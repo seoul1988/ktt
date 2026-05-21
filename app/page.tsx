@@ -9,7 +9,10 @@ const categories = [
 ];
 
 export default async function Home() {
-  const { data: spots } = await supabase.from("businesses").select("*");
+  const { data: spots, error } = await supabase
+  .from("businesses")
+  .select("*")
+  .order("id", { ascending: true });
 
 
   return (
@@ -67,32 +70,40 @@ export default async function Home() {
         <div className="space-y-4">
           {spots?.map((spot) => (
             <a
-              href={`/business/${spot.id}`}
-              key={spot.id}
-              className="block rounded-3xl bg-white p-4 shadow-sm"
-            >
-              <img
-                src={spot.image_url}
-                alt={spot.name}
-                className="mb-4 h-36 w-full rounded-2xl object-cover"
-              />
+		  href={`/business/${spot.id}`}
+		  key={spot.id}
+		  className="block rounded-3xl bg-white p-4 shadow-sm"
+		>
+		  <img
+			src={spot.image_url}
+			alt={spot.name}
+			className="mb-4 h-36 w-full rounded-2xl object-cover"
+		  />
 
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="text-lg font-bold">{spot.name}</h4>
-                  <p className="text-sm text-gray-600">
-                    {spot.category} · {spot.city}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-[#C4483A]">
-                    {spot.tag}
-                  </p>
-                </div>
+		  <div className="flex items-start justify-between">
+			<div className="flex-1">
+			  <h4 className="text-lg font-bold">
+				{spot.name}
+			  </h4>
 
-                <div className="rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
-                  ★ {spot.rating}
-                </div>
-              </div>
-            </a>
+			  <p className="text-sm text-gray-600">
+				{spot.category} · {spot.city}
+			  </p>
+
+			  <p className="mt-1 text-sm font-medium text-[#C4483A]">
+				{spot.tag}
+			  </p>
+
+			  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
+				{spot.description || "Tap to view details"}
+			  </p>
+			</div>
+
+			<div className="ml-3 rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
+			  ★ {spot.rating}
+    </div>
+  </div>
+</a>
           ))}
         </div>
       </section>
