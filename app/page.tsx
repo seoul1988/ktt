@@ -9,12 +9,8 @@ const categories = [
 ];
 
 export default async function Home() {
-  const { data: spots, error } = await supabase
-  .from("businesses")
-  .select("*");
+  const { data: spots } = await supabase.from("businesses").select("*");
 
-console.log("SUPABASE spots:", spots);
-console.log("SUPABASE error:", error);
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
@@ -48,6 +44,7 @@ console.log("SUPABASE error:", error);
         </div>
 
         <h3 className="mb-3 text-lg font-bold">Categories</h3>
+
         <div className="mb-8 grid grid-cols-3 gap-3">
           {categories.map((item) => (
             <button
@@ -62,12 +59,18 @@ console.log("SUPABASE error:", error);
 
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-lg font-bold">Trending Now</h3>
-          <button className="text-sm font-bold text-[#2453A6]">See all</button>
+          <button className="text-sm font-bold text-[#2453A6]">
+            See all
+          </button>
         </div>
 
         <div className="space-y-4">
           {spots?.map((spot) => (
-            <div key={spot.id} className="rounded-3xl bg-white p-4 shadow-sm">
+            <a
+              href={`/business/${spot.id}`}
+              key={spot.id}
+              className="block rounded-3xl bg-white p-4 shadow-sm"
+            >
               <img
                 src={spot.image_url}
                 alt={spot.name}
@@ -89,7 +92,7 @@ console.log("SUPABASE error:", error);
                   ★ {spot.rating}
                 </div>
               </div>
-            </div>
+            </a>
           ))}
         </div>
       </section>
