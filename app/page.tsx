@@ -1,3 +1,5 @@
+import { supabase } from "../lib/supabase";
+
 const categories = [
   { name: "BBQ", emoji: "🍖" },
   { name: "Chicken", emoji: "🍗" },
@@ -6,34 +8,14 @@ const categories = [
   { name: "Bubble Tea", emoji: "🧋" },
 ];
 
-const spots = [
-  {
-    name: "Seoul Garden",
-    type: "Korean BBQ",
-    city: "Raleigh",
-    rating: "4.7",
-    tag: "Popular BBQ spot",
-    image: "/bbq.png",
-  },
-  {
-    name: "KTT Bakery",
-    type: "Cafe & Bakery",
-    city: "Cary",
-    rating: "4.6",
-    tag: "Korean bakery favorite",
-    image: "/bakery.png",
-  },
-  {
-    name: "KTT Chicken",
-    type: "Chicken",
-    city: "Raleigh",
-    rating: "4.5",
-    tag: "Crispy Korean chicken",
-    image: "/chicken.png",
-  },
-];
+export default async function Home() {
+  const { data: spots, error } = await supabase
+  .from("businesses")
+  .select("*");
 
-export default function Home() {
+console.log("SUPABASE spots:", spots);
+console.log("SUPABASE error:", error);
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-md px-5 pb-24 pt-8">
@@ -84,10 +66,10 @@ export default function Home() {
         </div>
 
         <div className="space-y-4">
-          {spots.map((spot) => (
-            <div key={spot.name} className="rounded-3xl bg-white p-4 shadow-sm">
+          {spots?.map((spot) => (
+            <div key={spot.id} className="rounded-3xl bg-white p-4 shadow-sm">
               <img
-                src={spot.image}
+                src={spot.image_url}
                 alt={spot.name}
                 className="mb-4 h-36 w-full rounded-2xl object-cover"
               />
@@ -96,7 +78,7 @@ export default function Home() {
                 <div>
                   <h4 className="text-lg font-bold">{spot.name}</h4>
                   <p className="text-sm text-gray-600">
-                    {spot.type} · {spot.city}
+                    {spot.category} · {spot.city}
                   </p>
                   <p className="mt-1 text-sm font-medium text-[#C4483A]">
                     {spot.tag}
