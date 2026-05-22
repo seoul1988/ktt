@@ -84,7 +84,9 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-
+  // ← 여기 추가
+  const [imageIndexes, setImageIndexes] =
+    useState<Record<number, number>>({});
   const cardRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
   useEffect(() => {
@@ -212,62 +214,99 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 		>
 		  <div className="flex flex-col gap-3">
 			<div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
-			  <div
-				id={`image-scroll-${spot.id}`}
-				className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
-			  >
-				{[spot.image_url, spot.image_url_2, spot.image_url_3]
-				  .filter(Boolean)
-				  .map((image, imageIndex) => (
-					<img
-					  key={imageIndex}
-					  src={image as string}
-					  alt={spot.name}
-					  className="h-full w-full shrink-0 snap-center object-cover object-center"
-					/>
-				  ))}
-			  </div>
+  {(() => {
+    const images = [
+      spot.image_url,
+      spot.image_url_2,
+      spot.image_url_3,
+    ].filter(Boolean);
 
-			  {[spot.image_url, spot.image_url_2, spot.image_url_3].filter(Boolean)
-				.length > 1 && (
-				<>
-				  <button
-					type="button"
-					onClick={(e) => {
-					  e.preventDefault();
-					  e.stopPropagation();
+    const current = imageIndexes[spot.id] || 0;
 
-					  document
-						.getElementById(`image-scroll-${spot.id}`)
-						?.scrollBy({
-						  left: -300,
-						  behavior: "smooth",
-						});
-					}}
-					className="absolute left-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-lg font-bold text-white"
-				  >
-					‹
-				  </button>
+    return (
+      <>
+        <div
+          id={`image-scroll-${spot.id}`}
+          className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+          onScroll={(e) => {
+            const width = e.currentTarget.clientWidth;
 
-				  <button
-					type="button"
-					onClick={(e) => {
-					  e.preventDefault();
-					  e.stopPropagation();
+            setImageIndexes((prev) => ({
+              ...prev,
+              [spot.id]: Math.round(
+                e.currentTarget.scrollLeft / width
+              ),
+            }));
+          }}
+        >
+          {images.map((image, imageIndex) => (
+            <img
+              key={imageIndex}
+              src={image as string}
+              alt={spot.name}
+              className="h-full w-full shrink-0 snap-center object-cover"
+            />
+          ))}
+        </div>
 
-					  document
-						.getElementById(`image-scroll-${spot.id}`)
-						?.scrollBy({
-						  left: 300,
-						  behavior: "smooth",
-						});
-					}}
-					className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-lg font-bold text-white"
-				  >
-					›
-				  </button>
-				</>
-			  )}
+        {images.length > 1 && current > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
+              document
+                .getElementById(`image-scroll-${spot.id}`)
+                ?.scrollBy({
+                  left: -320,
+                  behavior: "smooth",
+                });
+            }}
+            className="absolute left-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
+          >
+            ←
+          </button>
+        )}
+
+        {images.length > 1 &&
+          current < images.length - 1 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                document
+                  .getElementById(`image-scroll-${spot.id}`)
+                  ?.scrollBy({
+                    left: 320,
+                    behavior: "smooth",
+                  });
+              }}
+              className="absolute right-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
+            >
+              →
+            </button>
+          )}
+
+        {images.length > 1 && (
+          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+            {images.map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 w-2 rounded-full ${
+                  i === current
+                    ? "bg-white"
+                    : "bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </>
+    );
+  })()}
 </div>
 
 			<div className="px-1 pb-2">
