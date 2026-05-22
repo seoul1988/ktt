@@ -8,6 +8,7 @@ import {
   Popup,
   TileLayer,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -76,6 +77,18 @@ function MoveMap({ spot }: { spot: Spot | null }) {
 
   return null;
 }
+
+
+function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
+  useMapEvents({
+    click: () => {
+      onToggle();
+    },
+  });
+
+  return null;
+}
+
 
 export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [search, setSearch] = useState("");
@@ -151,25 +164,24 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
         />
       </div>
 
-      <MapContainer
-        center={userLocation || [35.7796, -78.6382]}
-        zoom={12}
-        zoomControl={false}
-        className="h-screen w-full"
-        eventHandlers={{
-          click: () => {
-            setShowCards((prev) => !prev);
-          },
-        }}
-      >
+     <MapContainer
+	  center={userLocation || [35.7796, -78.6382]}
+	  zoom={12}
+	  zoomControl={false}
+	  className="h-screen w-full"
+	>
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
         <MoveMap spot={selectedSpot} />
-
-        {userLocation && (
+		<MapEmptyClickHandler
+		  onToggle={() => {
+			setShowCards((prev) => !prev);
+		  }}
+		/>
+				{userLocation && (
           <CircleMarker
             center={userLocation}
             radius={9}
@@ -364,3 +376,6 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
     </div>
   );
 }
+
+
+
