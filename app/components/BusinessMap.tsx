@@ -62,8 +62,6 @@ function MoveMap({ spot }: { spot: Spot | null }) {
     if (spot?.lat && spot?.lng) {
       const zoom = 14;
       const target = L.latLng(spot.lat, spot.lng);
-
-      // 카드가 아래에 있으므로 마커가 화면 중앙보다 조금 위에 보이게 조정
       const offsetY = 180;
 
       const point = map.project(target, zoom);
@@ -84,9 +82,10 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  // ← 여기 추가
+  const [showCards, setShowCards] = useState(true);
   const [imageIndexes, setImageIndexes] =
     useState<Record<number, number>>({});
+
   const cardRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
   useEffect(() => {
@@ -143,7 +142,10 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       <div className="absolute left-4 right-4 top-5 z-[1000]">
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setShowCards(true);
+          }}
           placeholder="Search Korean spots..."
           className="w-full rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none"
         />
@@ -154,6 +156,11 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
         zoom={12}
         zoomControl={false}
         className="h-screen w-full"
+        eventHandlers={{
+          click: () => {
+            setShowCards((prev) => !prev);
+          },
+        }}
       >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
@@ -182,6 +189,8 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
             eventHandlers={{
               click: () => {
                 setSelectedIndex(index);
+                setShowCards(true);
+
                 cardRefs.current[index]?.scrollIntoView({
                   behavior: "smooth",
                   inline: "center",
@@ -196,158 +205,150 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       </MapContainer>
 
       <div
-	  onScroll={handleScroll}
-	  className="fixed bottom-[82px] left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2"
-	>
-	  {sortedSpots.map((spot, index) => (
-		<a
-		  key={spot.id}
-		  ref={(el) => {
-			cardRefs.current[index] = el;
-		  }}
-		  href={`/business/${spot.id}`}
-		  className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] bg-white p-3 shadow-2xl border-4 ${
-			index === selectedIndex
-			  ? "border-red-500"
-			  : "border-transparent"
-		  }`}
-		>
-		  <div className="flex flex-col gap-3">
-			
-			
-			
-			
-			<div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
-				{(() => {
-				const images = [
-				spot.image_url,
-				spot.image_url_2,
-				spot.image_url_3,
-				].filter(Boolean);
+        onScroll={handleScroll}
+        className={`fixed left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 ${
+          showCards
+            ? "bottom-[82px] opacity-100"
+            : "bottom-[-360px] opacity-0"
+        }`}
+      >
+        {sortedSpots.map((spot, index) => {
+          const images = [
+            spot.image_url,
+            spot.image_url_2,
+            spot.image_url_3,
+          ].filter(Boolean);
 
-				const current = imageIndexes[spot.id] || 0;
+          const current = imageIndexes[spot.id] || 0;
 
-				return (
-				<>
-				<div
-				id={`image-scroll-${spot.id}`}
-				className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
-				onClick={(e)=>{
-				e.preventDefault();
-				e.stopPropagation();
-				}}
-				onScroll={(e) => {
-				  const target = e.currentTarget;
-				  const width = target.clientWidth;
-				  const scrollLeft = target.scrollLeft;
+          return (
+            <a
+              key={spot.id}
+              ref={(el) => {
+                cardRefs.current[index] = el;
+              }}
+              href={`/business/${spot.id}`}
+              className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] border-4 bg-white p-3 shadow-2xl ${
+                index === selectedIndex
+                  ? "border-red-500"
+                  : "border-transparent"
+              }`}
+            >
+              <div className="flex flex-col gap-3">
+                <div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
+                  <div
+                    id={`image-scroll-${spot.id}`}
+                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onScroll={(e) => {
+                      const target = e.currentTarget;
+                      const width = target.clientWidth;
+                      const scrollLeft = target.scrollLeft;
 
-				  if (!width) return;
+                      if (!width) return;
 
-				  setImageIndexes((prev) => ({
-					...prev,
-					[spot.id]: Math.round(scrollLeft / width),
-				  }));
-				}}
-								>
-				{images.map((image,imageIndex)=>(
-				<img
-				key={imageIndex}
-				src={image as string}
-				alt={spot.name}
-				draggable={false}
-				className="h-full w-full shrink-0 snap-center object-cover"
-				/>
-				))}
-				</div>
+                      setImageIndexes((prev) => ({
+                        ...prev,
+                        [spot.id]: Math.round(scrollLeft / width),
+                      }));
+                    }}
+                  >
+                    {images.map((image, imageIndex) => (
+                      <img
+                        key={imageIndex}
+                        src={image as string}
+                        alt={spot.name}
+                        draggable={false}
+                        className="h-full w-full shrink-0 snap-center object-cover"
+                      />
+                    ))}
+                  </div>
 
-				{images.length>1&&current>0&&(
-				<div
-				onClick={(e)=>{
-				e.preventDefault();
-				e.stopPropagation();
+                  {images.length > 1 && current > 0 && (
+                    <div
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
 
-				const c=document.getElementById(
-				`image-scroll-${spot.id}`
-				);
+                        const c = document.getElementById(
+                          `image-scroll-${spot.id}`
+                        );
 
-				if(!c)return;
+                        if (!c) return;
 
-				c.scrollTo({
-				left:c.scrollLeft-c.clientWidth,
-				behavior:"smooth",
-				});
-				}}
-				className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
-				>
-				←
-				</div>
-				)}
+                        c.scrollTo({
+                          left: c.scrollLeft - c.clientWidth,
+                          behavior: "smooth",
+                        });
+                      }}
+                      className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+                    >
+                      ←
+                    </div>
+                  )}
 
-				{images.length>1&&current<images.length-1&&(
-				<div
-				onClick={(e)=>{
-				e.preventDefault();
-				e.stopPropagation();
+                  {images.length > 1 && current < images.length - 1 && (
+                    <div
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
 
-				const c=document.getElementById(
-				`image-scroll-${spot.id}`
-				);
+                        const c = document.getElementById(
+                          `image-scroll-${spot.id}`
+                        );
 
-				if(!c)return;
+                        if (!c) return;
 
-				c.scrollTo({
-				left:c.scrollLeft+c.clientWidth,
-				behavior:"smooth",
-				});
-				}}
-				className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
-				>
-				→
-				</div>
-				)}
+                        c.scrollTo({
+                          left: c.scrollLeft + c.clientWidth,
+                          behavior: "smooth",
+                        });
+                      }}
+                      className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+                    >
+                      →
+                    </div>
+                  )}
 
-				{images.length>1&&(
-				<div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
-				{images.map((_,i)=>(
-				<div
-				key={i}
-				className={`h-2 w-2 rounded-full ${
-				i===current
-				?"bg-white"
-				:"bg-white/40"
-				}`}
-				/>
-				))}
-				</div>
-				)}
-				</>
-				);
-				})()}
-				</div>
+                  {images.length > 1 && (
+                    <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+                      {images.map((_, i) => (
+                        <div
+                          key={i}
+                          className={`h-2 w-2 rounded-full ${
+                            i === current ? "bg-white" : "bg-white/40"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
 
+                <div className="px-1 pb-2">
+                  <h3 className="text-xl font-bold">{spot.name}</h3>
 
+                  <p className="text-sm text-gray-600">
+                    {spot.category} · {spot.city}
+                  </p>
 
-			<div className="px-1 pb-2">
-			  <h3 className="text-xl font-bold">{spot.name}</h3>
+                  <p className="mt-1 text-sm font-bold text-[#C4483A]">
+                    {userLocation && "distance" in spot
+                      ? `${(spot as any).distance.toFixed(1)} miles away`
+                      : "Near Triangle"}
+                  </p>
 
-			  <p className="text-sm text-gray-600">
-				{spot.category} · {spot.city}
-			  </p>
-
-			  <p className="mt-1 text-sm font-bold text-[#C4483A]">
-				{userLocation && "distance" in spot
-				  ? `${(spot as any).distance.toFixed(1)} miles away`
-				  : "Near Triangle"}
-			  </p>
-
-			  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
-				{spot.description || "Tap to view details"}
-			  </p>
-			</div>
-		  </div>
-		</a>
-	  ))}
-	</div>
+                  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
+                    {spot.description || "Tap to view details"}
+                  </p>
+                </div>
+              </div>
+            </a>
+          );
+        })}
+      </div>
 
       <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
         <a href="/">Home</a>
