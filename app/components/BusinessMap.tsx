@@ -381,7 +381,30 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                 cardRefs.current[spot.id] = el;
               }}
               href={`/business/${spot.id}`}
-              className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] border-4 bg-white p-3 shadow-2xl ${
+			  
+              className={`
+						w-[88vw]
+						max-w-[420px]
+						shrink-0
+						snap-center
+						rounded-[28px]
+						border-4
+						bg-white
+						p-3
+						shadow-2xl
+
+						iphone:w-[80vw]
+
+						${
+						  spot.id === selectedSpotId
+							? "border-red-500"
+							: "border-transparent"
+						}
+						`}
+				  
+				  
+				  
+				  
                 spot.id === selectedSpotId
                   ? "border-red-500"
                   : "border-transparent"
