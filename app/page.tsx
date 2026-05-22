@@ -1,12 +1,5 @@
 import { supabase } from "../lib/supabase";
-import dynamic from "next/dynamic";
-
-const BusinessMap = dynamic(
-  () => import("./components/BusinessMap"),
-  {
-    ssr: false,
-  }
-);
+import MapWrapper from "./components/MapWrapper";
 
 export default async function Home() {
   const { data: spots } = await supabase
@@ -16,7 +9,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen">
-      <BusinessMap spots={spots || []} />
+      <MapWrapper spots={spots || []} />
     </main>
   );
 }
