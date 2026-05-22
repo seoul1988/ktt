@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { useEffect, useMemo, useState } from "react";
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -27,7 +27,16 @@ type Spot = {
 export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [search, setSearch] = useState("");
   const [selectedSpot, setSelectedSpot] = useState<Spot | null>(null);
+	const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
+	useEffect(() => {
+	  navigator.geolocation.getCurrentPosition((position) => {
+		setUserLocation([
+		  position.coords.latitude,
+		  position.coords.longitude,
+		]);
+	  });
+	}, []);
   const filteredSpots = useMemo(() => {
     return spots.filter((spot) => {
       const hasLocation = spot.lat && spot.lng;
@@ -53,15 +62,26 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       </div>
 
       <MapContainer
-        center={[35.7796, -78.6382]}
-        zoom={11}
-        className="h-screen w-full"
-      >
+	  center={userLocation || [35.7796, -78.6382]}
+	  zoom={12}
+	  zoomControl={false}
+	  className="h-screen w-full"
+	>
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
+		{userLocation && (
+		  <CircleMarker
+			center={userLocation}
+			radius={9}
+			pathOptions={{
+			  color: "#2563eb",
+			  fillColor: "#3b82f6",
+			  fillOpacity: 0.9,
+			}}
+		  />
+		)}
         {filteredSpots.map((spot) => (
           <Marker
             key={spot.id}
@@ -107,6 +127,27 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           </div>
         </a>
       )}
+	  <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+
+	  <a href="/">
+	  Home
+	</a>
+
+	<a
+	  href="/map"
+	  className="text-[#F7B955]"
+	>
+	  Map
+	</a>
+
+	<a href="/deals">
+	  Deals
+	</a>
+
+	<a href="/community">
+	  Community
+	</a>
+	</nav>
     </div>
   );
 }
