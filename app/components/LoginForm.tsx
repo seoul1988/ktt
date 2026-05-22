@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://your-domain.com";
+
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +28,9 @@ export default function LoginForm() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${SITE_URL}/`,
+      },
     });
 
     if (error) {
@@ -44,21 +50,25 @@ export default function LoginForm() {
   }
 
   async function loginWithGoogle() {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${SITE_URL}/`,
       },
     });
+
+    if (error) alert(error.message);
   }
 
   async function loginWithApple() {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${SITE_URL}/`,
       },
     });
+
+    if (error) alert(error.message);
   }
 
   return (
@@ -116,12 +126,12 @@ export default function LoginForm() {
               Login
             </button>
 
-			<a
-			  href="/signup"
-			  className="block w-full rounded-2xl border-2 border-[#172033] py-4 text-center text-lg font-extrabold text-[#172033]"
-			>
-			  Create Account
-			</a>
+            <a
+              href="/signup"
+              className="block w-full rounded-2xl border-2 border-[#172033] py-4 text-center text-lg font-extrabold text-[#172033]"
+            >
+              Create Account
+            </a>
           </div>
 
           <div className="my-7 flex items-center gap-4">
