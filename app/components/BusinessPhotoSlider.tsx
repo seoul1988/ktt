@@ -1,5 +1,4 @@
 import { supabase } from "../../../lib/supabase";
-import BusinessPhotoSlider from "../../components/BusinessPhotoSlider";
 
 export default async function BusinessPage({
   params,
@@ -18,16 +17,14 @@ export default async function BusinessPage({
     return <div>Not found</div>;
   }
 
-  const images = [
-    spot.image_url,
-    spot.image_url_2,
-    spot.image_url_3,
-  ].filter(Boolean);
-
   return (
     <main className="min-h-screen bg-white text-[#172033]">
       <div className="relative">
-        <BusinessPhotoSlider images={images} name={spot.name} />
+        <img
+          src={spot.image_url}
+          alt={spot.name}
+          className="h-[300px] w-full object-cover"
+        />
 
         <a
           href="/"
@@ -54,7 +51,10 @@ export default async function BusinessPage({
         </p>
 
         <div className="mt-6 grid grid-cols-4 text-center text-xs font-semibold text-gray-700">
-          <a href={spot.phone ? `tel:${spot.phone}` : "#"}>
+          <a
+            href={spot.phone ? `tel:${spot.phone}` : "#"}
+            className="flex flex-col items-center gap-1"
+          >
             <div className="text-3xl">☎</div>
             Call
           </a>
@@ -65,6 +65,7 @@ export default async function BusinessPage({
             )}`}
             target="_blank"
             rel="noopener noreferrer"
+            className="flex flex-col items-center gap-1"
           >
             <div className="text-3xl">↱</div>
             Directions
@@ -76,27 +77,30 @@ export default async function BusinessPage({
                 spot.website_url || ""
               }`
             )}`}
+            className="flex flex-col items-center gap-1"
           >
             <div className="text-3xl">⌲</div>
             Share
           </a>
 
-          <div>
+          <div className="flex flex-col items-center gap-1">
             <div className="text-3xl">♡</div>
             Save
           </div>
         </div>
 
-        <hr className="my-5 border-gray-200" />
+        <hr className="my-6 border-gray-200" />
 
-        <div className="space-y-2 text-[15px] leading-5">
+        <div className="space-y-4 text-[15px] leading-7">
           <p>
-            <span className="font-semibold">Address: </span>
+            <span className="font-semibold">Address</span>
+            <br />
             {spot.address || "Address not available"}
           </p>
 
           <p>
-            <span className="font-semibold">Hours: </span>
+            <span className="font-semibold">Hours</span>
+            <br />
             {spot.open_time && spot.close_time
               ? `${spot.open_time} – ${spot.close_time}`
               : "Hours not available"}
@@ -104,26 +108,30 @@ export default async function BusinessPage({
 
           {spot.break_start && spot.break_end && (
             <p>
-              <span className="font-semibold">Break Time: </span>
+              <span className="font-semibold">Break Time</span>
+              <br />
               {spot.break_start} – {spot.break_end}
             </p>
           )}
 
           {spot.closed_days && (
             <p>
-              <span className="font-semibold">Closed: </span>
+              <span className="font-semibold">Closed</span>
+              <br />
               Every {spot.closed_days}
             </p>
           )}
 
           <p>
-            <span className="font-semibold">Phone: </span>
+            <span className="font-semibold">Phone</span>
+            <br />
             {spot.phone || "Not available"}
           </p>
 
           {spot.website_url && (
             <p>
-              <span className="font-semibold">Website: </span>
+              <span className="font-semibold">Website</span>
+              <br />
               <a
                 href={spot.website_url}
                 target="_blank"
@@ -137,7 +145,8 @@ export default async function BusinessPage({
 
           {spot.instagram_url && (
             <p>
-              <span className="font-semibold">Instagram: </span>
+              <span className="font-semibold">Instagram</span>
+              <br />
               <a
                 href={spot.instagram_url}
                 target="_blank"
@@ -150,29 +159,40 @@ export default async function BusinessPage({
           )}
         </div>
 
-        <hr className="my-5 border-gray-200" />
+        <hr className="my-6 border-gray-200" />
 
         <section>
           <h2 className="mb-3 text-xl font-extrabold">Menu</h2>
 
-          <div className="space-y-1 text-[15px] leading-6">
+          <div className="space-y-2 text-[15px]">
             {spot.menu_item_1 && (
-              <p>{spot.menu_item_1} - {spot.menu_price_1 || "Price not listed"}</p>
+              <p>
+                {spot.menu_item_1} -{" "}
+                {spot.menu_price_1 || "Price not listed"}
+              </p>
             )}
 
             {spot.menu_item_2 && (
-              <p>{spot.menu_item_2} - {spot.menu_price_2 || "Price not listed"}</p>
+              <p>
+                {spot.menu_item_2} -{" "}
+                {spot.menu_price_2 || "Price not listed"}
+              </p>
             )}
 
             {spot.menu_item_3 && (
-              <p>{spot.menu_item_3} - {spot.menu_price_3 || "Price not listed"}</p>
-            )}
-
-            {!spot.menu_item_1 && !spot.menu_item_2 && !spot.menu_item_3 && (
-              <p className="text-gray-600">
-                Menu information is not available yet.
+              <p>
+                {spot.menu_item_3} -{" "}
+                {spot.menu_price_3 || "Price not listed"}
               </p>
             )}
+
+            {!spot.menu_item_1 &&
+              !spot.menu_item_2 &&
+              !spot.menu_item_3 && (
+                <p className="text-gray-600">
+                  Menu information is not available yet.
+                </p>
+              )}
           </div>
 
           {spot.menu_url && (
@@ -187,12 +207,12 @@ export default async function BusinessPage({
           )}
         </section>
 
-        <hr className="my-5 border-gray-200" />
+        <hr className="my-6 border-gray-200" />
 
         <section>
           <h2 className="mb-3 text-xl font-extrabold">About</h2>
 
-          <p className="leading-7 text-gray-700">
+          <p className="leading-8 text-gray-700">
             {spot.description || "No description yet."}
           </p>
         </section>
