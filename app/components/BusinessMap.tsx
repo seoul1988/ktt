@@ -211,18 +211,64 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 		  }`}
 		>
 		  <div className="flex flex-col gap-3">
-			<div className="flex h-[170px] w-full snap-x gap-2 overflow-x-auto rounded-[22px] bg-gray-100">
-			  {[spot.image_url, spot.image_url_2, spot.image_url_3]
-				.filter(Boolean)
-				.map((image, imageIndex) => (
-				  <img
-					key={imageIndex}
-					src={image as string}
-					alt={spot.name}
-					className="h-full w-full shrink-0 snap-center rounded-[22px] object-cover object-center"
-				  />
-				))}
-			</div>
+			<div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
+			  <div
+				id={`image-scroll-${spot.id}`}
+				className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+			  >
+				{[spot.image_url, spot.image_url_2, spot.image_url_3]
+				  .filter(Boolean)
+				  .map((image, imageIndex) => (
+					<img
+					  key={imageIndex}
+					  src={image as string}
+					  alt={spot.name}
+					  className="h-full w-full shrink-0 snap-center object-cover object-center"
+					/>
+				  ))}
+			  </div>
+
+			  {[spot.image_url, spot.image_url_2, spot.image_url_3].filter(Boolean)
+				.length > 1 && (
+				<>
+				  <button
+					type="button"
+					onClick={(e) => {
+					  e.preventDefault();
+					  e.stopPropagation();
+
+					  document
+						.getElementById(`image-scroll-${spot.id}`)
+						?.scrollBy({
+						  left: -300,
+						  behavior: "smooth",
+						});
+					}}
+					className="absolute left-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-lg font-bold text-white"
+				  >
+					‹
+				  </button>
+
+				  <button
+					type="button"
+					onClick={(e) => {
+					  e.preventDefault();
+					  e.stopPropagation();
+
+					  document
+						.getElementById(`image-scroll-${spot.id}`)
+						?.scrollBy({
+						  left: 300,
+						  behavior: "smooth",
+						});
+					}}
+					className="absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-lg font-bold text-white"
+				  >
+					›
+				  </button>
+				</>
+			  )}
+</div>
 
 			<div className="px-1 pb-2">
 			  <h3 className="text-xl font-bold">{spot.name}</h3>
