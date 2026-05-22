@@ -25,28 +25,24 @@ type Spot = {
   category: string;
   city: string;
   image_url: string;
+  image_url_2?: string | null;
+  image_url_3?: string | null;
   description?: string | null;
   rating?: number | null;
   lat?: number | null;
   lng?: number | null;
 };
 
-function milesBetween(
-  a: [number, number],
-  b: [number, number]
-) {
+function milesBetween(a: [number, number], b: [number, number]) {
   const R = 3958.8;
   const dLat = ((b[0] - a[0]) * Math.PI) / 180;
   const dLng = ((b[1] - a[1]) * Math.PI) / 180;
-
   const lat1 = (a[0] * Math.PI) / 180;
   const lat2 = (b[0] * Math.PI) / 180;
 
   const x =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) *
-      Math.cos(lat2) *
-      Math.sin(dLng / 2) ** 2;
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
 
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
@@ -180,48 +176,55 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       </MapContainer>
 
       <div
-        onScroll={handleScroll}
-        className="fixed bottom-24 left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-2"
-      >
-        {sortedSpots.map((spot, index) => (
-          <a
-            key={spot.id}
-            ref={(el) => {
-              cardRefs.current[index] = el;
-            }}
-            href={`/business/${spot.id}`}
-            className={`min-w-[85%] snap-center rounded-3xl bg-white p-4 shadow-2xl ${
-              index === selectedIndex ? "ring-4 ring-[#F7B955]" : ""
-            }`}
-          >
-            <div className="flex gap-4">
-              <img
-                src={spot.image_url}
-                alt={spot.name}
-                className="h-24 w-24 rounded-2xl object-cover"
-              />
+		  onScroll={handleScroll}
+		  className="fixed bottom-[82px] left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3"
+		>
+		  {sortedSpots.map((spot, index) => (
+			<a
+			  key={spot.id}
+			  ref={(el) => {
+				cardRefs.current[index] = el;
+			  }}
+			  href={`/business/${spot.id}`}
+			  className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] bg-white p-3 shadow-2xl ${
+				index === selectedIndex ? "ring-4 ring-[#F7B955]" : ""
+			  }`}
+			>
+			  <div className="flex flex-col gap-3">
+				<div className="flex h-[170px] w-full snap-x gap-2 overflow-x-auto rounded-[24px] bg-gray-100">
+				  {[spot.image_url, spot.image_url_2, spot.image_url_3]
+					.filter(Boolean)
+					.map((image, imageIndex) => (
+					  <img
+						key={imageIndex}
+						src={image as string}
+						alt={spot.name}
+						className="h-full w-full shrink-0 snap-center rounded-[24px] object-cover object-center"
+					  />
+					))}
+				</div>
 
-              <div className="flex-1">
-                <h3 className="text-lg font-bold">{spot.name}</h3>
+				<div className="px-1 pb-2">
+				  <h3 className="text-xl font-bold">{spot.name}</h3>
 
-                <p className="text-sm text-gray-600">
-                  {spot.category} · {spot.city}
-                </p>
+				  <p className="text-sm text-gray-600">
+					{spot.category} · {spot.city}
+				  </p>
 
-                <p className="mt-1 text-sm font-bold text-[#C4483A]">
-                  {userLocation && "distance" in spot
-                    ? `${(spot as any).distance.toFixed(1)} miles away`
-                    : "Near Triangle"}
-                </p>
+				  <p className="mt-1 text-sm font-bold text-[#C4483A]">
+					{userLocation && "distance" in spot
+					  ? `${(spot as any).distance.toFixed(1)} miles away`
+					  : "Near Triangle"}
+				  </p>
 
-                <p className="mt-1 line-clamp-2 text-sm text-gray-500">
-                  {spot.description || "Tap to view details"}
-                </p>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
+				  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
+					{spot.description || "Tap to view details"}
+				  </p>
+				</div>
+			  </div>
+			</a>
+		  ))}
+		</div>
 
       <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
         <a href="/">Home</a>

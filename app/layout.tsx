@@ -47,7 +47,6 @@ export default function RootLayout({
       <body
         className="
           min-h-screen
-          overflow-hidden
           bg-[#F8F3EC]
         "
       >
