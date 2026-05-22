@@ -236,17 +236,19 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 				e.preventDefault();
 				e.stopPropagation();
 				}}
-				onScroll={(e)=>{
-				const width=e.currentTarget.clientWidth;
+				onScroll={(e) => {
+				  const target = e.currentTarget;
+				  const width = target.clientWidth;
+				  const scrollLeft = target.scrollLeft;
 
-				setImageIndexes(prev=>({
-				...prev,
-				[spot.id]:Math.round(
-				e.currentTarget.scrollLeft/width
-				),
-				}));
+				  if (!width) return;
+
+				  setImageIndexes((prev) => ({
+					...prev,
+					[spot.id]: Math.round(scrollLeft / width),
+				  }));
 				}}
-				>
+								>
 				{images.map((image,imageIndex)=>(
 				<img
 				key={imageIndex}
