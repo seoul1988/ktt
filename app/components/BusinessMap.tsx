@@ -213,114 +213,117 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 		  }`}
 		>
 		  <div className="flex flex-col gap-3">
+			
+			
+			
+			
 			<div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
-  {(() => {
-    const images = [
-      spot.image_url,
-      spot.image_url_2,
-      spot.image_url_3,
-    ].filter(Boolean);
+				{(() => {
+				const images = [
+				spot.image_url,
+				spot.image_url_2,
+				spot.image_url_3,
+				].filter(Boolean);
 
-    const current = imageIndexes[spot.id] || 0;
+				const current = imageIndexes[spot.id] || 0;
 
-    return (
-      <>
-        <div
-          id={`image-scroll-${spot.id}`}
-          className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
-          onScroll={(e) => {
-            const width = e.currentTarget.clientWidth;
+				return (
+				<>
+				<div
+				id={`image-scroll-${spot.id}`}
+				className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+				onClick={(e)=>{
+				e.preventDefault();
+				e.stopPropagation();
+				}}
+				onScroll={(e)=>{
+				const width=e.currentTarget.clientWidth;
 
-            setImageIndexes((prev) => ({
-              ...prev,
-              [spot.id]: Math.round(
-                e.currentTarget.scrollLeft / width
-              ),
-            }));
-          }}
-        >
-          {images.map((image, imageIndex) => (
-            <img
-              key={imageIndex}
-              src={image as string}
-              alt={spot.name}
-              className="h-full w-full shrink-0 snap-center object-cover"
-            />
-          ))}
-        </div>
-
-        {images.length > 1 && current > 0 && (
-          <button
-            type="button"
-            onClick={(e) => {
-			  e.preventDefault();
-			  e.stopPropagation();
-
-			  const container = document.getElementById(
-				`image-scroll-${spot.id}`
-			  );
-
-			  if (!container) return;
-
-			  container.scrollTo({
-				left: Math.max(
-				  0,
-				  container.scrollLeft - container.clientWidth
+				setImageIndexes(prev=>({
+				...prev,
+				[spot.id]:Math.round(
+				e.currentTarget.scrollLeft/width
 				),
-				behavior: "smooth",
-			  });
-			}}
-						className="absolute left-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
-          >
-            ←
-          </button>
-        )}
+				}));
+				}}
+				>
+				{images.map((image,imageIndex)=>(
+				<img
+				key={imageIndex}
+				src={image as string}
+				alt={spot.name}
+				draggable={false}
+				className="h-full w-full shrink-0 snap-center object-cover"
+				/>
+				))}
+				</div>
 
-        {images.length > 1 &&
-          current < images.length - 1 && (
-            <button
-              type="button"
-              onClick={(e) => {
-			  e.preventDefault();
-			  e.stopPropagation();
+				{images.length>1&&current>0&&(
+				<div
+				onClick={(e)=>{
+				e.preventDefault();
+				e.stopPropagation();
 
-			  const container = document.getElementById(
+				const c=document.getElementById(
 				`image-scroll-${spot.id}`
-			  );
+				);
 
-			  if (!container) return;
+				if(!c)return;
 
-			  container.scrollTo({
-				left:
-				  container.scrollLeft +
-				  container.clientWidth,
-				behavior: "smooth",
-			  });
-			}}
-              className="absolute right-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
-            >
-              →
-            </button>
-          )}
+				c.scrollTo({
+				left:c.scrollLeft-c.clientWidth,
+				behavior:"smooth",
+				});
+				}}
+				className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+				>
+				←
+				</div>
+				)}
 
-        {images.length > 1 && (
-          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
-            {images.map((_, i) => (
-              <div
-                key={i}
-                className={`h-2 w-2 rounded-full ${
-                  i === current
-                    ? "bg-white"
-                    : "bg-white/40"
-                }`}
-              />
-            ))}
-          </div>
-        )}
-      </>
-    );
-  })()}
-</div>
+				{images.length>1&&current<images.length-1&&(
+				<div
+				onClick={(e)=>{
+				e.preventDefault();
+				e.stopPropagation();
+
+				const c=document.getElementById(
+				`image-scroll-${spot.id}`
+				);
+
+				if(!c)return;
+
+				c.scrollTo({
+				left:c.scrollLeft+c.clientWidth,
+				behavior:"smooth",
+				});
+				}}
+				className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+				>
+				→
+				</div>
+				)}
+
+				{images.length>1&&(
+				<div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+				{images.map((_,i)=>(
+				<div
+				key={i}
+				className={`h-2 w-2 rounded-full ${
+				i===current
+				?"bg-white"
+				:"bg-white/40"
+				}`}
+				/>
+				))}
+				</div>
+				)}
+				</>
+				);
+				})()}
+				</div>
+
+
 
 			<div className="px-1 pb-2">
 			  <h3 className="text-xl font-bold">{spot.name}</h3>
