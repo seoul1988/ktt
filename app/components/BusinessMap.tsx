@@ -13,6 +13,8 @@ import {
 import L from "leaflet";
 import ProfileButton from "./ProfileButton";
 import "leaflet/dist/leaflet.css";
+import { supabase } from "../../lib/supabase";
+
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -158,7 +160,12 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCards, setShowCards] = useState(true);
   const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
+  // 추가 ↓↓↓
+  const [likedIds, setLikedIds] =
+    useState<Record<number, boolean>>({});
 
+  const [likeCounts, setLikeCounts] =
+    useState<Record<number, number>>({});
   const cardRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
   useEffect(() => {
@@ -193,6 +200,91 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   }, [spots, search, userLocation]);
 
   const selectedSpot = sortedSpots[selectedIndex] || null;
+  useEffect(() => {
+  async function loadLikes() {
+    const { data } = await supabase
+      .from("business_likes")
+      .select("business_id,user_id");
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const counts: Record<number, number> = {};
+    const mine: Record<number, boolean> = {};
+
+    data?.forEach((v) => {
+      counts[v.business_id] =
+        (counts[v.business_id] || 0) + 1;
+
+      if (user && v.user_id === user.id) {
+        mine[v.business_id] = true;
+      }
+    });
+
+    setLikeCounts(counts);
+    setLikedIds(mine);
+  }
+
+  loadLikes();
+}, []);
+
+async function toggleLike(
+  e: React.MouseEvent,
+  businessId: number
+) {
+  e.preventDefault();
+  e.stopPropagation();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    alert("Login first");
+    return;
+  }
+
+  const liked = likedIds[businessId];
+
+  if (liked) {
+    await supabase
+      .from("business_likes")
+      .delete()
+      .eq("business_id", businessId)
+      .eq("user_id", user.id);
+
+    setLikedIds((p) => ({
+      ...p,
+      [businessId]: false,
+    }));
+
+    setLikeCounts((p) => ({
+      ...p,
+      [businessId]: Math.max(
+        (p[businessId] || 1) - 1,
+        0
+      ),
+    }));
+  } else {
+    await supabase
+      .from("business_likes")
+      .insert({
+        business_id: businessId,
+        user_id: user.id,
+      });
+
+    setLikedIds((p) => ({
+      ...p,
+      [businessId]: true,
+    }));
+
+    setLikeCounts((p) => ({
+      ...p,
+      [businessId]: (p[businessId] || 0) + 1,
+    }));
+  }
+}
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -447,9 +539,19 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 				  </h3>
 
 				  <div className="flex shrink-0 items-center gap-2">
-					<div className="rounded-full border border-pink-100 bg-pink-50 px-2 py-1 text-xs font-bold text-pink-500">
-					  ♡ 0
-					</div>
+					<button
+					  onClick={(e) =>
+						toggleLike(e, spot.id)
+					  }
+					  className={`rounded-full border px-2 py-1 text-xs font-bold ${
+						likedIds[spot.id]
+						  ? "border-red-200 bg-red-50 text-red-500"
+						  : "border-pink-100 bg-pink-50 text-pink-500"
+					  }`}
+					>
+					  {likedIds[spot.id] ? "♥" : "♡"}{" "}
+					  {likeCounts[spot.id] || 0}
+					</button>
 
 					<div
 					  className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${

@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import BusinessPhotoSlider from "../../components/BusinessPhotoSlider";
+import ProfileButton from "../../components/ProfileButton";
 
 function timeToMinutes(time?: string | null) {
   if (!time) return null;
@@ -71,16 +73,24 @@ export default async function BusinessPage({
       <div className="relative">
         <BusinessPhotoSlider images={images} name={spot.name} />
 
-        <a
-          href="/"
-          className="absolute left-5 top-5 rounded-full bg-white/90 px-4 py-2 text-sm font-bold shadow"
+        <Link
+          href="/map"
+          className="absolute left-5 top-5 z-50 rounded-full bg-white/90 px-4 py-2 text-sm font-bold shadow"
         >
           ← Back
-        </a>
+        </Link>
       </div>
 
       <section className="px-5 py-5">
-        <h1 className="text-3xl font-extrabold">{spot.name}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-3xl font-extrabold leading-tight">
+            {spot.name}
+          </h1>
+
+          <div className="shrink-0">
+            <ProfileButton />
+          </div>
+        </div>
 
         <p className="mt-1 text-sm text-gray-600">
           {spot.category} · {spot.city} ·{" "}
