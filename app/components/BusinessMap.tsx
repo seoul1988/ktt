@@ -253,17 +253,24 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           <button
             type="button"
             onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
+			  e.preventDefault();
+			  e.stopPropagation();
 
-              document
-                .getElementById(`image-scroll-${spot.id}`)
-                ?.scrollBy({
-                  left: -320,
-                  behavior: "smooth",
-                });
-            }}
-            className="absolute left-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
+			  const container = document.getElementById(
+				`image-scroll-${spot.id}`
+			  );
+
+			  if (!container) return;
+
+			  container.scrollTo({
+				left: Math.max(
+				  0,
+				  container.scrollLeft - container.clientWidth
+				),
+				behavior: "smooth",
+			  });
+			}}
+						className="absolute left-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
           >
             ←
           </button>
@@ -274,16 +281,22 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
             <button
               type="button"
               onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
+			  e.preventDefault();
+			  e.stopPropagation();
 
-                document
-                  .getElementById(`image-scroll-${spot.id}`)
-                  ?.scrollBy({
-                    left: 320,
-                    behavior: "smooth",
-                  });
-              }}
+			  const container = document.getElementById(
+				`image-scroll-${spot.id}`
+			  );
+
+			  if (!container) return;
+
+			  container.scrollTo({
+				left:
+				  container.scrollLeft +
+				  container.clientWidth,
+				behavior: "smooth",
+			  });
+			}}
               className="absolute right-3 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-white"
             >
               →
