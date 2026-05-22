@@ -1,6 +1,18 @@
 import { supabase } from "../../../lib/supabase";
 import BusinessPhotoSlider from "../../components/BusinessPhotoSlider";
 
+function timeToMinutes(time?: string | null) {
+  if (!time) return null;
+
+  const parts = String(time).split(":");
+  const hour = Number(parts[0]);
+  const minute = Number(parts[1] || 0);
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+  return hour * 60 + minute;
+}
+
 export default async function BusinessPage({
   params,
 }: {
@@ -24,6 +36,36 @@ export default async function BusinessPage({
     spot.image_url_3,
   ].filter(Boolean);
 
+  const now = new Date();
+
+  const today = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentTime = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentMinutes = timeToMinutes(currentTime);
+  const openMinutes = timeToMinutes(spot.open_time);
+  const closeMinutes = timeToMinutes(spot.close_time);
+
+  const isClosedDay =
+    spot.closed_days &&
+    String(spot.closed_days).toLowerCase().includes(today.toLowerCase());
+
+  const isOpenNow =
+    !isClosedDay &&
+    currentMinutes !== null &&
+    openMinutes !== null &&
+    closeMinutes !== null &&
+    currentMinutes >= openMinutes &&
+    currentMinutes < closeMinutes;
+
   return (
     <main className="min-h-screen bg-white text-[#172033]">
       <div className="relative">
@@ -44,12 +86,12 @@ export default async function BusinessPage({
           {spot.category} · {spot.city} ·{" "}
           <span
             className={
-              spot.is_open
+              isOpenNow
                 ? "font-bold text-green-600"
                 : "font-bold text-red-500"
             }
           >
-            {spot.is_open ? "Open" : "Closed"}
+            {isOpenNow ? "Open" : "Closed"}
           </span>
         </p>
 
@@ -157,15 +199,24 @@ export default async function BusinessPage({
 
           <div className="space-y-1 text-[15px] leading-6">
             {spot.menu_item_1 && (
-              <p>{spot.menu_item_1} - {spot.menu_price_1 || "Price not listed"}</p>
+              <p>
+                {spot.menu_item_1} -{" "}
+                {spot.menu_price_1 || "Price not listed"}
+              </p>
             )}
 
             {spot.menu_item_2 && (
-              <p>{spot.menu_item_2} - {spot.menu_price_2 || "Price not listed"}</p>
+              <p>
+                {spot.menu_item_2} -{" "}
+                {spot.menu_price_2 || "Price not listed"}
+              </p>
             )}
 
             {spot.menu_item_3 && (
-              <p>{spot.menu_item_3} - {spot.menu_price_3 || "Price not listed"}</p>
+              <p>
+                {spot.menu_item_3} -{" "}
+                {spot.menu_price_3 || "Price not listed"}
+              </p>
             )}
 
             {!spot.menu_item_1 && !spot.menu_item_2 && !spot.menu_item_3 && (
