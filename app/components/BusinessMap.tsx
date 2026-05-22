@@ -19,6 +19,14 @@ const markerIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
+const selectedMarkerIcon = new L.Icon({
+  iconUrl:
+    "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+});
+
 type Spot = {
   id: number;
   name: string;
@@ -52,7 +60,17 @@ function MoveMap({ spot }: { spot: Spot | null }) {
 
   useEffect(() => {
     if (spot?.lat && spot?.lng) {
-      map.flyTo([spot.lat, spot.lng], 14, {
+      const zoom = 14;
+      const target = L.latLng(spot.lat, spot.lng);
+
+      // 카드가 아래에 있으므로 마커가 화면 중앙보다 조금 위에 보이게 조정
+      const offsetY = 180;
+
+      const point = map.project(target, zoom);
+      const adjustedPoint = L.point(point.x, point.y + offsetY);
+      const adjustedCenter = map.unproject(adjustedPoint, zoom);
+
+      map.flyTo(adjustedCenter, zoom, {
         duration: 0.8,
       });
     }
@@ -158,7 +176,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           <Marker
             key={spot.id}
             position={[spot.lat as number, spot.lng as number]}
-            icon={markerIcon}
+            icon={index === selectedIndex ? selectedMarkerIcon : markerIcon}
             eventHandlers={{
               click: () => {
                 setSelectedIndex(index);
@@ -176,55 +194,55 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       </MapContainer>
 
       <div
-		  onScroll={handleScroll}
-		  className="fixed bottom-[82px] left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3"
-		>
-		  {sortedSpots.map((spot, index) => (
-			<a
-			  key={spot.id}
-			  ref={(el) => {
-				cardRefs.current[index] = el;
-			  }}
-			  href={`/business/${spot.id}`}
-			  className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] bg-white p-3 shadow-2xl ${
-				index === selectedIndex ? "ring-4 ring-[#F7B955]" : ""
-			  }`}
-			>
-			  <div className="flex flex-col gap-3">
-				<div className="flex h-[170px] w-full snap-x gap-2 overflow-x-auto rounded-[24px] bg-gray-100">
-				  {[spot.image_url, spot.image_url_2, spot.image_url_3]
-					.filter(Boolean)
-					.map((image, imageIndex) => (
-					  <img
-						key={imageIndex}
-						src={image as string}
-						alt={spot.name}
-						className="h-full w-full shrink-0 snap-center rounded-[24px] object-cover object-center"
-					  />
-					))}
-				</div>
+        onScroll={handleScroll}
+        className="fixed bottom-[82px] left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3"
+      >
+        {sortedSpots.map((spot, index) => (
+          <a
+            key={spot.id}
+            ref={(el) => {
+              cardRefs.current[index] = el;
+            }}
+            href={`/business/${spot.id}`}
+            className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] bg-white p-3 shadow-2xl ${
+              index === selectedIndex ? "ring-4 ring-red-500" : ""
+            }`}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="flex h-[170px] w-full snap-x gap-2 overflow-x-auto rounded-[24px] bg-gray-100">
+                {[spot.image_url, spot.image_url_2, spot.image_url_3]
+                  .filter(Boolean)
+                  .map((image, imageIndex) => (
+                    <img
+                      key={imageIndex}
+                      src={image as string}
+                      alt={spot.name}
+                      className="h-full w-full shrink-0 snap-center rounded-[24px] object-cover object-center"
+                    />
+                  ))}
+              </div>
 
-				<div className="px-1 pb-2">
-				  <h3 className="text-xl font-bold">{spot.name}</h3>
+              <div className="px-1 pb-2">
+                <h3 className="text-xl font-bold">{spot.name}</h3>
 
-				  <p className="text-sm text-gray-600">
-					{spot.category} · {spot.city}
-				  </p>
+                <p className="text-sm text-gray-600">
+                  {spot.category} · {spot.city}
+                </p>
 
-				  <p className="mt-1 text-sm font-bold text-[#C4483A]">
-					{userLocation && "distance" in spot
-					  ? `${(spot as any).distance.toFixed(1)} miles away`
-					  : "Near Triangle"}
-				  </p>
+                <p className="mt-1 text-sm font-bold text-[#C4483A]">
+                  {userLocation && "distance" in spot
+                    ? `${(spot as any).distance.toFixed(1)} miles away`
+                    : "Near Triangle"}
+                </p>
 
-				  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
-					{spot.description || "Tap to view details"}
-				  </p>
-				</div>
-			  </div>
-			</a>
-		  ))}
-		</div>
+                <p className="mt-2 line-clamp-2 text-sm text-gray-500">
+                  {spot.description || "Tap to view details"}
+                </p>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
 
       <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
         <a href="/">Home</a>
