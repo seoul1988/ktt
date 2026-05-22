@@ -7,14 +7,12 @@ import {
   Marker,
   Popup,
   TileLayer,
-  useMap,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import ProfileButton from "./ProfileButton";
 import "leaflet/dist/leaflet.css";
 import { supabase } from "../../lib/supabase";
-
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -48,6 +46,10 @@ type Spot = {
   break_start?: string | null;
   break_end?: string | null;
   closed_days?: string | null;
+};
+
+type SpotWithDistance = Spot & {
+  distance?: number;
 };
 
 function milesBetween(a: [number, number], b: [number, number]) {
@@ -121,28 +123,6 @@ function getOpenStatus(spot: Spot) {
   return { text: "Closed" };
 }
 
-function MoveMap({ spot }: { spot: Spot | null }) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (spot?.lat && spot?.lng) {
-      const zoom = 14;
-      const target = L.latLng(spot.lat, spot.lng);
-      const offsetY = 180;
-
-      const point = map.project(target, zoom);
-      const adjustedPoint = L.point(point.x, point.y + offsetY);
-      const adjustedCenter = map.unproject(adjustedPoint, zoom);
-
-      map.flyTo(adjustedCenter, zoom, {
-        duration: 0.8,
-      });
-    }
-  }, [spot, map]);
-
-  return null;
-}
-
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
     click: () => {
@@ -157,37 +137,41 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedSpotId, setSelectedSpotId] = useState<number | null>(null);
   const [showCards, setShowCards] = useState(true);
   const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
-  // 추가 ↓↓↓
-  const [likedIds, setLikedIds] =
-    useState<Record<number, boolean>>({});
+  const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
+  const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 
-  const [likeCounts, setLikeCounts] =
-    useState<Record<number, number>>({});
-  const cardRefs = useRef<(HTMLAnchorElement | null)[]>([]);
+  const cardRefs = useRef<Record<number, HTMLAnchorElement | null>>({});
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition((position) => {
-      setUserLocation([
-        position.coords.latitude,
-        position.coords.longitude,
-      ]);
-    });
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation([
+          position.coords.latitude,
+          position.coords.longitude,
+        ]);
+      },
+      () => {
+        setUserLocation(null);
+      }
+    );
   }, []);
 
-  const sortedSpots = useMemo(() => {
-    const valid = spots.filter((spot) => spot.lat && spot.lng);
+  const mapSpots = useMemo(() => {
+    return spots
+      .filter((spot) => spot.lat && spot.lng)
+      .filter((spot) => {
+        const text = `${spot.name} ${spot.category} ${spot.city}`.toLowerCase();
+        return text.includes(search.toLowerCase());
+      });
+  }, [spots, search]);
 
-    const searched = valid.filter((spot) => {
-      const text = `${spot.name} ${spot.category} ${spot.city}`.toLowerCase();
-      return text.includes(search.toLowerCase());
-    });
+  const cardSpots: SpotWithDistance[] = useMemo(() => {
+    if (!userLocation) return mapSpots;
 
-    if (!userLocation) return searched;
-
-    return searched
+    return mapSpots
       .map((spot) => ({
         ...spot,
         distance: milesBetween(userLocation, [
@@ -195,162 +179,128 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           spot.lng as number,
         ]),
       }))
-      .filter((spot) => spot.distance <= 20)
-      .sort((a, b) => a.distance - b.distance);
-  }, [spots, search, userLocation]);
+      .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+  }, [mapSpots, userLocation]);
 
-  const selectedSpot = sortedSpots[selectedIndex] || null;
   useEffect(() => {
-  async function loadLikes() {
-    const { data } = await supabase
-      .from("business_likes")
-      .select("business_id,user_id");
+    setSelectedSpotId(cardSpots[0]?.id || null);
+  }, [search, userLocation, cardSpots]);
+
+  useEffect(() => {
+    async function loadLikes() {
+      const { data } = await supabase
+        .from("business_likes")
+        .select("business_id,user_id");
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const counts: Record<number, number> = {};
+      const mine: Record<number, boolean> = {};
+
+      data?.forEach((v) => {
+        counts[v.business_id] = (counts[v.business_id] || 0) + 1;
+
+        if (user && v.user_id === user.id) {
+          mine[v.business_id] = true;
+        }
+      });
+
+      setLikeCounts(counts);
+      setLikedIds(mine);
+    }
+
+    loadLikes();
+  }, []);
+
+  async function toggleLike(e: React.MouseEvent, businessId: number) {
+    e.preventDefault();
+    e.stopPropagation();
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const counts: Record<number, number> = {};
-    const mine: Record<number, boolean> = {};
+    if (!user) {
+      alert("Login first");
+      return;
+    }
 
-    data?.forEach((v) => {
-      counts[v.business_id] =
-        (counts[v.business_id] || 0) + 1;
+    const liked = likedIds[businessId];
 
-      if (user && v.user_id === user.id) {
-        mine[v.business_id] = true;
-      }
-    });
+    if (liked) {
+      await supabase
+        .from("business_likes")
+        .delete()
+        .eq("business_id", businessId)
+        .eq("user_id", user.id);
 
-    setLikeCounts(counts);
-    setLikedIds(mine);
-  }
+      setLikedIds((p) => ({
+        ...p,
+        [businessId]: false,
+      }));
 
-  loadLikes();
-}, []);
-
-async function toggleLike(
-  e: React.MouseEvent,
-  businessId: number
-) {
-  e.preventDefault();
-  e.stopPropagation();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    alert("Login first");
-    return;
-  }
-
-  const liked = likedIds[businessId];
-
-  if (liked) {
-    await supabase
-      .from("business_likes")
-      .delete()
-      .eq("business_id", businessId)
-      .eq("user_id", user.id);
-
-    setLikedIds((p) => ({
-      ...p,
-      [businessId]: false,
-    }));
-
-    setLikeCounts((p) => ({
-      ...p,
-      [businessId]: Math.max(
-        (p[businessId] || 1) - 1,
-        0
-      ),
-    }));
-  } else {
-    await supabase
-      .from("business_likes")
-      .insert({
+      setLikeCounts((p) => ({
+        ...p,
+        [businessId]: Math.max((p[businessId] || 1) - 1, 0),
+      }));
+    } else {
+      await supabase.from("business_likes").insert({
         business_id: businessId,
         user_id: user.id,
       });
 
-    setLikedIds((p) => ({
-      ...p,
-      [businessId]: true,
-    }));
+      setLikedIds((p) => ({
+        ...p,
+        [businessId]: true,
+      }));
 
-    setLikeCounts((p) => ({
-      ...p,
-      [businessId]: (p[businessId] || 0) + 1,
-    }));
+      setLikeCounts((p) => ({
+        ...p,
+        [businessId]: (p[businessId] || 0) + 1,
+      }));
+    }
   }
-}
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [search]);
 
   const handleScroll = () => {
-    const positions = cardRefs.current.map((el) =>
-      el ? Math.abs(el.getBoundingClientRect().left - 16) : Infinity
-    );
+    let closestId: number | null = null;
+    let closestDistance = Infinity;
 
-    const closest = positions.indexOf(Math.min(...positions));
+    cardSpots.forEach((spot) => {
+      const el = cardRefs.current[spot.id];
+      if (!el) return;
 
-    if (closest !== -1) {
-      setSelectedIndex(closest);
+      const distance = Math.abs(el.getBoundingClientRect().left - 16);
+
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestId = spot.id;
+      }
+    });
+
+    if (closestId) {
+      setSelectedSpotId(closestId);
     }
   };
 
   return (
     <div className="relative min-h-screen">
-	
-	
-	
-     <div
-  className="
-    absolute
-    left-4
-    right-4
-    top-5
-    z-[1000]
-    flex
-    items-center
-    gap-3
-  "
->
+      <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3">
+        <input
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setShowCards(true);
+          }}
+          placeholder="Search Korean spots..."
+          className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none"
+        />
 
-  <input
-    value={search}
-    onChange={(e) => {
-      setSearch(e.target.value);
-      setShowCards(true);
-    }}
-    placeholder="Search Korean spots..."
-    className="
-      flex-1
-      rounded-2xl
-      border-none
-      bg-white
-      px-5
-      py-4
-      text-sm
-      font-semibold
-      shadow-xl
-      outline-none
-    "
-  />
-
-  <div className="shrink-0">
-    <ProfileButton />
-  </div>
-
-</div>
-	  
-	  
-	  
-	  
-	  
+        <div className="shrink-0">
+          <ProfileButton />
+        </div>
+      </div>
 
       <MapContainer
         center={userLocation || [35.7796, -78.6382]}
@@ -362,8 +312,6 @@ async function toggleLike(
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
-        <MoveMap spot={selectedSpot} />
 
         <MapEmptyClickHandler
           onToggle={() => {
@@ -383,19 +331,19 @@ async function toggleLike(
           />
         )}
 
-        {sortedSpots.map((spot, index) => (
+        {mapSpots.map((spot) => (
           <Marker
             key={spot.id}
             position={[spot.lat as number, spot.lng as number]}
-            icon={index === selectedIndex ? selectedMarkerIcon : markerIcon}
+            icon={spot.id === selectedSpotId ? selectedMarkerIcon : markerIcon}
             eventHandlers={{
               click: (e) => {
                 L.DomEvent.stopPropagation(e.originalEvent);
 
-                setSelectedIndex(index);
+                setSelectedSpotId(spot.id);
                 setShowCards(true);
 
-                cardRefs.current[index]?.scrollIntoView({
+                cardRefs.current[spot.id]?.scrollIntoView({
                   behavior: "smooth",
                   inline: "center",
                   block: "nearest",
@@ -416,7 +364,7 @@ async function toggleLike(
             : "bottom-[-360px] opacity-0"
         }`}
       >
-        {sortedSpots.map((spot, index) => {
+        {cardSpots.map((spot) => {
           const images = [
             spot.image_url,
             spot.image_url_2,
@@ -430,11 +378,11 @@ async function toggleLike(
             <a
               key={spot.id}
               ref={(el) => {
-                cardRefs.current[index] = el;
+                cardRefs.current[spot.id] = el;
               }}
               href={`/business/${spot.id}`}
               className={`w-[88vw] max-w-[420px] shrink-0 snap-center rounded-[28px] border-4 bg-white p-3 shadow-2xl ${
-                index === selectedIndex
+                spot.id === selectedSpotId
                   ? "border-red-500"
                   : "border-transparent"
               }`}
@@ -533,39 +481,38 @@ async function toggleLike(
                 </div>
 
                 <div className="px-1 pb-2">
-                 <div className="flex items-start justify-between gap-2">
-				  <h3 className="line-clamp-2 text-xl font-bold">
-					{spot.name}
-				  </h3>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="line-clamp-2 text-xl font-bold">
+                      {spot.name}
+                    </h3>
 
-				  <div className="flex shrink-0 items-center gap-2">
-					<button
-					  onClick={(e) =>
-						toggleLike(e, spot.id)
-					  }
-					  className={`rounded-full border px-2 py-1 text-xs font-bold ${
-						likedIds[spot.id]
-						  ? "border-red-200 bg-red-50 text-red-500"
-						  : "border-pink-100 bg-pink-50 text-pink-500"
-					  }`}
-					>
-					  {likedIds[spot.id] ? "♥" : "♡"}{" "}
-					  {likeCounts[spot.id] || 0}
-					</button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        onClick={(e) => toggleLike(e, spot.id)}
+                        className={`rounded-full border px-2 py-1 text-xs font-bold ${
+                          likedIds[spot.id]
+                            ? "border-red-200 bg-red-50 text-red-500"
+                            : "border-pink-100 bg-pink-50 text-pink-500"
+                        }`}
+                      >
+                        {likedIds[spot.id] ? "♥" : "♡"}{" "}
+                        {likeCounts[spot.id] || 0}
+                      </button>
 
-					<div
-					  className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
-						status.text === "Open"
-						  ? "bg-green-100 text-green-700"
-						  : status.text === "Break Time"
-						  ? "bg-orange-100 text-orange-700"
-						  : ":bg-gray-100 text-gray-600"
-					  }`}
-					>
-                      {status.text}
+                      <div
+                        className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
+                          status.text === "Open"
+                            ? "bg-green-100 text-green-700"
+                            : status.text === "Break Time"
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {status.text}
+                      </div>
                     </div>
                   </div>
-               </div>
+
                   <p className="mt-1 text-sm text-gray-600">
                     {spot.category} · {spot.city}
                   </p>
@@ -577,8 +524,8 @@ async function toggleLike(
                   )}
 
                   <p className="mt-1 text-sm font-semibold text-[#2453A6]">
-                    {userLocation && "distance" in spot
-                      ? `${(spot as any).distance.toFixed(1)} miles away`
+                    {userLocation && spot.distance !== undefined
+                      ? `${spot.distance.toFixed(1)} miles away`
                       : "Near Triangle"}
                   </p>
 
