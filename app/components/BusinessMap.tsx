@@ -11,6 +11,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+import ProfileButton from "./ProfileButton";
 import "leaflet/dist/leaflet.css";
 
 const markerIcon = new L.Icon({
@@ -40,6 +41,11 @@ type Spot = {
   rating?: number | null;
   lat?: number | null;
   lng?: number | null;
+  open_time?: string | null;
+  close_time?: string | null;
+  break_start?: string | null;
+  break_end?: string | null;
+  closed_days?: string | null;
 };
 
 function milesBetween(a: [number, number], b: [number, number]) {
@@ -54,6 +60,63 @@ function milesBetween(a: [number, number], b: [number, number]) {
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
 
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function timeToMinutes(time?: string | null) {
+  if (!time) return null;
+
+  const [hour, minute] = String(time).split(":").map(Number);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+
+  return hour * 60 + minute;
+}
+
+function getOpenStatus(spot: Spot) {
+  const now = new Date();
+
+  const today = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentTime = new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentMinutes = timeToMinutes(currentTime);
+  const openMinutes = timeToMinutes(spot.open_time);
+  const closeMinutes = timeToMinutes(spot.close_time);
+  const breakStart = timeToMinutes(spot.break_start);
+  const breakEnd = timeToMinutes(spot.break_end);
+
+  const isClosedDay =
+    spot.closed_days &&
+    String(spot.closed_days).toLowerCase().includes(today.toLowerCase());
+
+  const isBreakTime =
+    currentMinutes !== null &&
+    breakStart !== null &&
+    breakEnd !== null &&
+    currentMinutes >= breakStart &&
+    currentMinutes < breakEnd;
+
+  const isOpen =
+    !isClosedDay &&
+    !isBreakTime &&
+    currentMinutes !== null &&
+    openMinutes !== null &&
+    closeMinutes !== null &&
+    currentMinutes >= openMinutes &&
+    currentMinutes < closeMinutes;
+
+  if (isClosedDay) return { text: "Closed Today" };
+  if (isBreakTime) return { text: "Break Time" };
+  if (isOpen) return { text: "Open" };
+
+  return { text: "Closed" };
 }
 
 function MoveMap({ spot }: { spot: Spot | null }) {
@@ -78,7 +141,6 @@ function MoveMap({ spot }: { spot: Spot | null }) {
   return null;
 }
 
-
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
     click: () => {
@@ -89,15 +151,13 @@ function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   return null;
 }
 
-
 export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCards, setShowCards] = useState(true);
-  const [imageIndexes, setImageIndexes] =
-    useState<Record<number, number>>({});
+  const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
 
   const cardRefs = useRef<(HTMLAnchorElement | null)[]>([]);
 
@@ -152,36 +212,74 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 
   return (
     <div className="relative min-h-screen">
-      <div className="absolute left-4 right-4 top-5 z-[1000]">
-        <input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setShowCards(true);
-          }}
-          placeholder="Search Korean spots..."
-          className="w-full rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none"
-        />
-      </div>
+	
+	
+	
+     <div
+  className="
+    absolute
+    left-4
+    right-4
+    top-5
+    z-[1000]
+    flex
+    items-center
+    gap-3
+  "
+>
 
-     <MapContainer
-	  center={userLocation || [35.7796, -78.6382]}
-	  zoom={12}
-	  zoomControl={false}
-	  className="h-screen w-full"
-	>
+  <input
+    value={search}
+    onChange={(e) => {
+      setSearch(e.target.value);
+      setShowCards(true);
+    }}
+    placeholder="Search Korean spots..."
+    className="
+      flex-1
+      rounded-2xl
+      border-none
+      bg-white
+      px-5
+      py-4
+      text-sm
+      font-semibold
+      shadow-xl
+      outline-none
+    "
+  />
+
+  <div className="shrink-0">
+    <ProfileButton />
+  </div>
+
+</div>
+	  
+	  
+	  
+	  
+	  
+
+      <MapContainer
+        center={userLocation || [35.7796, -78.6382]}
+        zoom={12}
+        zoomControl={false}
+        className="h-screen w-full"
+      >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
         <MoveMap spot={selectedSpot} />
-		<MapEmptyClickHandler
-		  onToggle={() => {
-			setShowCards((prev) => !prev);
-		  }}
-		/>
-				{userLocation && (
+
+        <MapEmptyClickHandler
+          onToggle={() => {
+            setShowCards((prev) => !prev);
+          }}
+        />
+
+        {userLocation && (
           <CircleMarker
             center={userLocation}
             radius={9}
@@ -199,7 +297,9 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
             position={[spot.lat as number, spot.lng as number]}
             icon={index === selectedIndex ? selectedMarkerIcon : markerIcon}
             eventHandlers={{
-              click: () => {
+              click: (e) => {
+                L.DomEvent.stopPropagation(e.originalEvent);
+
                 setSelectedIndex(index);
                 setShowCards(true);
 
@@ -232,6 +332,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           ].filter(Boolean);
 
           const current = imageIndexes[spot.id] || 0;
+          const status = getOpenStatus(spot);
 
           return (
             <a
@@ -340,13 +441,40 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                 </div>
 
                 <div className="px-1 pb-2">
-                  <h3 className="text-xl font-bold">{spot.name}</h3>
+                 <div className="flex items-start justify-between gap-2">
+				  <h3 className="line-clamp-2 text-xl font-bold">
+					{spot.name}
+				  </h3>
 
-                  <p className="text-sm text-gray-600">
+				  <div className="flex shrink-0 items-center gap-2">
+					<div className="rounded-full border border-pink-100 bg-pink-50 px-2 py-1 text-xs font-bold text-pink-500">
+					  ♡ 0
+					</div>
+
+					<div
+					  className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
+						status.text === "Open"
+						  ? "bg-green-100 text-green-700"
+						  : status.text === "Break Time"
+						  ? "bg-orange-100 text-orange-700"
+						  : ":bg-gray-100 text-gray-600"
+					  }`}
+					>
+                      {status.text}
+                    </div>
+                  </div>
+               </div>
+                  <p className="mt-1 text-sm text-gray-600">
                     {spot.category} · {spot.city}
                   </p>
 
-                  <p className="mt-1 text-sm font-bold text-[#C4483A]">
+                  {spot.break_start && spot.break_end && (
+                    <p className="mt-1 text-xs text-orange-500">
+                      Break {spot.break_start}–{spot.break_end}
+                    </p>
+                  )}
+
+                  <p className="mt-1 text-sm font-semibold text-[#2453A6]">
                     {userLocation && "distance" in spot
                       ? `${(spot as any).distance.toFixed(1)} miles away`
                       : "Near Triangle"}
@@ -376,6 +504,3 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
     </div>
   );
 }
-
-
-

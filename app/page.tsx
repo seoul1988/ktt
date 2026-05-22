@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import ProfileButton from "./components/ProfileButton";
 
 export default async function Home() {
   const { data: spots } = await supabase
@@ -12,7 +13,7 @@ export default async function Home() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-[#C4483A]">KTT</p>
           <h1 className="text-3xl font-bold">KTown Triangle</h1>
@@ -21,46 +22,34 @@ export default async function Home() {
           </p>
         </div>
 
-        <img
-          src="/logo.png"
-          alt="KTT Logo"
-          className="h-16 w-16 rounded-2xl object-cover shadow-lg"
-        />
+        <div className="shrink-0">
+          <ProfileButton />
+        </div>
       </div>
 
-    <section className="mb-8">
+      <section className="mb-8">
+        <h2 className="mb-3 text-xl font-bold">🎉 Today’s Events</h2>
 
-  <h2 className="mb-3 text-xl font-bold">
-    🎉 Today’s Events
-  </h2>
+        <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
+          <img
+            src="/event.png"
+            alt="Event"
+            className="w-full object-cover"
+          />
 
-  <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
+          <div className="p-5">
+            <p className="text-sm font-bold text-[#C4483A]">This Weekend</p>
 
-    <img
-      src="/event.png"
-      alt="Event"
-      className="w-full object-cover"
-    />
+            <h3 className="mt-2 text-2xl font-bold">
+              K-Culture Night in the Triangle
+            </h3>
 
-    <div className="p-5">
-
-      <p className="text-sm font-bold text-[#C4483A]">
-        This Weekend
-      </p>
-
-      <h3 className="mt-2 text-2xl font-bold">
-        K-Culture Night in the Triangle
-      </h3>
-
-      <p className="mt-2 text-sm text-gray-600">
-        Food, music, community events and local Korean favorites.
-      </p>
-
-    </div>
-
-  </div>
-
-</section>
+            <p className="mt-2 text-sm text-gray-600">
+              Food, music, community events and local Korean favorites.
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section className="mb-8">
         <h2 className="mb-3 text-xl font-bold">🔥 Deals Near You</h2>
@@ -83,9 +72,7 @@ export default async function Home() {
                   Special Deal
                 </p>
 
-                <h4 className="mt-1 font-bold">
-                  {spot.name}
-                </h4>
+                <h4 className="mt-1 font-bold">{spot.name}</h4>
 
                 <p className="text-sm text-gray-600">
                   {spot.category} · {spot.city}
@@ -115,9 +102,7 @@ export default async function Home() {
             />
 
             <div className="p-5">
-              <h3 className="text-2xl font-bold">
-                {featured.name}
-              </h3>
+              <h3 className="text-2xl font-bold">{featured.name}</h3>
 
               <p className="mt-2 text-sm text-gray-600">
                 {featured.category} · {featured.city}
@@ -149,9 +134,7 @@ export default async function Home() {
                 />
 
                 <div className="flex-1">
-                  <h4 className="font-bold">
-                    {spot.name}
-                  </h4>
+                  <h4 className="font-bold">{spot.name}</h4>
 
                   <p className="text-sm text-gray-600">
                     {spot.category} · {spot.city}
@@ -176,17 +159,11 @@ export default async function Home() {
           Home
         </a>
 
-        <a href="/map">
-          Map
-        </a>
+        <a href="/map">Map</a>
 
-        <a href="/deals">
-          Deals
-        </a>
+        <a href="/deals">Deals</a>
 
-        <a href="/community">
-          Community
-        </a>
+        <a href="/community">Community</a>
       </nav>
     </main>
   );
