@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/update-google-ratings",
+      "schedule": "0 16 * * *"
+    }
+  ]
+}

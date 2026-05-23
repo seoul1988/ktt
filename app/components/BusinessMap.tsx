@@ -31,20 +31,29 @@ const selectedMarkerIcon = new L.Icon({
 
 type Spot = {
   id: number;
+
   name: string;
   category: string;
   city: string;
+
   image_url: string;
   image_url_2?: string | null;
   image_url_3?: string | null;
+
   description?: string | null;
+
   rating?: number | null;
+  review_count?: number | null;
+
   lat?: number | null;
   lng?: number | null;
+
   open_time?: string | null;
   close_time?: string | null;
+
   break_start?: string | null;
   break_end?: string | null;
+
   closed_days?: string | null;
 };
 
@@ -375,41 +384,33 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           const status = getOpenStatus(spot);
 
           return (
-            <a
-              key={spot.id}
-              ref={(el) => {
-                cardRefs.current[spot.id] = el;
-              }}
-              href={`/business/${spot.id}`}
-			  
-              className={`
-						w-[88vw]
-						max-w-[420px]
-						shrink-0
-						snap-center
-						rounded-[28px]
-						border-4
-						bg-white
-						p-3
-						shadow-2xl
+          <a
+			  key={spot.id}
+			  ref={(el) => {
+				cardRefs.current[spot.id] = el;
+			  }}
+			  href={`/business/${spot.id}`}
+			  className={`
+				w-[88vw]
+				iphone:w-[80vw]
+				max-w-[420px]
 
-						iphone:w-[80vw]
+				shrink-0
+				snap-center
+				rounded-[28px]
 
-						${
-						  spot.id === selectedSpotId
-							? "border-red-500"
-							: "border-transparent"
-						}
-						`}
-				  
-				  
-				  
-				  
-                spot.id === selectedSpotId
-                  ? "border-red-500"
-                  : "border-transparent"
-              }`}
-            >
+				border-4
+				bg-white
+				p-3
+				shadow-2xl
+
+				${
+				  spot.id === selectedSpotId
+					? "border-red-500"
+					: "border-transparent"
+				}
+			  `}
+			>
               <div className="flex flex-col gap-3">
                 <div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
                   <div
@@ -537,8 +538,14 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                   </div>
 
                   <p className="mt-1 text-sm text-gray-600">
-                    {spot.category} · {spot.city}
-                  </p>
+				  {spot.category} · {spot.city}
+				  {spot.rating && (
+					<>
+					  {" · "}⭐ {spot.rating}
+					  {spot.review_count ? ` (${spot.review_count})` : ""}
+					</>
+				  )}
+				</p>
 
                   {spot.break_start && spot.break_end && (
                     <p className="mt-1 text-xs text-orange-500">
