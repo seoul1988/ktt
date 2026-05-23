@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+type ProfileRole = "user" | "owner" | "admin";
+
 export default function ProfileButton() {
   const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string>("user");
+  const [role, setRole] = useState<ProfileRole>("user");
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -16,15 +18,26 @@ export default function ProfileButton() {
 
       setUser(user);
 
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
+      if (!user) return;
 
-        setRole(profile?.role || "user");
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!profile) {
+        await supabase.from("profiles").upsert({
+          id: user.id,
+          email: user.email,
+          role: "user",
+        });
+
+        setRole("user");
+        return;
       }
+
+      setRole((profile.role || "user") as ProfileRole);
     }
 
     loadUser();
@@ -46,7 +59,7 @@ export default function ProfileButton() {
     );
   }
 
-  if (role === "owner") {
+  if (role === "owner" || role === "admin") {
     return (
       <div className="relative">
         <button
@@ -57,21 +70,38 @@ export default function ProfileButton() {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-12 z-[2000] w-48 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
-            <a href="/business/new" className="block px-4 py-3 hover:bg-gray-100">
-              상점등록
-            </a>
+          <div className="absolute right-0 top-12 z-[3000] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
+         <a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
+			  Edit Profile
+			</a>
 
-            <a href="/events/new" className="block px-4 py-3 hover:bg-gray-100">
-              이벤트등록
-            </a>
+			<a
+			  href="/business/new"
+			  className="block px-4 py-3 hover:bg-gray-100"
+			>
+			  Register Business
+			</a>
 
-            <button
-              onClick={logout}
-              className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-            >
-              로그아웃
-            </button>
+			<a
+			  href="/events/new"
+			  className="block px-4 py-3 hover:bg-gray-100"
+			>
+			  Create Event
+			</a>
+
+			<a
+			  href="/coupons/new"
+			  className="block px-4 py-3 hover:bg-gray-100"
+			>
+			  Register Coupon
+			</a>
+
+			<button
+			  onClick={logout}
+			  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+			>
+			  Logout
+			</button>
           </div>
         )}
       </div>
