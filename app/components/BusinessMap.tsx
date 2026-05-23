@@ -29,31 +29,34 @@ const selectedMarkerIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
+const categories = [
+  { name: "BBQ", emoji: "🍖" },
+  { name: "Chicken", emoji: "🍗" },
+  { name: "Bakery", emoji: "🥐" },
+  { name: "Sushi", emoji: "🍣" },
+  { name: "Noodle", emoji: "🍜" },
+  { name: "Cafe", emoji: "☕" },
+  { name: "Taekwondo", emoji: "🥋" },
+  { name: "Alteration", emoji: "🧵" },
+];
+
 type Spot = {
   id: number;
-
   name: string;
   category: string;
   city: string;
-
   image_url: string;
   image_url_2?: string | null;
   image_url_3?: string | null;
-
   description?: string | null;
-
   rating?: number | null;
   review_count?: number | null;
-
   lat?: number | null;
   lng?: number | null;
-
   open_time?: string | null;
   close_time?: string | null;
-
   break_start?: string | null;
   break_end?: string | null;
-
   closed_days?: string | null;
 };
 
@@ -147,7 +150,9 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<number | null>(null);
-  const [showCards, setShowCards] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(true);
+  const [showCards, setShowCards] = useState(false);
   const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
@@ -173,9 +178,20 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       .filter((spot) => spot.lat && spot.lng)
       .filter((spot) => {
         const text = `${spot.name} ${spot.category} ${spot.city}`.toLowerCase();
-        return text.includes(search.toLowerCase());
+
+        const matchesSearch = text.includes(search.toLowerCase());
+
+        const matchesCategory = selectedCategory
+          ? text.includes(selectedCategory.toLowerCase())
+          : false;
+
+        if (!selectedCategory && !search) return false;
+        if (search && !matchesSearch) return false;
+        if (selectedCategory && !matchesCategory) return false;
+
+        return true;
       });
-  }, [spots, search]);
+  }, [spots, search, selectedCategory]);
 
   const cardSpots: SpotWithDistance[] = useMemo(() => {
     if (!userLocation) return mapSpots;
@@ -193,7 +209,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 
   useEffect(() => {
     setSelectedSpotId(cardSpots[0]?.id || null);
-  }, [search, userLocation, cardSpots]);
+  }, [cardSpots]);
 
   useEffect(() => {
     async function loadLikes() {
@@ -272,6 +288,18 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
     }
   }
 
+  function selectCategory(category: string) {
+    setSelectedCategory(category);
+    setSearch("");
+    setCategoryPanelOpen(false);
+    setShowCards(true);
+  }
+
+  function openCategoryPanel() {
+    setCategoryPanelOpen(true);
+    setShowCards(false);
+  }
+
   const handleScroll = () => {
     let closestId: number | null = null;
     let closestDistance = Infinity;
@@ -300,6 +328,8 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
+            setSelectedCategory(null);
+            setCategoryPanelOpen(false);
             setShowCards(true);
           }}
           placeholder="Search Korean spots..."
@@ -310,6 +340,42 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           <ProfileButton />
         </div>
       </div>
+
+      {categoryPanelOpen && (
+        <div className="fixed right-0 top-24 z-[1300] w-[104px] rounded-l-[28px] bg-white p-3 shadow-2xl">
+          <p className="mb-3 text-center text-xs font-extrabold text-gray-500">
+            Category
+          </p>
+
+          <div className="space-y-2">
+            {categories.map((cat) => (
+              <button
+                key={cat.name}
+                onClick={() => selectCategory(cat.name)}
+                className="flex w-full flex-col items-center justify-center rounded-2xl bg-gray-50 px-2 py-3 text-[11px] font-extrabold text-[#172033] shadow-sm active:scale-95"
+              >
+                <span className="text-2xl">{cat.emoji}</span>
+                <span className="mt-1 leading-tight">{cat.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!categoryPanelOpen && (
+        <button
+          onClick={openCategoryPanel}
+          className="fixed right-0 top-1/2 z-[1400] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl"
+        >
+          ☰
+        </button>
+      )}
+
+      {selectedCategory && !categoryPanelOpen && (
+        <div className="fixed left-4 top-[88px] z-[1100] rounded-full bg-white/95 px-4 py-2 text-xs font-extrabold text-[#172033] shadow-xl">
+          {selectedCategory}
+        </div>
+      )}
 
       <MapContainer
         center={userLocation || [35.7796, -78.6382]}
@@ -324,7 +390,9 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 
         <MapEmptyClickHandler
           onToggle={() => {
-            setShowCards((prev) => !prev);
+            if (!categoryPanelOpen) {
+              setShowCards((prev) => !prev);
+            }
           }}
         />
 
@@ -350,6 +418,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                 L.DomEvent.stopPropagation(e.originalEvent);
 
                 setSelectedSpotId(spot.id);
+                setCategoryPanelOpen(false);
                 setShowCards(true);
 
                 cardRefs.current[spot.id]?.scrollIntoView({
@@ -384,33 +453,30 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           const status = getOpenStatus(spot);
 
           return (
-          <a
-			  key={spot.id}
-			  ref={(el) => {
-				cardRefs.current[spot.id] = el;
-			  }}
-			  href={`/business/${spot.id}`}
-			  className={`
-				w-[88vw]
-				iphone:w-[80vw]
-				max-w-[420px]
-
-				shrink-0
-				snap-center
-				rounded-[28px]
-
-				border-4
-				bg-white
-				p-3
-				shadow-2xl
-
-				${
-				  spot.id === selectedSpotId
-					? "border-red-500"
-					: "border-transparent"
-				}
-			  `}
-			>
+            <a
+              key={spot.id}
+              ref={(el) => {
+                cardRefs.current[spot.id] = el;
+              }}
+              href={`/business/${spot.id}`}
+              className={`
+                w-[88vw]
+                iphone:w-[80vw]
+                max-w-[420px]
+                shrink-0
+                snap-center
+                rounded-[28px]
+                border-4
+                bg-white
+                p-3
+                shadow-2xl
+                ${
+                  spot.id === selectedSpotId
+                    ? "border-red-500"
+                    : "border-transparent"
+                }
+              `}
+            >
               <div className="flex flex-col gap-3">
                 <div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
                   <div
@@ -538,14 +604,14 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                   </div>
 
                   <p className="mt-1 text-sm text-gray-600">
-				  {spot.category} · {spot.city}
-				  {spot.rating && (
-					<>
-					  {" · "}⭐ {spot.rating}
-					  {spot.review_count ? ` (${spot.review_count})` : ""}
-					</>
-				  )}
-				</p>
+                    {spot.category} · {spot.city}
+                    {spot.rating && (
+                      <>
+                        {" · "}⭐ {spot.rating}
+                        {spot.review_count ? ` (${spot.review_count})` : ""}
+                      </>
+                    )}
+                  </p>
 
                   {spot.break_start && spot.break_end && (
                     <p className="mt-1 text-xs text-orange-500">
