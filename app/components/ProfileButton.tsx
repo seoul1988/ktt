@@ -108,12 +108,29 @@ export default function ProfileButton() {
     );
   }
 
-  return (
-    <button
-      onClick={logout}
-      className="rounded-full bg-white px-4 py-2 text-xs font-bold text-[#172033] shadow"
-    >
-      Logout
-    </button>
-  );
+	 return (
+	  <div className="relative">
+		<button
+		  onClick={() => setOpen((prev) => !prev)}
+		  className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
+		>
+		  ⋯
+		</button>
+
+		{open && (
+		  <div className="absolute right-0 top-12 z-[3000] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
+			<a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
+			  Edit Profile
+			</a>
+
+			<button
+			  onClick={logout}
+			  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+			>
+			  Logout
+			</button>
+		  </div>
+		)}
+	  </div>
+	);
 }
