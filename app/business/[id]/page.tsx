@@ -81,7 +81,7 @@ export default async function BusinessPage({
         </Link>
       </div>
 
-      <section className="px-5 py-5">
+      <section className="px-5 pt-5 pb-32">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-3xl font-extrabold leading-tight">
             {spot.name}
