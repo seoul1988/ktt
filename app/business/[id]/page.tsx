@@ -81,7 +81,7 @@ export default async function BusinessPage({
         </Link>
       </div>
 
-      <section className="px-5 py-5">
+      <section className="px-5 pt-5 pb-32">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-3xl font-extrabold leading-tight">
             {spot.name}
@@ -258,6 +258,19 @@ export default async function BusinessPage({
           </p>
         </section>
       </section>
+
+      <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+        <a href="/">Home</a>
+
+        <a href="/map" className="text-[#F7B955]">
+          Map
+        </a>
+
+        <a href="/deals">Deals</a>
+
+        <a href="/community">Community</a>
+      </nav>
     </main>
+	
   );
 }

@@ -378,11 +378,24 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       )}
 
       <MapContainer
-        center={userLocation || [35.7796, -78.6382]}
-        zoom={12}
-        zoomControl={false}
-        className="h-screen w-full"
-      >
+		  center={
+			selectedSpotId
+			  ? [
+				  (
+					mapSpots.find(
+					  (v) => v.id === selectedSpotId
+					)?.lat || 35.7796
+				  ) - 0.015,
+				  mapSpots.find(
+					(v) => v.id === selectedSpotId
+				  )?.lng || -78.6382,
+				]
+			  : userLocation || [35.7796, -78.6382]
+		  }
+		  zoom={12}
+		  zoomControl={false}
+		  className="h-screen w-full"
+		>
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
