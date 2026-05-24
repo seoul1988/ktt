@@ -1,51 +1,95 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type ProfileRole = "user" | "owner" | "admin";
 
 export default function ProfileButton() {
+  const [checking, setChecking] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<ProfileRole>("user");
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    async function loadUser() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const refreshUser = useCallback(async () => {
+    setChecking(true);
 
-      setUser(user);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      if (!user) return;
+    const currentUser = session?.user ?? null;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+    setUser(currentUser);
 
-      if (!profile) {
-        await supabase.from("profiles").upsert({
-          id: user.id,
-          email: user.email,
-          role: "user",
-        });
-
-        setRole("user");
-        return;
-      }
-
-      setRole((profile.role || "user") as ProfileRole);
+    if (!currentUser) {
+      setRole("user");
+      setOpen(false);
+      setChecking(false);
+      return;
     }
 
-    loadUser();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+
+    setRole((profile?.role || "user") as ProfileRole);
+    setChecking(false);
   }, []);
 
+  useEffect(() => {
+    refreshUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      refreshUser();
+    });
+
+    const handlePageShow = () => {
+      refreshUser();
+    };
+
+    const handleFocus = () => {
+      refreshUser();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshUser();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+    };
+  }, [refreshUser]);
+
   async function logout() {
+    setOpen(false);
+    setChecking(true);
     await supabase.auth.signOut();
-    window.location.href = "/";
+    location.replace("/");
+  }
+
+  if (checking) {
+    return (
+      <div className="rounded-full bg-white px-4 py-2 text-xs font-bold text-[#172033] shadow">
+        ...
+      </div>
+    );
   }
 
   if (!user) {
@@ -59,83 +103,63 @@ export default function ProfileButton() {
     );
   }
 
-  if (role === "owner" || role === "admin") {
-    return (
-      <div className="relative">
-        <button
-          onClick={() => setOpen((prev) => !prev)}
-          className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
-        >
-          ⋯
-        </button>
+  const isOwnerOrAdmin = role === "owner" || role === "admin";
 
-        {open && (
-          <div className="absolute right-0 top-12 z-[3000] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
-         <a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
-			  Edit Profile
-			</a>
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
+      >
+        ⋯
+      </button>
 
-			<a
-			  href="/business/new"
-			  className="block px-4 py-3 hover:bg-gray-100"
-			>
-			  Register Business
-			</a>
+      {open && (
+        <div className="absolute right-0 top-12 z-[3000] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
+          <a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
+            Edit Profile
+          </a>
 
-			<a
-			  href="/events/new"
-			  className="block px-4 py-3 hover:bg-gray-100"
-			>
-			  Create Event
-			</a>
+          {isOwnerOrAdmin && (
+            <>
+              <a
+                href="/business/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Register Business
+              </a>
 
-			<a
-			  href="/coupons/new"
-			  className="block px-4 py-3 hover:bg-gray-100"
-			>
-			  Register Coupon
-			</a>
-			<a
-			 href="/admin/owner-requests"
-			 className="block px-4 py-3 hover:bg-gray-100"
-			>
-			 Owner Requests
-			</a>
-						<button
-			  onClick={logout}
-			  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-			>
-			  Logout
-			</button>
-          </div>
-        )}
-      </div>
-    );
-  }
+              <a
+                href="/events/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Create Event
+              </a>
 
-	 return (
-	  <div className="relative">
-		<button
-		  onClick={() => setOpen((prev) => !prev)}
-		  className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
-		>
-		  ⋯
-		</button>
+              <a
+                href="/coupons/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Register Coupon
+              </a>
 
-		{open && (
-		  <div className="absolute right-0 top-12 z-[3000] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
-			<a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
-			  Edit Profile
-			</a>
+              <a
+                href="/admin/owner-requests"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Owner Requests
+              </a>
+            </>
+          )}
 
-			<button
-			  onClick={logout}
-			  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-			>
-			  Logout
-			</button>
-		  </div>
-		)}
-	  </div>
-	);
+          <button
+            onClick={logout}
+            className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }

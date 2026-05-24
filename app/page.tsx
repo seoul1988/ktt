@@ -1,5 +1,9 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { supabase } from "../lib/supabase";
 import ProfileButton from "./components/ProfileButton";
+import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 
 export default async function Home() {
   const { data: spots } = await supabase
@@ -23,8 +27,12 @@ export default async function Home() {
         </div>
 
         <div className="shrink-0">
-          <ProfileButton />
-        </div>
+
+		  <AuthRefreshWrapper>
+			<ProfileButton />
+		  </AuthRefreshWrapper>
+
+		</div>
       </div>
 
       <section className="mb-8">
