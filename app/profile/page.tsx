@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 type Profile = {
@@ -16,7 +15,6 @@ type Profile = {
 };
 
 export default function ProfilePage() {
-  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -34,7 +32,7 @@ export default function ProfilePage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.push("/login");
+        window.location.href = "/login";
         return;
       }
 
@@ -113,8 +111,8 @@ export default function ProfilePage() {
     }
 
     alert("Owner request submitted.");
-    router.push("/map");
-    router.refresh();
+
+    window.location.href = "/map";
   }
 
   async function saveProfile() {
@@ -138,8 +136,7 @@ export default function ProfilePage() {
       return;
     }
 
-    router.push("/map");
-    router.refresh();
+    window.location.href = "/map";
   }
 
   if (loading) {
@@ -156,7 +153,9 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md">
         <button
-          onClick={() => router.push("/map")}
+          onClick={() => {
+		  window.location.href = "/map";
+		}}
           className="mb-5 inline-block rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
         >
           ← Back
