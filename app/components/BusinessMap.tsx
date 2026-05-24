@@ -7,6 +7,7 @@ import {
   Marker,
   Popup,
   TileLayer,
+  useMap,
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
@@ -134,6 +135,33 @@ function getOpenStatus(spot: Spot) {
 
   return { text: "Closed" };
 }
+function MoveMap({
+  lat,
+  lng,
+}: {
+  lat?: number;
+  lng?: number;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!lat || !lng) return;
+
+    map.flyTo(
+      [
+        lat - 0.01,
+        lng,
+      ],
+      map.getZoom(),
+      {
+        duration: 0.5,
+      }
+    );
+  }, [lat, lng, map]);
+
+  return null;
+}
+
 
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
@@ -379,23 +407,26 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 
       <MapContainer
 		  center={
-			selectedSpotId
-			  ? [
-				  (
-					mapSpots.find(
-					  (v) => v.id === selectedSpotId
-					)?.lat || 35.7796
-				  ) - 0.015,
-				  mapSpots.find(
-					(v) => v.id === selectedSpotId
-				  )?.lng || -78.6382,
-				]
-			  : userLocation || [35.7796, -78.6382]
+			userLocation || [35.7796, -78.6382]
 		  }
 		  zoom={12}
 		  zoomControl={false}
 		  className="h-screen w-full"
 		>
+		<MoveMap
+		  lat={
+			mapSpots.find(
+			  (v) =>
+				v.id === selectedSpotId
+			)?.lat
+		  }
+		  lng={
+			mapSpots.find(
+			  (v) =>
+				v.id === selectedSpotId
+			)?.lng
+		  }
+		/>
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
