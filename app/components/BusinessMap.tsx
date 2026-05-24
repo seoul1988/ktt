@@ -147,16 +147,17 @@ function MoveMap({
   useEffect(() => {
     if (!lat || !lng) return;
 
-    map.flyTo(
-      [
-        lat - 0.01,
-        lng,
-      ],
-      map.getZoom(),
-      {
-        duration: 0.5,
-      }
-    );
+    setTimeout(() => {
+      map.setView(
+        [lat - 0.025, lng],
+        14,
+        {
+          animate: true,
+        }
+      );
+
+      map.invalidateSize();
+    }, 100);
   }, [lat, lng, map]);
 
   return null;
