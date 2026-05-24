@@ -49,16 +49,19 @@ export default function LoginForm() {
     alert("Account created. Please check your email.");
   }
 
-  async function loginWithGoogle() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${SITE_URL}/`,
-      },
-    });
+	  async function loginWithGoogle() {
+	  const { error } = await supabase.auth.signInWithOAuth({
+		provider: "google",
 
-    if (error) alert(error.message);
-  }
+		options: {
+		  redirectTo: `${SITE_URL}/auth/callback`,
+		},
+	  });
+
+	  if (error) {
+		alert(error.message);
+	  }
+	}
 
   async function loginWithApple() {
     const { error } = await supabase.auth.signInWithOAuth({

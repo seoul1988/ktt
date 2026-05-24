@@ -95,8 +95,13 @@ export default function ProfileButton() {
 			>
 			  Register Coupon
 			</a>
-
-			<button
+			<a
+			 href="/admin/owner-requests"
+			 className="block px-4 py-3 hover:bg-gray-100"
+			>
+			 Owner Requests
+			</a>
+						<button
 			  onClick={logout}
 			  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
 			>
