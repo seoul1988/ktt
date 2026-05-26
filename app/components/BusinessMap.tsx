@@ -415,17 +415,16 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 		  className="h-screen w-full"
 		>
 		<MoveMap
+		 <MoveMap
 		  lat={
 			mapSpots.find(
-			  (v) =>
-				v.id === selectedSpotId
-			)?.lat
+			  (v) => v.id === selectedSpotId
+			)?.lat ?? undefined
 		  }
 		  lng={
 			mapSpots.find(
-			  (v) =>
-				v.id === selectedSpotId
-			)?.lng
+			  (v) => v.id === selectedSpotId
+			)?.lng ?? undefined
 		  }
 		/>
         <TileLayer
