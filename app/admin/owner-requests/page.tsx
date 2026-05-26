@@ -54,75 +54,36 @@ export default function OwnerRequestsPage() {
   }, []);
 
   async function approve(row: OwnerRequestRow) {
-    const ok = window.confirm("Approve this owner request?");
-    if (!ok) return;
+  const ok = window.confirm("Approve this owner request?");
+  if (!ok) return;
 
-    const now = new Date().toISOString();
+  const { error } = await supabase.rpc("approve_owner_request", {
+    target_user_id: row.id,
+  });
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        role: "owner",
-        owner_status: "approved",
-        approved_at: now,
-      })
-      .eq("id", row.id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    if (row.business_id) {
-      await supabase.from("business_owners").insert({
-        user_id: row.id,
-        business_id: row.business_id,
-        status: "approved",
-        approved_at: now,
-      });
-    }
-
-    setRows((prev) =>
-      prev.map((item) =>
-        item.id === row.id
-          ? {
-              ...item,
-              role: "owner",
-              owner_status: "approved",
-              approved_at: now,
-            }
-          : item
-      )
-    );
+  if (error) {
+    alert(error.message);
+    return;
   }
+
+  await load();
+}
 
   async function reject(id: string) {
-    const ok = window.confirm("Reject this owner request?");
-    if (!ok) return;
+  const ok = window.confirm("Reject this owner request?");
+  if (!ok) return;
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        owner_status: "rejected",
-      })
-      .eq("id", id);
+  const { error } = await supabase.rpc("reject_owner_request", {
+    target_user_id: id,
+  });
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    setRows((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              owner_status: "rejected",
-            }
-          : item
-      )
-    );
+  if (error) {
+    alert(error.message);
+    return;
   }
+
+  await load();
+}
 
   function statusLabel(status: string | null) {
     const s = (status || "").toLowerCase();
