@@ -172,6 +172,15 @@ export default function ProfileButton() {
               >
                 Owner Requests
               </a>
+			  
+			  <a
+				  href="/admin/categories"
+				  className="block px-4 py-3 hover:bg-gray-100"
+				>
+				  Categories
+				</a>
+			  
+			  
 
               <a
                 href="/business/new"
