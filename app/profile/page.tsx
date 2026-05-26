@@ -147,7 +147,9 @@ export default function ProfilePage() {
     );
   }
 
-  const isPendingOwner = profile?.owner_status === "pending";
+  const isPendingOwner =
+  profile?.owner_status === "pending" &&
+  profile?.role === "user";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
@@ -236,22 +238,40 @@ export default function ProfilePage() {
             </label>
 
             {profile?.role === "user" && !isPendingOwner && (
-              <button
-                onClick={applyOwner}
-                className="mb-4 w-full rounded-2xl border-2 border-[#172033] py-4 font-extrabold text-[#172033]"
-              >
-                Apply as Business Owner
-              </button>
-            )}
+			  <button
+				onClick={applyOwner}
+				className="mb-4 w-full rounded-2xl border-2 border-[#172033] py-4 font-extrabold text-[#172033]"
+			  >
+				Apply as Business Owner
+			  </button>
+			)}
 
-            {isPendingOwner && (
-              <div className="mb-4 rounded-2xl bg-yellow-50 p-4 text-sm font-bold text-yellow-700">
-                Owner application pending approval
-              </div>
-            )}
+			{isPendingOwner && (
+			  <div className="mb-4 rounded-2xl bg-yellow-50 p-4 text-sm font-bold text-yellow-700">
+				Owner application pending approval
+			  </div>
+			)}
 
-            <button
-              onClick={saveProfile}
+			{profile?.role === "owner" && (
+			  <a
+				href="/owner"
+				className="mb-4 block w-full rounded-2xl bg-[#C4483A] py-4 text-center font-extrabold text-white"
+			  >
+				My Business
+			  </a>
+			)}
+
+			{profile?.role === "admin" && (
+			  <a
+				href="/admin/owner-requests"
+				className="mb-4 block w-full rounded-2xl bg-[#172033] py-4 text-center font-extrabold text-white"
+			  >
+				Admin Dashboard
+			  </a>
+			)}
+
+			<button
+			  onClick={saveProfile}
               disabled={saving || isPendingOwner}
               className="w-full rounded-2xl bg-[#172033] py-4 text-lg font-extrabold text-white shadow-lg disabled:opacity-60"
             >
