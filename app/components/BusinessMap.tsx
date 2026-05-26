@@ -149,7 +149,7 @@ function MoveMap({
 
     setTimeout(() => {
       map.setView(
-        [lat - 0.025, lng],
+        [lat - 0.035, lng],
         10,
         {
           animate: true,
