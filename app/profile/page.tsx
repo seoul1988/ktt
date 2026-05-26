@@ -86,7 +86,7 @@ export default function ProfilePage() {
     }
 
     loadProfile();
-  }, [router]);
+}, []);
 
   async function applyOwner() {
     if (!profile) return;
