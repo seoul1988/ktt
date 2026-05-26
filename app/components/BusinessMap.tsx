@@ -512,7 +512,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                 rounded-[28px]
                 border-4
                 bg-white
-                p-3
+                p-2
                 shadow-2xl
                 ${
                   spot.id === selectedSpotId
@@ -521,8 +521,8 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                 }
               `}
             >
-              <div className="flex flex-col gap-3">
-                <div className="relative h-[170px] w-full overflow-hidden rounded-[22px] bg-gray-100">
+              <div className="flex flex-col gap-2">
+                <div className="relative h-[145px] w-full overflow-hidden rounded-[22px] bg-gray-100">
                   <div
                     id={`image-scroll-${spot.id}`}
                     className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
