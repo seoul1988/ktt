@@ -19,7 +19,6 @@ export default function ProfileButton() {
     } = await supabase.auth.getSession();
 
     const currentUser = session?.user ?? null;
-
     setUser(currentUser);
 
     if (!currentUser) {
@@ -29,13 +28,31 @@ export default function ProfileButton() {
       return;
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", currentUser.id)
       .maybeSingle();
 
-    setRole((profile?.role || "user") as ProfileRole);
+    if (error) {
+      console.log("Profile role error:", error);
+      setRole("user");
+      setChecking(false);
+      return;
+    }
+
+    const cleanRole = String(profile?.role || "user")
+      .trim()
+      .toLowerCase();
+
+    if (cleanRole === "admin") {
+      setRole("admin");
+    } else if (cleanRole === "owner") {
+      setRole("owner");
+    } else {
+      setRole("user");
+    }
+
     setChecking(false);
   }, []);
 
@@ -70,10 +87,7 @@ export default function ProfileButton() {
       subscription.unsubscribe();
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("focus", handleFocus);
-      document.removeEventListener(
-        "visibilitychange",
-        handleVisibilityChange
-      );
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [refreshUser]);
 
@@ -103,7 +117,8 @@ export default function ProfileButton() {
     );
   }
 
-  const isOwnerOrAdmin = role === "owner" || role === "admin";
+  const isOwner = role === "owner";
+  const isAdmin = role === "admin";
 
   return (
     <div className="relative">
@@ -120,8 +135,12 @@ export default function ProfileButton() {
             Edit Profile
           </a>
 
-          {isOwnerOrAdmin && (
+          {isOwner && (
             <>
+              <a href="/owner" className="block px-4 py-3 hover:bg-gray-100">
+                My Business
+              </a>
+
               <a
                 href="/business/new"
                 className="block px-4 py-3 hover:bg-gray-100"
@@ -142,12 +161,37 @@ export default function ProfileButton() {
               >
                 Register Coupon
               </a>
+            </>
+          )}
 
+          {isAdmin && (
+            <>
               <a
                 href="/admin/owner-requests"
                 className="block px-4 py-3 hover:bg-gray-100"
               >
                 Owner Requests
+              </a>
+
+              <a
+                href="/business/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Register Business
+              </a>
+
+              <a
+                href="/events/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Create Event
+              </a>
+
+              <a
+                href="/coupons/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+              >
+                Register Coupon
               </a>
             </>
           )}

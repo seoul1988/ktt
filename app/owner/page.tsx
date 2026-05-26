@@ -3,16 +3,29 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+type BusinessOwnerRow = {
+  business_id: number;
+  status: string | null;
+  businesses: {
+    id: number;
+    name: string | null;
+    address: string | null;
+    phone?: string | null;
+    category?: string | null;
+  } | null;
+};
+
 export default function OwnerPage() {
-  const [profile, setProfile] = useState<any>(null);
-  const [businesses, setBusinesses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<BusinessOwnerRow[]>([]);
 
   useEffect(() => {
-    loadOwnerData();
+    loadMyBusinesses();
   }, []);
 
-  async function loadOwnerData() {
+  async function loadMyBusinesses() {
+    setLoading(true);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -22,76 +35,111 @@ export default function OwnerPage() {
       return;
     }
 
-    const { data: profileData } = await supabase
+    const { data: profile } = await supabase
       .from("profiles")
-      .select("*")
+      .select("role")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
-    setProfile(profileData);
+    if (profile?.role !== "owner") {
+      window.location.href = "/profile";
+      return;
+    }
 
-    if (profileData?.role !== "owner") {
+    const { data, error } = await supabase
+      .from("business_owners")
+      .select(`
+        business_id,
+        status,
+        businesses (
+          id,
+          name,
+          address,
+          phone,
+          category
+        )
+      `)
+      .eq("user_id", user.id)
+      .eq("status", "approved");
+
+    if (error) {
+      console.log("Owner businesses error:", error);
+      setRows([]);
       setLoading(false);
       return;
     }
 
-    const { data: ownerData } = await supabase
-      .from("business_owners")
-      .select("business_id, businesses(*)")
-      .eq("user_id", user.id)
-      .eq("status", "approved");
-
-    setBusinesses(ownerData || []);
+    setRows((data || []) as BusinessOwnerRow[]);
     setLoading(false);
   }
 
   if (loading) {
-    return <div className="p-5">로딩중...</div>;
-  }
-
-  if (profile?.role !== "owner") {
     return (
-      <main className="min-h-screen bg-[#F8F3EC] px-5 py-8">
-        <h1 className="text-2xl font-bold">상점주 권한이 없습니다</h1>
-        <p className="mt-3">상점주 신청 후 관리자 승인을 받아야 합니다.</p>
-
-        <a
-          href="/owner/request"
-          className="mt-5 block rounded-xl bg-black p-3 text-center text-white"
-        >
-          상점주 신청하기
-        </a>
+      <main className="flex min-h-screen items-center justify-center bg-[#F8F3EC] text-[#172033]">
+        <p className="font-bold">Loading...</p>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] px-5 py-8">
-      <h1 className="mb-6 text-2xl font-bold">매장관리</h1>
+    <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
+      <div className="mx-auto max-w-md">
+        <button
+          onClick={() => {
+            window.location.href = "/map";
+          }}
+          className="mb-5 rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
+        >
+          ← Back
+        </button>
 
-      {businesses.length === 0 && (
-        <p>아직 연결된 매장이 없습니다. 관리자에게 매장 연결을 요청하세요.</p>
-      )}
+        <h1 className="mb-6 text-3xl font-black">My Business</h1>
 
-      <div className="space-y-4">
-        {businesses.map((item: any) => (
-          <div key={item.business_id} className="rounded-2xl bg-white p-4 shadow">
-            <h2 className="text-lg font-bold">
-              {item.businesses?.name || "이름 없음"}
-            </h2>
-
-            <p className="text-sm text-gray-600">
-              {item.businesses?.address}
-            </p>
-
-            <a
-              href={`/owner/business/${item.business_id}`}
-              className="mt-4 block rounded-xl bg-black p-3 text-center text-white"
-            >
-              매장 수정하기
-            </a>
+        {rows.length === 0 && (
+          <div className="rounded-3xl bg-white p-5 font-bold shadow">
+            No approved business connected yet.
           </div>
-        ))}
+        )}
+
+        <div className="space-y-4">
+          {rows.map((row) => {
+            const business = row.businesses;
+
+            return (
+              <div
+                key={row.business_id}
+                className="rounded-3xl bg-white p-5 shadow"
+              >
+                <h2 className="text-xl font-black">
+                  {business?.name || "No business name"}
+                </h2>
+
+                <p className="mt-1 text-sm text-gray-600">
+                  {business?.address || "No address"}
+                </p>
+
+                {business?.category && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    Category: {business.category}
+                  </p>
+                )}
+
+                {business?.phone && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    Phone: {business.phone}
+                  </p>
+                )}
+
+                <a
+                  href={`/owner/business/${row.business_id}`}
+                  className="mt-4 block rounded-2xl bg-[#172033] py-3 text-center font-extrabold text-white"
+                >
+                  Edit Business
+                </a>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </main>
   );
