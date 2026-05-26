@@ -415,18 +415,18 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 		  className="h-screen w-full"
 		>
 	
-		 <MoveMap
-		  lat={
-			mapSpots.find(
-			  (v) => v.id === selectedSpotId
-			)?.lat ?? undefined
-		  }
-		  lng={
-			mapSpots.find(
-			  (v) => v.id === selectedSpotId
-			)?.lng ?? undefined
-		  }
-		/>
+		<MoveMap
+			  lat={
+				Number(
+				  mapSpots.find((v) => v.id === selectedSpotId)?.lat ?? 0
+				) || undefined
+			  }
+			  lng={
+				Number(
+				  mapSpots.find((v) => v.id === selectedSpotId)?.lng ?? 0
+				) || undefined
+			  }
+			/>
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
