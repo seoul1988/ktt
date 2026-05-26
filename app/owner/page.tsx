@@ -3,16 +3,18 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
+type Business = {
+  id: number;
+  name: string | null;
+  address: string | null;
+  phone?: string | null;
+  category?: string | null;
+};
+
 type BusinessOwnerRow = {
   business_id: number;
   status: string | null;
-  businesses: {
-    id: number;
-    name: string | null;
-    address: string | null;
-    phone?: string | null;
-    category?: string | null;
-  } | null;
+  businesses: Business | Business[] | null;
 };
 
 export default function OwnerPage() {
@@ -69,7 +71,7 @@ export default function OwnerPage() {
       return;
     }
 
-    setRows((data || []) as BusinessOwnerRow[]);
+    setRows((data || []) as unknown as BusinessOwnerRow[]);
     setLoading(false);
   }
 
@@ -103,7 +105,9 @@ export default function OwnerPage() {
 
         <div className="space-y-4">
           {rows.map((row) => {
-            const business = row.businesses;
+            const business = Array.isArray(row.businesses)
+			  ? row.businesses[0]
+			  : row.businesses;
 
             return (
               <div
