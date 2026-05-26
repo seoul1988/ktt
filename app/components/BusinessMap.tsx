@@ -414,7 +414,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
 		  zoomControl={false}
 		  className="h-screen w-full"
 		>
-		<MoveMap
+	
 		 <MoveMap
 		  lat={
 			mapSpots.find(
