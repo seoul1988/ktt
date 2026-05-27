@@ -443,19 +443,19 @@ useEffect(() => {
       </div>
 
       {categoryPanelOpen && (
-        <div className="fixed right-0 top-24 z-[1300] w-[104px] rounded-l-[28px] bg-white p-3 shadow-2xl">
+        <div className="fixed right-0 top-24 z-[1300] max-h-[72vh] w-[88px] overflow-y-auto rounded-l-[24px] bg-white p-2 shadow-2xl scrollbar-hide">
           <p className="mb-3 text-center text-xs font-extrabold text-gray-500">
             Category
           </p>
 
-          <div className="space-y-2">
+          <div className="space-y-1 overflow-y-auto">
             {displayCategories.map((cat) => (
               <button
                 key={cat.name}
                 onClick={() => selectCategory(cat.name)}
-                className="flex w-full flex-col items-center justify-center rounded-2xl bg-gray-50 px-2 py-3 text-[11px] font-extrabold text-[#172033] shadow-sm active:scale-95"
+                className="flex w-full flex-col items-center justify-center rounded-xl bg-gray-50 px-1 py-2 text-[10px] font-extrabold text-[#172033] shadow-sm active:scale-95"
               >
-                <span className="text-2xl">{cat.emoji || "🏷️"}</span>
+                <span className="text-lg">{cat.emoji || "🏷️"}</span>
                 <span className="mt-1 leading-tight">{cat.name}</span>
               </button>
             ))}
@@ -707,7 +707,7 @@ useEffect(() => {
                       </button>
 
                       <div
-                        className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${
+                        className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
                           status.text === "Open"
                             ? "bg-green-100 text-green-700"
                             : status.text === "Break Time"
