@@ -51,6 +51,23 @@ type Spot = {
   lng?: number | null;
   hours?: string | null;
   tags?: string | null;
+  event_title?: string | null;
+  event_name?: string | null;
+  coupon_title?: string | null;
+  deal_title?: string | null;
+  coupon_badge?: string | null;
+  coupon_count?: number | null;
+  coupons?: {
+    id: number;
+    business_id?: number | string | null;
+    title?: string | null;
+    description?: string | null;
+    coupon_type?: string | null;
+    value?: number | string | null;
+    min_order?: number | string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+  }[] | null;
 };
 
 type SpotWithDistance = Spot & {
@@ -265,6 +282,7 @@ console.log(data);
 	  ${spot.tags || ""}
 	  ${spot.city || ""}
 	  ${spot.description || ""}
+	  ${spot.coupon_badge || ""}
 	`.toLowerCase();
 
       const spotCategories = String(spot.category || "")
@@ -567,6 +585,15 @@ useEffect(() => {
 
           const current = imageIndexes[spot.id] || 0;
           const status = getOpenStatus(spot);
+          const firstCoupon = spot.coupons?.[0];
+          const eventLabel =
+            spot.coupon_badge ||
+            firstCoupon?.title ||
+            spot.event_title ||
+            spot.event_name ||
+            spot.coupon_title ||
+            spot.deal_title ||
+            null;
 
           return (
             <a
@@ -629,6 +656,12 @@ useEffect(() => {
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400">
                       No Photo
+                    </div>
+                  )}
+
+                  {eventLabel && (
+                    <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md">
+                      <span className="line-clamp-1">{eventLabel}</span>
                     </div>
                   )}
 

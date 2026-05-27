@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import ProfileButton from "../../components/ProfileButton";
 
 type Business = {
   id: number;
@@ -209,11 +210,34 @@ export default function NewCouponPage() {
     loadCoupons(businessId);
   }
 
-  return (
-    <div className="mx-auto max-w-md p-5">
-      <h1 className="mb-6 text-2xl font-bold">
-        Register Coupon
-      </h1>
+ return (
+
+<main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-5 text-[#172033]">
+
+<div
+className="
+max-w-md
+mx-auto
+"
+>
+      <div className="mb-6 flex items-center justify-between">
+  <div className="flex items-center gap-4">
+    <button
+      onClick={() => {
+        window.location.href = "/map";
+      }}
+      className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
+    >
+      ← Back
+    </button>
+
+    <h1 className="text-3xl font-black">
+      Register Coupon
+    </h1>
+  </div>
+
+  <ProfileButton />
+</div>
 
       <select
         value={businessId}
@@ -264,13 +288,23 @@ export default function NewCouponPage() {
           className="mb-3 w-full rounded border p-3"
         />
 
-        <input
-          type="number"
-          value={usageLimit}
-          onChange={(e) => setUsageLimit(Number(e.target.value))}
-          placeholder="사용 가능 수량"
-          className="mb-3 w-full rounded border p-3"
-        />
+    <div className="mb-3">
+		  <label className="mb-1 block text-sm font-bold">
+			쿠폰 수량
+		  </label>
+
+		  <input
+			type="number"
+			value={usageLimit}
+			onChange={(e) => setUsageLimit(Number(e.target.value))}
+			placeholder="예: 100"
+			className="w-full rounded border p-3"
+		  />
+
+		  <p className="mt-1 text-xs text-gray-500">
+			수량이 모두 사용되면 자동 종료됩니다.
+		  </p>
+		</div>
 
         <label className="mb-1 block text-sm font-bold">
           시작일
@@ -382,6 +416,32 @@ export default function NewCouponPage() {
           );
         })}
       </div>
-    </div>
-  );
+   </div>
+
+<div className="fixed bottom-4 left-0 right-0 z-50 px-5">
+  <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-2xl">
+    <a href="/" className="flex-1 py-4 text-center">
+      Home
+    </a>
+
+    <a href="/map" className="flex-1 py-4 text-center">
+      Map
+    </a>
+
+    <a
+      href="/coupons/new"
+      className="flex-1 py-4 text-center text-[#F6C343]"
+    >
+      Coupons
+    </a>
+
+    <a href="/community" className="flex-1 py-4 text-center">
+      Community
+    </a>
+  </div>
+</div>
+
+</main>
+
+);
 }

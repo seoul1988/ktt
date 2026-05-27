@@ -6,41 +6,60 @@ import { supabase } from "../../lib/supabase";
 export default function ClaimCouponButton({
   couponId,
 }: {
-  couponId:number;
+  couponId: number;
 }) {
-
-  const [loading,setLoading]=useState(false);
+  const [loading, setLoading] = useState(false);
 
   async function claim() {
-
     setLoading(true);
 
     const {
-      data:{user},
-    } =
-      await supabase.auth.getUser();
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user) {
-      location.href="/login";
+      setLoading(false);
+      location.href = "/login";
       return;
     }
 
-    const { error } =
-      await supabase
+    const { data: existing, error: existingError } = await supabase
+      .from("user_coupons")
+      .select("id,status")
+      .eq("user_id", user.id)
+      .eq("coupon_id", couponId)
+      .maybeSingle();
+
+    if (existingError) {
+      setLoading(false);
+      alert(existingError.message);
+      return;
+    }
+
+    if (existing) {
+      setLoading(false);
+      alert("You already claimed this coupon.");
+      location.href = "/my-coupons";
+      return;
+    }
+
+    const { error } = await supabase
       .from("user_coupons")
       .insert({
-        user_id:user.id,
-        coupon_id:couponId,
+        user_id: user.id,
+        coupon_id: couponId,
+        status: "claimed",
       });
 
     setLoading(false);
 
     if (error) {
-      alert("이미 받은 쿠폰");
+      alert(error.message);
       return;
     }
 
-    alert("쿠폰 저장 완료");
+    alert("Coupon saved successfully.");
+    location.href = "/my-coupons";
   }
 
   return (
@@ -54,9 +73,10 @@ export default function ClaimCouponButton({
         px-4
         py-2
         text-white
+        disabled:opacity-60
       "
     >
-      받기
+      {loading ? "Saving..." : "Claim Coupon"}
     </button>
   );
 }

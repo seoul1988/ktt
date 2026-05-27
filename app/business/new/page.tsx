@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import ProfileButton from "../../components/ProfileButton";
+
 
 type Category = {
   id: number;
@@ -332,17 +334,24 @@ const [instagramUrl, setInstagramUrl] = useState("");
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md">
-        <button
-          onClick={() => {
-            window.location.href = role === "admin" ? "/map" : "/owner";
-          }}
-          className="mb-5 rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-        >
-          ← Back
-        </button>
+        <div className="mb-6 flex items-center justify-between">
+		  <div className="flex items-center gap-4">
+			<button
+			  onClick={() => {
+				window.location.href = "/map";
+			  }}
+			  className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
+			>
+			  ← Back
+			</button>
 
-        <div className="rounded-[32px] bg-white p-6 shadow-2xl">
-          <h1 className="text-3xl font-black">Register Business</h1>
+			<h1 className="text-3xl font-black">
+			  Register Business
+			</h1>
+		  </div>
+
+		  <ProfileButton />
+		</div>
 
           <div className="mt-6 space-y-4">
             <input
@@ -595,7 +604,29 @@ const [instagramUrl, setInstagramUrl] = useState("");
             </button>
           </div>
         </div>
-      </div>
+
+	  <div className="fixed bottom-4 left-0 right-0 z-50 px-5">
+  <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-2xl">
+    <a href="/" className="flex-1 py-4 text-center">
+      Home
+    </a>
+
+    <a href="/map" className="flex-1 py-4 text-center">
+      Map
+    </a>
+
+    <a
+      href="/business/new"
+      className="flex-1 py-4 text-center text-[#F6C343]"
+    >
+      Business
+    </a>
+
+    <a href="/community" className="flex-1 py-4 text-center">
+      Community
+    </a>
+  </div>
+</div>
     </main>
   );
 }

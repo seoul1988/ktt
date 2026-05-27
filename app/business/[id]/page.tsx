@@ -109,26 +109,28 @@ export default async function BusinessPage({
     .eq("id", id)
     .single();
 
+if (!spot || error) {
+  return <div>Not found</div>;
+}
+
 const { data: coupons } = await supabase
   .from("coupons")
   .select("*")
-  .eq("business_id", business.id)
-  .eq("active", true);
-  
-  
-  if (!spot || error) {
-    return <div>Not found</div>;
-  }
+  .eq("business_id", id)
+  .order("id", { ascending: false });
 
-  const images = [
-    spot.image_url,
-    spot.image_url_2,
-    spot.image_url_3,
-  ].filter(Boolean);
+  const images =
+  spot.image_urls &&
+  Array.isArray(spot.image_urls) &&
+  spot.image_urls.length > 0
+    ? spot.image_urls
+    : [
+        spot.image_url,
+        spot.image_url_2,
+        spot.image_url_3,
+      ].filter(Boolean);
 
-  const now = new Date();
-
-const status = getOpenStatus(spot.hours);
+  const status = getOpenStatus(spot.hours);
 
   return (
     <main className="min-h-screen bg-white text-[#172033]">
@@ -337,11 +339,16 @@ const status = getOpenStatus(spot.hours);
         "
       >
         <div className="font-semibold">
-          {coupon.title}
+          {coupon.title || "Coupon"}
         </div>
 
         <div className="text-sm text-gray-500">
-          {coupon.description}
+          {coupon.description ||
+            (coupon.coupon_type === "percent" && coupon.value
+              ? `${coupon.value}% off`
+              : coupon.coupon_type === "amount" && coupon.value
+              ? `$${coupon.value} off`
+              : "Special offer")}
         </div>
 
         <ClaimCouponButton

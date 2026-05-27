@@ -134,7 +134,12 @@ export default function ProfileButton() {
           <a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
             Edit Profile
           </a>
-
+			<a
+			  href="/my-coupons"
+			  className="block px-4 py-3 hover:bg-gray-100"
+			>
+			  My Coupons
+			</a>
           {isOwner && (
             <>
               <a href="/owner" className="block px-4 py-3 hover:bg-gray-100">
