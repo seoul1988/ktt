@@ -3,251 +3,385 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
+type Business = {
+  id: number;
+  name: string;
+};
+
+type Coupon = {
+  id: number;
+  business_id: number;
+  title: string;
+  description: string | null;
+  coupon_type: string;
+  value: number;
+  start_date: string | null;
+  end_date: string | null;
+  usage_limit: number;
+  used_count: number;
+  active: boolean;
+};
+
 export default function NewCouponPage() {
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
 
-  const [businesses,setBusinesses]=
-    useState<any[]>([]);
+  const [businessId, setBusinessId] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
 
-  const [businessId,setBusinessId]=
-    useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [couponType, setCouponType] = useState("percent");
+  const [value, setValue] = useState(10);
+  const [usageLimit, setUsageLimit] = useState(1);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
-  const [title,setTitle]=
-    useState("");
-
-  const [description,setDescription]=
-    useState("");
-
-  const [couponType,setCouponType]=
-    useState("percent");
-
-  const [value,setValue]=
-    useState(10);
-
-  useEffect(()=>{
-
+  useEffect(() => {
     loadBusinesses();
+  }, []);
 
-  },[]);
-
-  async function loadBusinesses(){
-
-    const {
-      data:{user},
-    }=
-    await supabase.auth.getUser();
-
-    if(!user)return;
-
-    const {data}=await supabase
-      .from("businesses")
-      .select("id,name")
-      .eq(
-        "owner_id",
-        user.id
-      );
-
-    setBusinesses(
-      data||[]
-    );
-
-    if(data?.length){
-      setBusinessId(
-        data[0].id
-      );
+  useEffect(() => {
+    if (businessId) {
+      loadCoupons(businessId);
     }
+  }, [businessId]);
 
-  }
+  async function loadBusinesses() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  async function createCoupon(){
-
-    const {error}=await supabase
-      .from("coupons")
-      .insert({
-
-        business_id:
-          businessId,
-
-        title,
-
-        description,
-
-        coupon_type:
-          couponType,
-
-        value,
-
-        active:true
-
-      });
-
-    if(error){
-
-      alert(
-        error.message
-      );
-
+    if (!user) {
+      location.href = "/login";
       return;
     }
 
-    alert(
-      "쿠폰 등록 완료"
-    );
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("id,name")
+      .eq("owner_id", user.id)
+      .order("name");
 
-    location.href="/";
+    if (error) {
+      alert(error.message);
+      return;
+    }
 
+    setBusinesses(data || []);
+
+    if (data?.length) {
+      setBusinessId(String(data[0].id));
+    }
+  }
+
+  async function loadCoupons(selectedBusinessId: string) {
+    const { data, error } = await supabase
+      .from("coupons")
+      .select("*")
+      .eq("business_id", selectedBusinessId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setCoupons(data || []);
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setTitle("");
+    setDescription("");
+    setCouponType("percent");
+    setValue(10);
+    setUsageLimit(1);
+    setStartDate("");
+    setEndDate("");
+  }
+
+  function getIsExpired(coupon: Coupon) {
+    const dateExpired =
+      coupon.end_date && new Date(coupon.end_date) < new Date();
+
+    const quantityExpired =
+      coupon.usage_limit > 0 &&
+      coupon.used_count >= coupon.usage_limit;
+
+    return Boolean(dateExpired || quantityExpired || !coupon.active);
+  }
+
+  async function saveCoupon() {
+    if (!businessId) {
+      alert("상점을 선택하세요.");
+      return;
+    }
+
+    if (!title.trim()) {
+      alert("쿠폰 제목을 입력하세요.");
+      return;
+    }
+
+    const payload = {
+      business_id: Number(businessId),
+      title,
+      description,
+      coupon_type: couponType,
+      value,
+      usage_limit: usageLimit,
+      start_date: startDate ? new Date(startDate).toISOString() : null,
+      end_date: endDate ? new Date(endDate).toISOString() : null,
+      active: true,
+    };
+
+    if (editingId) {
+      const { error } = await supabase
+        .from("coupons")
+        .update(payload)
+        .eq("id", editingId);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      alert("쿠폰 수정 완료");
+    } else {
+      const { error } = await supabase
+        .from("coupons")
+        .insert(payload);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      alert("쿠폰 등록 완료");
+    }
+
+    resetForm();
+    loadCoupons(businessId);
+  }
+
+  function editCoupon(coupon: Coupon) {
+    setEditingId(coupon.id);
+    setBusinessId(String(coupon.business_id));
+    setTitle(coupon.title);
+    setDescription(coupon.description || "");
+    setCouponType(coupon.coupon_type);
+    setValue(Number(coupon.value || 0));
+    setUsageLimit(Number(coupon.usage_limit || 1));
+    setStartDate(coupon.start_date ? coupon.start_date.slice(0, 16) : "");
+    setEndDate(coupon.end_date ? coupon.end_date.slice(0, 16) : "");
+  }
+
+  async function deleteCoupon(id: number) {
+    if (!confirm("이 쿠폰을 삭제할까요?")) return;
+
+    const { error } = await supabase
+      .from("coupons")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    alert("쿠폰 삭제 완료");
+    loadCoupons(businessId);
+  }
+
+  async function toggleActive(coupon: Coupon) {
+    const { error } = await supabase
+      .from("coupons")
+      .update({
+        active: !coupon.active,
+      })
+      .eq("id", coupon.id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadCoupons(businessId);
   }
 
   return (
+    <div className="mx-auto max-w-md p-5">
+      <h1 className="mb-6 text-2xl font-bold">
+        Register Coupon
+      </h1>
 
-<div
-className="
-max-w-md
-mx-auto
-p-5
-"
->
+      <select
+        value={businessId}
+        onChange={(e) => setBusinessId(e.target.value)}
+        className="mb-3 w-full rounded border p-3"
+      >
+        {businesses.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.name}
+          </option>
+        ))}
+      </select>
 
-<h1
-className="
-text-2xl
-font-bold
-mb-6
-"
->
+      <div className="mb-6 rounded-2xl border bg-white p-4">
+        <h2 className="mb-3 font-bold">
+          {editingId ? "쿠폰 수정" : "쿠폰 등록"}
+        </h2>
 
-Register Coupon
+        <input
+          placeholder="Title 예: 첫 방문 10% 할인"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="mb-3 w-full rounded border p-3"
+        />
 
-</h1>
+        <textarea
+          placeholder="Description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          className="mb-3 w-full rounded border p-3"
+        />
 
-<select
-value={businessId}
-onChange={(e)=>
-setBusinessId(
-e.target.value
-)}
-className="
-w-full
-border
-rounded
-p-3
-mb-3
-"
->
+        <select
+          value={couponType}
+          onChange={(e) => setCouponType(e.target.value)}
+          className="mb-3 w-full rounded border p-3"
+        >
+          <option value="percent">Percent</option>
+          <option value="fixed">Amount</option>
+          <option value="free">Free</option>
+        </select>
 
-{businesses.map(
-(b)=>(
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => setValue(Number(e.target.value))}
+          placeholder="할인 값"
+          className="mb-3 w-full rounded border p-3"
+        />
 
-<option
-key={b.id}
-value={b.id}
->
+        <input
+          type="number"
+          value={usageLimit}
+          onChange={(e) => setUsageLimit(Number(e.target.value))}
+          placeholder="사용 가능 수량"
+          className="mb-3 w-full rounded border p-3"
+        />
 
-{b.name}
+        <label className="mb-1 block text-sm font-bold">
+          시작일
+        </label>
+        <input
+          type="datetime-local"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className="mb-3 w-full rounded border p-3"
+        />
 
-</option>
+        <label className="mb-1 block text-sm font-bold">
+          종료일
+        </label>
+        <input
+          type="datetime-local"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          className="mb-4 w-full rounded border p-3"
+        />
 
-))}
+        <button
+          onClick={saveCoupon}
+          className="w-full rounded bg-red-500 p-3 font-bold text-white"
+        >
+          {editingId ? "수정하기" : "등록하기"}
+        </button>
 
-</select>
+        {editingId && (
+          <button
+            onClick={resetForm}
+            className="mt-2 w-full rounded bg-gray-200 p-3 font-bold"
+          >
+            수정 취소
+          </button>
+        )}
+      </div>
 
-<input
-placeholder="Title"
-value={title}
-onChange={(e)=>
-setTitle(
-e.target.value
-)}
-className="
-w-full
-border
-rounded
-p-3
-mb-3
-"
-/>
+      <h2 className="mb-3 text-xl font-bold">
+        등록된 쿠폰
+      </h2>
 
-<textarea
-placeholder="Description"
-value={description}
-onChange={(e)=>
-setDescription(
-e.target.value
-)}
-className="
-w-full
-border
-rounded
-p-3
-mb-3
-"
-/>
+      <div className="space-y-3">
+        {coupons.map((coupon) => {
+          const expired = getIsExpired(coupon);
 
-<select
-value={couponType}
-onChange={(e)=>
-setCouponType(
-e.target.value
-)}
-className="
-w-full
-border
-rounded
-p-3
-mb-3
-"
->
+          return (
+            <div
+              key={coupon.id}
+              className="rounded-2xl border bg-white p-4"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-bold">{coupon.title}</p>
+                  <p className="text-sm text-gray-500">
+                    {coupon.description}
+                  </p>
+                </div>
 
-<option value="percent">
-Percent
-</option>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    expired
+                      ? "bg-gray-200 text-gray-600"
+                      : "bg-green-100 text-green-700"
+                  }`}
+                >
+                  {expired ? "Expired" : "Active"}
+                </span>
+              </div>
 
-<option value="fixed">
-Amount
-</option>
+              <p className="mt-2 text-sm">
+                사용: {coupon.used_count || 0} / {coupon.usage_limit || 0}
+              </p>
 
-<option value="free">
-Free
-</option>
+              <p className="text-sm text-gray-500">
+                기간:{" "}
+                {coupon.start_date
+                  ? new Date(coupon.start_date).toLocaleDateString()
+                  : "No start"}{" "}
+                ~{" "}
+                {coupon.end_date
+                  ? new Date(coupon.end_date).toLocaleDateString()
+                  : "No end"}
+              </p>
 
-</select>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => editCoupon(coupon)}
+                  className="flex-1 rounded bg-blue-500 p-2 text-sm font-bold text-white"
+                >
+                  수정
+                </button>
 
-<input
-type="number"
-value={value}
-onChange={(e)=>
-setValue(
-Number(
-e.target.value
-)
-)}
-className="
-w-full
-border
-rounded
-p-3
-mb-4
-"
-/>
+                <button
+                  onClick={() => toggleActive(coupon)}
+                  className="flex-1 rounded bg-gray-700 p-2 text-sm font-bold text-white"
+                >
+                  {coupon.active ? "비활성" : "활성"}
+                </button>
 
-<button
-onClick={
-createCoupon
-}
-className="
-w-full
-bg-red-500
-text-white
-rounded
-p-3
-"
->
-
-등록하기
-
-</button>
-
-</div>
-
-);
-
+                <button
+                  onClick={() => deleteCoupon(coupon.id)}
+                  className="flex-1 rounded bg-red-500 p-2 text-sm font-bold text-white"
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

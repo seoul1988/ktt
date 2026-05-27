@@ -288,6 +288,7 @@ const [instagramUrl, setInstagramUrl] = useState("");
 		tags,
 		website_url: websiteUrl,
 		instagram_url: instagramUrl,
+		owner_id: userId,
       })
       .select("id")
       .single();
