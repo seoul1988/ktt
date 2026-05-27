@@ -135,11 +135,11 @@ export default function OwnerPage() {
                 )}
 
                 <a
-                  href={`/owner/business/${row.business_id}`}
-                  className="mt-4 block rounded-2xl bg-[#172033] py-3 text-center font-extrabold text-white"
-                >
-                  Edit Business
-                </a>
+				  href={`/business/${row.business_id}/edit`}
+				  className="mt-4 block rounded-2xl bg-[#172033] py-3 text-center font-extrabold text-white"
+				>
+				  Edit Business
+				</a>
               </div>
             );
           })}

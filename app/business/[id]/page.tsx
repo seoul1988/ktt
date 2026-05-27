@@ -3,16 +3,96 @@ import { supabase } from "../../../lib/supabase";
 import BusinessPhotoSlider from "../../components/BusinessPhotoSlider";
 import ProfileButton from "../../components/ProfileButton";
 
-function timeToMinutes(time?: string | null) {
-  if (!time) return null;
+function timeTextToMinutes(timeText?: string | null) {
+  if (!timeText) return null;
 
-  const parts = String(time).split(":");
-  const hour = Number(parts[0]);
-  const minute = Number(parts[1] || 0);
+  const match = timeText.match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
 
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (match[3].toUpperCase() === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (match[3].toUpperCase() === "AM" && hour === 12) {
+    hour = 0;
+  }
 
   return hour * 60 + minute;
+}
+
+function getOpenStatus(hours?: string | null) {
+  if (!hours) {
+    return {
+      open: false,
+      text: "Hours not available",
+    };
+  }
+
+  const now = new Date();
+
+  const today = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentMinutes =
+    now
+      .toLocaleTimeString("en-US", {
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "America/New_York",
+      })
+      .split(":")
+      .map(Number)
+      .reduce((a, b) => a * 60 + b);
+
+  const line = hours
+    .split("\n")
+    .find((v) => v.startsWith(today));
+
+  if (!line) {
+    return {
+      open: false,
+      text: "Closed",
+    };
+  }
+
+  if (line.includes("Closed")) {
+    return {
+      open: false,
+      text: "Closed Today",
+    };
+  }
+
+  const main = line
+    .split("/ Break")[0]
+    .replace(today, "")
+    .trim();
+
+  const [openText, closeText] =
+    main.split(" - ");
+
+  const open =
+    timeTextToMinutes(openText);
+
+  const close =
+    timeTextToMinutes(closeText);
+
+  const isOpen =
+    open !== null &&
+    close !== null &&
+    currentMinutes >= open &&
+    currentMinutes < close;
+
+  return {
+    open: isOpen,
+    text: isOpen ? "Open" : "Closed",
+  };
 }
 
 export default async function BusinessPage({
@@ -40,33 +120,7 @@ export default async function BusinessPage({
 
   const now = new Date();
 
-  const today = new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    timeZone: "America/New_York",
-  }).format(now);
-
-  const currentTime = new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "America/New_York",
-  }).format(now);
-
-  const currentMinutes = timeToMinutes(currentTime);
-  const openMinutes = timeToMinutes(spot.open_time);
-  const closeMinutes = timeToMinutes(spot.close_time);
-
-  const isClosedDay =
-    spot.closed_days &&
-    String(spot.closed_days).toLowerCase().includes(today.toLowerCase());
-
-  const isOpenNow =
-    !isClosedDay &&
-    currentMinutes !== null &&
-    openMinutes !== null &&
-    closeMinutes !== null &&
-    currentMinutes >= openMinutes &&
-    currentMinutes < closeMinutes;
+const status = getOpenStatus(spot.hours);
 
   return (
     <main className="min-h-screen bg-white text-[#172033]">
@@ -96,12 +150,12 @@ export default async function BusinessPage({
           {spot.category} · {spot.city} ·{" "}
           <span
             className={
-              isOpenNow
+               status.open
                 ? "font-bold text-green-600"
                 : "font-bold text-red-500"
             }
           >
-            {isOpenNow ? "Open" : "Closed"}
+            {status.text}
           </span>
         </p>
 
@@ -147,12 +201,12 @@ export default async function BusinessPage({
             {spot.address || "Address not available"}
           </p>
 
-          <p>
-            <span className="font-semibold">Hours: </span>
-            {spot.open_time && spot.close_time
-              ? `${spot.open_time} – ${spot.close_time}`
-              : "Hours not available"}
-          </p>
+          <div>
+		  <span className="font-semibold">Hours: </span>
+		  <div className="mt-1 whitespace-pre-wrap font-sans">
+			{spot.hours || "Hours not available"}
+		  </div>
+		</div>
 
           {spot.break_start && spot.break_end && (
             <p>

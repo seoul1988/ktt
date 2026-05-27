@@ -30,23 +30,18 @@ const selectedMarkerIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
-const categories = [
-  { name: "BBQ", emoji: "🍖" },
-  { name: "Chicken", emoji: "🍗" },
-  { name: "Bakery", emoji: "🥐" },
-  { name: "Sushi", emoji: "🍣" },
-  { name: "Noodle", emoji: "🍜" },
-  { name: "Cafe", emoji: "☕" },
-  { name: "Taekwondo", emoji: "🥋" },
-  { name: "Alteration", emoji: "🧵" },
-];
+type MapCategory = {
+  name: string;
+  emoji: string | null;
+};
 
 type Spot = {
   id: number;
   name: string;
-  category: string;
-  city: string;
-  image_url: string;
+  category: string | null;
+  city: string | null;
+  image_url: string | null;
+  image_urls?: string[] | null;
   image_url_2?: string | null;
   image_url_3?: string | null;
   description?: string | null;
@@ -54,11 +49,7 @@ type Spot = {
   review_count?: number | null;
   lat?: number | null;
   lng?: number | null;
-  open_time?: string | null;
-  close_time?: string | null;
-  break_start?: string | null;
-  break_end?: string | null;
-  closed_days?: string | null;
+  hours?: string | null;
 };
 
 type SpotWithDistance = Spot & {
@@ -79,11 +70,22 @@ function milesBetween(a: [number, number], b: [number, number]) {
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-function timeToMinutes(time?: string | null) {
-  if (!time) return null;
+function normalizeCategory(value: string) {
+  return value.trim().toLowerCase().replace(/s$/, "");
+}
 
-  const [hour, minute] = String(time).split(":").map(Number);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+function timeTextToMinutes(timeText?: string | null) {
+  if (!timeText) return null;
+
+  const match = timeText.match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const ampm = match[3].toUpperCase();
+
+  if (ampm === "PM" && hour !== 12) hour += 12;
+  if (ampm === "AM" && hour === 12) hour = 0;
 
   return hour * 60 + minute;
 }
@@ -91,70 +93,82 @@ function timeToMinutes(time?: string | null) {
 function getOpenStatus(spot: Spot) {
   const now = new Date();
 
-  const today = new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
+  const todayShort = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
     timeZone: "America/New_York",
   }).format(now);
 
-  const currentTime = new Intl.DateTimeFormat("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "America/New_York",
-  }).format(now);
+  const currentMinutes =
+    now
+      .toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/New_York",
+      })
+      .split(":")
+      .map(Number)
+      .reduce((h, m) => h * 60 + m);
 
-  const currentMinutes = timeToMinutes(currentTime);
-  const openMinutes = timeToMinutes(spot.open_time);
-  const closeMinutes = timeToMinutes(spot.close_time);
-  const breakStart = timeToMinutes(spot.break_start);
-  const breakEnd = timeToMinutes(spot.break_end);
+  const line = String(spot.hours || "")
+    .split("\n")
+    .find((v) => v.startsWith(todayShort));
 
-  const isClosedDay =
-    spot.closed_days &&
-    String(spot.closed_days).toLowerCase().includes(today.toLowerCase());
+  if (!line) return { text: "Closed" };
 
-  const isBreakTime =
-    currentMinutes !== null &&
-    breakStart !== null &&
-    breakEnd !== null &&
-    currentMinutes >= breakStart &&
-    currentMinutes < breakEnd;
+  if (line.includes("Closed")) {
+    return { text: "Closed Today" };
+  }
 
-  const isOpen =
-    !isClosedDay &&
-    !isBreakTime &&
-    currentMinutes !== null &&
+  const mainPart = line.split("/ Break")[0].replace(todayShort, "").trim();
+  const breakPart = line.split("/ Break")[1]?.trim();
+
+  const [openText, closeText] = mainPart.split(" - ").map((v) => v.trim());
+
+  const openMinutes = timeTextToMinutes(openText);
+  const closeMinutes = timeTextToMinutes(closeText);
+
+  if (breakPart) {
+    const [breakStartText, breakEndText] = breakPart
+      .replace("Break", "")
+      .split(" - ")
+      .map((v) => v.trim());
+
+    const breakStart = timeTextToMinutes(breakStartText);
+    const breakEnd = timeTextToMinutes(breakEndText);
+
+    if (
+      breakStart !== null &&
+      breakEnd !== null &&
+      currentMinutes >= breakStart &&
+      currentMinutes < breakEnd
+    ) {
+      return { text: "Break Time" };
+    }
+  }
+
+  if (
     openMinutes !== null &&
     closeMinutes !== null &&
     currentMinutes >= openMinutes &&
-    currentMinutes < closeMinutes;
-
-  if (isClosedDay) return { text: "Closed Today" };
-  if (isBreakTime) return { text: "Break Time" };
-  if (isOpen) return { text: "Open" };
+    currentMinutes < closeMinutes
+  ) {
+    return { text: "Open" };
+  }
 
   return { text: "Closed" };
 }
-function MoveMap({
-  lat,
-  lng,
-}: {
-  lat?: number;
-  lng?: number;
-}) {
+
+function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   const map = useMap();
 
   useEffect(() => {
     if (!lat || !lng) return;
 
     setTimeout(() => {
-      map.setView(
-        [lat - 0.035, lng],
-        10,
-        {
-          animate: true,
-        }
-      );
+      map.setView([lat - 0.035, lng], 10, {
+        animate: true,
+      });
 
       map.invalidateSize();
     }, 100);
@@ -162,7 +176,6 @@ function MoveMap({
 
   return null;
 }
-
 
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
@@ -185,7 +198,29 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
   const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+  const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
+	const displayCategories = useMemo(() => {
+	  if (mapCategories.length > 0) {
+		return mapCategories;
+	  }
 
+	  const names = new Set<string>();
+
+	  spots.forEach((spot) => {
+		String(spot.category || "")
+		  .split(",")
+		  .map((v) => v.trim())
+		  .filter(Boolean)
+		  .forEach((v) => names.add(v));
+	  });
+
+	  return Array.from(names)
+		.sort()
+		.map((name) => ({
+		  name,
+		  emoji: "🏷️",
+		}));
+	}, [mapCategories, spots]);
   const cardRefs = useRef<Record<number, HTMLAnchorElement | null>>({});
 
   useEffect(() => {
@@ -202,38 +237,66 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
     );
   }, []);
 
+  useEffect(() => {
+    async function loadCategories() {
+      const { data, error } = await supabase
+        .from("categories")
+        .select("name, emoji")
+        .order("name", { ascending: true });
+console.log(data);
+      if (error) {
+        console.log("Category load error:", error);
+        setMapCategories([]);
+        return;
+      }
+
+      setMapCategories((data || []) as MapCategory[]);
+    }
+
+    loadCategories();
+  }, []);
+
   const mapSpots = useMemo(() => {
-    return spots
-      .filter((spot) => spot.lat && spot.lng)
-      .filter((spot) => {
-        const text = `${spot.name} ${spot.category} ${spot.city}`.toLowerCase();
+    return spots.filter((spot) => {
+      const searchText = `${spot.name || ""} ${spot.category || ""} ${
+        spot.city || ""
+      }`.toLowerCase();
 
-        const matchesSearch = text.includes(search.toLowerCase());
+      const spotCategories = String(spot.category || "")
+        .split(",")
+        .map((item) => normalizeCategory(item));
 
-        const matchesCategory = selectedCategory
-          ? text.includes(selectedCategory.toLowerCase())
-          : false;
+      const matchesSearch = search
+        ? searchText.includes(search.trim().toLowerCase())
+        : true;
 
-        if (!selectedCategory && !search) return false;
-        if (search && !matchesSearch) return false;
-        if (selectedCategory && !matchesCategory) return false;
+      const matchesCategory = selectedCategory
+        ? spotCategories.includes(normalizeCategory(selectedCategory))
+        : true;
 
-        return true;
-      });
+      if (!selectedCategory && !search) return false;
+
+      return matchesSearch && matchesCategory;
+    });
   }, [spots, search, selectedCategory]);
 
   const cardSpots: SpotWithDistance[] = useMemo(() => {
     if (!userLocation) return mapSpots;
 
     return mapSpots
-      .map((spot) => ({
-        ...spot,
-        distance: milesBetween(userLocation, [
-          spot.lat as number,
-          spot.lng as number,
-        ]),
-      }))
-      .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      .map((spot) => {
+        if (!spot.lat || !spot.lng) return spot;
+
+        return {
+          ...spot,
+          distance: milesBetween(userLocation, [spot.lat, spot.lng]),
+        };
+      })
+      .sort((a, b) => {
+        if (a.distance === undefined) return 1;
+        if (b.distance === undefined) return -1;
+        return a.distance - b.distance;
+      });
   }, [mapSpots, userLocation]);
 
   useEffect(() => {
@@ -350,6 +413,10 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
     }
   };
 
+  const selectedMapSpot = mapSpots.find(
+    (v) => v.id === selectedSpotId && v.lat && v.lng
+  );
+
   return (
     <div className="relative min-h-screen">
       <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3">
@@ -377,13 +444,13 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           </p>
 
           <div className="space-y-2">
-            {categories.map((cat) => (
+            {displayCategories.map((cat) => (
               <button
                 key={cat.name}
                 onClick={() => selectCategory(cat.name)}
                 className="flex w-full flex-col items-center justify-center rounded-2xl bg-gray-50 px-2 py-3 text-[11px] font-extrabold text-[#172033] shadow-sm active:scale-95"
               >
-                <span className="text-2xl">{cat.emoji}</span>
+                <span className="text-2xl">{cat.emoji || "🏷️"}</span>
                 <span className="mt-1 leading-tight">{cat.name}</span>
               </button>
             ))}
@@ -407,26 +474,16 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
       )}
 
       <MapContainer
-		  center={
-			userLocation || [35.7796, -78.6382]
-		  }
-		  zoom={12}
-		  zoomControl={false}
-		  className="h-screen w-full"
-		>
-	
-		<MoveMap
-			  lat={
-				Number(
-				  mapSpots.find((v) => v.id === selectedSpotId)?.lat ?? 0
-				) || undefined
-			  }
-			  lng={
-				Number(
-				  mapSpots.find((v) => v.id === selectedSpotId)?.lng ?? 0
-				) || undefined
-			  }
-			/>
+        center={userLocation || [35.7796, -78.6382]}
+        zoom={12}
+        zoomControl={false}
+        className="h-screen w-full"
+      >
+        <MoveMap
+          lat={selectedMapSpot?.lat || undefined}
+          lng={selectedMapSpot?.lng || undefined}
+        />
+
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -452,30 +509,34 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
           />
         )}
 
-        {mapSpots.map((spot) => (
-          <Marker
-            key={spot.id}
-            position={[spot.lat as number, spot.lng as number]}
-            icon={spot.id === selectedSpotId ? selectedMarkerIcon : markerIcon}
-            eventHandlers={{
-              click: (e) => {
-                L.DomEvent.stopPropagation(e.originalEvent);
+        {mapSpots
+          .filter((spot) => spot.lat && spot.lng)
+          .map((spot) => (
+            <Marker
+              key={spot.id}
+              position={[spot.lat as number, spot.lng as number]}
+              icon={
+                spot.id === selectedSpotId ? selectedMarkerIcon : markerIcon
+              }
+              eventHandlers={{
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e.originalEvent);
 
-                setSelectedSpotId(spot.id);
-                setCategoryPanelOpen(false);
-                setShowCards(true);
+                  setSelectedSpotId(spot.id);
+                  setCategoryPanelOpen(false);
+                  setShowCards(true);
 
-                cardRefs.current[spot.id]?.scrollIntoView({
-                  behavior: "smooth",
-                  inline: "center",
-                  block: "nearest",
-                });
-              },
-            }}
-          >
-            <Popup>{spot.name}</Popup>
-          </Marker>
-        ))}
+                  cardRefs.current[spot.id]?.scrollIntoView({
+                    behavior: "smooth",
+                    inline: "center",
+                    block: "nearest",
+                  });
+                },
+              }}
+            >
+              <Popup>{spot.name}</Popup>
+            </Marker>
+          ))}
       </MapContainer>
 
       <div
@@ -487,11 +548,12 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
         }`}
       >
         {cardSpots.map((spot) => {
-          const images = [
-            spot.image_url,
-            spot.image_url_2,
-            spot.image_url_3,
-          ].filter(Boolean);
+          const images =
+            spot.image_urls && spot.image_urls.length > 0
+              ? spot.image_urls
+              : [spot.image_url, spot.image_url_2, spot.image_url_3].filter(
+                  Boolean
+                );
 
           const current = imageIndexes[spot.id] || 0;
           const status = getOpenStatus(spot);
@@ -523,36 +585,42 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
             >
               <div className="flex flex-col gap-1">
                 <div className="relative h-[125px] w-full overflow-hidden rounded-[22px] bg-gray-100">
-                  <div
-                    id={`image-scroll-${spot.id}`}
-                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onScroll={(e) => {
-                      const target = e.currentTarget;
-                      const width = target.clientWidth;
-                      const scrollLeft = target.scrollLeft;
+                  {images.length > 0 ? (
+                    <div
+                      id={`image-scroll-${spot.id}`}
+                      className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onScroll={(e) => {
+                        const target = e.currentTarget;
+                        const width = target.clientWidth;
+                        const scrollLeft = target.scrollLeft;
 
-                      if (!width) return;
+                        if (!width) return;
 
-                      setImageIndexes((prev) => ({
-                        ...prev,
-                        [spot.id]: Math.round(scrollLeft / width),
-                      }));
-                    }}
-                  >
-                    {images.map((image, imageIndex) => (
-                      <img
-                        key={imageIndex}
-                        src={image as string}
-                        alt={spot.name}
-                        draggable={false}
-                        className="h-full w-full shrink-0 snap-center object-cover"
-                      />
-                    ))}
-                  </div>
+                        setImageIndexes((prev) => ({
+                          ...prev,
+                          [spot.id]: Math.round(scrollLeft / width),
+                        }));
+                      }}
+                    >
+                      {images.map((image, imageIndex) => (
+                        <img
+                          key={imageIndex}
+                          src={image as string}
+                          alt={spot.name}
+                          draggable={false}
+                          className="h-full w-full shrink-0 snap-center object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400">
+                      No Photo
+                    </div>
+                  )}
 
                   {images.length > 1 && current > 0 && (
                     <div
@@ -648,7 +716,7 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                   </div>
 
                   <p className="mt-1 text-sm text-gray-600">
-                    {spot.category} · {spot.city}
+                    {spot.category} · {spot.city || "Triangle"}
                     {spot.rating && (
                       <>
                         {" · "}⭐ {spot.rating}
@@ -656,12 +724,6 @@ export default function BusinessMap({ spots }: { spots: Spot[] }) {
                       </>
                     )}
                   </p>
-
-                  {spot.break_start && spot.break_end && (
-                    <p className="mt-1 text-xs text-orange-500">
-                      Break {spot.break_start}–{spot.break_end}
-                    </p>
-                  )}
 
                   <p className="mt-1 text-sm font-semibold text-[#2453A6]">
                     {userLocation && spot.distance !== undefined

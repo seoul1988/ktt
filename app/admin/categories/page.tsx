@@ -59,11 +59,12 @@ export default function AdminCategoriesPage() {
   async function loadCategories() {
     const { data, error } = await supabase
       .from("categories")
-      .select("id, name, emoji, created_at")
+      .select("*")
       .order("name", { ascending: true });
 
     if (error) {
-      alert(error.message);
+      console.log("Categories load error:", error);
+      alert("Categories load error: " + error.message);
       setCategories([]);
       return;
     }
@@ -167,34 +168,49 @@ export default function AdminCategoriesPage() {
           </button>
         </div>
 
-        <div className="mt-5 space-y-3">
-          {categories.length === 0 && (
-            <div className="rounded-3xl bg-white p-5 font-bold shadow">
-              No categories yet.
-            </div>
-          )}
+        <div className="mt-5">
+		  {categories.length === 0 && (
+			<div className="rounded-3xl bg-white p-5 font-bold shadow">
+			  No categories yet.
+			</div>
+		  )}
 
-          {categories.map((category) => (
-            <div
-              key={category.id}
-              className="flex items-center justify-between rounded-3xl bg-white p-4 shadow"
-            >
-              <div>
-                <p className="text-lg font-black">
-                  <span className="mr-2">{category.emoji || "🏷️"}</span>
-                  {category.name}
-                </p>
-              </div>
+		  <div className="grid grid-cols-2 gap-3">
+			{categories.map((category) => (
+			  <div
+				key={category.id}
+				className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 shadow"
+			  >
+				<div className="flex min-w-0 items-center gap-2">
+				  <span className="text-xl shrink-0">
+					{category.emoji || "🏷️"}
+				  </span>
 
-              <button
-                onClick={() => deleteCategory(category)}
-                className="rounded-xl bg-red-500 px-3 py-2 text-sm font-bold text-white"
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
+				  <span className="truncate font-bold">
+					{category.name}
+				  </span>
+				</div>
+
+				<button
+				  onClick={() => deleteCategory(category)}
+				  className="
+					ml-2
+					shrink-0
+					rounded-full
+					bg-red-500
+					px-2
+					py-1
+					text-[11px]
+					font-bold
+					text-white
+				  "
+				>
+				  삭제
+				</button>
+			  </div>
+			))}
+		  </div>
+</div>
       </div>
     </main>
   );

@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "../../../lib/supabase";
+import { useParams } from "next/navigation";
+import { supabase } from "../../../../lib/supabase";
 
 type Category = {
   id: number;
   name: string;
   emoji: string | null;
+};
+
+type AddressResult = {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
 };
 
 type DayHour = {
@@ -17,6 +25,20 @@ type DayHour = {
   hasBreak: boolean;
   breakStart: string;
   breakEnd: string;
+};
+
+type Business = {
+  id: number;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  category: string | null;
+  hours: string | null;
+  description: string | null;
+  image_url: string | null;
+  image_urls?: string[] | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 const defaultHours: DayHour[] = [
@@ -39,46 +61,77 @@ const timeOptions = [
   "12:00 AM", "12:30 AM", "1:00 AM", "1:30 AM", "2:00 AM",
 ];
 
-export default function NewBusinessPage() {
+function parseHours(hoursText: string | null): DayHour[] {
+  if (!hoursText) return defaultHours;
+
+  return defaultHours.map((defaultItem) => {
+    const line = hoursText.split("\n").find((v) => v.startsWith(defaultItem.day));
+    if (!line) return defaultItem;
+
+    if (line.includes("Closed")) {
+      return { ...defaultItem, closed: true };
+    }
+
+    const hasBreak = line.includes("/ Break");
+    const mainPart = line.split("/ Break")[0].replace(defaultItem.day, "").trim();
+    const breakPart = line.split("/ Break")[1]?.trim();
+
+    const [open, close] = mainPart.split(" - ").map((v) => v.trim());
+
+    let breakStart = defaultItem.breakStart;
+    let breakEnd = defaultItem.breakEnd;
+
+    if (breakPart) {
+      const [bs, be] = breakPart.split(" - ").map((v) => v.trim());
+      breakStart = bs || defaultItem.breakStart;
+      breakEnd = be || defaultItem.breakEnd;
+    }
+
+    return {
+      ...defaultItem,
+      open: open || defaultItem.open,
+      close: close || defaultItem.close,
+      closed: false,
+      hasBreak,
+      breakStart,
+      breakEnd,
+    };
+  });
+}
+
+export default function EditBusinessPage() {
+  const params = useParams();
+  const businessId = Number(params.id);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [role, setRole] = useState<string>("user");
 
+  const [business, setBusiness] = useState<Business | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [addressResults, setAddressResults] = useState<AddressResult[]>([]);
+  const [selectedLat, setSelectedLat] = useState<number | null>(null);
+  const [selectedLng, setSelectedLng] = useState<number | null>(null);
+
   const [phone, setPhone] = useState("");
   const [dayHours, setDayHours] = useState<DayHour[]>(defaultHours);
   const [description, setDescription] = useState("");
 
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
+  const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
+  const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
 
   useEffect(() => {
-    checkUser();
-    loadCategories();
+    loadPage();
   }, []);
 
-  async function loadCategories() {
-    const { data, error } = await supabase
-      .from("categories")
-      .select("id, name, emoji")
-      .order("name", { ascending: true });
+  async function loadPage() {
+    setLoading(true);
 
-    if (error) {
-      console.log("Categories load error:", error);
-      return;
-    }
-
-    setCategories((data || []) as Category[]);
-  }
-
-  async function checkUser() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -88,57 +141,107 @@ export default function NewBusinessPage() {
       return;
     }
 
-    setUserId(user.id);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
+    const { data: owner } = await supabase
+      .from("business_owners")
+      .select("user_id,status")
+      .eq("business_id", businessId)
+      .eq("user_id", user.id)
+      .eq("status", "approved")
       .maybeSingle();
 
-    const currentRole = String(profile?.role || "user").toLowerCase();
-    setRole(currentRole);
-
-    if (currentRole !== "owner" && currentRole !== "admin") {
-      alert("Only approved owners can register a business.");
-      window.location.href = "/profile";
+    if (!owner) {
+      alert("You do not have permission to edit this business.");
+      window.location.href = "/owner";
       return;
     }
+
+    const { data: categoryData } = await supabase
+      .from("categories")
+      .select("id, name, emoji")
+      .order("name", { ascending: true });
+
+    setCategories((categoryData || []) as Category[]);
+
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    if (error || !data) {
+      alert("Business not found.");
+      window.location.href = "/owner";
+      return;
+    }
+
+    const b = data as Business;
+
+    const images =
+      b.image_urls && b.image_urls.length > 0
+        ? b.image_urls
+        : b.image_url
+        ? [b.image_url]
+        : [];
+
+    setBusiness(b);
+    setName(b.name || "");
+    setAddress(b.address || "");
+    setPhone(b.phone || "");
+    setDescription(b.description || "");
+    setExistingImageUrls(images);
+    setDayHours(parseHours(b.hours));
+    setSelectedLat(b.lat || null);
+    setSelectedLng(b.lng || null);
+
+    setSelectedCategories(
+      String(b.category || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean)
+    );
 
     setLoading(false);
   }
 
-  async function geocodeAddress(addressText: string) {
-    const query = `${addressText}, North Carolina, USA`;
+  async function searchAddress(value: string) {
+    setAddress(value);
+    setSelectedLat(null);
+    setSelectedLng(null);
 
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(
-        query
-      )}`
-    );
-
-    const data = await response.json();
-
-    if (!data || data.length === 0) {
-      return { lat: null, lng: null };
+    if (value.trim().length < 5) {
+      setAddressResults([]);
+      return;
     }
 
-    return {
-      lat: Number(data[0].lat),
-      lng: Number(data[0].lon),
-    };
+    const query = `${value}, Raleigh, NC, USA`;
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&countrycodes=us&q=${encodeURIComponent(
+          query
+        )}`
+      );
+
+      const data = await response.json();
+      setAddressResults((data || []) as AddressResult[]);
+    } catch {
+      setAddressResults([]);
+    }
+  }
+
+  function selectAddress(item: AddressResult) {
+    setAddress(item.display_name);
+    setSelectedLat(Number(item.lat));
+    setSelectedLng(Number(item.lon));
+    setAddressResults([]);
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
 
-    if (imageFiles.length === 0) {
-      alert("Please select image files.");
-      return;
-    }
-
-    const remainCount = 6 - photoFiles.length;
+    const currentTotal = existingImageUrls.length + newPhotoFiles.length;
+    const remainCount = 6 - currentTotal;
 
     if (remainCount <= 0) {
       alert("You can upload up to 6 photos.");
@@ -148,8 +251,8 @@ export default function NewBusinessPage() {
 
     const newFiles = imageFiles.slice(0, remainCount);
 
-    setPhotoFiles((prev) => [...prev, ...newFiles]);
-    setPhotoPreviews((prev) => [
+    setNewPhotoFiles((prev) => [...prev, ...newFiles]);
+    setNewPhotoPreviews((prev) => [
       ...prev,
       ...newFiles.map((file) => URL.createObjectURL(file)),
     ]);
@@ -157,10 +260,13 @@ export default function NewBusinessPage() {
     e.target.value = "";
   }
 
-  function removePhoto(index: number) {
-    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+  function removeExistingPhoto(index: number) {
+    setExistingImageUrls((prev) => prev.filter((_, i) => i !== index));
+  }
 
-    setPhotoPreviews((prev) => {
+  function removeNewPhoto(index: number) {
+    setNewPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+    setNewPhotoPreviews((prev) => {
       URL.revokeObjectURL(prev[index]);
       return prev.filter((_, i) => i !== index);
     });
@@ -190,26 +296,23 @@ export default function NewBusinessPage() {
     return dayHours
       .map((item) => {
         if (item.closed) return `${item.day} Closed`;
-
         const base = `${item.day} ${item.open} - ${item.close}`;
-
         if (item.hasBreak) {
           return `${base} / Break ${item.breakStart} - ${item.breakEnd}`;
         }
-
         return base;
       })
       .join("\n");
   }
 
-  async function uploadBusinessPhotos() {
-    if (photoFiles.length === 0) return [];
+  async function uploadNewPhotos() {
+    if (newPhotoFiles.length === 0) return [];
 
     const uploadedUrls: string[] = [];
 
-    for (const file of photoFiles) {
+    for (const file of newPhotoFiles) {
       const fileExt = file.name.split(".").pop();
-      const fileName = `${userId}-${Date.now()}-${Math.random()
+      const fileName = `${businessId}-${Date.now()}-${Math.random()
         .toString(36)
         .substring(2)}.${fileExt}`;
 
@@ -217,9 +320,7 @@ export default function NewBusinessPage() {
         .from("business-images")
         .upload(fileName, file);
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage
         .from("business-images")
@@ -232,7 +333,7 @@ export default function NewBusinessPage() {
   }
 
   async function saveBusiness() {
-    if (!userId) return;
+    if (!business) return;
 
     if (!name.trim()) {
       alert("Please enter business name.");
@@ -244,6 +345,11 @@ export default function NewBusinessPage() {
       return;
     }
 
+    if (!selectedLat || !selectedLng) {
+      alert("Please select an address from the dropdown list.");
+      return;
+    }
+
     if (selectedCategories.length === 0) {
       alert("Please select at least one category.");
       return;
@@ -251,66 +357,42 @@ export default function NewBusinessPage() {
 
     setSaving(true);
 
-    let imageUrls: string[] = [];
-    let coords = { lat: null as number | null, lng: null as number | null };
+    let uploadedUrls: string[] = [];
 
     try {
-      imageUrls = await uploadBusinessPhotos();
-      coords = await geocodeAddress(address);
+      uploadedUrls = await uploadNewPhotos();
     } catch (error: any) {
       setSaving(false);
       alert("Save error: " + error.message);
       return;
     }
 
-    if (!coords.lat || !coords.lng) {
-      setSaving(false);
-      alert("Could not find this address on the map. Please check the address.");
-      return;
-    }
+    const finalImageUrls = [...existingImageUrls, ...uploadedUrls].slice(0, 6);
 
-    const { data: business, error: businessError } = await supabase
+    const { error } = await supabase
       .from("businesses")
-      .insert({
+      .update({
         name,
         address,
         phone,
         category: selectedCategories.join(", "),
         hours: formatBusinessHours(),
         description,
-        image_url: imageUrls[0] || "",
-        image_urls: imageUrls,
-        lat: coords.lat,
-        lng: coords.lng,
+        image_url: finalImageUrls[0] || "",
+        image_urls: finalImageUrls,
+        lat: selectedLat,
+        lng: selectedLng,
       })
-      .select("id")
-      .single();
+      .eq("id", business.id);
 
-    if (businessError) {
-      setSaving(false);
-      alert(businessError.message);
+    setSaving(false);
+
+    if (error) {
+      alert(error.message);
       return;
     }
 
-    if (business?.id) {
-      const { error: ownerError } = await supabase
-        .from("business_owners")
-        .insert({
-          user_id: userId,
-          business_id: business.id,
-          status: "approved",
-          approved_at: new Date().toISOString(),
-        });
-
-      if (ownerError) {
-        setSaving(false);
-        alert(ownerError.message);
-        return;
-      }
-    }
-
-    setSaving(false);
-    alert("Business registered.");
+    alert("Business updated.");
     window.location.href = "/owner";
   }
 
@@ -322,12 +404,14 @@ export default function NewBusinessPage() {
     );
   }
 
+  const totalPhotos = existingImageUrls.length + newPhotoFiles.length;
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md">
         <button
           onClick={() => {
-            window.location.href = role === "admin" ? "/map" : "/owner";
+            window.location.href = "/owner";
           }}
           className="mb-5 rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
         >
@@ -335,7 +419,7 @@ export default function NewBusinessPage() {
         </button>
 
         <div className="rounded-[32px] bg-white p-6 shadow-2xl">
-          <h1 className="text-3xl font-black">Register Business</h1>
+          <h1 className="text-3xl font-black">Edit Business</h1>
 
           <div className="mt-6 space-y-4">
             <input
@@ -345,12 +429,35 @@ export default function NewBusinessPage() {
               className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
             />
 
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Full address"
-              className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
-            />
+            <div className="relative">
+              <input
+                value={address}
+                onChange={(e) => searchAddress(e.target.value)}
+                placeholder="Full address"
+                className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
+              />
+
+              {addressResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-2xl border bg-white shadow-2xl">
+                  {addressResults.map((item) => (
+                    <button
+                      key={item.place_id}
+                      type="button"
+                      onClick={() => selectAddress(item)}
+                      className="w-full border-b px-4 py-3 text-left text-sm font-bold hover:bg-gray-100"
+                    >
+                      {item.display_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedLat && selectedLng && (
+                <p className="mt-2 text-xs font-bold text-green-600">
+                  Map location selected.
+                </p>
+              )}
+            </div>
 
             <input
               value={phone}
@@ -364,7 +471,7 @@ export default function NewBusinessPage() {
                 <div>
                   <p className="font-black">Business Photos</p>
                   <p className="text-xs font-bold text-gray-500">
-                    {photoFiles.length}/6 photos selected
+                    {totalPhotos}/6 photos selected
                   </p>
                 </div>
 
@@ -386,31 +493,51 @@ export default function NewBusinessPage() {
                 className="hidden"
               />
 
-              {photoPreviews.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {photoPreviews.map((preview, index) => (
-                    <div key={preview} className="relative">
-                      <img
-                        src={preview}
-                        alt={`Business preview ${index + 1}`}
-                        className="h-24 w-full rounded-xl object-cover"
-                      />
+              <div className="grid grid-cols-3 gap-2">
+                {existingImageUrls.map((url, index) => (
+                  <div key={url} className="relative">
+                    <img
+                      src={url}
+                      alt={`Existing photo ${index + 1}`}
+                      className="h-24 w-full rounded-xl object-cover"
+                    />
 
-                      <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
-                        {index + 1}
-                      </span>
+                    <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+                      {index + 1}
+                    </span>
 
-                      <button
-                        type="button"
-                        onClick={() => removePhoto(index)}
-                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    <button
+                      type="button"
+                      onClick={() => removeExistingPhoto(index)}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+
+                {newPhotoPreviews.map((preview, index) => (
+                  <div key={preview} className="relative">
+                    <img
+                      src={preview}
+                      alt={`New photo ${index + 1}`}
+                      className="h-24 w-full rounded-xl object-cover"
+                    />
+
+                    <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+                      {existingImageUrls.length + index + 1}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => removeNewPhoto(index)}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="rounded-2xl border bg-gray-50 p-4">
@@ -559,7 +686,7 @@ export default function NewBusinessPage() {
               disabled={saving}
               className="w-full rounded-2xl bg-[#172033] py-4 text-lg font-extrabold text-white disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Register Business"}
+              {saving ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </div>
@@ -567,7 +694,3 @@ export default function NewBusinessPage() {
     </main>
   );
 }
-
-
-
-
