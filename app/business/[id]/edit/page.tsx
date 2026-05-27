@@ -39,6 +39,9 @@ type Business = {
   image_urls?: string[] | null;
   lat?: number | null;
   lng?: number | null;
+  tags: string | null;
+  website_url: string | null;
+  instagram_url: string | null;
 };
 
 const defaultHours: DayHour[] = [
@@ -121,6 +124,10 @@ export default function EditBusinessPage() {
   const [dayHours, setDayHours] = useState<DayHour[]>(defaultHours);
   const [description, setDescription] = useState("");
 
+  const [tags, setTags] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
+
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
@@ -188,6 +195,9 @@ export default function EditBusinessPage() {
     setAddress(b.address || "");
     setPhone(b.phone || "");
     setDescription(b.description || "");
+    setTags(b.tags || "");
+    setWebsiteUrl(b.website_url || "");
+    setInstagramUrl(b.instagram_url || "");
     setExistingImageUrls(images);
     setDayHours(parseHours(b.hours));
     setSelectedLat(b.lat || null);
@@ -266,6 +276,7 @@ export default function EditBusinessPage() {
 
   function removeNewPhoto(index: number) {
     setNewPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+
     setNewPhotoPreviews((prev) => {
       URL.revokeObjectURL(prev[index]);
       return prev.filter((_, i) => i !== index);
@@ -296,10 +307,13 @@ export default function EditBusinessPage() {
     return dayHours
       .map((item) => {
         if (item.closed) return `${item.day} Closed`;
+
         const base = `${item.day} ${item.open} - ${item.close}`;
+
         if (item.hasBreak) {
           return `${base} / Break ${item.breakStart} - ${item.breakEnd}`;
         }
+
         return base;
       })
       .join("\n");
@@ -378,6 +392,9 @@ export default function EditBusinessPage() {
         category: selectedCategories.join(", "),
         hours: formatBusinessHours(),
         description,
+        tags,
+        website_url: websiteUrl,
+        instagram_url: instagramUrl,
         image_url: finalImageUrls[0] || "",
         image_urls: finalImageUrls,
         lat: selectedLat,
@@ -671,6 +688,31 @@ export default function EditBusinessPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="rounded-2xl border bg-gray-50 p-4 space-y-3">
+              <p className="font-black">Business Info</p>
+
+              <input
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="Tags (family, sushi, lunch)"
+                className="w-full rounded-xl border bg-white px-4 py-3"
+              />
+
+              <input
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="Website URL"
+                className="w-full rounded-xl border bg-white px-4 py-3"
+              />
+
+              <input
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                placeholder="Instagram URL"
+                className="w-full rounded-xl border bg-white px-4 py-3"
+              />
             </div>
 
             <textarea

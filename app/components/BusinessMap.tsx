@@ -50,6 +50,7 @@ type Spot = {
   lat?: number | null;
   lng?: number | null;
   hours?: string | null;
+  tags?: string | null;
 };
 
 type SpotWithDistance = Spot & {
@@ -258,9 +259,13 @@ console.log(data);
 
   const mapSpots = useMemo(() => {
     return spots.filter((spot) => {
-      const searchText = `${spot.name || ""} ${spot.category || ""} ${
-        spot.city || ""
-      }`.toLowerCase();
+      const searchText = `
+	  ${spot.name || ""}
+	  ${spot.category || ""}
+	  ${spot.tags || ""}
+	  ${spot.city || ""}
+	  ${spot.description || ""}
+	`.toLowerCase();
 
       const spotCategories = String(spot.category || "")
         .split(",")

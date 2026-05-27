@@ -55,6 +55,9 @@ export default function NewBusinessPage() {
   const [phone, setPhone] = useState("");
   const [dayHours, setDayHours] = useState<DayHour[]>(defaultHours);
   const [description, setDescription] = useState("");
+  const [tags, setTags] = useState("");
+const [websiteUrl, setWebsiteUrl] = useState("");
+const [instagramUrl, setInstagramUrl] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -282,6 +285,9 @@ export default function NewBusinessPage() {
         image_urls: imageUrls,
         lat: coords.lat,
         lng: coords.lng,
+		tags,
+		website_url: websiteUrl,
+		instagram_url: instagramUrl,
       })
       .select("id")
       .single();
@@ -545,6 +551,31 @@ export default function NewBusinessPage() {
                 ))}
               </div>
             </div>
+
+<div className="rounded-2xl border bg-gray-50 p-4 space-y-3">
+  <p className="font-black">Business Info</p>
+
+  <input
+    value={tags}
+    onChange={(e) => setTags(e.target.value)}
+    placeholder="Tags (Korean, Family, BBQ, Late Night)"
+    className="w-full rounded-xl border bg-white px-4 py-3"
+  />
+
+  <input
+    value={websiteUrl}
+    onChange={(e) => setWebsiteUrl(e.target.value)}
+    placeholder="Website (https://...)"
+    className="w-full rounded-xl border bg-white px-4 py-3"
+  />
+
+  <input
+    value={instagramUrl}
+    onChange={(e) => setInstagramUrl(e.target.value)}
+    placeholder="Instagram (https://instagram.com/...)"
+    className="w-full rounded-xl border bg-white px-4 py-3"
+  />
+</div>
 
             <textarea
               value={description}

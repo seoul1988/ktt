@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import BusinessPhotoSlider from "../../components/BusinessPhotoSlider";
 import ProfileButton from "../../components/ProfileButton";
+import ClaimCouponButton from "@/app/components/ClaimCouponButton";
 
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
@@ -108,6 +109,13 @@ export default async function BusinessPage({
     .eq("id", id)
     .single();
 
+const { data: coupons } = await supabase
+  .from("coupons")
+  .select("*")
+  .eq("business_id", business.id)
+  .eq("active", true);
+  
+  
   if (!spot || error) {
     return <div>Not found</div>;
   }
@@ -311,6 +319,45 @@ const status = getOpenStatus(spot.hours);
             {spot.description || "No description yet."}
           </p>
         </section>
+		
+		<div className="mt-6">
+  <h2 className="font-bold text-lg">
+    Coupons
+  </h2>
+
+  <div className="space-y-3">
+
+    {coupons?.map((coupon) => (
+      <div
+        key={coupon.id}
+        className="
+          rounded-xl
+          border
+          p-4
+        "
+      >
+        <div className="font-semibold">
+          {coupon.title}
+        </div>
+
+        <div className="text-sm text-gray-500">
+          {coupon.description}
+        </div>
+
+        <ClaimCouponButton
+          couponId={coupon.id}
+        />
+
+      </div>
+    ))}
+
+  </div>
+</div>
+		
+		
+		
+		
+		
       </section>
 
       <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
