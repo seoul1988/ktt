@@ -280,11 +280,33 @@ console.log(data);
     });
   }, [spots, search, selectedCategory]);
 
-  const cardSpots: SpotWithDistance[] = useMemo(() => {
+ const cardSpots: SpotWithDistance[] = useMemo(() => {
+  if (!userLocation) {
+    return mapSpots.map((spot) => ({
+      ...spot,
+      distance: undefined,
+    }));
+  }
 
-  useEffect(() => {
-    setSelectedSpotId(cardSpots[0]?.id || null);
-  }, [cardSpots]);
+  return mapSpots
+    .map((spot): SpotWithDistance => ({
+      ...spot,
+      distance:
+        spot.lat && spot.lng
+          ? milesBetween(userLocation, [spot.lat, spot.lng])
+          : undefined,
+    }))
+    .sort((a, b) => {
+      if (a.distance === undefined) return 1;
+      if (b.distance === undefined) return -1;
+
+      return a.distance - b.distance;
+    });
+}, [mapSpots, userLocation]);
+
+useEffect(() => {
+  setSelectedSpotId(cardSpots[0]?.id || null);
+}, [cardSpots]);
 
   useEffect(() => {
     async function loadLikes() {
