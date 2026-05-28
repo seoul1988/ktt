@@ -1,5 +1,5 @@
 "use client";
-
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabase";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
@@ -43,6 +43,7 @@ export default function AdminCommunityEventsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [autocomplete, setAutocomplete] =
     useState<google.maps.places.Autocomplete | null>(null);
 
@@ -169,13 +170,45 @@ export default function AdminCommunityEventsPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md pb-24">
-        <div className="mb-6">
-          <p className="text-sm font-black text-[#C4483A]">ADMIN</p>
-          <h1 className="text-3xl font-black">Community Events</h1>
-          <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-            Add, edit, and delete KTown community events.
-          </p>
-        </div>
+        <div className="relative mb-6 flex items-start justify-between">
+	  <div>
+		<p className="text-sm font-black text-[#C4483A]">ADMIN</p>
+		<h1 className="text-3xl font-black">Community Events</h1>
+		<p className="mt-2 text-sm font-semibold text-[#6B6257]">
+		  Add, edit, and delete KTown community events.
+		</p>
+	  </div>
+
+	  <button
+		onClick={() => setMenuOpen(!menuOpen)}
+		className="rounded-full bg-white px-4 py-2 text-2xl font-black shadow-sm"
+	  >
+		⋯
+	  </button>
+
+	  {menuOpen && (
+		<div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl bg-white shadow-lg">
+		  <Link
+			href="/admin"
+			className="block px-4 py-3 text-sm font-black hover:bg-[#F8F3EC]"
+		  >
+			Admin Home
+		  </Link>
+		  <Link
+			href="/community"
+			className="block px-4 py-3 text-sm font-black hover:bg-[#F8F3EC]"
+		  >
+			View Community
+		  </Link>
+		  <Link
+			href="/admin/community/events"
+			className="block px-4 py-3 text-sm font-black hover:bg-[#F8F3EC]"
+		  >
+			Events
+		  </Link>
+		</div>
+	  )}
+	</div>
 
         <section className="mb-8 rounded-3xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-xl font-black">
@@ -461,6 +494,19 @@ export default function AdminCommunityEventsPage() {
           </div>
         </section>
       </div>
+	  <div className="fixed bottom-4 left-0 right-0 z-50 px-5">
+  <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-lg">
+    <Link href="/admin" className="flex-1 py-4 text-center">
+      Admin
+    </Link>
+    <Link href="/admin/community/events" className="flex-1 bg-[#C4483A] py-4 text-center">
+      Events
+    </Link>
+    <Link href="/community" className="flex-1 py-4 text-center">
+      View
+    </Link>
+  </div>
+</div>
     </main>
   );
 }
