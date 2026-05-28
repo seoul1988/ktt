@@ -16,6 +16,7 @@ type CommunityEvent = {
   longitude: number | null;
   website: string | null;
   instagram: string | null;
+  entry_fee: string | null;
   featured: boolean | null;
 };
 
@@ -30,6 +31,7 @@ const emptyForm = {
   longitude: "",
   website: "",
   instagram: "",
+  entry_fee: "",
   featured: false,
 };
 
@@ -76,18 +78,19 @@ export default function AdminCommunityEventsPage() {
     setEditingId(event.id);
 
     setForm({
-      title: event.title || "",
-      description: event.description || "",
-      image_url: event.image_url || "",
-      category: event.category || "KPOP",
-      event_date: event.event_date ? event.event_date.slice(0, 16) : "",
-      address: event.address || "",
-      latitude: event.latitude?.toString() || "",
-      longitude: event.longitude?.toString() || "",
-      website: event.website || "",
-      instagram: event.instagram || "",
-      featured: Boolean(event.featured),
-    });
+  title: event.title || "",
+  description: event.description || "",
+  image_url: event.image_url || "",
+  category: event.category || "KPOP",
+  event_date: event.event_date ? event.event_date.slice(0, 16) : "",
+  address: event.address || "",
+  latitude: event.latitude?.toString() || "",
+  longitude: event.longitude?.toString() || "",
+  website: event.website || "",
+  instagram: event.instagram || "",
+  entry_fee: event.entry_fee || "",
+  featured: Boolean(event.featured),
+});
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -106,18 +109,21 @@ export default function AdminCommunityEventsPage() {
     setSaving(true);
 
     const payload = {
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      image_url: form.image_url.trim() || null,
-      category: form.category || null,
-      event_date: form.event_date ? new Date(form.event_date).toISOString() : null,
-      address: form.address.trim() || null,
-      latitude: form.latitude ? Number(form.latitude) : null,
-      longitude: form.longitude ? Number(form.longitude) : null,
-      website: form.website.trim() || null,
-      instagram: form.instagram.trim() || null,
-      featured: form.featured,
-    };
+	  title: form.title.trim(),
+	  description: form.description.trim() || null,
+	  image_url: form.image_url.trim() || null,
+	  category: form.category || null,
+	  event_date: form.event_date
+		? new Date(form.event_date).toISOString()
+		: null,
+	  address: form.address.trim() || null,
+	  latitude: form.latitude ? Number(form.latitude) : null,
+	  longitude: form.longitude ? Number(form.longitude) : null,
+	  website: form.website.trim() || null,
+	  instagram: form.instagram.trim() || null,
+	  entry_fee: form.entry_fee.trim() || null,
+	  featured: form.featured,
+	};
 
     const result = editingId
       ? await supabase
@@ -337,8 +343,15 @@ export default function AdminCommunityEventsPage() {
               placeholder="Website URL"
               className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
             />
-
-            <input
+		<input
+		  value={form.entry_fee}
+		  onChange={(e) =>
+			setForm({ ...form, entry_fee: e.target.value })
+		  }
+		  placeholder="Entry Fee (ex: Free / $20)"
+		  className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
+		/>
+			<input
               value={form.instagram}
               onChange={(e) =>
                 setForm({ ...form, instagram: e.target.value })
