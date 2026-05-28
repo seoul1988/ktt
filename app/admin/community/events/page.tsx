@@ -86,10 +86,15 @@ export default function AdminCommunityEventsPage() {
   }
 
   async function saveEvent() {
-    if (!form.title.trim()) {
-      alert("Title is required");
-      return;
-    }
+  if (uploading) {
+    alert("Image is still uploading. Please wait.");
+    return;
+  }
+
+  if (!form.title.trim()) {
+    alert("Title is required");
+    return;
+  }
 
     setSaving(true);
 
@@ -107,24 +112,28 @@ export default function AdminCommunityEventsPage() {
       featured: form.featured,
     };
 
-    const result = editingId
-      ? await supabase
-          .from("community_events")
-          .update(payload)
-          .eq("id", editingId)
-      : await supabase
-          .from("community_events")
-          .insert(payload);
+		const result = editingId
+		  ? await supabase
+			  .from("community_events")
+			  .update(payload)
+			  .eq("id", editingId)
+			  .select()
+		  : await supabase
+			  .from("community_events")
+			  .insert(payload)
+			  .select();
 
-    setSaving(false);
+		setSaving(false);
 
-    if (result.error) {
-      alert(result.error.message);
-      return;
-    }
+		if (result.error) {
+		  alert(result.error.message);
+		  console.log(result.error);
+		  return;
+		}
 
-    resetForm();
-    loadEvents();
+		alert(editingId ? "Event updated" : "Event added");
+		resetForm();
+		loadEvents();
   }
 
   async function deleteEvent(id: string) {

@@ -24,6 +24,8 @@ export default async function CommunityPage() {
     .order("created_at", { ascending: false })
     .limit(3);
 
+  const eventCount = events?.length || 0;
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-md px-5 pb-28 pt-6">
@@ -43,13 +45,24 @@ export default async function CommunityPage() {
             <h2 className="text-xl font-black">Upcoming Events</h2>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto pb-2">
+          <div
+            className={
+              eventCount === 1
+                ? "grid grid-cols-2 gap-4"
+                : "flex gap-4 overflow-x-auto pb-2"
+            }
+          >
             {events?.map((event) => (
-              <div
+              <Link
                 key={event.id}
-                className="min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
+                href={`/community/events/${event.id}`}
+                className={
+                  eventCount === 1
+                    ? "col-span-2 overflow-hidden rounded-3xl bg-white shadow-sm"
+                    : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
+                }
               >
-                <div className="h-36 bg-[#E8DED1]">
+                <div className={eventCount === 1 ? "h-44 bg-[#E8DED1]" : "h-36 bg-[#E8DED1]"}>
                   {event.image_url && (
                     <img
                       src={event.image_url}
@@ -78,10 +91,10 @@ export default async function CommunityPage() {
                     {event.address || "Location TBA"}
                   </p>
                 </div>
-              </div>
+              </Link>
             ))}
 
-            {!events?.length && (
+            {!eventCount && (
               <div className="rounded-3xl bg-white p-6 text-sm font-bold text-[#6B6257] shadow-sm">
                 No events yet.
               </div>
@@ -168,7 +181,8 @@ export default async function CommunityPage() {
           </div>
         </section>
       </section>
-	  <CommunityBottomNav />
+
+      <CommunityBottomNav />
     </main>
   );
 }
