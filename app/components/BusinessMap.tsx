@@ -224,11 +224,13 @@ export default function BusinessMap({
   spots,
   showAllOnLoad = false,
   activeNav = "map",
+  communityMode = false,
 }: {
   spots: Spot[];
   showAllOnLoad?: boolean;
   activeNav?: "map" | "deals";
-}) {
+  communityMode?: boolean;
+}){
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
@@ -240,28 +242,40 @@ export default function BusinessMap({
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
+	
 	const displayCategories = useMemo(() => {
-	  if (mapCategories.length > 0) {
-		return mapCategories;
-	  }
+  if (communityMode) {
+    return [
+      {
+        name: "Marketplace",
+        emoji: "🛍️",
+      },
+    ];
+  }
 
-	  const names = new Set<string>();
+  if (mapCategories.length > 0) {
+    return mapCategories;
+  }
 
-	  spots.forEach((spot) => {
-		String(spot.category || "")
-		  .split(",")
-		  .map((v) => v.trim())
-		  .filter(Boolean)
-		  .forEach((v) => names.add(v));
-	  });
+  const names = new Set<string>();
 
-	  return Array.from(names)
-		.sort()
-		.map((name) => ({
-		  name,
-		  emoji: "🏷️",
-		}));
-	}, [mapCategories, spots]);
+  spots.forEach((spot) => {
+    String(spot.category || "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .forEach((v) => names.add(v));
+  });
+
+  return Array.from(names)
+    .sort()
+    .map((name) => ({
+      name,
+      emoji: "🏷️",
+    }));
+}, [communityMode, mapCategories, spots]);
+	
+	
   const cardRefs = useRef<Record<number, HTMLAnchorElement | null>>({});
 
   useEffect(() => {
@@ -809,19 +823,27 @@ useEffect(() => {
         })}
       </div>
 
-      <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
-        <a href="/">Home</a>
+      {!communityMode && (
+  <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+    <a href="/">Home</a>
 
-        <a href="/map" className={activeNav === "map" ? "text-[#F7B955]" : undefined}>
-          Map
-        </a>
+    <a
+      href="/map"
+      className={activeNav === "map" ? "text-[#F7B955]" : undefined}
+    >
+      Map
+    </a>
 
-        <a href="/deals" className={activeNav === "deals" ? "text-[#F7B955]" : undefined}>
-          Deals
-        </a>
+    <a
+      href="/deals"
+      className={activeNav === "deals" ? "text-[#F7B955]" : undefined}
+    >
+      Deals
+    </a>
 
-        <a href="/community">Community</a>
-      </nav>
+    <a href="/community">Community</a>
+  </nav>
+)}
     </div>
   );
 }

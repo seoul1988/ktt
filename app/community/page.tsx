@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import BottomNav from "../components/BottomNav";
+import CommunityBottomNav from "../components/CommunityBottomNav";
 
 export default async function CommunityPage() {
   const { data: events } = await supabase
@@ -168,7 +168,7 @@ export default async function CommunityPage() {
           </div>
         </section>
       </section>
-	  <BottomNav />
+	  <CommunityBottomNav />
     </main>
   );
 }
