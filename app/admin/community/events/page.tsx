@@ -336,14 +336,7 @@ export default function AdminCommunityEventsPage() {
                 className="rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
               />
             </div>
-
-            <input
-              value={form.website}
-              onChange={(e) => setForm({ ...form, website: e.target.value })}
-              placeholder="Website URL"
-              className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
-            />
-		<input
+			<input
 		  value={form.entry_fee}
 		  onChange={(e) =>
 			setForm({ ...form, entry_fee: e.target.value })
@@ -351,7 +344,14 @@ export default function AdminCommunityEventsPage() {
 		  placeholder="Entry Fee (ex: Free / $20)"
 		  className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
 		/>
-			<input
+			
+            <input
+              value={form.website}
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
+              placeholder="Website URL"
+              className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
+            />
+		<input
               value={form.instagram}
               onChange={(e) =>
                 setForm({ ...form, instagram: e.target.value })
