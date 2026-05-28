@@ -92,6 +92,21 @@ function normalizeCategory(value: string) {
   return value.trim().toLowerCase().replace(/s$/, "");
 }
 
+function hasPromotion(spot: Spot) {
+  if (spot.coupon_badge || spot.coupon_count) return true;
+  if (spot.coupons && spot.coupons.length > 0) return true;
+  if (spot.event_title || spot.event_name || spot.coupon_title || spot.deal_title) return true;
+
+  const tagText = String(spot.tags || "").toLowerCase();
+  return (
+    tagText.includes("coupon") ||
+    tagText.includes("event") ||
+    tagText.includes("deal") ||
+    tagText.includes("discount") ||
+    tagText.includes("special")
+  );
+}
+
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
 
@@ -205,14 +220,22 @@ function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   return null;
 }
 
-export default function BusinessMap({ spots }: { spots: Spot[] }) {
+export default function BusinessMap({
+  spots,
+  showAllOnLoad = false,
+  activeNav = "map",
+}: {
+  spots: Spot[];
+  showAllOnLoad?: boolean;
+  activeNav?: "map" | "deals";
+}) {
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [categoryPanelOpen, setCategoryPanelOpen] = useState(true);
-  const [showCards, setShowCards] = useState(false);
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(!showAllOnLoad);
+  const [showCards, setShowCards] = useState(showAllOnLoad);
   const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
@@ -297,11 +320,13 @@ console.log(data);
         ? spotCategories.includes(normalizeCategory(selectedCategory))
         : true;
 
-      if (!selectedCategory && !search) return false;
+      if (!selectedCategory && !search) {
+        return showAllOnLoad ? hasPromotion(spot) : false;
+      }
 
       return matchesSearch && matchesCategory;
     });
-  }, [spots, search, selectedCategory]);
+  }, [spots, search, selectedCategory, showAllOnLoad]);
 
  const cardSpots: SpotWithDistance[] = useMemo(() => {
   if (!userLocation) {
@@ -787,11 +812,13 @@ useEffect(() => {
       <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
         <a href="/">Home</a>
 
-        <a href="/map" className="text-[#F7B955]">
+        <a href="/map" className={activeNav === "map" ? "text-[#F7B955]" : undefined}>
           Map
         </a>
 
-        <a href="/deals">Deals</a>
+        <a href="/deals" className={activeNav === "deals" ? "text-[#F7B955]" : undefined}>
+          Deals
+        </a>
 
         <a href="/community">Community</a>
       </nav>

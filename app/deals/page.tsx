@@ -26,7 +26,7 @@ function makeCouponBadge(coupon: Coupon) {
   return "Coupon";
 }
 
-export default async function MapPage() {
+export default async function DealsPage() {
   const { data: businesses, error: businessError } = await supabase
     .from("businesses")
     .select("*")
@@ -60,9 +60,27 @@ export default async function MapPage() {
     };
   });
 
+  const promotedSpots = spots.filter((spot) => {
+    const tagText = String(spot.tags || "").toLowerCase();
+
+    return (
+      spot.coupon_count > 0 ||
+      spot.coupon_badge ||
+      spot.event_title ||
+      spot.event_name ||
+      spot.coupon_title ||
+      spot.deal_title ||
+      tagText.includes("coupon") ||
+      tagText.includes("event") ||
+      tagText.includes("deal") ||
+      tagText.includes("discount") ||
+      tagText.includes("special")
+    );
+  });
+
   return (
     <main className="min-h-screen">
-      <MapWrapper spots={spots} activeNav="map" />
+      <MapWrapper spots={promotedSpots} showAllOnLoad activeNav="deals" />
     </main>
   );
 }
