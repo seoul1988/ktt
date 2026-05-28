@@ -129,10 +129,10 @@ export default async function CommunityPage() {
                         {event.address || "Location TBA"}
                       </p>
 					  {event.entry_fee && (
-						  <p className="mt-1 text-xs font-black text-[#C4483A]">
-							🎟 {event.entry_fee}
-						  </p>
-						)}
+					  <p className="mt-1 text-xs font-black text-[#C4483A]">
+						🎟 {event.entry_fee}
+					  </p>
+					)}
 					  {event.description && (
 					  <p className="mt-2 text-xs font-semibold leading-5 text-[#6B6257]">
 						{event.description.length > 60

@@ -170,45 +170,60 @@ export default function AdminCommunityEventsPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md pb-24">
-        <div className="relative mb-6 flex items-start justify-between">
-	  <div>
-		<p className="text-sm font-black text-[#C4483A]">ADMIN</p>
-		<h1 className="text-3xl font-black">Community Events</h1>
-		<p className="mt-2 text-sm font-semibold text-[#6B6257]">
-		  Add, edit, and delete KTown community events.
-		</p>
-	  </div>
+        
+		
+		
+		
+		<div className="relative mb-6">
+  <div className="flex items-start justify-between gap-4">
+    <div className="flex-1">
+      <p className="text-sm font-black text-[#C4483A]">
+        ADMIN
+      </p>
 
-	  <button
-		onClick={() => setMenuOpen(!menuOpen)}
-		className="rounded-full bg-white px-4 py-2 text-2xl font-black shadow-sm"
-	  >
-		⋯
-	  </button>
+      <h1 className="text-3xl font-black">
+        Community Events
+      </h1>
 
-	  {menuOpen && (
-		<div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl bg-white shadow-lg">
-		  <Link
-			href="/admin"
-			className="block px-4 py-3 text-sm font-black hover:bg-[#F8F3EC]"
-		  >
-			Admin Home
-		  </Link>
-		  <Link
-			href="/community"
-			className="block px-4 py-3 text-sm font-black hover:bg-[#F8F3EC]"
-		  >
-			View Community
-		  </Link>
-		  <Link
-			href="/admin/community/events"
-			className="block px-4 py-3 text-sm font-black hover:bg-[#F8F3EC]"
-		  >
-			Events
-		  </Link>
-		</div>
-	  )}
-	</div>
+      <p className="mt-2 text-sm font-semibold text-[#6B6257]">
+        Add, edit, and delete KTown community events.
+      </p>
+    </div>
+
+    <button
+  type="button"
+  onClick={() => setMenuOpen((prev) => !prev)}
+  className="fixed right-5 top-6 z-[99999] rounded-full bg-[#172033] px-4 py-3 text-sm font-black text-white shadow-xl"
+>
+  MENU
+</button>
+  </div>
+
+  {menuOpen && (
+    <div className="absolute right-0 top-14 z-[9999] w-52 overflow-hidden rounded-2xl border border-[#EFE7DC] bg-white shadow-2xl">
+      <Link
+        href="/admin"
+        className="block px-5 py-4 text-sm font-black hover:bg-[#F8F3EC]"
+      >
+        Admin Home
+      </Link>
+
+      <Link
+        href="/admin/community/events"
+        className="block px-5 py-4 text-sm font-black hover:bg-[#F8F3EC]"
+      >
+        Events
+      </Link>
+
+      <Link
+        href="/community"
+        className="block px-5 py-4 text-sm font-black hover:bg-[#F8F3EC]"
+      >
+        View Community
+      </Link>
+    </div>
+  )}
+</div>
 
         <section className="mb-8 rounded-3xl bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-xl font-black">
