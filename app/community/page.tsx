@@ -48,7 +48,7 @@ export default async function CommunityPage() {
           <div
             className={
               eventCount === 1
-                ? "grid grid-cols-2 gap-4"
+                ? "grid grid-cols-1 gap-4"
                 : "flex gap-4 overflow-x-auto pb-2"
             }
           >
@@ -58,39 +58,93 @@ export default async function CommunityPage() {
                 href={`/community/events/${event.id}`}
                 className={
                   eventCount === 1
-                    ? "col-span-2 overflow-hidden rounded-3xl bg-white shadow-sm"
+                    ? "overflow-hidden rounded-3xl bg-white shadow-sm"
                     : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
                 }
               >
-                <div className={eventCount === 1 ? "h-44 bg-[#E8DED1]" : "h-36 bg-[#E8DED1]"}>
-                  {event.image_url && (
-                    <img
-                      src={event.image_url}
-                      alt={event.title}
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-                </div>
+                {eventCount === 1 ? (
+                  <div className="flex min-h-[210px]">
+                    <div className="flex w-[42%] items-center justify-center bg-white p-3">
+                      {event.image_url ? (
+                        <img
+                          src={event.image_url}
+                          alt={event.title}
+                          className="max-h-[190px] max-w-full rounded-2xl object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-[170px] w-full items-center justify-center rounded-2xl bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+                          No Photo
+                        </div>
+                      )}
+                    </div>
 
-                <div className="p-4">
-                  <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
-                    {event.category || "EVENT"}
-                  </span>
+                    <div className="flex flex-1 flex-col justify-center p-5">
+                      <span className="w-fit rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
+                        {event.category || "EVENT"}
+                      </span>
 
-                  <h3 className="mt-3 line-clamp-2 text-lg font-black">
-                    {event.title}
-                  </h3>
+                      <h3 className="mt-4 line-clamp-3 text-2xl font-black leading-tight">
+                        {event.title}
+                      </h3>
 
-                  <p className="mt-1 text-xs font-bold text-[#6B6257]">
-                    {event.event_date
-                      ? new Date(event.event_date).toLocaleDateString()
-                      : "Date TBA"}
-                  </p>
+                      <p className="mt-3 text-sm font-bold text-[#6B6257]">
+                        {event.event_date
+                          ? new Date(event.event_date).toLocaleDateString()
+                          : "Date TBA"}
+                      </p>
 
-                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
-                    {event.address || "Location TBA"}
-                  </p>
-                </div>
+                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#6B6257]">
+                        {event.address || "Location TBA"}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="h-36 overflow-hidden bg-[#E8DED1]">
+                      {event.image_url && (
+                        <img
+                          src={event.image_url}
+                          alt={event.title}
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                    </div>
+
+                    <div className="p-4">
+                      <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
+                        {event.category || "EVENT"}
+                      </span>
+
+                      <h3 className="mt-3 line-clamp-2 text-lg font-black">
+                        {event.title}
+                      </h3>
+
+                      <p className="mt-1 text-xs font-bold text-[#6B6257]">
+                        {event.event_date
+                          ? new Date(event.event_date).toLocaleDateString()
+                          : "Date TBA"}
+                      </p>
+
+                      <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
+                        {event.address || "Location TBA"}
+                      </p>
+					  {event.entry_fee && (
+						  <p className="mt-1 text-xs font-black text-[#C4483A]">
+							🎟 {event.entry_fee}
+						  </p>
+						)}
+					  {event.description && (
+					  <p className="mt-2 text-xs font-semibold leading-5 text-[#6B6257]">
+						{event.description.length > 60
+						  ? `${event.description.slice(0, 60)}...`
+						  : event.description}
+					  </p>
+					)}
+										  
+					  
+                    </div>
+                  </>
+                )}
               </Link>
             ))}
 

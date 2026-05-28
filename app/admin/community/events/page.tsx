@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabase";
+import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 
 type CommunityEvent = {
   id: string;
@@ -32,13 +33,21 @@ const emptyForm = {
   featured: false,
 };
 
+const libraries: "places"[] = ["places"];
+
 export default function AdminCommunityEventsPage() {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  
   const [uploading, setUploading] = useState(false);
+  const [autocomplete, setAutocomplete] =
+    useState<google.maps.places.Autocomplete | null>(null);
+
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
 
   async function loadEvents() {
     const { data, error } = await supabase
@@ -71,9 +80,7 @@ export default function AdminCommunityEventsPage() {
       description: event.description || "",
       image_url: event.image_url || "",
       category: event.category || "KPOP",
-      event_date: event.event_date
-        ? event.event_date.slice(0, 16)
-        : "",
+      event_date: event.event_date ? event.event_date.slice(0, 16) : "",
       address: event.address || "",
       latitude: event.latitude?.toString() || "",
       longitude: event.longitude?.toString() || "",
@@ -86,15 +93,15 @@ export default function AdminCommunityEventsPage() {
   }
 
   async function saveEvent() {
-  if (uploading) {
-    alert("Image is still uploading. Please wait.");
-    return;
-  }
+    if (uploading) {
+      alert("Image is still uploading. Please wait.");
+      return;
+    }
 
-  if (!form.title.trim()) {
-    alert("Title is required");
-    return;
-  }
+    if (!form.title.trim()) {
+      alert("Title is required");
+      return;
+    }
 
     setSaving(true);
 
@@ -112,28 +119,25 @@ export default function AdminCommunityEventsPage() {
       featured: form.featured,
     };
 
-		const result = editingId
-		  ? await supabase
-			  .from("community_events")
-			  .update(payload)
-			  .eq("id", editingId)
-			  .select()
-		  : await supabase
-			  .from("community_events")
-			  .insert(payload)
-			  .select();
+    const result = editingId
+      ? await supabase
+          .from("community_events")
+          .update(payload)
+          .eq("id", editingId)
+          .select()
+      : await supabase.from("community_events").insert(payload).select();
 
-		setSaving(false);
+    setSaving(false);
 
-		if (result.error) {
-		  alert(result.error.message);
-		  console.log(result.error);
-		  return;
-		}
+    if (result.error) {
+      alert(result.error.message);
+      console.log(result.error);
+      return;
+    }
 
-		alert(editingId ? "Event updated" : "Event added");
-		resetForm();
-		loadEvents();
+    alert(editingId ? "Event updated" : "Event added");
+    resetForm();
+    loadEvents();
   }
 
   async function deleteEvent(id: string) {
@@ -160,12 +164,8 @@ export default function AdminCommunityEventsPage() {
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md pb-24">
         <div className="mb-6">
-          <p className="text-sm font-black text-[#C4483A]">
-            ADMIN
-          </p>
-          <h1 className="text-3xl font-black">
-            Community Events
-          </h1>
+          <p className="text-sm font-black text-[#C4483A]">ADMIN</p>
+          <h1 className="text-3xl font-black">Community Events</h1>
           <p className="mt-2 text-sm font-semibold text-[#6B6257]">
             Add, edit, and delete KTown community events.
           </p>
@@ -179,9 +179,7 @@ export default function AdminCommunityEventsPage() {
           <div className="space-y-3">
             <input
               value={form.title}
-              onChange={(e) =>
-                setForm({ ...form, title: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
               placeholder="Event title"
               className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
             />
@@ -196,67 +194,62 @@ export default function AdminCommunityEventsPage() {
               className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
             />
 
-           <div className="space-y-2">
-  <label className="text-sm font-black">
-    Event Image
-  </label>
+            <div className="space-y-2">
+              <label className="text-sm font-black">Event Image</label>
 
-  <input
-    type="file"
-    accept="image/*"
-    onChange={async (e) => {
-      const file = e.target.files?.[0];
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
 
-      if (!file) return;
+                  setUploading(true);
 
-      setUploading(true);
+                  const fileName = `${Date.now()}-${file.name}`;
 
-      const fileName = `${Date.now()}-${file.name}`;
+                  const { error } = await supabase.storage
+                    .from("community-events")
+                    .upload(fileName, file);
 
-      const { error } = await supabase.storage
-        .from("community-events")
-        .upload(fileName, file);
+                  if (error) {
+                    alert(error.message);
+                    setUploading(false);
+                    return;
+                  }
 
-			  if (error) {
-				alert(error.message);
-				setUploading(false);
-				return;
-			  }
+                  const { data } = supabase.storage
+                    .from("community-events")
+                    .getPublicUrl(fileName);
 
-			  const { data } = supabase.storage
-				.from("community-events")
-				.getPublicUrl(fileName);
+                  setForm((prev) => ({
+                    ...prev,
+                    image_url: data.publicUrl,
+                  }));
 
-			  setForm((prev) => ({
-				...prev,
-				image_url: data.publicUrl,
-			  }));
+                  setUploading(false);
+                }}
+                className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold"
+              />
 
-			  setUploading(false);
-			}}
-			className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold"
-		  />
+              {uploading && (
+                <p className="text-xs font-bold text-[#C4483A]">
+                  Uploading...
+                </p>
+              )}
 
-		  {uploading && (
-			<p className="text-xs font-bold text-[#C4483A]">
-			  Uploading...
-			</p>
-		  )}
-
-		  {form.image_url && (
-			<img
-			  src={form.image_url}
-			  alt="Preview"
-			  className="h-40 w-full rounded-2xl object-cover"
-			/>
-		  )}
-		</div>
+              {form.image_url && (
+                <img
+                  src={form.image_url}
+                  alt="Preview"
+                  className="h-40 w-full rounded-2xl object-cover"
+                />
+              )}
+            </div>
 
             <select
               value={form.category}
-              onChange={(e) =>
-                setForm({ ...form, category: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
               className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
             >
               <option value="KPOP">KPOP</option>
@@ -277,14 +270,46 @@ export default function AdminCommunityEventsPage() {
               className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
             />
 
-            <input
-              value={form.address}
-              onChange={(e) =>
-                setForm({ ...form, address: e.target.value })
-              }
-              placeholder="Address"
-              className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
-            />
+            {isLoaded ? (
+              <Autocomplete
+                onLoad={(auto) => setAutocomplete(auto)}
+                onPlaceChanged={() => {
+                  if (!autocomplete) return;
+
+                  const place = autocomplete.getPlace();
+
+                  setForm((prev) => ({
+                    ...prev,
+                    address:
+                      place.formatted_address ||
+                      place.name ||
+                      prev.address,
+                    latitude:
+                      place.geometry?.location?.lat()?.toString() || "",
+                    longitude:
+                      place.geometry?.location?.lng()?.toString() || "",
+                  }));
+                }}
+              >
+                <input
+                  value={form.address}
+                  onChange={(e) =>
+                    setForm({ ...form, address: e.target.value })
+                  }
+                  placeholder="Search address..."
+                  className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
+                />
+              </Autocomplete>
+            ) : (
+              <input
+                value={form.address}
+                onChange={(e) =>
+                  setForm({ ...form, address: e.target.value })
+                }
+                placeholder="Address"
+                className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
+              />
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <input
@@ -308,9 +333,7 @@ export default function AdminCommunityEventsPage() {
 
             <input
               value={form.website}
-              onChange={(e) =>
-                setForm({ ...form, website: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, website: e.target.value })}
               placeholder="Website URL"
               className="w-full rounded-2xl bg-[#F8F3EC] px-4 py-3 text-sm font-bold outline-none"
             />
@@ -357,9 +380,7 @@ export default function AdminCommunityEventsPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-xl font-black">
-            Event List
-          </h2>
+          <h2 className="mb-3 text-xl font-black">Event List</h2>
 
           <div className="space-y-4">
             {events.map((event) => (
@@ -388,9 +409,7 @@ export default function AdminCommunityEventsPage() {
                     )}
                   </div>
 
-                  <h3 className="text-lg font-black">
-                    {event.title}
-                  </h3>
+                  <h3 className="text-lg font-black">{event.title}</h3>
 
                   <p className="mt-1 text-xs font-bold text-[#6B6257]">
                     {event.event_date
