@@ -1,5 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import MapWrapper from "../components/MapWrapper";
+import BottomNav from "../components/BottomNav";
+
 
 type Coupon = {
   id: number;
@@ -61,8 +63,9 @@ export default async function MapPage() {
   });
 
   return (
-    <main className="min-h-screen">
-      <MapWrapper spots={spots} activeNav="map" />
-    </main>
-  );
+  <main className="min-h-screen">
+    <MapWrapper spots={spots} activeNav="map" />
+    <BottomNav />
+  </main>
+);
 }

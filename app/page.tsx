@@ -1,9 +1,50 @@
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+import BottomNav from "./components/BottomNav";
 import { supabase } from "../lib/supabase";
 import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
+
+function getFirstVideoUrl(spot: any) {
+  if (Array.isArray(spot.video_urls) && spot.video_urls.length > 0) {
+    return spot.video_urls.find((url: string) => url && url.trim()) || "";
+  }
+
+  return "";
+}
+
+function BusinessMedia({
+  spot,
+  className,
+}: {
+  spot: any;
+  className: string;
+}) {
+  const videoUrl = getFirstVideoUrl(spot);
+
+  if (videoUrl) {
+    return (
+      <video
+        src={videoUrl}
+        className={className}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+
+  return (
+    <img
+      src={spot.image_url || "/event.png"}
+      alt={spot.name}
+      className={className}
+    />
+  );
+}
 
 export default async function Home() {
   const { data: spots } = await supabase
@@ -16,7 +57,7 @@ export default async function Home() {
   const trending = spots || [];
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
+    <main className="min-h-screen bg-[#F8F3EC] px-5 pb-40 pt-8 text-[#172033]">
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-[#C4483A]">KTT</p>
@@ -27,23 +68,17 @@ export default async function Home() {
         </div>
 
         <div className="shrink-0">
-
-		  <AuthRefreshWrapper>
-			<ProfileButton />
-		  </AuthRefreshWrapper>
-
-		</div>
+          <AuthRefreshWrapper>
+            <ProfileButton />
+          </AuthRefreshWrapper>
+        </div>
       </div>
 
       <section className="mb-8">
         <h2 className="mb-3 text-xl font-bold">🎉 Today’s Events</h2>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
-          <img
-            src="/event.png"
-            alt="Event"
-            className="w-full object-cover"
-          />
+          <img src="/event.png" alt="Event" className="w-full object-cover" />
 
           <div className="p-5">
             <p className="text-sm font-bold text-[#C4483A]">This Weekend</p>
@@ -69,11 +104,12 @@ export default async function Home() {
               href={`/business/${spot.id}`}
               className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
             >
-              <img
-                src={spot.image_url}
-                alt={spot.name}
-                className="h-24 w-24 rounded-2xl object-cover"
-              />
+              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-200">
+                <BusinessMedia
+                  spot={spot}
+                  className="h-full w-full object-cover"
+                />
+              </div>
 
               <div className="flex-1">
                 <p className="text-xs font-bold text-[#C4483A]">
@@ -87,7 +123,7 @@ export default async function Home() {
                 </p>
 
                 <p className="mt-1 line-clamp-2 text-sm text-gray-500">
-                  {spot.tag || "Tap to view details"}
+                  {spot.tags || spot.tag || "Tap to view details"}
                 </p>
               </div>
             </a>
@@ -103,11 +139,12 @@ export default async function Home() {
             href={`/business/${featured.id}`}
             className="block overflow-hidden rounded-3xl bg-white shadow-xl"
           >
-            <img
-              src={featured.image_url}
-              alt={featured.name}
-              className="h-52 w-full object-cover"
-            />
+            <div className="h-52 w-full overflow-hidden bg-gray-200">
+              <BusinessMedia
+                spot={featured}
+                className="h-full w-full object-cover"
+              />
+            </div>
 
             <div className="p-5">
               <h3 className="text-2xl font-bold">{featured.name}</h3>
@@ -117,7 +154,7 @@ export default async function Home() {
               </p>
 
               <p className="mt-3 line-clamp-2 text-sm text-gray-700">
-                {featured.description || featured.tag}
+                {featured.description || featured.tags || featured.tag}
               </p>
             </div>
           </a>
@@ -135,11 +172,12 @@ export default async function Home() {
               className="block rounded-3xl bg-white p-4 shadow-sm"
             >
               <div className="flex items-center gap-4">
-                <img
-                  src={spot.image_url}
-                  alt={spot.name}
-                  className="h-20 w-20 rounded-2xl object-cover"
-                />
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-gray-200">
+                  <BusinessMedia
+                    spot={spot}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
 
                 <div className="flex-1">
                   <h4 className="font-bold">{spot.name}</h4>
@@ -149,12 +187,12 @@ export default async function Home() {
                   </p>
 
                   <p className="mt-1 text-sm font-medium text-[#C4483A]">
-                    {spot.tag}
+                    {spot.tags || spot.tag}
                   </p>
                 </div>
 
                 <div className="rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
-                  ★ {spot.rating}
+                  ★ {spot.rating || "New"}
                 </div>
               </div>
             </a>
@@ -162,17 +200,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
-        <a className="text-[#F7B955]" href="/">
-          Home
-        </a>
-
-        <a href="/map">Map</a>
-
-        <a href="/deals">Deals</a>
-
-        <a href="/community">Community</a>
-      </nav>
+      <BottomNav />
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import MapWrapper from "../components/MapWrapper";
+import BottomNav from "../components/BottomNav";
 
 type Coupon = {
   id: number;
@@ -16,11 +17,18 @@ type Coupon = {
 function makeCouponBadge(coupon: Coupon) {
   if (coupon.title && coupon.title.trim()) return coupon.title.trim();
 
-  const value = coupon.value !== null && coupon.value !== undefined ? String(coupon.value) : "";
+  const value =
+    coupon.value !== null && coupon.value !== undefined
+      ? String(coupon.value)
+      : "";
+
   const type = String(coupon.coupon_type || "").toLowerCase();
 
   if (value && type.includes("percent")) return `${value}% OFF`;
-  if (value && (type.includes("amount") || type.includes("dollar"))) return `$${value} OFF`;
+  if (value && (type.includes("amount") || type.includes("dollar"))) {
+    return `$${value} OFF`;
+  }
+
   if (value) return `Coupon ${value}`;
 
   return "Coupon";
@@ -38,7 +46,9 @@ export default async function DealsPage() {
 
   const { data: coupons, error: couponError } = await supabase
     .from("coupons")
-    .select("id,business_id,title,description,coupon_type,value,min_order,start_date,end_date")
+    .select(
+      "id,business_id,title,description,coupon_type,value,min_order,start_date,end_date"
+    )
     .order("id", { ascending: false });
 
   if (couponError) {
@@ -56,7 +66,8 @@ export default async function DealsPage() {
       ...business,
       coupons: businessCoupons,
       coupon_count: businessCoupons.length,
-      coupon_badge: businessCoupons.length > 0 ? makeCouponBadge(businessCoupons[0]) : null,
+      coupon_badge:
+        businessCoupons.length > 0 ? makeCouponBadge(businessCoupons[0]) : null,
     };
   });
 
@@ -81,6 +92,7 @@ export default async function DealsPage() {
   return (
     <main className="min-h-screen">
       <MapWrapper spots={promotedSpots} showAllOnLoad activeNav="deals" />
+      <BottomNav />
     </main>
   );
 }

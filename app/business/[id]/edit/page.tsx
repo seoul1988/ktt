@@ -42,6 +42,7 @@ type Business = {
   tags: string | null;
   website_url: string | null;
   instagram_url: string | null;
+  video_urls?: string[] | null;
 };
 
 const defaultHours: DayHour[] = [
@@ -131,6 +132,12 @@ export default function EditBusinessPage() {
   const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
+const videoInputRef = useRef<HTMLInputElement | null>(null);
+
+const [existingVideoUrl, setExistingVideoUrl] = useState("");
+const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
+const [newVideoPreview, setNewVideoPreview] = useState("");
+
 
   useEffect(() => {
     loadPage();
@@ -199,6 +206,11 @@ export default function EditBusinessPage() {
     setWebsiteUrl(b.website_url || "");
     setInstagramUrl(b.instagram_url || "");
     setExistingImageUrls(images);
+	setExistingVideoUrl(
+	  b.video_urls && b.video_urls.length > 0
+		? b.video_urls[0]
+		: ""
+	);
     setDayHours(parseHours(b.hours));
     setSelectedLat(b.lat || null);
     setSelectedLng(b.lng || null);
@@ -212,6 +224,58 @@ export default function EditBusinessPage() {
 
     setLoading(false);
   }
+
+
+
+	function handleVideoChange(
+	  e: React.ChangeEvent<HTMLInputElement>
+	) {
+	  const file = e.target.files?.[0];
+
+	  if (!file) return;
+
+	  if (!file.type.startsWith("video/")) {
+		alert("Please select a video file.");
+		return;
+	  }
+
+	  setNewVideoFile(file);
+	  setNewVideoPreview(URL.createObjectURL(file));
+	}
+
+	function removeVideo() {
+	  setExistingVideoUrl("");
+	  setNewVideoFile(null);
+
+	  if (newVideoPreview) {
+		URL.revokeObjectURL(newVideoPreview);
+	  }
+
+	  setNewVideoPreview("");
+	}
+
+	async function uploadVideo() {
+	  if (!newVideoFile) return "";
+
+	  const fileExt = newVideoFile.name.split(".").pop();
+
+	  const fileName =
+		`${businessId}-video-${Date.now()}.${fileExt}`;
+
+	  const { error } = await supabase.storage
+		.from("business-videos")
+		.upload(fileName, newVideoFile);
+
+	  if (error) throw error;
+
+	  const { data } = supabase.storage
+		.from("business-videos")
+		.getPublicUrl(fileName);
+
+	  return data.publicUrl;
+	}
+
+
 
   async function searchAddress(value: string) {
     setAddress(value);
@@ -372,9 +436,11 @@ export default function EditBusinessPage() {
     setSaving(true);
 
     let uploadedUrls: string[] = [];
+	let uploadedVideoUrl = "";
 
     try {
       uploadedUrls = await uploadNewPhotos();
+	  uploadedVideoUrl = await uploadVideo();
     } catch (error: any) {
       setSaving(false);
       alert("Save error: " + error.message);
@@ -386,20 +452,29 @@ export default function EditBusinessPage() {
     const { error } = await supabase
       .from("businesses")
       .update({
-        name,
-        address,
-        phone,
-        category: selectedCategories.join(", "),
-        hours: formatBusinessHours(),
-        description,
-        tags,
-        website_url: websiteUrl,
-        instagram_url: instagramUrl,
-        image_url: finalImageUrls[0] || "",
-        image_urls: finalImageUrls,
-        lat: selectedLat,
-        lng: selectedLng,
-      })
+		  name,
+		  address,
+		  phone,
+		  category: selectedCategories.join(", "),
+		  hours: formatBusinessHours(),
+		  description,
+		  tags,
+		  website_url: websiteUrl,
+		  instagram_url: instagramUrl,
+
+		  image_url: finalImageUrls[0] || "",
+		  image_urls: finalImageUrls,
+
+		  video_urls:
+			uploadedVideoUrl
+			  ? [uploadedVideoUrl]
+			  : existingVideoUrl
+			  ? [existingVideoUrl]
+			  : [],
+
+		  lat: selectedLat,
+		  lng: selectedLng,
+		})
       .eq("id", business.id);
 
     setSaving(false);
@@ -556,6 +631,57 @@ export default function EditBusinessPage() {
                 ))}
               </div>
             </div>
+
+
+
+<div className="rounded-2xl border bg-gray-50 p-4 space-y-3">
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="font-black">Business Video</p>
+      <p className="text-xs font-bold text-gray-500">
+        Upload 1 video
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => videoInputRef.current?.click()}
+      className="rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white"
+    >
+      영상첨부
+    </button>
+  </div>
+
+  <input
+    ref={videoInputRef}
+    type="file"
+    accept="video/*"
+    onChange={handleVideoChange}
+    className="hidden"
+  />
+
+  {(existingVideoUrl || newVideoPreview) && (
+    <div className="space-y-2">
+      <video
+        controls
+        src={newVideoPreview || existingVideoUrl}
+        className="h-56 w-full rounded-xl bg-black"
+      />
+
+      <button
+        type="button"
+        onClick={removeVideo}
+        className="w-full rounded-xl bg-red-500 py-3 font-black text-white"
+      >
+        Remove Video
+      </button>
+    </div>
+  )}
+</div>
+
+
+
+
 
             <div className="rounded-2xl border bg-gray-50 p-4">
               <p className="mb-3 font-black">Categories</p>

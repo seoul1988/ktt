@@ -1,25 +1,48 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { supabase } from "../../lib/supabase";
 
 export default function BottomNav() {
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadRole() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      console.log("USER:", user);
+
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      console.log("PROFILE ROLE:", data, error);
+
+      setRole(data?.role || null);
+    }
+
+    loadRole();
+  }, []);
+
   return (
-    <div className="fixed bottom-4 left-0 right-0 z-50 px-5">
-      <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-lg">
-        <Link href="/map" className="flex-1 py-4 text-center">
-          MAP
-        </Link>
+    <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+      <Link href="/">Home</Link>
+      <Link href="/map">Map</Link>
+      <Link href="/deals">Deals</Link>
+      <Link href="/community">Community</Link>
 
-        <Link href="/deals" className="flex-1 py-4 text-center">
-          DEALS
+      {role === "admin" && (
+        <Link href="/admin" className="text-[#F7B955]">
+          Admin
         </Link>
-
-        <Link href="/community" className="flex-1 py-4 text-center">
-          COMMUNITY
-        </Link>
-
-        <Link href="/profile" className="flex-1 py-4 text-center">
-          PROFILE
-        </Link>
-      </div>
-    </div>
+      )}
+    </nav>
   );
 }

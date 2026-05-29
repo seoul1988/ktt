@@ -306,6 +306,14 @@ export default function ProfilePage() {
     <a href="/profile" className="flex-1 py-4 text-center text-[#F6C343]">
       Profile
     </a>
+	{profile?.role === "admin" && (
+  <a
+    href="/admin"
+    className="flex-1 py-4 text-center text-[#F6C343]"
+  >
+    Admin
+  </a>
+)}
   </div>
 </div>
     </main>

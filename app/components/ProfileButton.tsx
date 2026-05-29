@@ -170,45 +170,50 @@ export default function ProfileButton() {
           )}
 
           {isAdmin && (
-            <>
-              <a
-                href="/admin/owner-requests"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Owner Requests
-              </a>
-			  
-			  <a
-				  href="/admin/categories"
-				  className="block px-4 py-3 hover:bg-gray-100"
-				>
-				  Categories
-				</a>
-			  
-			  
+  <>
+    <a
+      href="/owner"
+      className="block px-4 py-3 hover:bg-gray-100"
+    >
+      My Business
+    </a>
 
-              <a
-                href="/business/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Register Business
-              </a>
+    <a
+      href="/admin/owner-requests"
+      className="block px-4 py-3 hover:bg-gray-100"
+    >
+      Owner Requests
+    </a>
 
-              <a
-                href="/events/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Create Event
-              </a>
+    <a
+      href="/admin/categories"
+      className="block px-4 py-3 hover:bg-gray-100"
+    >
+      Categories
+    </a>
 
-              <a
-                href="/coupons/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Register Coupon
-              </a>
-            </>
-          )}
+    <a
+      href="/business/new"
+      className="block px-4 py-3 hover:bg-gray-100"
+    >
+      Register Business
+    </a>
+
+    <a
+      href="/events/new"
+      className="block px-4 py-3 hover:bg-gray-100"
+    >
+      Create Event
+    </a>
+
+    <a
+      href="/coupons/new"
+      className="block px-4 py-3 hover:bg-gray-100"
+    >
+      Register Coupon
+    </a>
+  </>
+)}
 
           <button
             onClick={logout}

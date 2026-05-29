@@ -43,12 +43,16 @@ export default function OwnerPage() {
       .eq("id", user.id)
       .maybeSingle();
 
-    if (profile?.role !== "owner") {
+    const role = String(profile?.role || "user").toLowerCase();
+    const isOwner = role === "owner";
+    const isAdmin = role === "admin";
+
+    if (!isOwner && !isAdmin) {
       window.location.href = "/profile";
       return;
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("business_owners")
       .select(`
         business_id,
@@ -61,8 +65,13 @@ export default function OwnerPage() {
           category
         )
       `)
-      .eq("user_id", user.id)
       .eq("status", "approved");
+
+    if (isOwner && !isAdmin) {
+      query = query.eq("user_id", user.id);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.log("Owner businesses error:", error);
@@ -106,8 +115,8 @@ export default function OwnerPage() {
         <div className="space-y-4">
           {rows.map((row) => {
             const business = Array.isArray(row.businesses)
-			  ? row.businesses[0]
-			  : row.businesses;
+              ? row.businesses[0]
+              : row.businesses;
 
             return (
               <div
@@ -135,11 +144,11 @@ export default function OwnerPage() {
                 )}
 
                 <a
-				  href={`/business/${row.business_id}/edit`}
-				  className="mt-4 block rounded-2xl bg-[#172033] py-3 text-center font-extrabold text-white"
-				>
-				  Edit Business
-				</a>
+                  href={`/business/${row.business_id}/edit`}
+                  className="mt-4 block rounded-2xl bg-[#172033] py-3 text-center font-extrabold text-white"
+                >
+                  Edit Business
+                </a>
               </div>
             );
           })}
