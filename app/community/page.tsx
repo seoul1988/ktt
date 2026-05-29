@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
+import ProfileButton from "../components/ProfileButton";
 
 export default async function CommunityPage() {
   const { data: events } = await supabase
@@ -29,15 +30,23 @@ export default async function CommunityPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-md px-5 pb-28 pt-6">
-        <div className="mb-6">
-          <p className="text-sm font-black text-[#C4483A]">COMMUNITY</p>
-          <h1 className="text-3xl font-black tracking-tight">
-            KTown Triangle
-          </h1>
-          <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-            Events, new places, and local highlights.
-          </p>
-        </div>
+      <div className="mb-6 flex items-start justify-between">
+		  <div>
+			<p className="text-sm font-black text-[#C4483A]">
+			  COMMUNITY
+			</p>
+
+			<h1 className="text-3xl font-black tracking-tight">
+			  KTown Triangle
+			</h1>
+
+			<p className="mt-2 text-sm font-semibold text-[#6B6257]">
+			  Events, new places, and local highlights.
+			</p>
+		  </div>
+
+		  <ProfileButton />
+		</div>
 
         {/* Upcoming Events */}
         <section className="mb-8">

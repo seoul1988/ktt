@@ -51,7 +51,12 @@ export default function AdminPage() {
           >
             🏷 Categories
           </Link>
-
+			<Link
+			  href="/admin/users"
+			  className="block rounded-2xl bg-[#172033] p-5 font-bold text-white"
+			>
+			  👥 Member Management
+			</Link>
         </div>
       </div>
 	  

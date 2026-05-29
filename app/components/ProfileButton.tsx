@@ -65,9 +65,13 @@ export default function ProfileButton() {
       refreshUser();
     });
 
-    const handlePageShow = () => {
-      refreshUser();
-    };
+   const handlePageShow = () => {
+	  refreshUser();
+
+	  setTimeout(() => {
+		refreshUser();
+	  }, 300);
+	};
 
     const handleFocus = () => {
       refreshUser();
