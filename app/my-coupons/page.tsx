@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import { supabase } from "../../lib/supabase";
 import ProfileButton from "../components/ProfileButton";
+import CommunityBottomNav from "../components/CommunityBottomNav";
+import BottomNav from "../components/BottomNav"; 
 
 export default function MyCouponsPage() {
   const [items, setItems] = useState<any[]>([]);
@@ -59,7 +61,9 @@ export default function MyCouponsPage() {
         <div className="mb-6 flex items-center justify-between">
   <div className="flex items-center gap-4">
     <button
-      onClick={() => history.back()}
+      onClick={() => {
+  window.location.href = "/";
+}}
       className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
     >
       ← Back
@@ -117,28 +121,7 @@ export default function MyCouponsPage() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 z-50 px-5">
-        <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-2xl">
-          <a href="/" className="flex-1 py-4 text-center">
-            Home
-          </a>
-
-          <a href="/map" className="flex-1 py-4 text-center">
-            Map
-          </a>
-
-          <a
-            href="/my-coupons"
-            className="flex-1 py-4 text-center text-[#F6C343]"
-          >
-            Deals
-          </a>
-
-          <a href="/community" className="flex-1 py-4 text-center">
-            Community
-          </a>
-        </div>
-      </div>
+       <BottomNav />
     </main>
   );
 }

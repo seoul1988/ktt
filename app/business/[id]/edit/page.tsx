@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
-
+import BottomNav from "../../../components/BottomNav";
 type Category = {
   id: number;
   name: string;
@@ -137,7 +137,7 @@ const videoInputRef = useRef<HTMLInputElement | null>(null);
 const [existingVideoUrl, setExistingVideoUrl] = useState("");
 const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
 const [newVideoPreview, setNewVideoPreview] = useState("");
-
+const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     loadPage();
@@ -499,21 +499,79 @@ const [newVideoPreview, setNewVideoPreview] = useState("");
   const totalPhotos = existingImageUrls.length + newPhotoFiles.length;
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
+    <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-32 text-[#172033]">
       <div className="mx-auto max-w-md">
+        <div className="mb-5 flex items-center justify-between gap-3">
+  <button
+    onClick={() => {
+      window.location.href = "/owner";
+    }}
+    className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
+  >
+    ← Back
+  </button>
+
+  <h1 className="flex-1 text-center text-3xl font-black">
+    Edit Business
+  </h1>
+
+  <div className="relative">
+    <button
+      type="button"
+      onClick={() => setMenuOpen((v) => !v)}
+      className="flex h-11 w-14 items-center justify-center rounded-full bg-white text-2xl font-black shadow"
+    >
+      ⋯
+    </button>
+
+    {menuOpen && (
+      <div className="absolute right-0 top-12 z-50 w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
         <button
+          type="button"
           onClick={() => {
             window.location.href = "/owner";
           }}
-          className="mb-5 rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
+          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
         >
-          ← Back
+          My Business
         </button>
 
-        <div className="rounded-[32px] bg-white p-6 shadow-2xl">
-          <h1 className="text-3xl font-black">Edit Business</h1>
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = `/business/${businessId}`;
+          }}
+          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+        >
+          View Business
+        </button>
 
-          <div className="mt-6 space-y-4">
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = "/my-coupons";
+          }}
+          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+        >
+          My Coupons
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = "/profile";
+          }}
+          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+        >
+          Profile
+        </button>
+      </div>
+    )}
+  </div>
+</div>
+
+<div className="rounded-[32px] bg-white p-6 shadow-2xl">
+  <div className="space-y-4">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -859,6 +917,7 @@ const [newVideoPreview, setNewVideoPreview] = useState("");
           </div>
         </div>
       </div>
+	  <BottomNav />
     </main>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-
+import CommunityBottomNav from "../components/CommunityBottomNav";
 export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5">
@@ -54,6 +54,9 @@ export default function AdminPage() {
 
         </div>
       </div>
+	  
+	  <CommunityBottomNav />  
+	  
     </main>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
+	import CommunityBottomNav from "../../components/CommunityBottomNav";   
 
 type Category = {
   id: number;
@@ -133,7 +134,7 @@ export default function AdminCategoriesPage() {
 		  <div className="flex items-center gap-4">
 			<button
 			  onClick={() => {
-				window.location.href = "/map";
+				window.location.href = "/admin";
 			  }}
 			  className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
 			>
@@ -222,28 +223,7 @@ export default function AdminCategoriesPage() {
 </div>
       </div>
 	  
-	  <div className="fixed bottom-4 left-0 right-0 z-50 px-5">
-  <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-2xl">
-    <a href="/" className="flex-1 py-4 text-center">
-      Home
-    </a>
-
-    <a href="/map" className="flex-1 py-4 text-center">
-      Map
-    </a>
-
-    <a
-      href="/admin/categories"
-      className="flex-1 py-4 text-center text-[#F6C343]"
-    >
-      Categories
-    </a>
-
-    <a href="/community" className="flex-1 py-4 text-center">
-      Community
-    </a>
-  </div>
-</div>
+   <CommunityBottomNav />
 	  
     </main>
   );
