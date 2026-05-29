@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
+ import BottomNav from "../../components/BottomNav"; 
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
-import ClaimCouponButton from "@/app/components/ClaimCouponButton";
+import BusinessCouponPopup from "../../components/BusinessCouponPopup";
 
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
@@ -210,12 +211,18 @@ const videos =
             Share
           </a>
 
-          <div>
-            <div className="text-3xl">♡</div>
-            Save
-          </div>
-        </div>
+     <div className="text-center">
+  <div className="text-3xl">⭐</div>
 
+  <div className="font-bold">
+    {spot.rating ? Number(spot.rating).toFixed(1) : "-"}
+  </div>
+
+  <div className="text-[10px] text-gray-500">
+    {spot.review_count ? `(${spot.review_count})` : ""}
+  </div>
+</div>
+</div> 
         <hr className="my-5 border-gray-200" />
 
         <div className="space-y-2 text-[15px] leading-5">
@@ -335,62 +342,12 @@ const videos =
           </p>
         </section>
 		
-		<div className="mt-6">
-  <h2 className="font-bold text-lg">
-    Coupons
-  </h2>
-
-  <div className="space-y-3">
-
-    {coupons?.map((coupon) => (
-      <div
-        key={coupon.id}
-        className="
-          rounded-xl
-          border
-          p-4
-        "
-      >
-        <div className="font-semibold">
-          {coupon.title || "Coupon"}
-        </div>
-
-        <div className="text-sm text-gray-500">
-          {coupon.description ||
-            (coupon.coupon_type === "percent" && coupon.value
-              ? `${coupon.value}% off`
-              : coupon.coupon_type === "amount" && coupon.value
-              ? `$${coupon.value} off`
-              : "Special offer")}
-        </div>
-
-        <ClaimCouponButton
-          couponId={coupon.id}
-        />
-
-      </div>
-    ))}
-
-  </div>
-</div>
+	<BusinessCouponPopup coupons={coupons || []} />
 		
 		
-		
-		
-		
-      </section>
+	 </section>
 
-      <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
-        <a href="/">Home</a>
-
-        <a href="/map" className="text-[#F7B955]">
-          Map
-        </a>
-
-        <a href="/deals">Deals</a>
-
-        <a href="/community">Community</a>
-      </nav>
+     <BottomNav />
     </main>
 	
   );
