@@ -5,7 +5,7 @@ import BottomNav from "./components/BottomNav";
 import { supabase } from "../lib/supabase";
 import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
-
+import InstallAppButton from "./components/InstallAppButton";
 function getFirstVideoUrl(spot: any) {
   if (Array.isArray(spot.video_urls) && spot.video_urls.length > 0) {
     return spot.video_urls.find((url: string) => url && url.trim()) || "";
@@ -57,6 +57,9 @@ export default async function Home() {
   const trending = spots || [];
 
   return (
+  <>
+    <InstallAppButton />
+
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-40 pt-8 text-[#172033]">
       <div className="mb-8 flex items-center justify-between gap-4">
         <div>
@@ -73,7 +76,7 @@ export default async function Home() {
           </AuthRefreshWrapper>
         </div>
       </div>
-
+<InstallAppButton />
       <section className="mb-8">
         <h2 className="mb-3 text-xl font-bold">🎉 Today’s Events</h2>
 
@@ -200,7 +203,8 @@ export default async function Home() {
         </div>
       </section>
 
-      <BottomNav />
+       <BottomNav />
     </main>
+  </>
   );
 }

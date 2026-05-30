@@ -31,6 +31,7 @@ const selectedMarkerIcon = new L.Icon({
 });
 
 type MapCategory = {
+  id?: number;
   name: string;
   emoji: string | null;
 };
@@ -222,15 +223,17 @@ function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
 
 export default function BusinessMap({
   spots,
+  categories = [],
   showAllOnLoad = false,
   activeNav = "map",
   communityMode = false,
 }: {
   spots: Spot[];
+  categories?: MapCategory[];
   showAllOnLoad?: boolean;
   activeNav?: "map" | "deals";
   communityMode?: boolean;
-}){
+}) {
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
@@ -242,38 +245,34 @@ export default function BusinessMap({
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
-	
-	const displayCategories = useMemo(() => {
-  if (communityMode) {
-    return [
-      {
-        name: "Marketplace",
-        emoji: "🛍️",
-      },
-    ];
-  }
+  const displayCategories = useMemo(() => {
+    if (mapCategories.length > 0) {
+      return mapCategories;
+    }
 
-  if (mapCategories.length > 0) {
-    return mapCategories;
-  }
+    // If this is community map and no community categories are checked,
+    // do not force Marketplace to show.
+    if (communityMode) {
+      return [];
+    }
 
-  const names = new Set<string>();
+    const names = new Set<string>();
 
-  spots.forEach((spot) => {
-    String(spot.category || "")
-      .split(",")
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .forEach((v) => names.add(v));
-  });
+    spots.forEach((spot) => {
+      String(spot.category || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .forEach((v) => names.add(v));
+    });
 
-  return Array.from(names)
-    .sort()
-    .map((name) => ({
-      name,
-      emoji: "🏷️",
-    }));
-}, [communityMode, mapCategories, spots]);
+    return Array.from(names)
+      .sort()
+      .map((name) => ({
+        name,
+        emoji: "🏷️",
+      }));
+  }, [communityMode, mapCategories, spots]);
 	
 	
   const cardRefs = useRef<Record<number, HTMLAnchorElement | null>>({});
@@ -294,11 +293,24 @@ export default function BusinessMap({
 
   useEffect(() => {
     async function loadCategories() {
-      const { data, error } = await supabase
+      if (categories.length > 0) {
+        setMapCategories(categories);
+        return;
+      }
+
+      let query = supabase
         .from("categories")
         .select("name, emoji")
         .order("name", { ascending: true });
-console.log(data);
+
+      if (communityMode) {
+        query = query.eq("show_on_community_map", true);
+      } else {
+        query = query.eq("show_on_main_map", true);
+      }
+
+      const { data, error } = await query;
+
       if (error) {
         console.log("Category load error:", error);
         setMapCategories([]);
@@ -309,7 +321,7 @@ console.log(data);
     }
 
     loadCategories();
-  }, []);
+  }, [communityMode, categories]);
 
   const mapSpots = useMemo(() => {
     return spots.filter((spot) => {

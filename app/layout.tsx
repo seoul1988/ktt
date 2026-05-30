@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "./components/AuthProvider";
 import "./globals.css";
@@ -15,13 +15,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "KTown Triangle",
-
-  description:
-    "Events, deals and Korean places around the Triangle",
+  description: "Events, deals and Korean places around the Triangle",
 
   manifest: "/manifest.webmanifest",
-
-  themeColor: "#172033",
 
   appleWebApp: {
     capable: true,
@@ -30,9 +26,29 @@ export const metadata: Metadata = {
   },
 
   icons: {
-    icon: "/logo.png",
+    icon: [
+      {
+        url: "/logo.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+      {
+        url: "/logo.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
+    ],
     apple: "/logo.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#172033",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -45,12 +61,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body
-        className="
-          min-h-screen
-          bg-[#F8F3EC]
-        "
-      >
+      <body className="min-h-screen bg-[#F8F3EC]">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
