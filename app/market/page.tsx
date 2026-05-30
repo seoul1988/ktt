@@ -1,12 +1,46 @@
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
+import CommunityBottomNav from "../components/CommunityBottomNav";
+
+type MarketItem = {
+  id: number;
+  title: string;
+  price: number | null;
+  status: string | null;
+  location: string | null;
+  category: string | null;
+  condition: string | null;
+  description: string | null;
+  images: string[] | null;
+  video_url?: string | null;
+};
+
+function statusLabel(status: string | null) {
+  if (status === "available") return "판매중";
+  if (status === "reserved") return "예약중";
+  if (status === "sold") return "판매완료";
+  return status || "상태없음";
+}
+
+function statusClass(status: string | null) {
+  if (status === "available") return "bg-green-600";
+  if (status === "reserved") return "bg-yellow-500";
+  if (status === "sold") return "bg-gray-500";
+  return "bg-gray-400";
+}
 
 export default async function MarketPage() {
-  const { data: items } = await supabase
+  const { data, error } = await supabase
     .from("market_items")
     .select("*")
-    .eq("status", "available")
+    .neq("status", "hidden")
     .order("created_at", { ascending: false });
+
+  if (error) {
+    return <div className="p-6">상품 불러오기 실패: {error.message}</div>;
+  }
+
+  const items = (data || []) as MarketItem[];
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
@@ -14,48 +48,119 @@ export default async function MarketPage() {
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-black text-[#172033]">벼룩시장</h1>
 
-          <Link
-            href="/market/new"
-            className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
-          >
-            + 등록
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          {items?.map((item) => (
+          <div className="flex gap-2">
             <Link
-              key={item.id}
-              href={`/market/${item.id}`}
-              className="overflow-hidden rounded-2xl bg-white shadow"
+              href="/market/my"
+              className="rounded-full border border-[#172033] px-4 py-2 text-sm font-bold text-[#172033]"
             >
-              <div className="h-32 bg-gray-200">
-                {item.images?.[0] && (
-                  <img
-                    src={item.images[0]}
-                    alt={item.title}
-                    className="h-full w-full object-cover"
-                  />
-                )}
-              </div>
-
-              <div className="p-3">
-                <h2 className="line-clamp-1 text-sm font-black">
-                  {item.title}
-                </h2>
-
-                <p className="mt-1 text-sm font-bold text-[#C2410C]">
-                  ${item.price}
-                </p>
-
-                <p className="mt-1 line-clamp-1 text-xs text-gray-500">
-                  {item.location}
-                </p>
-              </div>
+              내 물품
             </Link>
-          ))}
+
+            <Link
+              href="/market/new"
+              className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
+            >
+              + 등록
+            </Link>
+          </div>
         </div>
+
+        {items.length === 0 ? (
+          <div className="rounded-3xl bg-white p-8 text-center shadow">
+            <p className="text-sm font-bold text-gray-500">
+              등록된 상품이 없습니다.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {items.map((item) => (
+              <Link
+                key={item.id}
+                href={`/market/${item.id}`}
+                className={`overflow-hidden rounded-2xl bg-white shadow ${
+                  item.status === "sold" ? "opacity-70" : ""
+                }`}
+              >
+                <div className="relative h-32 bg-gray-200">
+                  {item.images?.[0] ? (
+                    <img
+                      src={item.images[0]}
+                      alt={item.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
+                      이미지 없음
+                    </div>
+					
+				  )}
+
+					{Array.isArray(item.images) && item.images.length > 1 && (
+					  <div className="absolute bottom-2 right-2 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
+						1/{item.images.length}
+					  </div>
+					)}
+
+
+                 
+
+                  {item.video_url && (
+                    <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
+                      VIDEO
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
+                        item.status
+                      )}`}
+                    >
+                      {statusLabel(item.status)}
+                    </span>
+
+                    <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
+                      {item.location || ""}
+                    </span>
+                  </div>
+
+                 <div className="flex items-center gap-2">
+				  <h2 className="line-clamp-1 flex-1 text-sm font-black text-[#172033]">
+					{item.title}
+				  </h2>
+
+				  {item.category && (
+					<span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
+					  {item.category}
+					</span>
+				  )}
+				</div>
+
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-sm font-black text-[#C2410C]">
+                      ${item.price || 0}
+                    </p>
+
+                    <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
+                      {item.condition || ""}
+                    </span>
+                  </div>
+
+                  {item.description && (
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600">
+                      {item.description}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
+
+      <CommunityBottomNav />
     </main>
   );
 }

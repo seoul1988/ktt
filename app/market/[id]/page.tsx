@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import MarketMediaSlider from "../../components/MarketMediaSlider";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
 
 export default async function MarketDetailPage({
   params,
@@ -51,7 +52,41 @@ export default async function MarketDetailPage({
   );
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
+    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-72">
+      {/* 상단 헤더 */}
+      <div className="mx-auto mb-3 flex max-w-md items-center justify-between">
+        <Link
+          href="/market"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#172033] shadow"
+        >
+          ←
+        </Link>
+
+        <h1 className="text-base font-black text-[#172033]">상품상세</h1>
+
+        <details className="relative">
+          <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#172033] shadow">
+            ⋯
+          </summary>
+
+          <div className="absolute right-0 top-12 z-[99999] w-40 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
+            <Link
+              href={`/market/seller/${item.seller_id}`}
+              className="block px-4 py-3 text-[#172033] hover:bg-gray-100"
+            >
+              판매자 상품
+            </Link>
+
+            <Link
+              href="/market"
+              className="block px-4 py-3 text-[#172033] hover:bg-gray-100"
+            >
+              목록으로
+            </Link>
+          </div>
+        </details>
+      </div>
+
       <div className="mx-auto max-w-md overflow-hidden rounded-3xl bg-white shadow">
         <MarketMediaSlider media={media} />
 
@@ -76,15 +111,13 @@ export default async function MarketDetailPage({
 
           <p className="mt-2 text-sm text-gray-500">{item.location}</p>
 
-        <div className="mt-4 flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 text-sm">
-  <span className="font-black text-[#172033]">
-    상품 상태
-  </span>
+          <div className="mt-4 flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 text-sm">
+            <span className="font-black text-[#172033]">상품 상태</span>
 
-  <span className="rounded-full bg-[#172033] px-3 py-1 text-xs font-black text-white">
-    {item.condition}
-  </span>
-</div>
+            <span className="rounded-full bg-[#172033] px-3 py-1 text-xs font-black text-white">
+              {item.condition}
+            </span>
+          </div>
 
           {item.description && (
             <p className="mt-4 whitespace-pre-line text-sm leading-6">
@@ -92,25 +125,26 @@ export default async function MarketDetailPage({
             </p>
           )}
 
-     <div className="mt-5 flex overflow-hidden rounded-full border border-[#172033]">
-  <Link
-    href={`/market/seller/${item.seller_id}`}
-    className="flex-1 border-r border-[#172033] py-3 text-center text-sm font-black text-[#172033]"
-  >
-    판매자 상품
-  </Link>
+          <div className="mt-3 flex overflow-hidden rounded-full border border-[#172033]">
+            <Link
+              href={`/market/seller/${item.seller_id}`}
+              className="flex-1 border-r border-[#172033] py-2 text-center text-sm font-black text-[#172033]"
+            >
+              판매자 상품
+            </Link>
 
-  <Link
-    href="/market"
-    className="flex-1 py-3 text-center text-sm font-black text-[#172033]"
-  >
-    목록으로
-  </Link>
-</div>
+            <Link
+              href="/market"
+              className="flex-1 py-2 text-center text-sm font-black text-[#172033]"
+            >
+              목록으로
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className="fixed bottom-4 left-1/2 z-[9999] grid w-[92%] max-w-md -translate-x-1/2 grid-cols-3 gap-2">
+      {/* 전화 / 문자 / 딜하기 버튼 */}
+      <div className="fixed bottom-24 left-1/2 z-[9999] grid w-[92%] max-w-md -translate-x-1/2 grid-cols-3 gap-2">
         {item.phone ? (
           <>
             <a
@@ -140,6 +174,8 @@ export default async function MarketDetailPage({
           </div>
         )}
       </div>
+
+      <CommunityBottomNav />
     </main>
   );
 }
