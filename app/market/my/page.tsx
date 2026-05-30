@@ -118,35 +118,44 @@ export default function MyMarketItemsPage() {
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-4 gap-2 text-xs font-bold">
-                <button
-                  onClick={() => updateStatus(item.id, "available")}
-                  className="rounded-full bg-green-100 py-2"
-                >
-                  판매중
-                </button>
+             <div className="mt-3 grid grid-cols-5 gap-2 text-xs font-bold">
 
-                <button
-                  onClick={() => updateStatus(item.id, "reserved")}
-                  className="rounded-full bg-yellow-100 py-2"
-                >
-                  예약
-                </button>
+  <Link
+    href={`/market/${item.id}/edit`}
+    className="rounded-full bg-blue-100 py-2 text-center text-blue-700"
+  >
+    수정
+  </Link>
 
-                <button
-                  onClick={() => updateStatus(item.id, "sold")}
-                  className="rounded-full bg-gray-200 py-2"
-                >
-                  완료
-                </button>
+  <button
+    onClick={() => updateStatus(item.id, "available")}
+    className="rounded-full bg-green-100 py-2"
+  >
+    판매중
+  </button>
 
-                <button
-                  onClick={() => deleteItem(item.id)}
-                  className="rounded-full bg-red-100 py-2 text-red-600"
-                >
-                  삭제
-                </button>
-              </div>
+  <button
+    onClick={() => updateStatus(item.id, "reserved")}
+    className="rounded-full bg-yellow-100 py-2"
+  >
+    예약
+  </button>
+
+  <button
+    onClick={() => updateStatus(item.id, "sold")}
+    className="rounded-full bg-gray-200 py-2"
+  >
+    완료
+  </button>
+
+  <button
+    onClick={() => deleteItem(item.id)}
+    className="rounded-full bg-red-100 py-2 text-red-600"
+  >
+    삭제
+  </button>
+
+</div>
             </div>
           ))}
 

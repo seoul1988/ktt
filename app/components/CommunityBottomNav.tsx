@@ -30,16 +30,36 @@ export default function CommunityBottomNav() {
   }, []);
 
   return (
-    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-[11px] font-semibold text-white shadow-2xl">
-      <Link href="/">HOME</Link>
-
-      <Link href="/community/map" className="text-[#F7B955]">
-        MAP
+    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[95%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl">
+      <Link href="/" className="flex flex-col items-center">
+  
+        <span>HOME</span>
       </Link>
 
-      <Link href="/community">COMMUNITY</Link>
+      <Link
+        href="/community/map"
+        className="flex flex-col items-center text-[#F7B955]"
+      >
+      
+        <span>MAP</span>
+      </Link>
 
-      {isAdmin && <Link href="/admin">ADMIN</Link>}
+      <Link href="/market" className="flex flex-col items-center">
+       
+        <span>MARKET</span>
+      </Link>
+
+      <Link href="/community" className="flex flex-col items-center">
+   
+        <span>COMMUNITY</span>
+      </Link>
+
+      {isAdmin && (
+        <Link href="/admin" className="flex flex-col items-center">
+        
+          <span>ADMIN</span>
+        </Link>
+      )}
     </nav>
   );
 }
