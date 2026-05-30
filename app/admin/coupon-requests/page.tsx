@@ -21,7 +21,7 @@ type Coupon = {
   status: string | null;
   businesses?: {
     name: string | null;
-  } | null;
+  }[] | null;
 };
 
 export default function CouponRequestsPage() {
@@ -62,7 +62,7 @@ export default function CouponRequestsPage() {
       return;
     }
 
-    setCoupons((data || []) as Coupon[]);
+    setCoupons((data || []) as unknown as Coupon[]);
     setLoading(false);
   }
 
@@ -147,7 +147,7 @@ export default function CouponRequestsPage() {
                   className="rounded-3xl bg-white p-5 shadow"
                 >
                   <p className="text-sm font-bold text-gray-500">
-                    {coupon.businesses?.name || "No business"}
+                   {coupon.businesses?.[0]?.name || "No business"}
                   </p>
 
                   <h2 className="mt-1 text-xl font-black">
