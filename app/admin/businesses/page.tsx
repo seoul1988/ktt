@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
@@ -11,11 +11,14 @@ type Business = {
   address: string | null;
   phone: string | null;
   category: string | null;
+  display_order: number | null;
 };
 
 export default function AdminBusinessesPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [orders, setOrders] = useState<Record<number, string>>({});
 
   useEffect(() => {
     loadBusinesses();
@@ -26,7 +29,9 @@ export default function AdminBusinessesPage() {
 
     const { data, error } = await supabase
       .from("businesses")
-      .select("id,name,address,phone,category")
+      .select("id,name,address,phone,category,display_order")
+      .order("category", { ascending: true, nullsFirst: false })
+      .order("display_order", { ascending: true, nullsFirst: false })
       .order("id", { ascending: false });
 
     if (error) {
@@ -35,29 +40,91 @@ export default function AdminBusinessesPage() {
       return;
     }
 
-    setBusinesses((data || []) as Business[]);
+    const rows = (data || []) as Business[];
+    setBusinesses(rows);
+
+    const nextOrders: Record<number, string> = {};
+    rows.forEach((b) => {
+      nextOrders[b.id] = String(b.display_order ?? 999);
+    });
+    setOrders(nextOrders);
+
     setLoading(false);
   }
 
-  async function deleteBusiness(id: number, name: string | null) {
-    const ok = window.confirm(
-      `"${name || "No name"}" business를 삭제할까요?`
-    );
+  const groupedBusinesses = useMemo(() => {
+    const groups: Record<string, Business[]> = {};
 
-    if (!ok) return;
+    businesses.forEach((business) => {
+      const category = business.category?.trim() || "No Category";
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(business);
+    });
+
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [businesses]);
+
+  async function saveDisplayOrder(id: number) {
+    const value = Number(orders[id] || 999);
+
+    if (Number.isNaN(value)) {
+      alert("숫자만 입력하세요.");
+      return;
+    }
+
+    setSavingId(id);
 
     const { error } = await supabase
       .from("businesses")
-      .delete()
+      .update({ display_order: value })
       .eq("id", id);
 
     if (error) {
       alert(error.message);
+      setSavingId(null);
       return;
     }
 
-    setBusinesses((prev) => prev.filter((b) => b.id !== id));
+    setBusinesses((prev) =>
+      prev
+        .map((b) => (b.id === id ? { ...b, display_order: value } : b))
+        .sort((a, b) => {
+          const catA = a.category || "";
+          const catB = b.category || "";
+          if (catA !== catB) return catA.localeCompare(catB);
+          return (a.display_order ?? 999) - (b.display_order ?? 999);
+        })
+    );
+
+    setSavingId(null);
   }
+
+async function deleteBusiness(id: number, name: string | null) {
+  const ok = window.confirm(`"${name || "No name"}" business를 삭제할까요?`);
+  if (!ok) return;
+
+  const { error: ownerError } = await supabase
+    .from("business_owners")
+    .delete()
+    .eq("business_id", id);
+
+  if (ownerError) {
+    alert("business_owners 삭제 실패: " + ownerError.message);
+    return;
+  }
+
+  const { error: businessError } = await supabase
+    .from("businesses")
+    .delete()
+    .eq("id", id);
+
+  if (businessError) {
+    alert("businesses 삭제 실패: " + businessError.message);
+    return;
+  }
+
+  setBusinesses((prev) => prev.filter((b) => b.id !== id));
+}
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
@@ -84,48 +151,89 @@ export default function AdminBusinessesPage() {
             No businesses found.
           </div>
         ) : (
-          <div className="space-y-4">
-            {businesses.map((business) => (
-              <div
-                key={business.id}
-                className="rounded-3xl bg-white p-5 shadow"
-              >
-                <h2 className="text-xl font-black">
-                  {business.name || "No business name"}
-                </h2>
+          <div className="space-y-7">
+            {groupedBusinesses.map(([category, items]) => (
+              <section key={category}>
+              <div className="mb-3 flex items-center justify-between rounded-2xl bg-[#172033] px-4 py-1.5 text-white shadow">
+		  <h2 className="text-lg font-black">
+			{category}
+		  </h2>
 
-                <p className="mt-1 text-sm text-gray-600">
-                  {business.address || "No address"}
-                </p>
+		  <span className="text-xs font-bold text-white/70">
+			낮은 숫자가 먼저 노출
+		  </span>
+		</div>
 
-                {business.category && (
-                  <p className="mt-1 text-sm text-gray-600">
-                    Category: {business.category}
-                  </p>
-                )}
+                <div className="space-y-4">
+                  {items.map((business) => (
+                    <div
+                      key={business.id}
+                      className="rounded-3xl bg-white p-5 shadow"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-xl font-black">
+                            {business.name || "No business name"}
+                          </h3>
 
-                {business.phone && (
-                  <p className="mt-1 text-sm text-gray-600">
-                    Phone: {business.phone}
-                  </p>
-                )}
+                          <p className="mt-1 text-sm text-gray-600">
+                            {business.address || "No address"}
+                          </p>
 
-            <div className="mt-4 flex gap-2">
-			  <Link
-				href={`/business/${business.id}/edit`}
-				className="rounded-xl bg-[#172033] px-4 py-2 text-sm font-bold text-white"
-			  >
-				Edit
-			  </Link>
+                          {business.phone && (
+                            <p className="mt-1 text-sm text-gray-600">
+                              Phone: {business.phone}
+                            </p>
+                          )}
+                        </div>
 
-			  <button
-				onClick={() => deleteBusiness(business.id, business.name)}
-				className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white"
-			  >
-				Delete
-			  </button>
-			</div>
-              </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[11px] font-black text-gray-500">
+                            ORDER
+                          </p>
+                          <input
+                            type="number"
+                            value={orders[business.id] ?? "999"}
+                            onChange={(e) =>
+                              setOrders((prev) => ({
+                                ...prev,
+                                [business.id]: e.target.value,
+                              }))
+                            }
+                            className="mt-1 w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          onClick={() => saveDisplayOrder(business.id)}
+                          disabled={savingId === business.id}
+                          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                        >
+                          {savingId === business.id ? "Saving..." : "Save Order"}
+                        </button>
+
+                        <Link
+                          href={`/business/${business.id}/edit`}
+                          className="rounded-xl bg-[#172033] px-4 py-2 text-sm font-bold text-white"
+                        >
+                          Edit
+                        </Link>
+
+                        <button
+                          onClick={() =>
+                            deleteBusiness(business.id, business.name)
+                          }
+                          className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
