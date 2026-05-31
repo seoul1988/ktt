@@ -29,15 +29,14 @@ function BusinessMedia({
 
   if (videoUrl) {
     return (
-      <video
-        src={videoUrl}
-        className={`${className} ${reel ? "object-cover" : "object-cover"} bg-black`}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-      />
+     <video
+  src={mainEvent.video_url}
+  className="h-full w-full object-cover"
+  autoPlay
+  muted
+  loop
+  playsInline
+/>
     );
   }
 
@@ -155,7 +154,7 @@ export default async function Home() {
                 href={`/business/${spot.id}`}
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
               >
-                <div className="aspect-[9/16] h-32 shrink-0 overflow-hidden rounded-2xl bg-black">
+                <div className="aspect-[9/16] h-20 shrink-0 overflow-hidden rounded-2xl bg-black">
                   <BusinessMedia
                     spot={spot}
                     reel
