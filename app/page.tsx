@@ -76,7 +76,7 @@ export default async function Home() {
         {mainEvent && (
   <section className="mb-8">
     <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-xl font-bold">🎉 Business Events</h2>
+      <h2 className="text-xl font-bold">🎉 Events</h2>
 
       <Link
         href="/business-events"
@@ -193,12 +193,12 @@ export default async function Home() {
                 className="block rounded-3xl bg-white p-4 shadow-sm"
               >
                 <div className="flex items-center gap-4">
-                  <div className="aspect-[9/16] h-28 shrink-0 overflow-hidden rounded-2xl bg-black">
-                    <BusinessMedia
-					  spot={spot}
-					  className="h-full w-full"
-					/>
-							  </div>
+                  <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
+				  <BusinessMedia
+					spot={spot}
+					className="h-full w-full object-contain"
+				  />
+				</div>
 
                   <div className="flex-1">
                     <h4 className="font-bold">{spot.name}</h4>
