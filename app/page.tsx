@@ -126,11 +126,10 @@ export default async function Home() {
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
               >
                 <div className="aspect-[9/16] h-32 shrink-0 overflow-hidden rounded-2xl bg-black">
-                  <BusinessMedia
-                    spot={spot}
-                    reel
-                    className="h-full w-full"
-                  />
+                 <BusinessMedia
+				  spot={spot}
+				  className="h-full w-full"
+				/>
                 </div>
 
                 <div className="flex-1">
@@ -163,11 +162,10 @@ export default async function Home() {
             >
               <div className="mx-auto aspect-[9/16] max-h-[65vh] w-full overflow-hidden bg-black sm:max-w-sm">
                 <BusinessMedia
-                  spot={featured}
-                  reel
-                  className="h-full w-full"
-                />
-              </div>
+			  spot={featured}
+			  className="h-full w-full"
+			/>
+						  </div>
 
               <div className="p-5">
                 <h3 className="text-2xl font-bold">{featured.name}</h3>
@@ -197,11 +195,10 @@ export default async function Home() {
                 <div className="flex items-center gap-4">
                   <div className="aspect-[9/16] h-28 shrink-0 overflow-hidden rounded-2xl bg-black">
                     <BusinessMedia
-                      spot={spot}
-                      reel
-                      className="h-full w-full"
-                    />
-                  </div>
+					  spot={spot}
+					  className="h-full w-full"
+					/>
+							  </div>
 
                   <div className="flex-1">
                     <h4 className="font-bold">{spot.name}</h4>
