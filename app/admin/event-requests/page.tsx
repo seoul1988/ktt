@@ -9,18 +9,20 @@ type SourceType = "request" | "community_events" | "business_events";
 
 type EventItem = {
   id: string;
-  owner_id?: string | null;
-  business_id?: number | null;
+  owner_id: string | null;
+  business_id: number | null;
   title: string | null;
   description: string | null;
-  image_url?: string | null;
+  image_url: string | null;
+  video_url?: string | null;
+  external_video_url?: string | null;
   event_date: string | null;
-  location?: string | null;
+  location: string | null;
   address?: string | null;
   status: string | null;
   approved_type?: string | null;
-  created_at: string | null;
-  source_type: SourceType;
+  created_at: string;
+  source_type: "request" | "community" | "business";
   businesses?: {
     name: string | null;
   } | null;
