@@ -19,27 +19,10 @@ function getFirstVideoUrl(spot: any) {
 function BusinessMedia({
   spot,
   className,
-  reel = false,
 }: {
   spot: any;
   className: string;
-  reel?: boolean;
 }) {
-  const videoUrl = getFirstVideoUrl(spot);
-
-  if (videoUrl) {
-    return (
-     <video
-  src={mainEvent.video_url}
-  className="h-full w-full object-cover"
-  autoPlay
-  muted
-  loop
-  playsInline
-/>
-    );
-  }
-
   return (
     <img
       src={spot.image_url || "/event.png"}
@@ -107,25 +90,13 @@ export default async function Home() {
       href="/business-events"
       className="block overflow-hidden rounded-3xl bg-white shadow-xl"
     >
-      <div className="relative mx-auto aspect-[9/16] max-h-[70vh] w-full overflow-hidden bg-black sm:max-w-sm">
-        {mainEvent.video_url ? (
-          <video
-            src={mainEvent.video_url}
-            className="h-full w-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-          />
-        ) : (
-          <img
-            src={mainEvent.image_url || "/event.png"}
-            alt={mainEvent.title || "Business Event"}
-            className="h-full w-full object-cover"
-          />
-        )}
-      </div>
+     <div className="h-64 w-full bg-white">
+  <img
+    src={mainEvent.image_url || "/event.png"}
+    alt={mainEvent.title || "Business Event"}
+    className="h-full w-full object-contain"
+  />
+</div>
 
       <div className="p-3">
         <p className="text-xs font-bold text-[#C4483A]">
@@ -154,7 +125,7 @@ export default async function Home() {
                 href={`/business/${spot.id}`}
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
               >
-                <div className="aspect-[9/16] h-20 shrink-0 overflow-hidden rounded-2xl bg-black">
+                <div className="aspect-[9/16] h-32 shrink-0 overflow-hidden rounded-2xl bg-black">
                   <BusinessMedia
                     spot={spot}
                     reel
