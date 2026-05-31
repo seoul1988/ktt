@@ -5,7 +5,10 @@ import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 
-type SourceType = "request" | "community_events" | "business_events";
+type SourceType =
+  | "request"
+  | "community_events"
+  | "business_events";
 
 type EventItem = {
   id: string;
@@ -22,7 +25,7 @@ type EventItem = {
   status: string | null;
   approved_type?: string | null;
   created_at: string;
-  source_type: "request" | "community" | "business";
+  source_type: SourceType;
   businesses?: {
     name: string | null;
   } | null;
@@ -205,7 +208,7 @@ export default function EventRequestsPage() {
     loadEvents();
   }
 
-  function getTableName(sourceType: SourceType) {
+  function getTableName(sourceType: SourceType): "event_requests" | "community_events" | "business_events" {
     if (sourceType === "business_events") return "business_events";
     if (sourceType === "community_events") return "community_events";
     return "event_requests";
