@@ -86,10 +86,10 @@ export default async function Home() {
       </Link>
     </div>
 
-    <Link
-      href="/business-events"
-      className="block overflow-hidden rounded-3xl bg-white shadow-xl"
-    >
+        <Link
+		  href={`/business-events/${mainEvent.id}`}
+		  className="block overflow-hidden rounded-3xl bg-white shadow-xl"
+		>
      <div className="h-64 w-full bg-white">
   <img
     src={mainEvent.image_url || "/event.png"}
@@ -153,33 +153,43 @@ export default async function Home() {
         </section>
 
         {featured && (
-          <section className="mb-8">
-            <h2 className="mb-3 text-xl font-bold">⭐ Featured Sponsor</h2>
+         <section className="mb-8">
+  <h2 className="mb-3 text-xl font-bold">⭐ Featured Sponsor</h2>
 
-            <a
-              href={`/business/${featured.id}`}
-              className="block overflow-hidden rounded-3xl bg-white shadow-xl"
-            >
-              <div className="h-56 w-full overflow-hidden bg-white">
-			  <BusinessMedia
-				spot={featured}
-				className="h-full w-full object-cover"
-			  />
-			</div>
+  <a
+    href={`/business/${featured.id}`}
+    className="block overflow-hidden rounded-3xl bg-white shadow-xl"
+  >
+    <div className="h-56 w-full overflow-hidden bg-white">
+      <BusinessMedia
+        spot={featured}
+        className="h-full w-full object-cover"
+      />
+    </div>
 
-              <div className="p-5">
-                <h3 className="text-2xl font-bold">{featured.name}</h3>
+    <div className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1">
+          <h3 className="text-2xl font-bold">
+            {featured.name}
+          </h3>
 
-                <p className="mt-2 text-sm text-gray-600">
-                  {featured.category} · {featured.city}
-                </p>
+          <p className="mt-2 text-sm text-gray-600">
+            {featured.category} · {featured.city}
+          </p>
+        </div>
 
-                <p className="mt-3 line-clamp-2 text-sm text-gray-700">
-                  {featured.description || featured.tags || featured.tag}
-                </p>
-              </div>
-            </a>
-          </section>
+        <div className="rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold whitespace-nowrap">
+          ★ {featured.rating || "New"}
+        </div>
+      </div>
+
+      <p className="mt-3 line-clamp-2 text-sm text-gray-700">
+        {featured.description || featured.tags || featured.tag}
+      </p>
+    </div>
+  </a>
+</section>
         )}
 
         <section>
