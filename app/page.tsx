@@ -160,12 +160,12 @@ export default async function Home() {
               href={`/business/${featured.id}`}
               className="block overflow-hidden rounded-3xl bg-white shadow-xl"
             >
-              <div className="mx-auto aspect-[9/16] max-h-[65vh] w-full overflow-hidden bg-black sm:max-w-sm">
-                <BusinessMedia
-			  spot={featured}
-			  className="h-full w-full"
-			/>
-						  </div>
+              <div className="h-56 w-full overflow-hidden bg-white">
+			  <BusinessMedia
+				spot={featured}
+				className="h-full w-full object-cover"
+			  />
+			</div>
 
               <div className="p-5">
                 <h3 className="text-2xl font-bold">{featured.name}</h3>
