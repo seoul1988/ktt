@@ -106,7 +106,7 @@ export default async function Home() {
       href="/business-events"
       className="block overflow-hidden rounded-3xl bg-white shadow-xl"
     >
-      <div className="h-40 w-full bg-black">
+      <div className="h-56 w-full bg-black">
         {mainEvent.video_url ? (
           <video
             src={mainEvent.video_url}
