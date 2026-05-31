@@ -19,31 +19,33 @@ function getFirstVideoUrl(spot: any) {
 function BusinessMedia({
   spot,
   className,
+  reel = false,
 }: {
   spot: any;
   className: string;
+  reel?: boolean;
 }) {
   const videoUrl = getFirstVideoUrl(spot);
 
   if (videoUrl) {
-	return (
-	  <video
-		src={videoUrl}
-		className={`${className} object-contain bg-black`}
-		autoPlay
-		muted
-		loop
-		playsInline
-		preload="metadata"
-	  />
-	);
+    return (
+      <video
+        src={videoUrl}
+        className={`${className} ${reel ? "object-cover" : "object-cover"} bg-black`}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+      />
+    );
   }
 
   return (
     <img
       src={spot.image_url || "/event.png"}
-      alt={spot.name}
-      className={className}
+      alt={spot.name || "Business"}
+      className={`${className} object-cover`}
     />
   );
 }
@@ -106,11 +108,11 @@ export default async function Home() {
       href="/business-events"
       className="block overflow-hidden rounded-3xl bg-white shadow-xl"
     >
-      <div className="h-56 w-full bg-black">
+      <div className="relative mx-auto aspect-[9/16] max-h-[70vh] w-full overflow-hidden bg-black sm:max-w-sm">
         {mainEvent.video_url ? (
           <video
             src={mainEvent.video_url}
-            className="h-full w-full object-contain"
+            className="h-full w-full object-cover"
             autoPlay
             muted
             loop
@@ -153,11 +155,12 @@ export default async function Home() {
                 href={`/business/${spot.id}`}
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
               >
-                <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-200">
+                <div className="aspect-[9/16] h-32 shrink-0 overflow-hidden rounded-2xl bg-black">
                   <BusinessMedia
-				  spot={spot}
-				  className="h-full w-full object-contain bg-black"
-				/>
+                    spot={spot}
+                    reel
+                    className="h-full w-full"
+                  />
                 </div>
 
                 <div className="flex-1">
@@ -188,10 +191,11 @@ export default async function Home() {
               href={`/business/${featured.id}`}
               className="block overflow-hidden rounded-3xl bg-white shadow-xl"
             >
-              <div className="h-36 w-full overflow-hidden bg-black">
+              <div className="mx-auto aspect-[9/16] max-h-[65vh] w-full overflow-hidden bg-black sm:max-w-sm">
                 <BusinessMedia
                   spot={featured}
-                  className="h-full w-full object-cover"
+                  reel
+                  className="h-full w-full"
                 />
               </div>
 
@@ -221,10 +225,11 @@ export default async function Home() {
                 className="block rounded-3xl bg-white p-4 shadow-sm"
               >
                 <div className="flex items-center gap-4">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-gray-200">
+                  <div className="aspect-[9/16] h-28 shrink-0 overflow-hidden rounded-2xl bg-black">
                     <BusinessMedia
                       spot={spot}
-                      className="h-full w-full object-cover"
+                      reel
+                      className="h-full w-full"
                     />
                   </div>
 
