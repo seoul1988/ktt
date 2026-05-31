@@ -125,10 +125,10 @@ export default async function Home() {
                 href={`/business/${spot.id}`}
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
               >
-                <div className="aspect-[9/16] h-32 shrink-0 overflow-hidden rounded-2xl bg-black">
+                <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
                  <BusinessMedia
 				  spot={spot}
-				  className="h-full w-full"
+				  className="h-full w-full object-contain"
 				/>
                 </div>
 
