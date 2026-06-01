@@ -5,13 +5,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const subscription = body.subscription;
+    const userId = body.userId;
 
-    if (!user) {
+    if (!userId) {
       return NextResponse.json(
-        { error: "로그인이 필요합니다." },
+        { error: "userId가 없습니다." },
         { status: 401 }
       );
     }
@@ -19,7 +18,7 @@ export async function POST(req: Request) {
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
-      .eq("id", user.id)
+      .eq("id", userId)
       .maybeSingle();
 
     if (profile?.role !== "admin") {
@@ -29,7 +28,11 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {
+    if (
+      !subscription?.endpoint ||
+      !subscription?.keys?.p256dh ||
+      !subscription?.keys?.auth
+    ) {
       return NextResponse.json(
         { error: "푸시 구독 정보가 올바르지 않습니다." },
         { status: 400 }
@@ -38,10 +41,10 @@ export async function POST(req: Request) {
 
     const { error } = await supabase.from("push_subscriptions").upsert(
       {
-        user_id: user.id,
-        endpoint: body.endpoint,
-        p256dh: body.keys.p256dh,
-        auth: body.keys.auth,
+        user_id: userId,
+        endpoint: subscription.endpoint,
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth,
         user_agent: req.headers.get("user-agent"),
       },
       {

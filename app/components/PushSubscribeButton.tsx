@@ -73,12 +73,15 @@ alert(
       });
 
       const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(subscription),
-      });
+		  method: "POST",
+		  headers: {
+			"Content-Type": "application/json",
+		  },
+		  body: JSON.stringify({
+			subscription,
+			userId: user.id,
+		  }),
+		});
 
       if (!res.ok) {
         const data = await res.json();
