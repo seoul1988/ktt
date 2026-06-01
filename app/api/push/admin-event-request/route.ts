@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   try {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
-    const subject = process.env.VAPID_SUBJECT || "mailto:mbsproinc@gmail.com";
+    const subject = process.env.VAPID_SUBJECT || "mailto:fcbs2023@gmail.com";
 
     if (!publicKey) {
       return NextResponse.json(
