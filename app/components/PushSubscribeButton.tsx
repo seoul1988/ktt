@@ -30,6 +30,9 @@ export default function PushSubscribeButton() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+	  console.log("PUSH USER:", user);
+console.log("PUSH USER ID:", user?.id);
+console.log("PUSH USER EMAIL:", user?.email);
 
       if (!user) {
         alert("로그인이 필요합니다.");
@@ -58,10 +61,7 @@ export default function PushSubscribeButton() {
       );
 
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-alert(
-  "PUBLIC KEY = " +
-  (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "UNDEFINED")
-);
+
       if (!publicKey) {
         alert("VAPID Public Key가 없습니다.");
         return;
