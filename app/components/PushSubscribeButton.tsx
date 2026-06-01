@@ -4,9 +4,16 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const cleanBase64 = base64String
+    .trim()
+    .replace(/^Public Key:\s*/i, "")
+    .replace(/key/gi, "")
+    .replace(/→/g, "")
+    .replace(/\s/g, "");
 
-  const base64 = (base64String + padding)
+  const padding = "=".repeat((4 - (cleanBase64.length % 4)) % 4);
+
+  const base64 = (cleanBase64 + padding)
     .replace(/-/g, "+")
     .replace(/_/g, "/");
 
@@ -30,6 +37,10 @@ export default function PushSubscribeButton() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      console.log("PUSH USER:", user);
+      console.log("PUSH USER ID:", user?.id);
+      console.log("PUSH USER EMAIL:", user?.email);
 
       if (!user) {
         alert("로그인이 필요합니다.");
@@ -57,35 +68,37 @@ export default function PushSubscribeButton() {
         "/service-worker.js"
       );
 
-      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
+      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 
-if (!publicKey) {
-  alert("VAPID Public Key가 없습니다.");
-  return;
-}
+      console.log("VAPID PUBLIC KEY:", publicKey);
+
+      if (!publicKey.trim()) {
+        alert("VAPID Public Key가 없습니다.");
+        return;
+      }
 
       const existingSubscription =
-  await registration.pushManager.getSubscription();
+        await registration.pushManager.getSubscription();
 
-if (existingSubscription) {
-  await existingSubscription.unsubscribe();
-}
+      if (existingSubscription) {
+        await existingSubscription.unsubscribe();
+      }
 
-const subscription = await registration.pushManager.subscribe({
-  userVisibleOnly: true,
-  applicationServerKey: urlBase64ToUint8Array(publicKey.trim()),
-});
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
 
       const res = await fetch("/api/push/subscribe", {
-		  method: "POST",
-		  headers: {
-			"Content-Type": "application/json",
-		  },
-		  body: JSON.stringify({
-			subscription,
-			userId: user.id,
-		  }),
-		});
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscription,
+          userId: user.id,
+        }),
+      });
 
       if (!res.ok) {
         const data = await res.json();
