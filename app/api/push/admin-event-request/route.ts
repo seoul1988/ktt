@@ -3,6 +3,10 @@ import webpush from "web-push";
 import { supabase } from "../../../../lib/supabase";
 
 export async function POST(req: Request) {
+	console.log("PUBLIC KEY:", process.env.VAPID_PUBLIC_KEY);
+  console.log("PRIVATE KEY:", process.env.VAPID_PRIVATE_KEY);
+	
+	
   try {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
     const privateKey = process.env.VAPID_PRIVATE_KEY;
