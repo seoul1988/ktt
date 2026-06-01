@@ -159,13 +159,12 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      ok: true,
-      sent,
-      failed,
-      adminCount: adminIds.length,
-      subscriptionCount: subscriptions.length,
-      errors,
-    });
+  ok: true,
+  sent,
+  failed,
+  adminIds,
+  subscriptions,
+});
   } catch (err: any) {
     console.error("ADMIN EVENT PUSH ERROR:", err);
 
