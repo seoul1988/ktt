@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { supabase } from "../../../lib/supabase";
+import EventManageButtons from "./EventManageButtons";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -100,25 +101,10 @@ export default async function BusinessEventDetailPage({
           ← Back
         </Link>
 
-        {canManage && (
-          <div className="flex gap-2">
-            <Link
-              href={`/business-events/${event.id}/edit`}
-              className="rounded-full bg-blue-600 px-4 py-2 text-sm font-black text-white shadow"
-            >
-              Edit
-            </Link>
-
-            <form action={deleteEvent}>
-              <button
-                type="submit"
-                className="rounded-full bg-red-600 px-4 py-2 text-sm font-black text-white shadow"
-              >
-                Delete
-              </button>
-            </form>
-          </div>
-        )}
+        <EventManageButtons
+  eventId={event.id}
+  ownerId={event.owner_id}
+/>
       </div>
 
       <div className="overflow-hidden rounded-3xl bg-white shadow-xl">

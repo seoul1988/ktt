@@ -155,19 +155,30 @@ const [menuOpen, setMenuOpen] = useState(false);
       return;
     }
 
-    const { data: owner } = await supabase
-      .from("business_owners")
-      .select("user_id,status")
-      .eq("business_id", businessId)
-      .eq("user_id", user.id)
-      .eq("status", "approved")
-      .maybeSingle();
+  const { data: profile } = await supabase
+  .from("profiles")
+  .select("role")
+  .eq("id", user.id)
+  .maybeSingle();
 
-    if (!owner) {
-      alert("You do not have permission to edit this business.");
-      window.location.href = "/owner";
-      return;
-    }
+const isAdmin = profile?.role === "admin";
+
+const { data: owner } = await supabase
+  .from("business_owners")
+  .select("user_id,status")
+  .eq("business_id", businessId)
+  .eq("user_id", user.id)
+  .eq("status", "approved")
+  .maybeSingle();
+
+const isOwner = !!owner;
+const canManage = isAdmin || isOwner;
+
+if (!canManage) {
+  alert("You do not have permission to edit this business.");
+  window.location.href = "/owner";
+  return;
+}
 
     const { data: categoryData } = await supabase
       .from("categories")
@@ -184,7 +195,7 @@ const [menuOpen, setMenuOpen] = useState(false);
 
     if (error || !data) {
       alert("Business not found.");
-      window.location.href = "/owner";
+      window.location.href = isAdmin ? "/admin/businesses" : "/owner";
       return;
     }
 
@@ -303,12 +314,15 @@ const [menuOpen, setMenuOpen] = useState(false);
     }
   }
 
-  function selectAddress(item: AddressResult) {
-    setAddress(item.display_name);
-    setSelectedLat(Number(item.lat));
-    setSelectedLng(Number(item.lon));
-    setAddressResults([]);
-  }
+ function selectAddress(item: AddressResult) {
+  const lat = Number(item.lat);
+  const lng = Number(item.lon);
+
+  setAddress(item.display_name);
+  setSelectedLat(lat);
+  setSelectedLng(lng);
+  setAddressResults([]);
+}
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -603,10 +617,26 @@ const [menuOpen, setMenuOpen] = useState(false);
               )}
 
               {selectedLat && selectedLng && (
-                <p className="mt-2 text-xs font-bold text-green-600">
-                  Map location selected.
-                </p>
-              )}
+			  <div className="mt-3 grid grid-cols-2 gap-2">
+				<div>
+				  <p className="mb-1 text-xs font-black text-gray-500">Latitude</p>
+				  <input
+					value={selectedLat}
+					readOnly
+					className="w-full rounded-xl border bg-green-50 px-3 py-3 text-sm font-bold text-green-700"
+				  />
+				</div>
+
+				<div>
+				  <p className="mb-1 text-xs font-black text-gray-500">Longitude</p>
+				  <input
+					value={selectedLng}
+					readOnly
+					className="w-full rounded-xl border bg-green-50 px-3 py-3 text-sm font-bold text-green-700"
+				  />
+				</div>
+			  </div>
+			)}
             </div>
 
             <input

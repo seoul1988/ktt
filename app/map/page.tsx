@@ -77,39 +77,51 @@ export default async function MapPage() {
   const categoryList = (categories || []) as Category[];
 
   const mainCategoryNames = new Set(
-    categoryList.map((category) => category.name)
-  );
+  categoryList
+    .map((category) => String(category.name || "").trim().toLowerCase())
+    .filter(Boolean)
+);
 
   const spots = (businesses || [])
-    .filter((business) => {
-      if (!business.category) return true;
-      return mainCategoryNames.has(business.category);
-    })
-    .map((business) => {
-      const businessCoupons = couponList.filter(
-        (coupon) => String(coupon.business_id) === String(business.id)
-      );
+  .filter((business) => {
+    if (!business.category) return true;
 
-      return {
-        ...business,
-        coupons: businessCoupons,
-        coupon_count: businessCoupons.length,
-        coupon_badge:
-          businessCoupons.length > 0
-            ? makeCouponBadge(businessCoupons[0])
-            : null,
-      };
-    });
+    const businessCategories = String(business.category)
+      .split(",")
+      .map((category) => category.trim().toLowerCase())
+      .filter(Boolean);
 
-  return (
-    <main className="min-h-screen">
-	 <InstallAppButton />
-      <MapWrapper
-        spots={spots}
-        categories={categoryList}
-        activeNav="map"
-      />
-      <BottomNav />
-    </main>
-  );
+    return businessCategories.some((category) =>
+      mainCategoryNames.has(category)
+    );
+  })
+  .map((business) => {
+    const businessCoupons = couponList.filter(
+      (coupon) => String(coupon.business_id) === String(business.id)
+    );
+
+    return {
+      ...business,
+      coupons: businessCoupons,
+      coupon_count: businessCoupons.length,
+      coupon_badge:
+        businessCoupons.length > 0
+          ? makeCouponBadge(businessCoupons[0])
+          : null,
+    };
+  });
+
+return (
+  <main className="min-h-screen">
+    <InstallAppButton />
+
+    <MapWrapper
+      spots={spots}
+      categories={categoryList}
+      activeNav="map"
+    />
+
+    <BottomNav />
+  </main>
+);
 }

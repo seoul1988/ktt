@@ -195,17 +195,24 @@ function getOpenStatus(spot: Spot) {
 
 function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   const map = useMap();
+  const movedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!lat || !lng) return;
 
-    setTimeout(() => {
-      map.setView([lat - 0.035, lng], 10, {
-        animate: true,
-      });
+    const key = `${lat},${lng}`;
 
-      map.invalidateSize();
-    }, 100);
+    if (movedRef.current === key) return;
+
+    movedRef.current = key;
+
+    map.flyTo(
+      [lat - 0.035, lng],
+      map.getZoom(), // 현재 줌 유지
+      {
+        animate: true,
+      }
+    );
   }, [lat, lng, map]);
 
   return null;
