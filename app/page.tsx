@@ -39,13 +39,16 @@ export default async function Home() {
     .order("id", { ascending: true });
 
   // business_id가 없는 이벤트도 보여야 하므로 businesses 조인을 사용하지 않습니다.
-  const { data: businessEvents } = await supabase
-    .from("business_events")
-    .select("*")
-    .eq("status", "approved")
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(1);
+const today = new Date().toISOString().slice(0, 10);
+
+const { data: businessEvents } = await supabase
+  .from("business_events")
+  .select("*")
+  .eq("status", "approved")
+  .eq("active", true)
+  .gte("event_date", today)
+  .order("event_date", { ascending: true })
+  .limit(1);
 
   const featured = spots?.[0];
   const deals = spots?.slice(0, 3) || [];

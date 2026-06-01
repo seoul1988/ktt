@@ -3,11 +3,30 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { supabase } from "../../../lib/supabase";
 import EventManageButtons from "./EventManageButtons";
+import BusinessMediaViewer from "../../components/BusinessMediaViewer";
+import BottomNav from "../../components/BottomNav";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const ADMIN_EMAILS = ["mbsproinc@gmail.com"];
+function getStoragePathFromPublicUrl(url: string | null) {
+  if (!url) return null;
+
+  const marker = "/storage/v1/object/public/";
+  const index = url.indexOf(marker);
+
+  if (index === -1) return null;
+
+  const fullPath = url.substring(index + marker.length);
+  const parts = fullPath.split("/");
+
+  const bucket = parts.shift();
+  const path = parts.join("/");
+
+  if (!bucket || !path) return null;
+
+  return { bucket, path };
+}
 
 export default async function BusinessEventDetailPage({
   params,
@@ -35,7 +54,7 @@ export default async function BusinessEventDetailPage({
 
     const { data: targetEvent } = await supabase
       .from("business_events")
-      .select("id, owner_id")
+      .select("id, owner_id, image_url, video_url")
       .eq("id", id)
       .maybeSingle();
 
@@ -43,14 +62,39 @@ export default async function BusinessEventDetailPage({
       redirect("/business-events");
     }
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
     const isOwner = targetEvent.owner_id === user.id;
-    const isAdmin = ADMIN_EMAILS.includes(user.email || "");
+    const isAdmin = profile?.role === "admin";
 
     if (!isOwner && !isAdmin) {
       redirect(`/business-events/${id}`);
     }
 
-    await supabase.from("business_events").delete().eq("id", id);
+    const imageFile = getStoragePathFromPublicUrl(targetEvent.image_url);
+
+    if (imageFile) {
+      await supabase.storage
+        .from(imageFile.bucket)
+        .remove([imageFile.path]);
+    }
+
+    const videoFile = getStoragePathFromPublicUrl(targetEvent.video_url);
+
+    if (videoFile) {
+      await supabase.storage
+        .from(videoFile.bucket)
+        .remove([videoFile.path]);
+    }
+
+    await supabase
+      .from("business_events")
+      .delete()
+      .eq("id", id);
 
     revalidatePath("/business-events");
     redirect("/business-events");
@@ -82,41 +126,55 @@ export default async function BusinessEventDetailPage({
           </p>
           <p className="mt-2 text-xs text-gray-400">ID: {id}</p>
         </div>
+
+        <BottomNav />
       </main>
     );
   }
 
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
   const isOwner = !!user && event.owner_id === user.id;
-  const isAdmin = !!user?.email && ADMIN_EMAILS.includes(user.email);
+  const isAdmin = profile?.role === "admin";
   const canManage = isOwner || isAdmin;
 
+  const images = event.image_url ? [event.image_url] : [];
+  const videos = event.video_url ? [event.video_url] : [];
+
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28 text-[#172033]">
-      <div className="mb-5 flex items-center justify-between gap-3">
-	  
-        <Link
-          href="/business-events"
-          className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
-        >
-          ← Back
-        </Link>
+    <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
+      <div className="relative">
+        <BusinessMediaViewer
+          images={images.length > 0 ? images : ["/event.png"]}
+          videos={videos}
+          name={event.title || "Business Event"}
+        />
 
-        <EventManageButtons
-  eventId={event.id}
-  ownerId={event.owner_id}
-/>
-      </div>
-
-      <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
-        <div className="h-64 w-full bg-white">
-          <img
-            src={event.image_url || "/event.png"}
-            alt={event.title || "Business Event"}
-            className="h-full w-full object-contain"
-          />
+        <div className="absolute left-5 top-5 z-50">
+          <Link
+            href="/business-events"
+            className="rounded-full bg-white/90 px-4 py-2 text-sm font-black shadow"
+          >
+            ← Back
+          </Link>
         </div>
 
-        <div className="p-5">
+        <div className="absolute right-5 top-5 z-50">
+          <EventManageButtons
+            eventId={event.id}
+            ownerId={event.owner_id}
+          />
+        </div>
+      </div>
+
+      <section className="px-5 pt-5">
+        <div className="rounded-3xl bg-white p-5 shadow-xl">
           <p className="text-sm font-bold text-[#C4483A]">
             {event.event_date || "Coming Soon"}
           </p>
@@ -129,13 +187,26 @@ export default async function BusinessEventDetailPage({
             {event.description || "No description"}
           </p>
 
-          {(event.location || event.address) && (
+          {event.external_video_url && (
+            <a
+              href={event.external_video_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 block rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
+            >
+              ▶ 영상 링크 보기
+            </a>
+          )}
+
+          {event.location && (
             <p className="mt-4 text-sm font-bold">
-              📍 {event.location || event.address}
+              📍 {event.location}
             </p>
           )}
         </div>
-      </div>
+      </section>
+
+      <BottomNav />
     </main>
   );
 }

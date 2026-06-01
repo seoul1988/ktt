@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
+import BottomNav from "../components/BottomNav";
+import ProfileButton from "../components/ProfileButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,10 +17,23 @@ export default async function BusinessEventsPage() {
     .order("event_date", { ascending: true });
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-5">
-      <h1 className="mb-6 text-3xl font-black text-[#172033]">
-        🎉 Business Events
-      </h1>
+    <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28">
+      <div className="mb-6 flex items-center justify-between gap-3">
+  <Link
+    href="/"
+    className="rounded-full bg-white/90 px-4 py-2 text-sm font-bold shadow"
+  >
+    ← Back
+  </Link>
+
+  <h1 className="text-2xl font-black text-[#172033]">
+    🎉 Business Events
+  </h1>
+
+  <div className="shrink-0">
+    <ProfileButton />
+  </div>
+</div>
 
       {!events || events.length === 0 ? (
         <div className="rounded-3xl bg-white p-8 text-center shadow">
@@ -59,6 +74,8 @@ export default async function BusinessEventsPage() {
           ))}
         </div>
       )}
+
+      <BottomNav />
     </main>
   );
 }

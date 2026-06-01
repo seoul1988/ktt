@@ -56,28 +56,44 @@ const [longitude, setLongitude] = useState<number | null>(null);
   }
 
   function handleVideo(file: File | null) {
-    if (!file) return;
+  if (!file) return;
 
-    setVideoFile(file);
-    setVideoPreview(URL.createObjectURL(file));
+  const maxSize = 50 * 1024 * 1024; // 50MB
+
+  if (file.size > maxSize) {
+    alert("영상 파일이 너무 큽니다. 50MB 이하로 올려주세요.");
+    return;
   }
 
-  async function uploadFile(file: File, bucket: string, folder: string) {
-    const ext = file.name.split(".").pop();
-    const fileName = `${folder}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
+  setVideoFile(file);
+  setVideoPreview(URL.createObjectURL(file));
+}
 
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(fileName, file);
+async function uploadFile(file: File, bucket: string, folder: string) {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
+  const fileName = `${folder}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}.${ext}`;
 
-    if (error) throw error;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type,
+    });
 
-    const { data } = supabase.storage.from(bucket).getPublicUrl(fileName);
-
-    return data.publicUrl;
+  if (error) {
+    console.error("UPLOAD ERROR:", error);
+    throw new Error(`${bucket} 업로드 실패: ${error.message}`);
   }
+
+  const { data: publicData } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(data.path);
+
+  return publicData.publicUrl;
+}
 
   async function submitEvent() {
     if (!title.trim()) {

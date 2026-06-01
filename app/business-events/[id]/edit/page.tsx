@@ -1,16 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../../lib/supabase";
+import ProfileButton from "../../../components/ProfileButton";
+import BottomNav from "../../../components/BottomNav";
 
-const ADMIN_EMAILS = ["mbsproinc@gmail.com"];
+
+const libraries: "places"[] = ["places"];
 
 export default function EditBusinessEventPage() {
   const router = useRouter();
   const params = useParams();
   const id = String(params.id);
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -21,14 +31,37 @@ export default function EditBusinessEventPage() {
   const [description, setDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [location, setLocation] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   const [imageUrl, setImageUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+	const [videoUrl, setVideoUrl] = useState("");
+	const [videoFile, setVideoFile] = useState<File | null>(null);
+	const [videoPreview, setVideoPreview] = useState("");
 
+	const [externalVideoUrl, setExternalVideoUrl] = useState("");
+	
+	const [oldVideoUrlToDelete, setOldVideoUrlToDelete] = useState("");
+	
   useEffect(() => {
     loadEvent();
   }, []);
+
+  function onPlaceChanged() {
+    const place = autocompleteRef.current?.getPlace();
+    if (!place) return;
+
+    const fullAddress = place.formatted_address || place.name || "";
+    setLocation(fullAddress);
+
+    const lat = place.geometry?.location?.lat();
+    const lng = place.geometry?.location?.lng();
+
+    setLatitude(typeof lat === "number" ? lat : null);
+    setLongitude(typeof lng === "number" ? lng : null);
+  }
 
   function handleImage(file: File | null) {
     if (!file) return;
@@ -37,11 +70,33 @@ export default function EditBusinessEventPage() {
     setImagePreview(URL.createObjectURL(file));
   }
 
-  function removeImage() {
-    setImageFile(null);
-    setImagePreview("");
-    setImageUrl("");
+async function removeImage() {
+  if (imageUrl) {
+    await deleteImageFromStorage(imageUrl);
   }
+
+  setImageFile(null);
+  setImagePreview("");
+  setImageUrl("");
+}
+
+function handleVideo(file: File | null) {
+  if (!file) return;
+
+  setVideoFile(file);
+  setVideoPreview(URL.createObjectURL(file));
+}
+
+async function removeVideo() {
+  if (videoUrl) {
+    await deleteVideoFromStorage(videoUrl);
+  }
+
+  setVideoFile(null);
+  setVideoPreview("");
+  setVideoUrl("");
+}
+
 
   async function uploadFile(file: File) {
     const ext = file.name.split(".").pop();
@@ -61,7 +116,81 @@ export default function EditBusinessEventPage() {
 
     return data.publicUrl;
   }
+async function uploadVideoFile(file: File) {
+  const ext = file.name.split(".").pop();
+  const fileName = `videos/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}.${ext}`;
 
+  const { error } = await supabase.storage
+    .from("event-videos")
+    .upload(fileName, file);
+
+  if (error) throw error;
+
+  const { data } = supabase.storage
+    .from("event-videos")
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
+}
+
+function getStoragePathFromPublicUrl(publicUrl: string) {
+  const marker = "/storage/v1/object/public/event-videos/";
+  const index = publicUrl.indexOf(marker);
+
+  if (index === -1) return null;
+
+  return decodeURIComponent(publicUrl.slice(index + marker.length));
+}
+
+async function deleteVideoFromStorage(publicUrl: string) {
+  const path = getStoragePathFromPublicUrl(publicUrl);
+
+  console.log("삭제할 영상 path:", path);
+
+  if (!path) {
+    alert("삭제할 영상 경로를 찾지 못했습니다.");
+    return;
+  }
+
+  const { error } = await supabase.storage
+    .from("event-videos")
+    .remove([path]);
+
+  if (error) {
+    alert("Storage 영상 삭제 실패: " + error.message);
+    return;
+  }
+
+  console.log("Storage 영상 삭제 완료:", path);
+}
+function getImageStoragePathFromPublicUrl(publicUrl: string) {
+  const marker = "/storage/v1/object/public/event-images/";
+  const index = publicUrl.indexOf(marker);
+
+  if (index === -1) return null;
+
+  return decodeURIComponent(publicUrl.slice(index + marker.length));
+}
+
+async function deleteImageFromStorage(publicUrl: string) {
+  const path = getImageStoragePathFromPublicUrl(publicUrl);
+
+  if (!path) {
+    alert("삭제할 이미지 경로를 찾지 못했습니다.");
+    return;
+  }
+
+  const { error } = await supabase.storage
+    .from("event-images")
+    .remove([path]);
+
+  if (error) {
+    alert("Storage 이미지 삭제 실패: " + error.message);
+    return;
+  }
+}
   async function loadEvent() {
     const {
       data: { user },
@@ -79,8 +208,14 @@ export default function EditBusinessEventPage() {
       return;
     }
 
-    const isOwner = user?.id === event.owner_id;
-    const isAdmin = ADMIN_EMAILS.includes(user?.email || "");
+    const { data: profile } = await supabase
+  .from("profiles")
+  .select("role")
+  .eq("id", user?.id)
+  .maybeSingle();
+
+const isOwner = user?.id === event.owner_id;
+const isAdmin = profile?.role === "admin";
 
     if (!user || (!isOwner && !isAdmin)) {
       alert("수정 권한이 없습니다.");
@@ -92,53 +227,77 @@ export default function EditBusinessEventPage() {
     setTitle(event.title || "");
     setDescription(event.description || "");
     setEventDate(event.event_date || "");
-    setLocation(event.location || event.address || "");
+    setLocation(event.location || "");
+    setLatitude(event.latitude ?? null);
+    setLongitude(event.longitude ?? null);
     setImageUrl(event.image_url || "");
     setLoading(false);
+	setVideoUrl(event.video_url || "");
+    setExternalVideoUrl(event.external_video_url || "");
   }
 
   async function saveEvent() {
-    if (!canManage) return;
+  if (!canManage) return;
 
-    if (!title.trim()) {
-      alert("제목을 입력하세요.");
+  if (!title.trim()) {
+    alert("제목을 입력하세요.");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    let finalImageUrl = imageUrl;
+    let finalVideoUrl = videoUrl;
+
+    if (imageFile) {
+      finalImageUrl = await uploadFile(imageFile);
+    }
+
+    // 기존 영상 삭제 후 새 영상 업로드
+    if (videoFile) {
+      if (oldVideoUrlToDelete) {
+        await deleteVideoFromStorage(oldVideoUrlToDelete);
+      }
+
+      finalVideoUrl = await uploadVideoFile(videoFile);
+    }
+
+    // 영상을 삭제만 하고 새 영상을 안 올린 경우
+    if (!videoFile && oldVideoUrlToDelete && !videoUrl) {
+      await deleteVideoFromStorage(oldVideoUrlToDelete);
+      finalVideoUrl = "";
+    }
+
+    const { error } = await supabase
+      .from("business_events")
+      .update({
+        title: title.trim(),
+        description: description.trim() || null,
+        event_date: eventDate || null,
+        location: location.trim() || null,
+        latitude,
+        longitude,
+        image_url: finalImageUrl || null,
+        video_url: finalVideoUrl || null,
+        external_video_url: externalVideoUrl.trim() || null,
+      })
+      .eq("id", id);
+
+    if (error) {
+      alert("수정 실패: " + error.message);
+      setSaving(false);
       return;
     }
 
-    setSaving(true);
-
-    try {
-      let finalImageUrl = imageUrl;
-
-      if (imageFile) {
-        finalImageUrl = await uploadFile(imageFile);
-      }
-
-      const { error } = await supabase
-        .from("business_events")
-        .update({
-          title: title.trim(),
-          description: description.trim() || null,
-          event_date: eventDate || null,
-          location: location.trim() || null,
-          image_url: finalImageUrl || null,
-        })
-        .eq("id", id);
-
-      if (error) {
-        alert("수정 실패: " + error.message);
-        setSaving(false);
-        return;
-      }
-
-      alert("수정되었습니다.");
-      router.push(`/business-events/${id}`);
-      router.refresh();
-    } catch (err: any) {
-      alert("저장 실패: " + err.message);
-      setSaving(false);
-    }
+    alert("수정되었습니다.");
+    router.push(`/business-events/${id}`);
+    router.refresh();
+  } catch (err: any) {
+    alert("저장 실패: " + err.message);
+    setSaving(false);
   }
+}
 
   if (loading) {
     return (
@@ -150,7 +309,7 @@ export default function EditBusinessEventPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28 text-[#172033]">
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between gap-3">
         <Link
           href={`/business-events/${id}`}
           className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
@@ -158,14 +317,13 @@ export default function EditBusinessEventPage() {
           ← Back
         </Link>
 
-        <button
-          type="button"
-          disabled={saving}
-          onClick={saveEvent}
-          className="rounded-full bg-[#172033] px-5 py-2 text-sm font-black text-white shadow disabled:bg-gray-400"
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
+        <h1 className="text-xl font-black text-[#172033]">
+          Edit Event
+        </h1>
+
+        <div className="shrink-0">
+          <ProfileButton />
+        </div>
       </div>
 
       <div className="space-y-5 rounded-3xl bg-white p-5 shadow">
@@ -198,13 +356,61 @@ export default function EditBusinessEventPage() {
           <label className="mb-2 block text-sm font-black text-[#172033]">
             주소
           </label>
-          <input
-            type="text"
-            placeholder="주소"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          />
+
+          {isLoaded ? (
+            <Autocomplete
+              options={{
+                fields: [
+                  "formatted_address",
+                  "address_components",
+                  "geometry",
+                  "name",
+                ],
+              }}
+              onLoad={(autocomplete) => {
+                autocompleteRef.current = autocomplete;
+              }}
+              onPlaceChanged={onPlaceChanged}
+            >
+              <input
+                type="text"
+                placeholder="주소"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+              />
+            </Autocomplete>
+          ) : (
+            <input
+              type="text"
+              placeholder="주소"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          )}
+
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              value={latitude ?? ""}
+              onChange={(e) =>
+                setLatitude(e.target.value ? Number(e.target.value) : null)
+              }
+              placeholder="Latitude"
+              className="w-full rounded-2xl border px-4 py-3 text-xs font-bold"
+            />
+
+            <input
+              type="number"
+              value={longitude ?? ""}
+              onChange={(e) =>
+                setLongitude(e.target.value ? Number(e.target.value) : null)
+              }
+              placeholder="Longitude"
+              className="w-full rounded-2xl border px-4 py-3 text-xs font-bold"
+            />
+          </div>
         </div>
 
         <div>
@@ -227,22 +433,65 @@ export default function EditBusinessEventPage() {
 
           {(imagePreview || imageUrl) && (
             <div className="relative mt-3 overflow-hidden rounded-2xl bg-white">
-              <button
-                type="button"
-                onClick={removeImage}
-                className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-lg font-black text-white shadow"
-              >
-                ×
-              </button>
-
               <img
                 src={imagePreview || imageUrl}
                 alt="Preview"
                 className="h-56 w-full object-contain"
               />
+
+              <button
+                type="button"
+                onClick={removeImage}
+                className="absolute right-3 top-3 z-[9999] flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-xl font-black text-white shadow-lg"
+              >
+                ×
+              </button>
             </div>
           )}
         </div>
+
+<div>
+  <div className="mb-2 flex items-center justify-between">
+    <label className="block text-sm font-black text-[#172033]">
+      동영상
+    </label>
+
+    {!videoPreview && !videoUrl && (
+      <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
+        첨부
+
+        <input
+          type="file"
+          accept="video/*"
+          onChange={(e) => handleVideo(e.target.files?.[0] || null)}
+          className="hidden"
+        />
+      </label>
+    )}
+  </div>
+
+  {(videoPreview || videoUrl) && (
+    <div className="relative mt-3 overflow-hidden rounded-2xl bg-black">
+      <video
+        src={videoPreview || videoUrl}
+        controls
+        playsInline
+        className="h-56 w-full object-contain"
+      />
+
+      <button
+        type="button"
+        onClick={removeVideo}
+        className="absolute right-3 top-3 z-[9999] flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-xl font-black text-white shadow-lg"
+      >
+        ×
+      </button>
+    </div>
+  )}
+</div>
+
+
+
 
         <div>
           <label className="mb-2 block text-sm font-black text-[#172033]">
@@ -256,7 +505,20 @@ export default function EditBusinessEventPage() {
             className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
           />
         </div>
+
+        <div className="pt-4">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={saveEvent}
+            className="w-full rounded-full bg-[#172033] py-4 text-sm font-black text-white shadow disabled:bg-gray-400"
+          >
+            {saving ? "Saving..." : "Save Event"}
+          </button>
+        </div>
       </div>
+
+      <BottomNav />
     </main>
   );
 }

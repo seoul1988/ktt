@@ -5,8 +5,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 
-const ADMIN_EMAILS = ["mbsproinc@gmail.com"];
-
 export default function EventManageButtons({
   eventId,
   ownerId,
@@ -16,6 +14,7 @@ export default function EventManageButtons({
 }) {
   const router = useRouter();
   const [canManage, setCanManage] = useState(false);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     async function checkUser() {
@@ -23,18 +22,31 @@ export default function EventManageButtons({
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) return;
+      if (!user) {
+        setCanManage(false);
+        setChecking(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
 
       const isOwner = ownerId === user.id;
-      const isAdmin = ADMIN_EMAILS.includes(user.email || "");
+      const isAdmin = profile?.role === "admin";
 
       setCanManage(isOwner || isAdmin);
+      setChecking(false);
     }
 
     checkUser();
   }, [ownerId]);
 
   async function deleteEvent() {
+    if (!canManage) return;
+
     if (!confirm("정말 삭제할까요?")) return;
 
     const { error } = await supabase
@@ -51,6 +63,7 @@ export default function EventManageButtons({
     router.refresh();
   }
 
+  if (checking) return null;
   if (!canManage) return null;
 
   return (

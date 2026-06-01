@@ -19,13 +19,19 @@ type EventItem = {
   image_url: string | null;
   video_url?: string | null;
   external_video_url?: string | null;
+
   event_date: string | null;
   location: string | null;
   address?: string | null;
+
+  latitude?: number | null;
+  longitude?: number | null;
+
   status: string | null;
   approved_type?: string | null;
   created_at: string;
   source_type: SourceType;
+
   businesses?: {
     name: string | null;
   } | null;
@@ -107,19 +113,21 @@ export default function EventRequestsPage() {
     return;
   }
 
-  const { error: insertError } = await supabase.from("business_events").insert({
-    business_id: event.business_id || null,
-    owner_id: event.owner_id || null,
-    title: event.title,
-    description: event.description,
-    image_url: event.image_url,
-    video_url: event.video_url || null,
-    external_video_url: event.external_video_url || null,
-    event_date: event.event_date,
-    location: event.location,
-    status: "approved",
-    active: true,
-  });
+const { error: insertError } = await supabase.from("business_events").insert({
+  business_id: event.business_id || null,
+  owner_id: event.owner_id || null,
+  title: event.title,
+  description: event.description,
+  image_url: event.image_url,
+  video_url: event.video_url || null,
+  external_video_url: event.external_video_url || null,
+  event_date: event.event_date,
+  location: event.location,
+  latitude: event.latitude ?? null,
+  longitude: event.longitude ?? null,
+  status: "approved",
+  active: true,
+});
 
   if (insertError) {
     alert("Business Event 저장 실패: " + insertError.message);
