@@ -44,8 +44,9 @@ export default function EventRequestsPage() {
 
     const [requestRes, communityRes, businessRes] = await Promise.all([
       supabase
-        .from("event_requests")
-        .select("*, businesses(name)")
+	  .from("event_requests")
+	  .select("*, businesses(name)")
+	  .neq("status", "deleted")
         .order("created_at", { ascending: false }),
 
       supabase
@@ -194,11 +195,16 @@ export default function EventRequestsPage() {
   }
 
   async function deleteEvent(event: EventItem) {
-    if (!confirm("정말 삭제할까요?")) return;
+  if (!confirm("정말 삭제할까요?")) return;
 
-    const table = getTableName(event.source_type);
-
-    const { error } = await supabase.from(table).delete().eq("id", event.id);
+  // event_requests 에서 삭제한 경우
+  if (event.source_type === "request") {
+    const { error } = await supabase
+      .from("event_requests")
+      .update({
+        status: "deleted",
+      })
+      .eq("id", event.id);
 
     if (error) {
       alert(error.message);
@@ -206,7 +212,45 @@ export default function EventRequestsPage() {
     }
 
     loadEvents();
+    return;
   }
+
+  // business_events 삭제
+  if (event.source_type === "business_events") {
+    await supabase
+      .from("business_events")
+      .delete()
+      .eq("id", event.id);
+
+    await supabase
+      .from("event_requests")
+      .update({
+        status: "deleted",
+      })
+      .eq("title", event.title);
+
+    loadEvents();
+    return;
+  }
+
+  // community_events 삭제
+  if (event.source_type === "community_events") {
+    await supabase
+      .from("community_events")
+      .delete()
+      .eq("id", event.id);
+
+    await supabase
+      .from("event_requests")
+      .update({
+        status: "deleted",
+      })
+      .eq("title", event.title);
+
+    loadEvents();
+    return;
+  }
+}
 
   function getTableName(sourceType: SourceType): "event_requests" | "community_events" | "business_events" {
     if (sourceType === "business_events") return "business_events";
