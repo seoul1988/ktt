@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+const adminSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
 
 export async function POST(req: Request) {
   try {
@@ -9,23 +14,7 @@ export async function POST(req: Request) {
     const userId = body.userId;
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "userId가 없습니다." },
-        { status: 401 }
-      );
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.json(
-        { error: "관리자만 푸시알림을 등록할 수 있습니다." },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "userId가 없습니다." }, { status: 401 });
     }
 
     if (
@@ -39,7 +28,20 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error } = await supabase.from("push_subscriptions").upsert(
+    const { data: profile } = await adminSupabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      return NextResponse.json(
+        { error: "관리자만 푸시알림을 등록할 수 있습니다." },
+        { status: 403 }
+      );
+    }
+
+    const { error } = await adminSupabase.from("push_subscriptions").upsert(
       {
         user_id: userId,
         endpoint: subscription.endpoint,
@@ -53,10 +55,7 @@ export async function POST(req: Request) {
     );
 
     if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
