@@ -57,17 +57,24 @@ export default function PushSubscribeButton() {
         "/service-worker.js"
       );
 
-      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim();
 
-      if (!publicKey) {
-        alert("VAPID Public Key가 없습니다.");
-        return;
-      }
+if (!publicKey) {
+  alert("VAPID Public Key가 없습니다.");
+  return;
+}
 
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
+      const existingSubscription =
+  await registration.pushManager.getSubscription();
+
+if (existingSubscription) {
+  await existingSubscription.unsubscribe();
+}
+
+const subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: urlBase64ToUint8Array(publicKey.trim()),
+});
 
       const res = await fetch("/api/push/subscribe", {
 		  method: "POST",
