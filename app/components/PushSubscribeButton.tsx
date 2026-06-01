@@ -120,24 +120,20 @@ export default function PushSubscribeButton() {
         }),
       });
 
-      if (!res.ok) {
-        let errorMessage = "푸시 구독 저장 실패";
+     if (!res.ok) {
+  const text = await res.text();
 
-        try {
-          const data = await res.json();
-          errorMessage = data.error || errorMessage;
-        } catch {
-          errorMessage = await res.text();
-        }
+  console.error("PUSH API STATUS:", res.status);
+  console.error("PUSH API RESPONSE:", text);
 
-        throw new Error(errorMessage);
-      }
+  throw new Error(text || `푸시 구독 저장 실패: ${res.status}`);
+}
 
       alert("관리자 푸시알림이 설정되었습니다.");
-    } catch (err: any) {
-      console.error("Push subscribe error:", err);
-      alert("푸시알림 설정 실패: " + (err?.message || String(err)));
-    } finally {
+   } catch (err: any) {
+  console.error("Push subscribe error full:", err);
+  alert("푸시알림 설정 실패: " + (err?.message || String(err)));
+} finally {
       setLoading(false);
     }
   }
