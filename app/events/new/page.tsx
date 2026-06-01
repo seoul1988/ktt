@@ -22,8 +22,8 @@ export default function NewEventPage() {
   const [description, setDescription] = useState("");
   const [eventDate, setEventDate] = useState("");
   const [location, setLocation] = useState("");
-const [latitude, setLatitude] = useState<number | null>(null);
-const [longitude, setLongitude] = useState<number | null>(null);
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -56,44 +56,44 @@ const [longitude, setLongitude] = useState<number | null>(null);
   }
 
   function handleVideo(file: File | null) {
-  if (!file) return;
+    if (!file) return;
 
-  const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 50 * 1024 * 1024;
 
-  if (file.size > maxSize) {
-    alert("영상 파일이 너무 큽니다. 50MB 이하로 올려주세요.");
-    return;
+    if (file.size > maxSize) {
+      alert("영상 파일이 너무 큽니다. 50MB 이하로 올려주세요.");
+      return;
+    }
+
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
   }
 
-  setVideoFile(file);
-  setVideoPreview(URL.createObjectURL(file));
-}
+  async function uploadFile(file: File, bucket: string, folder: string) {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
+    const fileName = `${folder}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
 
-async function uploadFile(file: File, bucket: string, folder: string) {
-  const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
-  const fileName = `${folder}/${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2)}.${ext}`;
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
 
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(fileName, file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: file.type,
-    });
+    if (error) {
+      console.error("UPLOAD ERROR:", error);
+      throw new Error(`${bucket} 업로드 실패: ${error.message}`);
+    }
 
-  if (error) {
-    console.error("UPLOAD ERROR:", error);
-    throw new Error(`${bucket} 업로드 실패: ${error.message}`);
+    const { data: publicData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(data.path);
+
+    return publicData.publicUrl;
   }
-
-  const { data: publicData } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(data.path);
-
-  return publicData.publicUrl;
-}
 
   async function submitEvent() {
     if (!title.trim()) {
@@ -146,25 +146,44 @@ async function uploadFile(file: File, bucket: string, folder: string) {
         );
       }
 
-      const { error } = await supabase.from("event_requests").insert({
-        owner_id: user.id,
-        business_id: businessId,
-        title: title.trim(),
-        description: description.trim(),
-        image_url: uploadedImageUrl || null,
-        video_url: uploadedVideoUrl || null,
-        external_video_url: videoUrl.trim() || null,
-        event_date: eventDate || null,
-        location: location.trim(),
-        latitude,
-        longitude,
-        status: "pending",
-      });
+      const { data: insertedEvent, error } = await supabase
+        .from("event_requests")
+        .insert({
+          owner_id: user.id,
+          business_id: businessId,
+          title: title.trim(),
+          description: description.trim(),
+          image_url: uploadedImageUrl || null,
+          video_url: uploadedVideoUrl || null,
+          external_video_url: videoUrl.trim() || null,
+          event_date: eventDate || null,
+          location: location.trim(),
+          latitude,
+          longitude,
+          status: "pending",
+        })
+        .select("id, title")
+        .single();
 
       if (error) {
         alert("이벤트 등록 실패: " + error.message);
         setSaving(false);
         return;
+      }
+
+      try {
+        await fetch("/api/push/admin-event-request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            eventId: insertedEvent.id,
+            title: insertedEvent.title,
+          }),
+        });
+      } catch (pushError) {
+        console.error("푸시알림 발송 실패:", pushError);
       }
 
       alert("이벤트가 등록되었습니다. 관리자 승인 후 노출됩니다.");
@@ -276,65 +295,65 @@ async function uploadFile(file: File, bucket: string, folder: string) {
             />
           </div>
 
-        <div>
-<div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-  <span className="text-sm font-black text-[#172033]">
-    Event Image
-  </span>
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#172033]">
+                Event Image
+              </span>
 
-    <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
-      파일 첨부
+              <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
+                파일 첨부
 
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => handleImage(e.target.files?.[0] || null)}
-        className="hidden"
-      />
-    </label>
-  </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImage(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
 
-  {imagePreview && (
-    <img
-      src={imagePreview}
-      alt="Preview"
-      className="mt-3 h-40 w-full rounded-2xl object-cover"
-    />
-  )}
-</div>
+            {imagePreview && (
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="mt-3 h-40 w-full rounded-2xl object-cover"
+              />
+            )}
+          </div>
 
           <div>
-  <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-    <span className="text-sm font-black text-[#172033]">
-      Event Video
-    </span>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#172033]">
+                Event Video
+              </span>
 
-    <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
-      첨부
+              <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
+                첨부
 
-      <input
-        type="file"
-        accept="video/*"
-        onChange={(e) => handleVideo(e.target.files?.[0] || null)}
-        className="hidden"
-      />
-    </label>
-  </div>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => handleVideo(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
 
-  {videoFile && (
-    <p className="mt-2 text-xs font-bold text-gray-500">
-      {videoFile.name}
-    </p>
-  )}
+            {videoFile && (
+              <p className="mt-2 text-xs font-bold text-gray-500">
+                {videoFile.name}
+              </p>
+            )}
 
-  {videoPreview && (
-    <video
-      src={videoPreview}
-      controls
-      className="mt-3 h-48 w-full rounded-2xl object-cover"
-    />
-  )}
-</div>
+            {videoPreview && (
+              <video
+                src={videoPreview}
+                controls
+                className="mt-3 h-48 w-full rounded-2xl object-cover"
+              />
+            )}
+          </div>
 
           <input
             type="text"

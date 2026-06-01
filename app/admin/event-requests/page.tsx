@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import PushSubscribeButton from "../../components/PushSubscribeButton";
 
 type SourceType =
   | "request"
@@ -305,7 +306,10 @@ const { error: insertError } = await supabase.from("business_events").insert({
           </div>
 
           <ProfileButton />
-        </div>
+		 </div>
+		 <div className="mb-5">
+  <PushSubscribeButton />
+</div>
 
         {loading ? (
           <div className="rounded-3xl bg-white p-5 shadow">Loading...</div>
