@@ -2,32 +2,28 @@ import { NextResponse } from "next/server";
 import webpush from "web-push";
 import { supabase } from "../../../../lib/supabase";
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || "mailto:mbsproinc@gmail.com",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "",
-  process.env.VAPID_PRIVATE_KEY || ""
-);
-
 export async function POST(req: Request) {
   try {
+    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const privateKey = process.env.VAPID_PRIVATE_KEY;
+    const subject = process.env.VAPID_SUBJECT || "mailto:mbsproinc@gmail.com";
+
+    if (!publicKey || !privateKey) {
+      return NextResponse.json(
+        {
+          error:
+            "VAPID 키가 없습니다. Vercel Environment Variables를 확인하세요.",
+        },
+        { status: 500 }
+      );
+    }
+
+    webpush.setVapidDetails(subject, publicKey, privateKey);
+
     const body = await req.json();
 
     const eventId = body.eventId;
     const title = body.title || "새 이벤트";
-
-    if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) {
-      return NextResponse.json(
-        { error: "NEXT_PUBLIC_VAPID_PUBLIC_KEY가 없습니다." },
-        { status: 500 }
-      );
-    }
-
-    if (!process.env.VAPID_PRIVATE_KEY) {
-      return NextResponse.json(
-        { error: "VAPID_PRIVATE_KEY가 없습니다." },
-        { status: 500 }
-      );
-    }
 
     const { data: admins, error: adminError } = await supabase
       .from("profiles")
