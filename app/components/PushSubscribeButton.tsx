@@ -7,6 +7,8 @@ function cleanVapidKey(key: string) {
   return key
     .replace(/^Public Key:\s*/i, "")
     .replace(/→/g, "")
+    .replace(/;/g, "")
+    .replace(/\//g, "")
     .replace(/\s/g, "")
     .trim();
 }
@@ -15,28 +17,30 @@ function urlBase64ToUint8Array(base64String: string) {
   const cleanBase64 = cleanVapidKey(base64String);
 
   console.log("CLEAN VAPID KEY:", cleanBase64);
+  console.log("VAPID LENGTH:", cleanBase64.length);
   console.log(
     "BAD CHARS:",
-    cleanBase64
-      .split("")
-      .filter((c) => c.charCodeAt(0) > 255)
-      .map((c) => `${c}:${c.charCodeAt(0)}`)
+    [...cleanBase64].filter((c) => !/[A-Za-z0-9_-]/.test(c))
   );
 
-  const padding = "=".repeat((4 - (cleanBase64.length % 4)) % 4);
+  if (!cleanBase64) {
+    throw new Error("VAPID Public Key가 비어 있습니다.");
+  }
 
+  const badChars = [...cleanBase64].filter((c) => !/[A-Za-z0-9_-]/.test(c));
+
+  if (badChars.length > 0) {
+    throw new Error("VAPID Public Key에 잘못된 문자가 있습니다: " + badChars.join(", "));
+  }
+
+  const padding = "=".repeat((4 - (cleanBase64.length % 4)) % 4);
   const base64 = (cleanBase64 + padding)
     .replace(/-/g, "+")
     .replace(/_/g, "/");
 
   const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
 
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-
-  return outputArray;
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
 export default function PushSubscribeButton() {
@@ -65,6 +69,11 @@ export default function PushSubscribeButton() {
         return;
       }
 
+      if (!("Notification" in window)) {
+        alert("이 브라우저는 알림을 지원하지 않습니다.");
+        return;
+      }
+
       const permission = await Notification.requestPermission();
 
       if (permission !== "granted") {
@@ -76,9 +85,12 @@ export default function PushSubscribeButton() {
         "/service-worker.js"
       );
 
-      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+      await navigator.serviceWorker.ready;
 
-      if (!publicKey.trim()) {
+      const rawPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
+      const publicKey = cleanVapidKey(rawPublicKey);
+
+      if (!publicKey) {
         alert("VAPID Public Key가 없습니다.");
         return;
       }
@@ -109,13 +121,22 @@ export default function PushSubscribeButton() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "푸시 구독 저장 실패");
+        let errorMessage = "푸시 구독 저장 실패";
+
+        try {
+          const data = await res.json();
+          errorMessage = data.error || errorMessage;
+        } catch {
+          errorMessage = await res.text();
+        }
+
+        throw new Error(errorMessage);
       }
 
       alert("관리자 푸시알림이 설정되었습니다.");
     } catch (err: any) {
-      alert("푸시알림 설정 실패: " + err.message);
+      console.error("Push subscribe error:", err);
+      alert("푸시알림 설정 실패: " + (err?.message || String(err)));
     } finally {
       setLoading(false);
     }
