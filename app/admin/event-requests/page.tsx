@@ -44,9 +44,10 @@ export default function EventRequestsPage() {
 
     const [requestRes, communityRes, businessRes] = await Promise.all([
       supabase
-        .from("event_requests")
-        .select("*, businesses(name)")
-        .order("created_at", { ascending: false }),
+	  .from("event_requests")
+	  .select("*, businesses(name)")
+	  .not("status", "in", '("approved","deleted")')
+	  .order("created_at", { ascending: false }),
 
       supabase
         .from("community_events")
