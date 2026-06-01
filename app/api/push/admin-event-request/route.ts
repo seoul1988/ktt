@@ -1,16 +1,38 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
-import { supabase } from "../../../../lib/supabase";
+
+function cleanEnv(value: string) {
+  return value.replace(/→/g, "").replace(/\s/g, "").trim();
+}
+
+function hasBadChar(value: string) {
+  return [...value].some((char) => char.charCodeAt(0) > 255);
+}
 
 export async function POST(req: Request) {
-	console.log("PUBLIC KEY:", process.env.VAPID_PUBLIC_KEY);
-  console.log("PRIVATE KEY:", process.env.VAPID_PRIVATE_KEY);
-	
-	
   try {
-    const publicKey = process.env.VAPID_PUBLIC_KEY;
-    const privateKey = process.env.VAPID_PRIVATE_KEY;
-    const subject = process.env.VAPID_SUBJECT || "mailto:fcbs2023@gmail.com";
+    const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
+    const serviceRoleKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY || "");
+    const publicKey = cleanEnv(process.env.VAPID_PUBLIC_KEY || "");
+    const privateKey = cleanEnv(process.env.VAPID_PRIVATE_KEY || "");
+    const subject = cleanEnv(
+      process.env.VAPID_SUBJECT || "mailto:fcbs2023@gmail.com"
+    );
+
+    if (!supabaseUrl) {
+      return NextResponse.json(
+        { error: "NEXT_PUBLIC_SUPABASE_URL이 없습니다." },
+        { status: 500 }
+      );
+    }
+
+    if (!serviceRoleKey) {
+      return NextResponse.json(
+        { error: "SUPABASE_SERVICE_ROLE_KEY가 없습니다." },
+        { status: 500 }
+      );
+    }
 
     if (!publicKey) {
       return NextResponse.json(
@@ -26,6 +48,26 @@ export async function POST(req: Request) {
       );
     }
 
+    if (
+      hasBadChar(supabaseUrl) ||
+      hasBadChar(serviceRoleKey) ||
+      hasBadChar(publicKey) ||
+      hasBadChar(privateKey) ||
+      hasBadChar(subject)
+    ) {
+      return NextResponse.json(
+        { error: "환경변수 안에 잘못된 문자가 있습니다." },
+        { status: 500 }
+      );
+    }
+
+    const adminSupabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    });
+
     webpush.setVapidDetails(subject, publicKey, privateKey);
 
     const body = await req.json();
@@ -33,28 +75,49 @@ export async function POST(req: Request) {
     const eventId = body.eventId;
     const title = body.title || "새 이벤트";
 
-    const { data: admins, error: adminError } = await supabase
+    const { data: admins, error: adminError } = await adminSupabase
       .from("profiles")
       .select("id")
       .eq("role", "admin");
 
     if (adminError) {
-      return NextResponse.json({ error: adminError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: adminError.message, step: "admin_select" },
+        { status: 500 }
+      );
     }
 
     const adminIds = admins?.map((admin) => admin.id) || [];
 
     if (adminIds.length === 0) {
-      return NextResponse.json({ ok: true, sent: 0 });
+      return NextResponse.json({
+        ok: true,
+        sent: 0,
+        failed: 0,
+        reason: "관리자 role=admin 계정이 없습니다.",
+      });
     }
 
-    const { data: subscriptions, error: subError } = await supabase
+    const { data: subscriptions, error: subError } = await adminSupabase
       .from("push_subscriptions")
-      .select("*")
+      .select("id, user_id, endpoint, p256dh, auth")
       .in("user_id", adminIds);
 
     if (subError) {
-      return NextResponse.json({ error: subError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: subError.message, step: "subscription_select" },
+        { status: 500 }
+      );
+    }
+
+    if (!subscriptions || subscriptions.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        sent: 0,
+        failed: 0,
+        adminCount: adminIds.length,
+        reason: "관리자 푸시 구독 정보가 없습니다.",
+      });
     }
 
     const payload = JSON.stringify({
@@ -66,8 +129,9 @@ export async function POST(req: Request) {
 
     let sent = 0;
     let failed = 0;
+    const errors: string[] = [];
 
-    for (const sub of subscriptions || []) {
+    for (const sub of subscriptions) {
       try {
         await webpush.sendNotification(
           {
@@ -83,9 +147,10 @@ export async function POST(req: Request) {
         sent++;
       } catch (err: any) {
         failed++;
+        errors.push(err?.message || String(err));
 
-        if (err.statusCode === 404 || err.statusCode === 410) {
-          await supabase
+        if (err?.statusCode === 404 || err?.statusCode === 410) {
+          await adminSupabase
             .from("push_subscriptions")
             .delete()
             .eq("id", sub.id);
@@ -93,10 +158,22 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, sent, failed });
+    return NextResponse.json({
+      ok: true,
+      sent,
+      failed,
+      adminCount: adminIds.length,
+      subscriptionCount: subscriptions.length,
+      errors,
+    });
   } catch (err: any) {
+    console.error("ADMIN EVENT PUSH ERROR:", err);
+
     return NextResponse.json(
-      { error: err.message || "관리자 푸시알림 발송 실패" },
+      {
+        error: err?.message || "관리자 푸시알림 발송 실패",
+        details: err?.stack || "",
+      },
       { status: 500 }
     );
   }
