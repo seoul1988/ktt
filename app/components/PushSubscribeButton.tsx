@@ -58,7 +58,10 @@ export default function PushSubscribeButton() {
       );
 
       const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-
+alert(
+  "PUBLIC KEY = " +
+  (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "UNDEFINED")
+);
       if (!publicKey) {
         alert("VAPID Public Key가 없습니다.");
         return;
