@@ -32,7 +32,10 @@ export async function POST(req: Request) {
     }
 
     if (!userId) {
-      return NextResponse.json({ error: "userId가 없습니다." }, { status: 401 });
+      return NextResponse.json(
+        { error: "userId가 없습니다." },
+        { status: 401 }
+      );
     }
 
     if (
@@ -49,18 +52,15 @@ export async function POST(req: Request) {
     const endpoint = String(subscription.endpoint).trim();
     const p256dh = String(subscription.keys.p256dh).trim();
     const auth = String(subscription.keys.auth).trim();
-    const userAgent = req.headers.get("user-agent") || "";
 
     console.log("PUSH ENDPOINT:", endpoint);
     console.log("PUSH P256DH:", p256dh);
     console.log("PUSH AUTH:", auth);
-    console.log("PUSH USER_AGENT:", userAgent);
 
     if (
       hasBadByteStringChar(endpoint) ||
       hasBadByteStringChar(p256dh) ||
-      hasBadByteStringChar(auth) ||
-      hasBadByteStringChar(userAgent)
+      hasBadByteStringChar(auth)
     ) {
       return NextResponse.json(
         {
@@ -71,13 +71,15 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log("ABOUT TO UPSERT PUSH SUBSCRIPTION");
+
     const { error } = await adminSupabase.from("push_subscriptions").upsert(
       {
         user_id: userId,
         endpoint,
         p256dh,
         auth,
-        user_agent: userAgent,
+        user_agent: null,
       },
       {
         onConflict: "endpoint",
@@ -85,15 +87,29 @@ export async function POST(req: Request) {
     );
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("SUPABASE PUSH UPSERT ERROR:", error);
+
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
-    console.error("PUSH SUBSCRIBE API ERROR:", err);
+    console.error("PUSH SUBSCRIBE API ERROR FULL:", err);
 
     return NextResponse.json(
-      { error: err?.message || "푸시 구독 저장 실패" },
+      {
+        error: String(err),
+        message: err?.message,
+        stack: err?.stack,
+      },
       { status: 500 }
     );
   }
