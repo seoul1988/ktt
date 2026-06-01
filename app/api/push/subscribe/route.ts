@@ -13,8 +13,25 @@ export async function POST(req: Request) {
     const subscription = body.subscription;
     const userId = body.userId;
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json(
+        { error: "NEXT_PUBLIC_SUPABASE_URL이 없습니다." },
+        { status: 500 }
+      );
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: "SUPABASE_SERVICE_ROLE_KEY가 없습니다." },
+        { status: 500 }
+      );
+    }
+
     if (!userId) {
-      return NextResponse.json({ error: "userId가 없습니다." }, { status: 401 });
+      return NextResponse.json(
+        { error: "userId가 없습니다." },
+        { status: 401 }
+      );
     }
 
     if (
@@ -27,8 +44,6 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-
-    
 
     const { error } = await adminSupabase.from("push_subscriptions").upsert(
       {
@@ -44,7 +59,10 @@ export async function POST(req: Request) {
     );
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true });

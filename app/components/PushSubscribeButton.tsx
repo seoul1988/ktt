@@ -3,10 +3,29 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+function cleanVapidKey(key: string) {
+  return key
+    .replace(/^Public Key:\s*/i, "")
+    .replace(/→/g, "")
+    .replace(/\s/g, "")
+    .trim();
+}
 
-  const base64 = (base64String + padding)
+function urlBase64ToUint8Array(base64String: string) {
+  const cleanBase64 = cleanVapidKey(base64String);
+
+  console.log("CLEAN VAPID KEY:", cleanBase64);
+  console.log(
+    "BAD CHARS:",
+    cleanBase64
+      .split("")
+      .filter((c) => c.charCodeAt(0) > 255)
+      .map((c) => `${c}:${c.charCodeAt(0)}`)
+  );
+
+  const padding = "=".repeat((4 - (cleanBase64.length % 4)) % 4);
+
+  const base64 = (cleanBase64 + padding)
     .replace(/-/g, "+")
     .replace(/_/g, "/");
 
@@ -30,9 +49,6 @@ export default function PushSubscribeButton() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-	  console.log("PUSH USER:", user);
-console.log("PUSH USER ID:", user?.id);
-console.log("PUSH USER EMAIL:", user?.email);
 
       if (!user) {
         alert("로그인이 필요합니다.");
@@ -60,28 +76,37 @@ console.log("PUSH USER EMAIL:", user?.email);
         "/service-worker.js"
       );
 
-      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
 
-      if (!publicKey) {
+      if (!publicKey.trim()) {
         alert("VAPID Public Key가 없습니다.");
         return;
       }
 
+      const existingSubscription =
+        await registration.pushManager.getSubscription();
+
+      if (existingSubscription) {
+        await existingSubscription.unsubscribe();
+      }
+
+      const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
+        applicationServerKey,
       });
 
       const res = await fetch("/api/push/subscribe", {
-		  method: "POST",
-		  headers: {
-			"Content-Type": "application/json",
-		  },
-		  body: JSON.stringify({
-			subscription,
-			userId: user.id,
-		  }),
-		});
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscription,
+          userId: user.id,
+        }),
+      });
 
       if (!res.ok) {
         const data = await res.json();
