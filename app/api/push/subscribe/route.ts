@@ -28,18 +28,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: profile } = await adminSupabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.json(
-        { error: "관리자만 푸시알림을 등록할 수 있습니다." },
-        { status: 403 }
-      );
-    }
+    
 
     const { error } = await adminSupabase.from("push_subscriptions").upsert(
       {

@@ -30,9 +30,6 @@ export default function PushSubscribeButton() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-	  console.log("PUSH USER:", user);
-console.log("PUSH USER ID:", user?.id);
-console.log("PUSH USER EMAIL:", user?.email);
 
       if (!user) {
         alert("로그인이 필요합니다.");
