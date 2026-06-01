@@ -5,15 +5,19 @@ import { supabase } from "../../../../lib/supabase";
 export async function POST(req: Request) {
   try {
     const publicKey = process.env.VAPID_PUBLIC_KEY;
-const privateKey = process.env.VAPID_PRIVATE_KEY;
+    const privateKey = process.env.VAPID_PRIVATE_KEY;
     const subject = process.env.VAPID_SUBJECT || "mailto:mbsproinc@gmail.com";
 
-    if (!publicKey || !privateKey) {
+    if (!publicKey) {
       return NextResponse.json(
-        {
-          error:
-            "VAPID 키가 없습니다. Vercel Environment Variables를 확인하세요.",
-        },
+        { error: "VAPID_PUBLIC_KEY가 없습니다." },
+        { status: 500 }
+      );
+    }
+
+    if (!privateKey) {
+      return NextResponse.json(
+        { error: "VAPID_PRIVATE_KEY가 없습니다." },
         { status: 500 }
       );
     }
@@ -31,20 +35,13 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
       .eq("role", "admin");
 
     if (adminError) {
-      return NextResponse.json(
-        { error: adminError.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: adminError.message }, { status: 500 });
     }
 
     const adminIds = admins?.map((admin) => admin.id) || [];
 
     if (adminIds.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        sent: 0,
-        message: "admin 사용자가 없습니다.",
-      });
+      return NextResponse.json({ ok: true, sent: 0 });
     }
 
     const { data: subscriptions, error: subError } = await supabase
@@ -53,18 +50,7 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
       .in("user_id", adminIds);
 
     if (subError) {
-      return NextResponse.json(
-        { error: subError.message },
-        { status: 500 }
-      );
-    }
-
-    if (!subscriptions || subscriptions.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        sent: 0,
-        message: "푸시알림을 허용한 admin 기기가 없습니다.",
-      });
+      return NextResponse.json({ error: subError.message }, { status: 500 });
     }
 
     const payload = JSON.stringify({
@@ -77,7 +63,7 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
     let sent = 0;
     let failed = 0;
 
-    for (const sub of subscriptions) {
+    for (const sub of subscriptions || []) {
       try {
         await webpush.sendNotification(
           {
@@ -103,16 +89,10 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
       }
     }
 
-    return NextResponse.json({
-      ok: true,
-      sent,
-      failed,
-    });
+    return NextResponse.json({ ok: true, sent, failed });
   } catch (err: any) {
     return NextResponse.json(
-      {
-        error: err.message || "관리자 푸시알림 발송 실패",
-      },
+      { error: err.message || "관리자 푸시알림 발송 실패" },
       { status: 500 }
     );
   }
