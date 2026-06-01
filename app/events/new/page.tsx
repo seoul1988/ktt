@@ -171,20 +171,40 @@ export default function NewEventPage() {
         return;
       }
 
-      try {
-        await fetch("/api/push/admin-event-request", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            eventId: insertedEvent.id,
-            title: insertedEvent.title,
-          }),
-        });
-      } catch (pushError) {
-        console.error("푸시알림 발송 실패:", pushError);
-      }
+     try {
+  const pushRes = await fetch("/api/push/admin-event-request", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      eventId: insertedEvent.id,
+      title: insertedEvent.title,
+    }),
+  });
+
+  const pushData = await pushRes.json();
+
+  console.log("ADMIN PUSH RESULT:", pushData);
+
+  if (!pushRes.ok) {
+    alert(
+      "이벤트는 등록됐지만 푸시알림 실패:\n" +
+        (pushData.error || "Unknown Error")
+    );
+  } else {
+    console.log(
+      `Push Success - Sent: ${pushData.sent}, Failed: ${pushData.failed}`
+    );
+  }
+} catch (pushError: any) {
+  console.error("푸시알림 발송 실패:", pushError);
+
+  alert(
+    "이벤트는 등록됐지만 푸시알림 요청 실패:\n" +
+      (pushError?.message || "Unknown Error")
+  );
+}
 
       alert("이벤트가 등록되었습니다. 관리자 승인 후 노출됩니다.");
       router.push("/");
