@@ -62,13 +62,12 @@ export default function ProfileButton() {
   }, []);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+  if (!menuRef.current) return;
+  if (!menuRef.current.contains(e.target as Node)) {
+    setOpen(false);
+  }
+}
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("touchstart", handleClickOutside);
 
