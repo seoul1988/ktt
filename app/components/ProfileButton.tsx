@@ -7,7 +7,6 @@ type ProfileRole = "user" | "owner" | "admin";
 
 export default function ProfileButton() {
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const mountedRef = useRef(true);
 
   const [checking, setChecking] = useState(true);
   const [user, setUser] = useState<any>(null);
@@ -17,28 +16,16 @@ export default function ProfileButton() {
   const refreshUser = useCallback(async () => {
     try {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
 
-      let currentUser = session?.user ?? null;
+      setUser(currentUser ?? null);
 
       if (!currentUser) {
-        const {
-          data: { user: fetchedUser },
-        } = await supabase.auth.getUser();
-
-        currentUser = fetchedUser ?? null;
-      }
-
-      if (!mountedRef.current) return;
-
-      // 세션 복구 중 잠깐 null이 나와도 기존 로그인 상태를 바로 지우지 않음
-      if (!currentUser) {
-        setChecking(false);
+        setRole("user");
+        setOpen(false);
         return;
       }
-
-      setUser(currentUser);
 
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -46,12 +33,9 @@ export default function ProfileButton() {
         .eq("id", currentUser.id)
         .maybeSingle();
 
-      if (!mountedRef.current) return;
-
       if (error) {
         console.error("Profile role error:", error);
         setRole("user");
-        setChecking(false);
         return;
       }
 
@@ -68,35 +52,23 @@ export default function ProfileButton() {
       }
     } catch (err) {
       console.error("Profile refresh error:", err);
-      // 에러가 나도 기존 user/open 상태를 지우지 않음
+      setRole("user");
     } finally {
-      if (mountedRef.current) {
-        setChecking(false);
-      }
+      setChecking(false);
     }
   }, []);
 
   useEffect(() => {
-    mountedRef.current = true;
     refreshUser();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        setRole("user");
-        setOpen(false);
-        setChecking(false);
-        return;
-      }
-
+    } = supabase.auth.onAuthStateChange(() => {
       setTimeout(refreshUser, 100);
-      setTimeout(refreshUser, 700);
     });
 
     const wakeUp = () => {
-      // 앱 복귀 때 checking=true로 바꾸지 않음. 그래야 버튼 클릭 가능.
+      setChecking(true);
       refreshUser();
       setTimeout(refreshUser, 500);
       setTimeout(refreshUser, 1500);
@@ -113,7 +85,6 @@ export default function ProfileButton() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      mountedRef.current = false;
       subscription.unsubscribe();
       window.removeEventListener("pageshow", wakeUp);
       window.removeEventListener("focus", wakeUp);
@@ -122,25 +93,16 @@ export default function ProfileButton() {
   }, [refreshUser]);
 
   useEffect(() => {
-    if (!open) return;
-
-    function handlePointerDown(e: PointerEvent) {
+    function handleClickOutside(e: MouseEvent) {
       if (!menuRef.current) return;
       if (!menuRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
 
-    // 모바일에서 버튼 클릭 직후 바로 닫히는 것을 막기 위해 한 박자 늦게 등록
-    const timer = window.setTimeout(() => {
-      document.addEventListener("pointerdown", handlePointerDown);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener("pointerdown", handlePointerDown);
-    };
-  }, [open]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function logout() {
     setOpen(false);
@@ -149,27 +111,15 @@ export default function ProfileButton() {
     window.location.href = "/";
   }
 
-  function toggleMenu() {
-    setOpen((prev) => !prev);
-    refreshUser();
-  }
-
-  if (checking && !user) {
+  if (checking) {
     return (
-      <div ref={menuRef} className="relative z-[99999]">
-        <button
-          type="button"
-          aria-label="Open menu"
-          onPointerDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleMenu();
-          }}
-          className="relative z-[99999] flex h-10 min-w-10 touch-manipulation items-center justify-center rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
-        >
-          ⋯
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={refreshUser}
+        className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
+      >
+        ⋯
+      </button>
     );
   }
 
@@ -177,7 +127,7 @@ export default function ProfileButton() {
     return (
       <a
         href="/login"
-        className="relative z-[99999] rounded-full bg-white px-4 py-2 text-xs font-bold text-[#172033] shadow"
+        className="rounded-full bg-white px-4 py-2 text-xs font-bold text-[#172033] shadow"
       >
         Login
       </a>
@@ -188,22 +138,17 @@ export default function ProfileButton() {
   const isAdmin = role === "admin";
 
   return (
-    <div ref={menuRef} className="relative z-[99999]">
+    <div ref={menuRef} className="relative">
       <button
         type="button"
-        aria-label="Open menu"
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleMenu();
-        }}
-        className="relative z-[99999] flex h-10 min-w-10 touch-manipulation items-center justify-center rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
+        onClick={() => setOpen((prev) => !prev)}
+        className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
       >
         ⋯
       </button>
 
       {open && (
-        <div className="fixed right-4 top-16 z-[999999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl sm:absolute sm:right-0 sm:top-12">
+        <div className="absolute right-0 top-12 z-[99999] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
           <a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
             Edit Profile
           </a>
@@ -268,11 +213,7 @@ export default function ProfileButton() {
 
           <button
             type="button"
-            onPointerDown={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              logout();
-            }}
+            onClick={logout}
             className="block w-full px-4 py-3 text-left hover:bg-gray-100"
           >
             Logout
