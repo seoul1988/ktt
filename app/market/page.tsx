@@ -160,7 +160,7 @@ export default async function MarketPage() {
         )}
       </div>
 
-      <CommunityBottomNav />
+      <CommunityBottomNav activeNav="market" />
     </main>
   );
 }

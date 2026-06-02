@@ -234,13 +234,16 @@ export default function BusinessMap({
   showAllOnLoad = false,
   activeNav = "map",
   communityMode = false,
+  role = null,
 }: {
   spots: Spot[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
   activeNav?: "map" | "deals" | "events";
   communityMode?: boolean;
+  role?: string | null;
 }) {
+
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
@@ -252,6 +255,7 @@ export default function BusinessMap({
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
+  const [myRole, setMyRole] = useState<string | null>(role);
   const displayCategories = useMemo(() => {
     if (mapCategories.length > 0) {
       return mapCategories;
@@ -283,6 +287,35 @@ export default function BusinessMap({
 	
 	
   const cardRefs = useRef<Record<number, HTMLAnchorElement | null>>({});
+
+  useEffect(() => {
+    async function loadMyRole() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setMyRole(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.log("Role load error:", error);
+        setMyRole(null);
+        return;
+      }
+
+      setMyRole(data?.role || null);
+    }
+
+    loadMyRole();
+  }, []);
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -511,10 +544,13 @@ useEffect(() => {
   return (
     <div className="relative min-h-screen">
       <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3">
-{showAllOnLoad && !selectedCategory && !search && (
-  <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl">
-    {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
-  </div>
+{showAllOnLoad &&
+  !communityMode &&
+  !selectedCategory &&
+  !search && (
+    <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl">
+      {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
+    </div>
 )}
         <input
           value={search}
@@ -854,24 +890,45 @@ useEffect(() => {
 
       {!communityMode && (
   <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
-    <a href="/">Home</a>
+  <a
+    href="/"
+    className={activeNav === "home" ? "text-[#F7B955]" : undefined}
+  >
+    Home
+  </a>
 
+  <a
+    href="/map"
+    className={activeNav === "map" ? "text-[#F7B955]" : undefined}
+  >
+    Map
+  </a>
+
+  <a
+    href="/deals"
+    className={activeNav === "deals" ? "text-[#F7B955]" : undefined}
+  >
+    Deals
+  </a>
+
+
+
+  <a
+    href="/community"
+    className={activeNav === "community" ? "text-[#F7B955]" : undefined}
+  >
+    Community
+  </a>
+
+  {myRole === "admin" && (
     <a
-      href="/map"
-      className={activeNav === "map" ? "text-[#F7B955]" : undefined}
+      href="/admin"
+      className={activeNav === "admin" ? "text-[#F7B955]" : undefined}
     >
-      Map
+      ADMIN
     </a>
-
-    <a
-      href="/deals"
-      className={activeNav === "deals" ? "text-[#F7B955]" : undefined}
-    >
-      Deals
-    </a>
-
-    <a href="/community">Community</a>
-  </nav>
+  )}
+</nav>
 )}
     </div>
   );

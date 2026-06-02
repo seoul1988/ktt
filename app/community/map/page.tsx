@@ -78,7 +78,7 @@ export default async function CommunityMapPage() {
         communityMode={true}
       />
 
-      <CommunityBottomNav />
+      <CommunityBottomNav activeNav="map"/>
     </main>
   );
 }

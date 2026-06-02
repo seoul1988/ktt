@@ -60,7 +60,7 @@ export default function AdminPage() {
         </div>
       </div>
 	  
-	  <CommunityBottomNav />  
+	  <CommunityBottomNav activeNav="admin" />  
 	  
     </main>
   );

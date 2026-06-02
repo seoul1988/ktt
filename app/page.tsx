@@ -286,7 +286,7 @@ const { data: activeDeals } = await supabase
           </div>
         </section>
 
-        <BottomNav />
+        <BottomNav activeNav="home"/>
       </main>
     </>
   );

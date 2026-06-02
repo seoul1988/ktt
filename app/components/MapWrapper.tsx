@@ -23,6 +23,7 @@ type MapWrapperProps = {
   showAllOnLoad?: boolean;
   activeNav?: "map" | "deals" | "events";
   communityMode?: boolean;
+  role?: string | null;
 };
 
 export default function MapWrapper({
@@ -31,14 +32,20 @@ export default function MapWrapper({
   showAllOnLoad = false,
   activeNav = "map",
   communityMode = false,
+  role = null,
 }: MapWrapperProps) {
+  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots.length}`;
+
   return (
-    <BusinessMap
-      spots={spots}
-      categories={categories}
-      showAllOnLoad={showAllOnLoad}
-      activeNav={activeNav}
-      communityMode={communityMode}
-    />
+    <div key={mapKey} className="min-h-screen">
+      <BusinessMap
+        spots={spots}
+        categories={categories}
+        showAllOnLoad={showAllOnLoad}
+        activeNav={activeNav}
+        communityMode={communityMode}
+        role={role}
+      />
+    </div>
   );
 }

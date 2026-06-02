@@ -4,8 +4,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-export default function BottomNav() {
+type BottomNavProps = {
+  activeNav?: "home" | "map" | "deals" | "community" | "market" | "admin";
+};
+
+export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
   const [role, setRole] = useState<string | null>(null);
+
+  const activeClass = "text-[#F7B955]";
+  const normalClass = "text-white";
 
   useEffect(() => {
     async function loadRole() {
@@ -13,17 +20,13 @@ export default function BottomNav() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      console.log("USER:", user);
-
       if (!user) return;
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
         .select("role")
         .eq("id", user.id)
         .maybeSingle();
-
-      console.log("PROFILE ROLE:", data, error);
 
       setRole(data?.role || null);
     }
@@ -33,13 +36,39 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
-      <Link href="/">Home</Link>
-      <Link href="/map">Map</Link>
-      <Link href="/deals">Deals</Link>
-      <Link href="/community">Community</Link>
+      <Link
+        href="/"
+        className={activeNav === "home" ? activeClass : normalClass}
+      >
+        Home
+      </Link>
+
+      <Link
+        href="/map"
+        className={activeNav === "map" ? activeClass : normalClass}
+      >
+        Map
+      </Link>
+
+      <Link
+        href="/deals"
+        className={activeNav === "deals" ? activeClass : normalClass}
+      >
+        Deals
+      </Link>
+
+      <Link
+        href="/community"
+        className={activeNav === "community" ? activeClass : normalClass}
+      >
+        Community
+      </Link>
 
       {role === "admin" && (
-        <Link href="/admin" className="text-[#F7B955]">
+        <Link
+          href="/admin"
+          className={activeNav === "admin" ? activeClass : normalClass}
+        >
           Admin
         </Link>
       )}

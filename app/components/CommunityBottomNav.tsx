@@ -4,8 +4,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-export default function CommunityBottomNav() {
+type CommunityBottomNavProps = {
+  activeNav?: "home" | "map" | "market" | "community" | "admin";
+};
+
+export default function CommunityBottomNav({
+  activeNav = "community",
+}: CommunityBottomNavProps) {
   const [isAdmin, setIsAdmin] = useState(false);
+
+  const activeClass = "text-[#F7B955]";
+  const normalClass = "text-white";
 
   useEffect(() => {
     async function loadProfile() {
@@ -19,7 +28,7 @@ export default function CommunityBottomNav() {
         .from("profiles")
         .select("role")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       if (data?.role === "admin") {
         setIsAdmin(true);
@@ -31,32 +40,49 @@ export default function CommunityBottomNav() {
 
   return (
     <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[95%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl">
-      <Link href="/" className="flex flex-col items-center">
-  
+      <Link
+        href="/"
+        className={`flex flex-col items-center ${
+          activeNav === "home" ? activeClass : normalClass
+        }`}
+      >
         <span>HOME</span>
       </Link>
 
       <Link
         href="/community/map"
-        className="flex flex-col items-center text-[#F7B955]"
+        className={`flex flex-col items-center ${
+          activeNav === "map" ? activeClass : normalClass
+        }`}
       >
-      
         <span>MAP</span>
       </Link>
 
-      <Link href="/market" className="flex flex-col items-center">
-       
+      <Link
+        href="/market"
+        className={`flex flex-col items-center ${
+          activeNav === "market" ? activeClass : normalClass
+        }`}
+      >
         <span>MARKET</span>
       </Link>
 
-      <Link href="/community" className="flex flex-col items-center">
-   
+      <Link
+        href="/community"
+        className={`flex flex-col items-center ${
+          activeNav === "community" ? activeClass : normalClass
+        }`}
+      >
         <span>COMMUNITY</span>
       </Link>
 
       {isAdmin && (
-        <Link href="/admin" className="flex flex-col items-center">
-        
+        <Link
+          href="/admin"
+          className={`flex flex-col items-center ${
+            activeNav === "admin" ? activeClass : normalClass
+          }`}
+        >
           <span>ADMIN</span>
         </Link>
       )}
