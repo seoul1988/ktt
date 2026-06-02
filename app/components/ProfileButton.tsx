@@ -1,96 +1,65 @@
+// app/components/ProfileButton.tsx
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-type ProfileRole = "user" | "owner" | "admin";
+type Profile = {
+  role: string | null;
+};
 
 export default function ProfileButton() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const [checking, setChecking] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<ProfileRole>("user");
-  const [open, setOpen] = useState(false);
+  const isAdmin = role === "admin" || role === "owner";
 
-  const refreshUser = useCallback(async () => {
-    try {
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUser() {
       const {
-        data: { user: currentUser },
+        data: { user },
       } = await supabase.auth.getUser();
 
-      setUser(currentUser ?? null);
+      if (!mounted) return;
 
-      if (!currentUser) {
-        setRole("user");
+      if (!user) {
+        setUserId(null);
+        setRole(null);
         setOpen(false);
         return;
       }
 
-      const { data: profile, error } = await supabase
+      setUserId(user.id);
+
+      const { data } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", currentUser.id)
-        .maybeSingle();
+        .eq("id", user.id)
+        .maybeSingle<Profile>();
 
-      if (error) {
-        console.error("Profile role error:", error);
-        setRole("user");
-        return;
-      }
+      if (!mounted) return;
 
-      const cleanRole = String(profile?.role || "user")
-        .trim()
-        .toLowerCase();
-
-      if (cleanRole === "admin") {
-        setRole("admin");
-      } else if (cleanRole === "owner") {
-        setRole("owner");
-      } else {
-        setRole("user");
-      }
-    } catch (err) {
-      console.error("Profile refresh error:", err);
-      setRole("user");
-    } finally {
-      setChecking(false);
+      setRole(data?.role || null);
     }
-  }, []);
 
-  useEffect(() => {
-    refreshUser();
+    loadUser();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
-      setTimeout(refreshUser, 100);
+      loadUser();
     });
 
-    const wakeUp = () => {
-      setChecking(true);
-      refreshUser();
-      setTimeout(refreshUser, 500);
-      setTimeout(refreshUser, 1500);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        wakeUp();
-      }
-    };
-
-    window.addEventListener("pageshow", wakeUp);
-    window.addEventListener("focus", wakeUp);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
+      mounted = false;
       subscription.unsubscribe();
-      window.removeEventListener("pageshow", wakeUp);
-      window.removeEventListener("focus", wakeUp);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [refreshUser]);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -101,120 +70,89 @@ export default function ProfileButton() {
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   async function logout() {
-    setOpen(false);
-    setChecking(true);
     await supabase.auth.signOut();
+
+    setUserId(null);
+    setRole(null);
+    setOpen(false);
+
     window.location.href = "/";
   }
 
-  if (checking) {
+  if (!userId) {
     return (
-      <button
-        type="button"
-        onClick={refreshUser}
-        className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
-      >
-        ⋯
-      </button>
-    );
-  }
-
-  if (!user) {
-    return (
-      <a
+      <Link
         href="/login"
-        className="rounded-full bg-white px-4 py-2 text-xs font-bold text-[#172033] shadow"
+        className="rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow"
       >
         Login
-      </a>
+      </Link>
     );
   }
 
-  const isOwner = role === "owner";
-  const isAdmin = role === "admin";
-
   return (
-    <div ref={menuRef} className="relative">
+    <div ref={menuRef} className="relative z-50">
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow"
       >
         ⋯
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-[99999] w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
-          <a href="/profile" className="block px-4 py-3 hover:bg-gray-100">
-            Edit Profile
-          </a>
+        <div className="absolute right-0 top-12 z-50 w-52 overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <Link
+            href="/profile"
+            className="block px-4 py-3 text-sm font-bold text-[#172033]"
+            onClick={() => setOpen(false)}
+          >
+            My Profile
+          </Link>
 
-          <a href="/my-coupons" className="block px-4 py-3 hover:bg-gray-100">
-            My Coupons
-          </a>
+          <Link
+            href="/my-businesses"
+            className="block px-4 py-3 text-sm font-bold text-[#172033]"
+            onClick={() => setOpen(false)}
+          >
+            My Businesses
+          </Link>
 
-          {(isOwner || isAdmin) && (
-            <>
-              <a href="/owner" className="block px-4 py-3 hover:bg-gray-100">
-                My Business
-              </a>
-
-              <a
-                href="/business/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Register Business
-              </a>
-
-              <a
-                href="/events/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Create Event
-              </a>
-
-              <a
-                href="/coupons/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Register Coupon
-              </a>
-            </>
-          )}
+          <Link
+            href="/business-events"
+            className="block px-4 py-3 text-sm font-bold text-[#172033]"
+            onClick={() => setOpen(false)}
+          >
+            Business Events
+          </Link>
 
           {isAdmin && (
-            <>
-              <a
-                href="/admin/owner-requests"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Owner Requests
-              </a>
-
-              <a
-                href="/admin/categories"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Categories
-              </a>
-
-              <a
-                href="/admin/event-requests"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Event Requests
-              </a>
-            </>
+            <Link
+              href="/admin"
+              className="block px-4 py-3 text-sm font-black text-[#C4483A]"
+              onClick={() => setOpen(false)}
+            >
+              Admin
+            </Link>
           )}
 
           <button
             type="button"
             onClick={logout}
-            className="block w-full px-4 py-3 text-left hover:bg-gray-100"
+            className="block w-full px-4 py-3 text-left text-sm font-black text-red-600"
           >
             Logout
           </button>
