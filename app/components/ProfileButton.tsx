@@ -101,11 +101,18 @@ export default function ProfileButton() {
     );
   }
 
- if (!userId) {
-  return (
+   return (
     <Link
       href="/login"
-      className="relative z-[9999] inline-flex items-center justify-center rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow cursor-pointer"
+      style={{
+        background: "#172033",
+        color: "white",
+        padding: "10px 16px",
+        borderRadius: "999px",
+        fontWeight: 900,
+        zIndex: 9999,
+        position: "relative",
+      }}
     >
       Login
     </Link>
