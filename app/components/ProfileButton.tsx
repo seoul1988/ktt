@@ -101,16 +101,16 @@ export default function ProfileButton() {
     );
   }
 
-  if (!userId) {
-    return (
-      <Link
-        href="/login"
-        className="rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow"
-      >
-        Login
-      </Link>
-    );
-  }
+ if (!userId) {
+  return (
+    <Link
+      href="/login"
+      className="relative z-[9999] inline-flex items-center justify-center rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow cursor-pointer"
+    >
+      Login
+    </Link>
+  );
+}
 
   return (
     <div ref={menuRef} className="relative z-50">
