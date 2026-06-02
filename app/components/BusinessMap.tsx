@@ -239,7 +239,7 @@ export default function BusinessMap({
   spots: Spot[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
-  activeNav?: "home" | "map" | "deals" | "events";
+  activeNav?: "home" | "map" | "deals" | "events" | "community" | "admin";
   communityMode?: boolean;
   role?: string | null;
 }) {
