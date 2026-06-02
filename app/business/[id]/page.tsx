@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
- import BottomNav from "../../components/BottomNav"; 
+import BottomNav from "../../components/BottomNav";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
@@ -131,12 +131,17 @@ const { data: coupons } = await supabase
         spot.image_url_3,
       ].filter(Boolean);
 
-const videos =
+const uploadedVideos =
   spot.video_urls &&
   Array.isArray(spot.video_urls) &&
   spot.video_urls.length > 0
     ? spot.video_urls
     : [];
+
+const videos = [
+  ...uploadedVideos,
+  ...(spot.external_video_url ? [spot.external_video_url] : []),
+].filter(Boolean);
 
 
 

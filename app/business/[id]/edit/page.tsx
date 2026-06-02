@@ -38,6 +38,7 @@ type Business = {
   website_url: string | null;
   instagram_url: string | null;
   video_urls?: string[] | null;
+  external_video_url?: string | null;
 };
 
 const defaultHours: DayHour[] = [
@@ -150,6 +151,36 @@ const timeOptions = [
   "2:00 AM",
 ];
 
+function isAllowedVideoUrl(url: string) {
+  if (!url.trim()) return true;
+
+  try {
+    const parsed = new URL(url.trim());
+    const host = parsed.hostname.toLowerCase();
+
+    return (
+      host.includes("youtube.com") ||
+      host.includes("youtu.be") ||
+      host.includes("facebook.com") ||
+      host.includes("fb.watch") ||
+      host.includes("instagram.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isExternalVideoUrl(url: string) {
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("youtube.com") ||
+    lower.includes("youtu.be") ||
+    lower.includes("facebook.com") ||
+    lower.includes("fb.watch") ||
+    lower.includes("instagram.com")
+  );
+}
+
 function parseHours(hoursText: string | null): DayHour[] {
   if (!hoursText) return defaultHours;
 
@@ -235,6 +266,7 @@ export default function EditBusinessPage() {
   const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
 
   const [existingVideoUrl, setExistingVideoUrl] = useState("");
+  const [externalVideoUrl, setExternalVideoUrl] = useState("");
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreview, setNewVideoPreview] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -322,6 +354,7 @@ export default function EditBusinessPage() {
     setExistingVideoUrl(
       b.video_urls && b.video_urls.length > 0 ? b.video_urls[0] : ""
     );
+    setExternalVideoUrl(b.external_video_url || "");
     setDayHours(parseHours(b.hours));
     setSelectedLat(b.lat || null);
     setSelectedLng(b.lng || null);
@@ -346,12 +379,21 @@ export default function EditBusinessPage() {
       return;
     }
 
+    if (newVideoPreview) {
+      URL.revokeObjectURL(newVideoPreview);
+    }
+
+    setExistingVideoUrl("");
+    setExternalVideoUrl("");
     setNewVideoFile(file);
     setNewVideoPreview(URL.createObjectURL(file));
+
+    e.target.value = "";
   }
 
   function removeVideo() {
     setExistingVideoUrl("");
+    setExternalVideoUrl("");
     setNewVideoFile(null);
 
     if (newVideoPreview) {
@@ -501,6 +543,16 @@ export default function EditBusinessPage() {
       return;
     }
 
+    if (newVideoFile && externalVideoUrl.trim()) {
+      alert("동영상은 첨부 또는 링크 중 하나만 가능합니다.");
+      return;
+    }
+
+    if (externalVideoUrl.trim() && !isAllowedVideoUrl(externalVideoUrl)) {
+      alert("YouTube, Facebook, Instagram video link only.");
+      return;
+    }
+
     setSaving(true);
 
     let uploadedUrls: string[] = [];
@@ -517,6 +569,23 @@ export default function EditBusinessPage() {
 
     const finalImageUrls = [...existingImageUrls, ...uploadedUrls].slice(0, 6);
 
+    const cleanExternalVideoUrl = externalVideoUrl.trim();
+
+    const finalUploadedVideoUrl =
+      uploadedVideoUrl ||
+      (existingVideoUrl && !isExternalVideoUrl(existingVideoUrl)
+        ? existingVideoUrl
+        : "");
+
+    const finalExternalVideoUrl =
+      finalUploadedVideoUrl
+        ? null
+        : cleanExternalVideoUrl
+        ? cleanExternalVideoUrl
+        : existingVideoUrl && isExternalVideoUrl(existingVideoUrl)
+        ? existingVideoUrl
+        : null;
+
     const { error } = await supabase
       .from("businesses")
       .update({
@@ -531,11 +600,13 @@ export default function EditBusinessPage() {
         instagram_url: instagramUrl,
         image_url: finalImageUrls[0] || "",
         image_urls: finalImageUrls,
-        video_urls: uploadedVideoUrl
-          ? [uploadedVideoUrl]
-          : existingVideoUrl
-          ? [existingVideoUrl]
-          : [],
+
+        // Uploaded video files must stay in video_urls.
+        // YouTube/Facebook/Instagram links must stay in external_video_url.
+        // If a new video file was uploaded, remove the old external link.
+        video_urls: finalUploadedVideoUrl ? [finalUploadedVideoUrl] : [],
+        external_video_url: finalExternalVideoUrl,
+
         lat: selectedLat,
         lng: selectedLng,
       })
@@ -800,14 +871,15 @@ export default function EditBusinessPage() {
                 <div>
                   <p className="font-black">Business Video</p>
                   <p className="text-xs font-bold text-gray-500">
-                    Upload 1 video
+                    Upload 1 video OR paste 1 YouTube / Facebook / Instagram link
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={() => videoInputRef.current?.click()}
-                  className="rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white"
+                  disabled={!!externalVideoUrl.trim()}
+                  className="rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
                 >
                   영상첨부
                 </button>
@@ -838,6 +910,45 @@ export default function EditBusinessPage() {
                   </button>
                 </div>
               )}
+
+              {externalVideoUrl && !newVideoPreview && !existingVideoUrl && (
+                <div className="rounded-xl border bg-white p-3 text-sm font-bold">
+                  <p className="mb-2 text-xs text-gray-500">External video link</p>
+                  <a
+                    href={externalVideoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="break-words text-[#2453A6] underline"
+                  >
+                    {externalVideoUrl}
+                  </a>
+                </div>
+              )}
+
+              <div className="relative flex items-center justify-center py-1">
+                <div className="h-px w-full bg-gray-200" />
+                <span className="absolute bg-gray-50 px-3 text-xs font-black text-gray-400">
+                  OR
+                </span>
+              </div>
+
+              <input
+                value={externalVideoUrl}
+                onChange={(e) => {
+                  setExternalVideoUrl(e.target.value);
+                  if (e.target.value.trim()) {
+                    setExistingVideoUrl("");
+                    setNewVideoFile(null);
+                    if (newVideoPreview) {
+                      URL.revokeObjectURL(newVideoPreview);
+                      setNewVideoPreview("");
+                    }
+                  }
+                }}
+                disabled={!!newVideoFile}
+                placeholder="YouTube / Facebook / Instagram video link"
+                className="w-full rounded-xl border bg-white px-4 py-3 disabled:bg-gray-100 disabled:text-gray-400"
+              />
             </div>
 
             <div className="rounded-2xl border bg-gray-50 p-4">

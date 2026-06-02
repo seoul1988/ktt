@@ -43,8 +43,32 @@ const timeOptions = [
   "12:00 AM", "12:30 AM", "1:00 AM", "1:30 AM", "2:00 AM",
 ];
 
+const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+const weekendDays = ["Sat", "Sun"];
+const allDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function isAllowedVideoUrl(url: string) {
+  if (!url.trim()) return true;
+
+  try {
+    const parsed = new URL(url.trim());
+    const host = parsed.hostname.toLowerCase();
+
+    return (
+      host.includes("youtube.com") ||
+      host.includes("youtu.be") ||
+      host.includes("facebook.com") ||
+      host.includes("fb.watch") ||
+      host.includes("instagram.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function NewBusinessPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const { isLoaded } = useLoadScript({
@@ -70,13 +94,21 @@ export default function NewBusinessPage() {
   const [tags, setTags] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [instagramUrl, setInstagramUrl] = useState("");
-const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const [externalVideoUrl, setExternalVideoUrl] = useState("");
 
-const [videoFile, setVideoFile] = useState<File | null>(null);
-const [videoPreview, setVideoPreview] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState("");
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+
+  const [bulkDays, setBulkDays] = useState<string[]>(weekDays);
+  const [bulkOpen, setBulkOpen] = useState("10:00 AM");
+  const [bulkClose, setBulkClose] = useState("9:00 PM");
+  const [bulkClosed, setBulkClosed] = useState(false);
+  const [bulkHasBreak, setBulkHasBreak] = useState(false);
+  const [bulkBreakStart, setBulkBreakStart] = useState("3:00 PM");
+  const [bulkBreakEnd, setBulkBreakEnd] = useState("5:00 PM");
 
   useEffect(() => {
     checkUser();
@@ -97,51 +129,56 @@ const [videoPreview, setVideoPreview] = useState("");
     setCategories((data || []) as Category[]);
   }
 
+  function handleVideoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
 
-function handleVideoChange(e: React.ChangeEvent<HTMLInputElement>) {
-  const file = e.target.files?.[0];
+    if (!file) return;
 
-  if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      alert("Please select a video file.");
+      e.target.value = "";
+      return;
+    }
 
-  if (!file.type.startsWith("video/")) {
-    alert("Please select a video file.");
+    if (externalVideoUrl.trim()) {
+      alert("동영상은 업로드 또는 링크 중 하나만 가능합니다. 링크를 지운 후 업로드하세요.");
+      e.target.value = "";
+      return;
+    }
+
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
+
     e.target.value = "";
-    return;
   }
 
-  setVideoFile(file);
-  setVideoPreview(URL.createObjectURL(file));
-
-  e.target.value = "";
-}
-
-function removeVideo() {
-  if (videoPreview) URL.revokeObjectURL(videoPreview);
-  setVideoFile(null);
-  setVideoPreview("");
-}
-
-async function uploadBusinessVideo() {
-  if (!videoFile) return "";
-
-  const fileExt = videoFile.name.split(".").pop();
-  const fileName = `${userId}-${Date.now()}-video.${fileExt}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("business-videos")
-    .upload(fileName, videoFile);
-
-  if (uploadError) {
-    throw uploadError;
+  function removeVideo() {
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoFile(null);
+    setVideoPreview("");
   }
 
-  const { data } = supabase.storage
-    .from("business-videos")
-    .getPublicUrl(fileName);
+  async function uploadBusinessVideo() {
+    if (!videoFile) return "";
 
-  return data.publicUrl;
-}
+    const fileExt = videoFile.name.split(".").pop();
+    const fileName = `${userId}-${Date.now()}-video.${fileExt}`;
 
+    const { error: uploadError } = await supabase.storage
+      .from("business-videos")
+      .upload(fileName, videoFile);
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("business-videos")
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  }
 
   async function checkUser() {
     const {
@@ -273,6 +310,57 @@ async function uploadBusinessVideo() {
     );
   }
 
+  function toggleBulkDay(day: string) {
+    setBulkDays((prev) =>
+      prev.includes(day) ? prev.filter((item) => item !== day) : [...prev, day]
+    );
+  }
+
+  function applyHoursToDays(days = bulkDays) {
+    if (days.length === 0) {
+      alert("Please select at least one day.");
+      return;
+    }
+
+    setDayHours((prev) =>
+      prev.map((item) =>
+        days.includes(item.day)
+          ? {
+              ...item,
+              open: bulkOpen,
+              close: bulkClose,
+              closed: bulkClosed,
+              hasBreak: bulkClosed ? false : bulkHasBreak,
+              breakStart: bulkBreakStart,
+              breakEnd: bulkBreakEnd,
+            }
+          : item
+      )
+    );
+  }
+
+  function quickApply(days: string[], open: string, close: string, closed = false) {
+    setBulkDays(days);
+    setBulkOpen(open);
+    setBulkClose(close);
+    setBulkClosed(closed);
+    setBulkHasBreak(false);
+
+    setDayHours((prev) =>
+      prev.map((item) =>
+        days.includes(item.day)
+          ? {
+              ...item,
+              open,
+              close,
+              closed,
+              hasBreak: false,
+            }
+          : item
+      )
+    );
+  }
+
   function formatBusinessHours() {
     return dayHours
       .map((item) => {
@@ -336,35 +424,44 @@ async function uploadBusinessVideo() {
       return;
     }
 
+    if (videoFile && externalVideoUrl.trim()) {
+      alert("동영상은 업로드 또는 링크 중 하나만 가능합니다.");
+      return;
+    }
+
+    if (externalVideoUrl.trim() && !isAllowedVideoUrl(externalVideoUrl)) {
+      alert("YouTube, Facebook, Instagram video link only.");
+      return;
+    }
+
     setSaving(true);
 
     let imageUrls: string[] = [];
+    let uploadedVideoUrl = "";
     let coords = { lat: null as number | null, lng: null as number | null };
 
-   let uploadedVideoUrl = "";
+    try {
+      imageUrls = await uploadBusinessPhotos();
+      uploadedVideoUrl = await uploadBusinessVideo();
 
-try {
-  imageUrls = await uploadBusinessPhotos();
-  uploadedVideoUrl = await uploadBusinessVideo();
+      if (lat && lng) {
+        coords = {
+          lat: Number(lat),
+          lng: Number(lng),
+        };
+      } else {
+        coords = await geocodeAddress(address);
 
-  if (lat && lng) {
-    coords = {
-      lat: Number(lat),
-      lng: Number(lng),
-    };
-  } else {
-    coords = await geocodeAddress(address);
-
-    if (coords.lat && coords.lng) {
-      setLat(String(coords.lat));
-      setLng(String(coords.lng));
+        if (coords.lat && coords.lng) {
+          setLat(String(coords.lat));
+          setLng(String(coords.lng));
+        }
+      }
+    } catch (error: any) {
+      setSaving(false);
+      alert("Save error: " + error.message);
+      return;
     }
-  }
-} catch (error: any) {
-  setSaving(false);
-  alert("Save error: " + error.message);
-  return;
-}
 
     if (!coords.lat || !coords.lng) {
       setSaving(false);
@@ -372,36 +469,38 @@ try {
       return;
     }
 
+    const cleanExternalVideoUrl = externalVideoUrl.trim();
 
+    const { data: business, error: businessError } = await supabase
+      .from("businesses")
+      .insert({
+        name,
+        address,
+        phone,
+        category: selectedCategories.join(", "),
+        hours: formatBusinessHours(),
+        description,
 
-  const { data: business, error: businessError } = await supabase
-  .from("businesses")
-  .insert({
-    name,
-    address,
-    phone,
-    category: selectedCategories.join(", "),
-    hours: formatBusinessHours(),
-    description,
+        image_url: imageUrls[0] || "",
+        image_urls: imageUrls,
 
-    image_url: imageUrls[0] || "",
-    image_urls: imageUrls,
+        // Uploaded video files only go here.
+        video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
 
-    video_urls: uploadedVideoUrl
-      ? [uploadedVideoUrl]
-      : [],
+        // YouTube / Facebook / Instagram links go here.
+        external_video_url: uploadedVideoUrl ? null : cleanExternalVideoUrl || null,
 
-    lat: coords.lat,
-    lng: coords.lng,
+        lat: coords.lat,
+        lng: coords.lng,
 
-    tags,
-    website_url: websiteUrl,
-    instagram_url: instagramUrl,
+        tags,
+        website_url: websiteUrl,
+        instagram_url: instagramUrl,
 
-    owner_id: userId,
-  })
-  .select("id")
-  .single();
+        owner_id: userId,
+      })
+      .select("id")
+      .single();
 
     if (businessError) {
       setSaving(false);
@@ -513,48 +612,68 @@ try {
             className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
           />
 
-         <div className="rounded-2xl border bg-gray-50 p-4 space-y-3">
-  <div>
-    <p className="font-black">Business Video</p>
-    <p className="text-xs font-bold text-gray-500">
-      Upload one video only.
-    </p>
-  </div>
+          <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
+            <div>
+              <p className="font-black">Business Video</p>
+              <p className="text-xs font-bold text-gray-500">
+                Upload one video OR paste one YouTube / Facebook / Instagram link.
+              </p>
+            </div>
 
-  <input
-    ref={videoInputRef}
-    type="file"
-    accept="video/*"
-    onChange={handleVideoChange}
-    className="hidden"
-  />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/*"
+              onChange={handleVideoChange}
+              className="hidden"
+            />
 
-  {!videoPreview ? (
-    <button
-      type="button"
-      onClick={() => videoInputRef.current?.click()}
-      className="w-full rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white"
-    >
-      영상첨부
-    </button>
-  ) : (
-    <div className="space-y-2">
-      <video
-        src={videoPreview}
-        controls
-        className="h-48 w-full rounded-xl bg-black"
-      />
+            {!videoPreview ? (
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                disabled={!!externalVideoUrl.trim()}
+                className="w-full rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
+              >
+                영상첨부
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <video
+                  src={videoPreview}
+                  controls
+                  className="h-48 w-full rounded-xl bg-black"
+                />
 
-      <button
-        type="button"
-        onClick={removeVideo}
-        className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
-      >
-        Remove Video
-      </button>
-    </div>
-  )}
-</div>
+                <button
+                  type="button"
+                  onClick={removeVideo}
+                  className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
+                >
+                  Remove Video
+                </button>
+              </div>
+            )}
+
+            <div className="relative flex items-center justify-center py-1">
+              <div className="h-px w-full bg-gray-200" />
+              <span className="absolute bg-gray-50 px-3 text-xs font-black text-gray-400">
+                OR
+              </span>
+            </div>
+
+            <input
+              value={externalVideoUrl}
+              onChange={(e) => setExternalVideoUrl(e.target.value)}
+              disabled={!!videoFile}
+              placeholder="YouTube / Facebook / Instagram video link"
+              className="w-full rounded-xl border bg-white px-4 py-3 disabled:bg-gray-100 disabled:text-gray-400"
+            />
+
+            <p className="text-[11px] font-bold text-gray-500">
+              동영상은 1개만 저장됩니다. 업로드 영상이 있으면 링크 입력은 잠깁니다.
+            </p>
+          </div>
 
           <div className="rounded-2xl border bg-gray-50 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -643,6 +762,162 @@ try {
 
           <div className="rounded-2xl border bg-gray-50 p-4">
             <p className="mb-3 font-black">Business Hours</p>
+
+            <div className="mb-4 space-y-3 rounded-2xl bg-white p-3 shadow-sm">
+              <div>
+                <p className="font-black">Quick Setup</p>
+                <p className="text-xs font-bold text-gray-500">
+                  같은 시간대 요일을 한 번에 적용하세요.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => quickApply(weekDays, "10:00 AM", "9:00 PM")}
+                  className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
+                >
+                  Mon-Fri Same
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => quickApply(allDays, "10:00 AM", "9:00 PM")}
+                  className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
+                >
+                  All Days Same
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => quickApply(weekendDays, "11:00 AM", "8:00 PM")}
+                  className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
+                >
+                  Weekend Same
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => quickApply(["Sun"], "11:00 AM", "8:00 PM", true)}
+                  className="rounded-xl bg-red-500 px-3 py-3 text-xs font-black text-white"
+                >
+                  Sunday Closed
+                </button>
+              </div>
+
+              <div className="rounded-2xl border bg-gray-50 p-3">
+                <p className="mb-2 text-sm font-black">Apply To Selected Days</p>
+
+                <div className="mb-3 grid grid-cols-4 gap-2">
+                  {allDays.map((day) => {
+                    const checked = bulkDays.includes(day);
+
+                    return (
+                      <label
+                        key={day}
+                        className={`flex cursor-pointer items-center justify-center rounded-xl border px-2 py-2 text-xs font-black ${
+                          checked
+                            ? "border-[#172033] bg-white text-[#172033]"
+                            : "border-gray-200 bg-white/50 text-gray-400"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleBulkDay(day)}
+                          className="hidden"
+                        />
+                        {day}
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <label className="mb-3 flex items-center gap-2 text-sm font-bold">
+                  <input
+                    type="checkbox"
+                    checked={bulkClosed}
+                    onChange={(e) => setBulkClosed(e.target.checked)}
+                  />
+                  Closed selected days
+                </label>
+
+                {!bulkClosed && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={bulkOpen}
+                        onChange={(e) => setBulkOpen(e.target.value)}
+                        className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
+                      >
+                        {timeOptions.map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={bulkClose}
+                        onChange={(e) => setBulkClose(e.target.value)}
+                        className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
+                      >
+                        {timeOptions.map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-sm font-bold">
+                      <input
+                        type="checkbox"
+                        checked={bulkHasBreak}
+                        onChange={(e) => setBulkHasBreak(e.target.checked)}
+                      />
+                      Same break time
+                    </label>
+
+                    {bulkHasBreak && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <select
+                          value={bulkBreakStart}
+                          onChange={(e) => setBulkBreakStart(e.target.value)}
+                          className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
+                        >
+                          {timeOptions.map((time) => (
+                            <option key={time} value={time}>
+                              {time}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={bulkBreakEnd}
+                          onChange={(e) => setBulkBreakEnd(e.target.value)}
+                          className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
+                        >
+                          {timeOptions.map((time) => (
+                            <option key={time} value={time}>
+                              {time}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => applyHoursToDays()}
+                  className="mt-3 w-full rounded-xl bg-[#F6C343] px-4 py-3 text-sm font-black text-[#172033]"
+                >
+                  Apply To Selected Days
+                </button>
+              </div>
+            </div>
 
             <div className="space-y-3">
               {dayHours.map((item, index) => (
@@ -743,7 +1018,7 @@ try {
             </div>
           </div>
 
-          <div className="rounded-2xl border bg-gray-50 p-4 space-y-3">
+          <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
             <p className="font-black">Business Info</p>
 
             <input
@@ -803,6 +1078,12 @@ try {
           <a href="/community" className="flex-1 py-4 text-center">
             Community
           </a>
+
+          {role === "admin" && (
+            <a href="/admin" className="flex-1 py-4 text-center">
+              Admin
+            </a>
+          )}
         </div>
       </div>
     </main>

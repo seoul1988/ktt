@@ -399,28 +399,25 @@ export default function BusinessMap({
     });
   }, [spots, search, selectedCategory, showAllOnLoad]);
 
- const cardSpots: SpotWithDistance[] = useMemo(() => {
-  if (!userLocation) {
-    return mapSpots.map((spot) => ({
-      ...spot,
-      distance: undefined,
-    }));
-  }
+const cardSpots: SpotWithDistance[] = useMemo(() => {
+  const withDistance = mapSpots.map((spot): SpotWithDistance => ({
+    ...spot,
+    distance:
+      userLocation && spot.lat && spot.lng
+        ? milesBetween(userLocation, [spot.lat, spot.lng])
+        : undefined,
+  }));
 
-  return mapSpots
-    .map((spot): SpotWithDistance => ({
-      ...spot,
-      distance:
-        spot.lat && spot.lng
-          ? milesBetween(userLocation, [spot.lat, spot.lng])
-          : undefined,
-    }))
-    .sort((a, b) => {
-      if (a.distance === undefined) return 1;
-      if (b.distance === undefined) return -1;
+  return withDistance.sort((a: any, b: any) => {
+    const orderA = a.display_order ?? a.order_number ?? a.order_no ?? 999999;
+    const orderB = b.display_order ?? b.order_number ?? b.order_no ?? 999999;
 
-      return a.distance - b.distance;
-    });
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
+    return a.id - b.id;
+  });
 }, [mapSpots, userLocation]);
 
 useEffect(() => {

@@ -2,6 +2,148 @@
 
 import { useRef, useState } from "react";
 
+type MediaItem = {
+  type: "video" | "image";
+  url: string;
+};
+
+function getYoutubeEmbedUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+
+    if (host.includes("youtu.be")) {
+      const id = parsed.pathname.replace("/", "").split("?")[0];
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    if (host.includes("youtube.com")) {
+      const watchId = parsed.searchParams.get("v");
+      if (watchId) return `https://www.youtube.com/embed/${watchId}`;
+
+      const shortsMatch = parsed.pathname.match(/\/shorts\/([^/?]+)/);
+      if (shortsMatch?.[1]) {
+        return `https://www.youtube.com/embed/${shortsMatch[1]}`;
+      }
+
+      const embedMatch = parsed.pathname.match(/\/embed\/([^/?]+)/);
+      if (embedMatch?.[1]) {
+        return `https://www.youtube.com/embed/${embedMatch[1]}`;
+      }
+    }
+
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function getVideoKind(url: string) {
+  const lower = url.toLowerCase();
+
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
+    return "youtube";
+  }
+
+  if (lower.includes("instagram.com")) {
+    return "instagram";
+  }
+
+  if (lower.includes("facebook.com") || lower.includes("fb.watch")) {
+    return "facebook";
+  }
+
+  return "upload";
+}
+
+function ExternalVideoButton({ url }: { url: string }) {
+  const kind = getVideoKind(url);
+  const label =
+    kind === "instagram"
+      ? "Open Instagram Video"
+      : kind === "facebook"
+      ? "Open Facebook Video"
+      : "Open Video";
+
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
+      <div className="text-5xl">▶</div>
+      <p className="text-lg font-black">
+        {kind === "instagram" ? "Instagram Video" : "Facebook Video"}
+      </p>
+      <p className="text-sm font-bold text-white/70">
+        이 영상은 앱 안에서 직접 재생이 제한될 수 있어요.
+      </p>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="rounded-full bg-white px-5 py-3 text-sm font-black text-black"
+      >
+        {label}
+      </a>
+    </div>
+  );
+}
+
+function MediaDisplay({ item, name, full = false }: { item: MediaItem; name: string; full?: boolean }) {
+  if (item.type === "image") {
+    return (
+      <img
+        src={item.url}
+        alt={name}
+        onClick={(e) => e.stopPropagation()}
+        className={
+          full
+            ? "max-h-[90vh] max-w-full rounded-xl object-contain"
+            : "h-full w-full object-contain"
+        }
+      />
+    );
+  }
+
+  const kind = getVideoKind(item.url);
+
+  if (kind === "youtube") {
+    const embedUrl = getYoutubeEmbedUrl(item.url);
+
+    if (embedUrl) {
+      return (
+        <iframe
+          src={embedUrl}
+          title={name || "YouTube video"}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          onClick={(e) => e.stopPropagation()}
+          className={
+            full
+              ? "aspect-video w-full max-w-5xl rounded-xl bg-black"
+              : "h-full w-full bg-black"
+          }
+        />
+      );
+    }
+  }
+
+  if (kind === "instagram" || kind === "facebook") {
+    return <ExternalVideoButton url={item.url} />;
+  }
+
+  return (
+    <video
+      src={item.url}
+      autoPlay
+      muted
+      loop
+      playsInline
+      controls
+      onClick={(e) => e.stopPropagation()}
+      className={full ? "max-h-[90vh] max-w-full rounded-xl" : "h-full w-full object-contain"}
+    />
+  );
+}
+
 export default function BusinessMediaViewer({
   images,
   videos,
@@ -11,9 +153,9 @@ export default function BusinessMediaViewer({
   videos: string[];
   name: string;
 }) {
-  const media = [
-    ...videos.map((url) => ({ type: "video" as const, url })),
-    ...images.map((url) => ({ type: "image" as const, url })),
+  const media: MediaItem[] = [
+    ...videos.filter(Boolean).map((url) => ({ type: "video" as const, url })),
+    ...images.filter(Boolean).map((url) => ({ type: "image" as const, url })),
   ];
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -45,39 +187,40 @@ export default function BusinessMediaViewer({
           if (diff < -50) goPrev();
         }}
       >
+        <div className="h-full w-full">
+          <MediaDisplay item={current} name={name} />
+        </div>
+
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="block h-full w-full"
-        >
-          {current.type === "video" ? (
-            <video
-              src={current.url}
-              autoPlay
-              muted
-              loop
-              playsInline
-              controls
-              className="h-full w-full object-contain"
-            />
-          ) : (
-            <img
-              src={current.url}
-              alt={name}
-              className="h-full w-full object-contain"
-            />
-          )}
-        </button>
+          aria-label="Open media viewer"
+          className="absolute inset-0 z-10"
+        />
 
         {media.length > 1 && (
           <>
-            <button type="button" onClick={goPrev} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-2xl font-black text-white">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                goPrev();
+              }}
+              className="absolute left-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-2xl font-black text-white"
+            >
               ‹
             </button>
-            <button type="button" onClick={goNext} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-2xl font-black text-white">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                goNext();
+              }}
+              className="absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-2xl font-black text-white"
+            >
               ›
             </button>
-            <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1 text-xs font-bold text-white">
+            <div className="absolute bottom-3 right-3 z-20 rounded-full bg-black/70 px-3 py-1 text-xs font-bold text-white">
               {currentIndex + 1}/{media.length}
             </div>
           </>
@@ -127,25 +270,9 @@ export default function BusinessMediaViewer({
             </>
           )}
 
-          {current.type === "video" ? (
-            <video
-              src={current.url}
-              autoPlay
-              muted
-              loop
-              playsInline
-              controls
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[90vh] max-w-full rounded-xl"
-            />
-          ) : (
-            <img
-              src={current.url}
-              alt={name}
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[90vh] max-w-full rounded-xl object-contain"
-            />
-          )}
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl">
+            <MediaDisplay item={current} name={name} full />
+          </div>
         </div>
       )}
     </>
