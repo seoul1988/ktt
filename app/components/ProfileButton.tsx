@@ -13,6 +13,7 @@ export default function ProfileButton() {
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [checking, setChecking] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const isAdmin = role === "admin" || role === "owner";
@@ -21,9 +22,13 @@ export default function ProfileButton() {
     let mounted = true;
 
     async function loadUser() {
+      setChecking(true);
+
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const user = session?.user || null;
 
       if (!mounted) return;
 
@@ -31,6 +36,7 @@ export default function ProfileButton() {
         setUserId(null);
         setRole(null);
         setOpen(false);
+        setChecking(false);
         return;
       }
 
@@ -45,6 +51,7 @@ export default function ProfileButton() {
       if (!mounted) return;
 
       setRole(data?.role || null);
+      setChecking(false);
     }
 
     loadUser();
@@ -63,11 +70,12 @@ export default function ProfileButton() {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
-  if (!menuRef.current) return;
-  if (!menuRef.current.contains(e.target as Node)) {
-    setOpen(false);
-  }
-}
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("touchstart", handleClickOutside);
 
@@ -85,6 +93,12 @@ export default function ProfileButton() {
     setOpen(false);
 
     window.location.href = "/";
+  }
+
+  if (checking) {
+    return (
+      <div className="h-10 w-20 rounded-full bg-white/70 shadow" />
+    );
   }
 
   if (!userId) {
@@ -108,6 +122,7 @@ export default function ProfileButton() {
           setOpen((v) => !v);
         }}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow"
+        aria-label="Open profile menu"
       >
         ⋯
       </button>
