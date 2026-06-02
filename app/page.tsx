@@ -32,6 +32,22 @@ function BusinessMedia({
   );
 }
 
+function DealMedia({
+  deal,
+  className,
+}: {
+  deal: any;
+  className: string;
+}) {
+  return (
+    <img
+      src={deal.image_url || deal.businesses?.image_url || "/event.png"}
+      alt={deal.title || deal.businesses?.name || "Deal"}
+      className={`${className} object-cover`}
+    />
+  );
+}
+
 export default async function Home() {
   const { data: spots } = await supabase
     .from("businesses")
@@ -50,8 +66,26 @@ const { data: businessEvents } = await supabase
   .order("event_date", { ascending: true })
   .limit(1);
 
+const { data: activeDeals } = await supabase
+  .from("deals")
+  .select(`
+    *,
+    businesses (
+      id,
+      name,
+      category,
+      city,
+      image_url
+    )
+  `)
+  .eq("status", "approved")
+  .eq("active", true)
+  .or(`end_date.is.null,end_date.gte.${today}`)
+  .order("created_at", { ascending: false })
+  .limit(3);
+
   const featured = spots?.[0];
-  const deals = spots?.slice(0, 3) || [];
+  const deals = activeDeals || [];
   const trending = spots || [];
   const mainEvent = businessEvents?.[0];
 
@@ -119,18 +153,27 @@ const { data: businessEvents } = await supabase
 )}
 
         <section className="mb-8">
-          <h2 className="mb-3 text-xl font-bold">🔥 Deals Near You</h2>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-xl font-bold">🔥 Deals Near You</h2>
+
+            <Link
+			    href="/deals"
+			  className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+			>
+			  More
+			</Link>
+          </div>
 
           <div className="space-y-4">
-            {deals.map((spot) => (
+            {deals.map((deal) => (
               <a
-                key={spot.id}
-                href={`/business/${spot.id}`}
+                key={deal.id}
+                href={`/deals/${deal.id}`}
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
               >
                 <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
-                 <BusinessMedia
-				  spot={spot}
+                 <DealMedia
+				  deal={deal}
 				  className="h-full w-full object-contain"
 				/>
                 </div>
@@ -140,18 +183,27 @@ const { data: businessEvents } = await supabase
                     Special Deal
                   </p>
 
-                  <h4 className="mt-1 font-bold">{spot.name}</h4>
+                  <h4 className="mt-1 font-bold">
+                    {deal.title || deal.businesses?.name || "Deal"}
+                  </h4>
 
                   <p className="text-sm text-gray-600">
-                    {spot.category} · {spot.city}
+                    {deal.businesses?.name || "KTT Deal"}
+                    {deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
                   </p>
 
                   <p className="mt-1 line-clamp-2 text-sm text-gray-500">
-                    {spot.tags || spot.tag || "Tap to view details"}
+                    {deal.description || "Tap to view deal details"}
                   </p>
                 </div>
               </a>
             ))}
+
+            {deals.length === 0 && (
+              <div className="rounded-3xl bg-white p-5 text-sm font-semibold text-gray-500 shadow-sm">
+                등록된 DEAL이 아직 없습니다.
+              </div>
+            )}
           </div>
         </section>
 
@@ -239,3 +291,4 @@ const { data: businessEvents } = await supabase
     </>
   );
 }
+

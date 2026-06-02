@@ -16,7 +16,8 @@ export default function ProfileButton() {
   const [checking, setChecking] = useState(true);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const isAdmin = role === "admin" || role === "owner";
+const isOwner = role === "owner";
+const isAdmin = role === "admin";
 
   useEffect(() => {
     let mounted = true;
@@ -127,45 +128,98 @@ export default function ProfileButton() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-50 w-52 overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
           <Link
             href="/profile"
-            className="block px-4 py-3 text-sm font-bold text-[#172033]"
+            className="block px-4 py-3 hover:bg-gray-100"
             onClick={() => setOpen(false)}
           >
-            My Profile
+            Edit Profile
           </Link>
 
           <Link
-            href="/my-businesses"
-            className="block px-4 py-3 text-sm font-bold text-[#172033]"
+            href="/my-coupons"
+            className="block px-4 py-3 hover:bg-gray-100"
             onClick={() => setOpen(false)}
           >
-            My Businesses
+            My Coupons
           </Link>
 
-          <Link
-            href="/business-events"
-            className="block px-4 py-3 text-sm font-bold text-[#172033]"
-            onClick={() => setOpen(false)}
-          >
-            Business Events
-          </Link>
+          {(isOwner || isAdmin) && (
+            <>
+              <Link
+                href="/owner"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                My Business
+              </Link>
+
+              <Link
+                href="/business/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                Register Business
+              </Link>
+
+              <Link
+                href="/events/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                Create Event
+              </Link>
+			  <Link
+				  href="/deals/new"
+				  className="block px-4 py-3 hover:bg-gray-100"
+				  onClick={() => setOpen(false)}
+				>
+				  Create Deal
+				</Link>
+
+              <Link
+                href="/coupons/new"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                Register Coupon
+              </Link>
+            </>
+          )}
 
           {isAdmin && (
-            <Link
-              href="/admin"
-              className="block px-4 py-3 text-sm font-black text-[#C4483A]"
-              onClick={() => setOpen(false)}
-            >
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/admin/owner-requests"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                Owner Requests
+              </Link>
+
+              <Link
+                href="/admin/categories"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                Categories
+              </Link>
+
+              <Link
+                href="/admin/event-requests"
+                className="block px-4 py-3 hover:bg-gray-100"
+                onClick={() => setOpen(false)}
+              >
+                Event Requests
+              </Link>
+            </>
           )}
 
           <button
             type="button"
             onClick={logout}
-            className="block w-full px-4 py-3 text-left text-sm font-black text-red-600"
+            className="block w-full px-4 py-3 text-left text-red-600 hover:bg-gray-100"
           >
             Logout
           </button>

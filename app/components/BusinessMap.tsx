@@ -353,9 +353,14 @@ export default function BusinessMap({
         ? spotCategories.includes(normalizeCategory(selectedCategory))
         : true;
 
-      if (!selectedCategory && !search) {
-        return showAllOnLoad ? hasPromotion(spot) : false;
-      }
+     if (!selectedCategory && !search) {
+  if (showAllOnLoad) return true;
+  return false;
+}
+
+
+
+
 
       return matchesSearch && matchesCategory;
     });
@@ -506,6 +511,11 @@ useEffect(() => {
   return (
     <div className="relative min-h-screen">
       <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3">
+{showAllOnLoad && !selectedCategory && !search && (
+  <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl">
+    {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
+  </div>
+)}
         <input
           value={search}
           onChange={(e) => {

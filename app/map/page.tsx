@@ -1,127 +1,161 @@
+// app/map/page.tsx
+
 import { supabase } from "../../lib/supabase";
 import MapWrapper from "../components/MapWrapper";
-import BottomNav from "../components/BottomNav";
-import InstallAppButton from "../components/InstallAppButton";
 
-type Coupon = {
-  id: number;
-  business_id: number | string | null;
-  title?: string | null;
-  description?: string | null;
-  coupon_type?: string | null;
-  value?: number | string | null;
-  min_order?: number | string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-};
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-type Category = {
-  id: number;
-  name: string;
-  emoji: string | null;
-  show_on_main_map: boolean | null;
-  show_on_community_map: boolean | null;
-};
+type SearchParams = Promise<{
+  view?: string;
+}>;
 
-function makeCouponBadge(coupon: Coupon) {
-  if (coupon.title && coupon.title.trim()) return coupon.title.trim();
+export default async function MapPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const view = params?.view || "";
+  const today = new Date().toISOString().slice(0, 10);
 
-  const value =
-    coupon.value !== null && coupon.value !== undefined
-      ? String(coupon.value)
-      : "";
+  if (view === "deals") {
+    const { data: deals, error } = await supabase
+      .from("deals")
+      .select(`
+        id,
+        title,
+        description,
+        image_url,
+        start_date,
+        end_date,
+        business_id,
+        businesses (*)
+      `)
+      .eq("status", "approved")
+      .eq("active", true)
+      .or(`end_date.is.null,end_date.gte.${today}`)
+      .order("created_at", { ascending: false });
 
-  const type = String(coupon.coupon_type || "").toLowerCase();
+    if (error) {
+      return (
+        <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+          <p className="font-bold text-red-600">
+            DEAL 지도 불러오기 실패: {error.message}
+          </p>
+        </main>
+      );
+    }
 
-  if (value && type.includes("percent")) return `${value}% OFF`;
-  if (value && (type.includes("amount") || type.includes("dollar"))) {
-    return `$${value} OFF`;
+    const spots =
+      deals
+        ?.map((deal: any) => {
+          const business = Array.isArray(deal.businesses)
+            ? deal.businesses[0]
+            : deal.businesses;
+
+          if (!business) return null;
+
+          return {
+            ...business,
+            deal_id: deal.id,
+            deal_title: deal.title,
+            deal_description: deal.description,
+            deal_image_url: deal.image_url,
+            deal_start_date: deal.start_date,
+            deal_end_date: deal.end_date,
+            has_deal: true,
+            source_type: "deal",
+          };
+        })
+        .filter(Boolean) || [];
+
+    return (
+      <MapWrapper
+        spots={spots}
+        showAllOnLoad={true}
+        activeNav="deals"
+      />
+    );
   }
-  if (value) return `Coupon ${value}`;
+if (view === "events") {
+  const { data: events, error } = await supabase
+    .from("business_events")
+    .select(`
+      id,
+      title,
+      description,
+      event_date,
+      image_url,
+      business_id,
+      businesses (*)
+    `)
+    .eq("status", "approved")
+    .eq("active", true)
+    .or(`event_date.is.null,event_date.gte.${today}`)
+    .not("business_id", "is", null)
+    .order("event_date", { ascending: true });
 
-  return "Coupon";
+  if (error) {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+        <p className="font-bold text-red-600">
+          EVENT 지도 불러오기 실패: {error.message}
+        </p>
+      </main>
+    );
+  }
+
+  const spots =
+    events
+      ?.map((event: any) => {
+        const business = Array.isArray(event.businesses)
+          ? event.businesses[0]
+          : event.businesses;
+
+        if (!business) return null;
+
+        return {
+          ...business,
+          event_id: event.id,
+          event_title: event.title,
+          event_description: event.description,
+          event_image_url: event.image_url,
+          event_date: event.event_date,
+          has_event: true,
+          source_type: "event",
+        };
+      })
+      .filter(Boolean) || [];
+
+  return (
+    <MapWrapper
+      spots={spots}
+      showAllOnLoad={true}
+      activeNav="events"
+    />
+  );
 }
-
-export default async function MapPage() {
-  const { data: businesses, error: businessError } = await supabase
+  const { data: spots, error } = await supabase
     .from("businesses")
     .select("*")
     .order("id", { ascending: true });
 
-  if (businessError) {
-    console.log("Map businesses load error:", businessError);
-  }
-
-  const { data: categories, error: categoryError } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("show_on_main_map", true)
-    .order("name", { ascending: true });
-
-  if (categoryError) {
-    console.log("Map categories load error:", categoryError);
-  }
-
-  const { data: coupons, error: couponError } = await supabase
-    .from("coupons")
-    .select(
-      "id,business_id,title,description,coupon_type,value,min_order,start_date,end_date"
-    )
-    .order("id", { ascending: false });
-
-  if (couponError) {
-    console.log("Map coupons load error:", couponError);
-  }
-
-  const couponList = (coupons || []) as Coupon[];
-  const categoryList = (categories || []) as Category[];
-
-  const mainCategoryNames = new Set(
-  categoryList
-    .map((category) => String(category.name || "").trim().toLowerCase())
-    .filter(Boolean)
-);
-
-  const spots = (businesses || [])
-  .filter((business) => {
-    if (!business.category) return true;
-
-    const businessCategories = String(business.category)
-      .split(",")
-      .map((category) => category.trim().toLowerCase())
-      .filter(Boolean);
-
-    return businessCategories.some((category) =>
-      mainCategoryNames.has(category)
+  if (error) {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+        <p className="font-bold text-red-600">
+          지도 불러오기 실패: {error.message}
+        </p>
+      </main>
     );
-  })
-  .map((business) => {
-    const businessCoupons = couponList.filter(
-      (coupon) => String(coupon.business_id) === String(business.id)
-    );
+  }
 
-    return {
-      ...business,
-      coupons: businessCoupons,
-      coupon_count: businessCoupons.length,
-      coupon_badge:
-        businessCoupons.length > 0
-          ? makeCouponBadge(businessCoupons[0])
-          : null,
-    };
-  });
-
-return (
-  <main className="min-h-screen">
-    <InstallAppButton />
-
+  return (
     <MapWrapper
-      spots={spots}
-      categories={categoryList}
+      spots={spots || []}
+      showAllOnLoad={false}
       activeNav="map"
     />
-
-    <BottomNav />
-  </main>
-);
+  );
 }

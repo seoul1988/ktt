@@ -21,7 +21,7 @@ type MapWrapperProps = {
   spots: any[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
-  activeNav?: "map" | "deals";
+  activeNav?: "map" | "deals" | "events";
   communityMode?: boolean;
 };
 

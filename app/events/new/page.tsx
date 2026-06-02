@@ -234,25 +234,47 @@ export default function NewEventPage() {
               ⋯
             </summary>
 
-            <div className="absolute right-0 top-12 z-[99999] w-44 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
-              <Link href="/" className="block px-4 py-3 hover:bg-gray-100">
-                Home
-              </Link>
+            <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
 
-              <Link
-                href="/business-events"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Business Events
-              </Link>
+  <Link href="/profile" className="block px-4 py-3 hover:bg-gray-100">
+    Edit Profile
+  </Link>
 
-              <Link
-                href="/admin/event-requests"
-                className="block px-4 py-3 hover:bg-gray-100"
-              >
-                Event Requests
-              </Link>
-            </div>
+  <Link href="/my-coupons" className="block px-4 py-3 hover:bg-gray-100">
+    My Coupons
+  </Link>
+
+  <Link href="/owner" className="block px-4 py-3 hover:bg-gray-100">
+    My Business
+  </Link>
+
+  <Link href="/business/new" className="block px-4 py-3 hover:bg-gray-100">
+    Register Business
+  </Link>
+
+  <Link href="/events/new" className="block px-4 py-3 hover:bg-gray-100">
+    Create Event
+  </Link>
+
+  <Link href="/deals/new" className="block px-4 py-3 hover:bg-gray-100">
+    Create Deal
+  </Link>
+
+  <Link href="/coupon/new" className="block px-4 py-3 hover:bg-gray-100">
+    Register Coupon
+  </Link>
+
+  <button
+    onClick={async () => {
+      await supabase.auth.signOut();
+      window.location.href = "/login";
+    }}
+    className="block w-full px-4 py-3 text-left text-red-600 hover:bg-gray-100"
+  >
+    Logout
+  </button>
+
+</div>
           </details>
         </div>
 

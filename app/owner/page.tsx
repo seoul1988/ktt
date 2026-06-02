@@ -128,86 +128,81 @@ export default function OwnerPage() {
             </button>
 
             {menuOpen && (
-  <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
+              <div className="absolute right-0 top-12 z-50 w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
+                <button
+                  onClick={() => {
+                    window.location.href = "/profile";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  Edit Profile
+                </button>
 
-    <button
-      onClick={() => {
-        window.location.href = "/profile";
-      }}
-      className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-    >
-      Edit Profile
-    </button>
+                <button
+                  onClick={() => {
+                    window.location.href = "/my-coupons";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  My Coupons
+                </button>
 
-    <button
-      onClick={() => {
-        window.location.href = "/my-coupons";
-      }}
-      className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-    >
-      My Coupons
-    </button>
+                <button
+                  onClick={() => {
+                    window.location.href = "/owner";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  My Business
+                </button>
 
-    <button
-      onClick={() => {
-        window.location.href = "/owner";
-      }}
-      className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-    >
-      My Business
-    </button>
+                <button
+                  onClick={() => {
+                    window.location.href = "/business/new";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  Register Business
+                </button>
 
-    {isAdmin && (
-      <>
-        <button
-          onClick={() => {
-            window.location.href = "/admin";
-          }}
-          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-        >
-          Admin Dashboard
-        </button>
+                <button
+                  onClick={() => {
+                    window.location.href = "/events/new";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  Create Event
+                </button>
 
-        <button
-          onClick={() => {
-            window.location.href = "/admin/community/events";
-          }}
-          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-        >
-          Manage Events
-        </button>
+                <button
+                  onClick={() => {
+                    window.location.href = "/deals/new";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  Create Deal
+                </button>
 
-        <button
-          onClick={() => {
-            window.location.href = "/admin/categories";
-          }}
-          className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-        >
-          Manage Categories
-        </button>
-      </>
-    )}
+                <button
+                  onClick={() => {
+                    window.location.href = "/coupons/new";
+                  }}
+                  className="block w-full px-5 py-4 text-left hover:bg-gray-100"
+                >
+                  Register Coupon
+                </button>
 
-    <button
-      onClick={() => {
-        window.location.href = "/business/new";
-      }}
-      className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-    >
-      Add Business
-    </button>
-
-    <button
-      onClick={async () => {
-        await supabase.auth.signOut();
-        window.location.href = "/login";
-      }}
-      className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-    >
-      Logout
-    </button>
-  </div>
-)}
+                <button
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    window.location.href = "/login";
+                  }}
+                  className="block w-full px-5 py-4 text-left text-red-600 hover:bg-gray-100"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
 			
 			
 			
