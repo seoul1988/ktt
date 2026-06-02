@@ -71,6 +71,7 @@ export default function ProfileButton() {
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
       if (!menuRef.current) return;
+
       if (!menuRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
@@ -96,28 +97,19 @@ export default function ProfileButton() {
   }
 
   if (checking) {
-    return (
-      <div className="h-10 w-20 rounded-full bg-white/70 shadow" />
-    );
+    return <div className="h-10 w-20 rounded-full bg-white/70 shadow" />;
   }
 
-   return (
-    <Link
-      href="/login"
-      style={{
-        background: "#172033",
-        color: "white",
-        padding: "10px 16px",
-        borderRadius: "999px",
-        fontWeight: 900,
-        zIndex: 9999,
-        position: "relative",
-      }}
-    >
-      Login
-    </Link>
-  );
-}
+  if (!userId) {
+    return (
+      <Link
+        href="/login"
+        className="relative z-[9999] inline-flex items-center justify-center rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow"
+      >
+        Login
+      </Link>
+    );
+  }
 
   return (
     <div ref={menuRef} className="relative z-50">
