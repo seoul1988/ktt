@@ -7,6 +7,7 @@ type ProfileRole = "user" | "owner" | "admin";
 
 export default function ProfileButton() {
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const mountedRef = useRef(true);
 
   const [checking, setChecking] = useState(true);
   const [user, setUser] = useState<any>(null);
@@ -16,16 +17,28 @@ export default function ProfileButton() {
   const refreshUser = useCallback(async () => {
     try {
       const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      setUser(currentUser ?? null);
+      let currentUser = session?.user ?? null;
 
       if (!currentUser) {
-        setRole("user");
-        setOpen(false);
+        const {
+          data: { user: fetchedUser },
+        } = await supabase.auth.getUser();
+
+        currentUser = fetchedUser ?? null;
+      }
+
+      if (!mountedRef.current) return;
+
+      // 중요: 세션 복구 중 잠깐 null이 나와도 기존 로그인 상태를 바로 지우지 않음
+      if (!currentUser) {
+        setChecking(false);
         return;
       }
+
+      setUser(currentUser);
 
       const { data: profile, error } = await supabase
         .from("profiles")
@@ -33,9 +46,12 @@ export default function ProfileButton() {
         .eq("id", currentUser.id)
         .maybeSingle();
 
+      if (!mountedRef.current) return;
+
       if (error) {
         console.error("Profile role error:", error);
         setRole("user");
+        setChecking(false);
         return;
       }
 
@@ -52,23 +68,35 @@ export default function ProfileButton() {
       }
     } catch (err) {
       console.error("Profile refresh error:", err);
-      setRole("user");
+      // 중요: 에러가 나도 기존 user/open 상태를 지우지 않음
     } finally {
-      setChecking(false);
+      if (mountedRef.current) {
+        setChecking(false);
+      }
     }
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     refreshUser();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setRole("user");
+        setOpen(false);
+        setChecking(false);
+        return;
+      }
+
       setTimeout(refreshUser, 100);
+      setTimeout(refreshUser, 700);
     });
 
     const wakeUp = () => {
-      setChecking(true);
+      // 중요: 앱 복귀 때 checking=true로 바꾸지 않음. 그래야 버튼 클릭 가능.
       refreshUser();
       setTimeout(refreshUser, 500);
       setTimeout(refreshUser, 1500);
@@ -85,6 +113,7 @@ export default function ProfileButton() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      mountedRef.current = false;
       subscription.unsubscribe();
       window.removeEventListener("pageshow", wakeUp);
       window.removeEventListener("focus", wakeUp);
@@ -111,11 +140,15 @@ export default function ProfileButton() {
     window.location.href = "/";
   }
 
-  if (checking) {
+  // 첫 로딩이고 기존 user가 없을 때만 로딩 표시
+  if (checking && !user) {
     return (
       <button
         type="button"
-        onClick={refreshUser}
+        onClick={() => {
+          setOpen((prev) => !prev);
+          refreshUser();
+        }}
         className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
       >
         ⋯
@@ -141,7 +174,10 @@ export default function ProfileButton() {
     <div ref={menuRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          setOpen((prev) => !prev);
+          refreshUser();
+        }}
         className="rounded-full bg-white px-4 py-2 text-xl font-black text-[#172033] shadow"
       >
         ⋯
