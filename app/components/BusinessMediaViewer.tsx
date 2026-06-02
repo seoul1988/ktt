@@ -87,7 +87,15 @@ function ExternalVideoButton({ url }: { url: string }) {
   );
 }
 
-function MediaDisplay({ item, name, full = false }: { item: MediaItem; name: string; full?: boolean }) {
+function MediaDisplay({
+  item,
+  name,
+  full = false,
+}: {
+  item: MediaItem;
+  name: string;
+  full?: boolean;
+}) {
   if (item.type === "image") {
     return (
       <img
@@ -96,7 +104,7 @@ function MediaDisplay({ item, name, full = false }: { item: MediaItem; name: str
         onClick={(e) => e.stopPropagation()}
         className={
           full
-            ? "max-h-[90vh] max-w-full rounded-xl object-contain"
+            ? "max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
             : "h-full w-full object-contain"
         }
       />
@@ -118,7 +126,7 @@ function MediaDisplay({ item, name, full = false }: { item: MediaItem; name: str
           onClick={(e) => e.stopPropagation()}
           className={
             full
-              ? "aspect-video w-full max-w-5xl rounded-xl bg-black"
+              ? "aspect-video w-[90vw] max-w-5xl rounded-xl bg-black"
               : "h-full w-full bg-black"
           }
         />
@@ -139,7 +147,11 @@ function MediaDisplay({ item, name, full = false }: { item: MediaItem; name: str
       playsInline
       controls
       onClick={(e) => e.stopPropagation()}
-      className={full ? "max-h-[90vh] max-w-full rounded-xl" : "h-full w-full object-contain"}
+      className={
+        full
+          ? "max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
+          : "h-full w-full object-contain"
+      }
     />
   );
 }
@@ -230,12 +242,19 @@ export default function BusinessMediaViewer({
       {isOpen && (
         <div
           onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-[9999] bg-black/90"
         >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            <MediaDisplay item={current} name={name} full />
+          </div>
+
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="absolute right-5 top-5 z-[10000] rounded-full bg-white px-4 py-2 font-black text-black"
+            className="absolute right-5 top-5 z-[10000] rounded-full bg-white px-4 py-2 font-black text-black shadow-lg"
           >
             ×
           </button>
@@ -248,7 +267,7 @@ export default function BusinessMediaViewer({
                   e.stopPropagation();
                   goPrev();
                 }}
-                className="absolute left-4 top-1/2 z-[10000] -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 text-3xl font-black text-black"
+                className="absolute left-4 top-1/2 z-[10000] -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 text-3xl font-black text-black shadow-lg"
               >
                 ‹
               </button>
@@ -259,20 +278,16 @@ export default function BusinessMediaViewer({
                   e.stopPropagation();
                   goNext();
                 }}
-                className="absolute right-4 top-1/2 z-[10000] -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 text-3xl font-black text-black"
+                className="absolute right-4 top-1/2 z-[10000] -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 text-3xl font-black text-black shadow-lg"
               >
                 ›
               </button>
 
-              <div className="absolute bottom-5 right-5 z-[10000] rounded-full bg-white/90 px-3 py-1 text-sm font-black text-black">
+              <div className="absolute bottom-5 right-5 z-[10000] rounded-full bg-white/90 px-3 py-1 text-sm font-black text-black shadow-lg">
                 {currentIndex + 1}/{media.length}
               </div>
             </>
           )}
-
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-5xl">
-            <MediaDisplay item={current} name={name} full />
-          </div>
         </div>
       )}
     </>

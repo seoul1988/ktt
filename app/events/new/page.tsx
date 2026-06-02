@@ -1,12 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-
 const libraries: "places"[] = ["places"];
 
 export default function NewEventPage() {
@@ -32,6 +31,11 @@ export default function NewEventPage() {
   const [videoUrl, setVideoUrl] = useState("");
 
   const [saving, setSaving] = useState(false);
+
+const [contactName, setContactName] = useState("");
+const [contactEmail, setContactEmail] = useState("");
+const [contactPhone, setContactPhone] = useState("");
+
 
   function onPlaceChanged() {
     const place = autocompleteRef.current?.getPlace();
@@ -95,6 +99,33 @@ export default function NewEventPage() {
     return publicData.publicUrl;
   }
 
+
+useEffect(() => {
+  async function loadProfile() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return;
+
+    setContactEmail(user.email || "");
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name, phone")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile) {
+      setContactName(profile.name || "");
+      setContactPhone(profile.phone || "");
+    }
+  }
+
+  loadProfile();
+}, []);
+
+
   async function submitEvent() {
     if (!title.trim()) {
       alert("이벤트 제목을 입력하세요.");
@@ -146,22 +177,31 @@ export default function NewEventPage() {
         );
       }
 
-      const { data: insertedEvent, error } = await supabase
-        .from("event_requests")
-        .insert({
-          owner_id: user.id,
-          business_id: businessId,
-          title: title.trim(),
-          description: description.trim(),
-          image_url: uploadedImageUrl || null,
-          video_url: uploadedVideoUrl || null,
-          external_video_url: videoUrl.trim() || null,
-          event_date: eventDate || null,
-          location: location.trim(),
-          latitude,
-          longitude,
-          status: "pending",
-        })
+		const { data: insertedEvent, error } = await supabase
+	  .from("event_requests")
+	  .insert({
+		owner_id: user.id,
+		business_id: businessId,
+
+		title: title.trim(),
+		description: description.trim(),
+
+		image_url: uploadedImageUrl || null,
+		video_url: uploadedVideoUrl || null,
+		external_video_url: videoUrl.trim() || null,
+
+		event_date: eventDate || null,
+		location: location.trim(),
+
+		latitude,
+		longitude,
+
+		contact_name: contactName.trim() || null,
+		contact_email: contactEmail.trim() || null,
+		contact_phone: contactPhone.trim() || null,
+
+		status: "pending",
+	  })
         .select("id, title")
         .single();
 
@@ -336,6 +376,36 @@ export default function NewEventPage() {
               className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
           </div>
+
+<div className="rounded-2xl border bg-gray-50 p-4">
+  <p className="mb-3 font-black">
+    Contact Information
+  </p>
+
+  <input
+    value={contactName}
+    onChange={(e) => setContactName(e.target.value)}
+    placeholder="Contact Name"
+    className="mb-2 w-full rounded-xl border px-4 py-3"
+  />
+
+  <input
+    value={contactEmail}
+    onChange={(e) => setContactEmail(e.target.value)}
+    placeholder="Email"
+    className="mb-2 w-full rounded-xl border px-4 py-3"
+  />
+
+  <input
+    value={contactPhone}
+    onChange={(e) => setContactPhone(e.target.value)}
+    placeholder="Phone"
+    className="w-full rounded-xl border px-4 py-3"
+  />
+</div>
+
+
+
 
           <div>
             <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">

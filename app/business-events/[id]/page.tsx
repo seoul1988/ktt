@@ -147,62 +147,99 @@ await supabase.from("business_events").delete().eq("id", id);
   const videos = event.video_url ? [event.video_url] : [];
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
-      <div className="relative">
-        <BusinessMediaViewer
-          images={images.length > 0 ? images : ["/event.png"]}
-          videos={videos}
-          name={event.title || "Business Event"}
-        />
+   <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
+  <div className="px-5 pt-5">
+    <div className="relative mx-auto max-w-xl overflow-hidden rounded-3xl shadow-xl">
+      <BusinessMediaViewer
+        images={images.length > 0 ? images : ["/event.png"]}
+        videos={videos}
+        name={event.title || "Business Event"}
+      />
 
-        <div className="absolute left-5 top-5 z-50">
-          <Link
-            href="/business-events"
-            className="rounded-full bg-white/90 px-4 py-2 text-sm font-black shadow"
-          >
-            ← Back
-          </Link>
-        </div>
-
-        <div className="absolute right-5 top-5 z-50">
-		  <EventManageButtons
-			eventId={event.id}
-			ownerId={event.owner_id}
-		  />
-		</div>
+      <div className="absolute left-4 top-4 z-50">
+        <Link
+          href="/business-events"
+          className="rounded-full bg-white/90 px-4 py-2 text-sm font-black shadow"
+        >
+          ← Back
+        </Link>
       </div>
 
-      <section className="px-5 pt-5">
-        <div className="rounded-3xl bg-white p-5 shadow-xl">
-          <p className="text-sm font-bold text-[#C4483A]">
-            {event.event_date || "Coming Soon"}
-          </p>
+      <div className="absolute right-4 top-4 z-50">
+        <EventManageButtons
+          eventId={event.id}
+          ownerId={event.owner_id}
+        />
+      </div>
+    </div>
+  </div>
 
-          <h1 className="mt-2 text-2xl font-black">
-            {event.title}
-          </h1>
+  <section className="px-5 pt-5">
+    <div className="mx-auto max-w-xl">
+      <div className="rounded-3xl bg-white p-5 shadow-xl">
+        <p className="text-sm font-bold text-[#C4483A]">
+          {event.event_date || "Coming Soon"}
+        </p>
 
-          <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
-            {event.description || "No description"}
-          </p>
+        <h1 className="mt-2 text-2xl font-black">
+          {event.title}
+        </h1>
 
-          {event.external_video_url && (
-            <a
-              href={event.external_video_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 block rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
-            >
-              ▶ 영상 링크 보기
-            </a>
-          )}
+        <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
+          {event.description || "No description"}
+        </p>
 
-          {event.location && (
-            <p className="mt-4 text-sm font-bold">
-              📍 {event.location}
-            </p>
-          )}
+        {event.external_video_url && (
+          <a
+            href={event.external_video_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 block rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
+          >
+            ▶ 영상 링크 보기
+          </a>
+        )}
+
+        <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs font-black">
+          <a
+            href={event.contact_phone ? `tel:${event.contact_phone}` : "#"}
+            className="rounded-2xl px-2 py-3 text-[#172033]"
+          >
+            <div className="text-xl">☎</div>
+            Call
+          </a>
+
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+              event.location || ""
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-2xl px-2 py-3 text-[#172033]"
+          >
+            <div className="text-xl">↱</div>
+            Directions
+          </a>
+
+          <a
+            href={`sms:?&body=${encodeURIComponent(
+              `${event.title || ""}\n${event.location || ""}`
+            )}`}
+            className="rounded-2xl px-2 py-3 text-[#172033]"
+          >
+            <div className="text-xl">⌲</div>
+            Share
+          </a>
         </div>
+
+        {event.location && (
+          <p className="mt-4 text-sm font-bold">
+            📍 {event.location}
+          </p>
+        )}
+      </div>
+    </div>
+
       </section>
 
       <BottomNav />
