@@ -1,9 +1,8 @@
-// app/business-events/[id]/page.tsx
-
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { supabase } from "../../../lib/supabase";
+import EventManageButtons from "./EventManageButtons";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import BottomNav from "../../components/BottomNav";
 
@@ -31,7 +30,6 @@ function getStoragePathFromPublicUrl(url: string | null) {
     path: decodeURIComponent(path),
   };
 }
-
 export default async function BusinessEventDetailPage({
   params,
 }: {
@@ -56,11 +54,11 @@ export default async function BusinessEventDetailPage({
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { data: targetEvent } = await supabase
-      .from("business_events")
-      .select("id, owner_id, image_url, video_url")
-      .eq("id", id)
-      .maybeSingle();
+  const { data: targetEvent } = await supabase
+  .from("business_events")
+  .select("id, owner_id, image_url, video_url")
+  .eq("id", id)
+  .maybeSingle();
 
     if (!user || !targetEvent) {
       redirect("/business-events");
@@ -73,8 +71,7 @@ export default async function BusinessEventDetailPage({
       .maybeSingle();
 
     const isOwner = targetEvent.owner_id === user.id;
-    const isAdmin =
-      profile?.role === "admin" || profile?.role === "owner";
+    const isAdmin = profile?.role === "admin";
 
     if (!isOwner && !isAdmin) {
       redirect(`/business-events/${id}`);
@@ -82,42 +79,23 @@ export default async function BusinessEventDetailPage({
 
     const imageFile = getStoragePathFromPublicUrl(targetEvent.image_url);
 
-    if (imageFile) {
-      const { error: imageDeleteError } = await supabase.storage
-        .from(imageFile.bucket)
-        .remove([imageFile.path]);
+if (imageFile) {
+  await supabase.storage
+    .from(imageFile.bucket)
+    .remove([imageFile.path]);
+}
 
-      if (imageDeleteError) {
-        console.error("Image delete failed:", imageDeleteError.message);
-      }
-    }
+const videoFile = getStoragePathFromPublicUrl(targetEvent.video_url);
 
-    const videoFile = getStoragePathFromPublicUrl(targetEvent.video_url);
+if (videoFile) {
+  await supabase.storage
+    .from(videoFile.bucket)
+    .remove([videoFile.path]);
+}
 
-    if (videoFile) {
-      const { error: videoDeleteError } = await supabase.storage
-        .from(videoFile.bucket)
-        .remove([videoFile.path]);
+await supabase.from("business_events").delete().eq("id", id);
 
-      if (videoDeleteError) {
-        console.error("Video delete failed:", videoDeleteError.message);
-      }
-    }
-
-    const { error: dbDeleteError } = await supabase
-      .from("business_events")
-      .delete()
-      .eq("id", id);
-
-    if (dbDeleteError) {
-      console.error("DB delete failed:", dbDeleteError.message);
-      redirect(`/business-events/${id}`);
-    }
-
-    revalidatePath("/");
     revalidatePath("/business-events");
-    revalidatePath(`/business-events/${id}`);
-
     redirect("/business-events");
   }
 
@@ -162,8 +140,7 @@ export default async function BusinessEventDetailPage({
     : { data: null };
 
   const isOwner = !!user && event.owner_id === user.id;
-  const isAdmin =
-    profile?.role === "admin" || profile?.role === "owner";
+  const isAdmin = profile?.role === "admin";
   const canManage = isOwner || isAdmin;
 
   const images = event.image_url ? [event.image_url] : [];
@@ -187,18 +164,12 @@ export default async function BusinessEventDetailPage({
           </Link>
         </div>
 
-        {canManage && (
-          <div className="absolute right-5 top-5 z-50">
-            <form action={deleteEvent}>
-              <button
-                type="submit"
-                className="rounded-full bg-red-600 px-4 py-2 text-sm font-black text-white shadow"
-              >
-                삭제
-              </button>
-            </form>
-          </div>
-        )}
+        <div className="absolute right-5 top-5 z-50">
+		  <EventManageButtons
+			eventId={event.id}
+			ownerId={event.owner_id}
+		  />
+		</div>
       </div>
 
       <section className="px-5 pt-5">
