@@ -238,7 +238,7 @@ export default function BusinessMap({
   spots: Spot[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
-  activeNav?: "map" | "deals";
+  activeNav?: "map" | "deals" | "events";
   communityMode?: boolean;
 }) {
   const [search, setSearch] = useState("");
