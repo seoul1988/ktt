@@ -19,7 +19,7 @@ function BusinessMedia({
     <img
       src={spot.image_url || "/event.png"}
       alt={spot.name || "Business"}
-      className={className}
+      className={`${className} object-cover`}
     />
   );
 }
@@ -35,7 +35,7 @@ function DealMedia({
     <img
       src={deal.image_url || deal.businesses?.image_url || "/event.png"}
       alt={deal.title || deal.businesses?.name || "Deal"}
-      className={className}
+      className={`${className} object-cover`}
     />
   );
 }
@@ -122,7 +122,7 @@ export default async function Home() {
                 <img
                   src={mainEvent.image_url || "/event.png"}
                   alt={mainEvent.title || "Business Event"}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover"
                 />
               </div>
 
@@ -209,7 +209,7 @@ export default async function Home() {
               <div className="h-56 w-full overflow-hidden bg-white">
                 <BusinessMedia
                   spot={featured}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                 />
               </div>
 
@@ -252,7 +252,7 @@ export default async function Home() {
                   <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
                     <BusinessMedia
                       spot={spot}
-                      className="h-full w-full object-contain"
+                      className="h-full w-full object-cover"
                     />
                   </div>
 

@@ -206,13 +206,13 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
 
     movedRef.current = key;
 
-    map.flyTo(
-      [lat - 0.035, lng],
-      map.getZoom(), // 현재 줌 유지
-      {
-        animate: true,
-      }
-    );
+   map.flyTo(
+  [lat - 0.20, lng],
+  Math.max(map.getZoom() - 2, 9),
+  {
+    animate: true,
+  }
+);
   }, [lat, lng, map]);
 
   return null;

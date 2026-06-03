@@ -148,7 +148,8 @@ const videos = [
   const status = getOpenStatus(spot.hours);
 
   return (
-    <main className="min-h-screen bg-white text-[#172033]">
+  <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
+    <div className="mx-auto max-w-xl">
       <div className="relative">
         <BusinessMediaViewer
 	  images={images}
@@ -351,7 +352,7 @@ const videos = [
 		
 		
 	 </section>
-
+ </div>
      <BottomNav />
     </main>
 	
