@@ -207,7 +207,7 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
     movedRef.current = key;
 
    map.flyTo(
-  [lat - 0.20, lng],
+  [lat - 0.15, lng],
   Math.max(map.getZoom() - 2, 9),
   {
     animate: true,
