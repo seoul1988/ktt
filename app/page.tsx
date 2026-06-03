@@ -41,10 +41,44 @@ function DealMedia({
 }
 
 export default async function Home() {
-  const { data: spots } = await supabase
-    .from("businesses")
-    .select("*")
-    .order("id", { ascending: true });
+  const { data: communityCategories } = await supabase
+  .from("categories")
+  .select("name")
+  .eq("show_on_community_map", true);
+
+const communityCategorySet = new Set(
+  (communityCategories || []).map((c) =>
+    String(c.name).trim().toLowerCase()
+  )
+);
+
+const { data: allSpots } = await supabase
+  .from("businesses")
+  .select("*")
+  .order("id", { ascending: true });
+
+const spots =
+  (allSpots || []).filter((spot) => {
+    const categories = String(spot.category || "")
+      .split(",")
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+
+    const hasCommunityCategory = categories.some((cat) =>
+      communityCategorySet.has(cat)
+    );
+
+    const hasMainCategory = categories.some(
+      (cat) => !communityCategorySet.has(cat)
+    );
+
+    // 커뮤니티만 속하면 숨김
+    if (hasCommunityCategory && !hasMainCategory) {
+      return false;
+    }
+
+    return true;
+  });
 
   const today = new Date().toISOString().slice(0, 10);
 

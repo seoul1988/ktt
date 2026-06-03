@@ -698,29 +698,33 @@ useEffect(() => {
 
           return (
             <a
-              key={spot.id}
-              ref={(el) => {
-                cardRefs.current[spot.id] = el;
-              }}
-              href={`/business/${spot.id}`}
-              className={`
-                w-[88vw]
-                iphone:w-[80vw]
-                max-w-[420px]
-                shrink-0
-                snap-center
-                rounded-[28px]
-                border-4
-                bg-white
-                p-[6px]
-                shadow-2xl
-                ${
-                  spot.id === selectedSpotId
-                    ? "border-red-500"
-                    : "border-transparent"
-                }
-              `}
-            >
+			  key={spot.id}
+			  ref={(el) => {
+				cardRefs.current[spot.id] = el;
+			  }}
+			  href={
+				communityMode
+				  ? `/business/${spot.id}?from=community`
+				  : `/business/${spot.id}`
+			  }
+			  className={`
+				w-[88vw]
+				iphone:w-[80vw]
+				max-w-[420px]
+				shrink-0
+				snap-center
+				rounded-[28px]
+				border-4
+				bg-white
+				p-[6px]
+				shadow-2xl
+				${
+				  spot.id === selectedSpotId
+					? "border-red-500"
+					: "border-transparent"
+				}
+			  `}
+			>
               <div className="flex flex-col gap-1">
                 <div className="relative h-[125px] w-full overflow-hidden rounded-[22px] bg-gray-100">
                   {images.length > 0 ? (
