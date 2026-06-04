@@ -90,55 +90,81 @@ export default function ProfilePage() {
 }, []);
 
   async function applyOwner() {
-    if (!profile) return;
+  if (!profile) return;
 
-    if (!businessName.trim()) {
-      alert("Please enter your business name.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        owner_status: "pending",
-        requested_business_name: businessName,
-        business_name: businessName,
-      })
-      .eq("id", profile.id);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    alert("Owner request submitted.");
-
-    window.location.href = "/map";
+  if (!fullName.trim()) {
+    alert("Please enter your full name.");
+    return;
   }
 
-  async function saveProfile() {
-    if (!profile) return;
-
-    setSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        full_name: fullName,
-        phone,
-        business_name: businessName,
-      })
-      .eq("id", profile.id);
-
-    setSaving(false);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    window.location.href = "/map";
+  if (!phone.trim()) {
+    alert("Please enter your phone number.");
+    return;
   }
+
+  if (!businessName.trim()) {
+    alert("Please enter your business name.");
+    return;
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: fullName,
+      phone,
+      owner_status: "pending",
+      requested_business_name: businessName,
+      business_name: businessName,
+    })
+    .eq("id", profile.id);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert("Owner request submitted.");
+
+  window.location.href = "/map";
+}
+
+ async function saveProfile() {
+  if (!profile) return;
+
+  setSaving(true);
+
+  const { error } = await supabase.from("profiles").upsert(
+    {
+      id: profile.id,
+      email: profile.email,
+      role: profile.role || "user",
+      owner_status: profile.owner_status || "none",
+      requested_business_name: profile.requested_business_name || "",
+      full_name: fullName,
+      phone,
+      business_name: businessName,
+    },
+    {
+      onConflict: "id",
+    }
+  );
+
+  setSaving(false);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  alert("Profile saved.");
+
+  setProfile({
+    ...profile,
+    full_name: fullName,
+    phone,
+    business_name: businessName,
+  });
+}
 
   if (loading) {
     return (
@@ -192,16 +218,46 @@ export default function ProfilePage() {
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-bold text-gray-700">
-                Account Type
-              </span>
+  <span className="mb-2 block text-sm font-bold text-gray-700">
+    Account Type
+  </span>
 
-              <input
-                value={profile?.role || "user"}
-                disabled
-                className="w-full rounded-2xl bg-gray-100 px-5 py-4 text-gray-500"
-              />
-            </label>
+  <div className="w-full rounded-2xl bg-white px-5 py-4 font-bold">
+    <span
+      className={
+        profile?.role === "admin"
+          ? "text-red-600"
+          : "text-gray-300"
+      }
+    >
+      Admin
+    </span>
+
+    <span className="mx-2 text-gray-300">|</span>
+
+    <span
+      className={
+        profile?.role === "owner"
+          ? "text-red-600"
+          : "text-gray-300"
+      }
+    >
+      Owner
+    </span>
+
+    <span className="mx-2 text-gray-300">|</span>
+
+    <span
+      className={
+        profile?.role === "user"
+          ? "text-red-600"
+          : "text-gray-300"
+      }
+    >
+      User
+    </span>
+  </div>
+</label>
 
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-gray-700">
@@ -248,7 +304,7 @@ export default function ProfilePage() {
             {profile?.role === "user" && !isPendingOwner && (
 			  <button
 				onClick={applyOwner}
-				className="mb-4 w-full rounded-2xl border-2 border-[#172033] py-4 font-extrabold text-[#172033]"
+				className="mb-4 w-full rounded-2xl bg-[#F6C343] py-4 font-extrabold text-[#172033] shadow-lg"
 			  >
 				Apply as Business Owner
 			  </button>

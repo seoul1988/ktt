@@ -1,11 +1,10 @@
-
 "use client";
 
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL || "https://your-domain.com";
+  process.env.NEXT_PUBLIC_SITE_URL || "https://www.ktowntriangle.com";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -37,9 +36,20 @@ export default function LoginForm() {
     if (error) alert(error.message);
   }
 
-  async function loginWithApple() {
+  async function loginWithFacebook() {
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "apple",
+      provider: "facebook",
+      options: {
+        redirectTo: `${SITE_URL}/auth/callback`,
+      },
+    });
+
+    if (error) alert(error.message);
+  }
+
+  async function loginWithKakao() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "kakao",
       options: {
         redirectTo: `${SITE_URL}/auth/callback`,
       },
@@ -52,24 +62,22 @@ export default function LoginForm() {
     <main className="min-h-screen bg-gradient-to-br from-[#fdf2f8] via-white to-[#fff7ed] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md rounded-[34px] bg-white px-6 py-9 shadow-2xl">
         <div className="mb-8 text-center">
-     
           <p className="mt-5 text-2xl font-black text-[#172033]">
-  Sign in to your account.
-</p>
-		 
+            Sign in to your account.
+          </p>
         </div>
 
         <div className="space-y-5">
           <label className="block">
             <span className="mb-3 block text-base font-medium text-gray-500">
-  Username or Email
-</span>
+              Username or Email
+            </span>
 
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your username or email"
-              className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#ff2f9b]"
+              className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#172033]"
             />
           </label>
 
@@ -84,7 +92,7 @@ export default function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 type={showPassword ? "text" : "password"}
-                 className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#ff2f9b]"
+                className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#172033]"
               />
 
               <button
@@ -98,8 +106,9 @@ export default function LoginForm() {
           </label>
 
           <button
+            type="button"
             onClick={login}
-            className="mt-4 w-full rounded-[22px] bg-[#ff2f9b] py-2 text-xl font-black text-white shadow-lg active:scale-[0.99]"
+            className="mt-4 w-full rounded-[22px] bg-black py-2 text-xl font-black text-white shadow-lg active:scale-[0.99]"
           >
             Login
           </button>
@@ -113,7 +122,7 @@ export default function LoginForm() {
 
         <a
           href="/signup"
-          className="mt-8 block w-full rounded-[22px] border-2 border-[#172033] py-1 text-center text-lg font-medium text-[#172033]"
+          className="mt-8 block w-full rounded-[22px] border border-gray-200 bg-gray-50 py-2 text-center text-lg font-medium text-[#172033]"
         >
           Create an Account
         </a>
@@ -126,21 +135,31 @@ export default function LoginForm() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
 
-  <div className="flex items-center justify-center gap-6">
-  <img
-    src="/icons/google-big.png"
-    alt="Google Login"
-    onClick={loginWithGoogle}
-    className="h-[76px] w-[150px]"
-  />
+        <div className="flex items-center justify-center gap-6">
+          <button type="button" onClick={loginWithGoogle}>
+            <img
+              src="/icons/google.png"
+              alt="Google Login"
+              className="h-[70px] w-[70px]"
+            />
+          </button>
 
-  <img
-    src="/icons/apple-big.png"
-    alt="Apple Login"
-    onClick={loginWithApple}
-    className="h-[60px] w-[130px]"
-  />
-</div>
+          <button type="button" onClick={loginWithFacebook}>
+            <img
+              src="/icons/facebook.png"
+              alt="Facebook Login"
+              className="h-[70px] w-[70px]"
+            />
+          </button>
+
+          <button type="button" onClick={loginWithKakao}>
+            <img
+              src="/icons/kakao.png"
+              alt="Kakao Login"
+              className="h-[70px] w-[70px]"
+            />
+          </button>
+        </div>
 
         <p className="mt-10 text-center text-sm leading-6 text-gray-400">
           By signing in, you agree to our Terms of Service and Privacy Policy.
@@ -149,4 +168,3 @@ export default function LoginForm() {
     </main>
   );
 }
-

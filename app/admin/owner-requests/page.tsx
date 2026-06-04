@@ -11,6 +11,7 @@ type OwnerRequestRow = {
   owner_status: string | null;
   requested_business_name: string | null;
   business_name: string | null;
+  full_name: string | null;
   phone: string | null;
   business_id: number | null;
   approved_at: string | null;
@@ -32,6 +33,7 @@ export default function OwnerRequestsPage() {
         owner_status,
         requested_business_name,
         business_name,
+		full_name,
         phone,
         business_id,
         approved_at
@@ -171,13 +173,18 @@ export default function OwnerRequestsPage() {
                     </span>
                   </div>
 
-                  {r.phone && (
-                    <p className="mt-2 text-sm text-gray-600">
-                      Phone: {r.phone}
-                    </p>
-                  )}
+               {r.full_name && (
+				  <p className="mt-2 text-sm text-gray-600">
+					Name: {r.full_name}
+				  </p>
+				)}
 
-                  <p className="mt-2 text-xs text-gray-400">
+				{r.phone && (
+				  <p className="mt-1 text-sm text-gray-600">
+					Phone: {r.phone}
+				  </p>
+				)}
+								  <p className="mt-2 text-xs text-gray-400">
                     Business ID: {r.business_id || "Not connected"}
                   </p>
 
