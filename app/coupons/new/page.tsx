@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
-
+import BottomNav from "../../components/BottomNav";
 type Business = {
   id: number;
   name: string;
@@ -418,28 +418,7 @@ mx-auto
       </div>
    </div>
 
-<div className="fixed bottom-4 left-0 right-0 z-50 px-5">
-  <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-2xl">
-    <a href="/" className="flex-1 py-4 text-center">
-      Home
-    </a>
-
-    <a href="/map" className="flex-1 py-4 text-center">
-      Map
-    </a>
-
-    <a
-      href="/coupons/new"
-      className="flex-1 py-4 text-center text-[#F6C343]"
-    >
-      Coupons
-    </a>
-
-    <a href="/community" className="flex-1 py-4 text-center">
-      Community
-    </a>
-  </div>
-</div>
+  <BottomNav />
 
 </main>
 
