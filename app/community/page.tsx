@@ -109,12 +109,12 @@ export default async function CommunityPage() {
                   </div>
                 ) : (
                   <>
-    <div className="flex h-28 w-full items-center justify-center bg-white p-2">
-  {biz.image_url ? (
+<div className="h-44 bg-white flex items-center justify-center p-2">
+  {event.image_url ? (
     <img
-      src={biz.image_url}
-      alt={biz.name}
-      className="block max-h-full max-w-full object-contain"
+      src={event.image_url}
+      alt={event.title}
+      className="max-h-full max-w-full object-contain"
     />
   ) : (
     <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
