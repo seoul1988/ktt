@@ -726,7 +726,7 @@ useEffect(() => {
 			  `}
 			>
               <div className="flex flex-col gap-1">
-                <div className="relative h-[125px] w-full overflow-hidden rounded-[22px] bg-gray-100">
+                <div className="relative h-[180px] w-full overflow-hidden rounded-[22px] bg-white">
                   {images.length > 0 ? (
                     <div
                       id={`image-scroll-${spot.id}`}
@@ -754,7 +754,9 @@ useEffect(() => {
                           src={image as string}
                           alt={spot.name}
                           draggable={false}
-                          className="h-full w-full shrink-0 snap-center object-cover"
+                          className={`h-full w-full shrink-0 snap-center ${
+                            communityMode ? "object-contain" : "object-cover"
+                          }`}
                         />
                       ))}
                     </div>

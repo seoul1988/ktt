@@ -109,15 +109,19 @@ export default async function CommunityPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="h-36 overflow-hidden bg-[#E8DED1]">
-                      {event.image_url && (
-                        <img
-                          src={event.image_url}
-                          alt={event.title}
-                          className="h-full w-full object-cover"
-                        />
-                      )}
-                    </div>
+    <div className="flex h-28 w-full items-center justify-center bg-white p-2">
+  {biz.image_url ? (
+    <img
+      src={biz.image_url}
+      alt={biz.name}
+      className="block max-h-full max-w-full object-contain"
+    />
+  ) : (
+    <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+      No Photo
+    </div>
+  )}
+</div>
 
                     <div className="p-4">
                       <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
