@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -9,6 +10,7 @@ const SITE_URL =
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   async function login() {
     const { error } = await supabase.auth.signInWithPassword({
@@ -24,50 +26,22 @@ export default function LoginForm() {
     window.location.href = "/";
   }
 
-  async function signUp() {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+  async function loginWithGoogle() {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
       options: {
-        emailRedirectTo: `${SITE_URL}/`,
+        redirectTo: `${SITE_URL}/auth/callback`,
       },
     });
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    if (data.user) {
-      await supabase.from("profiles").upsert({
-        id: data.user.id,
-        email: data.user.email,
-        role: "user",
-      });
-    }
-
-    alert("Account created. Please check your email.");
+    if (error) alert(error.message);
   }
-
-	  async function loginWithGoogle() {
-	  const { error } = await supabase.auth.signInWithOAuth({
-		provider: "google",
-
-		options: {
-		  redirectTo: `${SITE_URL}/auth/callback`,
-		},
-	  });
-
-	  if (error) {
-		alert(error.message);
-	  }
-	}
 
   async function loginWithApple() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "apple",
       options: {
-        redirectTo: `${SITE_URL}/`,
+        redirectTo: `${SITE_URL}/auth/callback`,
       },
     });
 
@@ -75,99 +49,104 @@ export default function LoginForm() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#fff7ed] via-white to-[#fdf2f8] px-5 py-10 text-[#172033]">
-      <div className="mx-auto max-w-md">
+    <main className="min-h-screen bg-gradient-to-br from-[#fdf2f8] via-white to-[#fff7ed] px-5 py-8 text-[#172033]">
+      <div className="mx-auto max-w-md rounded-[34px] bg-white px-6 py-9 shadow-2xl">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-3xl bg-[#172033] text-4xl font-black text-white shadow-xl">
-            K
-          </div>
-
-          <h1 className="text-3xl font-extrabold">KTown Triangle</h1>
-          <p className="mt-2 text-sm text-gray-500">
-            Korean food, deals, and local spots
-          </p>
+     
+          <p className="mt-5 text-2xl font-black text-[#172033]">
+  Sign in to your account.
+</p>
+		 
         </div>
 
-        <div className="rounded-[32px] bg-white p-6 shadow-2xl">
-          <div className="mb-6 text-center">
-            <h2 className="text-4xl font-black">Login</h2>
-            <p className="mt-3 text-gray-500">
-              Sign in to like restaurants and manage your business.
-            </p>
-          </div>
+        <div className="space-y-5">
+          <label className="block">
+            <span className="mb-3 block text-base font-medium text-gray-500">
+  Username or Email
+</span>
 
-          <div className="space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm font-bold text-gray-700">
-                Email
-              </span>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-base outline-none focus:border-[#172033]"
-              />
-            </label>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your username or email"
+              className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#ff2f9b]"
+            />
+          </label>
 
-            <label className="block">
-              <span className="mb-2 block text-sm font-bold text-gray-700">
-                Password
-              </span>
+          <label className="block">
+            <span className="mb-3 block text-base font-medium text-gray-500">
+              Password
+            </span>
+
+            <div className="relative">
               <input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                type="password"
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 text-base outline-none focus:border-[#172033]"
+                placeholder="Enter your password"
+                type={showPassword ? "text" : "password"}
+                 className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#ff2f9b]"
               />
-            </label>
 
-            <button
-              onClick={login}
-              className="mt-2 w-full rounded-2xl bg-[#172033] py-4 text-lg font-extrabold text-white shadow-lg"
-            >
-              Login
-            </button>
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-5 top-1/2 -translate-y-1/2 text-xl"
+              >
+                👁️
+              </button>
+            </div>
+          </label>
 
-            <a
-              href="/signup"
-              className="block w-full rounded-2xl border-2 border-[#172033] py-4 text-center text-lg font-extrabold text-[#172033]"
-            >
-              Create Account
-            </a>
-          </div>
-
-          <div className="my-7 flex items-center gap-4">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-sm font-semibold text-gray-400">
-              or continue with
-            </span>
-            <div className="h-px flex-1 bg-gray-200" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={loginWithGoogle}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-4 font-bold shadow-sm"
-            >
-              <span className="text-2xl">G</span>
-              Google
-            </button>
-
-            <button
-              onClick={loginWithApple}
-              className="flex items-center justify-center gap-2 rounded-2xl bg-black py-4 font-bold text-white shadow-sm"
-            >
-              <span className="text-2xl"></span>
-              Apple
-            </button>
-          </div>
-
-          <p className="mt-8 text-center text-xs leading-5 text-gray-400">
-            By logging in, you agree to our Terms and Privacy Policy.
-          </p>
+          <button
+            onClick={login}
+            className="mt-4 w-full rounded-[22px] bg-[#ff2f9b] py-2 text-xl font-black text-white shadow-lg active:scale-[0.99]"
+          >
+            Login
+          </button>
         </div>
+
+        <div className="mt-6 text-center text-base font-semibold text-gray-500">
+          Forgot Username
+          <span className="mx-3 text-gray-300">|</span>
+          Forgot Password
+        </div>
+
+        <a
+          href="/signup"
+          className="mt-8 block w-full rounded-[22px] border-2 border-[#172033] py-1 text-center text-lg font-medium text-[#172033]"
+        >
+          Create an Account
+        </a>
+
+        <div className="my-9 flex items-center gap-4">
+          <div className="h-px flex-1 bg-gray-200" />
+          <span className="text-base font-semibold text-gray-400">
+            or continue with
+          </span>
+          <div className="h-px flex-1 bg-gray-200" />
+        </div>
+
+  <div className="flex items-center justify-center gap-6">
+  <img
+    src="/icons/google-big.png"
+    alt="Google Login"
+    onClick={loginWithGoogle}
+    className="h-[76px] w-[150px]"
+  />
+
+  <img
+    src="/icons/apple-big.png"
+    alt="Apple Login"
+    onClick={loginWithApple}
+    className="h-[60px] w-[130px]"
+  />
+</div>
+
+        <p className="mt-10 text-center text-sm leading-6 text-gray-400">
+          By signing in, you agree to our Terms of Service and Privacy Policy.
+        </p>
       </div>
     </main>
   );
 }
+

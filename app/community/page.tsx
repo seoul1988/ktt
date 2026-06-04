@@ -180,13 +180,17 @@ export default async function CommunityPage() {
                 href={`/business/${biz.id}`}
                 className="overflow-hidden rounded-3xl bg-white shadow-sm"
               >
-                <div className="h-28 bg-[#E8DED1]">
-                  {biz.image_url && (
+                <div className="flex h-28 w-full items-center justify-center bg-white p-2">
+                  {biz.image_url ? (
                     <img
                       src={biz.image_url}
                       alt={biz.name}
-                      className="h-full w-full object-cover"
+                      className="block max-h-full max-w-full object-contain"
                     />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+                      No Photo
+                    </div>
                   )}
                 </div>
 
