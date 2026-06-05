@@ -8,7 +8,7 @@ export default function RedeemCouponPage({
 }: {
   params: { id: string };
 }) {
-  const userCouponId = params.id;
+  const redeemId = params.id;
   const [pinCode, setPinCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -22,12 +22,16 @@ export default function RedeemCouponPage({
     setLoading(true);
     setMessage("");
 
-    const { data: item, error: loadError } = await supabase
+    let userCouponId: string | null = redeemId;
+    let itemStatus = "claimed";
+
+    let { data: item, error: itemError } = await supabase
       .from("user_coupons")
       .select(`
         id,
         status,
         used_at,
+        coupon_id,
         coupons (
           id,
           title,
@@ -38,18 +42,32 @@ export default function RedeemCouponPage({
           end_date
         )
       `)
-      .eq("id", userCouponId)
+      .eq("id", redeemId)
       .maybeSingle();
 
-    if (loadError || !item || !item.coupons) {
-      setLoading(false);
-      setMessage("쿠폰을 찾을 수 없습니다.");
-      return;
-    }
+    let coupon: any = null;
 
-    const coupon = Array.isArray(item.coupons)
-      ? item.coupons[0]
-      : item.coupons;
+    if (item && item.coupons) {
+      itemStatus = item.status;
+      coupon = Array.isArray(item.coupons) ? item.coupons[0] : item.coupons;
+    } else {
+      const { data: directCoupon, error: couponError } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("id", redeemId)
+        .maybeSingle();
+
+      if (couponError || !directCoupon) {
+        setLoading(false);
+        setMessage(
+          `쿠폰을 찾을 수 없습니다. ID: ${redeemId}`
+        );
+        return;
+      }
+
+      userCouponId = null;
+      coupon = directCoupon;
+    }
 
     if (!coupon) {
       setLoading(false);
@@ -57,7 +75,7 @@ export default function RedeemCouponPage({
       return;
     }
 
-    if (item.status !== "claimed") {
+    if (userCouponId && itemStatus !== "claimed") {
       setLoading(false);
       setMessage("이미 사용된 쿠폰입니다.");
       return;
@@ -92,18 +110,20 @@ export default function RedeemCouponPage({
 
     const now = new Date().toISOString();
 
-    const { error: userCouponError } = await supabase
-      .from("user_coupons")
-      .update({
-        status: "used",
-        used_at: now,
-      })
-      .eq("id", userCouponId);
+    if (userCouponId) {
+      const { error: userCouponError } = await supabase
+        .from("user_coupons")
+        .update({
+          status: "used",
+          used_at: now,
+        })
+        .eq("id", userCouponId);
 
-    if (userCouponError) {
-      setLoading(false);
-      setMessage(userCouponError.message);
-      return;
+      if (userCouponError) {
+        setLoading(false);
+        setMessage(userCouponError.message);
+        return;
+      }
     }
 
     const { error: couponUpdateError } = await supabase
