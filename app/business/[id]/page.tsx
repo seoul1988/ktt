@@ -347,8 +347,10 @@ const availableCoupons = (coupons || []).filter((coupon) => {
             </p>
           </section>
 
-          <BusinessCouponPopup coupons={availableCoupons} />
-        </section>
+          {availableCoupons.length > 0 && (
+		  <BusinessCouponPopup coupons={availableCoupons} />
+		)}
+		</section>
       </div>
 
       <BottomNav />

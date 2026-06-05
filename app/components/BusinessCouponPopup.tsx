@@ -38,7 +38,7 @@ export default function BusinessCouponPopup({
                 {coupon.description ||
                   (coupon.coupon_type === "percent" && coupon.value
                     ? `${coupon.value}% off`
-                    : coupon.coupon_type === "amount" && coupon.value
+                    : coupon.coupon_type === "fixed" && coupon.value
                     ? `$${coupon.value} off`
                     : "Special offer")}
               </div>

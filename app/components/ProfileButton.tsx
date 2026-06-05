@@ -115,17 +115,21 @@ const isAdmin = role === "admin";
   return (
    <div ref={menuRef} className="relative z-50">
   <button
-    type="button"
-    onClick={(e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setOpen((v) => !v);
-    }}
-    className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow transition-all duration-150 active:scale-95"
-    aria-label="Open profile menu"
-  >
-    ⋯
-  </button>
+  type="button"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen((v) => !v);
+  }}
+  className="relative z-[99999] flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-black/10 transition-all duration-150 active:scale-95"
+  aria-label="Open profile menu"
+>
+  <span className="flex flex-col items-center justify-center gap-[3px]">
+    <span className="h-[5px] w-[5px] rounded-full bg-[#172033]" />
+    <span className="h-[5px] w-[5px] rounded-full bg-[#172033]" />
+    <span className="h-[5px] w-[5px] rounded-full bg-[#172033]" />
+  </span>
+</button>
 
   {open && (
     <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-sm font-bold text-[#172033] shadow-2xl">
