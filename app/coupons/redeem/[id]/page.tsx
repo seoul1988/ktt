@@ -6,14 +6,18 @@ import { supabase } from "../../../../lib/supabase";
 
 export default function RedeemCouponPage() {
   const params = useParams();
-  const redeemId = String(params.id);
-}) {
-  const redeemId = params.id;
+  const redeemId = String(params.id || "");
+
   const [pinCode, setPinCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   async function redeemCoupon() {
+    if (!redeemId) {
+      setMessage("쿠폰 ID가 없습니다.");
+      return;
+    }
+
     if (pinCode.length !== 4) {
       alert("4자리 PIN을 입력하세요.");
       return;
@@ -24,8 +28,9 @@ export default function RedeemCouponPage() {
 
     let userCouponId: string | null = redeemId;
     let itemStatus = "claimed";
+    let coupon: any = null;
 
-    let { data: item, error: itemError } = await supabase
+    const { data: item } = await supabase
       .from("user_coupons")
       .select(`
         id,
@@ -45,11 +50,11 @@ export default function RedeemCouponPage() {
       .eq("id", redeemId)
       .maybeSingle();
 
-    let coupon: any = null;
-
     if (item && item.coupons) {
       itemStatus = item.status;
-      coupon = Array.isArray(item.coupons) ? item.coupons[0] : item.coupons;
+      coupon = Array.isArray(item.coupons)
+        ? item.coupons[0]
+        : item.coupons;
     } else {
       const { data: directCoupon, error: couponError } = await supabase
         .from("coupons")
@@ -59,9 +64,7 @@ export default function RedeemCouponPage() {
 
       if (couponError || !directCoupon) {
         setLoading(false);
-        setMessage(
-          `쿠폰을 찾을 수 없습니다. ID: ${redeemId}`
-        );
+        setMessage(`쿠폰을 찾을 수 없습니다. ID: ${redeemId}`);
         return;
       }
 
@@ -87,7 +90,7 @@ export default function RedeemCouponPage() {
       return;
     }
 
-    if (coupon.pin_code !== pinCode) {
+    if (String(coupon.pin_code) !== pinCode) {
       setLoading(false);
       setMessage("PIN 번호가 맞지 않습니다.");
       return;
