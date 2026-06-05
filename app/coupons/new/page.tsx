@@ -21,6 +21,7 @@ type Coupon = {
   usage_limit: number;
   used_count: number;
   active: boolean;
+  pin_code?: string | null;
 };
 
 export default function NewCouponPage() {
@@ -37,6 +38,8 @@ export default function NewCouponPage() {
   const [usageLimit, setUsageLimit] = useState(1);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+const [pinCode, setPinCode] = useState("");
+
 
   useEffect(() => {
     loadBusinesses();
@@ -100,6 +103,7 @@ export default function NewCouponPage() {
     setUsageLimit(1);
     setStartDate("");
     setEndDate("");
+	setPinCode("");
   }
 
   function getIsExpired(coupon: Coupon) {
@@ -123,8 +127,11 @@ export default function NewCouponPage() {
       alert("쿠폰 제목을 입력하세요.");
       return;
     }
-
-    const payload = {
+	if (pinCode.length !== 4) {
+	  alert("4자리 PIN을 입력하세요.");
+	  return;
+	}
+		const payload = {
       business_id: Number(businessId),
       title,
       description,
@@ -134,6 +141,7 @@ export default function NewCouponPage() {
       start_date: startDate ? new Date(startDate).toISOString() : null,
       end_date: endDate ? new Date(endDate).toISOString() : null,
       active: true,
+	  pin_code: pinCode,
     };
 
     if (editingId) {
@@ -175,6 +183,7 @@ export default function NewCouponPage() {
     setUsageLimit(Number(coupon.usage_limit || 1));
     setStartDate(coupon.start_date ? coupon.start_date.slice(0, 16) : "");
     setEndDate(coupon.end_date ? coupon.end_date.slice(0, 16) : "");
+	setPinCode(coupon.pin_code || "");
   }
 
   async function deleteCoupon(id: number) {
@@ -325,6 +334,22 @@ mx-auto
           onChange={(e) => setEndDate(e.target.value)}
           className="mb-4 w-full rounded border p-3"
         />
+		<label className="mb-1 block text-sm font-bold">
+		  4-Digit PIN
+		</label>
+
+		<input
+		  type="text"
+		  maxLength={4}
+		  value={pinCode}
+		  onChange={(e) =>
+			setPinCode(e.target.value.replace(/\D/g, "").slice(0, 4))
+		  }
+		  placeholder="예: 1234"
+		  className="mb-4 w-full rounded border p-3"
+		/>
+		
+		
 
         <button
           onClick={saveCoupon}

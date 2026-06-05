@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../lib/supabase";
-import CommunityBottomNav from "../../components/CommunityBottomNav";
+import BottomNav from "../../components/BottomNav";
 const libraries: "places"[] = ["places"];
 
 export default function NewEventPage() {
@@ -498,7 +498,7 @@ useEffect(() => {
         </div>
       </div>
 
-      <CommunityBottomNav />
+           <BottomNav />
     </main>
   );
 }

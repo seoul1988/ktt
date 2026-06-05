@@ -113,118 +113,119 @@ const isAdmin = role === "admin";
   }
 
   return (
-    <div ref={menuRef} className="relative z-50">
+   <div ref={menuRef} className="relative z-50">
+  <button
+    type="button"
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen((v) => !v);
+    }}
+    className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow transition-all duration-150 active:scale-95"
+    aria-label="Open profile menu"
+  >
+    ⋯
+  </button>
+
+  {open && (
+    <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-sm font-bold text-[#172033] shadow-2xl">
+      <Link
+        href="/profile"
+        className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+        onClick={() => setOpen(false)}
+      >
+        Edit Profile
+      </Link>
+
+      <Link
+        href="/my-coupons"
+        className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+        onClick={() => setOpen(false)}
+      >
+        My Coupons
+      </Link>
+
+      {(isOwner || isAdmin) && (
+        <>
+          <Link
+            href="/owner"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            My Business
+          </Link>
+
+          <Link
+            href="/business/new"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Register Business
+          </Link>
+
+          <Link
+            href="/events/new"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Create Event
+          </Link>
+
+          <Link
+            href="/deals/new"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Create Deal
+          </Link>
+
+          <Link
+            href="/coupons/new"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Register Coupon
+          </Link>
+        </>
+      )}
+
+      {isAdmin && (
+        <>
+          <Link
+            href="/admin/owner-requests"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Owner Requests
+          </Link>
+
+          <Link
+            href="/admin/categories"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Categories
+          </Link>
+
+          <Link
+            href="/admin/event-requests"
+            className="block px-4 py-3 transition-all duration-150 hover:bg-gray-100 active:scale-[0.98] active:bg-gray-200"
+            onClick={() => setOpen(false)}
+          >
+            Event Requests
+          </Link>
+        </>
+      )}
+
       <button
         type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-        className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow"
-        aria-label="Open profile menu"
+        onClick={logout}
+        className="block w-full px-4 py-3 text-left text-red-600 transition-all duration-150 hover:bg-red-50 active:scale-[0.98] active:bg-red-100"
       >
-        ⋯
+        Logout
       </button>
-
-      {open && (
-        <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold text-[#172033] shadow-2xl">
-          <Link
-            href="/profile"
-            className="block px-4 py-3 hover:bg-gray-100"
-            onClick={() => setOpen(false)}
-          >
-            Edit Profile
-          </Link>
-
-          <Link
-            href="/my-coupons"
-            className="block px-4 py-3 hover:bg-gray-100"
-            onClick={() => setOpen(false)}
-          >
-            My Coupons
-          </Link>
-
-          {(isOwner || isAdmin) && (
-            <>
-              <Link
-                href="/owner"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                My Business
-              </Link>
-
-              <Link
-                href="/business/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                Register Business
-              </Link>
-
-              <Link
-                href="/events/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                Create Event
-              </Link>
-			  <Link
-				  href="/deals/new"
-				  className="block px-4 py-3 hover:bg-gray-100"
-				  onClick={() => setOpen(false)}
-				>
-				  Create Deal
-				</Link>
-
-              <Link
-                href="/coupons/new"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                Register Coupon
-              </Link>
-            </>
-          )}
-
-          {isAdmin && (
-            <>
-              <Link
-                href="/admin/owner-requests"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                Owner Requests
-              </Link>
-
-              <Link
-                href="/admin/categories"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                Categories
-              </Link>
-
-              <Link
-                href="/admin/event-requests"
-                className="block px-4 py-3 hover:bg-gray-100"
-                onClick={() => setOpen(false)}
-              >
-                Event Requests
-              </Link>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={logout}
-            className="block w-full px-4 py-3 text-left text-red-600 hover:bg-gray-100"
-          >
-            Logout
-          </button>
-        </div>
-      )}
     </div>
+  )}
+</div>
   );
 }
