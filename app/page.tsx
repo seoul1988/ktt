@@ -272,44 +272,45 @@ const spots =
           </section>
         )}
 
-        <section className="mx-auto max-w-xl">
-          <h2 className="mb-3 text-xl font-bold">📈 Trending Now</h2>
+       <section className="mx-auto max-w-xl">
+  <h2 className="mb-3 text-xl font-bold">📈 Trending Now</h2>
 
-          <div className="space-y-4">
-            {trending.map((spot) => (
-              <a
-                key={spot.id}
-                href={`/business/${spot.id}`}
-                className="block rounded-3xl bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
-                    <BusinessMedia
-                      spot={spot}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-
-                  <div className="flex-1">
-                    <h4 className="font-bold">{spot.name}</h4>
-
-                    <p className="text-sm text-gray-600">
-                      {spot.category} · {spot.city}
-                    </p>
-
-                    <p className="mt-1 text-sm font-medium text-[#C4483A]">
-                      {spot.tags || spot.tag}
-                    </p>
-                  </div>
-
-                  <div className="rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
-                    ★ {spot.rating || "New"}
-                  </div>
-                </div>
-              </a>
-            ))}
+  <div className="space-y-4">
+    {trending.map((spot) => (
+      <a
+        key={spot.id}
+        href={`/business/${spot.id}`}
+        className="block rounded-3xl bg-white p-4 shadow-sm"
+      >
+        <div className="flex items-center gap-4">
+          <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
+            <BusinessMedia
+              spot={spot}
+              className="h-full w-full object-cover"
+            />
           </div>
-        </section>
+
+          <div className="flex-1">
+            <h4 className="font-bold">{spot.name}</h4>
+
+            <p className="text-sm text-gray-600">
+              {spot.category} · {spot.city}
+            </p>
+
+            <p className="mt-1 text-sm font-medium text-[#C4483A]">
+              {spot.tags || spot.tag}
+            </p>
+
+            <p className="mt-1 text-sm font-bold text-[#172033]">
+  ★ {spot.rating || "New"}
+  {spot.review_count ? ` (${spot.review_count})` : ""}
+</p>
+          </div>
+        </div>
+      </a>
+    ))}
+  </div>
+</section>
 
         <BottomNav activeNav="home" />
       </main>
