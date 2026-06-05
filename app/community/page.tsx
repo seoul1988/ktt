@@ -199,11 +199,24 @@ export default async function CommunityPage() {
                     NEW
                   </span>
                   <h3 className="mt-2 line-clamp-1 text-sm font-black">
-                    {biz.name}
-                  </h3>
-                  <p className="line-clamp-1 text-xs font-semibold text-white/70">
-                    {biz.category || "Business"}
-                  </p>
+  {biz.name}
+</h3>
+
+<p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
+  {biz.category || "Business"}
+</p>
+
+<p className="mt-1 text-xs">
+  <span className="font-black text-[#F4C95D]">
+    ★ {biz.rating || "New"}
+  </span>
+
+  {biz.review_count ? (
+    <span className="ml-1 text-gray-400">
+      ({biz.review_count})
+    </span>
+  ) : null}
+</p>
                 </div>
               </Link>
             ))}
