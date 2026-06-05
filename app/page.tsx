@@ -301,11 +301,17 @@ const spots =
               {spot.tags || spot.tag}
             </p>
 
-            <p className="mt-1 text-sm font-bold text-[#172033]">
-  ★ {spot.rating || "New"}
-  {spot.review_count ? ` (${spot.review_count})` : ""}
-</p>
-          </div>
+           <p className="mt-1 text-sm">
+  <span className="font-bold text-[#172033]">
+    ★ {spot.rating || "New"}
+  </span>
+
+  {spot.review_count ? (
+    <span className="ml-1 text-gray-400">
+      ({spot.review_count})
+    </span>
+  ) : null}
+</p>     </div>
         </div>
       </a>
     ))}
