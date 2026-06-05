@@ -4,12 +4,12 @@ export const dynamic = "force-dynamic";
 
 
 export async function GET(req: Request) {
-  const secret = req.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
+//  const secret = req.headers.get("authorization");
+//  const cronSecret = process.env.CRON_SECRET;
 
- if (cronSecret && secret !== `Bearer ${cronSecret}`) {
-   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
- }
+// if (cronSecret && secret !== `Bearer ${cronSecret}`) {
+//   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+// }
 
   const googleKey = process.env.GOOGLE_PLACES_API_KEY;
 
