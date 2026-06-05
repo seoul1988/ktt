@@ -113,11 +113,27 @@ export default async function BusinessPage({
     return <div>Not found</div>;
   }
 
-  const { data: coupons } = await supabase
-    .from("coupons")
-    .select("*")
-    .eq("business_id", id)
-    .order("id", { ascending: false });
+  const now = new Date().toISOString();
+
+const { data: coupons } = await supabase
+  .from("coupons")
+  .select("*")
+  .eq("business_id", id)
+  .eq("active", true)
+  .eq("status", "approved")
+  .or(`end_date.is.null,end_date.gte.${now}`)
+  .order("id", { ascending: false });
+
+const availableCoupons = (coupons || []).filter((coupon) => {
+  const usageLimit = Number(coupon.usage_limit || 0);
+  const usedCount = Number(coupon.used_count || 0);
+
+  if (usageLimit > 0 && usedCount >= usageLimit) {
+    return false;
+  }
+
+  return true;
+});
 
   const images =
     spot.image_urls && Array.isArray(spot.image_urls) && spot.image_urls.length > 0
@@ -331,7 +347,7 @@ export default async function BusinessPage({
             </p>
           </section>
 
-          <BusinessCouponPopup coupons={coupons || []} />
+          <BusinessCouponPopup coupons={availableCoupons} />
         </section>
       </div>
 
