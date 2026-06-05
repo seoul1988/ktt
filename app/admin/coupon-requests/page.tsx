@@ -137,26 +137,29 @@ export default function CouponRequestsPage() {
         ) : (
           <div className="space-y-4">
             {coupons.map((coupon) => {
-		  const status = String(coupon.status || "pending")
-			.trim()
-			.toLowerCase();
+              const status = String(coupon.status || "pending")
+                .trim()
+                .toLowerCase();
 
-		  const dateExpired =
-			coupon.end_date && new Date(coupon.end_date) < new Date();
+              const dateExpired =
+                coupon.end_date &&
+                new Date(coupon.end_date) < new Date();
 
-		  const quantityExpired =
-			(coupon.usage_limit || 0) > 0 &&
-			(coupon.used_count || 0) >= (coupon.usage_limit || 0);
+              const quantityExpired =
+                (coupon.usage_limit || 0) > 0 &&
+                (coupon.used_count || 0) >= (coupon.usage_limit || 0);
 
-		  const expired = Boolean(dateExpired || quantityExpired || coupon.active === false);
+              const expired = Boolean(
+                dateExpired || quantityExpired || coupon.active === false
+              );
 
-		  return (
+              return (
                 <div
                   key={coupon.id}
                   className="rounded-3xl bg-white p-5 shadow"
                 >
                   <p className="text-sm font-bold text-gray-500">
-                   {coupon.businesses?.[0]?.name || "No business"}
+                    {coupon.businesses?.[0]?.name || "No business"}
                   </p>
 
                   <h2 className="mt-1 text-xl font-black">
@@ -178,45 +181,46 @@ export default function CouponRequestsPage() {
                     Used: {coupon.used_count || 0} / {coupon.usage_limit || 0}
                   </p>
 
-                <div className="mt-4 flex items-center gap-2">
-			  {status === "approved" ? (
-				<button
-				  disabled
-				  className="cursor-not-allowed rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white opacity-90"
-				>
-				  Approved
-				</button>
-			  ) : status === "rejected" ? (
-				<button
-				  disabled
-				  className="cursor-not-allowed rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white opacity-90"
-				>
-				  Rejected
-				</button>
-			  ) : (
-				<>
-				  <button
-					onClick={() => approveCoupon(coupon.id)}
-					className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white"
-				  >
-					Approve
-				  </button>
+                  <div className="mt-4 flex items-center gap-2">
+                    {status === "approved" ? (
+                      <button
+                        disabled
+                        className="cursor-not-allowed rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white opacity-90"
+                      >
+                        Approved
+                      </button>
+                    ) : status === "rejected" ? (
+                      <button
+                        disabled
+                        className="cursor-not-allowed rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white opacity-90"
+                      >
+                        Rejected
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => approveCoupon(coupon.id)}
+                          className="rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white"
+                        >
+                          Approve
+                        </button>
 
-				  <button
-					onClick={() => rejectCoupon(coupon.id)}
-					className="rounded-lg bg-red-500 px-3 py-2 text-sm font-bold text-white"
-				  >
-					Reject
-				  </button>
-				</>
-			  )}
+                        <button
+                          onClick={() => rejectCoupon(coupon.id)}
+                          className="rounded-lg bg-red-500 px-3 py-2 text-sm font-bold text-white"
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
 
-			  {expired && (
-				<span className="rounded-full bg-gray-300 px-3 py-2 text-xs font-black text-gray-700">
-				  Expired
-				</span>
-			  )}
-			</div>
+                    {expired && (
+                      <span className="rounded-full bg-gray-300 px-3 py-2 text-xs font-black text-gray-700">
+                        Expired
+                      </span>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
