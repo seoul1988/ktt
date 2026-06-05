@@ -300,7 +300,7 @@ useEffect(() => {
     Create Deal
   </Link>
 
-  <Link href="/coupon/new" className="block px-4 py-3 hover:bg-gray-100">
+  <Link href="/coupons/new" className="block px-4 py-3 hover:bg-gray-100">
     Register Coupon
   </Link>
 
