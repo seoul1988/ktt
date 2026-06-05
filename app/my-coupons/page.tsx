@@ -86,40 +86,42 @@ export default function MyCouponsPage() {
               </p>
             </div>
           ) : (
-            items.map((item) => {
-              const redeemUrl = `${window.location.origin}/redeem/${item.id}`;
-              const coupon = item.coupons;
+          items.map((item) => {
+  const coupon = item.coupons;
 
-              return (
-                <div key={item.id} className="rounded-3xl bg-white p-5 shadow">
-                  <p className="text-sm font-bold text-gray-500">
-                    {coupon?.businesses?.name}
-                  </p>
+  const redeemUrl =
+    `${window.location.origin}/coupons/redeem/${coupon?.id}`;
 
-                  <h2 className="mt-1 text-xl font-black">
-                    {coupon?.title}
-                  </h2>
+  return (
+    <div key={item.id} className="rounded-3xl bg-white p-5 shadow">
+      <p className="text-sm font-bold text-gray-500">
+        {coupon?.businesses?.name}
+      </p>
 
-                  <p className="mt-1 text-sm text-gray-600">
-                    {coupon?.description}
-                  </p>
+      <h2 className="mt-1 text-xl font-black">
+        {coupon?.title}
+      </h2>
 
-                  <p className="mt-2 text-sm font-bold">
-                    Status: {item.status}
-                  </p>
+      <p className="mt-1 text-sm text-gray-600">
+        {coupon?.description}
+      </p>
 
-                  {item.status === "claimed" ? (
-                    <div className="mt-4 flex justify-center rounded-2xl border p-4">
-                      <QRCodeCanvas value={redeemUrl} size={180} />
-                    </div>
-                  ) : (
-                    <p className="mt-4 rounded-xl bg-gray-100 p-3 text-center font-bold">
-                      Used
-                    </p>
-                  )}
-                </div>
-              );
-            })
+      <p className="mt-2 text-sm font-bold">
+        Status: {item.status}
+      </p>
+
+      {item.status === "claimed" ? (
+        <div className="mt-4 flex justify-center rounded-2xl border p-4">
+          <QRCodeCanvas value={redeemUrl} size={180} />
+        </div>
+      ) : (
+        <p className="mt-4 rounded-xl bg-gray-100 p-3 text-center font-bold">
+          Used
+        </p>
+      )}
+    </div>
+  );
+})
           )}
         </div>
       </div>
