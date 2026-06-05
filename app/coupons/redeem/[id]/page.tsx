@@ -8,7 +8,7 @@ export default function RedeemCouponPage({
 }: {
   params: { id: string };
 }) {
-  const couponId = params.id;
+  const userCouponId = params.id;
   const [pinCode, setPinCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -22,15 +22,44 @@ export default function RedeemCouponPage({
     setLoading(true);
     setMessage("");
 
-    const { data: coupon, error: loadError } = await supabase
-      .from("coupons")
-      .select("*")
-      .eq("id", couponId)
+    const { data: item, error: loadError } = await supabase
+      .from("user_coupons")
+      .select(`
+        id,
+        status,
+        used_at,
+        coupons (
+          id,
+          title,
+          active,
+          pin_code,
+          usage_limit,
+          used_count,
+          end_date
+        )
+      `)
+      .eq("id", userCouponId)
       .maybeSingle();
 
-    if (loadError || !coupon) {
+    if (loadError || !item || !item.coupons) {
       setLoading(false);
       setMessage("쿠폰을 찾을 수 없습니다.");
+      return;
+    }
+
+    const coupon = Array.isArray(item.coupons)
+      ? item.coupons[0]
+      : item.coupons;
+
+    if (!coupon) {
+      setLoading(false);
+      setMessage("쿠폰 정보를 찾을 수 없습니다.");
+      return;
+    }
+
+    if (item.status !== "claimed") {
+      setLoading(false);
+      setMessage("이미 사용된 쿠폰입니다.");
       return;
     }
 
@@ -61,17 +90,33 @@ export default function RedeemCouponPage({
       return;
     }
 
-    const { error: updateError } = await supabase
+    const now = new Date().toISOString();
+
+    const { error: userCouponError } = await supabase
+      .from("user_coupons")
+      .update({
+        status: "used",
+        used_at: now,
+      })
+      .eq("id", userCouponId);
+
+    if (userCouponError) {
+      setLoading(false);
+      setMessage(userCouponError.message);
+      return;
+    }
+
+    const { error: couponUpdateError } = await supabase
       .from("coupons")
       .update({
         used_count: (coupon.used_count || 0) + 1,
-        used_at: new Date().toISOString(),
+        used_at: now,
       })
-      .eq("id", couponId);
+      .eq("id", coupon.id);
 
-    if (updateError) {
+    if (couponUpdateError) {
       setLoading(false);
-      setMessage(updateError.message);
+      setMessage(couponUpdateError.message);
       return;
     }
 

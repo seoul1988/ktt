@@ -90,7 +90,7 @@ export default function MyCouponsPage() {
   const coupon = item.coupons;
 
   const redeemUrl =
-    `${window.location.origin}/coupons/redeem/${coupon?.id}`;
+  `${window.location.origin}/coupons/redeem/${item.id}`;
 
   return (
     <div key={item.id} className="rounded-3xl bg-white p-5 shadow">
