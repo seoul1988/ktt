@@ -68,7 +68,7 @@ export default async function CommunityPage() {
                 className={
                   eventCount === 1
                     ? "overflow-hidden rounded-3xl bg-white shadow-sm"
-                    : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
+                    : "min-w-[260px] overflow-hidden rounded-3xl bg-[#2A3448] text-white shadow-sm"
                 }
               >
                 {eventCount === 1 ? (
@@ -81,7 +81,7 @@ export default async function CommunityPage() {
                           className="max-h-[190px] max-w-full rounded-2xl object-contain"
                         />
                       ) : (
-                        <div className="flex h-[170px] w-full items-center justify-center rounded-2xl bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+                        <div className="flex h-[170px] w-full items-center justify-center rounded-2xl bg-[#E8DED1] text-xs font-black text-white/70">
                           No Photo
                         </div>
                       )}
@@ -178,7 +178,7 @@ export default async function CommunityPage() {
               <Link
                 key={biz.id}
                 href={`/business/${biz.id}`}
-                className="overflow-hidden rounded-3xl bg-white shadow-sm"
+                className="overflow-hidden rounded-3xl bg-[#2A3448] text-white shadow-sm"
               >
                 <div className="flex h-28 w-full items-center justify-center bg-white p-2">
                   {biz.image_url ? (
@@ -201,7 +201,7 @@ export default async function CommunityPage() {
                   <h3 className="mt-2 line-clamp-1 text-sm font-black">
                     {biz.name}
                   </h3>
-                  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
+                  <p className="line-clamp-1 text-xs font-semibold text-white/70">
                     {biz.category || "Business"}
                   </p>
                 </div>
