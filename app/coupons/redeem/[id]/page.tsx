@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 
-export default function RedeemCouponPage({
-  params,
-}: {
-  params: { id: string };
+export default function RedeemCouponPage() {
+  const params = useParams();
+  const redeemId = String(params.id);
 }) {
   const redeemId = params.id;
   const [pinCode, setPinCode] = useState("");
