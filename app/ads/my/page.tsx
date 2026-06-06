@@ -33,11 +33,17 @@ export default function MyAdsPage() {
       return;
     }
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("ads")
       .select("*")
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
+
+    if (error) {
+      alert(error.message);
+      setLoading(false);
+      return;
+    }
 
     setAds((data || []) as AdItem[]);
     setLoading(false);
@@ -50,6 +56,19 @@ export default function MyAdsPage() {
       .from("ads")
       .update({ status: "hidden" })
       .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadAds();
+  }
+
+  async function deleteAd(id: number) {
+    if (!confirm("이 광고를 완전히 삭제하시겠습니까?")) return;
+
+    const { error } = await supabase.from("ads").delete().eq("id", id);
 
     if (error) {
       alert(error.message);
@@ -108,21 +127,41 @@ export default function MyAdsPage() {
                     <h2 className="line-clamp-1 text-sm font-black">
                       {ad.title}
                     </h2>
+
                     <p className="mt-1 text-xs font-bold text-gray-500">
                       {ad.category || "카테고리 없음"} · {ad.status || "active"}
                     </p>
+
                     <p className="mt-1 line-clamp-2 text-xs text-gray-600">
                       {ad.description || ""}
                     </p>
                   </div>
                 </Link>
 
-                <button
-                  onClick={() => hideAd(ad.id)}
-                  className="mt-3 w-full rounded-2xl bg-red-600 py-2 text-xs font-black text-white"
-                >
-                  숨기기
-                </button>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <Link
+                    href={`/ads/${ad.id}/edit`}
+                    className="rounded-2xl bg-[#172033] py-2 text-center text-xs font-black text-white"
+                  >
+                    수정
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => hideAd(ad.id)}
+                    className="rounded-2xl bg-yellow-500 py-2 text-xs font-black text-white"
+                  >
+                    숨기기
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => deleteAd(ad.id)}
+                    className="rounded-2xl bg-red-600 py-2 text-xs font-black text-white"
+                  >
+                    삭제
+                  </button>
+                </div>
               </div>
             ))}
           </div>
