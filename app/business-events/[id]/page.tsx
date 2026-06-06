@@ -6,7 +6,7 @@ import EventManageButtons from "./EventManageButtons";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import BottomNav from "../../components/BottomNav";
 import AttendeeRegistrationForm from "./AttendeeRegistrationForm";
-
+import AttendeeList from "./AttendeeList";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -198,171 +198,95 @@ export default async function BusinessEventDetailPage({
         </div>
       </div>
 
-      <section className="px-5 pt-5">
-        <div className="mx-auto max-w-xl">
-          <div className="rounded-3xl bg-white p-5 shadow-xl">
-            <p className="text-sm font-bold text-[#C4483A]">
-              {event.event_date || "Coming Soon"}
-            </p>
+     <section className="px-5 pt-5">
+  <div className="mx-auto max-w-xl">
+    <div className="rounded-3xl bg-white p-5 shadow-xl">
+      <p className="text-sm font-bold text-[#C4483A]">
+        {event.event_date || "Coming Soon"}
+      </p>
 
-            <div className="mt-2 flex items-start justify-between gap-3">
-              <h1 className="flex-1 text-2xl font-black leading-tight">
-                {event.title}
-              </h1>
+      <div className="mt-2 flex items-start justify-between gap-3">
+        <h1 className="flex-1 text-2xl font-black leading-tight">
+          {event.title}
+        </h1>
 
-              {event.collect_attendees && (
-                <AttendeeRegistrationForm
-                  eventId={event.id}
-                  eventTitle={event.title || "Business Event"}
-                  buttonOnly
-                />
-              )}
-            </div>
+        {event.collect_attendees && (
+          <AttendeeRegistrationForm
+            eventId={event.id}
+            eventTitle={event.title || "Business Event"}
+            buttonOnly
+          />
+        )}
+      </div>
 
-            {event.collect_attendees && (
-              <AttendeeRegistrationForm
-                eventId={event.id}
-                eventTitle={event.title || "Business Event"}
-                formOnly
-              />
-            )}
+      {event.collect_attendees && (
+        <AttendeeRegistrationForm
+          eventId={event.id}
+          eventTitle={event.title || "Business Event"}
+          formOnly
+        />
+      )}
 
-            <p className="mt-3 rounded-xl bg-yellow-50 p-3 text-xs font-bold text-yellow-800">
-              DEBUG — collect:{String(event.collect_attendees)} / admin:
-              {String(isAdmin)} / owner:{String(isOwner)} / manage:
-              {String(canManage)} / attendees:{attendeeRows.length}
-            </p>
+      <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
+        {event.description || "No description"}
+      </p>
 
-            <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
-              {event.description || "No description"}
-            </p>
+      {event.external_video_url && (
+        <a
+          href={event.external_video_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 block rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
+        >
+          ▶ Watch Video
+        </a>
+      )}
 
-            {event.external_video_url && (
-              <a
-                href={event.external_video_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 block rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
-              >
-                ▶ Watch Video
-              </a>
-            )}
+      <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs font-black">
+        <a
+          href={event.contact_phone ? `tel:${event.contact_phone}` : "#"}
+          className="rounded-2xl px-2 py-3 text-[#172033]"
+        >
+          <div className="text-xl">☎</div>
+          Call
+        </a>
 
-            <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs font-black">
-              <a
-                href={event.contact_phone ? `tel:${event.contact_phone}` : "#"}
-                className="rounded-2xl px-2 py-3 text-[#172033]"
-              >
-                <div className="text-xl">☎</div>
-                Call
-              </a>
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            event.location || ""
+          )}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-2xl px-2 py-3 text-[#172033]"
+        >
+          <div className="text-xl">↱</div>
+          Directions
+        </a>
 
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  event.location || ""
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-2xl px-2 py-3 text-[#172033]"
-              >
-                <div className="text-xl">↱</div>
-                Directions
-              </a>
+        <a
+          href={`sms:?&body=${encodeURIComponent(
+            `${event.title || ""}\n${event.location || ""}`
+          )}`}
+          className="rounded-2xl px-2 py-3 text-[#172033]"
+        >
+          <div className="text-xl">⌲</div>
+          Share
+        </a>
+      </div>
 
-              <a
-                href={`sms:?&body=${encodeURIComponent(
-                  `${event.title || ""}\n${event.location || ""}`
-                )}`}
-                className="rounded-2xl px-2 py-3 text-[#172033]"
-              >
-                <div className="text-xl">⌲</div>
-                Share
-              </a>
-            </div>
+      {event.location && (
+        <p className="mt-4 text-sm font-bold">📍 {event.location}</p>
+      )}
+    </div>
 
-            {event.location && (
-              <p className="mt-4 text-sm font-bold">📍 {event.location}</p>
-            )}
-          </div>
-
-          {event.collect_attendees && (
-            <div className="mt-5 rounded-3xl bg-white p-5 shadow-xl">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-black">Attendee List</h2>
-                  <p className="mt-1 text-xs font-bold text-gray-500">
-                    This area is for testing. After it works, change the condition
-                    back to owner/admin only.
-                  </p>
-                </div>
-
-                <div className="rounded-2xl bg-[#F8F3EC] px-4 py-3 text-center">
-                  <p className="text-2xl font-black text-[#C46A2B]">
-                    {totalPeople}
-                  </p>
-                  <p className="text-[10px] font-black text-gray-500">
-                    PEOPLE
-                  </p>
-                </div>
-              </div>
-
-              {attendeesError && (
-                <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
-                  Attendee load error: {attendeesError.message}
-                </p>
-              )}
-
-              {!attendeesError && !canManage && (
-                <p className="mt-4 rounded-xl bg-orange-50 p-3 text-xs font-bold text-orange-700">
-                  You are logged in, but this page does not recognize you as the
-                  event owner or admin. Check profiles.role and owner_id.
-                </p>
-              )}
-
-              {attendeeRows.length === 0 ? (
-                <p className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm font-bold text-gray-500">
-                  No attendees found for this event id.
-                </p>
-              ) : (
-                <div className="mt-5 space-y-3">
-                  {attendeeRows.map((attendee, index) => (
-                    <div
-                      key={attendee.id}
-                      className="rounded-2xl border bg-gray-50 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black">
-                            {index + 1}. {attendee.name || "No Name"}
-                          </p>
-
-                          <a
-                            href={attendee.phone ? `tel:${attendee.phone}` : "#"}
-                            className="mt-1 block text-sm font-bold text-[#C46A2B]"
-                          >
-                            {attendee.phone || "No Phone"}
-                          </a>
-                        </div>
-
-                        <div className="text-right text-xs font-black text-gray-500">
-                          <p>Guests: {Number(attendee.companions) || 0}</p>
-                          <p>Total: {Number(attendee.total_count) || 1}</p>
-                        </div>
-                      </div>
-
-                      {attendee.created_at && (
-                        <p className="mt-2 text-[11px] font-bold text-gray-400">
-                          {new Date(attendee.created_at).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
+    {event.collect_attendees && (
+      <AttendeeList
+        eventId={event.id}
+        ownerId={event.owner_id}
+      />
+    )}
+  </div>
+</section>
 
       <BottomNav />
     </main>
