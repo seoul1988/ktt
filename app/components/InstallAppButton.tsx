@@ -16,6 +16,21 @@ export default function InstallAppButton() {
   const [showBanner, setShowBanner] = useState(true);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  function closeBanner() {
+    setIsClosing(true);
+
+    window.setTimeout(() => {
+      setShowBanner(false);
+      setIsClosing(false);
+    }, 350);
+  }
+
+  function openBanner() {
+    setShowBanner(true);
+    setIsClosing(false);
+  }
 
   useEffect(() => {
     const standalone =
@@ -28,6 +43,7 @@ export default function InstallAppButton() {
     }
 
     const userAgent = window.navigator.userAgent.toLowerCase();
+
     const ios =
       /iphone|ipad|ipod/.test(userAgent) &&
       !(window.navigator as any).standalone;
@@ -35,7 +51,7 @@ export default function InstallAppButton() {
     setIsIOS(ios);
 
     const timer = window.setTimeout(() => {
-      setShowBanner(false);
+      closeBanner();
     }, 5000);
 
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -53,7 +69,10 @@ export default function InstallAppButton() {
 
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt
+      );
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
@@ -65,6 +84,7 @@ export default function InstallAppButton() {
     }
 
     await installPrompt.prompt();
+
     const choice = await installPrompt.userChoice;
 
     if (choice.outcome === "accepted") {
@@ -76,8 +96,9 @@ export default function InstallAppButton() {
 
   function handleTouchEnd(x: number) {
     if (touchStartX !== null && x - touchStartX > 80) {
-      setShowBanner(false);
+      closeBanner();
     }
+
     setTouchStartX(null);
   }
 
@@ -90,57 +111,47 @@ export default function InstallAppButton() {
         <div
           onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
           onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0].clientX)}
-          className="fixed left-6 right-6 top-[82px] z-[2000] rounded-3xl bg-[#EFE3D3] p-4 shadow-2xl transition-all"
+          className={`fixed left-6 right-6 top-[82px] z-[2000] rounded-3xl bg-[#EFE3D3] p-4 shadow-2xl transition-transform duration-300 ease-in-out ${
+            isClosing ? "translate-x-[120%]" : "translate-x-0"
+          }`}
         >
           <div className="flex items-start justify-between gap-3">
-  <div className="flex-1">
-    <p className="text-sm font-black text-[#172033]">
-      📱 Add KTown to your phone
-    </p>
+            <div className="flex-1">
+              <p className="text-sm font-black text-[#172033]">
+                📱 Add KTown to your phone
+              </p>
 
-    <p className="mt-1 text-xs font-semibold text-[#6B6257]">
-      Quick access to local Korean food, events, and deals.
-    </p>
-  </div>
+              <p className="mt-1 text-xs font-semibold text-[#6B6257]">
+                Quick access to local Korean food, events, and deals.
+              </p>
+            </div>
 
-  <div className="flex items-center gap-2">
-    <button
-      onClick={installApp}
-      className="shrink-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
-    >
-      Add
-    </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={installApp}
+                className="shrink-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
+              >
+                Add
+              </button>
 
-    <button
-      onClick={() => setShowBanner(false)}
-      className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-black text-[#6B6257] hover:bg-black/5"
-      aria-label="Close"
-    >
-      ×
-    </button>
-  </div>
-</div>
+              <button
+                onClick={closeBanner}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-black text-[#6B6257] hover:bg-black/5"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <button
-  onClick={() => setShowBanner(true)}
-  className="
-    fixed
-    right-0
-    top-1/2
-    -translate-y-1/2
-    z-[2000]
-    h-20
-    w-4
-    rounded-l-full
-    bg-[#A8A8A8]
-    shadow-md
-  "
->
-  <span className="block text-center text-[10px] text-white">
-    ≡
-  </span>
-</button>
+          onClick={openBanner}
+          className="fixed right-0 top-1/2 z-[2000] h-20 w-4 -translate-y-1/2 rounded-l-full bg-[#A8A8A8] shadow-md"
+          aria-label="Open install panel"
+        >
+          <span className="block text-center text-[10px] text-white">≡</span>
+        </button>
       )}
 
       {showIOSGuide && (
