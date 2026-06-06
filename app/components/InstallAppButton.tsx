@@ -125,17 +125,21 @@ export default function InstallAppButton() {
         <button
   onClick={() => setShowBanner(true)}
   className="
-    fixed bottom-20 left-1/2 z-[2000]
-    -translate-x-1/2
-    rounded-full
-    bg-gray-300/80
-    px-3 py-1
-    text-[10px]
-    font-semibold
-    text-gray-700
+    fixed
+    right-0
+    top-1/2
+    -translate-y-1/2
+    z-[2000]
+    h-20
+    w-4
+    rounded-l-full
+    bg-[#A8A8A8]
+    shadow-md
   "
 >
-  Add to Home
+  <span className="block text-center text-[10px] text-white">
+    ≡
+  </span>
 </button>
       )}
 
