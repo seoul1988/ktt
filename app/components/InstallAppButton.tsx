@@ -118,11 +118,11 @@ export default function InstallAppButton() {
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <p className="text-sm font-black text-[#172033]">
-                📱 Add KTown to your phone
+                📱 Add to Home screen”
               </p>
 
               <p className="mt-1 text-xs font-semibold text-[#6B6257]">
-                Quick access to local Korean food, events, and deals.
+                Quick access to local Korean food.
               </p>
             </div>
 

@@ -1,168 +1,534 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
-import BottomNav from "../components/BottomNav";
+import { Autocomplete, useLoadScript } from "@react-google-maps/api";
+import { supabase } from "../../../lib/supabase";
+import BottomNav from "../../components/BottomNav";
 
-type EventItem = {
-  id: string;
-  title: string | null;
-  description: string | null;
-  image_url: string | null;
-  event_date: string | null;
-  category: string | null;
-  address: string | null;
-};
+const libraries: "places"[] = ["places"];
 
-export default function EventsPage() {
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+export default function NewEventPage() {
+  const router = useRouter();
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
-  useEffect(() => {
-    loadPage();
-  }, []);
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
 
-  async function loadPage() {
-    setLoading(true);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [location, setLocation] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
 
-    if (user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role,is_admin")
-        .eq("id", user.id)
-        .maybeSingle();
+  const [saving, setSaving] = useState(false);
 
-      setIsAdmin(profile?.role === "admin" || profile?.is_admin === true);
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+
+  // This page only decides whether the event will collect attendee registrations.
+  // The actual attendee input form should be shown on the event detail page when this is true.
+  const [collectAttendees, setCollectAttendees] = useState(false);
+
+  function onPlaceChanged() {
+    const place = autocompleteRef.current?.getPlace();
+    if (!place) return;
+
+    setLocation(place.formatted_address || place.name || "");
+
+    const lat = place.geometry?.location?.lat();
+    const lng = place.geometry?.location?.lng();
+
+    if (lat && lng) {
+      setLatitude(lat);
+      setLongitude(lng);
     }
-
-    const { data, error } = await supabase
-      .from("community_events")
-      .select("*")
-      .order("event_date", { ascending: true });
-
-    if (!error) {
-      setEvents((data || []) as EventItem[]);
-    }
-
-    setLoading(false);
   }
 
-  async function deleteEvent(id: string) {
-    if (!confirm("이 이벤트를 삭제할까요?")) return;
+  function handleImage(file: File | null) {
+    if (!file) return;
 
-    const { error } = await supabase
-      .from("community_events")
-      .delete()
-      .eq("id", id);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }
 
-    if (error) {
-      alert("삭제 실패: " + error.message);
+  function handleVideo(file: File | null) {
+    if (!file) return;
+
+    const maxSize = 50 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      alert("The video file is too large. Please upload a file under 50MB.");
       return;
     }
 
-    loadPage();
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
   }
 
-  if (loading) {
-    return <div className="p-6">불러오는 중...</div>;
+  async function uploadFile(file: File, bucket: string, folder: string) {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
+    const fileName = `${folder}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type,
+      });
+
+    if (error) {
+      console.error("UPLOAD ERROR:", error);
+      throw new Error(`${bucket} upload failed: ${error.message}`);
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(data.path);
+
+    return publicData.publicUrl;
+  }
+
+  useEffect(() => {
+    async function loadProfile() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      setContactEmail(user.email || "");
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, phone")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profile) {
+        setContactName(profile.name || "");
+        setContactPhone(profile.phone || "");
+      }
+    }
+
+    loadProfile();
+  }, []);
+
+  async function submitEvent() {
+    if (!title.trim()) {
+      alert("Please enter an event title.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        alert("Please log in first.");
+        setSaving(false);
+        return;
+      }
+
+      let businessId: number | null = null;
+
+      const { data: ownerRow } = await supabase
+        .from("business_owners")
+        .select("business_id")
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .maybeSingle();
+
+      if (ownerRow?.business_id) {
+        businessId = ownerRow.business_id;
+      }
+
+      let uploadedImageUrl = "";
+      let uploadedVideoUrl = "";
+
+      if (imageFile) {
+        uploadedImageUrl = await uploadFile(
+          imageFile,
+          "event-images",
+          "images"
+        );
+      }
+
+      if (videoFile) {
+        uploadedVideoUrl = await uploadFile(
+          videoFile,
+          "event-videos",
+          "videos"
+        );
+      }
+
+      const { data: insertedEvent, error } = await supabase
+        .from("event_requests")
+        .insert({
+          owner_id: user.id,
+          business_id: businessId,
+
+          title: title.trim(),
+          description: description.trim(),
+
+          image_url: uploadedImageUrl || null,
+          video_url: uploadedVideoUrl || null,
+          external_video_url: videoUrl.trim() || null,
+
+          event_date: eventDate || null,
+          location: location.trim(),
+
+          latitude,
+          longitude,
+
+          contact_name: contactName.trim() || null,
+          contact_email: contactEmail.trim() || null,
+          contact_phone: contactPhone.trim() || null,
+
+          collect_attendees: collectAttendees,
+
+          status: "pending",
+        })
+        .select("id, title")
+        .single();
+
+      if (error) {
+        alert("Event submission failed: " + error.message);
+        setSaving(false);
+        return;
+      }
+
+      try {
+        const pushRes = await fetch("/api/push/admin-event-request", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            eventId: insertedEvent.id,
+            title: insertedEvent.title,
+          }),
+        });
+
+        const pushData = await pushRes.json();
+
+        console.log("ADMIN PUSH RESULT:", pushData);
+
+        if (!pushRes.ok) {
+          alert(
+            "The event was submitted, but the push notification failed:\n" +
+              (pushData.error || "Unknown Error")
+          );
+        } else {
+          console.log(
+            `Push Success - Sent: ${pushData.sent}, Failed: ${pushData.failed}`
+          );
+        }
+      } catch (pushError: any) {
+        console.error("Push notification failed:", pushError);
+
+        alert(
+          "The event was submitted, but the push notification request failed:\n" +
+            (pushError?.message || "Unknown Error")
+        );
+      }
+
+      alert("Your event has been submitted and will appear after admin approval.");
+      router.push("/");
+    } catch (err: any) {
+      alert("Save failed: " + err.message);
+      setSaving(false);
+    }
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28 text-[#172033]">
+    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
       <div className="mx-auto max-w-md">
-        <div className="relative mb-4 flex items-center justify-center">
+        <div className="relative mb-5 flex items-center justify-center">
           <Link
             href="/"
-            className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black shadow"
+            className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#C46A2B] shadow"
           >
             ←
           </Link>
 
-          <h1 className="text-2xl font-black">Events</h1>
+          <h1 className="text-2xl font-black text-[#C46A2B]">
+            Create Event
+          </h1>
 
-          {isAdmin && (
-            <Link
-              href="/admin/community/events"
-              className="absolute right-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
-            >
-              관리
-            </Link>
-          )}
+          <details className="absolute right-0">
+            <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#C46A2B] shadow">
+              ⋯
+            </summary>
+
+            <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
+              <Link href="/profile" className="block px-4 py-3 hover:bg-gray-100">
+                Edit Profile
+              </Link>
+
+              <Link href="/my-coupons" className="block px-4 py-3 hover:bg-gray-100">
+                My Coupons
+              </Link>
+
+              <Link href="/owner" className="block px-4 py-3 hover:bg-gray-100">
+                My Business
+              </Link>
+
+              <Link href="/business/new" className="block px-4 py-3 hover:bg-gray-100">
+                Register Business
+              </Link>
+
+              <Link href="/events/new" className="block px-4 py-3 hover:bg-gray-100">
+                Create Event
+              </Link>
+
+              <Link href="/deals/new" className="block px-4 py-3 hover:bg-gray-100">
+                Create Deal
+              </Link>
+
+              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-gray-100">
+                Register Coupon
+              </Link>
+
+              <button
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = "/login";
+                }}
+                className="block w-full px-4 py-3 text-left text-red-600 hover:bg-gray-100"
+              >
+                Logout
+              </button>
+            </div>
+          </details>
         </div>
 
-        {events.length === 0 ? (
-          <div className="rounded-3xl bg-white p-8 text-center shadow">
-            <p className="text-sm font-bold text-gray-500">
-              등록된 이벤트가 없습니다.
+        <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
+          <input
+            type="text"
+            placeholder="Event Title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+          />
+
+          <input
+            type="date"
+            value={eventDate}
+            onChange={(e) => setEventDate(e.target.value)}
+            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+          />
+
+          {isLoaded ? (
+            <Autocomplete
+              onLoad={(autocomplete) => {
+                autocompleteRef.current = autocomplete;
+              }}
+              onPlaceChanged={onPlaceChanged}
+            >
+              <input
+                type="text"
+                placeholder="Location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+              />
+            </Autocomplete>
+          ) : (
+            <input
+              type="text"
+              placeholder="Location"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="number"
+              value={latitude ?? ""}
+              onChange={(e) => setLatitude(Number(e.target.value))}
+              placeholder="Latitude"
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+
+            <input
+              type="number"
+              value={longitude ?? ""}
+              onChange={(e) => setLongitude(Number(e.target.value))}
+              placeholder="Longitude"
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
+
+          <div className="rounded-2xl border bg-gray-50 p-4">
+            <p className="mb-3 font-black text-[#172033]">
+              Attendee Registration
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setCollectAttendees(true)}
+                className={`rounded-2xl px-3 py-3 text-sm font-black shadow-sm transition ${
+                  collectAttendees
+                    ? "bg-[#C46A2B] text-white"
+                    : "border bg-white text-[#172033]"
+                }`}
+              >
+                Collect Attendees
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCollectAttendees(false)}
+                className={`rounded-2xl px-3 py-3 text-sm font-black shadow-sm transition ${
+                  !collectAttendees
+                    ? "bg-[#C46A2B] text-white"
+                    : "border bg-white text-[#172033]"
+                }`}
+              >
+                No Registration
+              </button>
+            </div>
+
+            <p className="mt-3 text-xs font-bold text-gray-500">
+              Choose whether this event should collect attendee registrations on the event detail page.
             </p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {events.map((event) => (
-              <div
-                key={event.id}
-                className="overflow-hidden rounded-3xl bg-white shadow"
-              >
-                <img
-                  src={event.image_url || "/event.png"}
-                  alt={event.title || "Event"}
-                  className="h-44 w-full object-cover"
-                />
 
-                <div className="p-5">
-                  <p className="text-sm font-black text-[#C4483A]">
-                    {event.event_date || "Coming Soon"}
-                  </p>
+          <div className="rounded-2xl border bg-gray-50 p-4">
+            <p className="mb-3 font-black">Contact Information</p>
 
-                  <h2 className="mt-2 text-xl font-black">
-                    {event.title}
-                  </h2>
+            <input
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Contact Name"
+              className="mb-2 w-full rounded-xl border px-4 py-3"
+            />
 
-                  {event.category && (
-                    <p className="mt-1 text-xs font-bold text-gray-500">
-                      {event.category}
-                    </p>
-                  )}
+            <input
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="Email"
+              className="mb-2 w-full rounded-xl border px-4 py-3"
+            />
 
-                  {event.address && (
-                    <p className="mt-1 text-xs font-bold text-gray-500">
-                      {event.address}
-                    </p>
-                  )}
-
-                  <p className="mt-2 text-sm leading-6 text-gray-600">
-                    {event.description}
-                  </p>
-
-                  {isAdmin && (
-                    <div className="mt-4 grid grid-cols-2 gap-2 text-sm font-black">
-                      <Link
-                        href={`/admin/community/events/${event.id}/edit`}
-                        className="rounded-full bg-blue-100 py-2 text-center text-blue-700"
-                      >
-                        수정
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteEvent(event.id)}
-                        className="rounded-full bg-red-100 py-2 text-red-600"
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+            <input
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              placeholder="Phone"
+              className="w-full rounded-xl border px-4 py-3"
+            />
           </div>
-        )}
+
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#C46A2B]">
+                Event Image
+              </span>
+
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
+                Upload
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImage(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {imagePreview && (
+              <img
+                src={imagePreview}
+                alt="Preview"
+                className="mt-3 h-40 w-full rounded-2xl object-cover"
+              />
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#C46A2B]">
+                Event Video
+              </span>
+
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
+                Upload
+
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => handleVideo(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {videoFile && (
+              <p className="mt-2 text-xs font-bold text-gray-500">
+                {videoFile.name}
+              </p>
+            )}
+
+            {videoPreview && (
+              <video
+                src={videoPreview}
+                controls
+                className="mt-3 h-48 w-full rounded-2xl object-cover"
+              />
+            )}
+          </div>
+
+          <input
+            type="text"
+            placeholder="Video Link URL"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+          />
+
+          <textarea
+            placeholder="Event Description"
+            rows={6}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+          />
+
+          <button
+            type="button"
+            disabled={saving}
+            onClick={submitEvent}
+            className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
+          >
+            {saving ? "Submitting..." : "Submit Event"}
+          </button>
+
+          <p className="text-center text-xs font-bold text-gray-500">
+            After submission, an admin will approve it as a Business Event or Community Event.
+          </p>
+        </div>
       </div>
 
       <BottomNav />

@@ -260,17 +260,17 @@ useEffect(() => {
         <div className="relative mb-5 flex items-center justify-center">
           <Link
             href="/"
-            className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#172033] shadow"
+            className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#C46A2B] shadow"
           >
             ←
           </Link>
 
-          <h1 className="text-2xl font-black text-[#172033]">
+          <h1 className="text-2xl font-black text-[#C46A2B]">
             Create Event
           </h1>
 
           <details className="absolute right-0">
-            <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#172033] shadow">
+            <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#C46A2B] shadow">
               ⋯
             </summary>
 
@@ -409,11 +409,11 @@ useEffect(() => {
 
           <div>
             <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="text-sm font-black text-[#172033]">
+              <span className="text-sm font-black text-[#C46A2B]">
                 Event Image
               </span>
 
-              <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
                 파일 첨부
 
                 <input
@@ -436,11 +436,11 @@ useEffect(() => {
 
           <div>
             <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <span className="text-sm font-black text-[#172033]">
+              <span className="text-sm font-black text-[#C46A2B]">
                 Event Video
               </span>
 
-              <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
                 첨부
 
                 <input
@@ -487,7 +487,7 @@ useEffect(() => {
             type="button"
             disabled={saving}
             onClick={submitEvent}
-            className="w-full rounded-full bg-[#172033] py-4 text-sm font-black text-white disabled:bg-gray-400"
+            className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
           >
             {saving ? "등록 중..." : "이벤트 등록"}
           </button>
