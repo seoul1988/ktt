@@ -84,17 +84,26 @@ export default async function AdsPage() {
                 }`}
               >
                 <div className="relative h-32 bg-gray-200">
-                  {ad.images?.[0] ? (
-                    <img
-                      src={ad.images[0]}
-                      alt={ad.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
-                      이미지 없음
-                    </div>
-                  )}
+                  {ad.video_url ? (
+				  <video
+					src={ad.video_url}
+					controls
+					muted
+					playsInline
+					preload="metadata"
+					className="h-full w-full object-cover"
+				  />
+				) : ad.images?.[0] ? (
+				  <img
+					src={ad.images[0]}
+					alt={ad.title}
+					className="h-full w-full object-cover"
+				  />
+				) : (
+				  <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
+					이미지 없음
+				  </div>
+				)}
 
                   {Array.isArray(ad.images) && ad.images.length > 1 && (
                     <div className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">

@@ -21,6 +21,35 @@ export default function MyAdsPage() {
   const [ads, setAds] = useState<AdItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  function getStoragePathFromPublicUrl(url: string) {
+    try {
+      const decodedUrl = decodeURIComponent(url);
+      const marker = "/storage/v1/object/public/ads/";
+      const index = decodedUrl.indexOf(marker);
+
+      if (index === -1) return null;
+
+      return decodedUrl.substring(index + marker.length);
+    } catch {
+      return null;
+    }
+  }
+
+  async function deleteFilesFromBucket(urls: string[]) {
+    const paths = urls
+      .map((url) => getStoragePathFromPublicUrl(url))
+      .filter((path): path is string => Boolean(path));
+
+    if (paths.length === 0) return;
+
+    const { error } = await supabase.storage.from("ads").remove(paths);
+
+    if (error) {
+      alert("버킷 파일 삭제 실패: " + error.message);
+      throw error;
+    }
+  }
+
   async function loadAds() {
     setLoading(true);
 
@@ -65,17 +94,30 @@ export default function MyAdsPage() {
     loadAds();
   }
 
-  async function deleteAd(id: number) {
-    if (!confirm("이 광고를 완전히 삭제하시겠습니까?")) return;
-
-    const { error } = await supabase.from("ads").delete().eq("id", id);
-
-    if (error) {
-      alert(error.message);
+  async function deleteAd(ad: AdItem) {
+    if (!confirm("이 광고를 완전히 삭제하시겠습니까? 이미지와 동영상도 삭제됩니다.")) {
       return;
     }
 
-    loadAds();
+    try {
+      const fileUrls = [
+        ...(Array.isArray(ad.images) ? ad.images : []),
+        ...(ad.video_url ? [ad.video_url] : []),
+      ];
+
+      await deleteFilesFromBucket(fileUrls);
+
+      const { error } = await supabase.from("ads").delete().eq("id", ad.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      loadAds();
+    } catch (err: any) {
+      alert(err.message || "삭제 실패");
+    }
   }
 
   useEffect(() => {
@@ -156,7 +198,7 @@ export default function MyAdsPage() {
 
                   <button
                     type="button"
-                    onClick={() => deleteAd(ad.id)}
+                    onClick={() => deleteAd(ad)}
                     className="rounded-2xl bg-red-600 py-2 text-xs font-black text-white"
                   >
                     삭제
