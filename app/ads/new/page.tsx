@@ -142,25 +142,47 @@ export default function NewAdPage() {
           />
 
           <div>
-            <p className="mb-2 text-sm font-black">이미지</p>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => setImageFiles(e.target.files)}
-              className="w-full text-sm"
-            />
-          </div>
+  <p className="mb-2 text-sm font-black">이미지</p>
 
-          <div>
-            <p className="mb-2 text-sm font-black">동영상</p>
-            <input
-              type="file"
-              accept="video/*"
-              onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-              className="w-full text-sm"
-            />
-          </div>
+  <div className="flex items-center gap-2">
+    <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
+      {imageFiles && imageFiles.length > 0
+        ? `${imageFiles.length}개 선택됨`
+        : "선택된 이미지 없음"}
+    </div>
+
+    <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+      첨부
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(e) => setImageFiles(e.target.files)}
+        className="hidden"
+      />
+    </label>
+  </div>
+</div>
+
+<div>
+  <p className="mb-2 text-sm font-black">동영상</p>
+
+  <div className="flex items-center gap-2">
+    <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
+      {videoFile ? videoFile.name : "선택된 동영상 없음"}
+    </div>
+
+    <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+      첨부
+      <input
+        type="file"
+        accept="video/*"
+        onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+        className="hidden"
+      />
+    </label>
+  </div>
+</div>
 
           <button
             type="submit"
