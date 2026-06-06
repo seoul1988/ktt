@@ -10,6 +10,15 @@ import AttendeeRegistrationForm from "./AttendeeRegistrationForm";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type EventAttendee = {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  companions: number | null;
+  total_count: number | null;
+  created_at: string | null;
+};
+
 function getStoragePathFromPublicUrl(url: string | null) {
   if (!url) return null;
 
@@ -139,6 +148,21 @@ export default async function BusinessEventDetailPage({
   const isAdmin = profile?.role === "admin";
   const canManage = isOwner || isAdmin;
 
+  const { data: attendees } =
+    event.collect_attendees && canManage
+      ? await supabase
+          .from("event_attendees")
+          .select("id, name, phone, companions, total_count, created_at")
+          .eq("event_id", event.id)
+          .order("created_at", { ascending: false })
+      : { data: [] as EventAttendee[] };
+
+  const attendeeRows = (attendees || []) as EventAttendee[];
+  const totalPeople = attendeeRows.reduce(
+    (sum, row) => sum + (Number(row.total_count) || 1),
+    0
+  );
+
   const images = event.image_url ? [event.image_url] : [];
   const videos = event.video_url ? [event.video_url] : [];
 
@@ -249,6 +273,73 @@ export default async function BusinessEventDetailPage({
               <p className="mt-4 text-sm font-bold">📍 {event.location}</p>
             )}
           </div>
+
+          {event.collect_attendees && canManage && (
+            <div className="mt-5 rounded-3xl bg-white p-5 shadow-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-black">Attendee List</h2>
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    Visible only to the event owner and admins.
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-[#F8F3EC] px-4 py-3 text-center">
+                  <p className="text-2xl font-black text-[#C46A2B]">
+                    {totalPeople}
+                  </p>
+                  <p className="text-[10px] font-black text-gray-500">
+                    PEOPLE
+                  </p>
+                </div>
+              </div>
+
+              {attendeeRows.length === 0 ? (
+                <p className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm font-bold text-gray-500">
+                  No attendees yet.
+                </p>
+              ) : (
+                <div className="mt-5 space-y-3">
+                  {attendeeRows.map((attendee, index) => (
+                    <div
+                      key={attendee.id}
+                      className="rounded-2xl border bg-gray-50 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black">
+                            {index + 1}. {attendee.name || "No Name"}
+                          </p>
+
+                          <a
+                            href={attendee.phone ? `tel:${attendee.phone}` : "#"}
+                            className="mt-1 block text-sm font-bold text-[#C46A2B]"
+                          >
+                            {attendee.phone || "No Phone"}
+                          </a>
+                        </div>
+
+                        <div className="text-right text-xs font-black text-gray-500">
+                          <p>
+                            Guests: {Number(attendee.companions) || 0}
+                          </p>
+                          <p>
+                            Total: {Number(attendee.total_count) || 1}
+                          </p>
+                        </div>
+                      </div>
+
+                      {attendee.created_at && (
+                        <p className="mt-2 text-[11px] font-bold text-gray-400">
+                          {new Date(attendee.created_at).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
