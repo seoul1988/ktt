@@ -149,20 +149,18 @@ export default async function BusinessEventDetailPage({
   const canManage = isOwner || isAdmin;
 
   const {
-  data: attendees,
-  error: attendeesError,
-} = event.collect_attendees
-  ? await supabase
-      .from("event_attendees")
-      .select(
-        "id, name, phone, companions, total_count, created_at"
-      )
-      .eq("event_id", event.id)
-      .order("created_at", { ascending: false })
-  : {
-      data: [] as EventAttendee[],
-      error: null,
-    };
+    data: attendees,
+    error: attendeesError,
+  } = event.collect_attendees
+    ? await supabase
+        .from("event_attendees")
+        .select("id, name, phone, companions, total_count, created_at")
+        .eq("event_id", event.id)
+        .order("created_at", { ascending: false })
+    : {
+        data: [] as EventAttendee[],
+        error: null,
+      };
 
   const attendeeRows = (attendees || []) as EventAttendee[];
   const totalPeople = attendeeRows.reduce(
@@ -229,6 +227,12 @@ export default async function BusinessEventDetailPage({
               />
             )}
 
+            <p className="mt-3 rounded-xl bg-yellow-50 p-3 text-xs font-bold text-yellow-800">
+              DEBUG — collect:{String(event.collect_attendees)} / admin:
+              {String(isAdmin)} / owner:{String(isOwner)} / manage:
+              {String(canManage)} / attendees:{attendeeRows.length}
+            </p>
+
             <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
               {event.description || "No description"}
             </p>
@@ -281,22 +285,16 @@ export default async function BusinessEventDetailPage({
             )}
           </div>
 
-          {event.collect_attendees && canManage && (
+          {event.collect_attendees && (
             <div className="mt-5 rounded-3xl bg-white p-5 shadow-xl">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-black">Attendee List</h2>
                   <p className="mt-1 text-xs font-bold text-gray-500">
-                    Visible only to the event owner and admins.
+                    This area is for testing. After it works, change the condition
+                    back to owner/admin only.
                   </p>
                 </div>
-				
-				{attendeesError && (
-  <p className="mt-2 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
-    Attendee load error: {attendeesError.message}
-  </p>
-)}
-				
 
                 <div className="rounded-2xl bg-[#F8F3EC] px-4 py-3 text-center">
                   <p className="text-2xl font-black text-[#C46A2B]">
@@ -308,9 +306,22 @@ export default async function BusinessEventDetailPage({
                 </div>
               </div>
 
+              {attendeesError && (
+                <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
+                  Attendee load error: {attendeesError.message}
+                </p>
+              )}
+
+              {!attendeesError && !canManage && (
+                <p className="mt-4 rounded-xl bg-orange-50 p-3 text-xs font-bold text-orange-700">
+                  You are logged in, but this page does not recognize you as the
+                  event owner or admin. Check profiles.role and owner_id.
+                </p>
+              )}
+
               {attendeeRows.length === 0 ? (
                 <p className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm font-bold text-gray-500">
-                  No attendees yet.
+                  No attendees found for this event id.
                 </p>
               ) : (
                 <div className="mt-5 space-y-3">
@@ -334,12 +345,8 @@ export default async function BusinessEventDetailPage({
                         </div>
 
                         <div className="text-right text-xs font-black text-gray-500">
-                          <p>
-                            Guests: {Number(attendee.companions) || 0}
-                          </p>
-                          <p>
-                            Total: {Number(attendee.total_count) || 1}
-                          </p>
+                          <p>Guests: {Number(attendee.companions) || 0}</p>
+                          <p>Total: {Number(attendee.total_count) || 1}</p>
                         </div>
                       </div>
 
