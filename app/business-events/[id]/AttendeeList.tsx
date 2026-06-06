@@ -27,6 +27,7 @@ export default function AttendeeList({
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError("");
 
       const {
         data: { user },
@@ -69,6 +70,142 @@ export default function AttendeeList({
     load();
   }, [eventId, ownerId]);
 
+  function safeFileName(value: string) {
+    return value
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .replace(/\s+/g, "-")
+      .slice(0, 80);
+  }
+
+  function downloadBlob(content: BlobPart, fileName: string, type: string) {
+    const blob = new Blob([content], { type });
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }
+
+  function exportToExcelCsv() {
+    const header = [
+      "No",
+      "Name",
+      "Phone",
+      "Guests",
+      "Total People",
+      "Registered At",
+    ];
+
+    const csvRows = rows.map((row, index) => [
+      index + 1,
+      row.name || "",
+      row.phone || "",
+      Number(row.companions) || 0,
+      Number(row.total_count) || 1,
+      row.created_at ? new Date(row.created_at).toLocaleString() : "",
+    ]);
+
+    const csv = [header, ...csvRows]
+      .map((line) =>
+        line
+          .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+
+    downloadBlob(
+      "\ufeff" + csv,
+      `attendees-${safeFileName(eventId)}.csv`,
+      "text/csv;charset=utf-8;"
+    );
+  }
+
+  function exportToWordDoc() {
+    const totalPeople = rows.reduce(
+      (sum, row) => sum + (Number(row.total_count) || 1),
+      0
+    );
+
+    const tableRows = rows
+      .map(
+        (row, index) => `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${row.name || ""}</td>
+            <td>${row.phone || ""}</td>
+            <td>${Number(row.companions) || 0}</td>
+            <td>${Number(row.total_count) || 1}</td>
+            <td>${
+              row.created_at ? new Date(row.created_at).toLocaleString() : ""
+            }</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Attendee List</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 24px;
+            }
+            h1 {
+              font-size: 22px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 16px;
+            }
+            th, td {
+              border: 1px solid #999;
+              padding: 8px;
+              font-size: 12px;
+              text-align: left;
+            }
+            th {
+              background: #f0f0f0;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Attendee List</h1>
+          <p><strong>Total People:</strong> ${totalPeople}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Guests</th>
+                <th>Total People</th>
+                <th>Registered At</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    downloadBlob(
+      html,
+      `attendees-${safeFileName(eventId)}.doc`,
+      "application/msword;charset=utf-8;"
+    );
+  }
+
   if (loading) return null;
   if (!canView) return null;
 
@@ -91,6 +228,26 @@ export default function AttendeeList({
           <p className="text-2xl font-black text-[#C46A2B]">{totalPeople}</p>
           <p className="text-[10px] font-black text-gray-500">PEOPLE</p>
         </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={exportToExcelCsv}
+          disabled={rows.length === 0}
+          className="rounded-full bg-[#172033] px-4 py-3 text-xs font-black text-white disabled:bg-gray-300"
+        >
+          Download Excel
+        </button>
+
+        <button
+          type="button"
+          onClick={exportToWordDoc}
+          disabled={rows.length === 0}
+          className="rounded-full bg-[#C46A2B] px-4 py-3 text-xs font-black text-white disabled:bg-gray-300"
+        >
+          Download Word
+        </button>
       </div>
 
       {error && (
@@ -126,6 +283,12 @@ export default function AttendeeList({
                   <p>Total: {Number(attendee.total_count) || 1}</p>
                 </div>
               </div>
+
+              {attendee.created_at && (
+                <p className="mt-2 text-[11px] font-bold text-gray-400">
+                  {new Date(attendee.created_at).toLocaleString()}
+                </p>
+              )}
             </div>
           ))}
         </div>
