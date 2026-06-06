@@ -1,0 +1,178 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../../lib/supabase";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
+
+export default function NewAdPage() {
+  const router = useRouter();
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [location, setLocation] = useState("");
+  const [phone, setPhone] = useState("");
+  const [imageFiles, setImageFiles] = useState<FileList | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function uploadImages(userId: string) {
+    if (!imageFiles || imageFiles.length === 0) return [];
+
+    const urls: string[] = [];
+
+    for (const file of Array.from(imageFiles)) {
+      const ext = file.name.split(".").pop();
+      const path = `${userId}/images/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${ext}`;
+
+      const { error } = await supabase.storage.from("ads").upload(path, file);
+
+      if (error) throw error;
+
+      const { data } = supabase.storage.from("ads").getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+
+    return urls;
+  }
+
+  async function uploadVideo(userId: string) {
+    if (!videoFile) return null;
+
+    const ext = videoFile.name.split(".").pop();
+    const path = `${userId}/videos/${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage.from("ads").upload(path, videoFile);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from("ads").getPublicUrl(path);
+    return data.publicUrl;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!title.trim()) {
+      alert("제목을 입력하세요.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        alert("로그인이 필요합니다.");
+        router.push("/login");
+        return;
+      }
+
+      const imageUrls = await uploadImages(user.id);
+      const videoUrl = await uploadVideo(user.id);
+
+      const { error } = await supabase.from("ads").insert({
+        owner_id: user.id,
+        title,
+        description,
+        category,
+        location,
+        phone,
+        images: imageUrls,
+        video_url: videoUrl,
+        status: "active",
+      });
+
+      if (error) throw error;
+
+      router.push("/ads");
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message || "광고 등록 실패");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
+      <div className="mx-auto max-w-md">
+        <h1 className="mb-4 text-2xl font-black">광고 등록</h1>
+
+        <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl bg-white p-5 shadow">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="광고 제목"
+            className="w-full rounded-2xl border p-3 text-sm font-bold"
+          />
+
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="광고 설명"
+            className="min-h-28 w-full rounded-2xl border p-3 text-sm"
+          />
+
+          <input
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="카테고리 예: 식당, 청소, 구인, 부동산"
+            className="w-full rounded-2xl border p-3 text-sm"
+          />
+
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="지역 예: Cary, Raleigh"
+            className="w-full rounded-2xl border p-3 text-sm"
+          />
+
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="전화번호"
+            className="w-full rounded-2xl border p-3 text-sm"
+          />
+
+          <div>
+            <p className="mb-2 text-sm font-black">이미지</p>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setImageFiles(e.target.files)}
+              className="w-full text-sm"
+            />
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-black">동영상</p>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+              className="w-full text-sm"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white disabled:opacity-50"
+          >
+            {saving ? "등록 중..." : "광고 등록"}
+          </button>
+        </form>
+      </div>
+
+      <CommunityBottomNav activeNav="ads" />
+    </main>
+  );
+}

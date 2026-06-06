@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type CommunityBottomNavProps = {
-  activeNav?: "home" | "map" | "market" | "community" | "admin";
+  activeNav?: "home" | "map" | "market" | "ads" | "community" | "admin";
 };
 
 export default function CommunityBottomNav({
@@ -39,7 +39,7 @@ export default function CommunityBottomNav({
   }, []);
 
   return (
-    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[95%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl">
+    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl">
       <Link
         href="/"
         className={`flex flex-col items-center ${
@@ -65,6 +65,15 @@ export default function CommunityBottomNav({
         }`}
       >
         <span>MARKET</span>
+      </Link>
+
+      <Link
+        href="/ads"
+        className={`flex flex-col items-center ${
+          activeNav === "ads" ? activeClass : normalClass
+        }`}
+      >
+        <span>ADS</span>
       </Link>
 
       <Link
