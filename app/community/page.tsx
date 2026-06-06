@@ -12,11 +12,34 @@ export default async function CommunityPage() {
     .order("event_date", { ascending: true })
     .limit(6);
 
-  const { data: newBusinesses } = await supabase
-    .from("businesses")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(6);
+  const { data: allBusinesses } = await supabase
+  .from("businesses")
+  .select("*")
+  .order("created_at", { ascending: false });
+
+const { data: categories } = await supabase
+  .from("categories")
+  .select("name, show_on_community_map");
+
+const communityCategoryNames = new Set(
+  (categories || [])
+    .filter((cat) => cat.show_on_community_map === true)
+    .map((cat) => String(cat.name).trim().toLowerCase())
+);
+
+const newBusinesses =
+  allBusinesses
+    ?.filter((biz) => {
+      const bizCategories = String(biz.category || "")
+        .split(",")
+        .map((cat) => cat.trim().toLowerCase())
+        .filter(Boolean);
+
+      return bizCategories.some((cat) =>
+        communityCategoryNames.has(cat)
+      );
+    })
+    .slice(0, 6) || [];
 
   const { data: featured } = await supabase
     .from("featured_businesses")
