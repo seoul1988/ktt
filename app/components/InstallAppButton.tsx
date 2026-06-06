@@ -90,7 +90,7 @@ export default function InstallAppButton() {
         <div
           onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
           onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0].clientX)}
-          className="fixed left-6 right-6 top-[82px] z-[2000] rounded-3xl bg-[#E8DED1] p-4 shadow-2xl transition-all"
+          className="fixed left-6 right-6 top-[82px] z-[2000] rounded-3xl bg-[#EFE3D3] p-4 shadow-2xl transition-all"
         >
           <div className="flex items-start justify-between gap-3">
   <div className="flex-1">
