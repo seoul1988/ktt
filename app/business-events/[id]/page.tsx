@@ -205,7 +205,7 @@ export default async function BusinessEventDetailPage({
                 {event.title}
               </h1>
 
-              {event.collect_attendees && (
+              {event.collect_attendees && canManage && (
                 <AttendeeRegistrationForm
                   eventId={event.id}
                   eventTitle={event.title || "Business Event"}
