@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 
 type Props = {
@@ -18,51 +18,60 @@ export default function AttendeeRegistrationForm({
 }: Props) {
   const storageKey = `attendee-form-open-${eventId}`;
 
-  const [open, setOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem(storageKey) === "true";
-  });
-
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [companions, setCompanions] = useState("0");
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
 
+  useEffect(() => {
+    const saved = window.sessionStorage.getItem(storageKey);
+    setOpen(saved === "true");
+
+    function handleToggle(event: Event) {
+      const customEvent = event as CustomEvent<{
+        eventId: string;
+        open: boolean;
+      }>;
+
+      if (customEvent.detail?.eventId === eventId) {
+        setOpen(customEvent.detail.open);
+      }
+    }
+
+    window.addEventListener("attendee-form-toggle", handleToggle);
+
+    return () => {
+      window.removeEventListener("attendee-form-toggle", handleToggle);
+    };
+  }, [eventId, storageKey]);
+
   function toggleOpen() {
     const next = !open;
+
     setOpen(next);
+    window.sessionStorage.setItem(storageKey, String(next));
 
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem(storageKey, String(next));
-      window.dispatchEvent(
-        new CustomEvent("attendee-form-toggle", {
-          detail: { eventId, open: next },
-        })
-      );
-    }
-  }
-
-  if (typeof window !== "undefined") {
-    window.onstorage = () => {
-      setOpen(window.sessionStorage.getItem(storageKey) === "true");
-    };
-
-    window.addEventListener("attendee-form-toggle", ((event: CustomEvent) => {
-      if (event.detail?.eventId === eventId) {
-        setOpen(event.detail.open);
-      }
-    }) as EventListener);
+    window.dispatchEvent(
+      new CustomEvent("attendee-form-toggle", {
+        detail: { eventId, open: next },
+      })
+    );
   }
 
   async function submitAttendance() {
-    if (!name.trim()) {
-      alert("Please enter your name.");
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+    const phoneNormalized = cleanPhone.replace(/\D/g, "");
+
+    if (cleanName.length < 2) {
+      alert("Please enter your full name.");
       return;
     }
 
-    if (!phone.trim()) {
-      alert("Please enter your phone number.");
+    if (phoneNormalized.length < 10) {
+      alert("Please enter a valid phone number.");
       return;
     }
 
@@ -74,13 +83,19 @@ export default function AttendeeRegistrationForm({
       event_id: eventId,
       event_type: "business",
       event_title: eventTitle,
-      name: name.trim(),
-      phone: phone.trim(),
+      name: cleanName,
+      phone: cleanPhone,
+      phone_normalized: phoneNormalized,
       companions: companionCount,
       total_count: companionCount + 1,
     });
 
     setSaving(false);
+
+    if (error?.code === "23505") {
+      alert("This phone number is already registered for this event.");
+      return;
+    }
 
     if (error) {
       alert("Registration failed: " + error.message);
@@ -88,6 +103,9 @@ export default function AttendeeRegistrationForm({
     }
 
     setDone(true);
+    setOpen(false);
+    window.sessionStorage.setItem(storageKey, "false");
+
     setName("");
     setPhone("");
     setCompanions("0");
@@ -105,7 +123,7 @@ export default function AttendeeRegistrationForm({
     );
   }
 
-  if (formOnly && !open) {
+  if (formOnly && !open && !done) {
     return null;
   }
 
@@ -129,7 +147,7 @@ export default function AttendeeRegistrationForm({
       </h2>
 
       <p className="mt-1 text-xs font-bold text-gray-500">
-        No login required. Please enter your name, phone number, and guests.
+        No login required. The same phone number can register only once.
       </p>
 
       <input
@@ -143,6 +161,7 @@ export default function AttendeeRegistrationForm({
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
         placeholder="Phone Number"
+        inputMode="tel"
         className="mt-3 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
       />
 
