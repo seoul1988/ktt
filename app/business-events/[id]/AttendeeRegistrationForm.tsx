@@ -10,54 +10,83 @@ type Props = {
   formOnly?: boolean;
 };
 
+type Mode = "attend" | "cancel" | null;
+
+type FoundRegistration = {
+  id: string;
+  name: string | null;
+  phone: string | null;
+  companions: number | null;
+  total_count: number | null;
+};
+
 export default function AttendeeRegistrationForm({
   eventId,
   eventTitle,
   buttonOnly = false,
   formOnly = false,
 }: Props) {
-  const storageKey = `attendee-form-open-${eventId}`;
+  const storageKey = `attendee-form-mode-${eventId}`;
 
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [companions, setCompanions] = useState("0");
   const [saving, setSaving] = useState(false);
-  const [done, setDone] = useState(false);
+  const [message, setMessage] = useState("");
+  const [foundRegistration, setFoundRegistration] =
+    useState<FoundRegistration | null>(null);
 
   useEffect(() => {
-    const saved = window.sessionStorage.getItem(storageKey);
-    setOpen(saved === "true");
+    const saved = window.sessionStorage.getItem(storageKey) as Mode;
 
-    function handleToggle(event: Event) {
+    if (saved === "attend" || saved === "cancel") {
+      setMode(saved);
+    }
+
+    function handleModeChange(event: Event) {
       const customEvent = event as CustomEvent<{
         eventId: string;
-        open: boolean;
+        mode: Mode;
       }>;
 
       if (customEvent.detail?.eventId === eventId) {
-        setOpen(customEvent.detail.open);
+        setMode(customEvent.detail.mode);
+        setMessage("");
+        setFoundRegistration(null);
       }
     }
 
-    window.addEventListener("attendee-form-toggle", handleToggle);
+    window.addEventListener("attendee-form-mode-change", handleModeChange);
 
     return () => {
-      window.removeEventListener("attendee-form-toggle", handleToggle);
+      window.removeEventListener("attendee-form-mode-change", handleModeChange);
     };
   }, [eventId, storageKey]);
 
-  function toggleOpen() {
-    const next = !open;
+  function changeMode(nextMode: Mode) {
+    setMode(nextMode);
+    setMessage("");
+    setFoundRegistration(null);
 
-    setOpen(next);
-    window.sessionStorage.setItem(storageKey, String(next));
+    if (nextMode) {
+      window.sessionStorage.setItem(storageKey, nextMode);
+    } else {
+      window.sessionStorage.removeItem(storageKey);
+    }
 
     window.dispatchEvent(
-      new CustomEvent("attendee-form-toggle", {
-        detail: { eventId, open: next },
+      new CustomEvent("attendee-form-mode-change", {
+        detail: { eventId, mode: nextMode },
       })
     );
+  }
+
+  function resetForm() {
+    setName("");
+    setPhone("");
+    setCompanions("0");
+    setFoundRegistration(null);
   }
 
   async function submitAttendance() {
@@ -76,6 +105,7 @@ export default function AttendeeRegistrationForm({
     }
 
     setSaving(true);
+    setMessage("");
 
     const companionCount = Number(companions) || 0;
 
@@ -102,40 +132,182 @@ export default function AttendeeRegistrationForm({
       return;
     }
 
-    setDone(true);
-    setOpen(false);
-    window.sessionStorage.setItem(storageKey, "false");
+    setMessage("Registration received. Thank you for registering.");
+    changeMode(null);
+    resetForm();
+  }
 
-    setName("");
-    setPhone("");
-    setCompanions("0");
+  async function findRegistrationForCancel() {
+    const cleanPhone = phone.trim();
+    const phoneNormalized = cleanPhone.replace(/\D/g, "");
+
+    if (phoneNormalized.length < 10) {
+      alert("Please enter the phone number used for registration.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage("");
+    setFoundRegistration(null);
+
+    const { data, error } = await supabase
+      .from("event_attendees")
+      .select("id, name, phone, companions, total_count")
+      .eq("event_id", eventId)
+      .eq("phone_normalized", phoneNormalized)
+      .maybeSingle();
+
+    setSaving(false);
+
+    if (error) {
+      alert("Search failed: " + error.message);
+      return;
+    }
+
+    if (!data) {
+      alert("No registration found with this phone number.");
+      return;
+    }
+
+    setFoundRegistration(data);
+  }
+
+  async function confirmCancelRegistration() {
+    if (!foundRegistration) return;
+
+    setSaving(true);
+    setMessage("");
+
+    const { error } = await supabase
+      .from("event_attendees")
+      .delete()
+      .eq("id", foundRegistration.id);
+
+    setSaving(false);
+
+    if (error) {
+      alert("Cancellation failed: " + error.message);
+      return;
+    }
+
+    setMessage("Your registration has been canceled.");
+    changeMode(null);
+    resetForm();
   }
 
   if (buttonOnly) {
     return (
-      <button
-        type="button"
-        onClick={toggleOpen}
-        className="shrink-0 rounded-full bg-[#C46A2B] px-4 py-2 text-sm font-black text-white shadow"
-      >
-        {open ? "Close" : "Attend"}
-      </button>
+      <div className="flex shrink-0 gap-2">
+        <button
+          type="button"
+          onClick={() => changeMode("attend")}
+          className={`rounded-full px-4 py-2 text-sm font-black shadow ${
+            mode === "attend"
+              ? "bg-[#C46A2B] text-white"
+              : "bg-white text-[#C46A2B]"
+          }`}
+        >
+          Attend
+        </button>
+
+        <button
+          type="button"
+          onClick={() => changeMode("cancel")}
+          className={`rounded-full px-4 py-2 text-sm font-black shadow ${
+            mode === "cancel"
+              ? "bg-[#172033] text-white"
+              : "bg-gray-100 text-[#172033]"
+          }`}
+        >
+          Cancel
+        </button>
+      </div>
     );
   }
 
-  if (formOnly && !open && !done) {
+  if (formOnly && !mode && !message) {
     return null;
   }
 
-  if (done) {
+  if (message && !mode) {
     return (
       <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4 text-center">
-        <p className="text-lg font-black text-green-700">
-          Registration received!
+        <p className="text-lg font-black text-green-700">{message}</p>
+      </div>
+    );
+  }
+
+  if (mode === "cancel") {
+    return (
+      <div className="mt-5 rounded-2xl border bg-gray-50 p-4">
+        <h2 className="text-lg font-black text-[#172033]">
+          Cancel Registration
+        </h2>
+
+        <p className="mt-1 text-xs font-bold text-gray-500">
+          Enter your phone number to find your registration.
         </p>
-        <p className="mt-1 text-sm font-bold text-gray-600">
-          Thank you for registering.
-        </p>
+
+        <input
+          value={phone}
+          onChange={(e) => {
+            setPhone(e.target.value);
+            setFoundRegistration(null);
+          }}
+          placeholder="Phone Number"
+          inputMode="tel"
+          className="mt-4 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+        />
+
+        {!foundRegistration && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={findRegistrationForCancel}
+            className="mt-4 w-full rounded-full bg-[#172033] py-4 text-sm font-black text-white disabled:bg-gray-400"
+          >
+            {saving ? "Searching..." : "Find My Registration"}
+          </button>
+        )}
+
+        {foundRegistration && (
+          <div className="mt-4 rounded-2xl border bg-white p-4">
+            <p className="text-sm font-black text-[#172033]">
+              Is this your registration?
+            </p>
+
+            <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm font-bold text-gray-700">
+              <p>Name: {foundRegistration.name || "No Name"}</p>
+              <p>Phone: {foundRegistration.phone || "No Phone"}</p>
+              <p>Guests: {Number(foundRegistration.companions) || 0}</p>
+              <p>Total People: {Number(foundRegistration.total_count) || 1}</p>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={confirmCancelRegistration}
+                className="rounded-full bg-red-600 py-3 text-sm font-black text-white disabled:bg-gray-400"
+              >
+                {saving ? "Canceling..." : "Yes, Cancel"}
+              </button>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  setFoundRegistration(null);
+                  setPhone("");
+                  changeMode(null);
+                }}
+                className="rounded-full bg-gray-200 py-3 text-sm font-black text-[#172033]"
+              >
+                No, Keep
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
