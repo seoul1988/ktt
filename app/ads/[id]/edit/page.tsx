@@ -20,6 +20,14 @@ export default function EditAdPage() {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState("active");
 
+  const [images, setImages] = useState<string[]>([]);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  const [newImageFiles, setNewImageFiles] = useState<FileList | null>(null);
+  const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
+  const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
+  const [newVideoPreview, setNewVideoPreview] = useState<string | null>(null);
+
   useEffect(() => {
     async function loadAd() {
       const {
@@ -51,11 +59,89 @@ export default function EditAdPage() {
       setLocation(data.location || "");
       setPhone(data.phone || "");
       setStatus(data.status || "active");
+      setImages(Array.isArray(data.images) ? data.images : []);
+      setVideoUrl(data.video_url || null);
       setLoading(false);
     }
 
     loadAd();
   }, [id, router]);
+
+  function handleNewImageChange(files: FileList | null) {
+    setNewImageFiles(files);
+
+    if (!files || files.length === 0) {
+      setNewImagePreviews([]);
+      return;
+    }
+
+    const previews = Array.from(files).map((file) =>
+      URL.createObjectURL(file)
+    );
+
+    setNewImagePreviews(previews);
+  }
+
+  function handleNewVideoChange(file: File | null) {
+    setNewVideoFile(file);
+
+    if (!file) {
+      setNewVideoPreview(null);
+      return;
+    }
+
+    setNewVideoPreview(URL.createObjectURL(file));
+  }
+
+  function removeExistingImage(url: string) {
+    if (!confirm("이 이미지를 삭제하시겠습니까?")) return;
+    setImages((prev) => prev.filter((img) => img !== url));
+  }
+
+  function removeExistingVideo() {
+    if (!confirm("동영상을 삭제하시겠습니까?")) return;
+    setVideoUrl(null);
+  }
+
+  async function uploadImages(userId: string) {
+    if (!newImageFiles || newImageFiles.length === 0) return [];
+
+    const urls: string[] = [];
+
+    for (const file of Array.from(newImageFiles)) {
+      const ext = file.name.split(".").pop();
+      const path = `${userId}/images/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${ext}`;
+
+      const { error } = await supabase.storage.from("ads").upload(path, file);
+
+      if (error) throw error;
+
+      const { data } = supabase.storage.from("ads").getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+
+    return urls;
+  }
+
+  async function uploadVideo(userId: string) {
+    if (!newVideoFile) return null;
+
+    const ext = newVideoFile.name.split(".").pop();
+    const path = `${userId}/videos/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from("ads")
+      .upload(path, newVideoFile);
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from("ads").getPublicUrl(path);
+    return data.publicUrl;
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,27 +153,47 @@ export default function EditAdPage() {
 
     setSaving(true);
 
-    const { error } = await supabase
-      .from("ads")
-      .update({
-        title,
-        description,
-        category,
-        location,
-        phone,
-        status,
-      })
-      .eq("id", id);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    setSaving(false);
+      if (!user) {
+        alert("로그인이 필요합니다.");
+        router.push("/login");
+        return;
+      }
 
-    if (error) {
-      alert(error.message);
-      return;
+      const addedImages = await uploadImages(user.id);
+      const uploadedVideoUrl = await uploadVideo(user.id);
+
+      const finalImages = [...images, ...addedImages];
+      const finalVideoUrl = uploadedVideoUrl || videoUrl;
+
+      const { error } = await supabase
+        .from("ads")
+        .update({
+          title,
+          description,
+          category,
+          location,
+          phone,
+          status,
+          images: finalImages,
+          video_url: finalVideoUrl,
+        })
+        .eq("id", id)
+        .eq("owner_id", user.id);
+
+      if (error) throw error;
+
+      router.push("/ads/my");
+      router.refresh();
+    } catch (err: any) {
+      alert(err.message || "수정 실패");
+    } finally {
+      setSaving(false);
     }
-
-    router.push("/ads/my");
-    router.refresh();
   }
 
   if (loading) {
@@ -151,6 +257,122 @@ export default function EditAdPage() {
             <option value="expired">만료</option>
             <option value="hidden">숨김</option>
           </select>
+
+          <div>
+            <p className="mb-2 text-sm font-black">현재 이미지</p>
+
+            {images.length === 0 ? (
+              <p className="rounded-2xl border p-3 text-sm text-gray-500">
+                등록된 이미지 없음
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img) => (
+                  <div key={img} className="relative">
+                    <img
+                      src={img}
+                      alt="광고 이미지"
+                      className="h-24 w-full rounded-xl border object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeExistingImage(img)}
+                      className="absolute right-1 top-1 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-black">이미지 추가</p>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
+                {newImageFiles && newImageFiles.length > 0
+                  ? `${newImageFiles.length}개 선택됨`
+                  : "선택된 이미지 없음"}
+              </div>
+
+              <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+                첨부
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleNewImageChange(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {newImagePreviews.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {newImagePreviews.map((src, index) => (
+                  <img
+                    key={index}
+                    src={src}
+                    alt={`preview-${index}`}
+                    className="h-24 w-full rounded-xl border object-cover"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-black">현재 동영상</p>
+
+            {videoUrl ? (
+              <div className="space-y-2">
+                <video src={videoUrl} controls className="w-full rounded-2xl" />
+
+                <button
+                  type="button"
+                  onClick={removeExistingVideo}
+                  className="w-full rounded-2xl bg-red-600 py-2 text-xs font-black text-white"
+                >
+                  동영상 삭제
+                </button>
+              </div>
+            ) : (
+              <p className="rounded-2xl border p-3 text-sm text-gray-500">
+                등록된 동영상 없음
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-black">동영상 새로 첨부</p>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 truncate rounded-2xl border p-3 text-sm text-gray-500">
+                {newVideoFile ? newVideoFile.name : "선택된 동영상 없음"}
+              </div>
+
+              <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+                첨부
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) =>
+                    handleNewVideoChange(e.target.files?.[0] || null)
+                  }
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {newVideoPreview && (
+              <div className="mt-3 overflow-hidden rounded-2xl border">
+                <video src={newVideoPreview} controls className="w-full" />
+              </div>
+            )}
+          </div>
 
           <button
             type="submit"
