@@ -28,6 +28,32 @@ export default function EditAdPage() {
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreview, setNewVideoPreview] = useState<string | null>(null);
 
+  function getStoragePathFromPublicUrl(url: string) {
+    const marker = "/storage/v1/object/public/ads/";
+    const index = url.indexOf(marker);
+
+    if (index === -1) return null;
+
+    return decodeURIComponent(url.substring(index + marker.length));
+  }
+
+  async function deleteFileFromBucket(url: string) {
+    const path = getStoragePathFromPublicUrl(url);
+
+    if (!path) {
+      console.warn("Storage path를 찾을 수 없음:", url);
+      return;
+    }
+
+    const { error } = await supabase.storage.from("ads").remove([path]);
+
+    if (error) {
+      console.error("Storage 삭제 실패:", error.message);
+      alert("버킷 파일 삭제 실패: " + error.message);
+      throw error;
+    }
+  }
+
   useEffect(() => {
     async function loadAd() {
       const {
@@ -93,14 +119,29 @@ export default function EditAdPage() {
     setNewVideoPreview(URL.createObjectURL(file));
   }
 
-  function removeExistingImage(url: string) {
+  async function removeExistingImage(url: string) {
     if (!confirm("이 이미지를 삭제하시겠습니까?")) return;
-    setImages((prev) => prev.filter((img) => img !== url));
+
+    try {
+      await deleteFileFromBucket(url);
+      setImages((prev) => prev.filter((img) => img !== url));
+    } catch {
+      return;
+    }
   }
 
-  function removeExistingVideo() {
+  async function removeExistingVideo() {
     if (!confirm("동영상을 삭제하시겠습니까?")) return;
-    setVideoUrl(null);
+
+    try {
+      if (videoUrl) {
+        await deleteFileFromBucket(videoUrl);
+      }
+
+      setVideoUrl(null);
+    } catch {
+      return;
+    }
   }
 
   async function uploadImages(userId: string) {
@@ -162,6 +203,10 @@ export default function EditAdPage() {
         alert("로그인이 필요합니다.");
         router.push("/login");
         return;
+      }
+
+      if (newVideoFile && videoUrl) {
+        await deleteFileFromBucket(videoUrl);
       }
 
       const addedImages = await uploadImages(user.id);
