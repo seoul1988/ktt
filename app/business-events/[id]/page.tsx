@@ -118,7 +118,7 @@ export default async function BusinessEventDetailPage({
         </Link>
 
         <div className="rounded-3xl bg-white p-8 text-center shadow">
-          <p className="font-bold text-gray-500">이벤트를 찾을 수 없습니다.</p>
+          <p className="font-bold text-gray-500">Event not found.</p>
           <p className="mt-2 text-xs text-gray-400">ID: {id}</p>
         </div>
 
@@ -176,7 +176,27 @@ export default async function BusinessEventDetailPage({
               {event.event_date || "Coming Soon"}
             </p>
 
-            <h1 className="mt-2 text-2xl font-black">{event.title}</h1>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h1 className="flex-1 text-2xl font-black leading-tight">
+                {event.title}
+              </h1>
+
+              {event.collect_attendees && (
+                <AttendeeRegistrationForm
+                  eventId={event.id}
+                  eventTitle={event.title || "Business Event"}
+                  buttonOnly
+                />
+              )}
+            </div>
+
+            {event.collect_attendees && (
+              <AttendeeRegistrationForm
+                eventId={event.id}
+                eventTitle={event.title || "Business Event"}
+                formOnly
+              />
+            )}
 
             <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
               {event.description || "No description"}
@@ -189,7 +209,7 @@ export default async function BusinessEventDetailPage({
                 rel="noopener noreferrer"
                 className="mt-4 block rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
               >
-                ▶ 영상 링크 보기
+                ▶ Watch Video
               </a>
             )}
 
@@ -229,13 +249,6 @@ export default async function BusinessEventDetailPage({
               <p className="mt-4 text-sm font-bold">📍 {event.location}</p>
             )}
           </div>
-
-          {event.collect_attendees && (
-            <AttendeeRegistrationForm
-              eventId={event.id}
-              eventTitle={event.title || "Business Event"}
-            />
-          )}
         </div>
       </section>
 
