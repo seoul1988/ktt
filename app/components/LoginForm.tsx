@@ -27,16 +27,19 @@ export default function LoginForm() {
     window.location.href = "/";
   }
 
-  async function loginWithGoogle() {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${SITE_URL}/auth/callback`,
+async function loginWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${SITE_URL}/auth/callback`,
+      queryParams: {
+        prompt: "select_account",
       },
-    });
+    },
+  });
 
-    if (error) alert(error.message);
-  }
+  if (error) alert(error.message);
+}
 
   async function loginWithFacebook() {
     const { error } = await supabase.auth.signInWithOAuth({
