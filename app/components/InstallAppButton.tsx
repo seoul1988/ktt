@@ -123,12 +123,20 @@ export default function InstallAppButton() {
         </div>
       ) : (
         <button
-          onClick={() => setShowBanner(true)}
-          className="fixed right-4 top-[88px] z-[2000] rounded-full bg-[#172033] px-3 py-3 text-lg text-white shadow-xl"
-          aria-label="Add KTown to your phone"
-        >
-          🔖
-        </button>
+  onClick={() => setShowBanner(true)}
+  className="
+    fixed bottom-20 left-1/2 z-[2000]
+    -translate-x-1/2
+    rounded-full
+    bg-gray-300/80
+    px-3 py-1
+    text-[10px]
+    font-semibold
+    text-gray-700
+  "
+>
+  Add to Home
+</button>
       )}
 
       {showIOSGuide && (
