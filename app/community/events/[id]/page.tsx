@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
+import CommunityAttendeeRegistrationForm from "./CommunityAttendeeRegistrationForm";
+import CommunityAttendeeList from "./CommunityAttendeeList";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function CommunityEventDetailPage({
   params,
@@ -42,12 +47,12 @@ export default async function CommunityEventDetailPage({
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       {event.image_url && (
         <div className="mx-auto max-w-md bg-[#F8F3EC] pt-4">
-  <img
-    src={event.image_url}
-    alt={event.title}
-    className="w-full rounded-3xl object-contain"
-  />
-</div>
+          <img
+            src={event.image_url}
+            alt={event.title || "Community Event"}
+            className="w-full rounded-3xl object-contain"
+          />
+        </div>
       )}
 
       <section className="mx-auto max-w-md px-5 pb-28 pt-5">
@@ -64,7 +69,27 @@ export default async function CommunityEventDetailPage({
           </span>
         </div>
 
-        <h1 className="text-3xl font-black leading-tight">{event.title}</h1>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="flex-1 text-3xl font-black leading-tight">
+            {event.title}
+          </h1>
+
+          {event.collect_attendees && (
+            <CommunityAttendeeRegistrationForm
+              eventId={event.id}
+              eventTitle={event.title || "Community Event"}
+              buttonOnly
+            />
+          )}
+        </div>
+
+        {event.collect_attendees && (
+          <CommunityAttendeeRegistrationForm
+            eventId={event.id}
+            eventTitle={event.title || "Community Event"}
+            formOnly
+          />
+        )}
 
         <p className="mt-3 text-sm font-bold text-[#6B6257]">
           {event.event_date
@@ -87,6 +112,7 @@ export default async function CommunityEventDetailPage({
             <a
               href={event.website}
               target="_blank"
+              rel="noopener noreferrer"
               className="block rounded-2xl bg-[#172033] py-4 text-center text-sm font-black text-white"
             >
               Website
@@ -97,12 +123,20 @@ export default async function CommunityEventDetailPage({
             <a
               href={event.instagram}
               target="_blank"
+              rel="noopener noreferrer"
               className="block rounded-2xl bg-[#C4483A] py-4 text-center text-sm font-black text-white"
             >
               Instagram
             </a>
           )}
         </div>
+
+        {event.collect_attendees && (
+          <CommunityAttendeeList
+            eventId={event.id}
+            ownerId={event.owner_id || null}
+          />
+        )}
       </section>
 
       <CommunityBottomNav />
