@@ -13,7 +13,9 @@ export default function InstallAppButton() {
 
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [showBanner, setShowBanner] = useState(true);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   useEffect(() => {
     const standalone =
@@ -26,12 +28,15 @@ export default function InstallAppButton() {
     }
 
     const userAgent = window.navigator.userAgent.toLowerCase();
-
     const ios =
       /iphone|ipad|ipod/.test(userAgent) &&
       !(window.navigator as any).standalone;
 
     setIsIOS(ios);
+
+    const timer = window.setTimeout(() => {
+      setShowBanner(false);
+    }, 5000);
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -47,19 +52,19 @@ export default function InstallAppButton() {
     window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt
-      );
+      window.clearTimeout(timer);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
   async function installApp() {
-    if (!installPrompt) return;
+    if (!installPrompt) {
+      setShowIOSGuide(true);
+      return;
+    }
 
     await installPrompt.prompt();
-
     const choice = await installPrompt.userChoice;
 
     if (choice.outcome === "accepted") {
@@ -69,49 +74,71 @@ export default function InstallAppButton() {
     setInstallPrompt(null);
   }
 
-  if (isInstalled) return null;
+  function handleTouchEnd(x: number) {
+    if (touchStartX !== null && x - touchStartX > 80) {
+      setShowBanner(false);
+    }
+    setTouchStartX(null);
+  }
 
+  if (isInstalled) return null;
   if (!installPrompt && !isIOS) return null;
 
   return (
     <>
-      <div className="fixed left-4 right-4 top-[82px] z-[2000] rounded-3xl bg-white p-4 shadow-2xl">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-black text-[#172033]">
-              📱 Install KTown Triangle
-            </p>
-            <p className="mt-1 text-xs font-semibold text-gray-500">
-              Open faster from your home screen.
-            </p>
-          </div>
+      {showBanner ? (
+        <div
+          onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
+          onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0].clientX)}
+          className="fixed left-6 right-6 top-[82px] z-[2000] rounded-3xl bg-[#E8DED1] p-4 shadow-2xl transition-all"
+        >
+          <div className="flex items-start justify-between gap-3">
+  <div className="flex-1">
+    <p className="text-sm font-black text-[#172033]">
+      📱 Add KTown to your phone
+    </p>
 
-          {installPrompt ? (
-            <button
-              onClick={installApp}
-              className="shrink-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
-            >
-              Install
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowIOSGuide(true)}
-              className="shrink-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
-            >
-              How
-            </button>
-          )}
+    <p className="mt-1 text-xs font-semibold text-[#6B6257]">
+      Quick access to local Korean food, events, and deals.
+    </p>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <button
+      onClick={installApp}
+      className="shrink-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
+    >
+      Add
+    </button>
+
+    <button
+      onClick={() => setShowBanner(false)}
+      className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-black text-[#6B6257] hover:bg-black/5"
+      aria-label="Close"
+    >
+      ×
+    </button>
+  </div>
+</div>
         </div>
-      </div>
+      ) : (
+        <button
+          onClick={() => setShowBanner(true)}
+          className="fixed right-4 top-[88px] z-[2000] rounded-full bg-[#172033] px-3 py-3 text-lg text-white shadow-xl"
+          aria-label="Add KTown to your phone"
+        >
+          🔖
+        </button>
+      )}
 
       {showIOSGuide && (
         <div className="fixed inset-0 z-[3000] flex items-end bg-black/40 p-4">
           <div className="w-full rounded-[28px] bg-white p-5 text-[#172033] shadow-2xl">
-            <h2 className="text-xl font-black">Install on iPhone</h2>
+            <h2 className="text-xl font-black">Add KTown to your phone</h2>
 
             <div className="mt-4 space-y-3 text-sm font-semibold text-gray-700">
-              <p>1. Tap the Share button in Safari.</p>
-              <p>2. Select “Add to Home Screen”.</p>
+              <p>1. Open the browser menu.</p>
+              <p>2. Tap “Add to Home screen”.</p>
               <p>3. Tap “Add”.</p>
             </div>
 
