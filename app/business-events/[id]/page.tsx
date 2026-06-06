@@ -149,13 +149,13 @@ export default async function BusinessEventDetailPage({
   const canManage = isOwner || isAdmin;
 
   const { data: attendees } =
-    event.collect_attendees && canManage
-      ? await supabase
-          .from("event_attendees")
-          .select("id, name, phone, companions, total_count, created_at")
-          .eq("event_id", event.id)
-          .order("created_at", { ascending: false })
-      : { data: [] as EventAttendee[] };
+    const { data: attendees, error: attendeesError } = event.collect_attendees
+  ? await supabase
+      .from("event_attendees")
+      .select("id, name, phone, companions, total_count, created_at")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: false })
+  : { data: [] as EventAttendee[], error: null };
 
   const attendeeRows = (attendees || []) as EventAttendee[];
   const totalPeople = attendeeRows.reduce(
@@ -205,7 +205,7 @@ export default async function BusinessEventDetailPage({
                 {event.title}
               </h1>
 
-              {event.collect_attendees && canManage && (
+              {event.collect_attendees && (
                 <AttendeeRegistrationForm
                   eventId={event.id}
                   eventTitle={event.title || "Business Event"}
