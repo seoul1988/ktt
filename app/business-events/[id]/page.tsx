@@ -148,14 +148,21 @@ export default async function BusinessEventDetailPage({
   const isAdmin = profile?.role === "admin";
   const canManage = isOwner || isAdmin;
 
-  const { data: attendees } =
-    const { data: attendees, error: attendeesError } = event.collect_attendees
+  const {
+  data: attendees,
+  error: attendeesError,
+} = event.collect_attendees
   ? await supabase
       .from("event_attendees")
-      .select("id, name, phone, companions, total_count, created_at")
+      .select(
+        "id, name, phone, companions, total_count, created_at"
+      )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false })
-  : { data: [] as EventAttendee[], error: null };
+  : {
+      data: [] as EventAttendee[],
+      error: null,
+    };
 
   const attendeeRows = (attendees || []) as EventAttendee[];
   const totalPeople = attendeeRows.reduce(
@@ -283,6 +290,13 @@ export default async function BusinessEventDetailPage({
                     Visible only to the event owner and admins.
                   </p>
                 </div>
+				
+				{attendeesError && (
+  <p className="mt-2 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-600">
+    Attendee load error: {attendeesError.message}
+  </p>
+)}
+				
 
                 <div className="rounded-2xl bg-[#F8F3EC] px-4 py-3 text-center">
                   <p className="text-2xl font-black text-[#C46A2B]">
