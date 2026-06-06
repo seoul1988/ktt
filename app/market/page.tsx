@@ -32,11 +32,12 @@ function statusClass(status: string | null) {
   return "bg-gray-400";
 }
 
-const { data, error } = await supabase
-  .from("market_items")
-  .select("*")
-  .or("status.is.null,status.neq.hidden")
-  .order("created_at", { ascending: false });
+export default async function MarketPage() {
+  const { data, error } = await supabase
+    .from("market_items")
+    .select("*")
+    .or("status.is.null,status.neq.hidden")
+    .order("created_at", { ascending: false });
 
   if (error) {
     return <div className="p-6">상품 불러오기 실패: {error.message}</div>;
@@ -94,17 +95,13 @@ const { data, error } = await supabase
                     <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
                       이미지 없음
                     </div>
-					
-				  )}
+                  )}
 
-					{Array.isArray(item.images) && item.images.length > 1 && (
-					  <div className="absolute bottom-2 right-2 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
-						1/{item.images.length}
-					  </div>
-					)}
-
-
-                 
+                  {Array.isArray(item.images) && item.images.length > 1 && (
+                    <div className="absolute bottom-2 right-2 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
+                      1/{item.images.length}
+                    </div>
+                  )}
 
                   {item.video_url && (
                     <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
@@ -128,17 +125,17 @@ const { data, error } = await supabase
                     </span>
                   </div>
 
-                 <div className="flex items-center gap-2">
-				  <h2 className="line-clamp-1 flex-1 text-sm font-black text-[#172033]">
-					{item.title}
-				  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="line-clamp-1 flex-1 text-sm font-black text-[#172033]">
+                      {item.title}
+                    </h2>
 
-				  {item.category && (
-					<span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
-					  {item.category}
-					</span>
-				  )}
-				</div>
+                    {item.category && (
+                      <span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
+                        {item.category}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <p className="text-sm font-black text-[#C2410C]">
