@@ -13,9 +13,40 @@ export default function NewAdPage() {
   const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
+
   const [imageFiles, setImageFiles] = useState<FileList | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
+
+  function handleImageChange(files: FileList | null) {
+    setImageFiles(files);
+
+    if (!files || files.length === 0) {
+      setImagePreviews([]);
+      return;
+    }
+
+    const previews = Array.from(files).map((file) =>
+      URL.createObjectURL(file)
+    );
+
+    setImagePreviews(previews);
+  }
+
+  function handleVideoChange(file: File | null) {
+    setVideoFile(file);
+
+    if (!file) {
+      setVideoPreview(null);
+      return;
+    }
+
+    setVideoPreview(URL.createObjectURL(file));
+  }
 
   async function uploadImages(userId: string) {
     if (!imageFiles || imageFiles.length === 0) return [];
@@ -43,7 +74,9 @@ export default function NewAdPage() {
     if (!videoFile) return null;
 
     const ext = videoFile.name.split(".").pop();
-    const path = `${userId}/videos/${Date.now()}.${ext}`;
+    const path = `${userId}/videos/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
 
     const { error } = await supabase.storage.from("ads").upload(path, videoFile);
 
@@ -105,7 +138,10 @@ export default function NewAdPage() {
       <div className="mx-auto max-w-md">
         <h1 className="mb-4 text-2xl font-black">광고 등록</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl bg-white p-5 shadow">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-3xl bg-white p-5 shadow"
+        >
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -142,47 +178,68 @@ export default function NewAdPage() {
           />
 
           <div>
-  <p className="mb-2 text-sm font-black">이미지</p>
+            <p className="mb-2 text-sm font-black">이미지</p>
 
-  <div className="flex items-center gap-2">
-    <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
-      {imageFiles && imageFiles.length > 0
-        ? `${imageFiles.length}개 선택됨`
-        : "선택된 이미지 없음"}
-    </div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
+                {imageFiles && imageFiles.length > 0
+                  ? `${imageFiles.length}개 선택됨`
+                  : "선택된 이미지 없음"}
+              </div>
 
-    <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
-      첨부
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={(e) => setImageFiles(e.target.files)}
-        className="hidden"
-      />
-    </label>
-  </div>
-</div>
+              <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+                첨부
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handleImageChange(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+            </div>
 
-<div>
-  <p className="mb-2 text-sm font-black">동영상</p>
+            {imagePreviews.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {imagePreviews.map((src, index) => (
+                  <img
+                    key={index}
+                    src={src}
+                    alt={`preview-${index}`}
+                    className="h-24 w-full rounded-xl border object-cover"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-  <div className="flex items-center gap-2">
-    <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
-      {videoFile ? videoFile.name : "선택된 동영상 없음"}
-    </div>
+          <div>
+            <p className="mb-2 text-sm font-black">동영상</p>
 
-    <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
-      첨부
-      <input
-        type="file"
-        accept="video/*"
-        onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-        className="hidden"
-      />
-    </label>
-  </div>
-</div>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 truncate rounded-2xl border p-3 text-sm text-gray-500">
+                {videoFile ? videoFile.name : "선택된 동영상 없음"}
+              </div>
+
+              <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+                첨부
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) =>
+                    handleVideoChange(e.target.files?.[0] || null)
+                  }
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {videoPreview && (
+              <div className="mt-3 overflow-hidden rounded-2xl border">
+                <video src={videoPreview} controls className="w-full" />
+              </div>
+            )}
+          </div>
 
           <button
             type="submit"
