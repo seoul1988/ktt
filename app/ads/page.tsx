@@ -75,90 +75,94 @@ export default async function AdsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {ads.map((ad) => (
-              <Link
-                key={ad.id}
-                href={`/ads/${ad.id}`}
-                className={`overflow-hidden rounded-2xl bg-white shadow ${
-                  ad.status === "expired" ? "opacity-70" : ""
-                }`}
-              >
-                <div className="relative h-32 bg-gray-200">
-                  {ad.video_url ? (
-				  <video
-					src={ad.video_url}
-					controls
-					muted
-					playsInline
-					preload="metadata"
-					className="h-full w-full object-cover"
-				  />
-				) : ad.images?.[0] ? (
-				  <img
-					src={ad.images[0]}
-					alt={ad.title}
-					className="h-full w-full object-cover"
-				  />
-				) : (
-				  <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
-					이미지 없음
-				  </div>
-				)}
+            {ads.map((ad) => {
+              const hasImage = Array.isArray(ad.images) && ad.images.length > 0;
+              const hasVideo = Boolean(ad.video_url);
+              const hasMedia = hasImage || hasVideo;
 
-                  {Array.isArray(ad.images) && ad.images.length > 1 && (
-                    <div className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
-                      1/{ad.images.length}
+              return (
+                <Link
+                  key={ad.id}
+                  href={`/ads/${ad.id}`}
+                  className={`overflow-hidden rounded-2xl bg-white shadow ${
+                    ad.status === "expired" ? "opacity-70" : ""
+                  }`}
+                >
+                  {hasMedia && (
+                    <div className="relative h-32 bg-gray-200">
+                      {hasVideo ? (
+                        <video
+                          src={ad.video_url || ""}
+                          controls
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={ad.images![0]}
+                          alt={ad.title}
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+
+                      {hasImage && ad.images!.length > 1 && (
+                        <div className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
+                          1/{ad.images!.length}
+                        </div>
+                      )}
+
+                      {hasVideo && (
+                        <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
+                          VIDEO
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {ad.video_url && (
-                    <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
-                      VIDEO
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
-                        ad.status
-                      )}`}
-                    >
-                      {statusLabel(ad.status)}
-                    </span>
-
-                    <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
-                      {ad.location || ""}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <h2 className="line-clamp-1 flex-1 text-sm font-black text-[#172033]">
-                      {ad.title}
-                    </h2>
-
-                    {ad.category && (
-                      <span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
-                        {ad.category}
+                  <div className="p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
+                          ad.status
+                        )}`}
+                      >
+                        {statusLabel(ad.status)}
                       </span>
+
+                      <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
+                        {ad.location || ""}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <h2 className="line-clamp-1 flex-1 text-sm font-black text-[#172033]">
+                        {ad.title}
+                      </h2>
+
+                      {ad.category && (
+                        <span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
+                          {ad.category}
+                        </span>
+                      )}
+                    </div>
+
+                    {ad.phone && (
+                      <p className="mt-1 text-xs font-bold text-[#C2410C]">
+                        {ad.phone}
+                      </p>
+                    )}
+
+                    {ad.description && (
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600">
+                        {ad.description}
+                      </p>
                     )}
                   </div>
-
-                  {ad.phone && (
-                    <p className="mt-1 text-xs font-bold text-[#C2410C]">
-                      {ad.phone}
-                    </p>
-                  )}
-
-                  {ad.description && (
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600">
-                      {ad.description}
-                    </p>
-                  )}
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
