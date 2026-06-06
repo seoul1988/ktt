@@ -2,6 +2,9 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type MarketItem = {
   id: number;
   title: string;
@@ -29,12 +32,11 @@ function statusClass(status: string | null) {
   return "bg-gray-400";
 }
 
-export default async function MarketPage() {
-  const { data, error } = await supabase
-    .from("market_items")
-    .select("*")
-    .neq("status", "hidden")
-    .order("created_at", { ascending: false });
+const { data, error } = await supabase
+  .from("market_items")
+  .select("*")
+  .or("status.is.null,status.neq.hidden")
+  .order("created_at", { ascending: false });
 
   if (error) {
     return <div className="p-6">상품 불러오기 실패: {error.message}</div>;
