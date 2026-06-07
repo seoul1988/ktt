@@ -76,8 +76,19 @@ export default async function AdsPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {ads.map((ad) => {
-              const hasImage = Array.isArray(ad.images) && ad.images.length > 0;
-              const hasVideo = Boolean(ad.video_url);
+              const cleanImages = Array.isArray(ad.images)
+                ? ad.images.filter(
+                    (img) => typeof img === "string" && img.trim() !== ""
+                  )
+                : [];
+
+              const cleanVideoUrl =
+                typeof ad.video_url === "string" && ad.video_url.trim() !== ""
+                  ? ad.video_url
+                  : null;
+
+              const hasImage = cleanImages.length > 0;
+              const hasVideo = Boolean(cleanVideoUrl);
               const hasMedia = hasImage || hasVideo;
 
               return (
@@ -89,10 +100,10 @@ export default async function AdsPage() {
                   }`}
                 >
                   {hasMedia && (
-                    <div className="relative h-32 bg-gray-200">
+                    <div className="relative h-32 bg-black">
                       {hasVideo ? (
                         <video
-                          src={ad.video_url || ""}
+                          src={cleanVideoUrl || ""}
                           controls
                           muted
                           playsInline
@@ -101,21 +112,21 @@ export default async function AdsPage() {
                         />
                       ) : (
                         <img
-                          src={ad.images![0]}
+                          src={cleanImages[0]}
                           alt={ad.title}
                           className="h-full w-full object-cover"
                         />
                       )}
 
-                      {hasImage && ad.images!.length > 1 && (
-                        <div className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
-                          1/{ad.images!.length}
-                        </div>
-                      )}
-
                       {hasVideo && (
                         <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
                           VIDEO
+                        </div>
+                      )}
+
+                      {!hasVideo && cleanImages.length > 1 && (
+                        <div className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
+                          1/{cleanImages.length}
                         </div>
                       )}
                     </div>

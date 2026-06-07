@@ -6,10 +6,7 @@ import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import PushSubscribeButton from "../../components/PushSubscribeButton";
 
-type SourceType =
-  | "request"
-  | "community_events"
-  | "business_events";
+type SourceType = "request" | "community_events" | "business_events";
 
 type EventItem = {
   id: string;
@@ -20,19 +17,15 @@ type EventItem = {
   image_url: string | null;
   video_url?: string | null;
   external_video_url?: string | null;
-
   event_date: string | null;
   location: string | null;
   address?: string | null;
-
   latitude?: number | null;
   longitude?: number | null;
-
   status: string | null;
   approved_type?: string | null;
   created_at: string;
   source_type: SourceType;
-
   businesses?: {
     name: string | null;
   } | null;
@@ -51,10 +44,10 @@ export default function EventRequestsPage() {
 
     const [requestRes, communityRes, businessRes] = await Promise.all([
       supabase
-	  .from("event_requests")
-	  .select("*, businesses(name)")
-	  .not("status", "in", '("approved","deleted")')
-	  .order("created_at", { ascending: false }),
+        .from("event_requests")
+        .select("*, businesses(name)")
+        .not("status", "in", '("approved","deleted")')
+        .order("created_at", { ascending: false }),
 
       supabase
         .from("community_events")
@@ -108,48 +101,90 @@ export default function EventRequestsPage() {
     setLoading(false);
   }
 
+  function getStoragePathFromUrl(url: string | null | undefined) {
+    if (!url) return null;
+
+    try {
+      const marker = "/storage/v1/object/public/";
+      const index = url.indexOf(marker);
+
+      if (index === -1) return null;
+
+      const path = url.substring(index + marker.length);
+      const [bucket, ...fileParts] = path.split("/");
+      const filePath = fileParts.join("/");
+
+      if (!bucket || !filePath) return null;
+
+      return { bucket, filePath };
+    } catch {
+      return null;
+    }
+  }
+
+  async function deleteStorageFile(url: string | null | undefined) {
+    const parsed = getStoragePathFromUrl(url);
+
+    if (!parsed) return;
+
+    const { error } = await supabase.storage
+      .from(parsed.bucket)
+      .remove([parsed.filePath]);
+
+    if (error) {
+      console.error("Storage 삭제 실패:", error.message);
+    }
+  }
+
+  async function deleteEventFiles(event: EventItem) {
+    await deleteStorageFile(event.image_url);
+    await deleteStorageFile(event.video_url);
+
+    // external_video_url 은 유튜브/인스타/외부 링크라 Storage 삭제 대상 아님
+  }
+
   async function approveAsBusiness(event: EventItem) {
-  if (event.source_type !== "request") {
-    alert("이미 최종 이벤트 테이블에 등록된 이벤트입니다.");
-    return;
-  }
+    if (event.source_type !== "request") {
+      alert("이미 최종 이벤트 테이블에 등록된 이벤트입니다.");
+      return;
+    }
 
-const { error: insertError } = await supabase.from("business_events").insert({
-  business_id: event.business_id || null,
-  owner_id: event.owner_id || null,
-  title: event.title,
-  description: event.description,
-  image_url: event.image_url,
-  video_url: event.video_url || null,
-  external_video_url: event.external_video_url || null,
-  event_date: event.event_date,
-  location: event.location,
-  latitude: event.latitude ?? null,
-  longitude: event.longitude ?? null,
-  status: "approved",
-  active: true,
-});
-
-  if (insertError) {
-    alert("Business Event 저장 실패: " + insertError.message);
-    return;
-  }
-
-  const { error: updateError } = await supabase
-    .from("event_requests")
-    .update({
+    const { error: insertError } = await supabase.from("business_events").insert({
+      business_id: event.business_id || null,
+      owner_id: event.owner_id || null,
+      title: event.title,
+      description: event.description,
+      image_url: event.image_url,
+      video_url: event.video_url || null,
+      external_video_url: event.external_video_url || null,
+      event_date: event.event_date,
+      location: event.location,
+      latitude: event.latitude ?? null,
+      longitude: event.longitude ?? null,
       status: "approved",
-      approved_type: "business",
-    })
-    .eq("id", event.id);
+      active: true,
+    });
 
-  if (updateError) {
-    alert("요청 상태 변경 실패: " + updateError.message);
-    return;
+    if (insertError) {
+      alert("Business Event 저장 실패: " + insertError.message);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("event_requests")
+      .update({
+        status: "approved",
+        approved_type: "business",
+      })
+      .eq("id", event.id);
+
+    if (updateError) {
+      alert("요청 상태 변경 실패: " + updateError.message);
+      return;
+    }
+
+    loadEvents();
   }
-
-  loadEvents();
-}
 
   async function approveAsCommunity(event: EventItem) {
     if (event.source_type !== "request") {
@@ -161,6 +196,7 @@ const { error: insertError } = await supabase.from("business_events").insert({
       title: event.title,
       description: event.description,
       image_url: event.image_url,
+      video_url: event.video_url || null,
       event_date: event.event_date,
       address: event.location,
       status: "approved",
@@ -204,64 +240,79 @@ const { error: insertError } = await supabase.from("business_events").insert({
   }
 
   async function deleteEvent(event: EventItem) {
-  if (!confirm("정말 삭제할까요?")) return;
+    if (!confirm("정말 삭제할까요? 이미지/동영상 파일도 같이 삭제됩니다.")) return;
 
-  // event_requests 에서 삭제한 경우
-  if (event.source_type === "request") {
-    const { error } = await supabase
-      .from("event_requests")
-      .update({
-        status: "deleted",
-      })
-      .eq("id", event.id);
+    if (event.source_type === "request") {
+      await deleteEventFiles(event);
 
-    if (error) {
-      alert(error.message);
+      const { error } = await supabase
+        .from("event_requests")
+        .update({
+          status: "deleted",
+        })
+        .eq("id", event.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      loadEvents();
       return;
     }
 
-    loadEvents();
-    return;
+    if (event.source_type === "business_events") {
+      await deleteEventFiles(event);
+
+      const { error } = await supabase
+        .from("business_events")
+        .delete()
+        .eq("id", event.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      await supabase
+        .from("event_requests")
+        .update({
+          status: "deleted",
+        })
+        .eq("title", event.title);
+
+      loadEvents();
+      return;
+    }
+
+    if (event.source_type === "community_events") {
+      await deleteEventFiles(event);
+
+      const { error } = await supabase
+        .from("community_events")
+        .delete()
+        .eq("id", event.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      await supabase
+        .from("event_requests")
+        .update({
+          status: "deleted",
+        })
+        .eq("title", event.title);
+
+      loadEvents();
+      return;
+    }
   }
 
-  // business_events 삭제
-  if (event.source_type === "business_events") {
-    await supabase
-      .from("business_events")
-      .delete()
-      .eq("id", event.id);
-
-    await supabase
-      .from("event_requests")
-      .update({
-        status: "deleted",
-      })
-      .eq("title", event.title);
-
-    loadEvents();
-    return;
-  }
-
-  // community_events 삭제
-  if (event.source_type === "community_events") {
-    await supabase
-      .from("community_events")
-      .delete()
-      .eq("id", event.id);
-
-    await supabase
-      .from("event_requests")
-      .update({
-        status: "deleted",
-      })
-      .eq("title", event.title);
-
-    loadEvents();
-    return;
-  }
-}
-
-  function getTableName(sourceType: SourceType): "event_requests" | "community_events" | "business_events" {
+  function getTableName(
+    sourceType: SourceType
+  ): "event_requests" | "community_events" | "business_events" {
     if (sourceType === "business_events") return "business_events";
     if (sourceType === "community_events") return "community_events";
     return "event_requests";
@@ -306,10 +357,11 @@ const { error: insertError } = await supabase.from("business_events").insert({
           </div>
 
           <ProfileButton />
-		 </div>
-		 <div className="mb-5">
-  <PushSubscribeButton />
-</div>
+        </div>
+
+        <div className="mb-5">
+          <PushSubscribeButton />
+        </div>
 
         {loading ? (
           <div className="rounded-3xl bg-white p-5 shadow">Loading...</div>
@@ -374,13 +426,27 @@ const { error: insertError } = await supabase.from("business_events").insert({
                   📅 {event.event_date || "날짜 없음"}
                 </p>
 
+                {event.video_url && (
+                  <p className="mt-2 text-xs font-bold text-gray-500">
+                    🎬 업로드 동영상 있음
+                  </p>
+                )}
+
+                {event.external_video_url && (
+                  <p className="mt-2 text-xs font-bold text-gray-500">
+                    🔗 외부 동영상 링크 있음
+                  </p>
+                )}
+
                 {event.approved_type && (
                   <p className="mt-2 text-xs font-black text-[#C4483A]">
                     Approved as: {event.approved_type}
                   </p>
                 )}
 
-                {event.source_type === "request" && event.status !== "approved" && event.status !== "rejected" ? (
+                {event.source_type === "request" &&
+                event.status !== "approved" &&
+                event.status !== "rejected" ? (
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
                       type="button"

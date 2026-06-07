@@ -13,33 +13,31 @@ export default async function CommunityPage() {
     .limit(6);
 
   const { data: allBusinesses } = await supabase
-  .from("businesses")
-  .select("*")
-  .order("created_at", { ascending: false });
+    .from("businesses")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-const { data: categories } = await supabase
-  .from("categories")
-  .select("name, show_on_community_map");
+  const { data: categories } = await supabase
+    .from("categories")
+    .select("name, show_on_community_map");
 
-const communityCategoryNames = new Set(
-  (categories || [])
-    .filter((cat) => cat.show_on_community_map === true)
-    .map((cat) => String(cat.name).trim().toLowerCase())
-);
+  const communityCategoryNames = new Set(
+    (categories || [])
+      .filter((cat) => cat.show_on_community_map === true)
+      .map((cat) => String(cat.name).trim().toLowerCase())
+  );
 
-const newBusinesses =
-  allBusinesses
-    ?.filter((biz) => {
-      const bizCategories = String(biz.category || "")
-        .split(",")
-        .map((cat) => cat.trim().toLowerCase())
-        .filter(Boolean);
+  const newBusinesses =
+    allBusinesses
+      ?.filter((biz) => {
+        const bizCategories = String(biz.category || "")
+          .split(",")
+          .map((cat) => cat.trim().toLowerCase())
+          .filter(Boolean);
 
-      return bizCategories.some((cat) =>
-        communityCategoryNames.has(cat)
-      );
-    })
-    .slice(0, 6) || [];
+        return bizCategories.some((cat) => communityCategoryNames.has(cat));
+      })
+      .slice(0, 6) || [];
 
   const { data: featured } = await supabase
     .from("featured_businesses")
@@ -53,23 +51,23 @@ const newBusinesses =
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-md px-5 pb-28 pt-6">
-      <div className="mb-6 flex items-start justify-between">
-		  <div>
-			<p className="text-sm font-black text-[#C4483A]">
-			  COMMUNITY
-			</p>
+        <div className="mb-6 flex items-start justify-between">
+          <div>
+            <p className="text-sm font-black text-[#C4483A]">
+              COMMUNITY
+            </p>
 
-			<h1 className="text-3xl font-black tracking-tight">
-			  KTown Triangle
-			</h1>
+            <h1 className="text-3xl font-black tracking-tight">
+              KTown Triangle
+            </h1>
 
-			<p className="mt-2 text-sm font-semibold text-[#6B6257]">
-			  Events, new places, and local highlights.
-			</p>
-		  </div>
+            <p className="mt-2 text-sm font-semibold text-[#6B6257]">
+              Events, new places, and local highlights.
+            </p>
+          </div>
 
-		  <ProfileButton />
-		</div>
+          <ProfileButton />
+        </div>
 
         {/* Upcoming Events */}
         <section className="mb-8">
@@ -95,27 +93,27 @@ const newBusinesses =
                 }
               >
                 {eventCount === 1 ? (
-                  <div className="flex min-h-[210px]">
-                    <div className="flex w-[42%] items-center justify-center bg-white p-3">
+                  <div>
+                    <div className="relative h-64 w-full overflow-hidden bg-white">
                       {event.image_url ? (
                         <img
                           src={event.image_url}
-                          alt={event.title}
-                          className="max-h-[190px] max-w-full rounded-2xl object-contain"
+                          alt={event.title || "Event"}
+                          className="h-full w-full object-cover"
                         />
                       ) : (
-                        <div className="flex h-[170px] w-full items-center justify-center rounded-2xl bg-[#E8DED1] text-xs font-black text-white/70">
+                        <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
                           No Photo
                         </div>
                       )}
+
+                      <div className="absolute left-4 top-4 rounded-full bg-[#172033]/90 px-3 py-1 text-[11px] font-black text-white backdrop-blur-sm">
+                        {event.category || "EVENT"}
+                      </div>
                     </div>
 
-                    <div className="flex flex-1 flex-col justify-center p-5">
-                      <span className="w-fit rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
-                        {event.category || "EVENT"}
-                      </span>
-
-                      <h3 className="mt-4 line-clamp-3 text-2xl font-black leading-tight">
+                    <div className="p-5">
+                      <h3 className="line-clamp-3 text-2xl font-black leading-tight">
                         {event.title}
                       </h3>
 
@@ -128,30 +126,42 @@ const newBusinesses =
                       <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#6B6257]">
                         {event.address || "Location TBA"}
                       </p>
+
+                      {event.entry_fee && (
+                        <p className="mt-2 text-sm font-black text-[#C4483A]">
+                          🎟 {event.entry_fee}
+                        </p>
+                      )}
+
+                      {event.description && (
+                        <p className="mt-3 line-clamp-3 text-sm font-semibold leading-6 text-[#6B6257]">
+                          {event.description}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ) : (
                   <>
-<div className="h-44 bg-white flex items-center justify-center p-2">
-  {event.image_url ? (
-    <img
-      src={event.image_url}
-      alt={event.title}
-      className="max-h-full max-w-full object-contain"
-    />
-  ) : (
-    <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
-      No Photo
-    </div>
-  )}
-</div>
+                    <div className="relative h-52 w-full overflow-hidden bg-white">
+                      {event.image_url ? (
+                        <img
+                          src={event.image_url}
+                          alt={event.title || "Event"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+                          No Photo
+                        </div>
+                      )}
+
+                      <div className="absolute left-3 top-3 rounded-full bg-[#172033]/90 px-3 py-1 text-[10px] font-black text-white backdrop-blur-sm">
+                        {event.category || "EVENT"}
+                      </div>
+                    </div>
 
                     <div className="p-4">
-                      <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
-                        {event.category || "EVENT"}
-                      </span>
-
-                      <h3 className="mt-3 line-clamp-2 text-lg font-black">
+                      <h3 className="line-clamp-2 text-lg font-black">
                         {event.title}
                       </h3>
 
@@ -164,20 +174,20 @@ const newBusinesses =
                       <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
                         {event.address || "Location TBA"}
                       </p>
-					  {event.entry_fee && (
-					  <p className="mt-1 text-xs font-black text-[#C4483A]">
-						🎟 {event.entry_fee}
-					  </p>
-					)}
-					  {event.description && (
-					  <p className="mt-2 text-xs font-semibold leading-5 text-[#6B6257]">
-						{event.description.length > 60
-						  ? `${event.description.slice(0, 60)}...`
-						  : event.description}
-					  </p>
-					)}
-										  
-					  
+
+                      {event.entry_fee && (
+                        <p className="mt-1 text-xs font-black text-[#C4483A]">
+                          🎟 {event.entry_fee}
+                        </p>
+                      )}
+
+                      {event.description && (
+                        <p className="mt-2 text-xs font-semibold leading-5 text-[#6B6257]">
+                          {event.description.length > 60
+                            ? `${event.description.slice(0, 60)}...`
+                            : event.description}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -203,15 +213,15 @@ const newBusinesses =
                 href={`/business/${biz.id}`}
                 className="overflow-hidden rounded-3xl bg-[#2A3448] text-white shadow-sm"
               >
-                <div className="flex h-28 w-full items-center justify-center bg-white p-2">
+                <div className="h-44 w-full overflow-hidden bg-white">
                   {biz.image_url ? (
                     <img
                       src={biz.image_url}
-                      alt={biz.name}
-                      className="block max-h-full max-w-full object-contain"
+                      alt={biz.name || "Business"}
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+                    <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
                       No Photo
                     </div>
                   )}
@@ -221,25 +231,26 @@ const newBusinesses =
                   <span className="rounded-full bg-[#C4483A] px-2 py-1 text-[9px] font-black text-white">
                     NEW
                   </span>
+
                   <h3 className="mt-2 line-clamp-1 text-sm font-black">
-  {biz.name}
-</h3>
+                    {biz.name}
+                  </h3>
 
-<p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
-  {biz.category || "Business"}
-</p>
+                  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
+                    {biz.category || "Business"}
+                  </p>
 
-<p className="mt-1 text-xs">
-  <span className="font-black text-[#F4C95D]">
-    ★ {biz.rating || "New"}
-  </span>
+                  <p className="mt-1 text-xs">
+                    <span className="font-black text-[#F4C95D]">
+                      ★ {biz.rating || "New"}
+                    </span>
 
-  {biz.review_count ? (
-    <span className="ml-1 text-gray-400">
-      ({biz.review_count})
-    </span>
-  ) : null}
-</p>
+                    {biz.review_count ? (
+                      <span className="ml-1 text-gray-400">
+                        ({biz.review_count})
+                      </span>
+                    ) : null}
+                  </p>
                 </div>
               </Link>
             ))}
@@ -256,13 +267,17 @@ const newBusinesses =
                 key={item.id}
                 className="overflow-hidden rounded-3xl bg-[#172033] text-white shadow-sm"
               >
-                <div className="h-36 bg-[#2A3448]">
-                  {item.banner_image && (
+                <div className="h-44 w-full overflow-hidden bg-[#2A3448]">
+                  {item.banner_image ? (
                     <img
                       src={item.banner_image}
                       alt={item.title || "Featured Business"}
                       className="h-full w-full object-cover"
                     />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[#2A3448] text-xs font-black text-white/60">
+                      No Photo
+                    </div>
                   )}
                 </div>
 
@@ -270,9 +285,11 @@ const newBusinesses =
                   <p className="text-[10px] font-black text-[#F4C95D]">
                     FEATURED
                   </p>
+
                   <h3 className="mt-1 text-lg font-black">
                     {item.title || "Featured Business"}
                   </h3>
+
                   <p className="mt-1 text-sm font-semibold text-white/75">
                     {item.subtitle || "Sponsored local highlight"}
                   </p>
@@ -289,7 +306,7 @@ const newBusinesses =
         </section>
       </section>
 
-      <CommunityBottomNav activeNav="community"/>
+      <CommunityBottomNav activeNav="community" />
     </main>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import BottomNav from "../../components/BottomNav";
+import ProfileButton from "../../components/ProfileButton";
 import DealManageButtons from "./DealManageButtons";
 import DealImageSlider from "./DealImageSlider";
 
@@ -113,29 +114,24 @@ export default async function DealDetailPage({
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28 text-[#172033]">
       <div className="mx-auto max-w-md">
+        <div className="mb-4 flex items-center justify-between">
+          <Link
+            href="/deals"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black shadow"
+          >
+            ←
+          </Link>
+
+          <h1 className="text-2xl font-black">🔥 Deals</h1>
+
+          <ProfileButton />
+        </div>
+
         <div className="relative overflow-hidden rounded-3xl bg-white shadow-xl">
           <DealImageSlider
-  images={finalSliderImages}
-  title={deal.title || "Deal"}
-/>
-
-          <div className="absolute left-4 top-4 z-50">
-            <Link
-              href="/deals"
-              className="rounded-full bg-white/90 px-4 py-2 text-sm font-black shadow"
-            >
-              ← Back
-            </Link>
-          </div>
-
-          <div className="absolute right-4 top-4 z-50">
-            <DealManageButtons
-              dealId={deal.id}
-              ownerId={deal.owner_id}
-              businessId={deal.business_id}
-              imageUrl={deal.image_url}
-            />
-          </div>
+            images={finalSliderImages}
+            title={deal.title || "Deal"}
+          />
         </div>
 
         <section className="pt-5">
@@ -145,42 +141,54 @@ export default async function DealDetailPage({
                 {business?.name || "Business"}
               </h2>
 
-             {business?.address && (
-			  <p className="mt-1 text-sm text-gray-700">
-				📍 {business.address}
-			  </p>
-			)}
+              {business?.address && (
+                <p className="mt-1 text-sm text-gray-700">
+                  📍 {business.address}
+                </p>
+              )}
 
-			<div className="mt-3 flex gap-2">
-			  {business?.phone && (
-				<a
-				  href={`tel:${business.phone}`}
-				  className="flex-1 rounded-full bg-green-600 px-4 py-2 text-center text-xs font-black text-white"
-				>
-				  📞 전화
-				</a>
-			  )}
+              <div className="mt-3 flex gap-2">
+                {business?.phone && (
+                  <a
+                    href={`tel:${business.phone}`}
+                    className="flex-1 rounded-full bg-green-600 px-4 py-2 text-center text-xs font-black text-white"
+                  >
+                    📞 전화
+                  </a>
+                )}
 
-			  {business?.address && (
-				<a
-				  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-					business.address
-				  )}`}
-				  target="_blank"
-				  rel="noopener noreferrer"
-				  className="flex-1 rounded-full bg-[#172033] px-4 py-2 text-center text-xs font-black text-white"
-				>
-				  📍 길찾기
-				</a>
-			  )}
-			</div>
-</div>
+                {business?.address && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      business.address
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 rounded-full bg-[#172033] px-4 py-2 text-center text-xs font-black text-white"
+                  >
+                    📍 길찾기
+                  </a>
+                )}
+              </div>
+            </div>
+
             <p className="text-sm font-bold text-[#C4483A]">
               {deal.start_date || "Available Now"}
               {deal.end_date ? ` ~ ${deal.end_date}` : ""}
             </p>
 
-            <h1 className="mt-2 text-2xl font-black">{deal.title}</h1>
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h1 className="min-w-0 flex-1 text-2xl font-black leading-tight">
+                {deal.title}
+              </h1>
+
+              <DealManageButtons
+                dealId={deal.id}
+                ownerId={deal.owner_id}
+                businessId={deal.business_id}
+                imageUrl={deal.image_url}
+              />
+            </div>
 
             <p className="mt-4 whitespace-pre-line text-sm leading-6 text-gray-700">
               {deal.description || "No description"}
@@ -240,7 +248,7 @@ export default async function DealDetailPage({
         )}
       </div>
 
-      <BottomNav />
+      <BottomNav activeNav="deals" />
     </main>
   );
 }

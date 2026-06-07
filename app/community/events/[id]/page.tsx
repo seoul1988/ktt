@@ -3,6 +3,7 @@ import { supabase } from "../../../../lib/supabase";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
 import CommunityAttendeeRegistrationForm from "./CommunityAttendeeRegistrationForm";
 import CommunityAttendeeList from "./CommunityAttendeeList";
+import CommunityEventManageMenu from "./CommunityEventManageMenu";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,36 +39,38 @@ export default async function CommunityEventDetailPage({
           </Link>
         </div>
 
-        <CommunityBottomNav />
+        <CommunityBottomNav activeNav="community" />
       </main>
     );
   }
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      {event.image_url && (
-        <div className="mx-auto max-w-md bg-[#F8F3EC] pt-4">
-          <img
-            src={event.image_url}
-            alt={event.title || "Community Event"}
-            className="w-full rounded-3xl object-contain"
-          />
-        </div>
-      )}
-
       <section className="mx-auto max-w-md px-5 pb-28 pt-5">
-        <Link
-          href="/community"
-          className="mb-4 inline-block text-sm font-black text-[#C4483A]"
-        >
-          ← Back
-        </Link>
+        <div className="mb-4 flex items-center justify-between">
+          <Link
+            href="/community"
+            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+          >
+            ← Back
+          </Link>
 
-        <div className="mb-3">
           <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
             {event.category || "EVENT"}
           </span>
+
+          <CommunityEventManageMenu event={event} />
         </div>
+
+        {event.image_url && (
+          <div className="mb-5 overflow-hidden rounded-3xl bg-white shadow-sm">
+            <img
+              src={event.image_url}
+              alt={event.title || "Community Event"}
+              className="h-auto w-full object-contain"
+            />
+          </div>
+        )}
 
         <div className="flex items-start justify-between gap-3">
           <h1 className="flex-1 text-3xl font-black leading-tight">
@@ -139,7 +142,7 @@ export default async function CommunityEventDetailPage({
         )}
       </section>
 
-      <CommunityBottomNav />
+      <CommunityBottomNav activeNav="community" />
     </main>
   );
 }

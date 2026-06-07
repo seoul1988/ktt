@@ -713,10 +713,10 @@ useEffect(() => {
 				max-w-[420px]
 				shrink-0
 				snap-center
-				rounded-[28px]
-				border-4
+				rounded-[24px]
+				border-2
 				bg-white
-				p-[6px]
+				p-[4px]
 				shadow-2xl
 				${
 				  spot.id === selectedSpotId
@@ -726,7 +726,7 @@ useEffect(() => {
 			  `}
 			>
               <div className="flex flex-col gap-1">
-                <div className="relative h-[180px] w-full overflow-hidden rounded-[22px] bg-white">
+                <div className="relative h-[145px] w-full overflow-hidden rounded-[20px] bg-white">
                   {images.length > 0 ? (
                     <div
                       id={`image-scroll-${spot.id}`}

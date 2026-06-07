@@ -17,6 +17,20 @@ type AdItem = {
   status: string | null;
 };
 
+function statusLabel(status: string | null) {
+  if (status === "active") return "광고중";
+  if (status === "expired") return "만료";
+  if (status === "hidden") return "숨김";
+  return "광고중";
+}
+
+function statusClass(status: string | null) {
+  if (status === "active") return "bg-green-600";
+  if (status === "expired") return "bg-gray-500";
+  if (status === "hidden") return "bg-red-500";
+  return "bg-green-600";
+}
+
 export default async function AdDetailPage({
   params,
 }: {
@@ -40,6 +54,20 @@ export default async function AdDetailPage({
 
   const ad = data as AdItem;
 
+  const cleanImages = Array.isArray(ad.images)
+    ? ad.images.filter(
+        (img) => typeof img === "string" && img.trim() !== ""
+      )
+    : [];
+
+  const cleanVideoUrl =
+    typeof ad.video_url === "string" && ad.video_url.trim() !== ""
+      ? ad.video_url
+      : null;
+
+  const hasImage = cleanImages.length > 0;
+  const hasVideo = Boolean(cleanVideoUrl);
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
       <div className="mx-auto max-w-md">
@@ -48,23 +76,27 @@ export default async function AdDetailPage({
         </Link>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow">
-          <div className="bg-gray-200">
-            {ad.images?.[0] ? (
-              <img
-                src={ad.images[0]}
-                alt={ad.title}
-                className="max-h-[420px] w-full object-contain"
-              />
-            ) : (
-              <div className="flex h-64 items-center justify-center text-sm font-bold text-gray-400">
-                이미지 없음
-              </div>
-            )}
-          </div>
+          {hasVideo && (
+            <video
+              src={cleanVideoUrl || ""}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full"
+            />
+          )}
 
-          {Array.isArray(ad.images) && ad.images.length > 1 && (
+          {!hasVideo && hasImage && (
+            <img
+              src={cleanImages[0]}
+              alt={ad.title}
+              className="max-h-[420px] w-full object-contain"
+            />
+          )}
+
+          {hasImage && cleanImages.length > 1 && (
             <div className="flex gap-2 overflow-x-auto p-3">
-              {ad.images.map((img, index) => (
+              {cleanImages.map((img, index) => (
                 <img
                   key={index}
                   src={img}
@@ -72,16 +104,6 @@ export default async function AdDetailPage({
                   className="h-20 w-20 shrink-0 rounded-2xl object-cover"
                 />
               ))}
-            </div>
-          )}
-
-          {ad.video_url && (
-            <div className="p-3">
-              <video
-                src={ad.video_url}
-                controls
-                className="w-full rounded-2xl"
-              />
             </div>
           )}
 
@@ -93,11 +115,13 @@ export default async function AdDetailPage({
                 </span>
               )}
 
-              {ad.status && (
-                <span className="rounded-full bg-green-600 px-3 py-1 text-xs font-black text-white">
-                  {ad.status}
-                </span>
-              )}
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black text-white ${statusClass(
+                  ad.status
+                )}`}
+              >
+                {statusLabel(ad.status)}
+              </span>
             </div>
 
             <h1 className="text-2xl font-black">{ad.title}</h1>
