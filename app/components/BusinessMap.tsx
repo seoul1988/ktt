@@ -38,6 +38,9 @@ type MapCategory = {
 
 type Spot = {
   id: number;
+  source_type?: string | null;
+  deal_id?: number | string | null;
+  event_id?: number | string | null;
   name: string;
   category: string | null;
   city: string | null;
@@ -74,6 +77,16 @@ type Spot = {
 type SpotWithDistance = Spot & {
   distance?: number;
 };
+
+function getSpotRenderKey(spot: Spot, index: number) {
+  return [
+    spot.source_type || "spot",
+    spot.deal_id ?? "no-deal",
+    spot.event_id ?? "no-event",
+    spot.id,
+    index,
+  ].join("-");
+}
 
 function milesBetween(a: [number, number], b: [number, number]) {
   const R = 3958.8;
@@ -248,10 +261,11 @@ export default function BusinessMap({
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedSpotId, setSelectedSpotId] = useState<number | null>(null);
+  const [selectedSpotKey, setSelectedSpotKey] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(!showAllOnLoad);
   const [showCards, setShowCards] = useState(showAllOnLoad);
-  const [imageIndexes, setImageIndexes] = useState<Record<number, number>>({});
+  const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
@@ -286,7 +300,7 @@ export default function BusinessMap({
   }, [communityMode, mapCategories, spots]);
 	
 	
-  const cardRefs = useRef<Record<number, HTMLAnchorElement | null>>({});
+  const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
 
   useEffect(() => {
     async function loadMyRole() {
@@ -421,7 +435,10 @@ const cardSpots: SpotWithDistance[] = useMemo(() => {
 }, [mapSpots, userLocation]);
 
 useEffect(() => {
-  setSelectedSpotId(cardSpots[0]?.id || null);
+  const firstSpot = cardSpots[0];
+
+  setSelectedSpotId(firstSpot?.id || null);
+  setSelectedSpotKey(firstSpot ? getSpotRenderKey(firstSpot, 0) : null);
 }, [cardSpots]);
 
   useEffect(() => {
@@ -517,8 +534,9 @@ useEffect(() => {
     let closestId: number | null = null;
     let closestDistance = Infinity;
 
-    cardSpots.forEach((spot) => {
-      const el = cardRefs.current[spot.id];
+    cardSpots.forEach((spot, index) => {
+      const renderKey = getSpotRenderKey(spot, index);
+      const el = cardRefs.current[renderKey];
       if (!el) return;
 
       const distance = Math.abs(el.getBoundingClientRect().left - 16);
@@ -530,13 +548,25 @@ useEffect(() => {
     });
 
     if (closestId) {
+      const selectedIndex = cardSpots.findIndex((spot) => spot.id === closestId);
+      const selectedSpot = selectedIndex >= 0 ? cardSpots[selectedIndex] : null;
+
       setSelectedSpotId(closestId);
+      setSelectedSpotKey(
+        selectedSpot ? getSpotRenderKey(selectedSpot, selectedIndex) : null
+      );
     }
   };
 
-  const selectedMapSpot = mapSpots.find(
-    (v) => v.id === selectedSpotId && v.lat && v.lng
-  );
+  const selectedMapSpot =
+    cardSpots.find((spot, index) => {
+      return (
+        getSpotRenderKey(spot, index) === selectedSpotKey &&
+        spot.lat &&
+        spot.lng
+      );
+    }) ||
+    mapSpots.find((v) => v.id === selectedSpotId && v.lat && v.lng);
 
   return (
     <div className="relative min-h-screen">
@@ -640,32 +670,37 @@ useEffect(() => {
 
         {mapSpots
           .filter((spot) => spot.lat && spot.lng)
-          .map((spot) => (
-            <Marker
-              key={spot.id}
-              position={[spot.lat as number, spot.lng as number]}
-              icon={
-                spot.id === selectedSpotId ? selectedMarkerIcon : markerIcon
-              }
-              eventHandlers={{
-                click: (e) => {
-                  L.DomEvent.stopPropagation(e.originalEvent);
+          .map((spot, index) => {
+            const renderKey = getSpotRenderKey(spot, index);
 
-                  setSelectedSpotId(spot.id);
-                  setCategoryPanelOpen(false);
-                  setShowCards(true);
+            return (
+              <Marker
+                key={renderKey}
+                position={[spot.lat as number, spot.lng as number]}
+                icon={
+                  renderKey === selectedSpotKey ? selectedMarkerIcon : markerIcon
+                }
+                eventHandlers={{
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e.originalEvent);
 
-                  cardRefs.current[spot.id]?.scrollIntoView({
-                    behavior: "smooth",
-                    inline: "center",
-                    block: "nearest",
-                  });
-                },
-              }}
-            >
-              <Popup>{spot.name}</Popup>
-            </Marker>
-          ))}
+                    setSelectedSpotId(spot.id);
+                    setSelectedSpotKey(renderKey);
+                    setCategoryPanelOpen(false);
+                    setShowCards(true);
+
+                    cardRefs.current[renderKey]?.scrollIntoView({
+                      behavior: "smooth",
+                      inline: "center",
+                      block: "nearest",
+                    });
+                  },
+                }}
+              >
+                <Popup>{spot.name}</Popup>
+              </Marker>
+            );
+          })}
       </MapContainer>
 
       <div
@@ -676,7 +711,8 @@ useEffect(() => {
             : "bottom-[-360px] opacity-0"
         }`}
       >
-        {cardSpots.map((spot) => {
+        {cardSpots.map((spot, index) => {
+          const renderKey = getSpotRenderKey(spot, index);
           const images =
             spot.image_urls && spot.image_urls.length > 0
               ? spot.image_urls
@@ -684,7 +720,7 @@ useEffect(() => {
                   Boolean
                 );
 
-          const current = imageIndexes[spot.id] || 0;
+          const current = imageIndexes[renderKey] || 0;
           const status = getOpenStatus(spot);
           const firstCoupon = spot.coupons?.[0];
           const eventLabel =
@@ -698,9 +734,9 @@ useEffect(() => {
 
           return (
             <a
-			  key={spot.id}
+              key={renderKey}
 			  ref={(el) => {
-				cardRefs.current[spot.id] = el;
+				cardRefs.current[renderKey] = el;
 			  }}
 			  href={
 				communityMode
@@ -719,7 +755,7 @@ useEffect(() => {
 				p-[4px]
 				shadow-2xl
 				${
-				  spot.id === selectedSpotId
+				  renderKey === selectedSpotKey
 					? "border-red-500"
 					: "border-transparent"
 				}
@@ -729,7 +765,7 @@ useEffect(() => {
                 <div className="relative h-[145px] w-full overflow-hidden rounded-[20px] bg-white">
                   {images.length > 0 ? (
                     <div
-                      id={`image-scroll-${spot.id}`}
+                      id={`image-scroll-${renderKey}`}
                       className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
                       onClick={(e) => {
                         e.preventDefault();
@@ -744,7 +780,7 @@ useEffect(() => {
 
                         setImageIndexes((prev) => ({
                           ...prev,
-                          [spot.id]: Math.round(scrollLeft / width),
+                          [renderKey]: Math.round(scrollLeft / width),
                         }));
                       }}
                     >
@@ -779,7 +815,7 @@ useEffect(() => {
                         e.stopPropagation();
 
                         const c = document.getElementById(
-                          `image-scroll-${spot.id}`
+                          `image-scroll-${renderKey}`
                         );
 
                         if (!c) return;
@@ -802,7 +838,7 @@ useEffect(() => {
                         e.stopPropagation();
 
                         const c = document.getElementById(
-                          `image-scroll-${spot.id}`
+                          `image-scroll-${renderKey}`
                         );
 
                         if (!c) return;
