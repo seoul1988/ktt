@@ -1,15 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
-import { supabase } from "../../../lib/supabase";
-import BottomNav from "../../components/BottomNav";
+import { supabase } from "../../../../../lib/supabase";
+import CommunityBottomNav from "../../../../components/CommunityBottomNav";
 
 const libraries: "places"[] = ["places"];
 
-export default function NewEventPage() {
+function formatDate(value: string | null) {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
+
+function formatDateTimeLocal(value: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
+
+  return localDate.toISOString().slice(0, 16);
+}
+
+export default function EditCommunityEventForm({ event }: { event: any }) {
   const router = useRouter();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
@@ -18,29 +33,38 @@ export default function NewEventPage() {
     libraries,
   });
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [eventDate, setEventDate] = useState("");
-  const [location, setLocation] = useState("");
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
+  const [title, setTitle] = useState(event.title || "");
+  const [description, setDescription] = useState(event.description || "");
+  const [eventDate, setEventDate] = useState(formatDate(event.event_date));
+  const [location, setLocation] = useState(event.location || event.address || "");
+  const [latitude, setLatitude] = useState<number | null>(event.latitude ?? null);
+  const [longitude, setLongitude] = useState<number | null>(event.longitude ?? null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [imagePreview, setImagePreview] = useState(event.image_url || "");
+
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
+  const [videoPreview, setVideoPreview] = useState(event.video_url || "");
+  const [videoUrl, setVideoUrl] = useState(event.external_video_url || "");
+
+  const [contactName, setContactName] = useState(event.contact_name || "");
+  const [contactEmail, setContactEmail] = useState(event.contact_email || "");
+  const [contactPhone, setContactPhone] = useState(event.contact_phone || "");
+
+  const [collectAttendees, setCollectAttendees] = useState(
+    event.collect_attendees === true
+  );
+  const [raffleEnabled, setRaffleEnabled] = useState(
+    event.raffle_enabled === true
+  );
+  const [raffleDrawAt, setRaffleDrawAt] = useState(
+    formatDateTimeLocal(event.raffle_draw_at)
+  );
+  const [raffleWinnerCount, setRaffleWinnerCount] = useState(
+    event.raffle_winner_count || 1
+  );
 
   const [saving, setSaving] = useState(false);
-
-  const [contactName, setContactName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-
-  const [collectAttendees, setCollectAttendees] = useState(false);
-  const [raffleEnabled, setRaffleEnabled] = useState(false);
-  const [raffleDrawAt, setRaffleDrawAt] = useState("");
-  const [raffleWinnerCount, setRaffleWinnerCount] = useState(1);
 
   function onPlaceChanged() {
     const place = autocompleteRef.current?.getPlace();
@@ -93,7 +117,6 @@ export default function NewEventPage() {
       });
 
     if (error) {
-      console.error("UPLOAD ERROR:", error);
       throw new Error(`${bucket} upload failed: ${error.message}`);
     }
 
@@ -103,31 +126,6 @@ export default function NewEventPage() {
 
     return publicData.publicUrl;
   }
-
-  useEffect(() => {
-    async function loadProfile() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) return;
-
-      setContactEmail(user.email || "");
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, phone")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (profile) {
-        setContactName(profile.name || "");
-        setContactPhone(profile.phone || "");
-      }
-    }
-
-    loadProfile();
-  }, []);
 
   function setRegistrationMode(value: boolean) {
     setCollectAttendees(value);
@@ -169,31 +167,8 @@ export default function NewEventPage() {
     setSaving(true);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        alert("Please log in first.");
-        setSaving(false);
-        return;
-      }
-
-      let businessId: number | null = null;
-
-      const { data: ownerRow } = await supabase
-        .from("business_owners")
-        .select("business_id")
-        .eq("user_id", user.id)
-        .eq("status", "approved")
-        .maybeSingle();
-
-      if (ownerRow?.business_id) {
-        businessId = ownerRow.business_id;
-      }
-
-      let uploadedImageUrl = "";
-      let uploadedVideoUrl = "";
+      let uploadedImageUrl = event.image_url || null;
+      let uploadedVideoUrl = event.video_url || null;
 
       if (imageFile) {
         uploadedImageUrl = await uploadFile(
@@ -213,21 +188,19 @@ export default function NewEventPage() {
 
       const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
-      const { data: insertedEvent, error } = await supabase
-        .from("event_requests")
-        .insert({
-          owner_id: user.id,
-          business_id: businessId,
-
+      const { error } = await supabase
+        .from("community_events")
+        .update({
           title: title.trim(),
           description: description.trim(),
 
-          image_url: uploadedImageUrl || null,
-          video_url: uploadedVideoUrl || null,
+          image_url: uploadedImageUrl,
+          video_url: uploadedVideoUrl,
           external_video_url: videoUrl.trim() || null,
 
           event_date: eventDate || null,
           location: location.trim(),
+          address: location.trim(),
 
           latitude,
           longitude,
@@ -245,55 +218,17 @@ export default function NewEventPage() {
           attendee_required_name: collectAttendees,
           attendee_required_phone: collectAttendees,
           allow_companions: finalRaffleEnabled ? false : collectAttendees,
-
-          status: "pending",
         })
-        .select("id, title")
-        .single();
+        .eq("id", event.id);
 
       if (error) {
-        alert("Event submission failed: " + error.message);
+        alert("Update failed: " + error.message);
         setSaving(false);
         return;
       }
 
-      try {
-        const pushRes = await fetch("/api/push/admin-event-request", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            eventId: insertedEvent.id,
-            title: insertedEvent.title,
-          }),
-        });
-
-        const pushData = await pushRes.json();
-
-        console.log("ADMIN PUSH RESULT:", pushData);
-
-        if (!pushRes.ok) {
-          alert(
-            "The event was submitted, but the push notification failed:\n" +
-              (pushData.error || "Unknown Error")
-          );
-        } else {
-          console.log(
-            `Push Success - Sent: ${pushData.sent}, Failed: ${pushData.failed}`
-          );
-        }
-      } catch (pushError: any) {
-        console.error("Push notification failed:", pushError);
-
-        alert(
-          "The event was submitted, but the push notification request failed:\n" +
-            (pushError?.message || "Unknown Error")
-        );
-      }
-
-      alert("Your event has been submitted and will appear after admin approval.");
-      router.push("/");
+      router.push(`/community/events/${event.id}`);
+      router.refresh();
     } catch (err: any) {
       alert("Save failed: " + err.message);
       setSaving(false);
@@ -305,14 +240,14 @@ export default function NewEventPage() {
       <div className="mx-auto max-w-md">
         <div className="relative mb-5 flex items-center justify-center">
           <Link
-            href="/"
+            href={`/community/events/${event.id}`}
             className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#C46A2B] shadow"
           >
             ←
           </Link>
 
           <h1 className="text-2xl font-black text-[#C46A2B]">
-            Create Event
+            Edit Event
           </h1>
 
           <details className="absolute right-0">
@@ -350,6 +285,7 @@ export default function NewEventPage() {
               </Link>
 
               <button
+                type="button"
                 onClick={async () => {
                   await supabase.auth.signOut();
                   window.location.href = "/login";
@@ -518,7 +454,7 @@ export default function NewEventPage() {
                     </div>
 
                     <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
-                      Raffle registration will collect only the attendee's name and phone number.
+                      Raffle registration will collect only the attendee&apos;s name and phone number.
                       Guests/companions will be disabled so only the person who directly registers can win a prize.
                     </div>
                   </div>
@@ -560,7 +496,6 @@ export default function NewEventPage() {
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
                 Upload
-
                 <input
                   type="file"
                   accept="image/*"
@@ -587,7 +522,6 @@ export default function NewEventPage() {
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
                 Upload
-
                 <input
                   type="file"
                   accept="video/*"
@@ -634,16 +568,12 @@ export default function NewEventPage() {
             onClick={submitEvent}
             className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
           >
-            {saving ? "Submitting..." : "Submit Event"}
+            {saving ? "Saving..." : "Save Changes"}
           </button>
-
-          <p className="text-center text-xs font-bold text-gray-500">
-            After submission, an admin will approve it as a Business Event or Community Event.
-          </p>
         </div>
       </div>
 
-      <BottomNav />
+      <CommunityBottomNav activeNav="community" />
     </main>
   );
 }

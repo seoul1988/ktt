@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import BottomNav from "../../components/BottomNav";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
@@ -69,7 +70,6 @@ function getOpenStatus(hours?: string | null) {
   }
 
   const main = line.split("/ Break")[0].replace(today, "").trim();
-
   const [openText, closeText] = main.split(" - ");
 
   const open = timeTextToMinutes(openText);
@@ -91,6 +91,10 @@ type SearchParams = Promise<{
   from?: string;
 }>;
 
+function normalizeCategory(value: string) {
+  return value.trim().toLowerCase().replace(/s$/, "");
+}
+
 export default async function BusinessPage({
   params,
   searchParams,
@@ -100,8 +104,6 @@ export default async function BusinessPage({
 }) {
   const { id } = await params;
   const { from } = await searchParams;
-
-  const backHref = from === "community" ? "/community/map" : "/map";
 
   const { data: spot, error } = await supabase
     .from("businesses")
@@ -113,27 +115,47 @@ export default async function BusinessPage({
     return <div>Not found</div>;
   }
 
+  const { data: communityCategories } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("show_on_community_map", true);
+
+  const spotCategories = String(spot.category || "")
+    .split(",")
+    .map((item) => normalizeCategory(item))
+    .filter(Boolean);
+
+  const communityCategoryNames = (communityCategories || []).map((cat) =>
+    normalizeCategory(cat.name || "")
+  );
+
+  const isCommunityBusiness = from === "community";
+
+const backHref = isCommunityBusiness
+  ? "/community"
+  : "/map";
+
   const now = new Date().toISOString();
 
-const { data: coupons } = await supabase
-  .from("coupons")
-  .select("*")
-  .eq("business_id", id)
-  .eq("active", true)
-  .eq("status", "approved")
-  .or(`end_date.is.null,end_date.gte.${now}`)
-  .order("id", { ascending: false });
+  const { data: coupons } = await supabase
+    .from("coupons")
+    .select("*")
+    .eq("business_id", id)
+    .eq("active", true)
+    .eq("status", "approved")
+    .or(`end_date.is.null,end_date.gte.${now}`)
+    .order("id", { ascending: false });
 
-const availableCoupons = (coupons || []).filter((coupon) => {
-  const usageLimit = Number(coupon.usage_limit || 0);
-  const usedCount = Number(coupon.used_count || 0);
+  const availableCoupons = (coupons || []).filter((coupon) => {
+    const usageLimit = Number(coupon.usage_limit || 0);
+    const usedCount = Number(coupon.used_count || 0);
 
-  if (usageLimit > 0 && usedCount >= usageLimit) {
-    return false;
-  }
+    if (usageLimit > 0 && usedCount >= usageLimit) {
+      return false;
+    }
 
-  return true;
-});
+    return true;
+  });
 
   const images =
     spot.image_urls && Array.isArray(spot.image_urls) && spot.image_urls.length > 0
@@ -155,30 +177,30 @@ const availableCoupons = (coupons || []).filter((coupon) => {
   return (
     <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
       <div className="mx-auto max-w-xl">
-        <div className="relative">
-          <BusinessMediaViewer images={images} videos={videos} name={spot.name} />
+        <header className="sticky top-0 z-50 bg-[#F8F3EC]/95 shadow-sm backdrop-blur">
+          <div className="flex h-14 items-center justify-between gap-3 px-4">
+            <Link
+              href={backHref}
+              className="shrink-0 text-sm font-extrabold text-[#172033]"
+            >
+              ← Back
+            </Link>
 
-          <Link
-            href={backHref}
-            className="absolute left-5 top-5 z-50 rounded-full bg-white/90 px-4 py-2 text-sm font-bold shadow"
-          >
-            ← Back
-          </Link>
-        </div>
-
-        <section className="px-5 pt-5 pb-32">
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-3xl font-extrabold leading-tight">
+            <h1 className="min-w-0 flex-1 truncate text-center text-lg font-extrabold">
               {spot.name}
             </h1>
 
-            <div className="shrink-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center">
               <ProfileButton />
             </div>
           </div>
+        </header>
 
-          <p className="mt-1 text-sm text-gray-600">
-            {spot.category} · {spot.city} ·{" "}
+        <BusinessMediaViewer images={images} videos={videos} name={spot.name} />
+
+        <section className="px-5 pt-5 pb-32">
+          <p className="text-sm text-gray-600">
+            {spot.category} · {spot.city || "Triangle"} ·{" "}
             <span
               className={
                 status.open
@@ -198,7 +220,7 @@ const availableCoupons = (coupons || []).filter((coupon) => {
 
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                spot.address || `${spot.name} ${spot.city} NC`
+                spot.address || `${spot.name} ${spot.city || ""} NC`
               )}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -209,9 +231,9 @@ const availableCoupons = (coupons || []).filter((coupon) => {
 
             <a
               href={`sms:?&body=${encodeURIComponent(
-                `${spot.name} - ${spot.address || spot.city || "Triangle Area"} ${
-                  spot.website_url || ""
-                }`
+                `${spot.name} - ${
+                  spot.address || spot.city || "Triangle Area"
+                } ${spot.website_url || ""}`
               )}`}
             >
               <div className="text-3xl">⌲</div>
@@ -348,12 +370,17 @@ const availableCoupons = (coupons || []).filter((coupon) => {
           </section>
 
           {availableCoupons.length > 0 && (
-		  <BusinessCouponPopup coupons={availableCoupons} />
-		)}
-		</section>
+            <BusinessCouponPopup coupons={availableCoupons} />
+          )}
+        </section>
       </div>
 
-      <BottomNav />
+      {isCommunityBusiness ? (
+        <CommunityBottomNav activeNav="community" />
+      ) : (
+        <BottomNav activeNav="map" />
+      )}
     </main>
   );
 }
+

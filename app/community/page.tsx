@@ -50,12 +50,10 @@ export default async function CommunityPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-md px-5 pb-28 pt-6">
+      <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="mb-6 flex items-start justify-between">
           <div>
-            <p className="text-sm font-black text-[#C4483A]">
-              COMMUNITY
-            </p>
+            <p className="text-sm font-black text-[#C4483A]">COMMUNITY</p>
 
             <h1 className="text-3xl font-black tracking-tight">
               KTown Triangle
@@ -210,10 +208,10 @@ export default async function CommunityPage() {
             {newBusinesses?.map((biz) => (
               <Link
                 key={biz.id}
-                href={`/business/${biz.id}`}
+                href={`/business/${biz.id}?from=community`}
                 className="overflow-hidden rounded-3xl bg-[#2A3448] text-white shadow-sm"
               >
-                <div className="h-44 w-full overflow-hidden bg-white">
+                <div className="relative h-44 w-full overflow-hidden bg-white">
                   {biz.image_url ? (
                     <img
                       src={biz.image_url}
@@ -225,18 +223,18 @@ export default async function CommunityPage() {
                       No Photo
                     </div>
                   )}
+
+                  <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                    NEW
+                  </div>
                 </div>
 
                 <div className="p-3">
-                  <span className="rounded-full bg-[#C4483A] px-2 py-1 text-[9px] font-black text-white">
-                    NEW
-                  </span>
-
-                  <h3 className="mt-2 line-clamp-1 text-sm font-black">
+                  <h3 className="line-clamp-1 text-sm font-black">
                     {biz.name}
                   </h3>
 
-                  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
+                  <p className="line-clamp-1 text-xs font-semibold text-white/70">
                     {biz.category || "Business"}
                   </p>
 
@@ -306,7 +304,7 @@ export default async function CommunityPage() {
         </section>
       </section>
 
-      <CommunityBottomNav activeNav="community" />
+      <CommunityBottomNav />
     </main>
   );
 }
