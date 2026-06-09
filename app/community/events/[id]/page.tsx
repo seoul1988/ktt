@@ -103,11 +103,14 @@ export default async function CommunityEventDetailPage({
     redirect("/community");
   }
 
-  const collectAttendees = event.collect_attendees === true;
-  const raffleEnabled = event.raffle_enabled === true;
-  const allowCompanions = raffleEnabled
-    ? false
-    : event.allow_companions !== false;
+ const raffleEnabled = event.raffle_enabled === true;
+
+const collectAttendees =
+  event.collect_attendees === true || raffleEnabled === true;
+
+const allowCompanions = raffleEnabled
+  ? false
+  : event.allow_companions !== false;
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
