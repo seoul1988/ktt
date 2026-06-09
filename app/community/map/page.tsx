@@ -134,7 +134,7 @@ export default async function CommunityMapPage() {
         communityMode={true}
       />
 
-      <CommunityBottomNav activeNav="map" />
+      <CommunityBottomNav  />
     </main>
   );
 }
