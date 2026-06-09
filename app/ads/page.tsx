@@ -178,7 +178,7 @@ export default async function AdsPage() {
         )}
       </div>
 
-      <CommunityBottomNav activeNav="ads" />
+      <CommunityBottomNav />
     </main>
   );
 }

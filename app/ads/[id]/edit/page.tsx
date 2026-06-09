@@ -429,7 +429,7 @@ export default function EditAdPage() {
         </form>
       </div>
 
-      <CommunityBottomNav activeNav="ads" />
+      <CommunityBottomNav />
     </main>
   );
 }

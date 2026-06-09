@@ -159,7 +159,7 @@ export default async function AdDetailPage({
         </div>
       </div>
 
-      <CommunityBottomNav activeNav="ads" />
+      <CommunityBottomNav />
     </main>
   );
 }
