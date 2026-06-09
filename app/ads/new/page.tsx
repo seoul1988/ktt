@@ -251,7 +251,7 @@ export default function NewAdPage() {
         </form>
       </div>
 
-      <CommunityBottomNav activeNav="ads" />
+      <CommunityBottomNav  />
     </main>
   );
 }

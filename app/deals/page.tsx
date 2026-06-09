@@ -123,7 +123,7 @@ export default async function DealsPage() {
         )}
       </div>
 
-      <BottomNav activeNav="deals"/>
+      <BottomNav />
     </main>
   );
 }
