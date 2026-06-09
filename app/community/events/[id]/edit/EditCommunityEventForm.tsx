@@ -573,7 +573,7 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
         </div>
       </div>
 
-      <CommunityBottomNav activeNav="community" />
+      <CommunityBottomNav  />
     </main>
   );
 }

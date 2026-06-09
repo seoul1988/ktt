@@ -37,7 +37,7 @@ export default async function CommunityEventDetailPage({
           </Link>
         </div>
 
-        <CommunityBottomNav activeNav="community" />
+        <CommunityBottomNav />
       </main>
     );
   }
@@ -247,7 +247,7 @@ export default async function CommunityEventDetailPage({
         )}
       </section>
 
-      <CommunityBottomNav activeNav="community" />
+      <CommunityBottomNav  />
     </main>
   );
 }
