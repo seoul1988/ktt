@@ -210,7 +210,7 @@ export default function MyAdsPage() {
         )}
       </div>
 
-      <CommunityBottomNav  />
+      <CommunityBottomNav activeNav="ads" />
     </main>
   );
 }

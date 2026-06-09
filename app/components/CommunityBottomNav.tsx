@@ -1,18 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
-export default function CommunityBottomNav() {
-  const pathname = usePathname();
+type CommunityBottomNavProps = {
+  activeNav?: "home" | "map" | "market" | "ads" | "community" | "admin";
+};
+
+export default function CommunityBottomNav({
+  activeNav = "community",
+}: CommunityBottomNavProps) {
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const getClass = (active: boolean) =>
-    active
-      ? "flex flex-col items-center text-[#F7B955]"
-      : "flex flex-col items-center text-white";
+  const activeClass = "text-[#F7B955]";
+  const normalClass = "text-white";
 
   useEffect(() => {
     async function loadProfile() {
@@ -35,38 +37,48 @@ export default function CommunityBottomNav() {
   }, []);
 
   return (
-    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[94%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#8B2635] px-2 py-3 text-[10px] font-semibold shadow-2xl">
-      <Link href="/" className={getClass(pathname === "/")}>
+    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#8B2635] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl">
+      <Link
+        href="/"
+        className={`flex flex-col items-center ${
+          activeNav === "home" ? activeClass : normalClass
+        }`}
+      >
         <span>HOME</span>
       </Link>
 
       <Link
         href="/community/map"
-        className={getClass(pathname.startsWith("/community/map"))}
+        className={`flex flex-col items-center ${
+          activeNav === "map" ? activeClass : normalClass
+        }`}
       >
         <span>MAP</span>
       </Link>
 
       <Link
         href="/market"
-        className={getClass(pathname.startsWith("/market"))}
+        className={`flex flex-col items-center ${
+          activeNav === "market" ? activeClass : normalClass
+        }`}
       >
         <span>MARKET</span>
       </Link>
 
       <Link
         href="/ads"
-        className={getClass(pathname.startsWith("/ads"))}
+        className={`flex flex-col items-center ${
+          activeNav === "ads" ? activeClass : normalClass
+        }`}
       >
         <span>ADS</span>
       </Link>
 
       <Link
         href="/community"
-        className={getClass(
-          pathname === "/community" ||
-            pathname.startsWith("/community/events")
-        )}
+        className={`flex flex-col items-center ${
+          activeNav === "community" ? activeClass : normalClass
+        }`}
       >
         <span>COMMUNITY</span>
       </Link>
@@ -74,7 +86,9 @@ export default function CommunityBottomNav() {
       {isAdmin && (
         <Link
           href="/admin"
-          className={getClass(pathname.startsWith("/admin"))}
+          className={`flex flex-col items-center ${
+            activeNav === "admin" ? activeClass : normalClass
+          }`}
         >
           <span>ADMIN</span>
         </Link>

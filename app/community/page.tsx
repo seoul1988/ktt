@@ -304,7 +304,7 @@ export default async function CommunityPage() {
         </section>
       </section>
 
-      <CommunityBottomNav />
+      <CommunityBottomNav activeNav="community" />
     </main>
   );
 }

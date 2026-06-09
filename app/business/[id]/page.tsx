@@ -376,7 +376,7 @@ const backHref = isCommunityBusiness
       </div>
 
       {isCommunityBusiness ? (
-        <CommunityBottomNav  />
+        <CommunityBottomNav activeNav="community" />
       ) : (
         <BottomNav activeNav="map" />
       )}
