@@ -62,46 +62,25 @@ export default async function CommunityEventDetailPage({
   const canManage = isAdmin || isOwner;
 
   async function deleteEvent() {
-    "use server";
+  "use server";
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const { data: currentEvent } = await supabase
+    .from("community_events")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
 
-    if (!user) {
-      redirect("/login");
-    }
-
-    const { data: currentEvent } = await supabase
-      .from("community_events")
-      .select("id, owner_id")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (!currentEvent) {
-      redirect("/community");
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const canDelete =
-      profile?.role === "admin" || currentEvent.owner_id === user.id;
-
-    if (!canDelete) {
-      redirect(`/community/events/${id}`);
-    }
-
-    await supabase.from("community_events").delete().eq("id", id);
-
-    revalidatePath("/community");
-    revalidatePath(`/community/events/${id}`);
-
+  if (!currentEvent) {
     redirect("/community");
   }
+
+  await supabase.from("community_events").delete().eq("id", id);
+
+  revalidatePath("/community");
+  revalidatePath(`/community/events/${id}`);
+
+  redirect("/community");
+}
 
  const raffleEnabled = event.raffle_enabled === true;
 
