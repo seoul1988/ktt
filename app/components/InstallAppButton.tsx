@@ -60,16 +60,14 @@ export default function InstallAppButton() {
 
     const hideUntil = Number(localStorage.getItem(HIDE_KEY) || 0);
 
+    let timer: number | null = null;
+
     if (Date.now() > hideUntil) {
       setShowBanner(true);
 
-      const timer = window.setTimeout(() => {
+      timer = window.setTimeout(() => {
         closeBanner();
       }, 5000);
-
-      return () => {
-        window.clearTimeout(timer);
-      };
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -86,10 +84,13 @@ export default function InstallAppButton() {
     window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
+      if (timer) window.clearTimeout(timer);
+
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt
       );
+
       window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
@@ -127,51 +128,38 @@ export default function InstallAppButton() {
   return (
     <>
       {showBanner ? (
-  <div
-    onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
-    onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0].clientX)}
-    className={`fixed left-4 right-4 top-4 z-[99999] rounded-3xl bg-[#172033] p-4 text-white shadow-2xl transition-transform duration-300 ease-in-out ${
-      isClosing ? "translate-x-[120%]" : "translate-x-0"
-    }`}
-  >
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex-1">
-        <p className="text-sm font-black">
-          📱 Install KTown Triangle
-        </p>
+        <div
+          onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
+          onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0].clientX)}
+          className={`fixed left-4 right-4 top-4 z-[99999] rounded-3xl bg-[#172033] p-4 text-white shadow-2xl transition-transform duration-300 ease-in-out ${
+            isClosing ? "translate-x-[120%]" : "translate-x-0"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-black">
+                📱 Install KTown Triangle
+              </p>
 
-        <p className="mt-1 text-xs font-semibold text-white/75">
-          Add this app to your phone for faster access.
-        </p>
-      </div>
+              <p className="mt-1 text-xs font-semibold text-white/75">
+                Add this app to your phone for faster access.
+              </p>
+            </div>
 
-      <button
-        onClick={closeBanner}
-        className="rounded-full bg-white/15 px-3 py-1 text-xs font-black"
-      >
-        ✕
-      </button>
-    </div>
-
-    <button
-      onClick={installApp}
-      className="mt-4 w-full rounded-2xl bg-[#F7B955] py-3 text-sm font-black text-[#172033]"
-    >
-      Install App
-    </button>
-  </div>
-) : (
-  <button
-    onClick={openBanner}
-    className="fixed right-0 top-1/2 z-[2000] h-20 w-4 -translate-y-1/2 rounded-l-full bg-[#A8A8A8] shadow-md"
-    aria-label="Open install panel"
-  >
-    <span className="block text-center text-[10px] text-white">
-      ≡
-    </span>
-  </button>
-)}
+            <button
+              onClick={closeBanner}
+              className="rounded-full bg-white/15 px-3 py-1 text-xs font-black"
+            >
+              ✕
+            </button>
           </div>
+
+          <button
+            onClick={installApp}
+            className="mt-4 w-full rounded-2xl bg-[#F7B955] py-3 text-sm font-black text-[#172033]"
+          >
+            Install App
+          </button>
         </div>
       ) : (
         <button
