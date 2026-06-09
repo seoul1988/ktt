@@ -7,30 +7,15 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+const HIDE_KEY = "ktt_install_banner_hide_until";
+const HIDE_TIME = 24 * 60 * 60 * 1000;
+
 export default function InstallAppButton() {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
 
+  const [showBanner, setShowBanner] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [isClosing, setIsClosing] = useState(false);
-
-  function closeBanner() {
-    setIsClosing(true);
-
-    window.setTimeout(() => {
-      setShowBanner(false);
-      setIsClosing(false);
-    }, 350);
-  }
-
-  function openBanner() {
-    setShowBanner(true);
-    setIsClosing(false);
-  }
 
   useEffect(() => {
     const standalone =
@@ -42,137 +27,78 @@ export default function InstallAppButton() {
       return;
     }
 
-    const userAgent = window.navigator.userAgent.toLowerCase();
+    const hideUntil = Number(localStorage.getItem(HIDE_KEY) || 0);
+    const now = Date.now();
 
-    const ios =
-      /iphone|ipad|ipod/.test(userAgent) &&
-      !(window.navigator as any).standalone;
+    if (now > hideUntil) {
+      setShowBanner(true);
+    }
 
-    setIsIOS(ios);
-
-    const timer = window.setTimeout(() => {
-      closeBanner();
-    }, 5000);
-
-    const handleBeforeInstallPrompt = (event: Event) => {
+    const handler = (event: Event) => {
       event.preventDefault();
       setInstallPrompt(event as BeforeInstallPromptEvent);
     };
 
-    const handleAppInstalled = () => {
-      setIsInstalled(true);
-      setInstallPrompt(null);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
+    window.addEventListener("beforeinstallprompt", handler);
 
     return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt
-      );
-      window.removeEventListener("appinstalled", handleAppInstalled);
+      window.removeEventListener("beforeinstallprompt", handler);
     };
   }, []);
 
-  async function installApp() {
-    if (!installPrompt) {
-      setShowIOSGuide(true);
-      return;
-    }
-
-    await installPrompt.prompt();
-
-    const choice = await installPrompt.userChoice;
-
-    if (choice.outcome === "accepted") {
-      setIsInstalled(true);
-    }
-
-    setInstallPrompt(null);
+  function closeBanner() {
+    localStorage.setItem(HIDE_KEY, String(Date.now() + HIDE_TIME));
+    setShowBanner(false);
   }
 
-  function handleTouchEnd(x: number) {
-    if (touchStartX !== null && x - touchStartX > 80) {
-      closeBanner();
-    }
+  async function installApp() {
+    if (!installPrompt) return;
 
-    setTouchStartX(null);
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+
+    setInstallPrompt(null);
+    setShowBanner(false);
   }
 
   if (isInstalled) return null;
-  if (!installPrompt && !isIOS) return null;
 
   return (
     <>
-      {showBanner ? (
-        <div
-          onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
-          onTouchEnd={(e) => handleTouchEnd(e.changedTouches[0].clientX)}
-          className={`fixed left-6 right-6 top-[82px] z-[2000] rounded-3xl bg-[#EFE3D3] p-4 shadow-2xl transition-transform duration-300 ease-in-out ${
-            isClosing ? "translate-x-[120%]" : "translate-x-0"
-          }`}
-        >
+      {showBanner && (
+        <div className="fixed left-4 right-4 top-4 z-[99999] rounded-3xl bg-[#172033] p-4 text-white shadow-2xl">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex-1">
-              <p className="text-sm font-black text-[#172033]">
-                📱 Add to Home screen”
+            <div>
+              <p className="text-sm font-black">Install KTown Triangle</p>
+              <p className="mt-1 text-xs font-semibold text-white/75">
+                Add this app to your phone for faster access.
               </p>
-
-              <p className="mt-1 text-xs font-semibold text-[#6B6257]">
-                Quick access to local Korean food.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={installApp}
-                className="shrink-0 rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
-              >
-                Add
-              </button>
-
-              <button
-                onClick={closeBanner}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-black text-[#6B6257] hover:bg-black/5"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={openBanner}
-          className="fixed right-0 top-1/2 z-[2000] h-20 w-4 -translate-y-1/2 rounded-l-full bg-[#A8A8A8] shadow-md"
-          aria-label="Open install panel"
-        >
-          <span className="block text-center text-[10px] text-white">≡</span>
-        </button>
-      )}
-
-      {showIOSGuide && (
-        <div className="fixed inset-0 z-[3000] flex items-end bg-black/40 p-4">
-          <div className="w-full rounded-[28px] bg-white p-5 text-[#172033] shadow-2xl">
-            <h2 className="text-xl font-black">Add KTown to your phone</h2>
-
-            <div className="mt-4 space-y-3 text-sm font-semibold text-gray-700">
-              <p>1. Open the browser menu.</p>
-              <p>2. Tap “Add to Home screen”.</p>
-              <p>3. Tap “Add”.</p>
             </div>
 
             <button
-              onClick={() => setShowIOSGuide(false)}
-              className="mt-5 w-full rounded-2xl bg-[#172033] py-3 font-black text-white"
+              onClick={closeBanner}
+              className="rounded-full bg-white/15 px-3 py-1 text-xs font-black"
             >
-              Close
+              ✕
             </button>
           </div>
+
+          <button
+            onClick={installApp}
+            className="mt-4 w-full rounded-2xl bg-[#F7B955] py-3 text-sm font-black text-[#172033]"
+          >
+            Install App
+          </button>
         </div>
+      )}
+
+      {!showBanner && (
+        <button
+          onClick={() => setShowBanner(true)}
+          className="fixed right-4 top-24 z-[99999] rounded-full bg-[#172033] px-4 py-3 text-xs font-black text-white shadow-2xl"
+        >
+          APP
+        </button>
       )}
     </>
   );
