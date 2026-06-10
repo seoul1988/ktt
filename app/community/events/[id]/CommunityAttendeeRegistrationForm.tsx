@@ -59,7 +59,7 @@ export default function CommunityAttendeeRegistrationForm({
 
       if (existingUser) {
         setSaving(false);
-        alert("You are already registered for this event.");
+        alert("이미 이 이벤트에 등록되어 있습니다.");
         return;
       }
     }
@@ -73,7 +73,7 @@ export default function CommunityAttendeeRegistrationForm({
 
     if (existingPhone) {
       setSaving(false);
-      alert("This phone number is already registered for this event.");
+      alert("이미 등록된 전화번호입니다.");
       return;
     }
 
@@ -96,7 +96,7 @@ export default function CommunityAttendeeRegistrationForm({
 
     if (error) {
       if (error.code === "23505") {
-        alert("You are already registered for this event.");
+        alert("이미 이 이벤트에 등록되어 있습니다.");
         return;
       }
 
@@ -108,6 +108,8 @@ export default function CommunityAttendeeRegistrationForm({
     setName("");
     setPhone("");
     setCompanions("0");
+
+    window.location.reload();
   }
 
   if (done) {
@@ -130,45 +132,30 @@ export default function CommunityAttendeeRegistrationForm({
 
       {open && (
         <div className="mt-4 space-y-3">
-          <div>
-            <label className="mb-1 block text-xs font-black text-[#6B6257]">
-              Name
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none"
-            />
-          </div>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none"
+          />
 
-          <div>
-            <label className="mb-1 block text-xs font-black text-[#6B6257]">
-              Phone Number
-            </label>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone number"
-              inputMode="tel"
-              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none"
-            />
-          </div>
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone number"
+            inputMode="tel"
+            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none"
+          />
 
           {canUseCompanions && (
-            <div>
-              <label className="mb-1 block text-xs font-black text-[#6B6257]">
-                Guests
-              </label>
-              <input
-                value={companions}
-                onChange={(e) => setCompanions(e.target.value)}
-                type="number"
-                min={0}
-                placeholder="0"
-                className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none"
-              />
-            </div>
+            <input
+              value={companions}
+              onChange={(e) => setCompanions(e.target.value)}
+              type="number"
+              min={0}
+              placeholder="Guests"
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold outline-none"
+            />
           )}
 
           {raffleEnabled && (

@@ -15,9 +15,11 @@ type Attendee = {
 export default function CommunityAttendeeList({
   eventId,
   ownerId,
+  raffleEnabled = false,
 }: {
   eventId: string;
   ownerId: string | null;
+  raffleEnabled?: boolean;
 }) {
   const [loading, setLoading] = useState(true);
   const [canView, setCanView] = useState(false);
@@ -71,6 +73,8 @@ export default function CommunityAttendeeList({
   }, [eventId, ownerId]);
 
   function getTotalPeople() {
+    if (raffleEnabled) return rows.length;
+
     return rows.reduce((sum, row) => {
       const total = Number(row.total_count);
 
@@ -103,28 +107,37 @@ export default function CommunityAttendeeList({
     window.URL.revokeObjectURL(url);
   }
 
+  function getRowTotal(row: Attendee) {
+    const total = Number(row.total_count);
+
+    if (Number.isFinite(total) && total > 0) {
+      return total;
+    }
+
+    return 1;
+  }
+
   function exportToExcelCsv() {
-    const header = [
-      "No",
-      "Name",
-      "Phone",
-      "Guests",
-      "Total People",
-      "Registered At",
-    ];
+    const header = raffleEnabled
+      ? ["No", "Name", "Phone", "Registered At"]
+      : ["No", "Name", "Phone", "Guests", "Total People", "Registered At"];
 
     const csvRows = rows.map((row, index) => {
-      const total =
-        Number.isFinite(Number(row.total_count)) && Number(row.total_count) > 0
-          ? Number(row.total_count)
-          : 1;
+      if (raffleEnabled) {
+        return [
+          index + 1,
+          row.name || "",
+          row.phone || "",
+          row.created_at ? new Date(row.created_at).toLocaleString() : "",
+        ];
+      }
 
       return [
         index + 1,
         row.name || "",
         row.phone || "",
         Number(row.companions) || 0,
-        total,
+        getRowTotal(row),
         row.created_at ? new Date(row.created_at).toLocaleString() : "",
       ];
     });
@@ -147,13 +160,40 @@ export default function CommunityAttendeeList({
   function exportToWordDoc() {
     const totalPeople = getTotalPeople();
 
+    const tableHead = raffleEnabled
+      ? `
+        <tr>
+          <th>No</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Registered At</th>
+        </tr>
+      `
+      : `
+        <tr>
+          <th>No</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Guests</th>
+          <th>Total People</th>
+          <th>Registered At</th>
+        </tr>
+      `;
+
     const tableRows = rows
       .map((row, index) => {
-        const total =
-          Number.isFinite(Number(row.total_count)) &&
-          Number(row.total_count) > 0
-            ? Number(row.total_count)
-            : 1;
+        if (raffleEnabled) {
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${row.name || ""}</td>
+              <td>${row.phone || ""}</td>
+              <td>${
+                row.created_at ? new Date(row.created_at).toLocaleString() : ""
+              }</td>
+            </tr>
+          `;
+        }
 
         return `
           <tr>
@@ -161,7 +201,7 @@ export default function CommunityAttendeeList({
             <td>${row.name || ""}</td>
             <td>${row.phone || ""}</td>
             <td>${Number(row.companions) || 0}</td>
-            <td>${total}</td>
+            <td>${getRowTotal(row)}</td>
             <td>${
               row.created_at ? new Date(row.created_at).toLocaleString() : ""
             }</td>
@@ -184,19 +224,10 @@ export default function CommunityAttendeeList({
           </style>
         </head>
         <body>
-          <h1>Community Attendee List</h1>
-          <p><strong>Total People:</strong> ${totalPeople}</p>
+          <h1>${raffleEnabled ? "Drawing Entry List" : "Community Attendee List"}</h1>
+          <p><strong>${raffleEnabled ? "Total Entries" : "Total People"}:</strong> ${totalPeople}</p>
           <table>
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Guests</th>
-                <th>Total People</th>
-                <th>Registered At</th>
-              </tr>
-            </thead>
+            <thead>${tableHead}</thead>
             <tbody>${tableRows}</tbody>
           </table>
         </body>
@@ -219,7 +250,9 @@ export default function CommunityAttendeeList({
     <div className="mt-5 rounded-3xl bg-white p-5 shadow-xl">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black">Attendee List</h2>
+          <h2 className="text-xl font-black">
+            {raffleEnabled ? "Drawing Entries" : "Attendee List"}
+          </h2>
           <p className="mt-1 text-xs font-bold text-gray-500">
             Visible only to the event owner and admins.
           </p>
@@ -227,7 +260,9 @@ export default function CommunityAttendeeList({
 
         <div className="rounded-2xl bg-[#F8F3EC] px-4 py-3 text-center">
           <p className="text-2xl font-black text-[#C46A2B]">{totalPeople}</p>
-          <p className="text-[10px] font-black text-gray-500">PEOPLE</p>
+          <p className="text-[10px] font-black text-gray-500">
+            {raffleEnabled ? "ENTRIES" : "PEOPLE"}
+          </p>
         </div>
       </div>
 
@@ -263,43 +298,37 @@ export default function CommunityAttendeeList({
         </p>
       ) : (
         <div className="mt-5 space-y-3">
-          {rows.map((attendee, index) => {
-            const total =
-              Number.isFinite(Number(attendee.total_count)) &&
-              Number(attendee.total_count) > 0
-                ? Number(attendee.total_count)
-                : 1;
+          {rows.map((attendee, index) => (
+            <div key={attendee.id} className="rounded-2xl border bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black">
+                    {index + 1}. {attendee.name || "No Name"}
+                  </p>
 
-            return (
-              <div key={attendee.id} className="rounded-2xl border bg-gray-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-black">
-                      {index + 1}. {attendee.name || "No Name"}
-                    </p>
-
-                    <a
-                      href={attendee.phone ? `tel:${attendee.phone}` : "#"}
-                      className="mt-1 block text-sm font-bold text-[#C46A2B]"
-                    >
-                      {attendee.phone || "No Phone"}
-                    </a>
-                  </div>
-
-                  <div className="text-right text-xs font-black text-gray-500">
-                    <p>Guests: {Number(attendee.companions) || 0}</p>
-                    <p>Total: {total}</p>
-                  </div>
+                  <a
+                    href={attendee.phone ? `tel:${attendee.phone}` : "#"}
+                    className="mt-1 block text-sm font-bold text-[#C46A2B]"
+                  >
+                    {attendee.phone || "No Phone"}
+                  </a>
                 </div>
 
-                {attendee.created_at && (
-                  <p className="mt-2 text-[11px] font-bold text-gray-400">
-                    {new Date(attendee.created_at).toLocaleString()}
-                  </p>
+                {!raffleEnabled && (
+                  <div className="text-right text-xs font-black text-gray-500">
+                    <p>Guests: {Number(attendee.companions) || 0}</p>
+                    <p>Total: {getRowTotal(attendee)}</p>
+                  </div>
                 )}
               </div>
-            );
-          })}
+
+              {attendee.created_at && (
+                <p className="mt-2 text-[11px] font-bold text-gray-400">
+                  {new Date(attendee.created_at).toLocaleString()}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

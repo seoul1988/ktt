@@ -160,8 +160,7 @@ const allowCompanions = raffleEnabled
             ) : null}
 
             <div className="mt-2 font-bold">
-              Only the person who registers directly is eligible. Guests are not
-              accepted for this drawing.
+              추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
             </div>
           </div>
         )}
@@ -223,9 +222,10 @@ const allowCompanions = raffleEnabled
 
         {collectAttendees && (
           <CommunityAttendeeList
-            eventId={event.id}
-            ownerId={event.owner_id || null}
-          />
+		  eventId={event.id}
+		  ownerId={event.owner_id || null}
+		  raffleEnabled={raffleEnabled}
+		/>
         )}
       </section>
 
