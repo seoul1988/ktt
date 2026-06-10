@@ -53,10 +53,9 @@ export default function CommunityAttendeeList({
       }
 
       const { data, error } = await supabase
-        .from("event_attendees")
+        .from("community_event_attendees")
         .select("id, name, phone, companions, total_count, created_at")
         .eq("event_id", eventId)
-        .eq("event_type", "community")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -70,6 +69,18 @@ export default function CommunityAttendeeList({
 
     load();
   }, [eventId, ownerId]);
+
+  function getTotalPeople() {
+    return rows.reduce((sum, row) => {
+      const total = Number(row.total_count);
+
+      if (Number.isFinite(total) && total > 0) {
+        return sum + total;
+      }
+
+      return sum + 1;
+    }, 0);
+  }
 
   function safeFileName(value: string) {
     return value
@@ -102,14 +113,21 @@ export default function CommunityAttendeeList({
       "Registered At",
     ];
 
-    const csvRows = rows.map((row, index) => [
-      index + 1,
-      row.name || "",
-      row.phone || "",
-      Number(row.companions) || 0,
-      Number(row.total_count) || 1,
-      row.created_at ? new Date(row.created_at).toLocaleString() : "",
-    ]);
+    const csvRows = rows.map((row, index) => {
+      const total =
+        Number.isFinite(Number(row.total_count)) && Number(row.total_count) > 0
+          ? Number(row.total_count)
+          : 1;
+
+      return [
+        index + 1,
+        row.name || "",
+        row.phone || "",
+        Number(row.companions) || 0,
+        total,
+        row.created_at ? new Date(row.created_at).toLocaleString() : "",
+      ];
+    });
 
     const csv = [header, ...csvRows]
       .map((line) =>
@@ -127,26 +145,29 @@ export default function CommunityAttendeeList({
   }
 
   function exportToWordDoc() {
-    const totalPeople = rows.reduce(
-      (sum, row) => sum + (Number(row.total_count) || 1),
-      0
-    );
+    const totalPeople = getTotalPeople();
 
     const tableRows = rows
-      .map(
-        (row, index) => `
+      .map((row, index) => {
+        const total =
+          Number.isFinite(Number(row.total_count)) &&
+          Number(row.total_count) > 0
+            ? Number(row.total_count)
+            : 1;
+
+        return `
           <tr>
             <td>${index + 1}</td>
             <td>${row.name || ""}</td>
             <td>${row.phone || ""}</td>
             <td>${Number(row.companions) || 0}</td>
-            <td>${Number(row.total_count) || 1}</td>
+            <td>${total}</td>
             <td>${
               row.created_at ? new Date(row.created_at).toLocaleString() : ""
             }</td>
           </tr>
-        `
-      )
+        `;
+      })
       .join("");
 
     const html = `
@@ -192,10 +213,7 @@ export default function CommunityAttendeeList({
   if (loading) return null;
   if (!canView) return null;
 
-  const totalPeople = rows.reduce(
-    (sum, row) => sum + (Number(row.total_count) || 1),
-    0
-  );
+  const totalPeople = getTotalPeople();
 
   return (
     <div className="mt-5 rounded-3xl bg-white p-5 shadow-xl">
@@ -245,35 +263,43 @@ export default function CommunityAttendeeList({
         </p>
       ) : (
         <div className="mt-5 space-y-3">
-          {rows.map((attendee, index) => (
-            <div key={attendee.id} className="rounded-2xl border bg-gray-50 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black">
-                    {index + 1}. {attendee.name || "No Name"}
+          {rows.map((attendee, index) => {
+            const total =
+              Number.isFinite(Number(attendee.total_count)) &&
+              Number(attendee.total_count) > 0
+                ? Number(attendee.total_count)
+                : 1;
+
+            return (
+              <div key={attendee.id} className="rounded-2xl border bg-gray-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black">
+                      {index + 1}. {attendee.name || "No Name"}
+                    </p>
+
+                    <a
+                      href={attendee.phone ? `tel:${attendee.phone}` : "#"}
+                      className="mt-1 block text-sm font-bold text-[#C46A2B]"
+                    >
+                      {attendee.phone || "No Phone"}
+                    </a>
+                  </div>
+
+                  <div className="text-right text-xs font-black text-gray-500">
+                    <p>Guests: {Number(attendee.companions) || 0}</p>
+                    <p>Total: {total}</p>
+                  </div>
+                </div>
+
+                {attendee.created_at && (
+                  <p className="mt-2 text-[11px] font-bold text-gray-400">
+                    {new Date(attendee.created_at).toLocaleString()}
                   </p>
-
-                  <a
-                    href={attendee.phone ? `tel:${attendee.phone}` : "#"}
-                    className="mt-1 block text-sm font-bold text-[#C46A2B]"
-                  >
-                    {attendee.phone || "No Phone"}
-                  </a>
-                </div>
-
-                <div className="text-right text-xs font-black text-gray-500">
-                  <p>Guests: {Number(attendee.companions) || 0}</p>
-                  <p>Total: {Number(attendee.total_count) || 1}</p>
-                </div>
+                )}
               </div>
-
-              {attendee.created_at && (
-                <p className="mt-2 text-[11px] font-bold text-gray-400">
-                  {new Date(attendee.created_at).toLocaleString()}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
