@@ -82,6 +82,17 @@ export default function AttendeeList({
     setLoading(false);
   }
 
+  function maskPhone(phone: string | null) {
+    if (!phone) return "No Phone";
+
+    const digits = phone.replace(/\D/g, "");
+
+    if (digits.length === 0) return "No Phone";
+    if (digits.length <= 4) return "****";
+
+    return digits.slice(0, -4) + "****";
+  }
+
   function getRowTotal(row: Attendee) {
     const total = Number(row.total_count);
     return Number.isFinite(total) && total > 0 ? total : 1;
@@ -348,7 +359,7 @@ export default function AttendeeList({
                 className="rounded-2xl bg-white p-3 text-sm font-bold text-green-900 shadow-sm"
               >
                 {index + 1}. {winner.name || "No Name"}{" "}
-                {winner.phone ? `(${winner.phone})` : ""}
+                {winner.phone ? `(${maskPhone(winner.phone)})` : ""}
               </div>
             ))}
           </div>
@@ -407,7 +418,7 @@ export default function AttendeeList({
                     href={attendee.phone ? `tel:${attendee.phone}` : "#"}
                     className="mt-1 block text-sm font-bold text-[#C46A2B]"
                   >
-                    {attendee.phone || "No Phone"}
+                    {maskPhone(attendee.phone)}
                   </a>
                 </div>
 

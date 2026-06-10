@@ -82,6 +82,16 @@ export default function CommunityAttendeeList({
     setLoading(false);
   }
 
+  function maskPhone(phone: string | null) {
+    if (!phone) return "No Phone";
+
+    const digits = phone.replace(/\D/g, "");
+
+    if (digits.length <= 4) return "****";
+
+    return digits.slice(0, -4) + "****";
+  }
+
   function getTotalPeople() {
     if (raffleEnabled) return rows.length;
 
@@ -225,6 +235,71 @@ export default function CommunityAttendeeList({
     );
   }
 
+  function exportToWordDoc() {
+    const totalPeople = getTotalPeople();
+
+    const tableRows = rows
+      .map((row, index) => {
+        if (raffleEnabled) {
+          return `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${row.name || ""}</td>
+              <td>${row.phone || ""}</td>
+              <td>${row.is_winner ? "WINNER" : ""}</td>
+              <td>${row.created_at ? new Date(row.created_at).toLocaleString() : ""}</td>
+            </tr>
+          `;
+        }
+
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td>${row.name || ""}</td>
+            <td>${row.phone || ""}</td>
+            <td>${Number(row.companions) || 0}</td>
+            <td>${getRowTotal(row)}</td>
+            <td>${row.created_at ? new Date(row.created_at).toLocaleString() : ""}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const header = raffleEnabled
+      ? `<tr><th>No</th><th>Name</th><th>Phone</th><th>Winner</th><th>Registered At</th></tr>`
+      : `<tr><th>No</th><th>Name</th><th>Phone</th><th>Guests</th><th>Total People</th><th>Registered At</th></tr>`;
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${raffleEnabled ? "Drawing Entries" : "Attendee List"}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; }
+            h1 { font-size: 22px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th, td { border: 1px solid #999; padding: 8px; font-size: 12px; text-align: left; }
+            th { background: #f0f0f0; }
+          </style>
+        </head>
+        <body>
+          <h1>${raffleEnabled ? "Drawing Entries" : "Attendee List"}</h1>
+          <p><strong>${raffleEnabled ? "Entries" : "Total People"}:</strong> ${totalPeople}</p>
+          <table>
+            <thead>${header}</thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    downloadBlob(
+      html,
+      `community-attendees-${safeFileName(eventId)}.doc`,
+      "application/msword;charset=utf-8;"
+    );
+  }
+
   if (loading) return null;
   if (!canView) return null;
 
@@ -266,7 +341,7 @@ export default function CommunityAttendeeList({
           disabled={drawing || rows.length === 0 || alreadyDrawn}
           className="mt-4 w-full rounded-full bg-yellow-500 px-4 py-4 text-sm font-black text-white disabled:bg-gray-300"
         >
-          {alreadyDrawn ? "Winner" : drawing ? "Drawing..." : "Draw Winner"}
+          {alreadyDrawn ? "Winner Selected" : drawing ? "Drawing..." : "Draw Winner"}
         </button>
       )}
 
@@ -288,7 +363,7 @@ export default function CommunityAttendeeList({
                 className="rounded-2xl bg-white p-3 text-sm font-bold text-green-900 shadow-sm"
               >
                 {index + 1}. {winner.name || "No Name"}{" "}
-                {winner.phone ? `(${winner.phone})` : ""}
+                {winner.phone ? `(${maskPhone(winner.phone)})` : ""}
               </div>
             ))}
           </div>
@@ -307,8 +382,8 @@ export default function CommunityAttendeeList({
 
         <button
           type="button"
+          onClick={exportToWordDoc}
           disabled={rows.length === 0}
-          onClick={() => alert("Word download은 필요하면 다시 연결하면 됩니다.")}
           className="rounded-full bg-[#C46A2B] px-4 py-3 text-xs font-black text-white disabled:bg-gray-300"
         >
           Download Word
@@ -347,7 +422,7 @@ export default function CommunityAttendeeList({
                     href={attendee.phone ? `tel:${attendee.phone}` : "#"}
                     className="mt-1 block text-sm font-bold text-[#C46A2B]"
                   >
-                    {attendee.phone || "No Phone"}
+                    {maskPhone(attendee.phone)}
                   </a>
                 </div>
 
