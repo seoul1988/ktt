@@ -70,6 +70,10 @@ export default function AttendeeRegistrationForm({
     };
   }, [eventId, storageKey]);
 
+  function normalizePhone(value: string) {
+    return value.replace(/\D/g, "");
+  }
+
   function changeMode(nextMode: Mode) {
     setMode(nextMode);
     setMessage("");
@@ -98,7 +102,7 @@ export default function AttendeeRegistrationForm({
   async function submitAttendance() {
     const cleanName = name.trim();
     const cleanPhone = phone.trim();
-    const phoneNormalized = cleanPhone.replace(/\D/g, "");
+    const phoneNormalized = normalizePhone(cleanPhone);
 
     if (cleanName.length < 2) {
       alert("Please enter your full name.");
@@ -113,13 +117,46 @@ export default function AttendeeRegistrationForm({
     setSaving(true);
     setMessage("");
 
-    const companionCount = guestsAllowed ? Number(companions) || 0 : 0;
-    const totalCount = companionCount + 1;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user?.id) {
+      const { data: existingUser } = await supabase
+        .from("event_attendees")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingUser) {
+        setSaving(false);
+        alert("이미 이 이벤트에 등록되어 있습니다.");
+        return;
+      }
+    }
+
+    const { data: existingPhone } = await supabase
+      .from("event_attendees")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("phone_normalized", phoneNormalized)
+      .maybeSingle();
+
+    if (existingPhone) {
+      setSaving(false);
+      alert("이미 등록된 전화번호입니다.");
+      return;
+    }
+
+    const companionCount = guestsAllowed ? Math.max(0, Number(companions) || 0) : 0;
+    const totalCount = raffleEnabled ? 1 : companionCount + 1;
 
     const { error } = await supabase.from("event_attendees").insert({
       event_id: eventId,
       event_type: "business",
       event_title: eventTitle,
+      user_id: user?.id || null,
       name: cleanName,
       phone: cleanPhone,
       phone_normalized: phoneNormalized,
@@ -130,7 +167,7 @@ export default function AttendeeRegistrationForm({
     setSaving(false);
 
     if (error?.code === "23505") {
-      alert("This phone number is already registered for this event.");
+      alert("이미 이 이벤트에 등록되어 있습니다.");
       return;
     }
 
@@ -139,14 +176,19 @@ export default function AttendeeRegistrationForm({
       return;
     }
 
-    setMessage("Registration received. Thank you for registering.");
+    setMessage(
+      raffleEnabled
+        ? "Drawing entry received. Thank you for registering."
+        : "Registration received. Thank you for registering."
+    );
     changeMode(null);
     resetForm();
+    window.location.reload();
   }
 
   async function findRegistrationForCancel() {
     const cleanPhone = phone.trim();
-    const phoneNormalized = cleanPhone.replace(/\D/g, "");
+    const phoneNormalized = normalizePhone(cleanPhone);
 
     if (phoneNormalized.length < 10) {
       alert("Please enter the phone number used for registration.");
@@ -200,6 +242,7 @@ export default function AttendeeRegistrationForm({
     setMessage("Your registration has been canceled.");
     changeMode(null);
     resetForm();
+    window.location.reload();
   }
 
   if (buttonOnly) {
@@ -214,7 +257,7 @@ export default function AttendeeRegistrationForm({
               : "bg-white text-[#C46A2B]"
           }`}
         >
-          Attend
+          {raffleEnabled ? "Join Drawing" : "Attend"}
         </button>
 
         <button
@@ -232,9 +275,7 @@ export default function AttendeeRegistrationForm({
     );
   }
 
-  if (formOnly && !mode && !message) {
-    return null;
-  }
+  if (formOnly && !mode && !message) return null;
 
   if (message && !mode) {
     return (
@@ -286,8 +327,12 @@ export default function AttendeeRegistrationForm({
             <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm font-bold text-gray-700">
               <p>Name: {foundRegistration.name || "No Name"}</p>
               <p>Phone: {foundRegistration.phone || "No Phone"}</p>
-              <p>Guests: {Number(foundRegistration.companions) || 0}</p>
-              <p>Total People: {Number(foundRegistration.total_count) || 1}</p>
+              {!raffleEnabled && (
+                <>
+                  <p>Guests: {Number(foundRegistration.companions) || 0}</p>
+                  <p>Total People: {Number(foundRegistration.total_count) || 1}</p>
+                </>
+              )}
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -322,11 +367,12 @@ export default function AttendeeRegistrationForm({
   return (
     <div className="mt-5 rounded-2xl border bg-gray-50 p-4">
       <h2 className="text-lg font-black text-[#172033]">
-        Attend This Event
+        {raffleEnabled ? "Join Prize Drawing" : "Attend This Event"}
       </h2>
 
       <p className="mt-1 text-xs font-bold text-gray-500">
         No login required. The same phone number can register only once.
+        로그인한 사용자는 같은 아이디로도 한 번만 등록할 수 있습니다.
       </p>
 
       {raffleEnabled && (
@@ -373,7 +419,11 @@ export default function AttendeeRegistrationForm({
         onClick={submitAttendance}
         className="mt-4 w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
       >
-        {saving ? "Submitting..." : "Register to Attend"}
+        {saving
+          ? "Submitting..."
+          : raffleEnabled
+          ? "Submit Drawing Entry"
+          : "Register to Attend"}
       </button>
     </div>
   );

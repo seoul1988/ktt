@@ -83,6 +83,12 @@ export default async function BusinessEventDetailPage({
     ? new Date(event.registration_deadline).getTime()
     : null;
 
+  const hasInvalidRaffleSchedule =
+    raffleEnabled &&
+    raffleDrawAt !== null &&
+    registrationDeadlineAt !== null &&
+    raffleDrawAt < registrationDeadlineAt;
+
   const registrationClosed =
     registrationDeadlineAt !== null && Date.now() >= registrationDeadlineAt;
 
@@ -151,19 +157,19 @@ export default async function BusinessEventDetailPage({
           <div className="mt-4 rounded-2xl bg-yellow-100 px-4 py-4 text-xs font-black text-yellow-900">
             <div className="text-sm font-black">🎁 Prize Drawing Event</div>
 
-            {event.raffle_draw_at && (
-              <div className="mt-2">
-                <span className="font-black">🎯 Drawing Time:</span>
-                <br />
-                {new Date(event.raffle_draw_at).toLocaleString()}
-              </div>
-            )}
-
             {event.registration_deadline && (
               <div className="mt-2">
                 <span className="font-black">⏰ Registration Deadline:</span>
                 <br />
                 {new Date(event.registration_deadline).toLocaleString()}
+              </div>
+            )}
+
+            {event.raffle_draw_at && (
+              <div className="mt-2">
+                <span className="font-black">🎯 Drawing Time:</span>
+                <br />
+                {new Date(event.raffle_draw_at).toLocaleString()}
               </div>
             )}
 
@@ -179,24 +185,31 @@ export default async function BusinessEventDetailPage({
           </div>
         )}
 
-        {collectAttendees && !registrationClosed && !drawReady && (
-<div className="mt-4">
-  <AttendeeRegistrationForm
-    eventId={event.id}
-    eventTitle={event.title || "Business Event"}
-    raffleEnabled={raffleEnabled}
-    allowCompanions={!raffleEnabled}
-    buttonOnly
-  />
+        {hasInvalidRaffleSchedule && (
+          <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-700 shadow-sm">
+            추첨일은 등록 마감일보다 빠를 수 없습니다. 이벤트 수정 화면에서
+            날짜를 다시 설정해 주세요.
+          </div>
+        )}
 
-  <AttendeeRegistrationForm
-    eventId={event.id}
-    eventTitle={event.title || "Business Event"}
-    raffleEnabled={raffleEnabled}
-    allowCompanions={!raffleEnabled}
-    formOnly
-  />
-</div>
+        {collectAttendees && !registrationClosed && !drawReady && !hasInvalidRaffleSchedule && (
+          <div className="mt-4">
+            <AttendeeRegistrationForm
+              eventId={event.id}
+              eventTitle={event.title || "Business Event"}
+              raffleEnabled={raffleEnabled}
+              allowCompanions={!raffleEnabled}
+              buttonOnly
+            />
+
+            <AttendeeRegistrationForm
+              eventId={event.id}
+              eventTitle={event.title || "Business Event"}
+              raffleEnabled={raffleEnabled}
+              allowCompanions={!raffleEnabled}
+              formOnly
+            />
+          </div>
         )}
 
         {collectAttendees && (registrationClosed || drawReady) && (
@@ -271,7 +284,13 @@ export default async function BusinessEventDetailPage({
         </div>
 
         {collectAttendees && (
-          <AttendeeList eventId={event.id} ownerId={event.owner_id || null} />
+          <AttendeeList
+            eventId={event.id}
+            ownerId={event.owner_id || null}
+            raffleEnabled={raffleEnabled}
+            drawReady={drawReady}
+            winnerCount={winnerCount}
+          />
         )}
       </section>
 
