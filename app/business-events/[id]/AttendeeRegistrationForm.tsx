@@ -6,6 +6,8 @@ import { supabase } from "../../../lib/supabase";
 type Props = {
   eventId: string;
   eventTitle: string;
+  raffleEnabled?: boolean;
+  allowCompanions?: boolean;
   buttonOnly?: boolean;
   formOnly?: boolean;
 };
@@ -23,6 +25,8 @@ type FoundRegistration = {
 export default function AttendeeRegistrationForm({
   eventId,
   eventTitle,
+  raffleEnabled = false,
+  allowCompanions = true,
   buttonOnly = false,
   formOnly = false,
 }: Props) {
@@ -36,6 +40,8 @@ export default function AttendeeRegistrationForm({
   const [message, setMessage] = useState("");
   const [foundRegistration, setFoundRegistration] =
     useState<FoundRegistration | null>(null);
+
+  const guestsAllowed = allowCompanions !== false && raffleEnabled !== true;
 
   useEffect(() => {
     const saved = window.sessionStorage.getItem(storageKey) as Mode;
@@ -107,7 +113,8 @@ export default function AttendeeRegistrationForm({
     setSaving(true);
     setMessage("");
 
-    const companionCount = Number(companions) || 0;
+    const companionCount = guestsAllowed ? Number(companions) || 0 : 0;
+    const totalCount = companionCount + 1;
 
     const { error } = await supabase.from("event_attendees").insert({
       event_id: eventId,
@@ -117,7 +124,7 @@ export default function AttendeeRegistrationForm({
       phone: cleanPhone,
       phone_normalized: phoneNormalized,
       companions: companionCount,
-      total_count: companionCount + 1,
+      total_count: totalCount,
     });
 
     setSaving(false);
@@ -322,6 +329,14 @@ export default function AttendeeRegistrationForm({
         No login required. The same phone number can register only once.
       </p>
 
+      {raffleEnabled && (
+        <p className="mt-3 rounded-xl bg-yellow-100 p-3 text-xs font-black leading-5 text-yellow-900">
+          Prize Drawing Event는 본인 1명만 등록할 수 있습니다.
+          <br />
+          Guest 입력은 사용할 수 없습니다.
+        </p>
+      )}
+
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -337,18 +352,20 @@ export default function AttendeeRegistrationForm({
         className="mt-3 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
       />
 
-      <select
-        value={companions}
-        onChange={(e) => setCompanions(e.target.value)}
-        className="mt-3 w-full rounded-2xl border bg-white px-4 py-3 text-sm font-bold"
-      >
-        <option value="0">No guest</option>
-        <option value="1">1 guest</option>
-        <option value="2">2 guests</option>
-        <option value="3">3 guests</option>
-        <option value="4">4 guests</option>
-        <option value="5">5 guests</option>
-      </select>
+      {guestsAllowed && (
+        <select
+          value={companions}
+          onChange={(e) => setCompanions(e.target.value)}
+          className="mt-3 w-full rounded-2xl border bg-white px-4 py-3 text-sm font-bold"
+        >
+          <option value="0">No guest</option>
+          <option value="1">1 guest</option>
+          <option value="2">2 guests</option>
+          <option value="3">3 guests</option>
+          <option value="4">4 guests</option>
+          <option value="5">5 guests</option>
+        </select>
+      )}
 
       <button
         type="button"
