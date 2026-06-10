@@ -12,8 +12,9 @@ export default async function CommunityPage() {
   .order("created_at", { ascending: false })
   .limit(10);
 
-console.log("community events:", events);
-console.log("community events error:", eventsError);
+if (eventsError) {
+  console.error("community events error:", eventsError);
+}
 
   const { data: allBusinesses } = await supabase
     .from("businesses")
