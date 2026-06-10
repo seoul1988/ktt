@@ -14,10 +14,37 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.ktowntriangle.com"),
+
   title: "KTown Triangle",
   description: "Events, deals and Korean places around the Triangle",
 
   manifest: "/manifest.webmanifest",
+
+  openGraph: {
+    title: "KTown Triangle",
+    description:
+      "Korean food, events, deals, restaurants, markets, and local businesses around the Triangle.",
+    url: "https://www.ktowntriangle.com",
+    siteName: "KTown Triangle",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "KTown Triangle",
+      },
+    ],
+    type: "website",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "KTown Triangle",
+    description:
+      "Korean food, events, deals, restaurants, markets, and local businesses around the Triangle.",
+    images: ["/og-image.png"],
+  },
 
   appleWebApp: {
     capable: true,
