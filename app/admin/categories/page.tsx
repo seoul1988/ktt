@@ -8,6 +8,10 @@ export const dynamic = "force-dynamic";
 
 
 
+
+
+
+
 type Category = {
   id: number;
   name: string;
