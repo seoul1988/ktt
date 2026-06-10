@@ -480,26 +480,27 @@ export default function NewEventPage() {
                         Registration Deadline
                       </label>
 
-                      <input
-                        type="datetime-local"
-                        value={registrationDeadline}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setRegistrationDeadline(value);
+                     <input
+						  type="datetime-local"
+						  value={raffleDrawAt}
+						  min={registrationDeadline || undefined}
+						  onChange={(e) => {
+							const value = e.target.value;
 
-                          if (
-                            raffleDrawAt &&
-                            new Date(raffleDrawAt) <= new Date(value)
-                          ) {
-                            alert(
-                              "Drawing Date & Time must be later than the Registration Deadline."
-                            );
-                            setRaffleDrawAt("");
-                          }
-                        }}
-                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-                      />
-                    </div>
+							if (
+							  registrationDeadline &&
+							  new Date(value).getTime() <= new Date(registrationDeadline).getTime()
+							) {
+							  alert("Drawing Date & Time must be later than the Registration Deadline.");
+							  setRaffleDrawAt("");
+							  return;
+							}
+
+							setRaffleDrawAt(value);
+						  }}
+						  className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+						/>
+											</div>
 
                     <div>
                       <label className="mb-1 block text-xs font-black text-[#172033]">
