@@ -226,7 +226,7 @@ export default function EventRequestsPage() {
         event_date: event.event_date,
 
         address: event.address || event.location || null,
-        location: event.location || event.address || null,
+  
 
         latitude: event.latitude ?? null,
         longitude: event.longitude ?? null,
