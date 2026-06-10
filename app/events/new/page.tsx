@@ -184,6 +184,8 @@ export default function NewEventPage() {
     const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
     if (finalRaffleEnabled) {
+		  console.log("registrationDeadline:", registrationDeadline);
+  console.log("raffleDrawAt:", raffleDrawAt);
       if (!registrationDeadline) {
         alert("Please enter the registration deadline.");
         return;
