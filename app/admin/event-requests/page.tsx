@@ -25,6 +25,15 @@ type EventItem = {
   status: string | null;
   approved_type?: string | null;
   created_at: string;
+
+  collect_attendees?: boolean | null;
+  raffle_enabled?: boolean | null;
+  attendee_required_name?: boolean | null;
+  attendee_required_phone?: boolean | null;
+  allow_companions?: boolean | null;
+  raffle_draw_at?: string | null;
+  raffle_winner_count?: number | null;
+
   source_type: SourceType;
   businesses?: {
     name: string | null;
@@ -124,7 +133,6 @@ export default function EventRequestsPage() {
 
   async function deleteStorageFile(url: string | null | undefined) {
     const parsed = getStoragePathFromUrl(url);
-
     if (!parsed) return;
 
     const { error } = await supabase.storage
@@ -139,8 +147,19 @@ export default function EventRequestsPage() {
   async function deleteEventFiles(event: EventItem) {
     await deleteStorageFile(event.image_url);
     await deleteStorageFile(event.video_url);
+  }
 
-    // external_video_url 은 유튜브/인스타/외부 링크라 Storage 삭제 대상 아님
+  async function deleteOriginalRequestByTitle(title: string | null) {
+    if (!title) return;
+
+    const { error } = await supabase
+      .from("event_requests")
+      .delete()
+      .eq("title", title);
+
+    if (error) {
+      console.error("원본 event_requests 삭제 실패:", error.message);
+    }
   }
 
   async function approveAsBusiness(event: EventItem) {
@@ -152,15 +171,19 @@ export default function EventRequestsPage() {
     const { error: insertError } = await supabase.from("business_events").insert({
       business_id: event.business_id || null,
       owner_id: event.owner_id || null,
+
       title: event.title,
       description: event.description,
+
       image_url: event.image_url,
       video_url: event.video_url || null,
       external_video_url: event.external_video_url || null,
+
       event_date: event.event_date,
-      location: event.location,
+      location: event.location || event.address || null,
       latitude: event.latitude ?? null,
       longitude: event.longitude ?? null,
+
       status: "approved",
       active: true,
     });
@@ -170,16 +193,13 @@ export default function EventRequestsPage() {
       return;
     }
 
-    const { error: updateError } = await supabase
+    const { error: deleteError } = await supabase
       .from("event_requests")
-      .update({
-        status: "approved",
-        approved_type: "business",
-      })
+      .delete()
       .eq("id", event.id);
 
-    if (updateError) {
-      alert("요청 상태 변경 실패: " + updateError.message);
+    if (deleteError) {
+      alert("요청 삭제 실패: " + deleteError.message);
       return;
     }
 
@@ -192,31 +212,49 @@ export default function EventRequestsPage() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("community_events").insert({
-      title: event.title,
-      description: event.description,
-      image_url: event.image_url,
-      video_url: event.video_url || null,
-      event_date: event.event_date,
-      address: event.location,
-      status: "approved",
-    });
+    const { error: insertError } = await supabase
+      .from("community_events")
+      .insert({
+        owner_id: event.owner_id || null,
+
+        title: event.title,
+        description: event.description,
+
+        image_url: event.image_url,
+        video_url: event.video_url || null,
+        external_video_url: event.external_video_url || null,
+
+        event_date: event.event_date,
+
+        address: event.address || event.location || null,
+        location: event.location || event.address || null,
+
+        latitude: event.latitude ?? null,
+        longitude: event.longitude ?? null,
+
+        collect_attendees: event.collect_attendees ?? false,
+        raffle_enabled: event.raffle_enabled ?? false,
+        attendee_required_name: event.attendee_required_name ?? true,
+        attendee_required_phone: event.attendee_required_phone ?? true,
+        allow_companions: event.allow_companions ?? true,
+        raffle_draw_at: event.raffle_draw_at ?? null,
+        raffle_winner_count: event.raffle_winner_count ?? null,
+
+        status: "approved",
+      });
 
     if (insertError) {
       alert("Community Event 저장 실패: " + insertError.message);
       return;
     }
 
-    const { error: updateError } = await supabase
+    const { error: deleteError } = await supabase
       .from("event_requests")
-      .update({
-        status: "approved",
-        approved_type: "community",
-      })
+      .delete()
       .eq("id", event.id);
 
-    if (updateError) {
-      alert("요청 상태 변경 실패: " + updateError.message);
+    if (deleteError) {
+      alert("요청 삭제 실패: " + deleteError.message);
       return;
     }
 
@@ -242,14 +280,12 @@ export default function EventRequestsPage() {
   async function deleteEvent(event: EventItem) {
     if (!confirm("정말 삭제할까요? 이미지/동영상 파일도 같이 삭제됩니다.")) return;
 
-    if (event.source_type === "request") {
-      await deleteEventFiles(event);
+    await deleteEventFiles(event);
 
+    if (event.source_type === "request") {
       const { error } = await supabase
         .from("event_requests")
-        .update({
-          status: "deleted",
-        })
+        .delete()
         .eq("id", event.id);
 
       if (error) {
@@ -262,8 +298,6 @@ export default function EventRequestsPage() {
     }
 
     if (event.source_type === "business_events") {
-      await deleteEventFiles(event);
-
       const { error } = await supabase
         .from("business_events")
         .delete()
@@ -274,20 +308,12 @@ export default function EventRequestsPage() {
         return;
       }
 
-      await supabase
-        .from("event_requests")
-        .update({
-          status: "deleted",
-        })
-        .eq("title", event.title);
-
+      await deleteOriginalRequestByTitle(event.title);
       loadEvents();
       return;
     }
 
     if (event.source_type === "community_events") {
-      await deleteEventFiles(event);
-
       const { error } = await supabase
         .from("community_events")
         .delete()
@@ -298,13 +324,7 @@ export default function EventRequestsPage() {
         return;
       }
 
-      await supabase
-        .from("event_requests")
-        .update({
-          status: "deleted",
-        })
-        .eq("title", event.title);
-
+      await deleteOriginalRequestByTitle(event.title);
       loadEvents();
       return;
     }
