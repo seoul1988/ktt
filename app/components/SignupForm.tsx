@@ -4,13 +4,14 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 export default function SignupForm() {
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [role, setRole] = useState<"user" | "owner">("user");
 
   async function createAccount() {
-    if (!email || !password || !confirm) {
+    if (!fullName.trim() || !email.trim() || !password || !confirm) {
       alert("Please fill all fields.");
       return;
     }
@@ -21,8 +22,14 @@ export default function SignupForm() {
     }
 
     const { data, error } = await supabase.auth.signUp({
-      email,
+      email: email.trim(),
       password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          role,
+        },
+      },
     });
 
     if (error) {
@@ -34,6 +41,7 @@ export default function SignupForm() {
       await supabase.from("profiles").upsert({
         id: data.user.id,
         email: data.user.email,
+        full_name: fullName.trim(),
         role,
       });
     }
@@ -57,14 +65,19 @@ export default function SignupForm() {
               Create Account
             </h1>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Join KTown Triangle
-            </p>
+            <p className="mt-1 text-sm text-gray-500">Join KTown Triangle</p>
           </div>
         </div>
 
         <div className="rounded-[32px] bg-white p-6 shadow-2xl">
           <div className="space-y-4">
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Full Name"
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
+            />
+
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -94,29 +107,29 @@ export default function SignupForm() {
               </p>
 
               <div className="grid grid-cols-2 gap-3">
-       <button
-  type="button"
-  onClick={() => setRole("user")}
-  className={`rounded-2xl border p-4 font-semibold transition ${
-    role === "user"
-      ? "border-[#2563EB] bg-[#2563EB] text-white"
-      : "border-[#BFDBFE] bg-[#EFF6FF] text-[#2563EB]"
-  }`}
->
-  Member
-</button>
+                <button
+                  type="button"
+                  onClick={() => setRole("user")}
+                  className={`rounded-2xl border p-4 font-semibold transition ${
+                    role === "user"
+                      ? "border-[#2563EB] bg-[#2563EB] text-white"
+                      : "border-[#BFDBFE] bg-[#EFF6FF] text-[#2563EB]"
+                  }`}
+                >
+                  Member
+                </button>
 
-<button
-  type="button"
-  onClick={() => setRole("owner")}
-  className={`rounded-2xl border p-4 font-semibold transition ${
-    role === "owner"
-      ? "border-[#D4A017] bg-[#D4A017] text-white"
-      : "border-[#D4A017] bg-[#FFF8E1] text-[#B8860B]"
-  }`}
->
-  Business Owner
-</button>
+                <button
+                  type="button"
+                  onClick={() => setRole("owner")}
+                  className={`rounded-2xl border p-4 font-semibold transition ${
+                    role === "owner"
+                      ? "border-[#D4A017] bg-[#D4A017] text-white"
+                      : "border-[#D4A017] bg-[#FFF8E1] text-[#B8860B]"
+                  }`}
+                >
+                  Business Owner
+                </button>
               </div>
             </div>
 
