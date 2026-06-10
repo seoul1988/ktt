@@ -42,23 +42,20 @@ function DealMedia({
 
 export default async function Home() {
   const { data: communityCategories } = await supabase
-  .from("categories")
-  .select("name")
-  .eq("show_on_community_map", true);
+    .from("categories")
+    .select("name")
+    .eq("show_on_community_map", true);
 
-const communityCategorySet = new Set(
-  (communityCategories || []).map((c) =>
-    String(c.name).trim().toLowerCase()
-  )
-);
+  const communityCategorySet = new Set(
+    (communityCategories || []).map((c) => String(c.name).trim().toLowerCase())
+  );
 
-const { data: allSpots } = await supabase
-  .from("businesses")
-  .select("*")
-  .order("id", { ascending: true });
+  const { data: allSpots } = await supabase
+    .from("businesses")
+    .select("*")
+    .order("id", { ascending: true });
 
-const spots =
-  (allSpots || []).filter((spot) => {
+  const spots = (allSpots || []).filter((spot) => {
     const categories = String(spot.category || "")
       .split(",")
       .map((v) => v.trim().toLowerCase())
@@ -72,7 +69,6 @@ const spots =
       (cat) => !communityCategorySet.has(cat)
     );
 
-    // 커뮤니티만 속하면 숨김
     if (hasCommunityCategory && !hasMainCategory) {
       return false;
     }
@@ -101,8 +97,8 @@ const spots =
         category,
         city,
         image_url,
-		rating,
-      review_count
+        rating,
+        review_count
       )
     `)
     .eq("status", "approved")
@@ -167,9 +163,7 @@ const spots =
                   {mainEvent.event_date || "Coming Soon"}
                 </p>
 
-                <h3 className="mt-1 text-lg font-bold">
-                  {mainEvent.title}
-                </h3>
+                <h3 className="mt-1 text-lg font-bold">{mainEvent.title}</h3>
 
                 <p className="mt-1 line-clamp-2 text-sm text-gray-600">
                   {mainEvent.description}
@@ -205,29 +199,35 @@ const spots =
                   />
                 </div>
 
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold text-[#C4483A]">
                     Special Deal
                   </p>
 
-                  <h4 className="mt-1 font-bold">
+                  <h4 className="mt-1 line-clamp-1 font-bold">
                     {deal.title || deal.businesses?.name || "Deal"}
                   </h4>
-				<div className="flex items-center justify-between gap-3 text-sm">
-				  <div className="min-w-0 truncate text-gray-600">
-					{deal.businesses?.name || "KTT Deal"}
-					{deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
-				  </div>
 
-				  <div className="shrink-0 whitespace-nowrap font-bold text-[#C4483A]">
-					★ {deal.businesses?.rating || "New"}
-					{deal.businesses?.review_count ? (
-					  <span className="ml-1 text-gray-400">
-						({deal.businesses.review_count})
-					  </span>
-					) : null}
-				  </div>
-				</div>                    {deal.description || "Tap to view deal details"}
+                  <div className="mt-1 flex items-center justify-between gap-3 text-sm">
+                    <div className="min-w-0 truncate text-gray-600">
+                      {deal.businesses?.name || "KTT Deal"}
+                      {deal.businesses?.city
+                        ? ` · ${deal.businesses.city}`
+                        : ""}
+                    </div>
+
+                    <div className="shrink-0 whitespace-nowrap font-bold text-[#C4483A]">
+                      ★ {deal.businesses?.rating || "New"}
+                      {deal.businesses?.review_count ? (
+                        <span className="ml-1 text-gray-400">
+                          ({deal.businesses.review_count})
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <p className="mt-2 line-clamp-2 text-xs font-bold text-gray-500">
+                    {deal.description || "Tap to view deal details"}
                   </p>
                 </div>
               </a>
@@ -259,23 +259,21 @@ const spots =
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
-                    <h3 className="text-2xl font-bold">
-                      {featured.name}
-                    </h3>
+                    <h3 className="text-2xl font-bold">{featured.name}</h3>
 
                     <p className="mt-2 text-sm text-gray-600">
                       {featured.category} · {featured.city}
                     </p>
                   </div>
 
-                 <div className="whitespace-nowrap rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
-					  ★ {featured.rating || "New"}
-					  {featured.review_count ? (
-						<span className="ml-1 text-gray-500">
-						  ({featured.review_count})
-						</span>
-					  ) : null}
-					</div>
+                  <div className="whitespace-nowrap rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
+                    ★ {featured.rating || "New"}
+                    {featured.review_count ? (
+                      <span className="ml-1 text-gray-500">
+                        ({featured.review_count})
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <p className="mt-3 line-clamp-2 text-sm text-gray-700">
@@ -286,51 +284,52 @@ const spots =
           </section>
         )}
 
-       <section className="mx-auto max-w-xl">
-  <h2 className="mb-3 text-xl font-bold">📈 Trending Now</h2>
+        <section className="mx-auto max-w-xl">
+          <h2 className="mb-3 text-xl font-bold">📈 Trending Now</h2>
 
-  <div className="space-y-4">
-    {trending.map((spot) => (
-      <a
-        key={spot.id}
-        href={`/business/${spot.id}`}
-        className="block rounded-3xl bg-white p-4 shadow-sm"
-      >
-        <div className="flex items-center gap-4">
-          <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
-            <BusinessMedia
-              spot={spot}
-              className="h-full w-full object-cover"
-            />
+          <div className="space-y-4">
+            {trending.map((spot) => (
+              <a
+                key={spot.id}
+                href={`/business/${spot.id}`}
+                className="block rounded-3xl bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
+                    <BusinessMedia
+                      spot={spot}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <h4 className="font-bold">{spot.name}</h4>
+
+                    <p className="text-sm text-gray-600">
+                      {spot.category} · {spot.city}
+                    </p>
+
+                    <p className="mt-1 text-sm font-medium text-[#C4483A]">
+                      {spot.tags || spot.tag}
+                    </p>
+
+                    <p className="mt-1 text-sm">
+                      <span className="font-bold text-[#172033]">
+                        ★ {spot.rating || "New"}
+                      </span>
+
+                      {spot.review_count ? (
+                        <span className="ml-1 text-gray-400">
+                          ({spot.review_count})
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                </div>
+              </a>
+            ))}
           </div>
-
-          <div className="flex-1">
-            <h4 className="font-bold">{spot.name}</h4>
-
-            <p className="text-sm text-gray-600">
-              {spot.category} · {spot.city}
-            </p>
-
-            <p className="mt-1 text-sm font-medium text-[#C4483A]">
-              {spot.tags || spot.tag}
-            </p>
-
-           <p className="mt-1 text-sm">
-  <span className="font-bold text-[#172033]">
-    ★ {spot.rating || "New"}
-  </span>
-
-  {spot.review_count ? (
-    <span className="ml-1 text-gray-400">
-      ({spot.review_count})
-    </span>
-  ) : null}
-</p>     </div>
-        </div>
-      </a>
-    ))}
-  </div>
-</section>
+        </section>
 
         <BottomNav activeNav="home" />
       </main>
