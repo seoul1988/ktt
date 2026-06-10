@@ -29,8 +29,8 @@ export default async function DealsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28 text-[#172033]">
-      <div className="mx-auto max-w-xl">
+    <main className="min-h-screen bg-[#F8F3EC] px-2 pb-28 text-[#172033]">
+  <div className="mx-auto w-full max-w-2xl">
         <div className="relative mb-4 flex items-center justify-center">
           <Link
             href="/"
