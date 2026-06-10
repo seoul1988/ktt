@@ -214,22 +214,19 @@ const spots =
                     {deal.title || deal.businesses?.name || "Deal"}
                   </h4>
 
-                 <p className="text-sm text-gray-600">
-					  {deal.businesses?.name || "KTT Deal"}
-					  {deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
-					</p>
+			<div className="flex items-center gap-2 text-sm text-gray-600">
+			  <span className="font-semibold text-[#172033]">
+				{deal.businesses?.name || "KTT Deal"}
+			  </span>
 
-					<p className="mt-1 text-sm">
-					  <span className="font-bold text-[#172033]">
-						★ {deal.businesses?.rating || "New"}
-					  </span>
+			  <span className="font-bold text-[#C4483A]">
+				★ {deal.businesses?.rating || "New"}
+			  </span>
 
-					  {deal.businesses?.review_count ? (
-						<span className="ml-1 text-gray-400">
-						  ({deal.businesses.review_count})
-						</span>
-					  ) : null}
-					</p>
+			  {deal.businesses?.city ? (
+				<span>· {deal.businesses.city}</span>
+			  ) : null}
+			</div>
 
                   <p className="mt-1 line-clamp-2 text-sm text-gray-500">
                     {deal.description || "Tap to view deal details"}
