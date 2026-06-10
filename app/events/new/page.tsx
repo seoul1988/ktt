@@ -106,29 +106,34 @@ export default function NewEventPage() {
   }
 
   useEffect(() => {
-    async function loadProfile() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  async function loadProfile() {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      if (!user) return;
+    if (!user) return;
 
-      setContactEmail(user.email || "");
+    setContactEmail(user.email || "");
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, phone")
-        .eq("id", user.id)
-        .maybeSingle();
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("full_name, name, phone")
+      .eq("id", user.id)
+      .maybeSingle();
 
-      if (profile) {
-        setContactName(profile.name || "");
-        setContactPhone(profile.phone || "");
-      }
+    if (error) {
+      console.error("PROFILE LOAD ERROR:", error);
+      return;
     }
 
-    loadProfile();
-  }, []);
+    if (profile) {
+      setContactName(profile.full_name || profile.name || "");
+      setContactPhone(profile.phone || "");
+    }
+  }
+
+  loadProfile();
+}, []);
 
   function setRegistrationMode(value: boolean) {
     setCollectAttendees(value);
