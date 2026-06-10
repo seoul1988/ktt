@@ -180,7 +180,6 @@ export default function EventRequestsPage() {
       external_video_url: event.external_video_url || null,
 
       event_date: event.event_date,
-      location: event.location || event.address || null,
       latitude: event.latitude ?? null,
       longitude: event.longitude ?? null,
 
