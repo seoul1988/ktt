@@ -126,7 +126,7 @@ if (eventsError) {
                       </p>
 
                       <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#6B6257]">
-                        {event.address || "Location TBA"}
+                        {event.location || event.address || "Location TBA"}
                       </p>
 
                       {event.entry_fee && (
@@ -174,7 +174,7 @@ if (eventsError) {
                       </p>
 
                       <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
-                        {event.address || "Location TBA"}
+                        {event.location || event.address || "Location TBA"}
                       </p>
 
                       {event.entry_fee && (
