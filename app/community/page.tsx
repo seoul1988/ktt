@@ -6,11 +6,14 @@ import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
 
 export default async function CommunityPage() {
-  const { data: events } = await supabase
-    .from("community_events")
-    .select("*")
-    .order("event_date", { ascending: true })
-    .limit(6);
+  const { data: events, error: eventsError } = await supabase
+  .from("community_events")
+  .select("*")
+  .order("created_at", { ascending: false })
+  .limit(10);
+
+console.log("community events:", events);
+console.log("community events error:", eventsError);
 
   const { data: allBusinesses } = await supabase
     .from("businesses")
