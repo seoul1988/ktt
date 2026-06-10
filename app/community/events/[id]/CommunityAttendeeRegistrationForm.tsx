@@ -25,18 +25,57 @@ export default function CommunityAttendeeRegistrationForm({
 
   const canUseCompanions = !raffleEnabled && allowCompanions;
 
+  function normalizePhone(value: string) {
+    return value.replace(/\D/g, "");
+  }
+
   async function submitRegistration() {
-    if (!name.trim()) {
+    const cleanName = name.trim();
+    const cleanPhone = normalizePhone(phone);
+
+    if (!cleanName) {
       alert("Please enter your name.");
       return;
     }
 
-    if (!phone.trim()) {
+    if (!cleanPhone) {
       alert("Please enter your phone number.");
       return;
     }
 
     setSaving(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user?.id) {
+      const { data: existingUser } = await supabase
+        .from("community_event_attendees")
+        .select("id")
+        .eq("event_id", eventId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingUser) {
+        setSaving(false);
+        alert("You are already registered for this event.");
+        return;
+      }
+    }
+
+    const { data: existingPhone } = await supabase
+      .from("community_event_attendees")
+      .select("id")
+      .eq("event_id", eventId)
+      .eq("phone", cleanPhone)
+      .maybeSingle();
+
+    if (existingPhone) {
+      setSaving(false);
+      alert("This phone number is already registered for this event.");
+      return;
+    }
 
     const companionCount = canUseCompanions
       ? Math.max(0, Number(companions || 0))
@@ -46,8 +85,9 @@ export default function CommunityAttendeeRegistrationForm({
 
     const { error } = await supabase.from("community_event_attendees").insert({
       event_id: eventId,
-      name: name.trim(),
-      phone: phone.trim(),
+      user_id: user?.id || null,
+      name: cleanName,
+      phone: cleanPhone,
       companions: companionCount,
       total_count: totalCount,
     });
@@ -55,6 +95,11 @@ export default function CommunityAttendeeRegistrationForm({
     setSaving(false);
 
     if (error) {
+      if (error.code === "23505") {
+        alert("You are already registered for this event.");
+        return;
+      }
+
       alert("Registration failed: " + error.message);
       return;
     }
@@ -128,8 +173,8 @@ export default function CommunityAttendeeRegistrationForm({
 
           {raffleEnabled && (
             <p className="rounded-2xl bg-yellow-50 p-3 text-xs font-bold leading-5 text-yellow-900">
-              This is a prize drawing. Guests cannot be added. Only the person
-              who registers directly with their name and phone number is eligible.
+              추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
+              동반인은 추첨 대상에 포함되지 않습니다.
             </p>
           )}
 
