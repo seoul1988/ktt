@@ -100,7 +100,9 @@ const spots =
         name,
         category,
         city,
-        image_url
+        image_url,
+		rating,
+      review_count
       )
     `)
     .eq("status", "approved")
@@ -212,10 +214,22 @@ const spots =
                     {deal.title || deal.businesses?.name || "Deal"}
                   </h4>
 
-                  <p className="text-sm text-gray-600">
-                    {deal.businesses?.name || "KTT Deal"}
-                    {deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
-                  </p>
+                 <p className="text-sm text-gray-600">
+					  {deal.businesses?.name || "KTT Deal"}
+					  {deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
+					</p>
+
+					<p className="mt-1 text-sm">
+					  <span className="font-bold text-[#172033]">
+						★ {deal.businesses?.rating || "New"}
+					  </span>
+
+					  {deal.businesses?.review_count ? (
+						<span className="ml-1 text-gray-400">
+						  ({deal.businesses.review_count})
+						</span>
+					  ) : null}
+					</p>
 
                   <p className="mt-1 line-clamp-2 text-sm text-gray-500">
                     {deal.description || "Tap to view deal details"}
