@@ -109,26 +109,40 @@ export default function NewEventPage() {
   async function loadProfile() {
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser();
+
+    console.log("AUTH USER:", user, userError);
 
     if (!user) return;
 
     setContactEmail(user.email || "");
 
-    const { data: profile, error } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("full_name, name, phone")
+      .select("*")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (error) {
-      console.error("PROFILE LOAD ERROR:", error);
-      return;
-    }
+    console.log("PROFILE:", profile, profileError);
+
+    if (profileError) return;
 
     if (profile) {
-      setContactName(profile.full_name || profile.name || "");
-      setContactPhone(profile.phone || "");
+      setContactName(
+        profile.full_name ||
+          profile.name ||
+          profile.username ||
+          profile.business_name ||
+          ""
+      );
+
+      setContactPhone(
+        profile.phone ||
+          profile.phone_number ||
+          profile.contact_phone ||
+          ""
+      );
     }
   }
 
