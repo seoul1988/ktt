@@ -40,6 +40,7 @@ export default function NewEventPage() {
   const [collectAttendees, setCollectAttendees] = useState(false);
   const [raffleEnabled, setRaffleEnabled] = useState(false);
   const [raffleDrawAt, setRaffleDrawAt] = useState("");
+  const [registrationDeadline, setRegistrationDeadline] = useState("");
   const [raffleWinnerCount, setRaffleWinnerCount] = useState(1);
 
   function onPlaceChanged() {
@@ -151,154 +152,157 @@ export default function NewEventPage() {
   }
 
   async function submitEvent() {
-    if (!title.trim()) {
-      alert("Please enter an event title.");
+  if (!title.trim()) {
+    alert("Please enter an event title.");
+    return;
+  }
+
+  const finalRaffleEnabled = collectAttendees && raffleEnabled;
+
+  if (finalRaffleEnabled) {
+    if (!registrationDeadline) {
+      alert("Please enter the registration deadline.");
       return;
     }
 
-    if (raffleEnabled && !raffleDrawAt) {
+    if (!raffleDrawAt) {
       alert("Please enter the raffle drawing date and time.");
       return;
     }
 
-    if (raffleEnabled && Number(raffleWinnerCount) < 1) {
-      alert("Please enter at least 1 winner.");
+    if (new Date(raffleDrawAt) <= new Date(registrationDeadline)) {
+      alert("Drawing Date & Time must be later than the Registration Deadline.");
       return;
     }
 
-    setSaving(true);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        alert("Please log in first.");
-        setSaving(false);
-        return;
-      }
-
-      let businessId: number | null = null;
-
-      const { data: ownerRow } = await supabase
-        .from("business_owners")
-        .select("business_id")
-        .eq("user_id", user.id)
-        .eq("status", "approved")
-        .maybeSingle();
-
-      if (ownerRow?.business_id) {
-        businessId = ownerRow.business_id;
-      }
-
-      let uploadedImageUrl = "";
-      let uploadedVideoUrl = "";
-
-      if (imageFile) {
-        uploadedImageUrl = await uploadFile(
-          imageFile,
-          "event-images",
-          "images"
-        );
-      }
-
-      if (videoFile) {
-        uploadedVideoUrl = await uploadFile(
-          videoFile,
-          "event-videos",
-          "videos"
-        );
-      }
-
-      const finalRaffleEnabled = collectAttendees && raffleEnabled;
-
-      const { data: insertedEvent, error } = await supabase
-        .from("event_requests")
-        .insert({
-          owner_id: user.id,
-          business_id: businessId,
-
-          title: title.trim(),
-          description: description.trim(),
-
-          image_url: uploadedImageUrl || null,
-          video_url: uploadedVideoUrl || null,
-          external_video_url: videoUrl.trim() || null,
-
-          event_date: eventDate || null,
-          location: location.trim(),
-
-          latitude,
-          longitude,
-
-          contact_name: contactName.trim() || null,
-          contact_email: contactEmail.trim() || null,
-          contact_phone: contactPhone.trim() || null,
-
-          collect_attendees: collectAttendees,
-          raffle_enabled: finalRaffleEnabled,
-          raffle_draw_at: finalRaffleEnabled ? raffleDrawAt : null,
-          raffle_winner_count: finalRaffleEnabled
-            ? Number(raffleWinnerCount)
-            : null,
-          attendee_required_name: collectAttendees,
-          attendee_required_phone: collectAttendees,
-          allow_companions: finalRaffleEnabled ? false : collectAttendees,
-
-          status: "pending",
-        })
-        .select("id, title")
-        .single();
-
-      if (error) {
-        alert("Event submission failed: " + error.message);
-        setSaving(false);
-        return;
-      }
-
-      try {
-        const pushRes = await fetch("/api/push/admin-event-request", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            eventId: insertedEvent.id,
-            title: insertedEvent.title,
-          }),
-        });
-
-        const pushData = await pushRes.json();
-
-        console.log("ADMIN PUSH RESULT:", pushData);
-
-        if (!pushRes.ok) {
-          alert(
-            "The event was submitted, but the push notification failed:\n" +
-              (pushData.error || "Unknown Error")
-          );
-        } else {
-          console.log(
-            `Push Success - Sent: ${pushData.sent}, Failed: ${pushData.failed}`
-          );
-        }
-      } catch (pushError: any) {
-        console.error("Push notification failed:", pushError);
-
-        alert(
-          "The event was submitted, but the push notification request failed:\n" +
-            (pushError?.message || "Unknown Error")
-        );
-      }
-
-      alert("Your event has been submitted and will appear after admin approval.");
-      router.push("/");
-    } catch (err: any) {
-      alert("Save failed: " + err.message);
-      setSaving(false);
+    if (Number(raffleWinnerCount) < 1) {
+      alert("Please enter at least 1 winner.");
+      return;
     }
   }
+
+  setSaving(true);
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      alert("Please log in first.");
+      setSaving(false);
+      return;
+    }
+
+    let businessId: number | null = null;
+
+    const { data: ownerRow } = await supabase
+      .from("business_owners")
+      .select("business_id")
+      .eq("user_id", user.id)
+      .eq("status", "approved")
+      .maybeSingle();
+
+    if (ownerRow?.business_id) {
+      businessId = ownerRow.business_id;
+    }
+
+    let uploadedImageUrl = "";
+    let uploadedVideoUrl = "";
+
+    if (imageFile) {
+      uploadedImageUrl = await uploadFile(imageFile, "event-images", "images");
+    }
+
+    if (videoFile) {
+      uploadedVideoUrl = await uploadFile(videoFile, "event-videos", "videos");
+    }
+
+    const { data: insertedEvent, error } = await supabase
+      .from("event_requests")
+      .insert({
+        owner_id: user.id,
+        business_id: businessId,
+
+        title: title.trim(),
+        description: description.trim(),
+
+        image_url: uploadedImageUrl || null,
+        video_url: uploadedVideoUrl || null,
+        external_video_url: videoUrl.trim() || null,
+
+        event_date: eventDate || null,
+        location: location.trim(),
+
+        latitude,
+        longitude,
+
+        contact_name: contactName.trim() || null,
+        contact_email: contactEmail.trim() || null,
+        contact_phone: contactPhone.trim() || null,
+
+        collect_attendees: collectAttendees,
+        registration_deadline: finalRaffleEnabled ? registrationDeadline : null,
+
+        raffle_enabled: finalRaffleEnabled,
+        raffle_draw_at: finalRaffleEnabled ? raffleDrawAt : null,
+        raffle_winner_count: finalRaffleEnabled
+          ? Number(raffleWinnerCount)
+          : null,
+
+        attendee_required_name: collectAttendees,
+        attendee_required_phone: collectAttendees,
+        allow_companions: finalRaffleEnabled ? false : collectAttendees,
+
+        status: "pending",
+      })
+      .select("id, title")
+      .single();
+
+    if (error) {
+      alert("Event submission failed: " + error.message);
+      setSaving(false);
+      return;
+    }
+
+    try {
+      const pushRes = await fetch("/api/push/admin-event-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventId: insertedEvent.id,
+          title: insertedEvent.title,
+        }),
+      });
+
+      const pushData = await pushRes.json();
+
+      console.log("ADMIN PUSH RESULT:", pushData);
+
+      if (!pushRes.ok) {
+        alert(
+          "The event was submitted, but the push notification failed:\n" +
+            (pushData.error || "Unknown Error")
+        );
+      }
+    } catch (pushError: any) {
+      console.error("Push notification failed:", pushError);
+
+      alert(
+        "The event was submitted, but the push notification request failed:\n" +
+          (pushError?.message || "Unknown Error")
+      );
+    }
+
+    alert("Your event has been submitted and will appear after admin approval.");
+    router.push("/");
+  } catch (err: any) {
+    alert("Save failed: " + err.message);
+    setSaving(false);
+  }
+}
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
@@ -489,40 +493,55 @@ export default function NewEventPage() {
                 </div>
 
                 {raffleEnabled && (
-                  <div className="mt-4 space-y-3 rounded-2xl bg-red-50 p-4">
-                    <div>
-                      <label className="mb-1 block text-xs font-black text-[#172033]">
-                        Drawing Date & Time
-                      </label>
-                      <input
-                        type="datetime-local"
-                        value={raffleDrawAt}
-                        onChange={(e) => setRaffleDrawAt(e.target.value)}
-                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-                      />
-                    </div>
+  <div className="mt-4 space-y-3 rounded-2xl bg-red-50 p-4">
+    <div>
+      <label className="mb-1 block text-xs font-black text-[#172033]">
+        Registration Deadline
+      </label>
+      <input
+        type="datetime-local"
+        value={registrationDeadline}
+        onChange={(e) => setRegistrationDeadline(e.target.value)}
+        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+      />
+    </div>
 
-                    <div>
-                      <label className="mb-1 block text-xs font-black text-[#172033]">
-                        Number of Winners
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={raffleWinnerCount}
-                        onChange={(e) =>
-                          setRaffleWinnerCount(Number(e.target.value) || 1)
-                        }
-                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-                      />
-                    </div>
+    <div>
+      <label className="mb-1 block text-xs font-black text-[#172033]">
+        Drawing Date & Time
+      </label>
+      <input
+        type="datetime-local"
+        value={raffleDrawAt}
+        onChange={(e) => setRaffleDrawAt(e.target.value)}
+        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+      />
+    </div>
 
-                    <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
-                      Raffle registration will collect only the attendee's name and phone number.
-                      Guests/companions will be disabled so only the person who directly registers can win a prize.
-                    </div>
-                  </div>
-                )}
+    <div>
+      <label className="mb-1 block text-xs font-black text-[#172033]">
+        Number of Winners
+      </label>
+      <input
+        type="number"
+        min={1}
+        value={raffleWinnerCount}
+        onChange={(e) =>
+          setRaffleWinnerCount(Number(e.target.value) || 1)
+        }
+        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+      />
+    </div>
+
+    <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
+      Registration Deadline 이후에는 참가 신청이 마감됩니다.
+      <br />
+      Drawing Date & Time 이후 관리자/오너가 Draw Winner 버튼으로 추첨할 수 있습니다.
+      <br />
+      추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨 대상에 포함되지 않습니다.
+    </div>
+  </div>
+)}
               </div>
             )}
           </div>
