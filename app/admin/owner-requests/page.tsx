@@ -6,7 +6,7 @@ import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
+
 
 
 type OwnerRequestRow = {
