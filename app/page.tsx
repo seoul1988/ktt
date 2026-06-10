@@ -259,9 +259,14 @@ const spots =
                     </p>
                   </div>
 
-                  <div className="whitespace-nowrap rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
-                    ★ {featured.rating || "New"}
-                  </div>
+                 <div className="whitespace-nowrap rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
+					  ★ {featured.rating || "New"}
+					  {featured.review_count ? (
+						<span className="ml-1 text-gray-500">
+						  ({featured.review_count})
+						</span>
+					  ) : null}
+					</div>
                 </div>
 
                 <p className="mt-3 line-clamp-2 text-sm text-gray-700">
