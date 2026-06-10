@@ -181,9 +181,11 @@ export default async function BusinessEventDetailPage({
 
         {collectAttendees && !registrationClosed && !drawReady && (
           <AttendeeRegistrationForm
-            eventId={event.id}
-            eventTitle={event.title || "Business Event"}
-          />
+  eventId={event.id}
+  eventTitle={event.title || "Business Event"}
+  raffleEnabled={raffleEnabled}
+  allowCompanions={!raffleEnabled}
+/>
         )}
 
         {collectAttendees && (registrationClosed || drawReady) && (
