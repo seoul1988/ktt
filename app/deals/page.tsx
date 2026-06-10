@@ -30,7 +30,7 @@ export default async function DealsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-xl">
         <div className="relative mb-4 flex items-center justify-center">
           <Link
             href="/"
