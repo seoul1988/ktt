@@ -170,8 +170,17 @@ export default function NewEventPage() {
       return;
     }
 
-    if (new Date(raffleDrawAt) <= new Date(registrationDeadline)) {
+    const deadlineTime = new Date(registrationDeadline).getTime();
+    const drawTime = new Date(raffleDrawAt).getTime();
+
+    if (Number.isNaN(deadlineTime) || Number.isNaN(drawTime)) {
+      alert("Please enter valid raffle dates.");
+      return;
+    }
+
+    if (drawTime <= deadlineTime) {
       alert("Drawing Date & Time must be later than the Registration Deadline.");
+      setRaffleDrawAt("");
       return;
     }
 
@@ -277,7 +286,13 @@ export default function NewEventPage() {
         }),
       });
 
-      const pushData = await pushRes.json();
+      let pushData: any = {};
+
+      try {
+        pushData = await pushRes.json();
+      } catch {
+        pushData = {};
+      }
 
       console.log("ADMIN PUSH RESULT:", pushData);
 
@@ -285,6 +300,10 @@ export default function NewEventPage() {
         alert(
           "The event was submitted, but the push notification failed:\n" +
             (pushData.error || "Unknown Error")
+        );
+      } else {
+        console.log(
+          `Push Success - Sent: ${pushData.sent}, Failed: ${pushData.failed}`
         );
       }
     } catch (pushError: any) {
@@ -494,29 +513,88 @@ export default function NewEventPage() {
 
                 {raffleEnabled && (
   <div className="mt-4 space-y-3 rounded-2xl bg-red-50 p-4">
-    <div>
-      <label className="mb-1 block text-xs font-black text-[#172033]">
-        Registration Deadline
-      </label>
-      <input
-        type="datetime-local"
-        value={registrationDeadline}
-        onChange={(e) => setRegistrationDeadline(e.target.value)}
-        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-      />
-    </div>
+  <div>
+    <label className="mb-1 block text-xs font-black text-[#172033]">
+      Registration Deadline
+    </label>
 
-    <div>
-      <label className="mb-1 block text-xs font-black text-[#172033]">
-        Drawing Date & Time
-      </label>
-      <input
-        type="datetime-local"
-        value={raffleDrawAt}
-        onChange={(e) => setRaffleDrawAt(e.target.value)}
-        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-      />
-    </div>
+    <input
+      type="datetime-local"
+      value={registrationDeadline}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        setRegistrationDeadline(value);
+
+        // 이미 선택된 추첨일이 마감일보다 빠르거나 같으면 제거
+        if (
+          raffleDrawAt &&
+          new Date(raffleDrawAt) <= new Date(value)
+        ) {
+          alert(
+            "Drawing Date & Time must be later than the Registration Deadline."
+          );
+          setRaffleDrawAt("");
+        }
+      }}
+      className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-xs font-black text-[#172033]">
+      Drawing Date & Time
+    </label>
+
+    <input
+      type="datetime-local"
+      value={raffleDrawAt}
+      min={registrationDeadline || undefined}
+      onChange={(e) => {
+        const value = e.target.value;
+
+        if (
+          registrationDeadline &&
+          new Date(value) <= new Date(registrationDeadline)
+        ) {
+          alert(
+            "Drawing Date & Time must be later than the Registration Deadline."
+          );
+          return;
+        }
+
+        setRaffleDrawAt(value);
+      }}
+      className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+    />
+  </div>
+
+  <div>
+    <label className="mb-1 block text-xs font-black text-[#172033]">
+      Number of Winners
+    </label>
+
+    <input
+      type="number"
+      min={1}
+      value={raffleWinnerCount}
+      onChange={(e) =>
+        setRaffleWinnerCount(Number(e.target.value) || 1)
+      }
+      className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+    />
+  </div>
+
+  <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
+    Registration Deadline 이후에는 참가 신청이 마감됩니다.
+    <br />
+    Drawing Date & Time은 반드시 Registration Deadline 이후여야 합니다.
+    <br />
+    Drawing Date & Time 이후 관리자/오너가 Draw Winner 버튼으로 추첨할 수 있습니다.
+    <br />
+    추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨 대상에 포함되지 않습니다.
+  </div>
+</div>
 
     <div>
       <label className="mb-1 block text-xs font-black text-[#172033]">
