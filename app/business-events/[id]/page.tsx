@@ -180,12 +180,23 @@ export default async function BusinessEventDetailPage({
         )}
 
         {collectAttendees && !registrationClosed && !drawReady && (
-          <AttendeeRegistrationForm
-  eventId={event.id}
-  eventTitle={event.title || "Business Event"}
-  raffleEnabled={raffleEnabled}
-  allowCompanions={!raffleEnabled}
-/>
+<div className="mt-4">
+  <AttendeeRegistrationForm
+    eventId={event.id}
+    eventTitle={event.title || "Business Event"}
+    raffleEnabled={raffleEnabled}
+    allowCompanions={!raffleEnabled}
+    buttonOnly
+  />
+
+  <AttendeeRegistrationForm
+    eventId={event.id}
+    eventTitle={event.title || "Business Event"}
+    raffleEnabled={raffleEnabled}
+    allowCompanions={!raffleEnabled}
+    formOnly
+  />
+</div>
         )}
 
         {collectAttendees && (registrationClosed || drawReady) && (
