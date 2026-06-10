@@ -8,26 +8,33 @@ import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 
-function BusinessBadges({
-  hasCoupon,
+function OfferBadges({
   hasDeal,
+  hasCoupon,
+  size = "sm",
 }: {
-  hasCoupon: boolean;
   hasDeal: boolean;
+  hasCoupon: boolean;
+  size?: "sm" | "md";
 }) {
-  if (!hasCoupon && !hasDeal) return null;
+  if (!hasDeal && !hasCoupon) return null;
+
+  const badgeClass =
+    size === "md"
+      ? "rounded-full px-2.5 py-1 text-xs font-black shadow-sm"
+      : "rounded-full px-2 py-0.5 text-[10px] font-black shadow-sm";
 
   return (
-    <div className="absolute left-2 top-2 z-10 flex flex-wrap gap-1.5">
-      {hasCoupon && (
-        <span className="rounded-full bg-[#C4483A] px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
-          COUPON
+    <div className="flex flex-wrap items-center gap-1.5">
+      {hasDeal && (
+        <span className={`${badgeClass} bg-yellow-400 text-black`}>
+          🔥 DEAL
         </span>
       )}
 
-      {hasDeal && (
-        <span className="rounded-full bg-[#172033] px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
-          DEAL
+      {hasCoupon && (
+        <span className={`${badgeClass} bg-purple-600 text-white`}>
+          🎟 COUPON
         </span>
       )}
     </div>
@@ -37,28 +44,16 @@ function BusinessBadges({
 function BusinessMedia({
   spot,
   className,
-  hasCoupon = false,
-  hasDeal = false,
 }: {
   spot: any;
   className: string;
-  hasCoupon?: boolean;
-  hasDeal?: boolean;
 }) {
   return (
-    <div className="relative h-full w-full">
-      <BusinessBadges hasCoupon={hasCoupon} hasDeal={hasDeal} />
-
-      <img
-        src={spot.image_url || "/event.png"}
-        alt={spot.name || "Business"}
-        className={`${className} object-cover`}
-      />
-
-      {(hasCoupon || hasDeal) && (
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent" />
-      )}
-    </div>
+    <img
+      src={spot.image_url || "/event.png"}
+      alt={spot.name || "Business"}
+      className={`${className} object-cover`}
+    />
   );
 }
 
@@ -154,15 +149,11 @@ export default async function Home() {
     .eq("active", true);
 
   const dealBusinessIds = new Set(
-    (dealBusinesses || [])
-      .map((d: any) => d.business_id)
-      .filter(Boolean)
+    (dealBusinesses || []).map((d: any) => d.business_id).filter(Boolean)
   );
 
   const couponBusinessIds = new Set(
-    (couponBusinesses || [])
-      .map((c: any) => c.business_id)
-      .filter(Boolean)
+    (couponBusinesses || []).map((c: any) => c.business_id).filter(Boolean)
   );
 
   const featured = spots?.[0];
@@ -269,9 +260,7 @@ export default async function Home() {
                   <div className="mt-1 flex items-center justify-between gap-3 text-sm">
                     <div className="min-w-0 truncate text-gray-600">
                       {deal.businesses?.name || "KTT Deal"}
-                      {deal.businesses?.city
-                        ? ` · ${deal.businesses.city}`
-                        : ""}
+                      {deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
                     </div>
 
                     <div className="shrink-0 whitespace-nowrap font-bold text-[#C4483A]">
@@ -310,16 +299,22 @@ export default async function Home() {
               <div className="h-56 w-full overflow-hidden bg-white">
                 <BusinessMedia
                   spot={featured}
-                  hasCoupon={couponBusinessIds.has(featured.id)}
-                  hasDeal={dealBusinessIds.has(featured.id)}
                   className="h-full w-full object-contain"
                 />
               </div>
 
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-bold">{featured.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-2xl font-bold">{featured.name}</h3>
+
+                      <OfferBadges
+                        hasDeal={dealBusinessIds.has(featured.id)}
+                        hasCoupon={couponBusinessIds.has(featured.id)}
+                        size="md"
+                      />
+                    </div>
 
                     <p className="mt-2 text-sm text-gray-600">
                       {featured.category} · {featured.city}
@@ -362,14 +357,19 @@ export default async function Home() {
                     <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
                       <BusinessMedia
                         spot={spot}
-                        hasCoupon={hasCoupon}
-                        hasDeal={hasDeal}
                         className="h-full w-full object-cover"
                       />
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h4 className="line-clamp-1 font-bold">{spot.name}</h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="line-clamp-1 font-bold">{spot.name}</h4>
+
+                        <OfferBadges
+                          hasDeal={hasDeal}
+                          hasCoupon={hasCoupon}
+                        />
+                      </div>
 
                       <p className="line-clamp-1 text-sm text-gray-600">
                         {spot.category} · {spot.city}
