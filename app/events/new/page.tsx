@@ -60,7 +60,6 @@ export default function NewEventPage() {
 
   function handleImage(file: File | null) {
     if (!file) return;
-
     setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
   }
@@ -68,9 +67,7 @@ export default function NewEventPage() {
   function handleVideo(file: File | null) {
     if (!file) return;
 
-    const maxSize = 50 * 1024 * 1024;
-
-    if (file.size > maxSize) {
+    if (file.size > 50 * 1024 * 1024) {
       alert("The video file is too large. Please upload a file under 50MB.");
       return;
     }
@@ -94,7 +91,6 @@ export default function NewEventPage() {
       });
 
     if (error) {
-      console.error("UPLOAD ERROR:", error);
       throw new Error(`${bucket} upload failed: ${error.message}`);
     }
 
@@ -106,48 +102,55 @@ export default function NewEventPage() {
   }
 
   useEffect(() => {
-  async function loadProfile() {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    async function loadProfile() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-    console.log("AUTH USER:", user, userError);
+      if (!user) return;
 
-    if (!user) return;
+      setContactEmail(user.email || "");
 
-    setContactEmail(user.email || "");
+      let profile: any = null;
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
+      const byId = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    console.log("PROFILE:", profile, profileError);
+      profile = byId.data;
 
-    if (profileError) return;
+      if (!profile) {
+        const byUserId = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
-    if (profile) {
-      setContactName(
-        profile.full_name ||
-          profile.name ||
-          profile.username ||
-          profile.business_name ||
-          ""
-      );
+        profile = byUserId.data;
+      }
 
-      setContactPhone(
-        profile.phone ||
-          profile.phone_number ||
-          profile.contact_phone ||
-          ""
-      );
+      if (profile) {
+        setContactName(
+          profile.full_name ||
+            profile.name ||
+            profile.username ||
+            profile.business_name ||
+            ""
+        );
+
+        setContactPhone(
+          profile.phone ||
+            profile.phone_number ||
+            profile.contact_phone ||
+            ""
+        );
+      }
     }
-  }
 
-  loadProfile();
-}, []);
+    loadProfile();
+  }, []);
 
   function setRegistrationMode(value: boolean) {
     setCollectAttendees(value);
@@ -155,6 +158,7 @@ export default function NewEventPage() {
     if (!value) {
       setRaffleEnabled(false);
       setRaffleDrawAt("");
+      setRegistrationDeadline("");
       setRaffleWinnerCount(1);
     }
   }
@@ -166,181 +170,166 @@ export default function NewEventPage() {
       setCollectAttendees(true);
     } else {
       setRaffleDrawAt("");
+      setRegistrationDeadline("");
       setRaffleWinnerCount(1);
     }
   }
 
   async function submitEvent() {
-  if (!title.trim()) {
-    alert("Please enter an event title.");
-    return;
-  }
-
-  const finalRaffleEnabled = collectAttendees && raffleEnabled;
-
-  if (finalRaffleEnabled) {
-    if (!registrationDeadline) {
-      alert("Please enter the registration deadline.");
+    if (!title.trim()) {
+      alert("Please enter an event title.");
       return;
     }
 
-    if (!raffleDrawAt) {
-      alert("Please enter the raffle drawing date and time.");
-      return;
+    const finalRaffleEnabled = collectAttendees && raffleEnabled;
+
+    if (finalRaffleEnabled) {
+      if (!registrationDeadline) {
+        alert("Please enter the registration deadline.");
+        return;
+      }
+
+      if (!raffleDrawAt) {
+        alert("Please enter the raffle drawing date and time.");
+        return;
+      }
+
+      const deadlineTime = new Date(registrationDeadline).getTime();
+      const drawTime = new Date(raffleDrawAt).getTime();
+
+      if (Number.isNaN(deadlineTime) || Number.isNaN(drawTime)) {
+        alert("Please enter valid raffle dates.");
+        return;
+      }
+
+      if (drawTime <= deadlineTime) {
+        alert("Drawing Date & Time must be later than the Registration Deadline.");
+        setRaffleDrawAt("");
+        return;
+      }
+
+      if (Number(raffleWinnerCount) < 1) {
+        alert("Please enter at least 1 winner.");
+        return;
+      }
     }
 
-    const deadlineTime = new Date(registrationDeadline).getTime();
-    const drawTime = new Date(raffleDrawAt).getTime();
-
-    if (Number.isNaN(deadlineTime) || Number.isNaN(drawTime)) {
-      alert("Please enter valid raffle dates.");
-      return;
-    }
-
-    if (drawTime <= deadlineTime) {
-      alert("Drawing Date & Time must be later than the Registration Deadline.");
-      setRaffleDrawAt("");
-      return;
-    }
-
-    if (Number(raffleWinnerCount) < 1) {
-      alert("Please enter at least 1 winner.");
-      return;
-    }
-  }
-
-  setSaving(true);
-
-  try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      alert("Please log in first.");
-      setSaving(false);
-      return;
-    }
-
-    let businessId: number | null = null;
-
-    const { data: ownerRow } = await supabase
-      .from("business_owners")
-      .select("business_id")
-      .eq("user_id", user.id)
-      .eq("status", "approved")
-      .maybeSingle();
-
-    if (ownerRow?.business_id) {
-      businessId = ownerRow.business_id;
-    }
-
-    let uploadedImageUrl = "";
-    let uploadedVideoUrl = "";
-
-    if (imageFile) {
-      uploadedImageUrl = await uploadFile(imageFile, "event-images", "images");
-    }
-
-    if (videoFile) {
-      uploadedVideoUrl = await uploadFile(videoFile, "event-videos", "videos");
-    }
-
-    const { data: insertedEvent, error } = await supabase
-      .from("event_requests")
-      .insert({
-        owner_id: user.id,
-        business_id: businessId,
-
-        title: title.trim(),
-        description: description.trim(),
-
-        image_url: uploadedImageUrl || null,
-        video_url: uploadedVideoUrl || null,
-        external_video_url: videoUrl.trim() || null,
-
-        event_date: eventDate || null,
-        location: location.trim(),
-
-        latitude,
-        longitude,
-
-        contact_name: contactName.trim() || null,
-        contact_email: contactEmail.trim() || null,
-        contact_phone: contactPhone.trim() || null,
-
-        collect_attendees: collectAttendees,
-        registration_deadline: finalRaffleEnabled ? registrationDeadline : null,
-
-        raffle_enabled: finalRaffleEnabled,
-        raffle_draw_at: finalRaffleEnabled ? raffleDrawAt : null,
-        raffle_winner_count: finalRaffleEnabled
-          ? Number(raffleWinnerCount)
-          : null,
-
-        attendee_required_name: collectAttendees,
-        attendee_required_phone: collectAttendees,
-        allow_companions: finalRaffleEnabled ? false : collectAttendees,
-
-        status: "pending",
-      })
-      .select("id, title")
-      .single();
-
-    if (error) {
-      alert("Event submission failed: " + error.message);
-      setSaving(false);
-      return;
-    }
+    setSaving(true);
 
     try {
-      const pushRes = await fetch("/api/push/admin-event-request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          eventId: insertedEvent.id,
-          title: insertedEvent.title,
-        }),
-      });
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      let pushData: any = {};
+      if (!user) {
+        alert("Please log in first.");
+        setSaving(false);
+        return;
+      }
+
+      let businessId: number | null = null;
+
+      const { data: ownerRow } = await supabase
+        .from("business_owners")
+        .select("business_id")
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .maybeSingle();
+
+      if (ownerRow?.business_id) {
+        businessId = ownerRow.business_id;
+      }
+
+      let uploadedImageUrl = "";
+      let uploadedVideoUrl = "";
+
+      if (imageFile) {
+        uploadedImageUrl = await uploadFile(imageFile, "event-images", "images");
+      }
+
+      if (videoFile) {
+        uploadedVideoUrl = await uploadFile(videoFile, "event-videos", "videos");
+      }
+
+      const { data: insertedEvent, error } = await supabase
+        .from("event_requests")
+        .insert({
+          owner_id: user.id,
+          business_id: businessId,
+
+          title: title.trim(),
+          description: description.trim(),
+
+          image_url: uploadedImageUrl || null,
+          video_url: uploadedVideoUrl || null,
+          external_video_url: videoUrl.trim() || null,
+
+          event_date: eventDate || null,
+          location: location.trim(),
+
+          latitude,
+          longitude,
+
+          contact_name: contactName.trim() || null,
+          contact_email: contactEmail.trim() || null,
+          contact_phone: contactPhone.trim() || null,
+
+          collect_attendees: collectAttendees,
+          registration_deadline: finalRaffleEnabled ? registrationDeadline : null,
+
+          raffle_enabled: finalRaffleEnabled,
+          raffle_draw_at: finalRaffleEnabled ? raffleDrawAt : null,
+          raffle_winner_count: finalRaffleEnabled
+            ? Number(raffleWinnerCount)
+            : null,
+
+          attendee_required_name: collectAttendees,
+          attendee_required_phone: collectAttendees,
+          allow_companions: finalRaffleEnabled ? false : collectAttendees,
+
+          status: "pending",
+        })
+        .select("id, title")
+        .single();
+
+      if (error) {
+        alert("Event submission failed: " + error.message);
+        setSaving(false);
+        return;
+      }
 
       try {
-        pushData = await pushRes.json();
-      } catch {
-        pushData = {};
-      }
+        const pushRes = await fetch("/api/push/admin-event-request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: insertedEvent.id,
+            title: insertedEvent.title,
+          }),
+        });
 
-      console.log("ADMIN PUSH RESULT:", pushData);
+        const pushData = await pushRes.json().catch(() => ({}));
 
-      if (!pushRes.ok) {
+        if (!pushRes.ok) {
+          alert(
+            "The event was submitted, but the push notification failed:\n" +
+              (pushData.error || "Unknown Error")
+          );
+        }
+      } catch (pushError: any) {
         alert(
-          "The event was submitted, but the push notification failed:\n" +
-            (pushData.error || "Unknown Error")
-        );
-      } else {
-        console.log(
-          `Push Success - Sent: ${pushData.sent}, Failed: ${pushData.failed}`
+          "The event was submitted, but the push notification request failed:\n" +
+            (pushError?.message || "Unknown Error")
         );
       }
-    } catch (pushError: any) {
-      console.error("Push notification failed:", pushError);
 
-      alert(
-        "The event was submitted, but the push notification request failed:\n" +
-          (pushError?.message || "Unknown Error")
-      );
+      alert("Your event has been submitted and will appear after admin approval.");
+      router.push("/");
+    } catch (err: any) {
+      alert("Save failed: " + err.message);
+      setSaving(false);
     }
-
-    alert("Your event has been submitted and will appear after admin approval.");
-    router.push("/");
-  } catch (err: any) {
-    alert("Save failed: " + err.message);
-    setSaving(false);
   }
-}
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
@@ -356,52 +345,6 @@ export default function NewEventPage() {
           <h1 className="text-2xl font-black text-[#C46A2B]">
             Create Event
           </h1>
-
-          <details className="absolute right-0">
-            <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#C46A2B] shadow">
-              ⋯
-            </summary>
-
-            <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
-              <Link href="/profile" className="block px-4 py-3 hover:bg-gray-100">
-                Edit Profile
-              </Link>
-
-              <Link href="/my-coupons" className="block px-4 py-3 hover:bg-gray-100">
-                My Coupons
-              </Link>
-
-              <Link href="/owner" className="block px-4 py-3 hover:bg-gray-100">
-                My Business
-              </Link>
-
-              <Link href="/business/new" className="block px-4 py-3 hover:bg-gray-100">
-                Register Business
-              </Link>
-
-              <Link href="/events/new" className="block px-4 py-3 hover:bg-gray-100">
-                Create Event
-              </Link>
-
-              <Link href="/deals/new" className="block px-4 py-3 hover:bg-gray-100">
-                Create Deal
-              </Link>
-
-              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-gray-100">
-                Register Coupon
-              </Link>
-
-              <button
-                onClick={async () => {
-                  await supabase.auth.signOut();
-                  window.location.href = "/login";
-                }}
-                className="block w-full px-4 py-3 text-left text-red-600 hover:bg-gray-100"
-              >
-                Logout
-              </button>
-            </div>
-          </details>
         </div>
 
         <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
@@ -449,7 +392,9 @@ export default function NewEventPage() {
             <input
               type="number"
               value={latitude ?? ""}
-              onChange={(e) => setLatitude(Number(e.target.value))}
+              onChange={(e) =>
+                setLatitude(e.target.value ? Number(e.target.value) : null)
+              }
               placeholder="Latitude"
               className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
@@ -457,7 +402,9 @@ export default function NewEventPage() {
             <input
               type="number"
               value={longitude ?? ""}
-              onChange={(e) => setLongitude(Number(e.target.value))}
+              onChange={(e) =>
+                setLongitude(e.target.value ? Number(e.target.value) : null)
+              }
               placeholder="Longitude"
               className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
@@ -494,10 +441,6 @@ export default function NewEventPage() {
               </button>
             </div>
 
-            <p className="mt-3 text-xs font-bold text-gray-500">
-              Choose whether this event should collect attendee registrations on the event detail page.
-            </p>
-
             {collectAttendees && (
               <div className="mt-4 rounded-2xl border bg-white p-4">
                 <p className="mb-3 text-sm font-black text-[#172033]">
@@ -531,114 +474,89 @@ export default function NewEventPage() {
                 </div>
 
                 {raffleEnabled && (
-  <div className="mt-4 space-y-3 rounded-2xl bg-red-50 p-4">
-  <div>
-    <label className="mb-1 block text-xs font-black text-[#172033]">
-      Registration Deadline
-    </label>
+                  <div className="mt-4 space-y-3 rounded-2xl bg-red-50 p-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-black text-[#172033]">
+                        Registration Deadline
+                      </label>
 
-    <input
-      type="datetime-local"
-      value={registrationDeadline}
-      onChange={(e) => {
-        const value = e.target.value;
+                      <input
+                        type="datetime-local"
+                        value={registrationDeadline}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setRegistrationDeadline(value);
 
-        setRegistrationDeadline(value);
+                          if (
+                            raffleDrawAt &&
+                            new Date(raffleDrawAt) <= new Date(value)
+                          ) {
+                            alert(
+                              "Drawing Date & Time must be later than the Registration Deadline."
+                            );
+                            setRaffleDrawAt("");
+                          }
+                        }}
+                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+                      />
+                    </div>
 
-        // 이미 선택된 추첨일이 마감일보다 빠르거나 같으면 제거
-        if (
-          raffleDrawAt &&
-          new Date(raffleDrawAt) <= new Date(value)
-        ) {
-          alert(
-            "Drawing Date & Time must be later than the Registration Deadline."
-          );
-          setRaffleDrawAt("");
-        }
-      }}
-      className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-    />
-  </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black text-[#172033]">
+                        Drawing Date & Time
+                      </label>
 
-  <div>
-    <label className="mb-1 block text-xs font-black text-[#172033]">
-      Drawing Date & Time
-    </label>
+                      <input
+                        type="datetime-local"
+                        value={raffleDrawAt}
+                        min={registrationDeadline || undefined}
+                        onChange={(e) => {
+                          const value = e.target.value;
 
-    <input
-      type="datetime-local"
-      value={raffleDrawAt}
-      min={registrationDeadline || undefined}
-      onChange={(e) => {
-        const value = e.target.value;
+                          if (
+                            registrationDeadline &&
+                            new Date(value) <= new Date(registrationDeadline)
+                          ) {
+                            alert(
+                              "Drawing Date & Time must be later than the Registration Deadline."
+                            );
+                            setRaffleDrawAt("");
+                            return;
+                          }
 
-        if (
-          registrationDeadline &&
-          new Date(value) <= new Date(registrationDeadline)
-        ) {
-          alert(
-            "Drawing Date & Time must be later than the Registration Deadline."
-          );
-          return;
-        }
+                          setRaffleDrawAt(value);
+                        }}
+                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+                      />
+                    </div>
 
-        setRaffleDrawAt(value);
-      }}
-      className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-    />
-  </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-black text-[#172033]">
+                        Number of Winners
+                      </label>
 
-  <div>
-    <label className="mb-1 block text-xs font-black text-[#172033]">
-      Number of Winners
-    </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={raffleWinnerCount}
+                        onChange={(e) =>
+                          setRaffleWinnerCount(Number(e.target.value) || 1)
+                        }
+                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+                      />
+                    </div>
 
-    <input
-      type="number"
-      min={1}
-      value={raffleWinnerCount}
-      onChange={(e) =>
-        setRaffleWinnerCount(Number(e.target.value) || 1)
-      }
-      className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-    />
-  </div>
-
-  <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
-    Registration Deadline 이후에는 참가 신청이 마감됩니다.
-    <br />
-    Drawing Date & Time은 반드시 Registration Deadline 이후여야 합니다.
-    <br />
-    Drawing Date & Time 이후 관리자/오너가 Draw Winner 버튼으로 추첨할 수 있습니다.
-    <br />
-    추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨 대상에 포함되지 않습니다.
-  </div>
-</div>
-
-    <div>
-      <label className="mb-1 block text-xs font-black text-[#172033]">
-        Number of Winners
-      </label>
-      <input
-        type="number"
-        min={1}
-        value={raffleWinnerCount}
-        onChange={(e) =>
-          setRaffleWinnerCount(Number(e.target.value) || 1)
-        }
-        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-      />
-    </div>
-
-    <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
-      Registration Deadline 이후에는 참가 신청이 마감됩니다.
-      <br />
-      Drawing Date & Time 이후 관리자/오너가 Draw Winner 버튼으로 추첨할 수 있습니다.
-      <br />
-      추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨 대상에 포함되지 않습니다.
-    </div>
-  </div>
-)}
+                    <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
+                      Registration Deadline 이후에는 참가 신청이 마감됩니다.
+                      <br />
+                      Drawing Date & Time은 반드시 Registration Deadline 이후여야 합니다.
+                      <br />
+                      Drawing Date & Time 이후 관리자/오너가 Draw Winner 버튼으로 추첨할 수 있습니다.
+                      <br />
+                      추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨 대상에 포함되지 않습니다.
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -676,7 +594,6 @@ export default function NewEventPage() {
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
                 Upload
-
                 <input
                   type="file"
                   accept="image/*"
@@ -703,7 +620,6 @@ export default function NewEventPage() {
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
                 Upload
-
                 <input
                   type="file"
                   accept="video/*"
