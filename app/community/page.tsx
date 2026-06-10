@@ -5,6 +5,9 @@ import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function CommunityPage() {
   const { data: events, error: eventsError } = await supabase
   .from("community_events")
