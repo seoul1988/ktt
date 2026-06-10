@@ -39,8 +39,8 @@ export default function NewEventPage() {
 
   const [collectAttendees, setCollectAttendees] = useState(false);
   const [raffleEnabled, setRaffleEnabled] = useState(false);
-  const [raffleDrawAt, setRaffleDrawAt] = useState("");
   const [registrationDeadline, setRegistrationDeadline] = useState("");
+  const [raffleDrawAt, setRaffleDrawAt] = useState("");
   const [raffleWinnerCount, setRaffleWinnerCount] = useState(1);
 
   function onPlaceChanged() {
@@ -157,8 +157,8 @@ export default function NewEventPage() {
 
     if (!value) {
       setRaffleEnabled(false);
-      setRaffleDrawAt("");
       setRegistrationDeadline("");
+      setRaffleDrawAt("");
       setRaffleWinnerCount(1);
     }
   }
@@ -169,8 +169,8 @@ export default function NewEventPage() {
     if (value) {
       setCollectAttendees(true);
     } else {
-      setRaffleDrawAt("");
       setRegistrationDeadline("");
+      setRaffleDrawAt("");
       setRaffleWinnerCount(1);
     }
   }
@@ -184,8 +184,6 @@ export default function NewEventPage() {
     const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
     if (finalRaffleEnabled) {
-		  console.log("registrationDeadline:", registrationDeadline);
-  console.log("raffleDrawAt:", raffleDrawAt);
       if (!registrationDeadline) {
         alert("Please enter the registration deadline.");
         return;
@@ -344,9 +342,7 @@ export default function NewEventPage() {
             ←
           </Link>
 
-          <h1 className="text-2xl font-black text-[#C46A2B]">
-            Create Event
-          </h1>
+          <h1 className="text-2xl font-black text-[#C46A2B]">Create Event</h1>
         </div>
 
         <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
@@ -482,27 +478,28 @@ export default function NewEventPage() {
                         Registration Deadline
                       </label>
 
-                     <input
-						  type="datetime-local"
-						  value={raffleDrawAt}
-						  min={registrationDeadline || undefined}
-						  onChange={(e) => {
-							const value = e.target.value;
+                      <input
+                        type="datetime-local"
+                        value={registrationDeadline}
+                        onChange={(e) => {
+                          const value = e.currentTarget.value;
+                          setRegistrationDeadline(value);
 
-							if (
-							  registrationDeadline &&
-							  new Date(value).getTime() <= new Date(registrationDeadline).getTime()
-							) {
-							  alert("Drawing Date & Time must be later than the Registration Deadline.");
-							  setRaffleDrawAt("");
-							  return;
-							}
-
-							setRaffleDrawAt(value);
-						  }}
-						  className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-						/>
-											</div>
+                          if (
+                            raffleDrawAt &&
+                            value &&
+                            new Date(raffleDrawAt).getTime() <=
+                              new Date(value).getTime()
+                          ) {
+                            alert(
+                              "Drawing Date & Time must be later than the Registration Deadline."
+                            );
+                            setRaffleDrawAt("");
+                          }
+                        }}
+                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+                      />
+                    </div>
 
                     <div>
                       <label className="mb-1 block text-xs font-black text-[#172033]">
@@ -514,11 +511,13 @@ export default function NewEventPage() {
                         value={raffleDrawAt}
                         min={registrationDeadline || undefined}
                         onChange={(e) => {
-                          const value = e.target.value;
+                          const value = e.currentTarget.value;
 
                           if (
                             registrationDeadline &&
-                            new Date(value) <= new Date(registrationDeadline)
+                            value &&
+                            new Date(value).getTime() <=
+                              new Date(registrationDeadline).getTime()
                           ) {
                             alert(
                               "Drawing Date & Time must be later than the Registration Deadline."
