@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 
 type Business = {
   id: number;

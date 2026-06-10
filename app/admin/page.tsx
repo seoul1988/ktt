@@ -1,5 +1,10 @@
 import Link from "next/link";
 import CommunityBottomNav from "../components/CommunityBottomNav";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+
+
 export default function AdminPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5">

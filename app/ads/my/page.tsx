@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 type AdItem = {
   id: number;
   title: string;

@@ -5,6 +5,9 @@ import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import PushSubscribeButton from "../../components/PushSubscribeButton";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 
 type SourceType = "request" | "community_events" | "business_events";
 

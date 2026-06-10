@@ -5,6 +5,9 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 
 type UserProfile = {
   id: string;

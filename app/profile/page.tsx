@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import ProfileButton from "../components/ProfileButton";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Profile = {
   id: string;

@@ -6,7 +6,8 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
 import ProfileButton from "../components/ProfileButton";
-
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 type EventItem = {
   id: string;
   owner_id: string | null;

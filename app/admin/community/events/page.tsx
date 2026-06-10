@@ -3,6 +3,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabase";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 
 type CommunityEvent = {
   id: string;
