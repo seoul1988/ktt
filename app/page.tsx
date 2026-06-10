@@ -8,19 +8,57 @@ import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 
+function BusinessBadges({
+  hasCoupon,
+  hasDeal,
+}: {
+  hasCoupon: boolean;
+  hasDeal: boolean;
+}) {
+  if (!hasCoupon && !hasDeal) return null;
+
+  return (
+    <div className="absolute left-2 top-2 z-10 flex flex-wrap gap-1.5">
+      {hasCoupon && (
+        <span className="rounded-full bg-[#C4483A] px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
+          COUPON
+        </span>
+      )}
+
+      {hasDeal && (
+        <span className="rounded-full bg-[#172033] px-2.5 py-1 text-[10px] font-black text-white shadow-lg">
+          DEAL
+        </span>
+      )}
+    </div>
+  );
+}
+
 function BusinessMedia({
   spot,
   className,
+  hasCoupon = false,
+  hasDeal = false,
 }: {
   spot: any;
   className: string;
+  hasCoupon?: boolean;
+  hasDeal?: boolean;
 }) {
   return (
-    <img
-      src={spot.image_url || "/event.png"}
-      alt={spot.name || "Business"}
-      className={`${className} object-cover`}
-    />
+    <div className="relative h-full w-full">
+      <BusinessBadges hasCoupon={hasCoupon} hasDeal={hasDeal} />
+
+      <img
+        src={spot.image_url || "/event.png"}
+        alt={spot.name || "Business"}
+        className={`${className} object-cover`}
+      />
+
+      {(hasCoupon || hasDeal) && (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-transparent" />
+      )}
+    </div>
   );
 }
 
@@ -41,6 +79,8 @@ function DealMedia({
 }
 
 export default async function Home() {
+  const today = new Date().toISOString().slice(0, 10);
+
   const { data: communityCategories } = await supabase
     .from("categories")
     .select("name")
@@ -69,14 +109,8 @@ export default async function Home() {
       (cat) => !communityCategorySet.has(cat)
     );
 
-    if (hasCommunityCategory && !hasMainCategory) {
-      return false;
-    }
-
-    return true;
+    return !(hasCommunityCategory && !hasMainCategory);
   });
-
-  const today = new Date().toISOString().slice(0, 10);
 
   const { data: businessEvents } = await supabase
     .from("business_events")
@@ -106,6 +140,30 @@ export default async function Home() {
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false })
     .limit(3);
+
+  const { data: dealBusinesses } = await supabase
+    .from("deals")
+    .select("business_id")
+    .eq("status", "approved")
+    .eq("active", true)
+    .or(`end_date.is.null,end_date.gte.${today}`);
+
+  const { data: couponBusinesses } = await supabase
+    .from("coupons")
+    .select("business_id")
+    .eq("active", true);
+
+  const dealBusinessIds = new Set(
+    (dealBusinesses || [])
+      .map((d: any) => d.business_id)
+      .filter(Boolean)
+  );
+
+  const couponBusinessIds = new Set(
+    (couponBusinesses || [])
+      .map((c: any) => c.business_id)
+      .filter(Boolean)
+  );
 
   const featured = spots?.[0];
   const deals = activeDeals || [];
@@ -252,6 +310,8 @@ export default async function Home() {
               <div className="h-56 w-full overflow-hidden bg-white">
                 <BusinessMedia
                   spot={featured}
+                  hasCoupon={couponBusinessIds.has(featured.id)}
+                  hasDeal={dealBusinessIds.has(featured.id)}
                   className="h-full w-full object-contain"
                 />
               </div>
@@ -288,46 +348,53 @@ export default async function Home() {
           <h2 className="mb-3 text-xl font-bold">📈 Trending Now</h2>
 
           <div className="space-y-4">
-            {trending.map((spot) => (
-              <a
-                key={spot.id}
-                href={`/business/${spot.id}`}
-                className="block rounded-3xl bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
-                    <BusinessMedia
-                      spot={spot}
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
+            {trending.map((spot) => {
+              const hasDeal = dealBusinessIds.has(spot.id);
+              const hasCoupon = couponBusinessIds.has(spot.id);
 
-                  <div className="flex-1">
-                    <h4 className="font-bold">{spot.name}</h4>
+              return (
+                <a
+                  key={spot.id}
+                  href={`/business/${spot.id}`}
+                  className="block rounded-3xl bg-white p-4 shadow-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
+                      <BusinessMedia
+                        spot={spot}
+                        hasCoupon={hasCoupon}
+                        hasDeal={hasDeal}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
 
-                    <p className="text-sm text-gray-600">
-                      {spot.category} · {spot.city}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="line-clamp-1 font-bold">{spot.name}</h4>
 
-                    <p className="mt-1 text-sm font-medium text-[#C4483A]">
-                      {spot.tags || spot.tag}
-                    </p>
+                      <p className="line-clamp-1 text-sm text-gray-600">
+                        {spot.category} · {spot.city}
+                      </p>
 
-                    <p className="mt-1 text-sm">
-                      <span className="font-bold text-[#172033]">
-                        ★ {spot.rating || "New"}
-                      </span>
+                      <p className="mt-1 line-clamp-1 text-sm font-medium text-[#C4483A]">
+                        {spot.tags || spot.tag}
+                      </p>
 
-                      {spot.review_count ? (
-                        <span className="ml-1 text-gray-400">
-                          ({spot.review_count})
+                      <p className="mt-1 text-sm">
+                        <span className="font-bold text-[#172033]">
+                          ★ {spot.rating || "New"}
                         </span>
-                      ) : null}
-                    </p>
+
+                        {spot.review_count ? (
+                          <span className="ml-1 text-gray-400">
+                            ({spot.review_count})
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </a>
-            ))}
+                </a>
+              );
+            })}
           </div>
         </section>
 
