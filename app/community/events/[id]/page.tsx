@@ -62,34 +62,43 @@ export default async function CommunityEventDetailPage({
   const canManage = isAdmin || isOwner;
 
   async function deleteEvent() {
-  "use server";
+    "use server";
 
-  const { data: currentEvent } = await supabase
-    .from("community_events")
-    .select("id")
-    .eq("id", id)
-    .maybeSingle();
+    const { data: currentEvent } = await supabase
+      .from("community_events")
+      .select("id")
+      .eq("id", id)
+      .maybeSingle();
 
-  if (!currentEvent) {
+    if (!currentEvent) {
+      redirect("/community");
+    }
+
+    await supabase.from("community_events").delete().eq("id", id);
+
+    revalidatePath("/community");
+    revalidatePath(`/community/events/${id}`);
+
     redirect("/community");
   }
 
-  await supabase.from("community_events").delete().eq("id", id);
+  const raffleEnabled = event.raffle_enabled === true;
 
-  revalidatePath("/community");
-  revalidatePath(`/community/events/${id}`);
+  const raffleDrawAt = event.raffle_draw_at
+    ? new Date(event.raffle_draw_at).getTime()
+    : null;
 
-  redirect("/community");
-}
+  const drawReady =
+    raffleEnabled && raffleDrawAt !== null && Date.now() >= raffleDrawAt;
 
- const raffleEnabled = event.raffle_enabled === true;
+  const collectAttendees =
+    event.collect_attendees === true || raffleEnabled === true;
 
-const collectAttendees =
-  event.collect_attendees === true || raffleEnabled === true;
+  const allowCompanions = raffleEnabled
+    ? false
+    : event.allow_companions !== false;
 
-const allowCompanions = raffleEnabled
-  ? false
-  : event.allow_companions !== false;
+  const winnerCount = Math.max(1, Number(event.raffle_winner_count || 1));
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
@@ -161,17 +170,24 @@ const allowCompanions = raffleEnabled
 
             <div className="mt-2 font-bold">
               추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
+              동반인은 추첨 대상에 포함되지 않습니다.
             </div>
           </div>
         )}
 
-        {collectAttendees && (
+        {collectAttendees && !drawReady && (
           <CommunityAttendeeRegistrationForm
             eventId={event.id}
             eventTitle={event.title || "Community Event"}
             raffleEnabled={raffleEnabled}
             allowCompanions={allowCompanions}
           />
+        )}
+
+        {collectAttendees && drawReady && (
+          <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-[#6B6257] shadow-sm">
+            추첨 등록 시간이 마감되었습니다.
+          </div>
         )}
 
         {!collectAttendees && (
@@ -187,7 +203,7 @@ const allowCompanions = raffleEnabled
         </p>
 
         <p className="mt-2 text-sm font-bold text-[#6B6257]">
-          {event.address || event.location || "Location TBA"}
+          {event.address || "Location TBA"}
         </p>
 
         {event.description && (
@@ -222,10 +238,12 @@ const allowCompanions = raffleEnabled
 
         {collectAttendees && (
           <CommunityAttendeeList
-		  eventId={event.id}
-		  ownerId={event.owner_id || null}
-		  raffleEnabled={raffleEnabled}
-		/>
+            eventId={event.id}
+            ownerId={event.owner_id || null}
+            raffleEnabled={raffleEnabled}
+            drawReady={drawReady}
+            winnerCount={winnerCount}
+          />
         )}
       </section>
 

@@ -10,80 +10,157 @@ type Attendee = {
   companions: number | null;
   total_count: number | null;
   created_at: string | null;
+  is_winner?: boolean | null;
+  won_at?: string | null;
 };
 
 export default function CommunityAttendeeList({
   eventId,
   ownerId,
   raffleEnabled = false,
+  drawReady = false,
+  winnerCount = 1,
 }: {
   eventId: string;
   ownerId: string | null;
   raffleEnabled?: boolean;
+  drawReady?: boolean;
+  winnerCount?: number;
 }) {
   const [loading, setLoading] = useState(true);
   const [canView, setCanView] = useState(false);
   const [rows, setRows] = useState<Attendee[]>([]);
   const [error, setError] = useState("");
+  const [drawing, setDrawing] = useState(false);
+  const [rollingName, setRollingName] = useState("");
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError("");
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const allowed = ownerId === user.id || profile?.role === "admin";
-      setCanView(allowed);
-
-      if (!allowed) {
-        setLoading(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("community_event_attendees")
-        .select("id, name, phone, companions, total_count, created_at")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setRows(data || []);
-      }
-
-      setLoading(false);
-    }
-
     load();
   }, [eventId, ownerId]);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const allowed = ownerId === user.id || profile?.role === "admin";
+    setCanView(allowed);
+
+    if (!allowed) {
+      setLoading(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("community_event_attendees")
+      .select(
+        "id, name, phone, companions, total_count, created_at, is_winner, won_at"
+      )
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setError(error.message);
+    } else {
+      setRows(data || []);
+    }
+
+    setLoading(false);
+  }
 
   function getTotalPeople() {
     if (raffleEnabled) return rows.length;
 
     return rows.reduce((sum, row) => {
       const total = Number(row.total_count);
-
-      if (Number.isFinite(total) && total > 0) {
-        return sum + total;
-      }
-
-      return sum + 1;
+      return sum + (Number.isFinite(total) && total > 0 ? total : 1);
     }, 0);
+  }
+
+  function getRowTotal(row: Attendee) {
+    const total = Number(row.total_count);
+    return Number.isFinite(total) && total > 0 ? total : 1;
+  }
+
+  function pickRandomWinners(list: Attendee[], count: number) {
+    const pool = [...list];
+
+    for (let i = pool.length - 1; i > 0; i--) {
+      const randomArray = new Uint32Array(1);
+      window.crypto.getRandomValues(randomArray);
+      const j = randomArray[0] % (i + 1);
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    return pool.slice(0, Math.min(count, pool.length));
+  }
+
+  async function drawWinners() {
+    if (!raffleEnabled || !drawReady) return;
+
+    const existingWinners = rows.filter((row) => row.is_winner);
+
+    if (existingWinners.length > 0) {
+      alert("이미 추첨이 완료되었습니다.");
+      return;
+    }
+
+    if (rows.length === 0) {
+      alert("등록된 참가자가 없습니다.");
+      return;
+    }
+
+    setDrawing(true);
+
+    setTimeout(() => {
+      let rollCount = 0;
+
+      const interval = window.setInterval(async () => {
+        const random = rows[Math.floor(Math.random() * rows.length)];
+        setRollingName(random?.name || "Drawing...");
+
+        rollCount += 1;
+
+        if (rollCount >= 25) {
+          window.clearInterval(interval);
+
+          const winners = pickRandomWinners(rows, winnerCount);
+          const winnerIds = winners.map((winner) => winner.id);
+
+          const { error } = await supabase
+            .from("community_event_attendees")
+            .update({
+              is_winner: true,
+              won_at: new Date().toISOString(),
+            })
+            .in("id", winnerIds);
+
+          if (error) {
+            alert("Winner 저장 실패: " + error.message);
+            setDrawing(false);
+            return;
+          }
+
+          setRollingName("");
+          setDrawing(false);
+          await load();
+        }
+      }, 100);
+    }, 2000);
   }
 
   function safeFileName(value: string) {
@@ -96,8 +173,8 @@ export default function CommunityAttendeeList({
   function downloadBlob(content: BlobPart, fileName: string, type: string) {
     const blob = new Blob([content], { type });
     const url = window.URL.createObjectURL(blob);
-
     const a = document.createElement("a");
+
     a.href = url;
     a.download = fileName;
     document.body.appendChild(a);
@@ -107,19 +184,9 @@ export default function CommunityAttendeeList({
     window.URL.revokeObjectURL(url);
   }
 
-  function getRowTotal(row: Attendee) {
-    const total = Number(row.total_count);
-
-    if (Number.isFinite(total) && total > 0) {
-      return total;
-    }
-
-    return 1;
-  }
-
   function exportToExcelCsv() {
     const header = raffleEnabled
-      ? ["No", "Name", "Phone", "Registered At"]
+      ? ["No", "Name", "Phone", "Winner", "Registered At"]
       : ["No", "Name", "Phone", "Guests", "Total People", "Registered At"];
 
     const csvRows = rows.map((row, index) => {
@@ -128,6 +195,7 @@ export default function CommunityAttendeeList({
           index + 1,
           row.name || "",
           row.phone || "",
+          row.is_winner ? "WINNER" : "",
           row.created_at ? new Date(row.created_at).toLocaleString() : "",
         ];
       }
@@ -157,94 +225,12 @@ export default function CommunityAttendeeList({
     );
   }
 
-  function exportToWordDoc() {
-    const totalPeople = getTotalPeople();
-
-    const tableHead = raffleEnabled
-      ? `
-        <tr>
-          <th>No</th>
-          <th>Name</th>
-          <th>Phone</th>
-          <th>Registered At</th>
-        </tr>
-      `
-      : `
-        <tr>
-          <th>No</th>
-          <th>Name</th>
-          <th>Phone</th>
-          <th>Guests</th>
-          <th>Total People</th>
-          <th>Registered At</th>
-        </tr>
-      `;
-
-    const tableRows = rows
-      .map((row, index) => {
-        if (raffleEnabled) {
-          return `
-            <tr>
-              <td>${index + 1}</td>
-              <td>${row.name || ""}</td>
-              <td>${row.phone || ""}</td>
-              <td>${
-                row.created_at ? new Date(row.created_at).toLocaleString() : ""
-              }</td>
-            </tr>
-          `;
-        }
-
-        return `
-          <tr>
-            <td>${index + 1}</td>
-            <td>${row.name || ""}</td>
-            <td>${row.phone || ""}</td>
-            <td>${Number(row.companions) || 0}</td>
-            <td>${getRowTotal(row)}</td>
-            <td>${
-              row.created_at ? new Date(row.created_at).toLocaleString() : ""
-            }</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    const html = `
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Community Attendee List</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 24px; }
-            h1 { font-size: 22px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th, td { border: 1px solid #999; padding: 8px; font-size: 12px; text-align: left; }
-            th { background: #f0f0f0; }
-          </style>
-        </head>
-        <body>
-          <h1>${raffleEnabled ? "Drawing Entry List" : "Community Attendee List"}</h1>
-          <p><strong>${raffleEnabled ? "Total Entries" : "Total People"}:</strong> ${totalPeople}</p>
-          <table>
-            <thead>${tableHead}</thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-        </body>
-      </html>
-    `;
-
-    downloadBlob(
-      html,
-      `community-attendees-${safeFileName(eventId)}.doc`,
-      "application/msword;charset=utf-8;"
-    );
-  }
-
   if (loading) return null;
   if (!canView) return null;
 
   const totalPeople = getTotalPeople();
+  const winners = rows.filter((row) => row.is_winner);
+  const alreadyDrawn = winners.length > 0;
 
   return (
     <div className="mt-5 rounded-3xl bg-white p-5 shadow-xl">
@@ -266,6 +252,49 @@ export default function CommunityAttendeeList({
         </div>
       </div>
 
+      {raffleEnabled && drawReady && (
+        <div className="mt-4 rounded-2xl bg-yellow-50 p-4 text-xs font-bold leading-5 text-yellow-900">
+          추첨을 시작하기 전에 휴대폰 화면 녹화를 켜 주세요.
+          녹화가 시작되면 아래 버튼을 눌러 추첨을 진행하세요.
+        </div>
+      )}
+
+      {raffleEnabled && drawReady && (
+        <button
+          type="button"
+          onClick={drawWinners}
+          disabled={drawing || rows.length === 0 || alreadyDrawn}
+          className="mt-4 w-full rounded-full bg-yellow-500 px-4 py-4 text-sm font-black text-white disabled:bg-gray-300"
+        >
+          {alreadyDrawn ? "Winner" : drawing ? "Drawing..." : "Draw Winner"}
+        </button>
+      )}
+
+      {drawing && (
+        <div className="mt-4 rounded-3xl bg-[#172033] p-6 text-center text-white">
+          <p className="text-xs font-black text-white/60">Drawing...</p>
+          <p className="mt-3 text-2xl font-black">{rollingName || "Ready..."}</p>
+        </div>
+      )}
+
+      {winners.length > 0 && (
+        <div className="mt-5 rounded-3xl bg-green-50 p-4">
+          <h3 className="text-lg font-black text-green-800">🎉 Winners</h3>
+
+          <div className="mt-3 space-y-2">
+            {winners.map((winner, index) => (
+              <div
+                key={winner.id}
+                className="rounded-2xl bg-white p-3 text-sm font-bold text-green-900 shadow-sm"
+              >
+                {index + 1}. {winner.name || "No Name"}{" "}
+                {winner.phone ? `(${winner.phone})` : ""}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button
           type="button"
@@ -278,8 +307,8 @@ export default function CommunityAttendeeList({
 
         <button
           type="button"
-          onClick={exportToWordDoc}
           disabled={rows.length === 0}
+          onClick={() => alert("Word download은 필요하면 다시 연결하면 됩니다.")}
           className="rounded-full bg-[#C46A2B] px-4 py-3 text-xs font-black text-white disabled:bg-gray-300"
         >
           Download Word
@@ -299,11 +328,19 @@ export default function CommunityAttendeeList({
       ) : (
         <div className="mt-5 space-y-3">
           {rows.map((attendee, index) => (
-            <div key={attendee.id} className="rounded-2xl border bg-gray-50 p-4">
+            <div
+              key={attendee.id}
+              className={`rounded-2xl border p-4 ${
+                attendee.is_winner ? "border-green-400 bg-green-50" : "bg-gray-50"
+              }`}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-black">
-                    {index + 1}. {attendee.name || "No Name"}
+                    {index + 1}. {attendee.name || "No Name"}{" "}
+                    {attendee.is_winner && (
+                      <span className="ml-1 text-green-700">WINNER</span>
+                    )}
                   </p>
 
                   <a
