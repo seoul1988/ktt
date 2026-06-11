@@ -143,10 +143,14 @@ export default async function Home() {
     .eq("active", true)
     .or(`end_date.is.null,end_date.gte.${today}`);
 
-  const { data: couponBusinesses } = await supabase
-    .from("coupons")
-    .select("business_id")
-    .eq("active", true);
+const now = new Date().toISOString();
+
+const { data: couponBusinesses } = await supabase
+  .from("coupons")
+  .select("business_id")
+  .eq("active", true)
+  .lte("start_date", now)
+  .gte("end_date", now);
 
   const dealBusinessIds = new Set(
     (dealBusinesses || []).map((d: any) => d.business_id).filter(Boolean)
