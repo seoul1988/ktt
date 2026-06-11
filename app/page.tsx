@@ -29,13 +29,13 @@ function OfferBadges({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {hasDeal && (
-		  <Link
-			href={`/business/${businessId}`}
-			className={`${badgeClass} bg-yellow-400 text-black`}
-		  >
-			🔥 DEAL
-		  </Link>
-		)}
+  <Link
+    href={`/business/${businessId}`}
+    className={`${badgeClass} bg-yellow-400 text-black`}
+  >
+    🔥 DEAL
+  </Link>
+)}
 
      {hasCoupon && (
 	  <Link
