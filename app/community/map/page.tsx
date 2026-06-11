@@ -152,7 +152,7 @@ export default async function CommunityMapPage() {
             source_type: "marketplace",
 
             // 카드/마커 연결용 고유값
-            map_key: `marketplace-${marketplaceId}-${normalizedCat}`,
+            map_key: `marketplace-${marketplaceId}-${normalizedCat}-${item.title}-${item.created_at}`,
           };
         });
     }) || [];
