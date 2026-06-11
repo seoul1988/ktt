@@ -34,12 +34,24 @@ export default function MapWrapper({
   communityMode = false,
   role = null,
 }: MapWrapperProps) {
-  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots.length}`;
+  const normalizedSpots =
+    spots?.map((spot: any, index: number) => ({
+      ...spot,
+      map_key:
+        spot.map_key ||
+        `${spot.source_type || "business"}-${
+          spot.deal_id || spot.event_id || spot.id || index
+        }-${spot.business_id || spot.original_business_id || spot.id || index}`,
+    })) || [];
+
+  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${
+    normalizedSpots.length
+  }`;
 
   return (
     <div key={mapKey} className="min-h-screen">
       <BusinessMap
-        spots={spots}
+        spots={normalizedSpots}
         categories={categories}
         showAllOnLoad={showAllOnLoad}
         activeNav={activeNav}

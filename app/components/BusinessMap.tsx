@@ -38,6 +38,9 @@ type MapCategory = {
 
 type Spot = {
   id: number;
+  map_key?: string | null;
+  business_id?: number | string | null;
+  original_business_id?: number | string | null;
   source_type?: string | null;
   deal_id?: number | string | null;
   event_id?: number | string | null;
@@ -61,6 +64,9 @@ type Spot = {
   deal_title?: string | null;
   coupon_badge?: string | null;
   coupon_count?: number | null;
+  display_order?: number | null;
+  order_number?: number | null;
+  order_no?: number | null;
   coupons?: {
     id: number;
     business_id?: number | string | null;
@@ -78,14 +84,22 @@ type SpotWithDistance = Spot & {
   distance?: number;
 };
 
-function getSpotRenderKey(spot: Spot, index: number) {
-  return [
-    spot.source_type || "spot",
-    spot.deal_id ?? "no-deal",
-    spot.event_id ?? "no-event",
-    spot.id,
-    index,
-  ].join("-");
+function getSpotKey(spot: Spot | null | undefined) {
+  if (!spot) return "";
+
+  return (
+    spot.map_key ||
+    [
+      spot.source_type || "business",
+      spot.deal_id ?? "no-deal",
+      spot.event_id ?? "no-event",
+      spot.business_id ?? spot.original_business_id ?? spot.id,
+    ].join("-")
+  );
+}
+
+function getBusinessId(spot: Spot) {
+  return Number(spot.business_id || spot.original_business_id || spot.id);
 }
 
 function milesBetween(a: [number, number], b: [number, number]) {
@@ -104,21 +118,6 @@ function milesBetween(a: [number, number], b: [number, number]) {
 
 function normalizeCategory(value: string) {
   return value.trim().toLowerCase().replace(/s$/, "");
-}
-
-function hasPromotion(spot: Spot) {
-  if (spot.coupon_badge || spot.coupon_count) return true;
-  if (spot.coupons && spot.coupons.length > 0) return true;
-  if (spot.event_title || spot.event_name || spot.coupon_title || spot.deal_title) return true;
-
-  const tagText = String(spot.tags || "").toLowerCase();
-  return (
-    tagText.includes("coupon") ||
-    tagText.includes("event") ||
-    tagText.includes("deal") ||
-    tagText.includes("discount") ||
-    tagText.includes("special")
-  );
 }
 
 function timeTextToMinutes(timeText?: string | null) {
@@ -214,18 +213,13 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
     if (!lat || !lng) return;
 
     const key = `${lat},${lng}`;
-
     if (movedRef.current === key) return;
 
     movedRef.current = key;
 
-   map.flyTo(
-  [lat - 0.15, lng],
-  Math.max(map.getZoom() - 2, 9),
-  {
-    animate: true,
-  }
-);
+    map.flyTo([lat - 0.15, lng], Math.max(map.getZoom() - 2, 9), {
+      animate: true,
+    });
   }, [lat, lng, map]);
 
   return null;
@@ -256,11 +250,9 @@ export default function BusinessMap({
   communityMode?: boolean;
   role?: string | null;
 }) {
-
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
-  const [selectedSpotId, setSelectedSpotId] = useState<number | null>(null);
   const [selectedSpotKey, setSelectedSpotKey] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(!showAllOnLoad);
@@ -270,20 +262,23 @@ export default function BusinessMap({
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
   const [myRole, setMyRole] = useState<string | null>(role);
-  const displayCategories = useMemo(() => {
-    if (mapCategories.length > 0) {
-      return mapCategories;
-    }
 
-    // If this is community map and no community categories are checked,
-    // do not force Marketplace to show.
-    if (communityMode) {
-      return [];
-    }
+  const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+
+  const normalizedSpots = useMemo(() => {
+    return spots.map((spot) => ({
+      ...spot,
+      map_key: getSpotKey(spot),
+    }));
+  }, [spots]);
+
+  const displayCategories = useMemo(() => {
+    if (mapCategories.length > 0) return mapCategories;
+    if (communityMode) return [];
 
     const names = new Set<string>();
 
-    spots.forEach((spot) => {
+    normalizedSpots.forEach((spot) => {
       String(spot.category || "")
         .split(",")
         .map((v) => v.trim())
@@ -297,10 +292,7 @@ export default function BusinessMap({
         name,
         emoji: "🏷️",
       }));
-  }, [communityMode, mapCategories, spots]);
-	
-	
-  const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  }, [communityMode, mapCategories, normalizedSpots]);
 
   useEffect(() => {
     async function loadMyRole() {
@@ -378,15 +370,15 @@ export default function BusinessMap({
   }, [communityMode, categories]);
 
   const mapSpots = useMemo(() => {
-    return spots.filter((spot) => {
+    return normalizedSpots.filter((spot) => {
       const searchText = `
-	  ${spot.name || ""}
-	  ${spot.category || ""}
-	  ${spot.tags || ""}
-	  ${spot.city || ""}
-	  ${spot.description || ""}
-	  ${spot.coupon_badge || ""}
-	`.toLowerCase();
+        ${spot.name || ""}
+        ${spot.category || ""}
+        ${spot.tags || ""}
+        ${spot.city || ""}
+        ${spot.description || ""}
+        ${spot.coupon_badge || ""}
+      `.toLowerCase();
 
       const spotCategories = String(spot.category || "")
         .split(",")
@@ -400,46 +392,38 @@ export default function BusinessMap({
         ? spotCategories.includes(normalizeCategory(selectedCategory))
         : true;
 
-     if (!selectedCategory && !search) {
-  if (showAllOnLoad) return true;
-  return false;
-}
-
-
-
-
+      if (!selectedCategory && !search) {
+        if (showAllOnLoad) return true;
+        return false;
+      }
 
       return matchesSearch && matchesCategory;
     });
-  }, [spots, search, selectedCategory, showAllOnLoad]);
+  }, [normalizedSpots, search, selectedCategory, showAllOnLoad]);
 
-const cardSpots: SpotWithDistance[] = useMemo(() => {
-  const withDistance = mapSpots.map((spot): SpotWithDistance => ({
-    ...spot,
-    distance:
-      userLocation && spot.lat && spot.lng
-        ? milesBetween(userLocation, [spot.lat, spot.lng])
-        : undefined,
-  }));
+  const cardSpots: SpotWithDistance[] = useMemo(() => {
+    const withDistance = mapSpots.map((spot): SpotWithDistance => ({
+      ...spot,
+      distance:
+        userLocation && spot.lat && spot.lng
+          ? milesBetween(userLocation, [spot.lat, spot.lng])
+          : undefined,
+    }));
 
-  return withDistance.sort((a: any, b: any) => {
-    const orderA = a.display_order ?? a.order_number ?? a.order_no ?? 999999;
-    const orderB = b.display_order ?? b.order_number ?? b.order_no ?? 999999;
+    return withDistance.sort((a: any, b: any) => {
+      const orderA = a.display_order ?? a.order_number ?? a.order_no ?? 999999;
+      const orderB = b.display_order ?? b.order_number ?? b.order_no ?? 999999;
 
-    if (orderA !== orderB) {
-      return orderA - orderB;
-    }
+      if (orderA !== orderB) return orderA - orderB;
 
-    return a.id - b.id;
-  });
-}, [mapSpots, userLocation]);
+      return getBusinessId(a) - getBusinessId(b);
+    });
+  }, [mapSpots, userLocation]);
 
-useEffect(() => {
-  const firstSpot = cardSpots[0];
-
-  setSelectedSpotId(firstSpot?.id || null);
-  setSelectedSpotKey(firstSpot ? getSpotRenderKey(firstSpot, 0) : null);
-}, [cardSpots]);
+  useEffect(() => {
+    const firstSpot = cardSpots[0];
+    setSelectedSpotKey(firstSpot ? getSpotKey(firstSpot) : null);
+  }, [cardSpots]);
 
   useEffect(() => {
     async function loadLikes() {
@@ -531,54 +515,44 @@ useEffect(() => {
   }
 
   const handleScroll = () => {
-    let closestId: number | null = null;
+    let closestKey: string | null = null;
     let closestDistance = Infinity;
 
-    cardSpots.forEach((spot, index) => {
-      const renderKey = getSpotRenderKey(spot, index);
-      const el = cardRefs.current[renderKey];
+    cardSpots.forEach((spot) => {
+      const spotKey = getSpotKey(spot);
+      const el = cardRefs.current[spotKey];
       if (!el) return;
 
       const distance = Math.abs(el.getBoundingClientRect().left - 16);
 
       if (distance < closestDistance) {
         closestDistance = distance;
-        closestId = spot.id;
+        closestKey = spotKey;
       }
     });
 
-    if (closestId) {
-      const selectedIndex = cardSpots.findIndex((spot) => spot.id === closestId);
-      const selectedSpot = selectedIndex >= 0 ? cardSpots[selectedIndex] : null;
-
-      setSelectedSpotId(closestId);
-      setSelectedSpotKey(
-        selectedSpot ? getSpotRenderKey(selectedSpot, selectedIndex) : null
-      );
+    if (closestKey) {
+      setSelectedSpotKey(closestKey);
     }
   };
 
   const selectedMapSpot =
-    cardSpots.find((spot, index) => {
-      return (
-        getSpotRenderKey(spot, index) === selectedSpotKey &&
-        spot.lat &&
-        spot.lng
-      );
-    }) ||
-    mapSpots.find((v) => v.id === selectedSpotId && v.lat && v.lng);
+    cardSpots.find(
+      (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
+    ) ||
+    mapSpots.find(
+      (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
+    );
 
   return (
     <div className="relative min-h-screen">
       <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3">
-{showAllOnLoad &&
-  !communityMode &&
-  !selectedCategory &&
-  !search && (
-    <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl">
-      {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
-    </div>
-)}
+        {showAllOnLoad && !communityMode && !selectedCategory && !search && (
+          <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl">
+            {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
+          </div>
+        )}
+
         <input
           value={search}
           onChange={(e) => {
@@ -670,30 +644,31 @@ useEffect(() => {
 
         {mapSpots
           .filter((spot) => spot.lat && spot.lng)
-          .map((spot, index) => {
-            const renderKey = getSpotRenderKey(spot, index);
+          .map((spot) => {
+            const spotKey = getSpotKey(spot);
 
             return (
               <Marker
-                key={renderKey}
+                key={spotKey}
                 position={[spot.lat as number, spot.lng as number]}
                 icon={
-                  renderKey === selectedSpotKey ? selectedMarkerIcon : markerIcon
+                  spotKey === selectedSpotKey ? selectedMarkerIcon : markerIcon
                 }
                 eventHandlers={{
                   click: (e) => {
                     L.DomEvent.stopPropagation(e.originalEvent);
 
-                    setSelectedSpotId(spot.id);
-                    setSelectedSpotKey(renderKey);
+                    setSelectedSpotKey(spotKey);
                     setCategoryPanelOpen(false);
                     setShowCards(true);
 
-                    cardRefs.current[renderKey]?.scrollIntoView({
-                      behavior: "smooth",
-                      inline: "center",
-                      block: "nearest",
-                    });
+                    setTimeout(() => {
+                      cardRefs.current[spotKey]?.scrollIntoView({
+                        behavior: "smooth",
+                        inline: "center",
+                        block: "nearest",
+                      });
+                    }, 50);
                   },
                 }}
               >
@@ -711,8 +686,10 @@ useEffect(() => {
             : "bottom-[-360px] opacity-0"
         }`}
       >
-        {cardSpots.map((spot, index) => {
-          const renderKey = getSpotRenderKey(spot, index);
+        {cardSpots.map((spot) => {
+          const spotKey = getSpotKey(spot);
+          const businessId = getBusinessId(spot);
+
           const images =
             spot.image_urls && spot.image_urls.length > 0
               ? spot.image_urls
@@ -720,9 +697,10 @@ useEffect(() => {
                   Boolean
                 );
 
-          const current = imageIndexes[renderKey] || 0;
+          const current = imageIndexes[spotKey] || 0;
           const status = getOpenStatus(spot);
           const firstCoupon = spot.coupons?.[0];
+
           const eventLabel =
             spot.coupon_badge ||
             firstCoupon?.title ||
@@ -734,38 +712,41 @@ useEffect(() => {
 
           return (
             <a
-              key={renderKey}
-			  ref={(el) => {
-				cardRefs.current[renderKey] = el;
-			  }}
-			  href={
-				communityMode
-				  ? `/business/${spot.id}?from=community`
-				  : `/business/${spot.id}`
-			  }
-			  className={`
-				w-[88vw]
-				iphone:w-[80vw]
-				max-w-[420px]
-				shrink-0
-				snap-center
-				rounded-[24px]
-				border-2
-				bg-white
-				p-[4px]
-				shadow-2xl
-				${
-				  renderKey === selectedSpotKey
-					? "border-red-500"
-					: "border-transparent"
-				}
-			  `}
-			>
+              key={spotKey}
+              ref={(el) => {
+                cardRefs.current[spotKey] = el;
+              }}
+              href={
+                communityMode
+                  ? `/business/${businessId}?from=community`
+                  : `/business/${businessId}`
+              }
+              onClick={() => {
+                setSelectedSpotKey(spotKey);
+              }}
+              className={`
+                w-[88vw]
+                iphone:w-[80vw]
+                max-w-[420px]
+                shrink-0
+                snap-center
+                rounded-[24px]
+                border-2
+                bg-white
+                p-[4px]
+                shadow-2xl
+                ${
+                  spotKey === selectedSpotKey
+                    ? "border-red-500"
+                    : "border-transparent"
+                }
+              `}
+            >
               <div className="flex flex-col gap-1">
                 <div className="relative h-[145px] w-full overflow-hidden rounded-[20px] bg-white">
                   {images.length > 0 ? (
                     <div
-                      id={`image-scroll-${renderKey}`}
+                      id={`image-scroll-${spotKey}`}
                       className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
                       onClick={(e) => {
                         e.preventDefault();
@@ -780,7 +761,7 @@ useEffect(() => {
 
                         setImageIndexes((prev) => ({
                           ...prev,
-                          [renderKey]: Math.round(scrollLeft / width),
+                          [spotKey]: Math.round(scrollLeft / width),
                         }));
                       }}
                     >
@@ -815,7 +796,7 @@ useEffect(() => {
                         e.stopPropagation();
 
                         const c = document.getElementById(
-                          `image-scroll-${renderKey}`
+                          `image-scroll-${spotKey}`
                         );
 
                         if (!c) return;
@@ -838,7 +819,7 @@ useEffect(() => {
                         e.stopPropagation();
 
                         const c = document.getElementById(
-                          `image-scroll-${renderKey}`
+                          `image-scroll-${spotKey}`
                         );
 
                         if (!c) return;
@@ -876,15 +857,15 @@ useEffect(() => {
 
                     <div className="flex shrink-0 items-center gap-2">
                       <button
-                        onClick={(e) => toggleLike(e, spot.id)}
+                        onClick={(e) => toggleLike(e, businessId)}
                         className={`rounded-full border px-2 py-1 text-xs font-bold ${
-                          likedIds[spot.id]
+                          likedIds[businessId]
                             ? "border-red-200 bg-red-50 text-red-500"
                             : "border-pink-100 bg-pink-50 text-pink-500"
                         }`}
                       >
-                        {likedIds[spot.id] ? "♥" : "♡"}{" "}
-                        {likeCounts[spot.id] || 0}
+                        {likedIds[businessId] ? "♥" : "♡"}{" "}
+                        {likeCounts[businessId] || 0}
                       </button>
 
                       <div
@@ -928,47 +909,49 @@ useEffect(() => {
       </div>
 
       {!communityMode && (
-  <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
-  <a
-    href="/"
-    className={activeNav === "home" ? "text-[#F7B955]" : undefined}
-  >
-    Home
-  </a>
+        <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+          <a
+            href="/"
+            className={activeNav === "home" ? "text-[#F7B955]" : undefined}
+          >
+            Home
+          </a>
 
-  <a
-    href="/map"
-    className={activeNav === "map" ? "text-[#F7B955]" : undefined}
-  >
-    Map
-  </a>
+          <a
+            href="/map"
+            className={activeNav === "map" ? "text-[#F7B955]" : undefined}
+          >
+            Map
+          </a>
 
-  <a
-    href="/deals"
-    className={activeNav === "deals" ? "text-[#F7B955]" : undefined}
-  >
-    Deals
-  </a>
+          <a
+            href="/deals"
+            className={activeNav === "deals" ? "text-[#F7B955]" : undefined}
+          >
+            Deals
+          </a>
 
+          <a
+            href="/community"
+            className={
+              activeNav === "community" ? "text-[#F7B955]" : undefined
+            }
+          >
+            Community
+          </a>
 
-
-  <a
-    href="/community"
-    className={activeNav === "community" ? "text-[#F7B955]" : undefined}
-  >
-    Community
-  </a>
-
-  {myRole === "admin" && (
-    <a
-      href="/admin"
-      className={activeNav === "admin" ? "text-[#F7B955]" : undefined}
-    >
-      ADMIN
-    </a>
-  )}
-</nav>
-)}
+          {myRole === "admin" && (
+            <a
+              href="/admin"
+              className={
+                activeNav === "admin" ? "text-[#F7B955]" : undefined
+              }
+            >
+              ADMIN
+            </a>
+          )}
+        </nav>
+      )}
     </div>
   );
 }
