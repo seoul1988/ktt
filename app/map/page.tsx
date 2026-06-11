@@ -57,14 +57,17 @@ export default async function MapPage({
 
           if (!business) return null;
 
+          const businessId = business.id;
+
           return {
             ...business,
 
-            // 지도 카드/마커 선택용 고유값
-            map_key: `deal-${deal.id}-business-${business.id}`,
+            id: businessId,
+            business_id: businessId,
+            original_business_id: businessId,
 
-            business_id: business.id,
-            original_business_id: business.id,
+            source_type: "deal",
+            map_key: `deal-${deal.id}-business-${businessId}`,
 
             deal_id: deal.id,
             deal_title: deal.title,
@@ -75,7 +78,6 @@ export default async function MapPage({
 
             has_deal: true,
             has_event: false,
-            source_type: "deal",
           };
         })
         .filter(Boolean) || [];
@@ -122,14 +124,17 @@ export default async function MapPage({
 
           if (!business) return null;
 
+          const businessId = business.id;
+
           return {
             ...business,
 
-            // 지도 카드/마커 선택용 고유값
-            map_key: `event-${event.id}-business-${business.id}`,
+            id: businessId,
+            business_id: businessId,
+            original_business_id: businessId,
 
-            business_id: business.id,
-            original_business_id: business.id,
+            source_type: "event",
+            map_key: `event-${event.id}-business-${businessId}`,
 
             event_id: event.id,
             event_title: event.title,
@@ -139,7 +144,6 @@ export default async function MapPage({
 
             has_event: true,
             has_deal: false,
-            source_type: "event",
           };
         })
         .filter(Boolean) || [];
@@ -165,18 +169,23 @@ export default async function MapPage({
   }
 
   const spots =
-    businesses?.map((business: any) => ({
-      ...business,
+    businesses?.map((business: any) => {
+      const businessId = business.id;
 
-      // 일반 지도용 고유값
-      map_key: `business-${business.id}`,
+      return {
+        ...business,
 
-      business_id: business.id,
-      original_business_id: business.id,
-      source_type: "business",
-      has_deal: false,
-      has_event: false,
-    })) || [];
+        id: businessId,
+        business_id: businessId,
+        original_business_id: businessId,
+
+        source_type: "business",
+        map_key: `business-${businessId}`,
+
+        has_deal: false,
+        has_event: false,
+      };
+    }) || [];
 
   return <MapWrapper spots={spots} showAllOnLoad={false} activeNav="map" />;
 }
