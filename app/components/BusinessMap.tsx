@@ -652,39 +652,50 @@ export default function BusinessMap({
         )}
 
         {mapSpots
-          .filter((spot) => spot.lat && spot.lng)
-          .map((spot) => {
-            const spotKey = getSpotKey(spot);
+  .filter((spot) => spot.lat && spot.lng)
+  .map((spot) => {
+    const spotKey = getSpotKey(spot);
 
-            return (
-              <Marker
-                key={spotKey}
-                position={[spot.lat as number, spot.lng as number]}
-                icon={
-                  spotKey === selectedSpotKey ? selectedMarkerIcon : markerIcon
-                }
-                eventHandlers={{
-                  click: (e) => {
-                    L.DomEvent.stopPropagation(e.originalEvent);
+    const sameLocationSpots = mapSpots.filter(
+      (s) => Number(s.lat) === Number(spot.lat) && Number(s.lng) === Number(spot.lng)
+    );
 
-                    setSelectedSpotKey(spotKey);
-                    setCategoryPanelOpen(false);
-                    setShowCards(true);
+    const sameLocationIndex = sameLocationSpots.findIndex(
+      (s) => getSpotKey(s) === spotKey
+    );
 
-                    setTimeout(() => {
-                      cardRefs.current[spotKey]?.scrollIntoView({
-                        behavior: "smooth",
-                        inline: "center",
-                        block: "nearest",
-                      });
-                    }, 50);
-                  },
-                }}
-              >
-                <Popup>{spot.name}</Popup>
-              </Marker>
-            );
-          })}
+    const markerOffset = sameLocationIndex > 0 ? sameLocationIndex * 0.00008 : 0;
+
+    return (
+      <Marker
+        key={spotKey}
+        position={[
+          (Number(spot.lat) || 0) + markerOffset,
+          (Number(spot.lng) || 0) + markerOffset,
+        ]}
+        icon={spotKey === selectedSpotKey ? selectedMarkerIcon : markerIcon}
+        eventHandlers={{
+          click: (e) => {
+            L.DomEvent.stopPropagation(e.originalEvent);
+
+            setSelectedSpotKey(spotKey);
+            setCategoryPanelOpen(false);
+            setShowCards(true);
+
+            setTimeout(() => {
+              cardRefs.current[spotKey]?.scrollIntoView({
+                behavior: "smooth",
+                inline: "center",
+                block: "nearest",
+              });
+            }, 50);
+          },
+        }}
+      >
+        <Popup>{spot.name}</Popup>
+      </Marker>
+    );
+  })}
       </MapContainer>
 
       <div
