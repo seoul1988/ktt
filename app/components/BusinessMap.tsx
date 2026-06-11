@@ -15,6 +15,8 @@ import ProfileButton from "./ProfileButton";
 import "leaflet/dist/leaflet.css";
 import { supabase } from "../../lib/supabase";
 
+const MAP_STATE_KEY = "ktt_map_state_v1";
+
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -44,6 +46,9 @@ type Spot = {
   source_type?: string | null;
   deal_id?: number | string | null;
   event_id?: number | string | null;
+  type?: string | null;
+  original_id?: number | string | null;
+  marketplace_id?: number | string | null;
   name: string;
   category: string | null;
   city: string | null;
@@ -90,16 +95,33 @@ function getSpotKey(spot: Spot | null | undefined) {
   return (
     spot.map_key ||
     [
-      spot.source_type || "business",
+      spot.source_type || spot.type || "business",
       spot.deal_id ?? "no-deal",
       spot.event_id ?? "no-event",
-      spot.business_id ?? spot.original_business_id ?? spot.id,
+      spot.marketplace_id ?? "no-market",
+      spot.business_id ?? spot.original_business_id ?? spot.original_id ?? spot.id,
     ].join("-")
   );
 }
 
 function getBusinessId(spot: Spot) {
   return Number(spot.business_id || spot.original_business_id || spot.id);
+}
+
+function getDetailHref(
+  spot: Spot,
+  businessId: number,
+  communityMode: boolean
+) {
+  if (communityMode && (spot.source_type === "marketplace" || spot.type === "marketplace")) {
+    return `/community/market/${spot.original_id || spot.marketplace_id || spot.id}`;
+  }
+
+  if (communityMode) {
+    return `/business/${businessId}?from=community`;
+  }
+
+  return `/business/${businessId}`;
 }
 
 function milesBetween(a: [number, number], b: [number, number]) {
@@ -162,15 +184,12 @@ function getOpenStatus(spot: Spot) {
 
   if (!line) return { text: "Closed" };
 
-  if (line.includes("Closed")) {
-    return { text: "Closed Today" };
-  }
+  if (line.includes("Closed")) return { text: "Closed Today" };
 
   const mainPart = line.split("/ Break")[0].replace(todayShort, "").trim();
   const breakPart = line.split("/ Break")[1]?.trim();
 
   const [openText, closeText] = mainPart.split(" - ").map((v) => v.trim());
-
   const openMinutes = timeTextToMinutes(openText);
   const closeMinutes = timeTextToMinutes(closeText);
 
@@ -264,6 +283,10 @@ export default function BusinessMap({
   const [myRole, setMyRole] = useState<string | null>(role);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const cardScrollRef = useRef<HTMLDivElement | null>(null);
+  const restoredRef = useRef(false);
+
+  const storageKey = `${MAP_STATE_KEY}-${communityMode ? "community" : activeNav}`;
 
   const normalizedSpots = useMemo(() => {
     return spots.map((spot) => ({
@@ -293,6 +316,58 @@ export default function BusinessMap({
         emoji: "🏷️",
       }));
   }, [communityMode, mapCategories, normalizedSpots]);
+
+  function saveMapState(next?: {
+    selectedSpotKey?: string | null;
+    selectedCategory?: string | null;
+    search?: string;
+  }) {
+    if (typeof window === "undefined") return;
+
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        selectedSpotKey:
+          next?.selectedSpotKey !== undefined
+            ? next.selectedSpotKey
+            : selectedSpotKey,
+        selectedCategory:
+          next?.selectedCategory !== undefined
+            ? next.selectedCategory
+            : selectedCategory,
+        search: next?.search !== undefined ? next.search : search,
+        showCards: true,
+      })
+    );
+  }
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const saved = sessionStorage.getItem(storageKey);
+    if (!saved) return;
+
+    try {
+      const parsed = JSON.parse(saved);
+
+      if (typeof parsed.search === "string") {
+        setSearch(parsed.search);
+      }
+
+      if (parsed.selectedCategory) {
+        setSelectedCategory(parsed.selectedCategory);
+      }
+
+      if (parsed.selectedSpotKey) {
+        setSelectedSpotKey(parsed.selectedSpotKey);
+      }
+
+      setCategoryPanelOpen(false);
+      setShowCards(true);
+    } catch {
+      sessionStorage.removeItem(storageKey);
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     async function loadMyRole() {
@@ -421,9 +496,31 @@ export default function BusinessMap({
   }, [mapSpots, userLocation]);
 
   useEffect(() => {
+    if (selectedSpotKey) return;
+
     const firstSpot = cardSpots[0];
     setSelectedSpotKey(firstSpot ? getSpotKey(firstSpot) : null);
-  }, [cardSpots]);
+  }, [cardSpots, selectedSpotKey]);
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (!selectedSpotKey) return;
+    if (cardSpots.length === 0) return;
+
+    const exists = cardSpots.some((spot) => getSpotKey(spot) === selectedSpotKey);
+
+    if (!exists) return;
+
+    restoredRef.current = true;
+
+    setTimeout(() => {
+      cardRefs.current[selectedSpotKey]?.scrollIntoView({
+        behavior: "auto",
+        inline: "center",
+        block: "nearest",
+      });
+    }, 150);
+  }, [cardSpots, selectedSpotKey]);
 
   useEffect(() => {
     async function loadLikes() {
@@ -507,6 +604,13 @@ export default function BusinessMap({
     setSearch("");
     setCategoryPanelOpen(false);
     setShowCards(true);
+    restoredRef.current = false;
+
+    saveMapState({
+      selectedCategory: category,
+      selectedSpotKey: null,
+      search: "",
+    });
   }
 
   function openCategoryPanel() {
@@ -524,15 +628,9 @@ export default function BusinessMap({
       if (!el) return;
 
       const viewportCenter = window.innerWidth / 2;
-
-		const rect = el.getBoundingClientRect();
-
-		const cardCenter =
-		  rect.left + rect.width / 2;
-
-		const distance = Math.abs(
-		  cardCenter - viewportCenter
-		);
+      const rect = el.getBoundingClientRect();
+      const cardCenter = rect.left + rect.width / 2;
+      const distance = Math.abs(cardCenter - viewportCenter);
 
       if (distance < closestDistance) {
         closestDistance = distance;
@@ -542,6 +640,9 @@ export default function BusinessMap({
 
     if (closestKey) {
       setSelectedSpotKey(closestKey);
+      saveMapState({
+        selectedSpotKey: closestKey,
+      });
     }
   };
 
@@ -565,10 +666,19 @@ export default function BusinessMap({
         <input
           value={search}
           onChange={(e) => {
-            setSearch(e.target.value);
+            const value = e.target.value;
+
+            setSearch(value);
             setSelectedCategory(null);
             setCategoryPanelOpen(false);
             setShowCards(true);
+            restoredRef.current = false;
+
+            saveMapState({
+              search: value,
+              selectedCategory: null,
+              selectedSpotKey: null,
+            });
           }}
           placeholder="Search Korean spots..."
           className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none"
@@ -652,60 +762,64 @@ export default function BusinessMap({
         )}
 
         {mapSpots
-  .filter((spot) => spot.lat !== null && spot.lng !== null)
-  .map((spot, index) => {
-    const baseKey = getSpotKey(spot);
-    const spotKey = `${baseKey}-${index}`;
-    const selectedBaseKey = selectedSpotKey;
+          .filter((spot) => spot.lat !== null && spot.lng !== null)
+          .map((spot, index) => {
+            const baseKey = getSpotKey(spot);
+            const markerKey = `${baseKey}-${index}`;
+            const isSelected = baseKey === selectedSpotKey;
 
-    const isSelected = baseKey === selectedBaseKey;
+            const lat = Number(spot.lat);
+            const lng = Number(spot.lng);
 
-    const lat = Number(spot.lat);
-    const lng = Number(spot.lng);
+            const sameLocationSpots = mapSpots.filter(
+              (s) =>
+                Number(s.lat).toFixed(6) === lat.toFixed(6) &&
+                Number(s.lng).toFixed(6) === lng.toFixed(6)
+            );
 
-    const sameLocationSpots = mapSpots.filter(
-      (s) =>
-        Number(s.lat).toFixed(6) === lat.toFixed(6) &&
-        Number(s.lng).toFixed(6) === lng.toFixed(6)
-    );
+            const sameLocationIndex = sameLocationSpots.findIndex(
+              (s) => getSpotKey(s) === baseKey
+            );
 
-    const sameLocationIndex = sameLocationSpots.findIndex(
-      (s) => getSpotKey(s) === baseKey
-    );
+            const markerOffset = sameLocationIndex * 0.00012;
 
-    const markerOffset = sameLocationIndex * 0.00012;
+            return (
+              <Marker
+                key={markerKey}
+                position={[lat + markerOffset, lng + markerOffset]}
+                icon={isSelected ? selectedMarkerIcon : markerIcon}
+                zIndexOffset={isSelected ? 10000 : sameLocationIndex}
+                eventHandlers={{
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e.originalEvent);
 
-    return (
-      <Marker
-        key={spotKey}
-        position={[lat + markerOffset, lng + markerOffset]}
-        icon={isSelected ? selectedMarkerIcon : markerIcon}
-        zIndexOffset={isSelected ? 10000 : sameLocationIndex}
-        eventHandlers={{
-          click: (e) => {
-            L.DomEvent.stopPropagation(e.originalEvent);
+                    setSelectedSpotKey(baseKey);
+                    setCategoryPanelOpen(false);
+                    setShowCards(true);
+                    restoredRef.current = false;
 
-            setSelectedSpotKey(baseKey);
-            setCategoryPanelOpen(false);
-            setShowCards(true);
+                    saveMapState({
+                      selectedSpotKey: baseKey,
+                    });
 
-            setTimeout(() => {
-              cardRefs.current[baseKey]?.scrollIntoView({
-                behavior: "smooth",
-                inline: "center",
-                block: "nearest",
-              });
-            }, 50);
-          },
-        }}
-      >
-        <Popup>{spot.name}</Popup>
-      </Marker>
-    );
-  })}
+                    setTimeout(() => {
+                      cardRefs.current[baseKey]?.scrollIntoView({
+                        behavior: "smooth",
+                        inline: "center",
+                        block: "nearest",
+                      });
+                    }, 50);
+                  },
+                }}
+              >
+                <Popup>{spot.name}</Popup>
+              </Marker>
+            );
+          })}
       </MapContainer>
 
       <div
+        ref={cardScrollRef}
         onScroll={handleScroll}
         className={`fixed left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 ${
           showCards
@@ -715,7 +829,7 @@ export default function BusinessMap({
       >
         {cardSpots.map((spot, index) => {
           const spotKey = getSpotKey(spot);
-		  const cardKey = `${spotKey}-${index}`;
+          const cardKey = `${spotKey}-${index}`;
           const businessId = getBusinessId(spot);
 
           const images =
@@ -744,13 +858,12 @@ export default function BusinessMap({
               ref={(el) => {
                 cardRefs.current[spotKey] = el;
               }}
-              href={
-                communityMode
-                  ? `/business/${businessId}?from=community`
-                  : `/business/${businessId}`
-              }
+              href={getDetailHref(spot, businessId, communityMode)}
               onClick={() => {
                 setSelectedSpotKey(spotKey);
+                saveMapState({
+                  selectedSpotKey: spotKey,
+                });
               }}
               className={`
                 w-[88vw]
