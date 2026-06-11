@@ -83,7 +83,9 @@ export default async function Home() {
     .eq("show_on_community_map", true);
 
   const communityCategorySet = new Set(
-    (communityCategories || []).map((c) => String(c.name).trim().toLowerCase())
+    (communityCategories || []).map((c) =>
+      String(c.name).trim().toLowerCase()
+    )
   );
 
   const { data: allSpots } = await supabase
@@ -133,6 +135,7 @@ export default async function Home() {
     `)
     .eq("status", "approved")
     .eq("active", true)
+    .lte("start_date", today)
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false })
     .limit(3);
@@ -142,16 +145,20 @@ export default async function Home() {
     .select("business_id")
     .eq("status", "approved")
     .eq("active", true)
+    .lte("start_date", today)
     .or(`end_date.is.null,end_date.gte.${today}`);
 
   const { data: couponBusinesses } = await supabase
     .from("coupons")
     .select("business_id, usage_limit, used_count")
     .eq("active", true)
+    .lte("start_date", now)
     .or(`end_date.is.null,end_date.gte.${now}`);
 
   const dealBusinessIds = new Set(
-    (dealBusinesses || []).map((d: any) => d.business_id).filter(Boolean)
+    (dealBusinesses || [])
+      .map((d: any) => d.business_id)
+      .filter(Boolean)
   );
 
   const couponBusinessIds = new Set(
@@ -274,7 +281,9 @@ export default async function Home() {
                   <div className="mt-1 flex items-center justify-between gap-3 text-sm">
                     <div className="min-w-0 truncate text-gray-600">
                       {deal.businesses?.name || "KTT Deal"}
-                      {deal.businesses?.city ? ` · ${deal.businesses.city}` : ""}
+                      {deal.businesses?.city
+                        ? ` · ${deal.businesses.city}`
+                        : ""}
                     </div>
 
                     <div className="shrink-0 whitespace-nowrap font-bold text-[#C4483A]">
@@ -377,7 +386,9 @@ export default async function Home() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="line-clamp-1 font-bold">{spot.name}</h4>
+                        <h4 className="line-clamp-1 font-bold">
+                          {spot.name}
+                        </h4>
 
                         <OfferBadges
                           hasDeal={hasDeal}
