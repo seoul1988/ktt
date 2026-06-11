@@ -523,7 +523,16 @@ export default function BusinessMap({
       const el = cardRefs.current[spotKey];
       if (!el) return;
 
-      const distance = Math.abs(el.getBoundingClientRect().left - 16);
+      const viewportCenter = window.innerWidth / 2;
+
+		const rect = el.getBoundingClientRect();
+
+		const cardCenter =
+		  rect.left + rect.width / 2;
+
+		const distance = Math.abs(
+		  cardCenter - viewportCenter
+		);
 
       if (distance < closestDistance) {
         closestDistance = distance;
