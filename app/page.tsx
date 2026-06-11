@@ -11,10 +11,12 @@ import InstallAppButton from "./components/InstallAppButton";
 function OfferBadges({
   hasDeal,
   hasCoupon,
+  businessId,
   size = "sm",
 }: {
   hasDeal: boolean;
   hasCoupon: boolean;
+  businessId: number | string;
   size?: "sm" | "md";
 }) {
   if (!hasDeal && !hasCoupon) return null;
@@ -27,16 +29,22 @@ function OfferBadges({
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {hasDeal && (
-        <span className={`${badgeClass} bg-yellow-400 text-black`}>
-          🔥 DEAL
-        </span>
-      )}
+		  <Link
+			href={`/business/${businessId}`}
+			className={`${badgeClass} bg-yellow-400 text-black`}
+		  >
+			🔥 DEAL
+		  </Link>
+		)}
 
-      {hasCoupon && (
-        <span className={`${badgeClass} bg-purple-600 text-white`}>
-          🎟 COUPON
-        </span>
-      )}
+     {hasCoupon && (
+	  <Link
+		href={`/business/${businessId}`}
+		className={`${badgeClass} bg-purple-600 text-white`}
+	  >
+		🎟 COUPON
+	  </Link>
+	)}
     </div>
   );
 }
@@ -333,10 +341,11 @@ export default async function Home() {
                       <h3 className="text-2xl font-bold">{featured.name}</h3>
 
                       <OfferBadges
-                        hasDeal={dealBusinessIds.has(featured.id)}
-                        hasCoupon={couponBusinessIds.has(featured.id)}
-                        size="md"
-                      />
+					  businessId={featured.id}
+					  hasDeal={dealBusinessIds.has(featured.id)}
+					  hasCoupon={couponBusinessIds.has(featured.id)}
+					  size="md"
+					/>
                     </div>
 
                     <p className="mt-2 text-sm text-gray-600">
@@ -390,10 +399,11 @@ export default async function Home() {
                           {spot.name}
                         </h4>
 
-                        <OfferBadges
-                          hasDeal={hasDeal}
-                          hasCoupon={hasCoupon}
-                        />
+                       <OfferBadges
+						  businessId={spot.id}
+						  hasDeal={hasDeal}
+						  hasCoupon={hasCoupon}
+						/>
                       </div>
 
                       <p className="line-clamp-1 text-sm text-gray-600">
