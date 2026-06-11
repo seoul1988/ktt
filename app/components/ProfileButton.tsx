@@ -8,9 +8,9 @@ type Profile = {
   role: string | null;
 };
 
-function timeout<T>(promise: Promise<T>, ms = 5000): Promise<T> {
+function timeout<T>(promise: PromiseLike<T>, ms = 5000): Promise<T> {
   return Promise.race([
-    promise,
+    Promise.resolve(promise),
     new Promise<T>((_, reject) =>
       setTimeout(() => reject(new Error("Request timeout")), ms)
     ),
