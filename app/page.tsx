@@ -74,7 +74,8 @@ function DealMedia({
 }
 
 export default async function Home() {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
 
   const { data: communityCategories } = await supabase
     .from("categories")
@@ -143,20 +144,30 @@ export default async function Home() {
     .eq("active", true)
     .or(`end_date.is.null,end_date.gte.${today}`);
 
-const now = new Date().toISOString();
-
-const { data: couponBusinesses } = await supabase
-  .from("coupons")
-  .select("business_id")
-  .eq("active", true)
-  .or(`end_date.is.null,end_date.gte.${now}`);
+  const { data: couponBusinesses } = await supabase
+    .from("coupons")
+    .select("business_id, usage_limit, used_count")
+    .eq("active", true)
+    .or(`end_date.is.null,end_date.gte.${now}`);
 
   const dealBusinessIds = new Set(
     (dealBusinesses || []).map((d: any) => d.business_id).filter(Boolean)
   );
 
   const couponBusinessIds = new Set(
-    (couponBusinesses || []).map((c: any) => c.business_id).filter(Boolean)
+    (couponBusinesses || [])
+      .filter((c: any) => {
+        const usageLimit = Number(c.usage_limit || 0);
+        const usedCount = Number(c.used_count || 0);
+
+        if (usageLimit > 0 && usedCount >= usageLimit) {
+          return false;
+        }
+
+        return true;
+      })
+      .map((c: any) => c.business_id)
+      .filter(Boolean)
   );
 
   const featured = spots?.[0];
