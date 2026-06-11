@@ -149,8 +149,7 @@ const { data: couponBusinesses } = await supabase
   .from("coupons")
   .select("business_id")
   .eq("active", true)
-  .lte("start_date", now)
-  .gte("end_date", now);
+  .or(`end_date.is.null,end_date.gte.${now}`);
 
   const dealBusinessIds = new Set(
     (dealBusinesses || []).map((d: any) => d.business_id).filter(Boolean)
