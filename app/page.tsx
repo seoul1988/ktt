@@ -11,11 +11,13 @@ import InstallAppButton from "./components/InstallAppButton";
 function OfferBadges({
   hasDeal,
   hasCoupon,
+  dealId,
   businessId,
   size = "sm",
 }: {
   hasDeal: boolean;
   hasCoupon: boolean;
+  dealId?: string | null;
   businessId: number | string;
   size?: "sm" | "md";
 }) {
@@ -28,34 +30,28 @@ function OfferBadges({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {hasDeal && (
-  <Link
-    href={`/business/${businessId}`}
-    className={`${badgeClass} bg-yellow-400 text-black`}
-  >
-    🔥 DEAL
-  </Link>
-)}
+      {hasDeal && dealId && (
+        <Link
+          href={`/deals/${dealId}`}
+          className={`${badgeClass} bg-yellow-400 text-black`}
+        >
+          🔥 DEAL
+        </Link>
+      )}
 
-     {hasCoupon && (
-	  <Link
-		href={`/business/${businessId}`}
-		className={`${badgeClass} bg-purple-600 text-white`}
-	  >
-		🎟 COUPON
-	  </Link>
-	)}
+      {hasCoupon && (
+        <Link
+          href={`/business/${businessId}`}
+          className={`${badgeClass} bg-purple-600 text-white`}
+        >
+          🎟 COUPON
+        </Link>
+      )}
     </div>
   );
 }
 
-function BusinessMedia({
-  spot,
-  className,
-}: {
-  spot: any;
-  className: string;
-}) {
+function BusinessMedia({ spot, className }: { spot: any; className: string }) {
   return (
     <img
       src={spot.image_url || "/event.png"}
@@ -65,13 +61,7 @@ function BusinessMedia({
   );
 }
 
-function DealMedia({
-  deal,
-  className,
-}: {
-  deal: any;
-  className: string;
-}) {
+function DealMedia({ deal, className }: { deal: any; className: string }) {
   return (
     <img
       src={deal.image_url || deal.businesses?.image_url || "/event.png"}
@@ -150,7 +140,7 @@ export default async function Home() {
 
   const { data: dealBusinesses } = await supabase
     .from("deals")
-    .select("business_id")
+    .select("id, business_id")
     .eq("status", "approved")
     .eq("active", true)
     .lte("start_date", today)
@@ -163,10 +153,10 @@ export default async function Home() {
     .lte("start_date", now)
     .or(`end_date.is.null,end_date.gte.${now}`);
 
-  const dealBusinessIds = new Set(
+  const dealBusinessMap = new Map(
     (dealBusinesses || [])
-      .map((d: any) => d.business_id)
-      .filter(Boolean)
+      .filter((d: any) => d.business_id && d.id)
+      .map((d: any) => [d.business_id, d.id])
   );
 
   const couponBusinessIds = new Set(
@@ -175,10 +165,7 @@ export default async function Home() {
         const usageLimit = Number(c.usage_limit || 0);
         const usedCount = Number(c.used_count || 0);
 
-        if (usageLimit > 0 && usedCount >= usageLimit) {
-          return false;
-        }
-
+        if (usageLimit > 0 && usedCount >= usageLimit) return false;
         return true;
       })
       .map((c: any) => c.business_id)
@@ -265,7 +252,7 @@ export default async function Home() {
 
           <div className="space-y-4">
             {deals.map((deal) => (
-              <a
+              <Link
                 key={deal.id}
                 href={`/deals/${deal.id}`}
                 className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
@@ -308,7 +295,7 @@ export default async function Home() {
                     {deal.description || "Tap to view deal details"}
                   </p>
                 </div>
-              </a>
+              </Link>
             ))}
 
             {deals.length === 0 && (
@@ -323,29 +310,31 @@ export default async function Home() {
           <section className="mx-auto mb-8 max-w-xl">
             <h2 className="mb-3 text-xl font-bold">⭐ Featured Sponsor</h2>
 
-            <a
-              href={`/business/${featured.id}`}
-              className="block overflow-hidden rounded-3xl bg-white shadow-xl"
-            >
-              <div className="h-56 w-full overflow-hidden bg-white">
-                <BusinessMedia
-                  spot={featured}
-                  className="h-full w-full object-contain"
-                />
-              </div>
+            <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
+              <Link href={`/business/${featured.id}`} className="block">
+                <div className="h-56 w-full overflow-hidden bg-white">
+                  <BusinessMedia
+                    spot={featured}
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              </Link>
 
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-2xl font-bold">{featured.name}</h3>
+                      <Link href={`/business/${featured.id}`}>
+                        <h3 className="text-2xl font-bold">{featured.name}</h3>
+                      </Link>
 
                       <OfferBadges
-					  businessId={featured.id}
-					  hasDeal={dealBusinessIds.has(featured.id)}
-					  hasCoupon={couponBusinessIds.has(featured.id)}
-					  size="md"
-					/>
+                        businessId={featured.id}
+                        dealId={dealBusinessMap.get(featured.id)}
+                        hasDeal={dealBusinessMap.has(featured.id)}
+                        hasCoupon={couponBusinessIds.has(featured.id)}
+                        size="md"
+                      />
                     </div>
 
                     <p className="mt-2 text-sm text-gray-600">
@@ -367,7 +356,7 @@ export default async function Home() {
                   {featured.description || featured.tags || featured.tag}
                 </p>
               </div>
-            </a>
+            </div>
           </section>
         )}
 
@@ -376,34 +365,40 @@ export default async function Home() {
 
           <div className="space-y-4">
             {trending.map((spot) => {
-              const hasDeal = dealBusinessIds.has(spot.id);
+              const dealId = dealBusinessMap.get(spot.id);
+              const hasDeal = Boolean(dealId);
               const hasCoupon = couponBusinessIds.has(spot.id);
 
               return (
-                <a
+                <div
                   key={spot.id}
-                  href={`/business/${spot.id}`}
                   className="block rounded-3xl bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
+                    <Link
+                      href={`/business/${spot.id}`}
+                      className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white"
+                    >
                       <BusinessMedia
                         spot={spot}
                         className="h-full w-full object-cover"
                       />
-                    </div>
+                    </Link>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="line-clamp-1 font-bold">
-                          {spot.name}
-                        </h4>
+                        <Link href={`/business/${spot.id}`}>
+                          <h4 className="line-clamp-1 font-bold">
+                            {spot.name}
+                          </h4>
+                        </Link>
 
-                       <OfferBadges
-						  businessId={spot.id}
-						  hasDeal={hasDeal}
-						  hasCoupon={hasCoupon}
-						/>
+                        <OfferBadges
+                          businessId={spot.id}
+                          dealId={dealId}
+                          hasDeal={hasDeal}
+                          hasCoupon={hasCoupon}
+                        />
                       </div>
 
                       <p className="line-clamp-1 text-sm text-gray-600">
@@ -427,7 +422,7 @@ export default async function Home() {
                       </p>
                     </div>
                   </div>
-                </a>
+                </div>
               );
             })}
           </div>
