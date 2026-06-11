@@ -109,8 +109,7 @@ export default async function CommunityMapPage() {
             type: "business",
             source_type: "community-business",
 
-            // 카드/마커 연결용 고유값
-            map_key: `marketplace-${marketplaceId}-${normalizedCat}-${item.title}`,
+            map_key: `community-business-${businessId}-${normalizedCat}-${business.name || "business"}`,
           };
         });
     }) || [];
@@ -132,7 +131,6 @@ export default async function CommunityMapPage() {
             marketplace_id: marketplaceId,
             original_id: marketplaceId,
 
-            // BusinessMap에서 href 만들 때 필요
             business_id: marketplaceId,
             original_business_id: marketplaceId,
 
@@ -151,8 +149,7 @@ export default async function CommunityMapPage() {
             type: "marketplace",
             source_type: "marketplace",
 
-            // 카드/마커 연결용 고유값
-            map_key: `marketplace-${marketplaceId}-${normalizedCat}-${item.title}-${item.created_at}`,
+            map_key: `marketplace-${marketplaceId}-${normalizedCat}-${item.title || "item"}-${item.created_at || ""}`,
           };
         });
     }) || [];
