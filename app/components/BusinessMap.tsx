@@ -652,38 +652,45 @@ export default function BusinessMap({
         )}
 
         {mapSpots
-  .filter((spot) => spot.lat && spot.lng)
-  .map((spot) => {
-    const spotKey = getSpotKey(spot);
+  .filter((spot) => spot.lat !== null && spot.lng !== null)
+  .map((spot, index) => {
+    const baseKey = getSpotKey(spot);
+    const spotKey = `${baseKey}-${index}`;
+    const selectedBaseKey = selectedSpotKey;
+
+    const isSelected = baseKey === selectedBaseKey;
+
+    const lat = Number(spot.lat);
+    const lng = Number(spot.lng);
 
     const sameLocationSpots = mapSpots.filter(
-      (s) => Number(s.lat) === Number(spot.lat) && Number(s.lng) === Number(spot.lng)
+      (s) =>
+        Number(s.lat).toFixed(6) === lat.toFixed(6) &&
+        Number(s.lng).toFixed(6) === lng.toFixed(6)
     );
 
     const sameLocationIndex = sameLocationSpots.findIndex(
-      (s) => getSpotKey(s) === spotKey
+      (s) => getSpotKey(s) === baseKey
     );
 
-    const markerOffset = sameLocationIndex > 0 ? sameLocationIndex * 0.00008 : 0;
+    const markerOffset = sameLocationIndex * 0.00012;
 
     return (
       <Marker
         key={spotKey}
-        position={[
-          (Number(spot.lat) || 0) + markerOffset,
-          (Number(spot.lng) || 0) + markerOffset,
-        ]}
-        icon={spotKey === selectedSpotKey ? selectedMarkerIcon : markerIcon}
+        position={[lat + markerOffset, lng + markerOffset]}
+        icon={isSelected ? selectedMarkerIcon : markerIcon}
+        zIndexOffset={isSelected ? 10000 : sameLocationIndex}
         eventHandlers={{
           click: (e) => {
             L.DomEvent.stopPropagation(e.originalEvent);
 
-            setSelectedSpotKey(spotKey);
+            setSelectedSpotKey(baseKey);
             setCategoryPanelOpen(false);
             setShowCards(true);
 
             setTimeout(() => {
-              cardRefs.current[spotKey]?.scrollIntoView({
+              cardRefs.current[baseKey]?.scrollIntoView({
                 behavior: "smooth",
                 inline: "center",
                 block: "nearest",
@@ -706,8 +713,9 @@ export default function BusinessMap({
             : "bottom-[-360px] opacity-0"
         }`}
       >
-        {cardSpots.map((spot) => {
+        {cardSpots.map((spot, index) => {
           const spotKey = getSpotKey(spot);
+		  const cardKey = `${spotKey}-${index}`;
           const businessId = getBusinessId(spot);
 
           const images =
@@ -732,7 +740,7 @@ export default function BusinessMap({
 
           return (
             <a
-              key={spotKey}
+              key={cardKey}
               ref={(el) => {
                 cardRefs.current[spotKey] = el;
               }}
