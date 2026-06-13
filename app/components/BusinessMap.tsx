@@ -113,15 +113,20 @@ function getDetailHref(
   businessId: number,
   communityMode: boolean
 ) {
-  if (communityMode && (spot.source_type === "marketplace" || spot.type === "marketplace")) {
-    return `/community/market/${spot.original_id || spot.marketplace_id || spot.id}`;
+  if (
+    communityMode &&
+    (spot.source_type === "marketplace" || spot.type === "marketplace")
+  ) {
+    return `/community/market/${
+      spot.original_id || spot.marketplace_id || spot.id
+    }?from=community-map`;
   }
 
   if (communityMode) {
-    return `/business/${businessId}?from=community`;
+    return `/business/${businessId}?from=community-map`;
   }
 
-  return `/business/${businessId}`;
+  return `/business/${businessId}?from=map`;
 }
 
 function milesBetween(a: [number, number], b: [number, number]) {

@@ -131,9 +131,12 @@ export default async function BusinessPage({
 
   const isCommunityBusiness = from === "community";
 
-const backHref = isCommunityBusiness
-  ? "/community"
-  : "/map";
+const backHref =
+  from === "community-map"
+    ? "/community/map"
+    : from === "map"
+    ? "/map"
+    : "/map";
 
   const now = new Date().toISOString();
 
