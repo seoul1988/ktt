@@ -117,59 +117,36 @@ function getStoragePathFromPublicUrl(url: string, bucketName: string) {
 
   return decodeURIComponent(url.substring(index + marker.length));
 }
-  async function deleteAd(ad: AdItem) {
-  const ok = window.confirm("Delete this ad and all media files?");
-  if (!ok) return;
+  async function deleteAd(id: number) {
+    const ok = window.confirm("Delete this ad?");
+    if (!ok) return;
 
-  setDeletingId(ad.id);
+    setDeletingId(id);
 
-  const imagePaths =
-    Array.isArray(ad.images)
-      ? ad.images
-          .map((url) => getStoragePathFromPublicUrl(url, "ads"))
-          .filter(Boolean) as string[]
-      : [];
-
-  const videoPath = ad.video_url
-    ? getStoragePathFromPublicUrl(ad.video_url, "ads")
-    : null;
-
-  const mediaPaths = [...imagePaths, ...(videoPath ? [videoPath] : [])];
-
-  if (mediaPaths.length > 0) {
-    const { error: storageError } = await supabase.storage
+    const { data, error } = await supabase
       .from("ads")
-      .remove(mediaPaths);
+      .delete()
+      .eq("id", id)
+      .select("id");
 
-    if (storageError) {
-      console.error("Storage delete error:", storageError);
-      alert("Media delete failed: " + storageError.message);
-      setDeletingId(null);
+    setDeletingId(null);
+
+    if (error) {
+      console.error("Delete ad error:", error);
+      alert("Failed to delete ad: " + error.message);
       return;
     }
+
+    if (!data || data.length === 0) {
+      alert(
+        "Delete did not complete. This is usually caused by Supabase RLS policy."
+      );
+      return;
+    }
+
+    setAds((prev) => prev.filter((ad) => ad.id !== id));
   }
 
-  const { data, error } = await supabase
-    .from("ads")
-    .delete()
-    .eq("id", ad.id)
-    .select("id");
-
-  setDeletingId(null);
-
-  if (error) {
-    console.error("Delete ad error:", error);
-    alert("Failed to delete ad: " + error.message);
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    alert("Delete did not complete. Check Supabase RLS policy.");
-    return;
-  }
-
-  setAds((prev) => prev.filter((item) => item.id !== ad.id));
-}
   if (loading) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
