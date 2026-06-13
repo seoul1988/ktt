@@ -21,9 +21,19 @@ type Ad = {
   display_order: number | null;
 };
 
+function getStoragePathFromPublicUrl(url: string, bucketName: string) {
+  const marker = `/storage/v1/object/public/${bucketName}/`;
+  const index = url.indexOf(marker);
+
+  if (index === -1) return null;
+
+  return decodeURIComponent(url.substring(index + marker.length));
+}
+
 export default function AdminAdsPage() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadAds();
@@ -66,10 +76,7 @@ export default function AdminAdsPage() {
         .map((ad) =>
           ad.id === id ? { ...ad, display_order: displayOrder } : ad
         )
-        .sort(
-          (a, b) =>
-            (a.display_order ?? 999) - (b.display_order ?? 999)
-        )
+        .sort((a, b) => (a.display_order ?? 999) - (b.display_order ?? 999))
     );
   }
 
@@ -89,18 +96,57 @@ export default function AdminAdsPage() {
     );
   }
 
-  async function deleteAd(id: number) {
-    const ok = window.confirm("Delete this ad?");
+  async function deleteAd(ad: Ad) {
+    const ok = window.confirm("Delete this ad and all image/video files?");
     if (!ok) return;
 
-    const { error } = await supabase.from("ads").delete().eq("id", id);
+    setDeletingId(ad.id);
+
+    const imagePaths = Array.isArray(ad.images)
+      ? (ad.images
+          .map((url) => getStoragePathFromPublicUrl(url, "ads"))
+          .filter(Boolean) as string[])
+      : [];
+
+    const videoPath = ad.video_url
+      ? getStoragePathFromPublicUrl(ad.video_url, "ads")
+      : null;
+
+    const mediaPaths = [...imagePaths, ...(videoPath ? [videoPath] : [])];
+
+    if (mediaPaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from("ads")
+        .remove(mediaPaths);
+
+      if (storageError) {
+        console.error("Storage delete error:", storageError);
+        alert("Media delete failed: " + storageError.message);
+        setDeletingId(null);
+        return;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("ads")
+      .delete()
+      .eq("id", ad.id)
+      .select("id");
+
+    setDeletingId(null);
 
     if (error) {
-      alert(error.message);
+      console.error("Ad delete error:", error);
+      alert("Ad delete failed: " + error.message);
       return;
     }
 
-    setAds((prev) => prev.filter((ad) => ad.id !== id));
+    if (!data || data.length === 0) {
+      alert("Delete did not complete. Check Supabase RLS policy.");
+      return;
+    }
+
+    setAds((prev) => prev.filter((item) => item.id !== ad.id));
   }
 
   return (
@@ -137,23 +183,26 @@ export default function AdminAdsPage() {
                 : [];
 
               const hasImage = cleanImages.length > 0;
+              const hasVideo =
+                typeof ad.video_url === "string" &&
+                ad.video_url.trim() !== "";
 
               return (
                 <div key={ad.id} className="rounded-3xl bg-white p-4 shadow">
-                  {hasImage && (
-                    <img
-                      src={cleanImages[0]}
-                      alt={ad.title || "Ad"}
-                      className="mb-3 h-40 w-full rounded-2xl object-cover"
-                    />
-                  )}
-
-                  {ad.video_url && (
+                  {hasVideo ? (
                     <video
-                      src={ad.video_url}
+                      src={ad.video_url || ""}
                       controls
                       className="mb-3 h-40 w-full rounded-2xl object-cover"
                     />
+                  ) : (
+                    hasImage && (
+                      <img
+                        src={cleanImages[0]}
+                        alt={ad.title || "Ad"}
+                        className="mb-3 h-40 w-full rounded-2xl object-cover"
+                      />
+                    )
                   )}
 
                   <div className="flex items-start justify-between gap-3">
@@ -226,6 +275,7 @@ export default function AdminAdsPage() {
 
                   <div className="mt-4 grid grid-cols-2 gap-2">
                     <button
+                      type="button"
                       onClick={() =>
                         changeStatus(ad.id, isActive ? "hidden" : "active")
                       }
@@ -244,10 +294,12 @@ export default function AdminAdsPage() {
                     </Link>
 
                     <button
-                      onClick={() => deleteAd(ad.id)}
-                      className="col-span-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-black text-white"
+                      type="button"
+                      disabled={deletingId === ad.id}
+                      onClick={() => deleteAd(ad)}
+                      className="col-span-2 rounded-xl bg-red-500 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
                     >
-                      Delete
+                      {deletingId === ad.id ? "Deleting..." : "Delete"}
                     </button>
                   </div>
                 </div>
