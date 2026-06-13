@@ -10,20 +10,29 @@ function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
 
   const match = timeText.match(/^(\d{1,2}):(\d{2})\s?(AM|PM)$/i);
+
   if (!match) return null;
 
   let hour = Number(match[1]);
   const minute = Number(match[2]);
 
-  if (match[3].toUpperCase() === "PM" && hour !== 12) hour += 12;
-  if (match[3].toUpperCase() === "AM" && hour === 12) hour = 0;
+  if (match[3].toUpperCase() === "PM" && hour !== 12) {
+    hour += 12;
+  }
+
+  if (match[3].toUpperCase() === "AM" && hour === 12) {
+    hour = 0;
+  }
 
   return hour * 60 + minute;
 }
 
 function getOpenStatus(hours?: string | null) {
   if (!hours) {
-    return { open: false, text: "Hours not available" };
+    return {
+      open: false,
+      text: "Hours not available",
+    };
   }
 
   const now = new Date();
@@ -46,8 +55,19 @@ function getOpenStatus(hours?: string | null) {
 
   const line = hours.split("\n").find((v) => v.startsWith(today));
 
-  if (!line) return { open: false, text: "Closed" };
-  if (line.includes("Closed")) return { open: false, text: "Closed Today" };
+  if (!line) {
+    return {
+      open: false,
+      text: "Closed",
+    };
+  }
+
+  if (line.includes("Closed")) {
+    return {
+      open: false,
+      text: "Closed Today",
+    };
+  }
 
   const main = line.split("/ Break")[0].replace(today, "").trim();
   const [openText, closeText] = main.split(" - ");
@@ -61,12 +81,14 @@ function getOpenStatus(hours?: string | null) {
     currentMinutes >= open &&
     currentMinutes < close;
 
-  return { open: isOpen, text: isOpen ? "Open" : "Closed" };
+  return {
+    open: isOpen,
+    text: isOpen ? "Open" : "Closed",
+  };
 }
 
 type SearchParams = Promise<{
   from?: string;
-  category?: string;
 }>;
 
 function normalizeCategory(value: string) {
@@ -81,7 +103,7 @@ export default async function BusinessPage({
   searchParams: SearchParams;
 }) {
   const { id } = await params;
-  const { from, category } = await searchParams;
+  const { from } = await searchParams;
 
   const { data: spot, error } = await supabase
     .from("businesses")
@@ -93,28 +115,25 @@ export default async function BusinessPage({
     return <div>Not found</div>;
   }
 
-  const isCommunityBusiness =
-    from === "community" || from === "community-map";
+  const { data: communityCategories } = await supabase
+    .from("categories")
+    .select("name")
+    .eq("show_on_community_map", true);
 
-  const backHref = (() => {
-    const categoryQuery = category
-      ? `?category=${encodeURIComponent(category)}`
-      : "";
+  const spotCategories = String(spot.category || "")
+    .split(",")
+    .map((item) => normalizeCategory(item))
+    .filter(Boolean);
 
-    if (from === "community-map") {
-      return `/community/map${categoryQuery}`;
-    }
+  const communityCategoryNames = (communityCategories || []).map((cat) =>
+    normalizeCategory(cat.name || "")
+  );
 
-    if (from === "community") {
-      return "/community";
-    }
+  const isCommunityBusiness = from === "community";
 
-    if (from === "map") {
-      return `/map${categoryQuery}`;
-    }
-
-    return "/map";
-  })();
+const backHref = isCommunityBusiness
+  ? "/community"
+  : "/map";
 
   const now = new Date().toISOString();
 
@@ -223,9 +242,11 @@ export default async function BusinessPage({
 
             <div className="text-center">
               <div className="text-3xl">⭐</div>
+
               <div className="font-bold">
                 {spot.rating ? Number(spot.rating).toFixed(1) : "-"}
               </div>
+
               <div className="text-[10px] text-gray-500">
                 {spot.review_count ? `(${spot.review_count})` : ""}
               </div>
@@ -342,6 +363,7 @@ export default async function BusinessPage({
 
           <section>
             <h2 className="mb-3 text-xl font-extrabold">About</h2>
+
             <p className="leading-7 text-gray-700">
               {spot.description || "No description yet."}
             </p>
@@ -354,10 +376,11 @@ export default async function BusinessPage({
       </div>
 
       {isCommunityBusiness ? (
-        <CommunityBottomNav activeNav="map" />
+        <CommunityBottomNav activeNav="community" />
       ) : (
         <BottomNav activeNav="map" />
       )}
     </main>
   );
 }
+
