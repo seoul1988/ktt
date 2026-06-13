@@ -37,11 +37,11 @@ export default function AdminPage() {
           </Link>
 
           <Link
-            href="/admin/community-requests"
-            className="block rounded-2xl bg-[#172033] p-5 font-bold text-white"
-          >
-            📅 Community Requests
-          </Link>
+		  href="/admin/ads"
+		  className="block rounded-2xl bg-[#172033] p-5 font-bold text-white"
+		>
+		  📢 Ad Management
+		</Link>
 
           <Link
             href="/admin/businesses"

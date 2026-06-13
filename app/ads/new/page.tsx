@@ -111,16 +111,17 @@ export default function NewAdPage() {
       const videoUrl = await uploadVideo(user.id);
 
       const { error } = await supabase.from("ads").insert({
-        owner_id: user.id,
-        title,
-        description,
-        category,
-        location,
-        phone,
-        images: imageUrls,
-        video_url: videoUrl,
-        status: "active",
-      });
+		  user_id: user.id,
+		  title,
+		  description,
+		  category,
+		  location,
+		  phone,
+		  images: imageUrls,
+		  video_url: videoUrl,
+		  status: "active",
+		  display_order: 999,
+		});
 
       if (error) throw error;
 
