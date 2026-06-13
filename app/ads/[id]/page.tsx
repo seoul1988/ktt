@@ -15,6 +15,8 @@ type AdItem = {
   images: string[] | null;
   video_url: string | null;
   status: string | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 function statusLabel(status: string | null) {
@@ -29,6 +31,20 @@ function statusClass(status: string | null) {
   if (status === "expired") return "bg-gray-500";
   if (status === "hidden") return "bg-red-500";
   return "bg-green-600";
+}
+
+function cleanPhone(phone: string) {
+  return phone.replace(/[^\d+]/g, "");
+}
+
+function getDirectionUrl(ad: AdItem) {
+  if (ad.lat !== null && ad.lng !== null) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${ad.lat},${ad.lng}`;
+  }
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    ad.location || ""
+  )}`;
 }
 
 export default async function AdDetailPage({
@@ -55,9 +71,7 @@ export default async function AdDetailPage({
   const ad = data as AdItem;
 
   const cleanImages = Array.isArray(ad.images)
-    ? ad.images.filter(
-        (img) => typeof img === "string" && img.trim() !== ""
-      )
+    ? ad.images.filter((img) => typeof img === "string" && img.trim() !== "")
     : [];
 
   const cleanVideoUrl =
@@ -67,6 +81,11 @@ export default async function AdDetailPage({
 
   const hasImage = cleanImages.length > 0;
   const hasVideo = Boolean(cleanVideoUrl);
+  const hasPhone = Boolean(ad.phone && ad.phone.trim() !== "");
+  const hasLocation = Boolean(
+    (ad.location && ad.location.trim() !== "") ||
+      (ad.lat !== null && ad.lng !== null)
+  );
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
@@ -138,21 +157,27 @@ export default async function AdDetailPage({
               </p>
             )}
 
-            {ad.phone && (
+            {(hasPhone || hasLocation) && (
               <div className="mt-5 grid grid-cols-2 gap-2">
-                <a
-                  href={`tel:${ad.phone}`}
-                  className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white"
-                >
-                  전화
-                </a>
+                {hasPhone && (
+                  <a
+                    href={`tel:${cleanPhone(ad.phone || "")}`}
+                    className="rounded-2xl bg-green-600 py-3 text-center text-sm font-black text-white"
+                  >
+                    📞 Call
+                  </a>
+                )}
 
-                <a
-                  href={`sms:${ad.phone}`}
-                  className="rounded-2xl border border-[#172033] py-3 text-center text-sm font-black text-[#172033]"
-                >
-                  문자
-                </a>
+                {hasLocation && (
+                  <a
+                    href={getDirectionUrl(ad)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-orange-500 py-3 text-center text-sm font-black text-white"
+                  >
+                    🧭 Directions
+                  </a>
+                )}
               </div>
             )}
           </div>
