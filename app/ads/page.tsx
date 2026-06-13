@@ -18,8 +18,6 @@ type AdItem = {
   status: string | null;
   created_at: string | null;
   display_order: number | null;
-  lat: number | null;
-  lng: number | null;
 };
 
 function statusLabel(status: string | null) {
@@ -40,23 +38,10 @@ function cleanPhone(phone: string) {
   return phone.replace(/[^\d+]/g, "");
 }
 
-function getMapUrl(ad: AdItem) {
-  if (ad.lat !== null && ad.lng !== null) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${ad.lat},${ad.lng}`;
-  }
-
+function getMapUrl(location: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    ad.location || ""
+    location
   )}`;
-}
-
-function getStoragePathFromPublicUrl(url: string, bucketName: string) {
-  const marker = `/storage/v1/object/public/${bucketName}/`;
-  const index = url.indexOf(marker);
-
-  if (index === -1) return null;
-
-  return decodeURIComponent(url.substring(index + marker.length));
 }
 
 export default function AdsPage() {
@@ -133,6 +118,15 @@ export default function AdsPage() {
     setAds((prev) =>
       prev.map((ad) => (ad.id === id ? { ...ad, status: nextStatus } : ad))
     );
+  }
+
+  function getStoragePathFromPublicUrl(url: string, bucketName: string) {
+    const marker = `/storage/v1/object/public/${bucketName}/`;
+    const index = url.indexOf(marker);
+
+    if (index === -1) return null;
+
+    return decodeURIComponent(url.substring(index + marker.length));
   }
 
   async function deleteAd(ad: AdItem) {
@@ -249,12 +243,11 @@ export default function AdsPage() {
                 Boolean(currentUserId && ad.user_id === currentUserId) ||
                 isAdmin;
 
-              const hasPhone = Boolean(ad.phone && ad.phone.trim() !== "");
+              const hasPhone =
+                typeof ad.phone === "string" && ad.phone.trim() !== "";
 
-              const hasLocation = Boolean(
-                (ad.location && ad.location.trim() !== "") ||
-                  (ad.lat !== null && ad.lng !== null)
-              );
+              const hasLocation =
+                typeof ad.location === "string" && ad.location.trim() !== "";
 
               return (
                 <div
@@ -308,11 +301,9 @@ export default function AdsPage() {
                           {statusLabel(ad.status)}
                         </span>
 
-                        {ad.location && (
-                          <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
-                            {ad.location}
-                          </span>
-                        )}
+                        <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
+                          {ad.location || ""}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -336,11 +327,11 @@ export default function AdsPage() {
                   </Link>
 
                   {(hasPhone || hasLocation) && (
-                    <div className="flex gap-2 border-t px-2 py-2">
+                    <div className="grid grid-cols-2 gap-1 border-t px-2 py-2">
                       {hasPhone && (
                         <a
                           href={`tel:${cleanPhone(ad.phone || "")}`}
-                          className="flex-1 rounded-xl bg-green-600 py-2 text-center text-[11px] font-black text-white"
+                          className="rounded-xl bg-green-600 py-2 text-center text-[11px] font-black text-white"
                         >
                           📞 Call
                         </a>
@@ -348,10 +339,10 @@ export default function AdsPage() {
 
                       {hasLocation && (
                         <a
-                          href={getMapUrl(ad)}
+                          href={getMapUrl(ad.location || "")}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 rounded-xl bg-orange-600 py-2 text-center text-[11px] font-black text-white"
+                          className="rounded-xl bg-orange-600 py-2 text-center text-[11px] font-black text-white"
                         >
                           🧭 Directions
                         </a>
