@@ -28,6 +28,7 @@ export default function NewAdPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -189,12 +190,30 @@ export default function NewAdPage() {
       <div className="mx-auto max-w-md">
         <h1 className="mb-4 text-2xl font-black">광고 등록</h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-3xl bg-white p-5 shadow">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="광고 제목" className="w-full rounded-2xl border p-3 text-sm font-bold" />
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-4 rounded-3xl bg-white p-5 shadow"
+        >
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="광고 제목"
+            className="w-full rounded-2xl border p-3 text-sm font-bold"
+          />
 
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="광고 설명" className="min-h-28 w-full rounded-2xl border p-3 text-sm" />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="광고 설명"
+            className="min-h-28 w-full rounded-2xl border p-3 text-sm"
+          />
 
-          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="카테고리 예: 식당, 청소, 구인, 부동산" className="w-full rounded-2xl border p-3 text-sm" />
+          <input
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="카테고리 예: 식당, 청소, 구인, 부동산"
+            className="w-full rounded-2xl border p-3 text-sm"
+          />
 
           <input
             ref={addressRef}
@@ -214,23 +233,80 @@ export default function NewAdPage() {
             </div>
           )}
 
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="전화번호" className="w-full rounded-2xl border p-3 text-sm" />
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="전화번호"
+            className="w-full rounded-2xl border p-3 text-sm"
+          />
 
-          <input type="file" accept="image/*" multiple onChange={(e) => handleImageChange(e.target.files)} className="w-full rounded-2xl border p-3 text-sm" />
+          <div>
+            <p className="mb-2 text-sm font-black">이미지</p>
 
-          {imagePreviews.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {imagePreviews.map((src, index) => (
-                <img key={index} src={src} className="h-24 w-full rounded-xl object-cover" />
-              ))}
-            </div>
-          )}
+            <label className="flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-5 text-sm font-black text-gray-600">
+              🖼 이미지 선택
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handleImageChange(e.target.files)}
+                className="hidden"
+              />
+            </label>
 
-          <input type="file" accept="video/*" onChange={(e) => handleVideoChange(e.target.files?.[0] || null)} className="w-full rounded-2xl border p-3 text-sm" />
+            {imageFiles && imageFiles.length > 0 && (
+              <p className="mt-2 text-xs font-bold text-gray-500">
+                {imageFiles.length}개 이미지 선택됨
+              </p>
+            )}
 
-          {videoPreview && <video src={videoPreview} controls className="w-full rounded-2xl" />}
+            {imagePreviews.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {imagePreviews.map((src, index) => (
+                  <img
+                    key={index}
+                    src={src}
+                    alt={`preview-${index}`}
+                    className="h-24 w-full rounded-xl border object-cover"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
 
-          <button type="submit" disabled={saving} className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white disabled:opacity-50">
+          <div>
+            <p className="mb-2 text-sm font-black">동영상</p>
+
+            <label className="flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-5 text-sm font-black text-gray-600">
+              🎬 동영상 선택
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(e) =>
+                  handleVideoChange(e.target.files?.[0] || null)
+                }
+                className="hidden"
+              />
+            </label>
+
+            {videoFile && (
+              <p className="mt-2 truncate text-xs font-bold text-gray-500">
+                {videoFile.name}
+              </p>
+            )}
+
+            {videoPreview && (
+              <div className="mt-3 overflow-hidden rounded-2xl border">
+                <video src={videoPreview} controls className="w-full" />
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white disabled:opacity-50"
+          >
             {saving ? "등록 중..." : "광고 등록"}
           </button>
         </form>
