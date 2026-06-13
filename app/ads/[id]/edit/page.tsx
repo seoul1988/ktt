@@ -16,16 +16,21 @@ type AdItem = {
   images: string[] | null;
   video_url: string | null;
   status: string | null;
+  lat: number | null;
+  lng: number | null;
 };
+
+const IMAGE_BUCKET = "ad-images";
+const VIDEO_BUCKET = "ad-videos";
 
 export default function EditAdPage() {
   const params = useParams();
   const router = useRouter();
-
   const adId = Number(params.id);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
   const [ad, setAd] = useState<AdItem | null>(null);
 
   const [title, setTitle] = useState("");
@@ -34,6 +39,15 @@ export default function EditAdPage() {
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState("active");
+
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+
+  const [images, setImages] = useState<string[]>([]);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+
+  const [newImages, setNewImages] = useState<File[]>([]);
+  const [newVideo, setNewVideo] = useState<File | null>(null);
 
   useEffect(() => {
     loadAd();
@@ -54,15 +68,98 @@ export default function EditAdPage() {
       return;
     }
 
-    setAd(data as AdItem);
-    setTitle(data.title || "");
-    setDescription(data.description || "");
-    setCategory(data.category || "");
-    setLocation(data.location || "");
-    setPhone(data.phone || "");
-    setStatus(data.status || "active");
+    const item = data as AdItem;
+
+    setAd(item);
+    setTitle(item.title || "");
+    setDescription(item.description || "");
+    setCategory(item.category || "");
+    setLocation(item.location || "");
+    setPhone(item.phone || "");
+    setStatus(item.status || "active");
+    setLat(item.lat ? String(item.lat) : "");
+    setLng(item.lng ? String(item.lng) : "");
+    setImages(Array.isArray(item.images) ? item.images : []);
+    setVideoUrl(item.video_url || null);
 
     setLoading(false);
+  }
+
+  async function geocodeAddress() {
+    if (!location.trim()) {
+      alert("Please enter an address first.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          location
+        )}&limit=1`
+      );
+
+      const data = await res.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        alert("Address not found.");
+        return;
+      }
+
+      setLat(data[0].lat);
+      setLng(data[0].lon);
+      alert("Latitude and longitude added.");
+    } catch {
+      alert("Failed to get latitude and longitude.");
+    }
+  }
+
+  async function uploadImages() {
+    const uploadedUrls: string[] = [];
+
+    for (const file of newImages) {
+      const ext = file.name.split(".").pop();
+      const fileName = `${adId}/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from(IMAGE_BUCKET)
+        .upload(fileName, file, { upsert: true });
+
+      if (error) throw error;
+
+      const { data } = supabase.storage.from(IMAGE_BUCKET).getPublicUrl(fileName);
+      uploadedUrls.push(data.publicUrl);
+    }
+
+    return uploadedUrls;
+  }
+
+  async function uploadVideo() {
+    if (!newVideo) return videoUrl;
+
+    const ext = newVideo.name.split(".").pop();
+    const fileName = `${adId}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from(VIDEO_BUCKET)
+      .upload(fileName, newVideo, { upsert: true });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage.from(VIDEO_BUCKET).getPublicUrl(fileName);
+    return data.publicUrl;
+  }
+
+  function removeImage(url: string) {
+    setImages((prev) => prev.filter((img) => img !== url));
+  }
+
+  function removeVideo() {
+    setVideoUrl(null);
+    setNewVideo(null);
   }
 
   async function saveAd() {
@@ -73,26 +170,38 @@ export default function EditAdPage() {
 
     setSaving(true);
 
-    const { error } = await supabase
-      .from("ads")
-      .update({
-        title: title.trim(),
-        description: description.trim() || null,
-        category: category.trim() || null,
-        location: location.trim() || null,
-        phone: phone.trim() || null,
-        status,
-      })
-      .eq("id", adId);
+    try {
+      const uploadedImages = await uploadImages();
+      const finalImages = [...images, ...uploadedImages];
+      const finalVideoUrl = await uploadVideo();
 
-    setSaving(false);
+      const { error } = await supabase
+        .from("ads")
+        .update({
+          title: title.trim(),
+          description: description.trim() || null,
+          category: category.trim() || null,
+          location: location.trim() || null,
+          phone: phone.trim() || null,
+          status,
+          lat: lat ? Number(lat) : null,
+          lng: lng ? Number(lng) : null,
+          images: finalImages,
+          video_url: finalVideoUrl,
+        })
+        .eq("id", adId);
 
-    if (error) {
-      alert("Failed to update ad: " + error.message);
-      return;
+      if (error) {
+        alert("Failed to update ad: " + error.message);
+        setSaving(false);
+        return;
+      }
+
+      router.push(`/ads/${adId}`);
+    } catch (err: any) {
+      alert("Upload failed: " + err.message);
+      setSaving(false);
     }
-
-    router.push(`/ads/${adId}`);
   }
 
   if (loading) {
@@ -157,13 +266,46 @@ export default function EditAdPage() {
 
           <div>
             <label className="mb-1 block text-xs font-black text-gray-500">
-              Location
+              Address
             </label>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-            />
+            <div className="flex gap-2">
+              <input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="flex-1 rounded-xl border px-4 py-3 text-sm font-bold"
+              />
+              <button
+                type="button"
+                onClick={geocodeAddress}
+                className="rounded-xl bg-[#172033] px-3 text-xs font-black text-white"
+              >
+                Get GPS
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs font-black text-gray-500">
+                Latitude
+              </label>
+              <input
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+                className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-black text-gray-500">
+                Longitude
+              </label>
+              <input
+                value={lng}
+                onChange={(e) => setLng(e.target.value)}
+                className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+              />
+            </div>
           </div>
 
           <div>
@@ -173,6 +315,81 @@ export default function EditAdPage() {
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-black text-gray-500">
+              Current Images
+            </label>
+
+            {images.length === 0 ? (
+              <p className="text-xs font-bold text-gray-400">No images</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {images.map((img) => (
+                  <div key={img} className="relative overflow-hidden rounded-xl">
+                    <img src={img} className="h-24 w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(img)}
+                      className="absolute right-1 top-1 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-black text-gray-500">
+              Add Images
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setNewImages(Array.from(e.target.files || []))}
+              className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-black text-gray-500">
+              Current Video
+            </label>
+
+            {videoUrl ? (
+              <div className="space-y-2">
+                <video
+                  src={videoUrl}
+                  controls
+                  className="h-48 w-full rounded-xl bg-black object-contain"
+                />
+                <button
+                  type="button"
+                  onClick={removeVideo}
+                  className="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white"
+                >
+                  Remove Video
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs font-bold text-gray-400">No video</p>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-black text-gray-500">
+              Replace / Add Video
+            </label>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => setNewVideo(e.target.files?.[0] || null)}
               className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
             />
           </div>

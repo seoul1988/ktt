@@ -109,37 +109,67 @@ export default function AdsPage() {
       prev.map((ad) => (ad.id === id ? { ...ad, status: nextStatus } : ad))
     );
   }
+function getStoragePathFromPublicUrl(url: string, bucketName: string) {
+  const marker = `/storage/v1/object/public/${bucketName}/`;
+  const index = url.indexOf(marker);
 
-  async function deleteAd(id: number) {
-    const ok = window.confirm("Delete this ad?");
-    if (!ok) return;
+  if (index === -1) return null;
 
-    setDeletingId(id);
+  return decodeURIComponent(url.substring(index + marker.length));
+}
+  async function deleteAd(ad: AdItem) {
+  const ok = window.confirm("Delete this ad and all media files?");
+  if (!ok) return;
 
-    const { data, error } = await supabase
+  setDeletingId(ad.id);
+
+  const imagePaths =
+    Array.isArray(ad.images)
+      ? ad.images
+          .map((url) => getStoragePathFromPublicUrl(url, "ads"))
+          .filter(Boolean) as string[]
+      : [];
+
+  const videoPath = ad.video_url
+    ? getStoragePathFromPublicUrl(ad.video_url, "ads")
+    : null;
+
+  const mediaPaths = [...imagePaths, ...(videoPath ? [videoPath] : [])];
+
+  if (mediaPaths.length > 0) {
+    const { error: storageError } = await supabase.storage
       .from("ads")
-      .delete()
-      .eq("id", id)
-      .select("id");
+      .remove(mediaPaths);
 
-    setDeletingId(null);
-
-    if (error) {
-      console.error("Delete ad error:", error);
-      alert("Failed to delete ad: " + error.message);
+    if (storageError) {
+      console.error("Storage delete error:", storageError);
+      alert("Media delete failed: " + storageError.message);
+      setDeletingId(null);
       return;
     }
-
-    if (!data || data.length === 0) {
-      alert(
-        "Delete did not complete. This is usually caused by Supabase RLS policy."
-      );
-      return;
-    }
-
-    setAds((prev) => prev.filter((ad) => ad.id !== id));
   }
 
+  const { data, error } = await supabase
+    .from("ads")
+    .delete()
+    .eq("id", ad.id)
+    .select("id");
+
+  setDeletingId(null);
+
+  if (error) {
+    console.error("Delete ad error:", error);
+    alert("Failed to delete ad: " + error.message);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    alert("Delete did not complete. Check Supabase RLS policy.");
+    return;
+  }
+
+  setAds((prev) => prev.filter((item) => item.id !== ad.id));
+}
   if (loading) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
@@ -308,7 +338,7 @@ export default function AdsPage() {
                       <button
                         type="button"
                         disabled={deletingId === ad.id}
-                        onClick={() => deleteAd(ad.id)}
+                        onClick={() => deleteAd(ad)}
                         className="rounded-xl bg-red-500 py-2 text-[11px] font-black text-white disabled:opacity-50"
                       >
                         {deletingId === ad.id ? "Deleting..." : "Delete"}
