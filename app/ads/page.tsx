@@ -21,10 +21,10 @@ type AdItem = {
 };
 
 function statusLabel(status: string | null) {
-  if (status === "active") return "광고중";
-  if (status === "expired") return "만료";
-  if (status === "hidden") return "숨김";
-  return "광고중";
+  if (status === "active") return "Active";
+  if (status === "expired") return "Expired";
+  if (status === "hidden") return "Hidden";
+  return "Active";
 }
 
 function statusClass(status: string | null) {
@@ -39,6 +39,7 @@ export default function AdsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     loadPage();
@@ -82,7 +83,7 @@ export default function AdsPage() {
     const { data, error } = await query;
 
     if (error) {
-      alert("광고 불러오기 실패: " + error.message);
+      alert("Failed to load ads: " + error.message);
       setLoading(false);
       return;
     }
@@ -100,7 +101,7 @@ export default function AdsPage() {
       .eq("id", id);
 
     if (error) {
-      alert(error.message);
+      alert("Failed to update ad: " + error.message);
       return;
     }
 
@@ -110,13 +111,29 @@ export default function AdsPage() {
   }
 
   async function deleteAd(id: number) {
-    const ok = window.confirm("이 광고를 삭제할까요?");
+    const ok = window.confirm("Delete this ad?");
     if (!ok) return;
 
-    const { error } = await supabase.from("ads").delete().eq("id", id);
+    setDeletingId(id);
+
+    const { data, error } = await supabase
+      .from("ads")
+      .delete()
+      .eq("id", id)
+      .select("id");
+
+    setDeletingId(null);
 
     if (error) {
-      alert(error.message);
+      console.error("Delete ad error:", error);
+      alert("Failed to delete ad: " + error.message);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      alert(
+        "Delete did not complete. This is usually caused by Supabase RLS policy."
+      );
       return;
     }
 
@@ -138,21 +155,21 @@ export default function AdsPage() {
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
       <div className="mx-auto max-w-md">
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-[#172033]">광고</h1>
+          <h1 className="text-2xl font-black text-[#172033]">Ads</h1>
 
           <div className="flex gap-2">
             <Link
               href="/ads/my"
               className="rounded-full border border-[#172033] px-4 py-2 text-sm font-bold text-[#172033]"
             >
-              내 광고
+              My Ads
             </Link>
 
             <Link
               href="/ads/new"
               className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
             >
-              + 등록
+              + Add
             </Link>
           </div>
         </div>
@@ -160,7 +177,7 @@ export default function AdsPage() {
         {ads.length === 0 ? (
           <div className="rounded-3xl bg-white p-8 text-center shadow">
             <p className="text-sm font-bold text-gray-500">
-              등록된 광고가 없습니다.
+              No ads have been posted yet.
             </p>
           </div>
         ) : (
@@ -177,9 +194,8 @@ export default function AdsPage() {
                   ? ad.video_url
                   : null;
 
-              const hasImage = cleanImages.length > 0;
               const hasVideo = Boolean(cleanVideoUrl);
-              const hasMedia = hasImage || hasVideo;
+              const hasMedia = cleanImages.length > 0 || hasVideo;
 
               const canManage =
                 Boolean(currentUserId && ad.user_id === currentUserId) ||
@@ -271,6 +287,7 @@ export default function AdsPage() {
                   {canManage && (
                     <div className="grid grid-cols-3 gap-1 border-t p-2">
                       <button
+                        type="button"
                         onClick={() => toggleVisibility(ad.id, ad.status)}
                         className={`rounded-xl py-2 text-[11px] font-black text-white ${
                           ad.status === "hidden"
@@ -278,21 +295,23 @@ export default function AdsPage() {
                             : "bg-gray-600"
                         }`}
                       >
-                        {ad.status === "hidden" ? "노출" : "안노출"}
+                        {ad.status === "hidden" ? "Show" : "Hide"}
                       </button>
 
                       <Link
                         href={`/ads/${ad.id}/edit`}
                         className="rounded-xl bg-blue-600 py-2 text-center text-[11px] font-black text-white"
                       >
-                        수정
+                        Edit
                       </Link>
 
                       <button
+                        type="button"
+                        disabled={deletingId === ad.id}
                         onClick={() => deleteAd(ad.id)}
-                        className="rounded-xl bg-red-500 py-2 text-[11px] font-black text-white"
+                        className="rounded-xl bg-red-500 py-2 text-[11px] font-black text-white disabled:opacity-50"
                       >
-                        삭제
+                        {deletingId === ad.id ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   )}
