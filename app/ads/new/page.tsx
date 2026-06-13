@@ -14,6 +14,10 @@ export default function NewAdPage() {
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
 
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const [findingGps, setFindingGps] = useState(false);
+
   const [imageFiles, setImageFiles] = useState<FileList | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
 
@@ -46,6 +50,55 @@ export default function NewAdPage() {
     }
 
     setVideoPreview(URL.createObjectURL(file));
+  }
+
+  async function geocodeAddress(address: string) {
+    if (!address.trim()) {
+      return { lat: null, lng: null };
+    }
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          address
+        )}&limit=1`
+      );
+
+      const data = await res.json();
+
+      if (!Array.isArray(data) || data.length === 0) {
+        return { lat: null, lng: null };
+      }
+
+      return {
+        lat: Number(data[0].lat),
+        lng: Number(data[0].lon),
+      };
+    } catch {
+      return { lat: null, lng: null };
+    }
+  }
+
+  async function handleFindGps() {
+    if (!location.trim()) {
+      alert("주소 또는 지역을 입력하세요.");
+      return;
+    }
+
+    setFindingGps(true);
+
+    const coords = await geocodeAddress(location);
+
+    setFindingGps(false);
+
+    if (coords.lat === null || coords.lng === null) {
+      alert("위도/경도를 찾을 수 없습니다. 주소를 더 정확히 입력하세요.");
+      return;
+    }
+
+    setLat(coords.lat);
+    setLng(coords.lng);
+    alert("위도/경도가 입력되었습니다.");
   }
 
   async function uploadImages(userId: string) {
@@ -107,21 +160,32 @@ export default function NewAdPage() {
         return;
       }
 
+      let finalLat = lat;
+      let finalLng = lng;
+
+      if (location.trim() && (finalLat === null || finalLng === null)) {
+        const coords = await geocodeAddress(location);
+        finalLat = coords.lat;
+        finalLng = coords.lng;
+      }
+
       const imageUrls = await uploadImages(user.id);
       const videoUrl = await uploadVideo(user.id);
 
       const { error } = await supabase.from("ads").insert({
-		  user_id: user.id,
-		  title,
-		  description,
-		  category,
-		  location,
-		  phone,
-		  images: imageUrls,
-		  video_url: videoUrl,
-		  status: "active",
-		  display_order: 999,
-		});
+        user_id: user.id,
+        title: title.trim(),
+        description: description.trim() || null,
+        category: category.trim() || null,
+        location: location.trim() || null,
+        phone: phone.trim() || null,
+        lat: finalLat,
+        lng: finalLng,
+        images: imageUrls,
+        video_url: videoUrl,
+        status: "active",
+        display_order: 999,
+      });
 
       if (error) throw error;
 
@@ -164,12 +228,37 @@ export default function NewAdPage() {
             className="w-full rounded-2xl border p-3 text-sm"
           />
 
-          <input
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="지역 예: Cary, Raleigh"
-            className="w-full rounded-2xl border p-3 text-sm"
-          />
+          <div>
+            <div className="flex gap-2">
+              <input
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  setLat(null);
+                  setLng(null);
+                }}
+                placeholder="주소 예: 123 Main St, Cary, NC"
+                className="flex-1 rounded-2xl border p-3 text-sm"
+              />
+
+              <button
+                type="button"
+                onClick={handleFindGps}
+                disabled={findingGps}
+                className="rounded-2xl bg-[#172033] px-4 text-xs font-black text-white disabled:opacity-50"
+              >
+                {findingGps ? "찾는 중" : "GPS"}
+              </button>
+            </div>
+
+            {(lat !== null && lng !== null) && (
+              <div className="mt-2 rounded-2xl bg-green-50 p-3 text-xs font-bold text-green-700">
+                Latitude: {lat}
+                <br />
+                Longitude: {lng}
+              </div>
+            )}
+          </div>
 
           <input
             value={phone}
