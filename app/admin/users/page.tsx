@@ -5,9 +5,6 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-export const dynamic = "force-dynamic";
-
-
 
 type UserProfile = {
   id: string;
@@ -33,6 +30,7 @@ export default function AdminUsersPage() {
     const { data, error } = await supabase
       .from("profiles")
       .select("id,email,role,owner_status,business_name,phone,created_at")
+      .neq("owner_status", "disabled")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -64,14 +62,22 @@ export default function AdminUsersPage() {
     );
   }
 
-  async function deleteProfile(id: string, email: string | null) {
+  async function disableProfile(id: string, email: string | null) {
     const ok = window.confirm(
-      `Delete this profile?\n\n${email || id}\n\nAuth user account may still remain in Supabase Auth.`
+      `Disable this member?\n\n${
+        email || id
+      }\n\nThis will hide this member from the admin list.`
     );
 
     if (!ok) return;
 
-    const { error } = await supabase.from("profiles").delete().eq("id", id);
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        role: "user",
+        owner_status: "disabled",
+      })
+      .eq("id", id);
 
     if (error) {
       alert(error.message);
@@ -120,7 +126,7 @@ export default function AdminUsersPage() {
                         {user.email || "No email"}
                       </h2>
 
-                      <p className="mt-1 text-xs text-gray-400">
+                      <p className="mt-1 break-all text-xs text-gray-400">
                         ID: {user.id}
                       </p>
                     </div>
@@ -180,10 +186,10 @@ export default function AdminUsersPage() {
                     </button>
 
                     <button
-                      onClick={() => deleteProfile(user.id, user.email)}
+                      onClick={() => disableProfile(user.id, user.email)}
                       className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white"
                     >
-                      Delete
+                      Disable
                     </button>
                   </div>
                 </div>
