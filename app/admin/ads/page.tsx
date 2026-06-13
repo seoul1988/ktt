@@ -6,12 +6,16 @@ import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 
 type Ad = {
-  id: string;
+  id: number;
+  owner_id: string | null;
+  user_id: string | null;
   title: string | null;
   description: string | null;
-  image_url: string | null;
+  category: string | null;
+  location: string | null;
+  phone: string | null;
+  images: string[] | null;
   video_url: string | null;
-  link_url: string | null;
   status: string | null;
   created_at: string | null;
   display_order: number | null;
@@ -31,7 +35,7 @@ export default function AdminAdsPage() {
     const { data, error } = await supabase
       .from("ads")
       .select(
-        "id,title,description,image_url,video_url,link_url,status,created_at,display_order"
+        "id,owner_id,user_id,title,description,category,location,phone,images,video_url,status,created_at,display_order"
       )
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: false });
@@ -46,7 +50,7 @@ export default function AdminAdsPage() {
     setLoading(false);
   }
 
-  async function changeDisplayOrder(id: string, displayOrder: number) {
+  async function changeDisplayOrder(id: number, displayOrder: number) {
     const { error } = await supabase
       .from("ads")
       .update({ display_order: displayOrder })
@@ -69,7 +73,7 @@ export default function AdminAdsPage() {
     );
   }
 
-  async function changeStatus(id: string, status: "active" | "hidden") {
+  async function changeStatus(id: number, status: "active" | "hidden") {
     const { error } = await supabase
       .from("ads")
       .update({ status })
@@ -85,7 +89,7 @@ export default function AdminAdsPage() {
     );
   }
 
-  async function deleteAd(id: string) {
+  async function deleteAd(id: number) {
     const ok = window.confirm("Delete this ad?");
     if (!ok) return;
 
@@ -126,11 +130,19 @@ export default function AdminAdsPage() {
             {ads.map((ad) => {
               const isActive = (ad.status || "active") === "active";
 
+              const cleanImages = Array.isArray(ad.images)
+                ? ad.images.filter(
+                    (img) => typeof img === "string" && img.trim() !== ""
+                  )
+                : [];
+
+              const hasImage = cleanImages.length > 0;
+
               return (
                 <div key={ad.id} className="rounded-3xl bg-white p-4 shadow">
-                  {ad.image_url && (
+                  {hasImage && (
                     <img
-                      src={ad.image_url}
+                      src={cleanImages[0]}
                       alt={ad.title || "Ad"}
                       className="mb-3 h-40 w-full rounded-2xl object-cover"
                     />
@@ -150,20 +162,28 @@ export default function AdminAdsPage() {
                         {ad.title || "Untitled Ad"}
                       </h2>
 
+                      {ad.category && (
+                        <p className="mt-1 text-xs font-black text-[#C2410C]">
+                          {ad.category}
+                        </p>
+                      )}
+
+                      {ad.location && (
+                        <p className="mt-1 text-sm text-gray-600">
+                          Location: {ad.location}
+                        </p>
+                      )}
+
+                      {ad.phone && (
+                        <p className="mt-1 text-sm text-gray-600">
+                          Phone: {ad.phone}
+                        </p>
+                      )}
+
                       {ad.description && (
                         <p className="mt-1 text-sm text-gray-600">
                           {ad.description}
                         </p>
-                      )}
-
-                      {ad.link_url && (
-                        <a
-                          href={ad.link_url}
-                          target="_blank"
-                          className="mt-2 block text-xs font-bold text-blue-600"
-                        >
-                          Open Link
-                        </a>
                       )}
 
                       {ad.created_at && (
