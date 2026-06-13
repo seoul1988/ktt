@@ -113,20 +113,15 @@ function getDetailHref(
   businessId: number,
   communityMode: boolean
 ) {
-  if (
-    communityMode &&
-    (spot.source_type === "marketplace" || spot.type === "marketplace")
-  ) {
-    return `/community/market/${
-      spot.original_id || spot.marketplace_id || spot.id
-    }?from=community-map`;
+  if (communityMode && (spot.source_type === "marketplace" || spot.type === "marketplace")) {
+    return `/community/market/${spot.original_id || spot.marketplace_id || spot.id}`;
   }
 
   if (communityMode) {
-    return `/business/${businessId}?from=community-map`;
+    return `/business/${businessId}?from=community`;
   }
 
-  return `/business/${businessId}?from=map`;
+  return `/business/${businessId}`;
 }
 
 function milesBetween(a: [number, number], b: [number, number]) {
@@ -171,22 +166,24 @@ function getOpenStatus(spot: Spot) {
     timeZone: "America/New_York",
   }).format(now);
 
-  const currentMinutes = now
-    .toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "America/New_York",
-    })
-    .split(":")
-    .map(Number)
-    .reduce((h, m) => h * 60 + m);
+  const currentMinutes =
+    now
+      .toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "America/New_York",
+      })
+      .split(":")
+      .map(Number)
+      .reduce((h, m) => h * 60 + m);
 
   const line = String(spot.hours || "")
     .split("\n")
     .find((v) => v.startsWith(todayShort));
 
   if (!line) return { text: "Closed" };
+
   if (line.includes("Closed")) return { text: "Closed Today" };
 
   const mainPart = line.split("/ Break")[0].replace(todayShort, "").trim();
@@ -286,6 +283,7 @@ export default function BusinessMap({
   const [myRole, setMyRole] = useState<string | null>(role);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
+  const cardScrollRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
 
   const storageKey = `${MAP_STATE_KEY}-${communityMode ? "community" : activeNav}`;
@@ -352,9 +350,17 @@ export default function BusinessMap({
     try {
       const parsed = JSON.parse(saved);
 
-      if (typeof parsed.search === "string") setSearch(parsed.search);
-      if (parsed.selectedCategory) setSelectedCategory(parsed.selectedCategory);
-      if (parsed.selectedSpotKey) setSelectedSpotKey(parsed.selectedSpotKey);
+      if (typeof parsed.search === "string") {
+        setSearch(parsed.search);
+      }
+
+      if (parsed.selectedCategory) {
+        setSelectedCategory(parsed.selectedCategory);
+      }
+
+      if (parsed.selectedSpotKey) {
+        setSelectedSpotKey(parsed.selectedSpotKey);
+      }
 
       setCategoryPanelOpen(false);
       setShowCards(true);
@@ -502,6 +508,7 @@ export default function BusinessMap({
     if (cardSpots.length === 0) return;
 
     const exists = cardSpots.some((spot) => getSpotKey(spot) === selectedSpotKey);
+
     if (!exists) return;
 
     restoredRef.current = true;
@@ -565,7 +572,11 @@ export default function BusinessMap({
         .eq("business_id", businessId)
         .eq("user_id", user.id);
 
-      setLikedIds((p) => ({ ...p, [businessId]: false }));
+      setLikedIds((p) => ({
+        ...p,
+        [businessId]: false,
+      }));
+
       setLikeCounts((p) => ({
         ...p,
         [businessId]: Math.max((p[businessId] || 1) - 1, 0),
@@ -576,7 +587,11 @@ export default function BusinessMap({
         user_id: user.id,
       });
 
-      setLikedIds((p) => ({ ...p, [businessId]: true }));
+      setLikedIds((p) => ({
+        ...p,
+        [businessId]: true,
+      }));
+
       setLikeCounts((p) => ({
         ...p,
         [businessId]: (p[businessId] || 0) + 1,
@@ -804,6 +819,7 @@ export default function BusinessMap({
       </MapContainer>
 
       <div
+        ref={cardScrollRef}
         onScroll={handleScroll}
         className={`fixed left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 ${
           showCards
