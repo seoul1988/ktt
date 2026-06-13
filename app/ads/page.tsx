@@ -34,16 +34,6 @@ function statusClass(status: string | null) {
   return "bg-green-600";
 }
 
-function cleanPhone(phone: string) {
-  return phone.replace(/[^\d+]/g, "");
-}
-
-function getMapUrl(location: string) {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    location
-  )}`;
-}
-
 export default function AdsPage() {
   const [ads, setAds] = useState<AdItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -119,69 +109,67 @@ export default function AdsPage() {
       prev.map((ad) => (ad.id === id ? { ...ad, status: nextStatus } : ad))
     );
   }
+function getStoragePathFromPublicUrl(url: string, bucketName: string) {
+  const marker = `/storage/v1/object/public/${bucketName}/`;
+  const index = url.indexOf(marker);
 
-  function getStoragePathFromPublicUrl(url: string, bucketName: string) {
-    const marker = `/storage/v1/object/public/${bucketName}/`;
-    const index = url.indexOf(marker);
+  if (index === -1) return null;
 
-    if (index === -1) return null;
-
-    return decodeURIComponent(url.substring(index + marker.length));
-  }
-
+  return decodeURIComponent(url.substring(index + marker.length));
+}
   async function deleteAd(ad: AdItem) {
-    const ok = window.confirm("Delete this ad and all media files?");
-    if (!ok) return;
+  const ok = window.confirm("Delete this ad and all media files?");
+  if (!ok) return;
 
-    setDeletingId(ad.id);
+  setDeletingId(ad.id);
 
-    const imagePaths = Array.isArray(ad.images)
-      ? (ad.images
+  const imagePaths =
+    Array.isArray(ad.images)
+      ? ad.images
           .map((url) => getStoragePathFromPublicUrl(url, "ads"))
-          .filter(Boolean) as string[])
+          .filter(Boolean) as string[]
       : [];
 
-    const videoPath = ad.video_url
-      ? getStoragePathFromPublicUrl(ad.video_url, "ads")
-      : null;
+  const videoPath = ad.video_url
+    ? getStoragePathFromPublicUrl(ad.video_url, "ads")
+    : null;
 
-    const mediaPaths = [...imagePaths, ...(videoPath ? [videoPath] : [])];
+  const mediaPaths = [...imagePaths, ...(videoPath ? [videoPath] : [])];
 
-    if (mediaPaths.length > 0) {
-      const { error: storageError } = await supabase.storage
-        .from("ads")
-        .remove(mediaPaths);
-
-      if (storageError) {
-        console.error("Storage delete error:", storageError);
-        alert("Media delete failed: " + storageError.message);
-        setDeletingId(null);
-        return;
-      }
-    }
-
-    const { data, error } = await supabase
+  if (mediaPaths.length > 0) {
+    const { error: storageError } = await supabase.storage
       .from("ads")
-      .delete()
-      .eq("id", ad.id)
-      .select("id");
+      .remove(mediaPaths);
 
-    setDeletingId(null);
-
-    if (error) {
-      console.error("Delete ad error:", error);
-      alert("Failed to delete ad: " + error.message);
+    if (storageError) {
+      console.error("Storage delete error:", storageError);
+      alert("Media delete failed: " + storageError.message);
+      setDeletingId(null);
       return;
     }
-
-    if (!data || data.length === 0) {
-      alert("Delete did not complete. Check Supabase RLS policy.");
-      return;
-    }
-
-    setAds((prev) => prev.filter((item) => item.id !== ad.id));
   }
 
+  const { data, error } = await supabase
+    .from("ads")
+    .delete()
+    .eq("id", ad.id)
+    .select("id");
+
+  setDeletingId(null);
+
+  if (error) {
+    console.error("Delete ad error:", error);
+    alert("Failed to delete ad: " + error.message);
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    alert("Delete did not complete. Check Supabase RLS policy.");
+    return;
+  }
+
+  setAds((prev) => prev.filter((item) => item.id !== ad.id));
+}
   if (loading) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
@@ -242,12 +230,6 @@ export default function AdsPage() {
               const canManage =
                 Boolean(currentUserId && ad.user_id === currentUserId) ||
                 isAdmin;
-
-              const hasPhone =
-                typeof ad.phone === "string" && ad.phone.trim() !== "";
-
-              const hasLocation =
-                typeof ad.location === "string" && ad.location.trim() !== "";
 
               return (
                 <div
@@ -318,6 +300,12 @@ export default function AdsPage() {
                         )}
                       </div>
 
+                      {ad.phone && (
+                        <p className="mt-1 text-xs font-bold text-[#C2410C]">
+                          {ad.phone}
+                        </p>
+                      )}
+
                       {ad.description && (
                         <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600">
                           {ad.description}
@@ -325,30 +313,6 @@ export default function AdsPage() {
                       )}
                     </div>
                   </Link>
-
-                  {(hasPhone || hasLocation) && (
-                    <div className="grid grid-cols-2 gap-1 border-t px-2 py-2">
-                      {hasPhone && (
-                        <a
-                          href={`tel:${cleanPhone(ad.phone || "")}`}
-                          className="rounded-xl bg-green-600 py-2 text-center text-[11px] font-black text-white"
-                        >
-                          📞 Call
-                        </a>
-                      )}
-
-                      {hasLocation && (
-                        <a
-                          href={getMapUrl(ad.location || "")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-xl bg-orange-600 py-2 text-center text-[11px] font-black text-white"
-                        >
-                          🧭 Directions
-                        </a>
-                      )}
-                    </div>
-                  )}
 
                   {canManage && (
                     <div className="grid grid-cols-3 gap-1 border-t p-2">
@@ -374,7 +338,7 @@ export default function AdsPage() {
                       <button
                         type="button"
                         disabled={deletingId === ad.id}
-                        onClick={() => deleteAd(ad)}
+                        onClick={() => deleteAd(ad.id)}
                         className="rounded-xl bg-red-500 py-2 text-[11px] font-black text-white disabled:opacity-50"
                       >
                         {deletingId === ad.id ? "Deleting..." : "Delete"}
