@@ -61,6 +61,16 @@ export default function EditCommunityDealPage() {
     }
   }, [checkingUser]);
 
+  function getFirstImage(data: any) {
+    if (data?.image_url) return data.image_url;
+
+    if (Array.isArray(data?.images) && data.images.length > 0) {
+      return data.images[0];
+    }
+
+    return "";
+  }
+
   function initAutocomplete() {
     if (!addressInputRef.current) return;
     if (!window.google?.maps?.places) return;
@@ -131,7 +141,7 @@ export default function EditCommunityDealPage() {
     setPhone(data.phone || "");
     setAddress(data.address || "");
     setWebsite(data.website || "");
-    setImageUrl(data.image_url || "");
+    setImageUrl(getFirstImage(data));
     setStartDate(data.start_date || "");
     setEndDate(data.end_date || "");
     setLat(data.lat ?? null);
@@ -142,7 +152,6 @@ export default function EditCommunityDealPage() {
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-
     e.target.value = "";
 
     if (!file) return;
@@ -182,52 +191,64 @@ export default function EditCommunityDealPage() {
 
       const { data: updatedDeal, error: dbError } = await supabase
         .from("deals")
-        .update({ image_url: publicUrl })
+        .update({
+          image_url: publicUrl,
+          images: [publicUrl],
+        })
         .eq("id", id)
         .eq("user_id", userId)
         .eq("deal_scope", "community")
-        .select("id,image_url")
+        .select("id,image_url,images")
         .single();
 
       if (dbError) throw dbError;
 
-      if (!updatedDeal) {
-        alert("이미지는 업로드됐지만 DB 저장이 안 됐습니다. RLS를 확인하세요.");
-        return;
-      }
-
-      setImageUrl(updatedDeal.image_url || publicUrl);
+      setImageUrl(getFirstImage(updatedDeal) || publicUrl);
       alert("이미지가 변경되었습니다.");
     } catch (err: any) {
       console.error("image upload or db update error:", err);
-      alert(
-        `이미지 변경 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
-      );
+      alert(err?.message || "이미지 변경 오류");
     } finally {
       setUploading(false);
     }
   }
 
   async function handleRemoveImage() {
-  if (!confirm("이미지를 삭제하시겠습니까?")) return;
+    if (!confirm("이미지를 삭제하시겠습니까?")) return;
 
-  const { data, error } = await supabase
-    .from("deals")
-    .update({ image_url: null })
-    .eq("id", id)
-    .select();
+    if (!userId || ownerId !== userId) {
+      alert("삭제 권한이 없습니다.");
+      return;
+    }
 
-  console.log("DELETE IMAGE RESULT", data, error);
+    try {
+      setDeletingImage(true);
 
-  if (error) {
-    alert(error.message);
-    return;
+      const { data, error } = await supabase
+        .from("deals")
+        .update({
+          image_url: null,
+          images: [],
+        })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .eq("deal_scope", "community")
+        .select("id,image_url,images")
+        .single();
+
+      console.log("DELETE IMAGE RESULT", data, error);
+
+      if (error) throw error;
+
+      setImageUrl("");
+      alert("이미지가 삭제되었습니다.");
+    } catch (err: any) {
+      console.error("community deal image delete error:", err);
+      alert(err?.message || "이미지 삭제 오류");
+    } finally {
+      setDeletingImage(false);
+    }
   }
-
-  setImageUrl("");
-}
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
@@ -273,6 +294,7 @@ export default function EditCommunityDealPage() {
           lng,
           website: website.trim() || null,
           image_url: imageUrl || null,
+          images: imageUrl ? [imageUrl] : [],
           start_date: startDate || null,
           end_date: endDate,
           active: true,
@@ -295,11 +317,7 @@ export default function EditCommunityDealPage() {
       router.push(`/community/deals/${id}`);
     } catch (err: any) {
       console.error("community deal update error:", err);
-      alert(
-        `딜 수정 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
-      );
+      alert(err?.message || "딜 수정 오류");
     } finally {
       setLoading(false);
     }
@@ -328,11 +346,7 @@ export default function EditCommunityDealPage() {
       router.push("/community/deals");
     } catch (err: any) {
       console.error("community deal delete error:", err);
-      alert(
-        `딜 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
-      );
+      alert(err?.message || "딜 삭제 오류");
     } finally {
       setLoading(false);
     }
@@ -350,21 +364,21 @@ export default function EditCommunityDealPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="mb-6">
-  <div className="flex items-center gap-3">
-    <Link
-      href={`/community/deals/${id}`}
-      className="text-sm font-black text-[#C4483A]"
-    >
-      ← Back
-    </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/community/deals/${id}`}
+              className="text-sm font-black text-[#C4483A]"
+            >
+              ← Back
+            </Link>
 
-    <span className="text-sm font-black text-[#C4483A]">
-      EDIT COMMUNITY DEAL
-    </span>
-  </div>
+            <span className="text-sm font-black text-[#C4483A]">
+              EDIT COMMUNITY DEAL
+            </span>
+          </div>
 
-  <h1 className="mt-2 text-3xl font-black tracking-tight">딜 수정</h1>
-</div>
+          <h1 className="mt-2 text-3xl font-black tracking-tight">딜 수정</h1>
+        </div>
 
         <form
           onSubmit={handleUpdate}
@@ -494,7 +508,7 @@ export default function EditCommunityDealPage() {
                   type="button"
                   onClick={handleRemoveImage}
                   disabled={deletingImage || loading || uploading}
-                  className="mt-3 rounded-full bg-gray-200 px-3 py-2 text-xs font-black text-[#172033] disabled:opacity-60"
+                  className="mt-3 rounded-full bg-gray-200 px-3 py-2 text-xs font-semibold text-[#172033] disabled:opacity-60"
                 >
                   {deletingImage ? "삭제 중..." : "이미지 삭제"}
                 </button>
@@ -506,22 +520,24 @@ export default function EditCommunityDealPage() {
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={loading || uploading || deletingImage}
-            className="w-full rounded-2xl bg-[#C4483A] px-5 py-4 text-sm font-black text-white shadow-sm disabled:opacity-60"
-          >
-            {loading ? "수정 중..." : "수정 저장"}
-          </button>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button
+              type="submit"
+              disabled={loading || uploading || deletingImage}
+              className="rounded-xl bg-[#C4483A] px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-60"
+            >
+              {loading ? "수정 중..." : "수정 저장"}
+            </button>
 
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={loading || uploading || deletingImage}
-            className="w-full rounded-2xl bg-gray-200 px-5 py-4 text-sm font-black text-[#172033] disabled:opacity-60"
-          >
-            삭제
-          </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={loading || uploading || deletingImage}
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+            >
+              삭제
+            </button>
+          </div>
         </form>
       </section>
 
