@@ -109,14 +109,16 @@ export default function AdsPage() {
       prev.map((ad) => (ad.id === id ? { ...ad, status: nextStatus } : ad))
     );
   }
-function getStoragePathFromPublicUrl(url: string, bucketName: string) {
-  const marker = `/storage/v1/object/public/${bucketName}/`;
-  const index = url.indexOf(marker);
 
-  if (index === -1) return null;
+  function getStoragePathFromPublicUrl(url: string, bucketName: string) {
+    const marker = `/storage/v1/object/public/${bucketName}/`;
+    const index = url.indexOf(marker);
 
-  return decodeURIComponent(url.substring(index + marker.length));
-}
+    if (index === -1) return null;
+
+    return decodeURIComponent(url.substring(index + marker.length));
+  }
+
   async function deleteAd(id: number) {
     const ok = window.confirm("Delete this ad?");
     if (!ok) return;
@@ -188,7 +190,7 @@ function getStoragePathFromPublicUrl(url: string, bucketName: string) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 items-stretch gap-3">
             {ads.map((ad) => {
               const cleanImages = Array.isArray(ad.images)
                 ? ad.images.filter(
@@ -211,13 +213,13 @@ function getStoragePathFromPublicUrl(url: string, bucketName: string) {
               return (
                 <div
                   key={ad.id}
-                  className={`overflow-hidden rounded-2xl bg-white shadow ${
+                  className={`flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow ${
                     ad.status === "expired" || ad.status === "hidden"
                       ? "opacity-70"
                       : ""
                   }`}
                 >
-                  <Link href={`/ads/${ad.id}`} className="block">
+                  <Link href={`/ads/${ad.id}`} className="flex flex-1 flex-col">
                     {hasMedia && (
                       <div className="relative h-32 bg-black">
                         {hasVideo ? (
@@ -250,7 +252,7 @@ function getStoragePathFromPublicUrl(url: string, bucketName: string) {
                       </div>
                     )}
 
-                    <div className="p-3">
+                    <div className="flex flex-1 flex-col p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span
                           className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
@@ -277,22 +279,32 @@ function getStoragePathFromPublicUrl(url: string, bucketName: string) {
                         )}
                       </div>
 
-                      {ad.phone && (
-                        <p className="mt-1 text-xs font-bold text-[#C2410C]">
-                          {ad.phone}
-                        </p>
-                      )}
+                      <div className="mt-1 min-h-[16px]">
+                        {ad.phone ? (
+                          <p className="text-xs font-bold text-[#C2410C]">
+                            {ad.phone}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-transparent">No phone</p>
+                        )}
+                      </div>
 
-                      {ad.description && (
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-600">
-                          {ad.description}
-                        </p>
-                      )}
+                      <div className="mt-2 min-h-[42px]">
+                        {ad.description ? (
+                          <p className="line-clamp-2 text-xs leading-5 text-gray-600">
+                            {ad.description}
+                          </p>
+                        ) : (
+                          <p className="text-xs leading-5 text-transparent">
+                            No description
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </Link>
 
                   {canManage && (
-                    <div className="grid grid-cols-3 gap-1 border-t p-2">
+                    <div className="mt-auto grid grid-cols-3 gap-1 border-t p-2">
                       <button
                         type="button"
                         onClick={() => toggleVisibility(ad.id, ad.status)}
