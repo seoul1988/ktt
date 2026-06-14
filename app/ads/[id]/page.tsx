@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import AdImageGallery from "./AdImageGallery";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -106,24 +107,7 @@ export default async function AdDetailPage({
           )}
 
           {!hasVideo && hasImage && (
-            <img
-              src={cleanImages[0]}
-              alt={ad.title}
-              className="max-h-[420px] w-full object-contain"
-            />
-          )}
-
-          {hasImage && cleanImages.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto p-3">
-              {cleanImages.map((img, index) => (
-                <img
-                  key={index}
-                  src={img}
-                  alt={`${ad.title}-${index}`}
-                  className="h-20 w-20 shrink-0 rounded-2xl object-cover"
-                />
-              ))}
-            </div>
+            <AdImageGallery images={cleanImages} title={ad.title} />
           )}
 
           <div className="p-5">
