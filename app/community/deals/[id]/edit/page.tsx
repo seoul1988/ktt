@@ -88,6 +88,15 @@ export default function EditCommunityDealPage() {
     });
   }
 
+  function getStoragePathFromPublicUrl(url: string) {
+    const marker = "/storage/v1/object/public/deal-images/";
+    const index = url.indexOf(marker);
+
+    if (index === -1) return null;
+
+    return url.substring(index + marker.length);
+  }
+
   async function loadDeal() {
     setCheckingUser(true);
 
@@ -159,8 +168,12 @@ export default function EditCommunityDealPage() {
     try {
       setUploading(true);
 
+      const oldStoragePath = imageUrl
+        ? getStoragePathFromPublicUrl(imageUrl)
+        : null;
+
       const ext = file.name.split(".").pop() || "jpg";
-      const fileName = `community-deals/${id}/${Date.now()}-${Math.random()
+      const fileName = `community-deals/${Date.now()}-${Math.random()
         .toString(36)
         .slice(2)}.${ext}`;
 
@@ -179,20 +192,37 @@ export default function EditCommunityDealPage() {
 
       const publicUrl = publicUrlData.publicUrl;
 
-      const { error: dbError } = await supabase
+      const { data: updatedDeal, error: dbError } = await supabase
         .from("deals")
         .update({
           image_url: publicUrl,
         })
         .eq("id", id)
-        .eq("deal_scope", "community");
+        .eq("user_id", userId)
+        .eq("deal_scope", "community")
+        .select("id,image_url")
+        .single();
 
       console.log("IMAGE UPLOAD URL:", publicUrl);
-      console.log("IMAGE DB UPDATE ERROR:", dbError);
+      console.log("IMAGE DB UPDATE RESULT:", updatedDeal, dbError);
 
       if (dbError) throw dbError;
 
-      setImageUrl(publicUrl);
+      if (!updatedDeal) {
+        alert("이미지는 업로드됐지만 DB 저장이 안 됐습니다. RLS를 확인하세요.");
+        return;
+      }
+
+      if (oldStoragePath) {
+        const { error: oldDeleteError } = await supabase.storage
+          .from("deal-images")
+          .remove([oldStoragePath]);
+
+        console.log("OLD IMAGE DELETE PATH:", oldStoragePath);
+        console.log("OLD IMAGE DELETE ERROR:", oldDeleteError);
+      }
+
+      setImageUrl(updatedDeal.image_url || publicUrl);
       alert("이미지가 등록되었습니다.");
     } catch (err: any) {
       console.error("image upload error:", err);
@@ -217,22 +247,41 @@ export default function EditCommunityDealPage() {
     try {
       setDeletingImage(true);
 
-      const { error } = await supabase
+      const storagePath = imageUrl ? getStoragePathFromPublicUrl(imageUrl) : null;
+
+      const { data: updatedDeal, error: dbError } = await supabase
         .from("deals")
         .update({
           image_url: null,
         })
         .eq("id", id)
-        .eq("deal_scope", "community");
+        .eq("user_id", userId)
+        .eq("deal_scope", "community")
+        .select("id,image_url")
+        .single();
 
-      console.log("DELETE IMAGE ERROR:", error);
+      console.log("DB IMAGE DELETE RESULT:", updatedDeal, dbError);
 
-      if (error) throw error;
+      if (dbError) throw dbError;
+
+      if (!updatedDeal) {
+        alert("DB 수정된 데이터가 없습니다. RLS 정책을 확인하세요.");
+        return;
+      }
+
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("deal-images")
+          .remove([storagePath]);
+
+        console.log("STORAGE DELETE PATH:", storagePath);
+        console.log("STORAGE DELETE ERROR:", storageError);
+      }
 
       setImageUrl("");
       alert("이미지가 삭제되었습니다.");
     } catch (err: any) {
-      console.error("community deal image delete error:", err);
+      console.error("image delete error:", err);
       alert(
         `이미지 삭제 오류\n\n메시지: ${
           err?.message || "알 수 없는 오류"
@@ -274,7 +323,7 @@ export default function EditCommunityDealPage() {
     try {
       setLoading(true);
 
-      const { error } = await supabase
+      const { data: updatedDeal, error } = await supabase
         .from("deals")
         .update({
           title: title.trim(),
@@ -294,9 +343,17 @@ export default function EditCommunityDealPage() {
           deal_scope: "community",
         })
         .eq("id", id)
-        .eq("deal_scope", "community");
+        .eq("user_id", userId)
+        .eq("deal_scope", "community")
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      if (!updatedDeal) {
+        alert("DB 수정된 데이터가 없습니다. RLS 권한을 확인하세요.");
+        return;
+      }
 
       router.push(`/community/deals/${id}`);
     } catch (err: any) {
@@ -322,13 +379,32 @@ export default function EditCommunityDealPage() {
     try {
       setLoading(true);
 
-      const { error } = await supabase
+      const storagePath = imageUrl ? getStoragePathFromPublicUrl(imageUrl) : null;
+
+      const { data: deletedDeal, error } = await supabase
         .from("deals")
         .delete()
         .eq("id", id)
-        .eq("deal_scope", "community");
+        .eq("user_id", userId)
+        .eq("deal_scope", "community")
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      if (!deletedDeal) {
+        alert("삭제된 데이터가 없습니다. RLS 권한을 확인하세요.");
+        return;
+      }
+
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("deal-images")
+          .remove([storagePath]);
+
+        console.log("DEAL DELETE IMAGE PATH:", storagePath);
+        console.log("DEAL DELETE STORAGE ERROR:", storageError);
+      }
 
       router.push("/community/deals");
     } catch (err: any) {
