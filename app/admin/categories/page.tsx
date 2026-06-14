@@ -4,13 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+
 export const dynamic = "force-dynamic";
-
-
-
-
-
-
 
 type Category = {
   id: number;
@@ -277,7 +272,10 @@ export default function AdminCategoriesPage() {
                       </span>
 
                       <div className="min-w-0">
-                        <div className="truncate font-bold">{category.name}</div>
+                        <div className="truncate font-bold">
+                          {category.name}
+                        </div>
+
                         <div className="mt-1 text-[10px] font-bold text-gray-500">
                           {checkedMain && "📍 Main"}
                           {checkedMain && checkedCommunity && " • "}
@@ -286,10 +284,21 @@ export default function AdminCategoriesPage() {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => {
+                        window.location.href = `/admin/categories/${category.id}/edit`;
+                      }}
+                      className="flex-1 rounded-full bg-[#172033] px-3 py-2 text-[11px] font-bold text-white"
+                    >
+                      수정
+                    </button>
 
                     <button
                       onClick={() => deleteCategory(category)}
-                      className="shrink-0 rounded-full bg-red-500 px-2 py-1 text-[11px] font-bold text-white"
+                      className="flex-1 rounded-full bg-red-500 px-3 py-2 text-[11px] font-bold text-white"
                     >
                       삭제
                     </button>
