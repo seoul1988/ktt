@@ -211,45 +211,23 @@ export default function EditCommunityDealPage() {
   }
 
   async function handleRemoveImage() {
-    if (!confirm("이미지를 삭제하시겠습니까?")) return;
+  if (!confirm("이미지를 삭제하시겠습니까?")) return;
 
-    if (!userId || ownerId !== userId) {
-      alert("삭제 권한이 없습니다.");
-      return;
-    }
+  const { data, error } = await supabase
+    .from("deals")
+    .update({ image_url: null })
+    .eq("id", id)
+    .select();
 
-    try {
-      setDeletingImage(true);
+  console.log("DELETE IMAGE RESULT", data, error);
 
-      const { data: updatedDeal, error } = await supabase
-        .from("deals")
-        .update({ image_url: null })
-        .eq("id", id)
-        .eq("user_id", userId)
-        .eq("deal_scope", "community")
-        .select("id,image_url")
-        .single();
-
-      if (error) throw error;
-
-      if (!updatedDeal) {
-        alert("DB에서 수정된 데이터가 없습니다. RLS 권한을 확인하세요.");
-        return;
-      }
-
-      setImageUrl("");
-      alert("이미지가 DB에서 삭제되었습니다.");
-    } catch (err: any) {
-      console.error("community deal image delete error:", err);
-      alert(
-        `이미지 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
-      );
-    } finally {
-      setDeletingImage(false);
-    }
+  if (error) {
+    alert(error.message);
+    return;
   }
+
+  setImageUrl("");
+}
 
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
