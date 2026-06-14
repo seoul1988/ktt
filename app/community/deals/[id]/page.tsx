@@ -197,8 +197,7 @@ export default function CommunityDealDetailPage() {
                 <p>⏰ Ends {new Date(deal.end_date).toLocaleDateString()}</p>
               )}
 
-              {deal.phone && <p>📞 {deal.phone}</p>}
-              {deal.address && <p>📍 {deal.address}</p>}
+             
               {websiteUrl && <p>🌐 {websiteUrl}</p>}
             </div>
 
@@ -223,16 +222,7 @@ export default function CommunityDealDetailPage() {
                 </a>
               )}
 
-              {websiteUrl && (
-                <a
-                  href={websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="col-span-2 rounded-2xl bg-[#F4C95D] px-4 py-3 text-center text-sm font-black text-[#172033]"
-                >
-                  웹사이트 보기
-                </a>
-              )}
+           
             </div>
           </div>
         </div>
