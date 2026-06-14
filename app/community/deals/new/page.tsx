@@ -23,6 +23,8 @@ export default function NewCommunityDealPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [uploading, setUploading] = useState(false);
+const [imageUrl, setImageUrl] = useState("");
 
   useEffect(() => {
     checkUser();
@@ -232,12 +234,32 @@ export default function NewCommunityDealPage() {
             <label className="mb-1 block text-sm font-black">
               이미지 URL
             </label>
-            <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
-            />
+          <div>
+  <label className="mb-2 block text-sm font-black">
+    딜 이미지
+  </label>
+
+  <input
+    type="file"
+    accept="image/*"
+    onChange={handleImageUpload}
+    className="block w-full text-sm"
+  />
+
+  {uploading && (
+    <p className="mt-2 text-xs text-[#6B6257]">
+      업로드 중...
+    </p>
+  )}
+
+  {imageUrl && (
+    <img
+      src={imageUrl}
+      alt="preview"
+      className="mt-3 h-48 w-full rounded-2xl object-cover"
+    />
+  )}
+</div>
           </div>
 
           <button
