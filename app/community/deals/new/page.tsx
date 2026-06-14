@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
 
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 export default function NewCommunityDealPage() {
   const router = useRouter();
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,10 +31,56 @@ export default function NewCommunityDealPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
 
   useEffect(() => {
     checkUser();
   }, []);
+
+  useEffect(() => {
+    if (!addressInputRef.current) return;
+
+    const existingScript = document.getElementById("google-maps-script");
+
+    if (!existingScript) {
+      const script = document.createElement("script");
+      script.id = "google-maps-script";
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+      script.async = true;
+      script.onload = initAutocomplete;
+      document.body.appendChild(script);
+    } else {
+      initAutocomplete();
+    }
+  }, [checkingUser]);
+
+  function initAutocomplete() {
+    if (!addressInputRef.current) return;
+    if (!window.google?.maps?.places) return;
+
+    const autocomplete = new window.google.maps.places.Autocomplete(
+      addressInputRef.current,
+      {
+        types: ["address"],
+        componentRestrictions: { country: "us" },
+        fields: ["formatted_address", "geometry"],
+      }
+    );
+
+    autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+
+      if (!place.formatted_address || !place.geometry?.location) {
+        alert("주소를 목록에서 선택해주세요.");
+        return;
+      }
+
+      setAddress(place.formatted_address);
+      setLat(place.geometry.location.lat());
+      setLng(place.geometry.location.lng());
+    });
+  }
 
   async function checkUser() {
     const {
@@ -108,6 +161,11 @@ export default function NewCommunityDealPage() {
       return;
     }
 
+    if (address.trim() && (!lat || !lng)) {
+      alert("주소는 입력 후 Google 목록에서 선택해주세요.");
+      return;
+    }
+
     setLoading(true);
 
     const { error } = await supabase.from("deals").insert({
@@ -118,6 +176,8 @@ export default function NewCommunityDealPage() {
       discount_text: discountText.trim(),
       phone: phone.trim() || null,
       address: address.trim() || null,
+      lat,
+      lng,
       website: website.trim() || null,
       image_url: imageUrl || null,
       start_date: startDate || null,
@@ -130,16 +190,16 @@ export default function NewCommunityDealPage() {
     setLoading(false);
 
     if (error) {
-  console.error("community deal insert error:", error);
+      console.error("community deal insert error:", error);
 
-  alert(
-    `딜 등록 오류\n\n메시지: ${error.message}\n코드: ${error.code || "없음"}\n상세: ${
-      error.details || "없음"
-    }`
-  );
+      alert(
+        `딜 등록 오류\n\n메시지: ${error.message}\n코드: ${
+          error.code || "없음"
+        }\n상세: ${error.details || "없음"}`
+      );
 
-  return;
-}
+      return;
+    }
 
     router.push("/community");
   }
@@ -260,11 +320,22 @@ export default function NewCommunityDealPage() {
           <div>
             <label className="mb-1 block text-sm font-black">주소</label>
             <input
+              ref={addressInputRef}
               value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="예: Cary, NC"
+              onChange={(e) => {
+                setAddress(e.target.value);
+                setLat(null);
+                setLng(null);
+              }}
+              placeholder="주소를 입력하고 Google 목록에서 선택하세요"
               className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
             />
+
+            {lat && lng && (
+              <p className="mt-1 text-xs font-black text-green-700">
+                위치 선택 완료
+              </p>
+            )}
           </div>
 
           <div>
