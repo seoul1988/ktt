@@ -130,10 +130,16 @@ export default function NewCommunityDealPage() {
     setLoading(false);
 
     if (error) {
-      console.error("community deal insert error:", error);
-      alert("딜 등록 중 오류가 발생했습니다.");
-      return;
-    }
+  console.error("community deal insert error:", error);
+
+  alert(
+    `딜 등록 오류\n\n메시지: ${error.message}\n코드: ${error.code || "없음"}\n상세: ${
+      error.details || "없음"
+    }`
+  );
+
+  return;
+}
 
     router.push("/community");
   }
