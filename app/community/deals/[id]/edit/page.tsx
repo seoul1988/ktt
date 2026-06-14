@@ -61,16 +61,6 @@ export default function EditCommunityDealPage() {
     }
   }, [checkingUser]);
 
-  function getFirstImage(data: any) {
-    if (data?.image_url) return data.image_url;
-
-    if (Array.isArray(data?.images) && data.images.length > 0) {
-      return data.images[0];
-    }
-
-    return "";
-  }
-
   function initAutocomplete() {
     if (!addressInputRef.current) return;
     if (!window.google?.maps?.places) return;
@@ -141,7 +131,7 @@ export default function EditCommunityDealPage() {
     setPhone(data.phone || "");
     setAddress(data.address || "");
     setWebsite(data.website || "");
-    setImageUrl(getFirstImage(data));
+    setImageUrl(data.image_url || "");
     setStartDate(data.start_date || "");
     setEndDate(data.end_date || "");
     setLat(data.lat ?? null);
@@ -193,21 +183,31 @@ export default function EditCommunityDealPage() {
         .from("deals")
         .update({
           image_url: publicUrl,
-          images: [publicUrl],
         })
         .eq("id", id)
         .eq("user_id", userId)
         .eq("deal_scope", "community")
-        .select("id,image_url,images")
+        .select("id,image_url")
         .single();
+
+      console.log("UPLOAD IMAGE RESULT", updatedDeal, dbError);
 
       if (dbError) throw dbError;
 
-      setImageUrl(getFirstImage(updatedDeal) || publicUrl);
+      if (!updatedDeal) {
+        alert("이미지는 업로드됐지만 DB 저장이 안 됐습니다. RLS를 확인하세요.");
+        return;
+      }
+
+      setImageUrl(updatedDeal.image_url || publicUrl);
       alert("이미지가 변경되었습니다.");
     } catch (err: any) {
       console.error("image upload or db update error:", err);
-      alert(err?.message || "이미지 변경 오류");
+      alert(
+        `이미지 변경 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
+          err?.code || "없음"
+        }\n상세: ${err?.details || "없음"}`
+      );
     } finally {
       setUploading(false);
     }
@@ -228,23 +228,31 @@ export default function EditCommunityDealPage() {
         .from("deals")
         .update({
           image_url: null,
-          images: [],
         })
         .eq("id", id)
         .eq("user_id", userId)
         .eq("deal_scope", "community")
-        .select("id,image_url,images")
+        .select("id,image_url")
         .single();
 
       console.log("DELETE IMAGE RESULT", data, error);
 
       if (error) throw error;
 
+      if (!data) {
+        alert("DB 수정된 데이터가 없습니다. RLS 정책을 확인하세요.");
+        return;
+      }
+
       setImageUrl("");
       alert("이미지가 삭제되었습니다.");
     } catch (err: any) {
       console.error("community deal image delete error:", err);
-      alert(err?.message || "이미지 삭제 오류");
+      alert(
+        `이미지 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
+          err?.code || "없음"
+        }\n상세: ${err?.details || "없음"}`
+      );
     } finally {
       setDeletingImage(false);
     }
@@ -294,7 +302,6 @@ export default function EditCommunityDealPage() {
           lng,
           website: website.trim() || null,
           image_url: imageUrl || null,
-          images: imageUrl ? [imageUrl] : [],
           start_date: startDate || null,
           end_date: endDate,
           active: true,
@@ -317,7 +324,11 @@ export default function EditCommunityDealPage() {
       router.push(`/community/deals/${id}`);
     } catch (err: any) {
       console.error("community deal update error:", err);
-      alert(err?.message || "딜 수정 오류");
+      alert(
+        `딜 수정 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
+          err?.code || "없음"
+        }\n상세: ${err?.details || "없음"}`
+      );
     } finally {
       setLoading(false);
     }
@@ -346,7 +357,11 @@ export default function EditCommunityDealPage() {
       router.push("/community/deals");
     } catch (err: any) {
       console.error("community deal delete error:", err);
-      alert(err?.message || "딜 삭제 오류");
+      alert(
+        `딜 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
+          err?.code || "없음"
+        }\n상세: ${err?.details || "없음"}`
+      );
     } finally {
       setLoading(false);
     }
