@@ -33,22 +33,24 @@ export default async function CommunityDealDetailPage({ params }: PageProps) {
         )}`
       : null;
 
+  const websiteUrl =
+    deal.website &&
+    (String(deal.website).startsWith("http://") ||
+      String(deal.website).startsWith("https://"))
+      ? deal.website
+      : deal.website
+      ? `https://${deal.website}`
+      : null;
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-5 flex items-center justify-between">
+        <div className="mb-5">
           <Link
             href="/community/deals"
             className="text-sm font-black text-[#C4483A]"
           >
             ← Back
-          </Link>
-
-          <Link
-            href={`/community/deals/${deal.id}/edit`}
-            className="rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white"
-          >
-            수정
           </Link>
         </div>
 
@@ -78,9 +80,18 @@ export default async function CommunityDealDetailPage({ params }: PageProps) {
           </div>
 
           <div className="p-5">
-            <h1 className="text-3xl font-black leading-tight">
-              {deal.title || "Community Deal"}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="min-w-0 flex-1 text-3xl font-black leading-tight">
+                {deal.title || "Community Deal"}
+              </h1>
+
+              <Link
+                href={`/community/deals/${deal.id}/edit`}
+                className="shrink-0 rounded-full bg-[#172033] px-3 py-2 text-xs font-black text-white"
+              >
+                ✏ 수정
+              </Link>
+            </div>
 
             <p className="mt-2 text-base font-bold text-[#6B6257]">
               {deal.business_name || "Local Business"}
@@ -95,8 +106,7 @@ export default async function CommunityDealDetailPage({ params }: PageProps) {
             <div className="mt-6 space-y-2 text-sm font-bold text-[#6B6257]">
               {deal.end_date && (
                 <p>
-                  ⏰ Ends{" "}
-                  {new Date(deal.end_date).toLocaleDateString()}
+                  ⏰ Ends {new Date(deal.end_date).toLocaleDateString()}
                 </p>
               )}
 
@@ -104,7 +114,7 @@ export default async function CommunityDealDetailPage({ params }: PageProps) {
 
               {deal.address && <p>📍 {deal.address}</p>}
 
-              {deal.website && <p>🌐 {deal.website}</p>}
+              {websiteUrl && <p>🌐 {websiteUrl}</p>}
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
@@ -128,9 +138,9 @@ export default async function CommunityDealDetailPage({ params }: PageProps) {
                 </a>
               )}
 
-              {deal.website && (
+              {websiteUrl && (
                 <a
-                  href={deal.website}
+                  href={websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="col-span-2 rounded-2xl bg-[#F4C95D] px-4 py-3 text-center text-sm font-black text-[#172033]"
