@@ -111,18 +111,20 @@ export default function CommunityDealDetailPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-5 flex items-center gap-3">
-          <Link
-            href="/community/deals"
-            className="text-sm font-black text-[#C4483A]"
-          >
-            ← Back
-          </Link>
+        <div className="relative mb-6 flex items-center">
+  <Link
+    href="/community/deals"
+    className="z-10 text-sm font-black text-[#C4483A]"
+  >
+    ← Back
+  </Link>
 
-          <span className="text-sm font-black tracking-wider text-[#172033]">
-            COMMUNITY DEAL
-          </span>
-        </div>
+  <div className="absolute left-1/2 -translate-x-1/2">
+    <h2 className="text-xl font-black tracking-[0.25em] text-[#172033]">
+      COMMUNITY DEAL
+    </h2>
+  </div>
+</div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
           <div className="relative h-72 w-full overflow-hidden bg-[#E8DED1]">
@@ -217,16 +219,7 @@ export default function CommunityDealDetailPage() {
                 </a>
               )}
 
-              {websiteUrl && (
-                <a
-                  href={websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="col-span-2 rounded-2xl bg-[#F4C95D] px-4 py-3 text-center text-sm font-black text-[#172033]"
-                >
-                  웹사이트 보기
-                </a>
-              )}
+             
             </div>
           </div>
         </div>
