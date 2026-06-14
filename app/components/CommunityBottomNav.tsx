@@ -20,8 +20,12 @@ export default function CommunityBottomNav({
 }: CommunityBottomNavProps) {
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const activeClass = "text-[#F7B955]";
+  const activeClass =
+    "text-[#F7B955] scale-110 drop-shadow-[0_0_8px_rgba(247,185,85,0.65)]";
   const normalClass = "text-white";
+
+  const itemClass =
+    "flex min-w-[38px] flex-col items-center justify-center gap-0.5 leading-none transition-all duration-150 active:scale-90 active:opacity-70";
 
   useEffect(() => {
     async function loadProfile() {
@@ -43,11 +47,8 @@ export default function CommunityBottomNav({
     loadProfile();
   }, []);
 
-  const itemClass =
-    "flex min-w-[38px] flex-col items-center justify-center gap-0.5 leading-none";
-
   return (
-    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#8B2635] px-2 py-3 text-[8px] font-bold text-white shadow-2xl">
+    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-2 py-3 text-[8px] font-bold text-white shadow-2xl backdrop-blur-sm">
       <Link
         href="/"
         className={`${itemClass} ${
@@ -100,13 +101,12 @@ export default function CommunityBottomNav({
 
       <Link
         href="/community"
-        className={`flex min-w-[68px] flex-col items-center justify-center leading-none ${
+        className={`${itemClass} ${
           activeNav === "community" ? activeClass : normalClass
         }`}
       >
-        <span className="text-[9px] font-black tracking-tight">
-          COMMUNITY
-        </span>
+        <span className="text-lg leading-none">👥</span>
+        <span>SOCIAL</span>
       </Link>
 
       {isAdmin && (
