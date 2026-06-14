@@ -24,6 +24,7 @@ export default function EditCommunityDealPage() {
   const [checkingUser, setCheckingUser] = useState(true);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingImage, setDeletingImage] = useState(false);
 
   const [title, setTitle] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -138,7 +139,6 @@ export default function EditCommunityDealPage() {
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
@@ -161,9 +161,7 @@ export default function EditCommunityDealPage() {
           upsert: false,
         });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage
         .from("deal-images")
@@ -175,6 +173,38 @@ export default function EditCommunityDealPage() {
       alert("이미지 업로드 중 오류가 발생했습니다.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleRemoveImage() {
+    if (!confirm("이미지를 삭제하시겠습니까?")) return;
+
+    if (!userId || ownerId !== userId) {
+      alert("삭제 권한이 없습니다.");
+      return;
+    }
+
+    try {
+      setDeletingImage(true);
+
+      const { error } = await supabase
+        .from("deals")
+        .update({ image_url: null })
+        .eq("id", id)
+        .eq("user_id", userId)
+        .eq("deal_scope", "community");
+
+      if (error) throw error;
+
+      setImageUrl("");
+      alert("이미지가 삭제되었습니다.");
+    } catch (err: any) {
+      console.error("community deal image delete error:", err);
+      alert(
+        `이미지 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}`
+      );
+    } finally {
+      setDeletingImage(false);
     }
   }
 
@@ -301,9 +331,7 @@ export default function EditCommunityDealPage() {
             EDIT COMMUNITY DEAL
           </p>
 
-          <h1 className="mt-1 text-3xl font-black tracking-tight">
-            딜 수정
-          </h1>
+          <h1 className="mt-1 text-3xl font-black tracking-tight">딜 수정</h1>
         </div>
 
         <form
@@ -329,9 +357,7 @@ export default function EditCommunityDealPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-black">
-              할인 내용 *
-            </label>
+            <label className="mb-1 block text-sm font-black">할인 내용 *</label>
             <input
               value={discountText}
               onChange={(e) => setDiscountText(e.target.value)}
@@ -361,9 +387,7 @@ export default function EditCommunityDealPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-black">
-                종료일 *
-              </label>
+              <label className="mb-1 block text-sm font-black">종료일 *</label>
               <input
                 type="date"
                 value={endDate}
@@ -441,10 +465,11 @@ export default function EditCommunityDealPage() {
 
                 <button
                   type="button"
-                  onClick={() => setImageUrl("")}
-                  className="mt-2 rounded-full bg-gray-200 px-3 py-1 text-xs font-black text-[#172033]"
+                  onClick={handleRemoveImage}
+                  disabled={deletingImage || loading}
+                  className="mt-2 rounded-full bg-gray-200 px-3 py-1 text-xs font-black text-[#172033] disabled:opacity-60"
                 >
-                  이미지 삭제
+                  {deletingImage ? "삭제 중..." : "이미지 삭제"}
                 </button>
               </div>
             )}
@@ -452,7 +477,7 @@ export default function EditCommunityDealPage() {
 
           <button
             type="submit"
-            disabled={loading || uploading}
+            disabled={loading || uploading || deletingImage}
             className="w-full rounded-2xl bg-[#C4483A] px-5 py-4 text-sm font-black text-white shadow-sm disabled:opacity-60"
           >
             {loading ? "수정 중..." : "수정 저장"}
@@ -461,7 +486,7 @@ export default function EditCommunityDealPage() {
           <button
             type="button"
             onClick={handleDelete}
-            disabled={loading}
+            disabled={loading || deletingImage}
             className="w-full rounded-2xl bg-gray-200 px-5 py-4 text-sm font-black text-[#172033] disabled:opacity-60"
           >
             삭제
