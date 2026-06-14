@@ -215,26 +215,22 @@ export default function NewCommunityDealPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-6">
-          <Link
-            href="/community"
-            className="text-sm font-black text-[#C4483A]"
-          >
-            ← Back
-          </Link>
+    <div className="mb-6">
+  <div className="relative flex items-center h-8">
+    <Link
+      href="/community"
+      className="text-sm font-black text-[#C4483A]"
+    >
+      ← Back
+    </Link>
 
-          <p className="mt-5 text-sm font-black text-[#C4483A]">
-            COMMUNITY DEAL
-          </p>
+    <h1 className="absolute left-1/2 -translate-x-1/2 text-base font-extrabold text-[#172033]">
+      COMMUNITY DEAL
+    </h1>
+  </div>
 
-          <h1 className="mt-1 text-3xl font-black tracking-tight">
-            딜 등록
-          </h1>
 
-          <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-            커뮤니티에만 표시되는 딜입니다.
-          </p>
-        </div>
+</div>
 
         <form
           onSubmit={handleSubmit}

@@ -430,22 +430,19 @@ export default function EditCommunityDealPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-6">
-          <div className="flex items-center gap-3">
-            <Link
-              href={`/community/deals/${id}`}
-              className="text-sm font-black text-[#C4483A]"
-            >
-              ← Back
-            </Link>
+       <div className="mb-6">
+<div className="relative flex items-center h-8">
+  <Link
+    href={`/community/deals/${id}`}
+    className="text-sm font-black text-[#C4483A]"
+  >
+    ← Back
+  </Link>
 
-            <span className="text-sm font-black text-[#C4483A]">
-              EDIT COMMUNITY DEAL
-            </span>
-          </div>
-
-          <h1 className="mt-2 text-3xl font-black tracking-tight">딜 수정</h1>
-        </div>
+  <span className="absolute left-1/2 -translate-x-1/2 text-sm font-black text-[#172033]">
+    EDIT COMMUNITY DEAL
+  </span>
+</div>
 
         <form
           onSubmit={handleUpdate}
