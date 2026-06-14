@@ -49,10 +49,7 @@ export default function CommunityDealDetailPage() {
         .eq("id", user.id)
         .single();
 
-      const isOwner = dealData.user_id === user.id;
-      const isAdmin = profile?.role === "admin";
-
-      setCanManage(isOwner || isAdmin);
+      setCanManage(dealData.user_id === user.id || profile?.role === "admin");
     }
 
     setLoading(false);
@@ -61,8 +58,7 @@ export default function CommunityDealDetailPage() {
   async function handleDelete() {
     if (!deal) return;
 
-    const ok = confirm("정말 이 딜을 삭제하시겠습니까?");
-    if (!ok) return;
+    if (!confirm("정말 이 딜을 삭제하시겠습니까?")) return;
 
     setDeleting(true);
 
@@ -115,13 +111,17 @@ export default function CommunityDealDetailPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-5">
+        <div className="mb-5 flex items-center gap-3">
           <Link
             href="/community/deals"
             className="text-sm font-black text-[#C4483A]"
           >
             ← Back
           </Link>
+
+          <span className="text-sm font-black tracking-wider text-[#172033]">
+            COMMUNITY DEAL
+          </span>
         </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
@@ -143,10 +143,6 @@ export default function CommunityDealDetailPage() {
                 No Photo
               </div>
             )}
-
-            <div className="absolute left-4 top-4 rounded-full bg-[#F4C95D] px-4 py-2 text-xs font-black text-[#172033] shadow-lg">
-              COMMUNITY DEAL
-            </div>
 
             {deal.discount_text && (
               <div className="absolute bottom-4 left-4 rounded-full bg-[#C4483A] px-5 py-2 text-base font-black text-white shadow-lg">
@@ -197,7 +193,6 @@ export default function CommunityDealDetailPage() {
                 <p>⏰ Ends {new Date(deal.end_date).toLocaleDateString()}</p>
               )}
 
-             
               {websiteUrl && <p>🌐 {websiteUrl}</p>}
             </div>
 
@@ -222,7 +217,16 @@ export default function CommunityDealDetailPage() {
                 </a>
               )}
 
-           
+              {websiteUrl && (
+                <a
+                  href={websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="col-span-2 rounded-2xl bg-[#F4C95D] px-4 py-3 text-center text-sm font-black text-[#172033]"
+                >
+                  웹사이트 보기
+                </a>
+              )}
             </div>
           </div>
         </div>
