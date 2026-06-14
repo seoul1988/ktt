@@ -19,25 +19,19 @@ export default async function CommunityDealsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-5 flex items-center justify-between border-b border-[#E8DED1] pb-3">
-  <Link
-    href="/community"
-    className="text-sm font-bold text-[#C4483A]"
-  >
-    ← Back
-  </Link>
+      <section className="mx-auto max-w-xl px-5 pb-28 pt-4">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+          <Link
+            href="/community"
+            className="z-10 text-sm font-semibold text-[#172033]"
+          >
+            ← Back
+          </Link>
 
-  <div className="text-right">
-    <p className="text-[11px] font-black tracking-[0.18em] text-[#C4483A]">
-      COMMUNITY
-    </p>
-
-    <h1 className="text-xl font-black text-[#172033]">
-      Deals
-    </h1>
-  </div>
-</div>
+          <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+            Community Deals
+          </h1>
+        </div>
 
         <div className="space-y-5">
           {deals?.map((deal) => (
@@ -71,9 +65,7 @@ export default async function CommunityDealsPage() {
               </div>
 
               <div className="p-5">
-                <h2 className="text-xl font-black">
-                  {deal.title}
-                </h2>
+                <h2 className="text-xl font-black">{deal.title}</h2>
 
                 <p className="mt-1 text-sm font-bold text-[#6B6257]">
                   {deal.business_name || "Local Business"}
@@ -87,8 +79,7 @@ export default async function CommunityDealsPage() {
 
                 {deal.end_date && (
                   <p className="mt-3 text-xs font-black text-[#C4483A]">
-                    Ends{" "}
-                    {new Date(deal.end_date).toLocaleDateString()}
+                    Ends {new Date(deal.end_date).toLocaleDateString()}
                   </p>
                 )}
               </div>
