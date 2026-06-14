@@ -112,19 +112,19 @@ export default function CommunityDealDetailPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="relative mb-6 flex items-center">
-  <Link
-    href="/community/deals"
-    className="z-10 text-sm font-black text-[#C4483A]"
-  >
-    ← Back
-  </Link>
+          <Link
+            href="/community/deals"
+            className="z-10 text-sm font-black text-[#C4483A]"
+          >
+            ← Back
+          </Link>
 
-  <div className="absolute left-1/2 -translate-x-1/2">
-    <h2 className="text-xl font-black tracking-[0.25em] text-[#172033]">
-      COMMUNITY DEAL
-    </h2>
-  </div>
-</div>
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <h2 className="text-lg font-black tracking-[0.2em] text-[#172033]">
+              COMMUNITY DEAL
+            </h2>
+          </div>
+        </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
           <div className="relative h-72 w-full overflow-hidden bg-[#E8DED1]">
@@ -154,33 +154,11 @@ export default function CommunityDealDetailPage() {
           </div>
 
           <div className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="min-w-0 flex-1 text-3xl font-black leading-tight">
-                {deal.title || "Community Deal"}
-              </h1>
+            <h1 className="text-2xl font-black leading-snug break-words">
+              {deal.title || "Community Deal"}
+            </h1>
 
-              {canManage && (
-                <div className="flex shrink-0 gap-2">
-                  <Link
-                    href={`/community/deals/${deal.id}/edit`}
-                    className="rounded-full bg-[#172033] px-3 py-2 text-xs font-black text-white"
-                  >
-                    수정
-                  </Link>
-
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="rounded-full bg-red-500 px-3 py-2 text-xs font-black text-white disabled:opacity-60"
-                  >
-                    {deleting ? "삭제중" : "삭제"}
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <p className="mt-2 text-base font-bold text-[#6B6257]">
+            <p className="mt-3 text-base font-bold text-[#6B6257]">
               {deal.business_name || "Local Business"}
             </p>
 
@@ -190,12 +168,21 @@ export default function CommunityDealDetailPage() {
               </p>
             )}
 
-            <div className="mt-6 space-y-2 text-sm font-bold text-[#6B6257]">
+            <div className="mt-6 space-y-3 text-sm font-bold text-[#6B6257]">
               {deal.end_date && (
                 <p>⏰ Ends {new Date(deal.end_date).toLocaleDateString()}</p>
               )}
 
-              {websiteUrl && <p>🌐 {websiteUrl}</p>}
+              {websiteUrl && (
+                <a
+                  href={websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block break-all text-sm font-bold text-blue-600 underline"
+                >
+                  🌐 {websiteUrl}
+                </a>
+              )}
             </div>
 
             <div className="mt-6 grid grid-cols-2 gap-3">
@@ -218,9 +205,27 @@ export default function CommunityDealDetailPage() {
                   길찾기
                 </a>
               )}
-
-             
             </div>
+
+            {canManage && (
+              <div className="mt-6 flex gap-3 border-t border-gray-100 pt-5">
+                <Link
+                  href={`/community/deals/${deal.id}/edit`}
+                  className="flex-1 rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
+                >
+                  수정
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+                >
+                  {deleting ? "삭제중" : "삭제"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -232,7 +237,10 @@ export default function CommunityDealDetailPage() {
         >
           <button
             type="button"
-            onClick={() => setImageOpen(false)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setImageOpen(false);
+            }}
             className="absolute right-4 top-4 rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033]"
           >
             닫기
@@ -241,6 +249,7 @@ export default function CommunityDealDetailPage() {
           <img
             src={deal.image_url}
             alt={deal.title || "Deal image"}
+            onClick={(e) => e.stopPropagation()}
             className="max-h-[85vh] max-w-full rounded-2xl object-contain"
           />
         </div>
