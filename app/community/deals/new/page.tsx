@@ -12,6 +12,7 @@ export default function NewCommunityDealPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingUser, setCheckingUser] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const [title, setTitle] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -23,8 +24,6 @@ export default function NewCommunityDealPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [uploading, setUploading] = useState(false);
-const [imageUrl, setImageUrl] = useState("");
 
   useEffect(() => {
     checkUser();
@@ -42,6 +41,48 @@ const [imageUrl, setImageUrl] = useState("");
 
     setUserId(user.id);
     setCheckingUser(false);
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `community-deals/${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("deal-images")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from("deal-images")
+        .getPublicUrl(fileName);
+
+      setImageUrl(data.publicUrl);
+    } catch (err) {
+      console.error("image upload error:", err);
+      alert("이미지 업로드 중 오류가 발생했습니다.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -78,7 +119,7 @@ const [imageUrl, setImageUrl] = useState("");
       phone: phone.trim() || null,
       address: address.trim() || null,
       website: website.trim() || null,
-      image_url: imageUrl.trim() || null,
+      image_url: imageUrl || null,
       start_date: startDate || null,
       end_date: endDate,
       active: true,
@@ -231,40 +272,46 @@ const [imageUrl, setImageUrl] = useState("");
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-black">
-              이미지 URL
+            <label className="mb-2 block text-sm font-black">딜 이미지</label>
+
+            <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F8F3EC] px-4 py-5 text-sm font-black text-[#6B6257]">
+              📷 이미지 선택
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
             </label>
-          <div>
-  <label className="mb-2 block text-sm font-black">
-    딜 이미지
-  </label>
 
-  <input
-    type="file"
-    accept="image/*"
-    onChange={handleImageUpload}
-    className="block w-full text-sm"
-  />
+            {uploading && (
+              <p className="mt-2 text-xs font-bold text-[#6B6257]">
+                업로드 중...
+              </p>
+            )}
 
-  {uploading && (
-    <p className="mt-2 text-xs text-[#6B6257]">
-      업로드 중...
-    </p>
-  )}
+            {imageUrl && (
+              <div className="mt-3 overflow-hidden rounded-2xl">
+                <img
+                  src={imageUrl}
+                  alt="preview"
+                  className="h-48 w-full object-cover"
+                />
 
-  {imageUrl && (
-    <img
-      src={imageUrl}
-      alt="preview"
-      className="mt-3 h-48 w-full rounded-2xl object-cover"
-    />
-  )}
-</div>
+                <button
+                  type="button"
+                  onClick={() => setImageUrl("")}
+                  className="mt-2 rounded-full bg-gray-200 px-3 py-1 text-xs font-black text-[#172033]"
+                >
+                  이미지 삭제
+                </button>
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || uploading}
             className="mt-3 w-full rounded-2xl bg-[#C4483A] px-5 py-4 text-sm font-black text-white shadow-sm disabled:opacity-60"
           >
             {loading ? "등록 중..." : "🔥 딜 등록하기"}
