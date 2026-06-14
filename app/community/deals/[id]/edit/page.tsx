@@ -203,9 +203,6 @@ export default function EditCommunityDealPage() {
         .select("id,image_url")
         .single();
 
-      console.log("IMAGE UPLOAD URL:", publicUrl);
-      console.log("IMAGE DB UPDATE RESULT:", updatedDeal, dbError);
-
       if (dbError) throw dbError;
 
       if (!updatedDeal) {
@@ -214,12 +211,7 @@ export default function EditCommunityDealPage() {
       }
 
       if (oldStoragePath) {
-        const { error: oldDeleteError } = await supabase.storage
-          .from("deal-images")
-          .remove([oldStoragePath]);
-
-        console.log("OLD IMAGE DELETE PATH:", oldStoragePath);
-        console.log("OLD IMAGE DELETE ERROR:", oldDeleteError);
+        await supabase.storage.from("deal-images").remove([oldStoragePath]);
       }
 
       setImageUrl(updatedDeal.image_url || publicUrl);
@@ -260,8 +252,6 @@ export default function EditCommunityDealPage() {
         .select("id,image_url")
         .single();
 
-      console.log("DB IMAGE DELETE RESULT:", updatedDeal, dbError);
-
       if (dbError) throw dbError;
 
       if (!updatedDeal) {
@@ -270,12 +260,7 @@ export default function EditCommunityDealPage() {
       }
 
       if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from("deal-images")
-          .remove([storagePath]);
-
-        console.log("STORAGE DELETE PATH:", storagePath);
-        console.log("STORAGE DELETE ERROR:", storageError);
+        await supabase.storage.from("deal-images").remove([storagePath]);
       }
 
       setImageUrl("");
@@ -398,12 +383,7 @@ export default function EditCommunityDealPage() {
       }
 
       if (storagePath) {
-        const { error: storageError } = await supabase.storage
-          .from("deal-images")
-          .remove([storagePath]);
-
-        console.log("DEAL DELETE IMAGE PATH:", storagePath);
-        console.log("DEAL DELETE STORAGE ERROR:", storageError);
+        await supabase.storage.from("deal-images").remove([storagePath]);
       }
 
       router.push("/community/deals");
@@ -430,19 +410,24 @@ export default function EditCommunityDealPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-       <div className="mb-6">
-<div className="relative flex items-center h-8">
-  <Link
-    href={`/community/deals/${id}`}
-    className="text-sm font-black text-[#C4483A]"
-  >
-    ← Back
-  </Link>
+        <div className="mb-6">
+          <div className="relative flex h-8 items-center">
+            <Link
+              href={`/community/deals/${id}`}
+              className="text-sm font-black text-[#C4483A]"
+            >
+              ← Back
+            </Link>
 
-  <span className="absolute left-1/2 -translate-x-1/2 text-sm font-black text-[#172033]">
-    EDIT COMMUNITY DEAL
-  </span>
-</div>
+            <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-extrabold text-[#172033]">
+              EDIT COMMUNITY DEAL
+            </h1>
+          </div>
+
+          <p className="mt-4 text-center text-sm font-medium text-[#6B6257]">
+            커뮤니티에만 표시되는 딜을 수정합니다.
+          </p>
+        </div>
 
         <form
           onSubmit={handleUpdate}
