@@ -20,26 +20,24 @@ export default async function CommunityDealsPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <Link
-          href="/community"
-          className="text-sm font-black text-[#C4483A]"
-        >
-          ← Back
-        </Link>
+        <div className="mb-5 flex items-center justify-between border-b border-[#E8DED1] pb-3">
+  <Link
+    href="/community"
+    className="text-sm font-bold text-[#C4483A]"
+  >
+    ← Back
+  </Link>
 
-        <div className="mt-4 mb-6">
-          <p className="text-sm font-black text-[#C4483A]">
-            COMMUNITY DEALS
-          </p>
+  <div className="text-right">
+    <p className="text-[11px] font-black tracking-[0.18em] text-[#C4483A]">
+      COMMUNITY
+    </p>
 
-          <h1 className="text-3xl font-black tracking-tight">
-            Community Deals
-          </h1>
-
-          <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-            Local discounts and special offers.
-          </p>
-        </div>
+    <h1 className="text-xl font-black text-[#172033]">
+      Deals
+    </h1>
+  </div>
+</div>
 
         <div className="space-y-5">
           {deals?.map((deal) => (
