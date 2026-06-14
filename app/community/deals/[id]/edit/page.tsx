@@ -179,34 +179,27 @@ export default function EditCommunityDealPage() {
 
       const publicUrl = publicUrlData.publicUrl;
 
-      const { data: updatedDeal, error: dbError } = await supabase
+      const { error: dbError } = await supabase
         .from("deals")
         .update({
           image_url: publicUrl,
         })
         .eq("id", id)
-        .eq("user_id", userId)
-        .eq("deal_scope", "community")
-        .select("id,image_url")
-        .single();
+        .eq("deal_scope", "community");
 
-      console.log("UPLOAD IMAGE RESULT", updatedDeal, dbError);
+      console.log("IMAGE UPLOAD URL:", publicUrl);
+      console.log("IMAGE DB UPDATE ERROR:", dbError);
 
       if (dbError) throw dbError;
 
-      if (!updatedDeal) {
-        alert("이미지는 업로드됐지만 DB 저장이 안 됐습니다. RLS를 확인하세요.");
-        return;
-      }
-
-      setImageUrl(updatedDeal.image_url || publicUrl);
-      alert("이미지가 변경되었습니다.");
+      setImageUrl(publicUrl);
+      alert("이미지가 등록되었습니다.");
     } catch (err: any) {
-      console.error("image upload or db update error:", err);
+      console.error("image upload error:", err);
       alert(
-        `이미지 변경 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
+        `이미지 업로드 오류\n\n메시지: ${
+          err?.message || "알 수 없는 오류"
+        }\n코드: ${err?.code || "없음"}\n상세: ${err?.details || "없음"}`
       );
     } finally {
       setUploading(false);
@@ -224,34 +217,26 @@ export default function EditCommunityDealPage() {
     try {
       setDeletingImage(true);
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("deals")
         .update({
           image_url: null,
         })
         .eq("id", id)
-        .eq("user_id", userId)
-        .eq("deal_scope", "community")
-        .select("id,image_url")
-        .single();
+        .eq("deal_scope", "community");
 
-      console.log("DELETE IMAGE RESULT", data, error);
+      console.log("DELETE IMAGE ERROR:", error);
 
       if (error) throw error;
-
-      if (!data) {
-        alert("DB 수정된 데이터가 없습니다. RLS 정책을 확인하세요.");
-        return;
-      }
 
       setImageUrl("");
       alert("이미지가 삭제되었습니다.");
     } catch (err: any) {
       console.error("community deal image delete error:", err);
       alert(
-        `이미지 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
+        `이미지 삭제 오류\n\n메시지: ${
+          err?.message || "알 수 없는 오류"
+        }\n코드: ${err?.code || "없음"}\n상세: ${err?.details || "없음"}`
       );
     } finally {
       setDeletingImage(false);
@@ -289,7 +274,7 @@ export default function EditCommunityDealPage() {
     try {
       setLoading(true);
 
-      const { data: updatedDeal, error } = await supabase
+      const { error } = await supabase
         .from("deals")
         .update({
           title: title.trim(),
@@ -309,25 +294,17 @@ export default function EditCommunityDealPage() {
           deal_scope: "community",
         })
         .eq("id", id)
-        .eq("user_id", userId)
-        .eq("deal_scope", "community")
-        .select("id")
-        .single();
+        .eq("deal_scope", "community");
 
       if (error) throw error;
-
-      if (!updatedDeal) {
-        alert("DB 수정된 데이터가 없습니다. RLS 권한을 확인하세요.");
-        return;
-      }
 
       router.push(`/community/deals/${id}`);
     } catch (err: any) {
       console.error("community deal update error:", err);
       alert(
-        `딜 수정 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
+        `딜 수정 오류\n\n메시지: ${
+          err?.message || "알 수 없는 오류"
+        }\n코드: ${err?.code || "없음"}\n상세: ${err?.details || "없음"}`
       );
     } finally {
       setLoading(false);
@@ -349,7 +326,6 @@ export default function EditCommunityDealPage() {
         .from("deals")
         .delete()
         .eq("id", id)
-        .eq("user_id", userId)
         .eq("deal_scope", "community");
 
       if (error) throw error;
@@ -358,9 +334,9 @@ export default function EditCommunityDealPage() {
     } catch (err: any) {
       console.error("community deal delete error:", err);
       alert(
-        `딜 삭제 오류\n\n메시지: ${err?.message || "알 수 없는 오류"}\n코드: ${
-          err?.code || "없음"
-        }\n상세: ${err?.details || "없음"}`
+        `딜 삭제 오류\n\n메시지: ${
+          err?.message || "알 수 없는 오류"
+        }\n코드: ${err?.code || "없음"}\n상세: ${err?.details || "없음"}`
       );
     } finally {
       setLoading(false);
