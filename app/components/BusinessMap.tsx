@@ -1063,9 +1063,7 @@ export default function BusinessMap({
                     : "Near Triangle"}
                 </p>
 
-                <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-600">
-                  {spot.description || "Tap to view details"}
-                </p>
+              
               </div>
             </a>
           );
