@@ -345,42 +345,48 @@ export default function NewCommunityDealPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-black"> 이미지</label>
+  <label className="mb-2 block text-sm font-black">
+    이미지
+  </label>
 
-            className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-[#F8F3EC] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#F3EEE6]"
-			📷 이미지 선택
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-            </label>
+  <label
+    className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-[#F8F3EC] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#F3EEE6]"
+  >
+    📷 이미지 선택
 
-            {uploading && (
-              <p className="mt-2 text-xs font-bold text-[#6B6257]">
-                업로드 중...
-              </p>
-            )}
+    <input
+      type="file"
+      accept="image/*"
+      onChange={handleImageUpload}
+      disabled={uploading}
+      className="hidden"
+    />
+  </label>
 
-            {imageUrl && (
-              <div className="mt-3 overflow-hidden rounded-2xl">
-                <img
-                  src={imageUrl}
-                  alt="preview"
-                  className="h-48 w-full object-cover"
-                />
+  {uploading && (
+    <p className="mt-2 text-xs font-bold text-[#6B6257]">
+      업로드 중...
+    </p>
+  )}
 
-                <button
-                  type="button"
-                  onClick={() => setImageUrl("")}
-                  className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-[#172033]"
-                >
-                  이미지 삭제
-                </button>
-              </div>
-            )}
-          </div>
+  {imageUrl && (
+    <div className="mt-3 overflow-hidden rounded-2xl">
+      <img
+        src={imageUrl}
+        alt="preview"
+        className="h-48 w-full object-cover"
+      />
+
+      <button
+        type="button"
+        onClick={() => setImageUrl("")}
+        className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-[#172033]"
+      >
+        이미지 삭제
+      </button>
+    </div>
+  )}
+</div>
 
           <button
   type="submit"
