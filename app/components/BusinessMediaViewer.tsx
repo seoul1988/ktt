@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type MediaItem = {
   type: "video" | "image";
@@ -22,14 +22,10 @@ function getYoutubeEmbedUrl(url: string) {
       if (watchId) return `https://www.youtube.com/embed/${watchId}`;
 
       const shortsMatch = parsed.pathname.match(/\/shorts\/([^/?]+)/);
-      if (shortsMatch?.[1]) {
-        return `https://www.youtube.com/embed/${shortsMatch[1]}`;
-      }
+      if (shortsMatch?.[1]) return `https://www.youtube.com/embed/${shortsMatch[1]}`;
 
       const embedMatch = parsed.pathname.match(/\/embed\/([^/?]+)/);
-      if (embedMatch?.[1]) {
-        return `https://www.youtube.com/embed/${embedMatch[1]}`;
-      }
+      if (embedMatch?.[1]) return `https://www.youtube.com/embed/${embedMatch[1]}`;
     }
 
     return "";
@@ -41,29 +37,15 @@ function getYoutubeEmbedUrl(url: string) {
 function getVideoKind(url: string) {
   const lower = url.toLowerCase();
 
-  if (lower.includes("youtube.com") || lower.includes("youtu.be")) {
-    return "youtube";
-  }
-
-  if (lower.includes("instagram.com")) {
-    return "instagram";
-  }
-
-  if (lower.includes("facebook.com") || lower.includes("fb.watch")) {
-    return "facebook";
-  }
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "youtube";
+  if (lower.includes("instagram.com")) return "instagram";
+  if (lower.includes("facebook.com") || lower.includes("fb.watch")) return "facebook";
 
   return "upload";
 }
 
 function ExternalVideoButton({ url }: { url: string }) {
   const kind = getVideoKind(url);
-  const label =
-    kind === "instagram"
-      ? "Open Instagram Video"
-      : kind === "facebook"
-      ? "Open Facebook Video"
-      : "Open Video";
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
@@ -78,10 +60,9 @@ function ExternalVideoButton({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={(e) => e.stopPropagation()}
         className="rounded-full bg-white px-5 py-3 text-sm font-black text-black"
       >
-        {label}
+        Open Video
       </a>
     </div>
   );
@@ -91,21 +72,23 @@ function MediaDisplay({
   item,
   name,
   full = false,
+  onOpen,
 }: {
   item: MediaItem;
   name: string;
   full?: boolean;
+  onOpen?: () => void;
 }) {
   if (item.type === "image") {
     return (
       <img
         src={item.url}
         alt={name}
-        onClick={(e) => e.stopPropagation()}
+        onClick={onOpen}
         className={
           full
             ? "max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
-            : "h-full w-full object-contain"
+            : "h-full w-full cursor-pointer object-contain"
         }
       />
     );
@@ -123,7 +106,6 @@ function MediaDisplay({
           title={name || "YouTube video"}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
-          onClick={(e) => e.stopPropagation()}
           className={
             full
               ? "aspect-video w-[90vw] max-w-5xl rounded-xl bg-black"
@@ -146,7 +128,6 @@ function MediaDisplay({
       loop
       playsInline
       controls
-      onClick={(e) => e.stopPropagation()}
       className={
         full
           ? "max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
@@ -174,6 +155,12 @@ export default function BusinessMediaViewer({
   const [isOpen, setIsOpen] = useState(false);
   const touchStartX = useRef(0);
 
+  useEffect(() => {
+    if (currentIndex > media.length - 1) {
+      setCurrentIndex(0);
+    }
+  }, [media.length, currentIndex]);
+
   if (media.length === 0) return null;
 
   const current = media[currentIndex];
@@ -189,7 +176,7 @@ export default function BusinessMediaViewer({
   return (
     <>
       <div
-        className="relative h-[320px] w-full bg-black"
+        className="relative h-[320px] w-full overflow-hidden bg-black"
         onTouchStart={(e) => {
           touchStartX.current = e.touches[0].clientX;
         }}
@@ -199,40 +186,33 @@ export default function BusinessMediaViewer({
           if (diff < -50) goPrev();
         }}
       >
-        <div className="h-full w-full">
-          <MediaDisplay item={current} name={name} />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setIsOpen(true)}
-          aria-label="Open media viewer"
-          className="absolute inset-0 z-10"
+        <MediaDisplay
+          item={current}
+          name={name}
+          onOpen={() => {
+            if (current.type === "image") setIsOpen(true);
+          }}
         />
 
         {media.length > 1 && (
           <>
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                goPrev();
-              }}
-              className="absolute left-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-2xl font-black text-white"
+              onClick={goPrev}
+              className="absolute left-3 top-1/2 z-[999] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-3xl font-black text-black shadow-lg"
             >
               ‹
             </button>
+
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                goNext();
-              }}
-              className="absolute right-3 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/60 px-3 py-2 text-2xl font-black text-white"
+              onClick={goNext}
+              className="absolute right-3 top-1/2 z-[999] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-3xl font-black text-black shadow-lg"
             >
               ›
             </button>
-            <div className="absolute bottom-3 right-3 z-20 rounded-full bg-black/70 px-3 py-1 text-xs font-bold text-white">
+
+            <div className="absolute bottom-3 right-3 z-[999] rounded-full bg-black/75 px-3 py-1 text-xs font-bold text-white">
               {currentIndex + 1}/{media.length}
             </div>
           </>
@@ -244,10 +224,7 @@ export default function BusinessMediaViewer({
           onClick={() => setIsOpen(false)}
           className="fixed inset-0 z-[9999] bg-black/90"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute inset-0 flex items-center justify-center"
-          >
+          <div className="absolute inset-0 flex items-center justify-center">
             <MediaDisplay item={current} name={name} full />
           </div>
 
@@ -267,7 +244,7 @@ export default function BusinessMediaViewer({
                   e.stopPropagation();
                   goPrev();
                 }}
-                className="absolute left-4 top-1/2 z-[10000] -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 text-3xl font-black text-black shadow-lg"
+                className="absolute left-4 top-1/2 z-[10000] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-4xl font-black text-black shadow-lg"
               >
                 ‹
               </button>
@@ -278,14 +255,10 @@ export default function BusinessMediaViewer({
                   e.stopPropagation();
                   goNext();
                 }}
-                className="absolute right-4 top-1/2 z-[10000] -translate-y-1/2 rounded-full bg-white/90 px-4 py-3 text-3xl font-black text-black shadow-lg"
+                className="absolute right-4 top-1/2 z-[10000] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-4xl font-black text-black shadow-lg"
               >
                 ›
               </button>
-
-              <div className="absolute bottom-5 right-5 z-[10000] rounded-full bg-white/90 px-3 py-1 text-sm font-black text-black shadow-lg">
-                {currentIndex + 1}/{media.length}
-              </div>
             </>
           )}
         </div>
