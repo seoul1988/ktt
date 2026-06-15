@@ -14,19 +14,29 @@ export default async function CommunityEventsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-5 flex items-center justify-between border-b border-[#E8DED1] pb-3">
-          <div>
-            <p className="text-xs font-black text-[#C4483A]">COMMUNITY</p>
-            <h1 className="text-2xl font-black">Events</h1>
-          </div>
-
+      <section className="mx-auto max-w-xl px-5 pb-28 pt-5">
+        {/* Header */}
+        <div className="mb-5 flex items-center justify-between">
           <Link
             href="/community"
-            className="rounded-full bg-white px-3 py-2 text-xs font-black shadow-sm"
+            className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#172033] shadow-sm"
           >
             Back
           </Link>
+
+          <div className="text-center">
+            <h1 className="text-lg font-black leading-tight">
+              <span className="text-[#C4483A]">COMMUNITY</span>{" "}
+              <span className="text-[#172033]">Events</span>
+            </h1>
+          </div>
+
+          <button
+            type="button"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xl font-black text-[#172033] shadow-sm"
+          >
+            ⋯
+          </button>
         </div>
 
         <div className="space-y-4">
