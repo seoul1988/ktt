@@ -8,6 +8,71 @@ import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 
+function getYoutubeEmbedUrl(url: string | null | undefined) {
+  if (!url) return null;
+
+  const value = String(url);
+
+  if (value.includes("youtube.com/watch?v=")) {
+    const id = value.split("v=")[1]?.split("&")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : null;
+  }
+
+  if (value.includes("youtu.be/")) {
+    const id = value.split("youtu.be/")[1]?.split("?")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : null;
+  }
+
+  return null;
+}
+
+function VideoFirstMedia({
+  videoUrl,
+  imageUrl,
+  alt,
+  className,
+}: {
+  videoUrl?: string | null;
+  imageUrl?: string | null;
+  alt: string;
+  className: string;
+}) {
+  const youtubeUrl = getYoutubeEmbedUrl(videoUrl);
+
+  if (youtubeUrl) {
+    return (
+      <iframe
+        src={youtubeUrl}
+        title={alt}
+        className={className}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    );
+  }
+
+  if (videoUrl) {
+    return (
+      <video
+        src={videoUrl}
+        controls
+        autoPlay
+        muted
+        playsInline
+        className={`${className} bg-black object-cover`}
+      />
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl || "/event.png"}
+      alt={alt}
+      className={`${className} object-cover`}
+    />
+  );
+}
+
 function OfferBadges({
   hasDeal,
   hasCoupon,
@@ -108,6 +173,12 @@ export default async function Home() {
     return !(hasCommunityCategory && !hasMainCategory);
   });
 
+  const { data: grandOpenings } = await supabase
+    .from("grand_openings")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
   const { data: businessEvents } = await supabase
     .from("business_events")
     .select("*")
@@ -166,7 +237,6 @@ export default async function Home() {
       .filter((c: any) => {
         const usageLimit = Number(c.usage_limit || 0);
         const usedCount = Number(c.used_count || 0);
-
         if (usageLimit > 0 && usedCount >= usageLimit) return false;
         return true;
       })
@@ -178,6 +248,10 @@ export default async function Home() {
   const deals = activeDeals || [];
   const trending = spots || [];
   const mainEvent = businessEvents?.[0];
+  const mainGrandOpening = grandOpenings?.[0];
+
+  const grandOpeningImage =
+    mainGrandOpening?.images?.[0] || mainGrandOpening?.image_url || "/event.png";
 
   return (
     <>
@@ -200,6 +274,53 @@ export default async function Home() {
           </div>
         </div>
 
+        {mainGrandOpening && (
+          <section className="mx-auto mb-8 max-w-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xl font-bold">🎉 Grand Opening</h2>
+
+              <Link
+                href="/grand-openings"
+                className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+              >
+                More
+              </Link>
+            </div>
+
+            <Link
+              href={`/grand-openings/${mainGrandOpening.id}`}
+              className="block overflow-hidden rounded-3xl bg-white shadow-xl"
+            >
+              <div className="h-64 w-full bg-white">
+                <VideoFirstMedia
+                  videoUrl={mainGrandOpening.video_url}
+                  imageUrl={grandOpeningImage}
+                  alt={mainGrandOpening.title || "Grand Opening"}
+                  className="h-full w-full"
+                />
+              </div>
+
+              <div className="p-5">
+                <p className="text-xs font-bold text-[#C4483A]">
+                  {mainGrandOpening.opening_date || "Coming Soon"}
+                </p>
+
+                <h3 className="mt-1 text-lg font-bold">
+                  {mainGrandOpening.business_name || "Grand Opening"}
+                </h3>
+
+                <p className="mt-1 text-sm font-semibold text-gray-600">
+                  {mainGrandOpening.title}
+                </p>
+
+                <p className="mt-2 line-clamp-2 text-sm text-gray-600">
+                  {mainGrandOpening.description}
+                </p>
+              </div>
+            </Link>
+          </section>
+        )}
+
         {mainEvent && (
           <section className="mx-auto mb-8 max-w-xl">
             <div className="mb-3 flex items-center justify-between">
@@ -218,10 +339,11 @@ export default async function Home() {
               className="block overflow-hidden rounded-3xl bg-white shadow-xl"
             >
               <div className="h-64 w-full bg-white">
-                <img
-                  src={mainEvent.image_url || "/event.png"}
+                <VideoFirstMedia
+                  videoUrl={mainEvent.video_url}
+                  imageUrl={mainEvent.image_url || "/event.png"}
                   alt={mainEvent.title || "Business Event"}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full"
                 />
               </div>
 
@@ -275,36 +397,12 @@ export default async function Home() {
                     {deal.title || deal.businesses?.name || "Deal"}
                   </h4>
 
-                  <div className="mt-1 flex items-center justify-between gap-3 text-sm">
-                    <div className="min-w-0 truncate text-gray-600">
-                      {deal.businesses?.name || "KTT Deal"}
-                      {deal.businesses?.city
-                        ? ` · ${deal.businesses.city}`
-                        : ""}
-                    </div>
-
-                    <div className="shrink-0 whitespace-nowrap font-bold text-[#C4483A]">
-                      ★ {deal.businesses?.rating || "New"}
-                      {deal.businesses?.review_count ? (
-                        <span className="ml-1 text-gray-400">
-                          ({deal.businesses.review_count})
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
                   <p className="mt-2 line-clamp-2 text-xs font-bold text-gray-500">
                     {deal.description || "Tap to view deal details"}
                   </p>
                 </div>
               </Link>
             ))}
-
-            {deals.length === 0 && (
-              <div className="rounded-3xl bg-white p-5 text-sm font-semibold text-gray-500 shadow-sm">
-                등록된 DEAL이 아직 없습니다.
-              </div>
-            )}
           </div>
         </section>
 
@@ -323,36 +421,23 @@ export default async function Home() {
               </Link>
 
               <div className="p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/business/${featured.id}`}>
-                        <h3 className="text-2xl font-bold">{featured.name}</h3>
-                      </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link href={`/business/${featured.id}`}>
+                    <h3 className="text-2xl font-bold">{featured.name}</h3>
+                  </Link>
 
-                      <OfferBadges
-                        businessId={featured.id}
-                        dealId={dealBusinessMap.get(featured.id)}
-                        hasDeal={dealBusinessMap.has(featured.id)}
-                        hasCoupon={couponBusinessIds.has(featured.id)}
-                        size="md"
-                      />
-                    </div>
-
-                    <p className="mt-2 text-sm text-gray-600">
-                      {featured.category} · {featured.city}
-                    </p>
-                  </div>
-
-                  <div className="whitespace-nowrap rounded-full bg-[#F8F3EC] px-3 py-1 text-sm font-bold">
-                    ★ {featured.rating || "New"}
-                    {featured.review_count ? (
-                      <span className="ml-1 text-gray-500">
-                        ({featured.review_count})
-                      </span>
-                    ) : null}
-                  </div>
+                  <OfferBadges
+                    businessId={featured.id}
+                    dealId={dealBusinessMap.get(featured.id)}
+                    hasDeal={dealBusinessMap.has(featured.id)}
+                    hasCoupon={couponBusinessIds.has(featured.id)}
+                    size="md"
+                  />
                 </div>
+
+                <p className="mt-2 text-sm text-gray-600">
+                  {featured.category} · {featured.city}
+                </p>
 
                 <p className="mt-3 line-clamp-2 text-sm text-gray-700">
                   {featured.description || featured.tags || featured.tag}
@@ -405,22 +490,6 @@ export default async function Home() {
 
                       <p className="line-clamp-1 text-sm text-gray-600">
                         {spot.category} · {spot.city}
-                      </p>
-
-                      <p className="mt-1 line-clamp-1 text-sm font-medium text-[#C4483A]">
-                        {spot.tags || spot.tag}
-                      </p>
-
-                      <p className="mt-1 text-sm">
-                        <span className="font-bold text-[#172033]">
-                          ★ {spot.rating || "New"}
-                        </span>
-
-                        {spot.review_count ? (
-                          <span className="ml-1 text-gray-400">
-                            ({spot.review_count})
-                          </span>
-                        ) : null}
                       </p>
                     </div>
                   </div>
