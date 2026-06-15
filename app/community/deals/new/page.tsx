@@ -251,7 +251,7 @@ export default function NewCommunityDealPage() {
             <input
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="예: Salon Reve"
+              placeholder="예: Hair Salon"
               className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
             />
           </div>

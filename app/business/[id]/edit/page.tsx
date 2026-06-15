@@ -42,114 +42,31 @@ type Business = {
 };
 
 const defaultHours: DayHour[] = [
-  {
-    day: "Mon",
-    open: "10:00 AM",
-    close: "9:00 PM",
-    closed: false,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
-  {
-    day: "Tue",
-    open: "10:00 AM",
-    close: "9:00 PM",
-    closed: false,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
-  {
-    day: "Wed",
-    open: "10:00 AM",
-    close: "9:00 PM",
-    closed: false,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
-  {
-    day: "Thu",
-    open: "10:00 AM",
-    close: "9:00 PM",
-    closed: false,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
-  {
-    day: "Fri",
-    open: "10:00 AM",
-    close: "10:00 PM",
-    closed: false,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
-  {
-    day: "Sat",
-    open: "11:00 AM",
-    close: "10:00 PM",
-    closed: false,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
-  {
-    day: "Sun",
-    open: "11:00 AM",
-    close: "8:00 PM",
-    closed: true,
-    hasBreak: false,
-    breakStart: "3:00 PM",
-    breakEnd: "5:00 PM",
-  },
+  { day: "Mon", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  { day: "Tue", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  { day: "Wed", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  { day: "Thu", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  { day: "Fri", open: "10:00 AM", close: "10:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  { day: "Sat", open: "11:00 AM", close: "10:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  { day: "Sun", open: "11:00 AM", close: "8:00 PM", closed: true, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
 ];
 
 const timeOptions = [
-  "6:00 AM",
-  "6:30 AM",
-  "7:00 AM",
-  "7:30 AM",
-  "8:00 AM",
-  "8:30 AM",
-  "9:00 AM",
-  "9:30 AM",
-  "10:00 AM",
-  "10:30 AM",
-  "11:00 AM",
-  "11:30 AM",
-  "12:00 PM",
-  "12:30 PM",
-  "1:00 PM",
-  "1:30 PM",
-  "2:00 PM",
-  "2:30 PM",
-  "3:00 PM",
-  "3:30 PM",
-  "4:00 PM",
-  "4:30 PM",
-  "5:00 PM",
-  "5:30 PM",
-  "6:00 PM",
-  "6:30 PM",
-  "7:00 PM",
-  "7:30 PM",
-  "8:00 PM",
-  "8:30 PM",
-  "9:00 PM",
-  "9:30 PM",
-  "10:00 PM",
-  "10:30 PM",
-  "11:00 PM",
-  "11:30 PM",
-  "12:00 AM",
-  "12:30 AM",
-  "1:00 AM",
-  "1:30 AM",
-  "2:00 AM",
+  "6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM",
+  "9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM",
+  "12:00 PM", "12:30 PM", "1:00 PM", "1:30 PM", "2:00 PM", "2:30 PM",
+  "3:00 PM", "3:30 PM", "4:00 PM", "4:30 PM", "5:00 PM", "5:30 PM",
+  "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM",
+  "9:00 PM", "9:30 PM", "10:00 PM", "10:30 PM", "11:00 PM", "11:30 PM",
+  "12:00 AM", "12:30 AM", "1:00 AM", "1:30 AM", "2:00 AM",
 ];
+
+function getBusinessImagePathFromPublicUrl(url: string) {
+  const marker = "/storage/v1/object/public/business-images/";
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  return url.substring(index + marker.length);
+}
 
 function isAllowedVideoUrl(url: string) {
   if (!url.trim()) return true;
@@ -200,8 +117,8 @@ function parseHours(hoursText: string | null): DayHour[] {
       .split("/ Break")[0]
       .replace(defaultItem.day, "")
       .trim();
-    const breakPart = line.split("/ Break")[1]?.trim();
 
+    const breakPart = line.split("/ Break")[1]?.trim();
     const [open, close] = mainPart.split(" - ").map((v) => v.trim());
 
     let breakStart = defaultItem.breakStart;
@@ -242,6 +159,9 @@ export default function EditBusinessPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingPhotoIndex, setDeletingPhotoIndex] = useState<number | null>(
+    null
+  );
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [business, setBusiness] = useState<Business | null>(null);
@@ -273,7 +193,6 @@ export default function EditBusinessPage() {
 
   useEffect(() => {
     loadPage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadPage() {
@@ -305,8 +224,7 @@ export default function EditBusinessPage() {
       .eq("status", "approved")
       .maybeSingle();
 
-    const isOwner = !!owner;
-    const canManage = admin || isOwner;
+    const canManage = admin || !!owner;
 
     if (!canManage) {
       alert("You do not have permission to edit this business.");
@@ -446,8 +364,54 @@ export default function EditBusinessPage() {
     e.target.value = "";
   }
 
-  function removeExistingPhoto(index: number) {
-    setExistingImageUrls((prev) => prev.filter((_, i) => i !== index));
+  async function removeExistingPhoto(index: number) {
+    if (!business) return;
+    if (!confirm("이 사진을 삭제하시겠습니까?")) return;
+
+    const targetUrl = existingImageUrls[index];
+    const nextImageUrls = existingImageUrls.filter((_, i) => i !== index);
+
+    try {
+      setDeletingPhotoIndex(index);
+
+      const { error: dbError } = await supabase
+        .from("businesses")
+        .update({
+          image_urls: nextImageUrls,
+          image_url: nextImageUrls[0] || null,
+        })
+        .eq("id", business.id);
+
+      if (dbError) throw dbError;
+
+      const storagePath = getBusinessImagePathFromPublicUrl(targetUrl);
+
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("business-images")
+          .remove([storagePath]);
+
+        if (storageError) {
+          console.error("storage image delete error:", storageError);
+        }
+      }
+
+      setExistingImageUrls(nextImageUrls);
+      setBusiness({
+        ...business,
+        image_urls: nextImageUrls,
+        image_url: nextImageUrls[0] || null,
+      });
+    } catch (err: any) {
+      console.error("business image delete error:", err);
+      alert(
+        `이미지 삭제 오류\n\n메시지: ${
+          err?.message || "알 수 없는 오류"
+        }\n코드: ${err?.code || "없음"}`
+      );
+    } finally {
+      setDeletingPhotoIndex(null);
+    }
   }
 
   function removeNewPhoto(index: number) {
@@ -568,7 +532,6 @@ export default function EditBusinessPage() {
     }
 
     const finalImageUrls = [...existingImageUrls, ...uploadedUrls].slice(0, 6);
-
     const cleanExternalVideoUrl = externalVideoUrl.trim();
 
     const finalUploadedVideoUrl =
@@ -577,14 +540,13 @@ export default function EditBusinessPage() {
         ? existingVideoUrl
         : "");
 
-    const finalExternalVideoUrl =
-      finalUploadedVideoUrl
-        ? null
-        : cleanExternalVideoUrl
-        ? cleanExternalVideoUrl
-        : existingVideoUrl && isExternalVideoUrl(existingVideoUrl)
-        ? existingVideoUrl
-        : null;
+    const finalExternalVideoUrl = finalUploadedVideoUrl
+      ? null
+      : cleanExternalVideoUrl
+      ? cleanExternalVideoUrl
+      : existingVideoUrl && isExternalVideoUrl(existingVideoUrl)
+      ? existingVideoUrl
+      : null;
 
     const { error } = await supabase
       .from("businesses")
@@ -598,15 +560,10 @@ export default function EditBusinessPage() {
         tags,
         website_url: websiteUrl,
         instagram_url: instagramUrl,
-        image_url: finalImageUrls[0] || "",
+        image_url: finalImageUrls[0] || null,
         image_urls: finalImageUrls,
-
-        // Uploaded video files must stay in video_urls.
-        // YouTube/Facebook/Instagram links must stay in external_video_url.
-        // If a new video file was uploaded, remove the old external link.
         video_urls: finalUploadedVideoUrl ? [finalUploadedVideoUrl] : [],
         external_video_url: finalExternalVideoUrl,
-
         lat: selectedLat,
         lng: selectedLng,
       })
@@ -760,27 +717,17 @@ export default function EditBusinessPage() {
 
               {selectedLat && selectedLng && (
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div>
-                    <p className="mb-1 text-xs font-black text-gray-500">
-                      Latitude
-                    </p>
-                    <input
-                      value={selectedLat}
-                      readOnly
-                      className="w-full rounded-xl border bg-green-50 px-3 py-3 text-sm font-bold text-green-700"
-                    />
-                  </div>
+                  <input
+                    value={selectedLat}
+                    readOnly
+                    className="w-full rounded-xl border bg-green-50 px-3 py-3 text-sm font-bold text-green-700"
+                  />
 
-                  <div>
-                    <p className="mb-1 text-xs font-black text-gray-500">
-                      Longitude
-                    </p>
-                    <input
-                      value={selectedLng}
-                      readOnly
-                      className="w-full rounded-xl border bg-green-50 px-3 py-3 text-sm font-bold text-green-700"
-                    />
-                  </div>
+                  <input
+                    value={selectedLng}
+                    readOnly
+                    className="w-full rounded-xl border bg-green-50 px-3 py-3 text-sm font-bold text-green-700"
+                  />
                 </div>
               )}
             </div>
@@ -804,7 +751,7 @@ export default function EditBusinessPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="shrink-0 rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white"
+                  className="shrink-0 rounded-xl bg-[#172033] px-4 py-2 text-sm font-semibold text-white"
                 >
                   사진첨부
                 </button>
@@ -835,9 +782,10 @@ export default function EditBusinessPage() {
                     <button
                       type="button"
                       onClick={() => removeExistingPhoto(index)}
-                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
+                      disabled={deletingPhotoIndex === index}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow disabled:opacity-50"
                     >
-                      ×
+                      {deletingPhotoIndex === index ? "…" : "×"}
                     </button>
                   </div>
                 ))}
@@ -866,264 +814,6 @@ export default function EditBusinessPage() {
               </div>
             </div>
 
-            <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-black">Business Video</p>
-                  <p className="text-xs font-bold text-gray-500">
-                    Upload 1 video OR paste 1 YouTube / Facebook / Instagram link
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => videoInputRef.current?.click()}
-                  disabled={!!externalVideoUrl.trim()}
-                  className="rounded-2xl bg-[#172033] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-40"
-                >
-                  영상첨부
-                </button>
-              </div>
-
-              <input
-                ref={videoInputRef}
-                type="file"
-                accept="video/*"
-                onChange={handleVideoChange}
-                className="hidden"
-              />
-
-              {(existingVideoUrl || newVideoPreview) && (
-                <div className="space-y-2">
-                  <video
-                    controls
-                    src={newVideoPreview || existingVideoUrl}
-                    className="h-56 w-full rounded-xl bg-black"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={removeVideo}
-                    className="w-full rounded-xl bg-red-500 py-3 font-black text-white"
-                  >
-                    Remove Video
-                  </button>
-                </div>
-              )}
-
-              {externalVideoUrl && !newVideoPreview && !existingVideoUrl && (
-                <div className="rounded-xl border bg-white p-3 text-sm font-bold">
-                  <p className="mb-2 text-xs text-gray-500">External video link</p>
-                  <a
-                    href={externalVideoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="break-words text-[#2453A6] underline"
-                  >
-                    {externalVideoUrl}
-                  </a>
-                </div>
-              )}
-
-              <div className="relative flex items-center justify-center py-1">
-                <div className="h-px w-full bg-gray-200" />
-                <span className="absolute bg-gray-50 px-3 text-xs font-black text-gray-400">
-                  OR
-                </span>
-              </div>
-
-              <input
-                value={externalVideoUrl}
-                onChange={(e) => {
-                  setExternalVideoUrl(e.target.value);
-                  if (e.target.value.trim()) {
-                    setExistingVideoUrl("");
-                    setNewVideoFile(null);
-                    if (newVideoPreview) {
-                      URL.revokeObjectURL(newVideoPreview);
-                      setNewVideoPreview("");
-                    }
-                  }
-                }}
-                disabled={!!newVideoFile}
-                placeholder="YouTube / Facebook / Instagram video link"
-                className="w-full rounded-xl border bg-white px-4 py-3 disabled:bg-gray-100 disabled:text-gray-400"
-              />
-            </div>
-
-            <div className="rounded-2xl border bg-gray-50 p-4">
-              <p className="mb-3 font-black">Categories</p>
-
-              <div className="grid grid-cols-2 gap-2">
-                {categories.map((cat) => {
-                  const checked = selectedCategories.includes(cat.name);
-
-                  return (
-                    <label
-                      key={cat.id}
-                      className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold ${
-                        checked
-                          ? "border-[#172033] bg-white"
-                          : "border-gray-200 bg-white/60"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleCategory(cat.name)}
-                        className="h-4 w-4"
-                      />
-
-                      <span>{cat.emoji || "🏷️"}</span>
-                      <span className="truncate">{cat.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-gray-50 p-4">
-              <p className="mb-3 font-black">Business Hours</p>
-
-              <div className="space-y-3">
-                {dayHours.map((item, index) => (
-                  <div
-                    key={item.day}
-                    className="rounded-2xl bg-white p-3 shadow-sm"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="font-black">{item.day}</p>
-
-                      <label className="flex items-center gap-2 text-sm font-bold">
-                        <input
-                          type="checkbox"
-                          checked={item.closed}
-                          onChange={(e) =>
-                            updateDayHour(index, "closed", e.target.checked)
-                          }
-                        />
-                        Closed
-                      </label>
-                    </div>
-
-                    {!item.closed && (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2">
-                          <select
-                            value={item.open}
-                            onChange={(e) =>
-                              updateDayHour(index, "open", e.target.value)
-                            }
-                            className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
-                          >
-                            {timeOptions.map((time) => (
-                              <option key={time} value={time}>
-                                {time}
-                              </option>
-                            ))}
-                          </select>
-
-                          <select
-                            value={item.close}
-                            onChange={(e) =>
-                              updateDayHour(index, "close", e.target.value)
-                            }
-                            className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
-                          >
-                            {timeOptions.map((time) => (
-                              <option key={time} value={time}>
-                                {time}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <label className="flex items-center gap-2 text-sm font-bold">
-                          <input
-                            type="checkbox"
-                            checked={item.hasBreak}
-                            onChange={(e) =>
-                              updateDayHour(
-                                index,
-                                "hasBreak",
-                                e.target.checked
-                              )
-                            }
-                          />
-                          Break time
-                        </label>
-
-                        {item.hasBreak && (
-                          <div className="grid grid-cols-2 gap-2">
-                            <select
-                              value={item.breakStart}
-                              onChange={(e) =>
-                                updateDayHour(
-                                  index,
-                                  "breakStart",
-                                  e.target.value
-                                )
-                              }
-                              className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
-                            >
-                              {timeOptions.map((time) => (
-                                <option key={time} value={time}>
-                                  {time}
-                                </option>
-                              ))}
-                            </select>
-
-                            <select
-                              value={item.breakEnd}
-                              onChange={(e) =>
-                                updateDayHour(
-                                  index,
-                                  "breakEnd",
-                                  e.target.value
-                                )
-                              }
-                              className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
-                            >
-                              {timeOptions.map((time) => (
-                                <option key={time} value={time}>
-                                  {time}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
-              <p className="font-black">Business Info</p>
-
-              <input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="Tags (family, sushi, lunch)"
-                className="w-full rounded-xl border bg-white px-4 py-3"
-              />
-
-              <input
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="Website URL"
-                className="w-full rounded-xl border bg-white px-4 py-3"
-              />
-
-              <input
-                value={instagramUrl}
-                onChange={(e) => setInstagramUrl(e.target.value)}
-                placeholder="Instagram URL"
-                className="w-full rounded-xl border bg-white px-4 py-3"
-              />
-            </div>
-
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -1135,7 +825,7 @@ export default function EditBusinessPage() {
             <button
               onClick={saveBusiness}
               disabled={saving}
-              className="w-full rounded-2xl bg-[#172033] py-4 text-lg font-extrabold text-white disabled:opacity-60"
+              className="w-full rounded-xl bg-[#172033] py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save Changes"}
             </button>
