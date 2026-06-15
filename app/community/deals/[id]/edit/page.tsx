@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../../lib/supabase";
 import CommunityBottomNav from "../../../../components/CommunityBottomNav";
-import ProfileButton from "../../../../components/ProfileButton";
+
 
 declare global {
   interface Window {
