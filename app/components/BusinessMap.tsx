@@ -260,9 +260,19 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
 
     movedRef.current = key;
 
-    map.flyTo([lat - 0.15, lng], Math.max(map.getZoom() - 2, 9), {
-      animate: true,
-    });
+   const isLandscape =
+  typeof window !== "undefined" &&
+  window.matchMedia("(orientation: landscape)").matches;
+
+		map.flyTo(
+		  isLandscape
+			? [lat - 0.05, lng] // 가로모드만 아래로
+			: [lat - 0.15, lng], // 세로모드는 기존 유지
+		  Math.max(map.getZoom() - 2, 9),
+		  {
+			animate: true,
+		  }
+		);
   }, [lat, lng, map]);
 
   return null;
