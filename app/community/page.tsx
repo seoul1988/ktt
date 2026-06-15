@@ -84,7 +84,6 @@ export default async function CommunityPage() {
             <p className="mt-2 text-sm font-semibold text-[#6B6257]">
               Events, deals, new places, and local highlights.
             </p>
-
           </div>
 
           <ProfileButton />
@@ -92,12 +91,22 @@ export default async function CommunityPage() {
 
         {/* Upcoming Events */}
         <section className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-black">Upcoming Events</h2>
+          <div className="mb-4 flex items-center justify-between rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="h-7 w-1.5 rounded-full bg-[#C4483A]" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
+                  Events
+                </p>
+                <h2 className="text-xl font-black text-[#172033]">
+                  Upcoming Events
+                </h2>
+              </div>
+            </div>
 
             <Link
               href="/community/events"
-              className="text-xs font-black text-[#C4483A]"
+              className="rounded-full bg-[#C4483A] px-3 py-1.5 text-xs font-black text-white shadow-sm"
             >
               View all
             </Link>
@@ -208,12 +217,22 @@ export default async function CommunityPage() {
 
         {/* Community Deals */}
         <section className="mb-8">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-black">Community Deals</h2>
+          <div className="mb-4 flex items-center justify-between rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="h-7 w-1.5 rounded-full bg-[#F4C95D]" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
+                  Deals
+                </p>
+                <h2 className="text-xl font-black text-[#172033]">
+                  Community Deals
+                </h2>
+              </div>
+            </div>
 
             <Link
               href="/community/deals"
-              className="text-xs font-black text-[#C4483A]"
+              className="rounded-full bg-[#F4C95D] px-3 py-1.5 text-xs font-black text-[#172033] shadow-sm"
             >
               View all
             </Link>
@@ -303,7 +322,19 @@ export default async function CommunityPage() {
 
         {/* New in Raleigh */}
         <section className="mb-8">
-          <h2 className="mb-3 text-xl font-black">New in Raleigh</h2>
+          <div className="mb-4 rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="h-7 w-1.5 rounded-full bg-[#2A3448]" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#2A3448]">
+                  New
+                </p>
+                <h2 className="text-xl font-black text-[#172033]">
+                  New in Raleigh
+                </h2>
+              </div>
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             {newBusinesses?.map((biz) => (
@@ -358,7 +389,19 @@ export default async function CommunityPage() {
 
         {/* Featured Business */}
         <section>
-          <h2 className="mb-3 text-xl font-black">Featured Business</h2>
+          <div className="mb-4 rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="h-7 w-1.5 rounded-full bg-[#172033]" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#172033]">
+                  Featured
+                </p>
+                <h2 className="text-xl font-black text-[#172033]">
+                  Featured Business
+                </h2>
+              </div>
+            </div>
+          </div>
 
           <div className="space-y-4">
             {featured?.map((item) => (
