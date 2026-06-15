@@ -192,6 +192,11 @@ export default function ProfileButton() {
 				  🎉 Grand Opening
 				</Link>
 
+
+
+
+
+
               <Link
                 href="/events/new"
                 className="block px-4 py-3 hover:bg-[#F8F3EC]"
