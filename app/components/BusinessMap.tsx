@@ -208,7 +208,6 @@ function getOpenStatus(spot: Spot) {
     .find((v) => v.startsWith(todayShort));
 
   if (!line) return { text: "Closed" };
-
   if (line.includes("Closed")) return { text: "Closed Today" };
 
   const mainPart = line.split("/ Break")[0].replace(todayShort, "").trim();
@@ -371,17 +370,9 @@ export default function BusinessMap({
     try {
       const parsed = JSON.parse(saved);
 
-      if (typeof parsed.search === "string") {
-        setSearch(parsed.search);
-      }
-
-      if (parsed.selectedCategory) {
-        setSelectedCategory(parsed.selectedCategory);
-      }
-
-      if (parsed.selectedSpotKey) {
-        setSelectedSpotKey(parsed.selectedSpotKey);
-      }
+      if (typeof parsed.search === "string") setSearch(parsed.search);
+      if (parsed.selectedCategory) setSelectedCategory(parsed.selectedCategory);
+      if (parsed.selectedSpotKey) setSelectedSpotKey(parsed.selectedSpotKey);
 
       setCategoryPanelOpen(false);
       setShowCards(true);
@@ -533,7 +524,6 @@ export default function BusinessMap({
     if (cardSpots.length === 0) return;
 
     const exists = cardSpots.some((spot) => getSpotKey(spot) === selectedSpotKey);
-
     if (!exists) return;
 
     restoredRef.current = true;
@@ -681,9 +671,9 @@ export default function BusinessMap({
 
   return (
     <div className="relative min-h-screen">
-      <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3">
+      <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3 landscape:left-3 landscape:right-3 landscape:top-3">
         {showAllOnLoad && !communityMode && !selectedCategory && !search && (
-          <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl">
+          <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl landscape:hidden">
             {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
           </div>
         )}
@@ -706,7 +696,7 @@ export default function BusinessMap({
             });
           }}
           placeholder="Search Korean spots..."
-          className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none"
+          className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none landscape:px-4 landscape:py-3 landscape:text-xs"
         />
 
         <div className="shrink-0">
@@ -715,7 +705,7 @@ export default function BusinessMap({
       </div>
 
       {categoryPanelOpen && (
-        <div className="fixed right-0 top-24 z-[1300] max-h-[72vh] w-[88px] overflow-y-auto rounded-l-[24px] bg-white p-2 shadow-2xl scrollbar-hide">
+        <div className="fixed right-0 top-24 z-[1300] max-h-[72vh] w-[88px] overflow-y-auto rounded-l-[24px] bg-white p-2 shadow-2xl scrollbar-hide landscape:top-16 landscape:max-h-[78vh] landscape:w-[78px]">
           <p className="mb-3 text-center text-xs font-extrabold text-gray-500">
             Category
           </p>
@@ -738,14 +728,14 @@ export default function BusinessMap({
       {!categoryPanelOpen && (
         <button
           onClick={openCategoryPanel}
-          className="fixed right-0 top-1/2 z-[1400] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl"
+          className="fixed right-0 top-1/2 z-[1400] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl landscape:py-5"
         >
           ☰
         </button>
       )}
 
       {selectedCategory && !categoryPanelOpen && (
-        <div className="fixed left-4 top-[88px] z-[1100] rounded-full bg-white/95 px-4 py-2 text-xs font-extrabold text-[#172033] shadow-xl">
+        <div className="fixed left-4 top-[88px] z-[1100] rounded-full bg-white/95 px-4 py-2 text-xs font-extrabold text-[#172033] shadow-xl landscape:left-3 landscape:top-[62px]">
           {selectedCategory}
         </div>
       )}
@@ -846,10 +836,10 @@ export default function BusinessMap({
       <div
         ref={cardScrollRef}
         onScroll={handleScroll}
-        className={`fixed left-0 right-0 z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 ${
+        className={`fixed z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 landscape:left-3 landscape:right-auto landscape:top-[76px] landscape:bottom-5 landscape:w-[176px] landscape:flex-col landscape:gap-2 landscape:overflow-y-auto landscape:overflow-x-hidden landscape:px-0 landscape:pb-0 landscape:pt-0 ${
           showCards
-            ? "bottom-[82px] opacity-100"
-            : "bottom-[-360px] opacity-0"
+            ? "left-0 right-0 bottom-[82px] opacity-100"
+            : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
         }`}
       >
         {cardSpots.map((spot, index) => {
@@ -890,29 +880,17 @@ export default function BusinessMap({
                   selectedSpotKey: spotKey,
                 });
               }}
-              className={`
-                w-[88vw]
-                iphone:w-[80vw]
-                max-w-[420px]
-                shrink-0
-                snap-center
-                overflow-hidden
-                rounded-[24px]
-                border-2
-                bg-white
-                shadow-2xl
-                ${
-                  spotKey === selectedSpotKey
-                    ? "border-red-500"
-                    : "border-white"
-                }
-              `}
+              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] border-2 bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:w-[166px] landscape:max-w-[166px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:border landscape:p-2 landscape:shadow-xl ${
+                spotKey === selectedSpotKey
+                  ? "border-red-500"
+                  : "border-white"
+              }`}
             >
-              <div className="relative h-[145px] w-full overflow-hidden bg-white">
+              <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-12 landscape:w-12 landscape:shrink-0 landscape:rounded-xl">
                 {images.length > 0 ? (
                   <div
                     id={`image-scroll-${spotKey}`}
-                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth landscape:overflow-hidden"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -938,18 +916,18 @@ export default function BusinessMap({
                         draggable={false}
                         className={`h-full w-full shrink-0 snap-center ${
                           communityMode ? "object-contain" : "object-cover"
-                        }`}
+                        } landscape:object-cover`}
                       />
                     ))}
                   </div>
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400">
+                  <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 landscape:text-[9px]">
                     No Photo
                   </div>
                 )}
 
                 {eventLabel && (
-                  <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md">
+                  <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md landscape:hidden">
                     <span className="line-clamp-1">{eventLabel}</span>
                   </div>
                 )}
@@ -971,7 +949,7 @@ export default function BusinessMap({
                         behavior: "smooth",
                       });
                     }}
-                    className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+                    className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
                   >
                     ←
                   </div>
@@ -994,14 +972,14 @@ export default function BusinessMap({
                         behavior: "smooth",
                       });
                     }}
-                    className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+                    className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
                   >
                     →
                   </div>
                 )}
 
                 {images.length > 1 && (
-                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 landscape:hidden">
                     {images.map((_, i) => (
                       <div
                         key={i}
@@ -1014,13 +992,13 @@ export default function BusinessMap({
                 )}
               </div>
 
-              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3">
+              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="line-clamp-2 text-xl font-black text-[#172033]">
+                  <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
                     {spot.name}
                   </h3>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2 landscape:hidden">
                     <button
                       onClick={(e) => toggleLike(e, businessId)}
                       className={`rounded-full border px-2 py-1 text-xs font-bold ${
@@ -1047,7 +1025,7 @@ export default function BusinessMap({
                   </div>
                 </div>
 
-                <p className="mt-1 text-sm font-semibold text-gray-700">
+                <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
                   {spot.category} · {spot.city || "Triangle"}
                   {spot.rating && (
                     <>
@@ -1057,13 +1035,11 @@ export default function BusinessMap({
                   )}
                 </p>
 
-                <p className="mt-1 text-sm font-bold text-[#2453A6]">
+                <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
                   {userLocation && spot.distance !== undefined
                     ? `${spot.distance.toFixed(1)} miles away`
                     : "Near Triangle"}
                 </p>
-
-              
               </div>
             </a>
           );
@@ -1071,7 +1047,7 @@ export default function BusinessMap({
       </div>
 
       {!communityMode && (
-        <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+        <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[70%] landscape:max-w-sm landscape:py-2 landscape:text-[11px]">
           <a
             href="/"
             className={activeNav === "home" ? "text-[#F7B955]" : undefined}
