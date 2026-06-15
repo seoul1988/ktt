@@ -651,14 +651,17 @@ export default function BusinessMap({
     let distance = 0;
 
     if (isLandscape) {
-      // 폰 가로모드: 왼쪽 리스트 맨 위에 가장 가까운 카드 기준
-      const listTop = cardScrollRef.current?.getBoundingClientRect().top || 76;
-      distance = Math.abs(rect.top - listTop);
+      // 가로모드 → 카드 세로 중앙이 화면 세로 중앙에 가장 가까운 카드
+      const viewportCenterY = window.innerHeight / 2;
+      const cardCenterY = rect.top + rect.height / 2;
+
+      distance = Math.abs(cardCenterY - viewportCenterY);
     } else {
-      // 세로모드: 기존처럼 가운데 카드 기준
-      const viewportCenter = window.innerWidth / 2;
-      const cardCenter = rect.left + rect.width / 2;
-      distance = Math.abs(cardCenter - viewportCenter);
+      // 세로모드 → 기존 가로 스크롤 카드 중앙
+      const viewportCenterX = window.innerWidth / 2;
+      const cardCenterX = rect.left + rect.width / 2;
+
+      distance = Math.abs(cardCenterX - viewportCenterX);
     }
 
     if (distance < closestDistance) {
@@ -669,6 +672,7 @@ export default function BusinessMap({
 
   if (closestKey) {
     setSelectedSpotKey(closestKey);
+
     saveMapState({
       selectedSpotKey: closestKey,
     });
@@ -850,7 +854,7 @@ export default function BusinessMap({
       <div
         ref={cardScrollRef}
         onScroll={handleScroll}
-        className={`fixed z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 landscape:left-3 landscape:right-auto landscape:top-[76px] landscape:bottom-5 landscape:w-[176px] landscape:flex-col landscape:gap-2 landscape:overflow-y-auto landscape:overflow-x-hidden landscape:px-0 landscape:pb-0 landscape:pt-0 ${
+        className={`fixed z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 landscape:left-3 landscape:right-auto landscape:top-[76px] landscape:bottom-5 landscape:w-[210px] landscape:flex-col landscape:gap-2 landscape:overflow-y-auto landscape:overflow-x-hidden landscape:px-0 landscape:pb-0 landscape:pt-0 ${
           showCards
             ? "left-0 right-0 bottom-[82px] opacity-100"
             : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
@@ -894,7 +898,7 @@ export default function BusinessMap({
                   selectedSpotKey: spotKey,
                 });
               }}
-              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] border-2 bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:w-[166px] landscape:max-w-[166px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:border landscape:p-2 landscape:shadow-xl ${
+              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] border-2 bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:border landscape:p-2 landscape:shadow-xl ${
                 spotKey === selectedSpotKey
                   ? "border-red-500"
                   : "border-white"
