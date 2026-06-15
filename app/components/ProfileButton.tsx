@@ -26,6 +26,7 @@ export default function ProfileButton() {
 
   const isOwner = role === "owner";
   const isAdmin = role === "admin";
+  const canManage = isOwner || isAdmin;
 
   async function loadUser() {
     try {
@@ -154,34 +155,64 @@ export default function ProfileButton() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-[999999] w-52 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
-          <Link href="/profile" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+        <div className="absolute right-0 top-10 z-[999999] w-56 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
+          <Link
+            href="/profile"
+            className="block px-4 py-3 hover:bg-[#F8F3EC]"
+            onClick={() => setOpen(false)}
+          >
             Edit Profile
           </Link>
 
-          <Link href="/my-coupons" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+          <Link
+            href="/my-coupons"
+            className="block px-4 py-3 hover:bg-[#F8F3EC]"
+            onClick={() => setOpen(false)}
+          >
             My Coupons
           </Link>
 
-          {(isOwner || isAdmin) && (
+          {canManage && (
             <>
-              <Link href="/owner" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <div className="border-t border-[#EFE5D8]" />
+
+              <Link
+                href="/owner"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 My Business
               </Link>
 
-              <Link href="/business/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
-                Register Business
-              </Link>
+              <Link
+				  href="/grand-opening/new"
+				  className="block px-4 py-3 hover:bg-[#F8F3EC]"
+				  onClick={() => setOpen(false)}
+				>
+				  🎉 Grand Opening
+				</Link>
 
-              <Link href="/events/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <Link
+                href="/events/new"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 Create Event
               </Link>
 
-              <Link href="/deals/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <Link
+                href="/deals/new"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 Create Deal
               </Link>
 
-              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <Link
+                href="/coupons/new"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 Register Coupon
               </Link>
             </>
@@ -189,19 +220,35 @@ export default function ProfileButton() {
 
           {isAdmin && (
             <>
-              <Link href="/admin/owner-requests" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <div className="border-t border-[#EFE5D8]" />
+
+              <Link
+                href="/admin/owner-requests"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 Owner Requests
               </Link>
 
-              <Link href="/admin/categories" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <Link
+                href="/admin/categories"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 Categories
               </Link>
 
-              <Link href="/admin/event-requests" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <Link
+                href="/admin/event-requests"
+                className="block px-4 py-3 hover:bg-[#F8F3EC]"
+                onClick={() => setOpen(false)}
+              >
                 Event Requests
               </Link>
             </>
           )}
+
+          <div className="border-t border-[#EFE5D8]" />
 
           <button
             type="button"
