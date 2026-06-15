@@ -28,9 +28,16 @@ export default async function CommunityDealsPage() {
             ← Back
           </Link>
 
-          <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+          <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
             Community Deals
           </h1>
+
+          <Link
+            href="/community/deals/new"
+            className="absolute right-0 rounded-full bg-[#C4483A] px-3 py-1.5 text-xs font-black text-white shadow-sm transition active:scale-95"
+          >
+            + 등록
+          </Link>
         </div>
 
         <div className="space-y-5">
@@ -38,7 +45,7 @@ export default async function CommunityDealsPage() {
             <Link
               key={deal.id}
               href={`/community/deals/${deal.id}`}
-              className="block overflow-hidden rounded-3xl bg-white shadow-sm"
+              className="block overflow-hidden rounded-3xl bg-white shadow-sm transition active:scale-[0.98]"
             >
               <div className="relative h-52 w-full overflow-hidden bg-[#E8DED1]">
                 {deal.image_url ? (
@@ -52,20 +59,24 @@ export default async function CommunityDealsPage() {
                     No Photo
                   </div>
                 )}
-
-                <div className="absolute left-3 top-3 rounded-full bg-[#F4C95D] px-3 py-1 text-xs font-black text-[#172033]">
-                  DEAL
-                </div>
-
-                {deal.discount_text && (
-                  <div className="absolute bottom-3 left-3 rounded-full bg-[#C4483A] px-4 py-2 text-sm font-black text-white">
-                    {deal.discount_text}
-                  </div>
-                )}
               </div>
 
               <div className="p-5">
-                <h2 className="text-xl font-black">{deal.title}</h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-xl font-black leading-snug">
+                    {deal.title}
+                  </h2>
+
+                  <span className="rounded-full bg-[#F4C95D] px-2.5 py-1 text-[10px] font-black text-[#172033]">
+                    DEAL
+                  </span>
+
+                  {deal.discount_text && (
+                    <span className="rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white">
+                      {deal.discount_text}
+                    </span>
+                  )}
+                </div>
 
                 <p className="mt-1 text-sm font-bold text-[#6B6257]">
                   {deal.business_name || "Local Business"}
@@ -94,7 +105,7 @@ export default async function CommunityDealsPage() {
         </div>
       </section>
 
-      <CommunityBottomNav activeNav="community" />
+      <CommunityBottomNav activeNav="deals" />
     </main>
   );
 }
