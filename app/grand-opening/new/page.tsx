@@ -1,23 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../lib/supabase";
-import ProfileButton from "../../../components/ProfileButton";
+import ProfileButton from "../../components/ProfileButton";
 
+const libraries: "places"[] = ["places"];
 
 export default function NewGrandOpeningPage() {
   const router = useRouter();
+
+  const autocompleteRef =
+    useRef<google.maps.places.Autocomplete | null>(null);
+
+  const { isLoaded } = useLoadScript({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
 
   const [userId, setUserId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
   const [address, setAddress] = useState("");
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
   const [phone, setPhone] = useState("");
   const [openingDate, setOpeningDate] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -37,6 +54,117 @@ export default function NewGrandOpeningPage() {
     loadUser();
   }, [router]);
 
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      if (videoPreview) URL.revokeObjectURL(videoPreview);
+    };
+  }, [imagePreviews, videoPreview]);
+
+  function handlePlaceChanged() {
+    const place = autocompleteRef.current?.getPlace();
+
+    if (place?.formatted_address) {
+      setAddress(place.formatted_address);
+    }
+
+    const location = place?.geometry?.location;
+
+    if (location) {
+      setLat(location.lat());
+      setLng(location.lng());
+    }
+  }
+
+  function handleImages(files: FileList | null) {
+    if (!files) return;
+
+    const selected = Array.from(files);
+    const merged = [...imageFiles, ...selected].slice(0, 5);
+
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+
+    setImageFiles(merged);
+    setImagePreviews(merged.map((file) => URL.createObjectURL(file)));
+  }
+
+  function removeImage(index: number) {
+    const nextFiles = imageFiles.filter((_, i) => i !== index);
+
+    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+
+    setImageFiles(nextFiles);
+    setImagePreviews(nextFiles.map((file) => URL.createObjectURL(file)));
+  }
+
+  function handleVideo(file: File | null) {
+    if (!file) return;
+
+    if (videoPreview) {
+      URL.revokeObjectURL(videoPreview);
+    }
+
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
+  }
+
+  function removeVideo() {
+    if (videoPreview) {
+      URL.revokeObjectURL(videoPreview);
+    }
+
+    setVideoFile(null);
+    setVideoPreview(null);
+  }
+
+  async function uploadImages(grandOpeningId: string) {
+    const uploadedUrls: string[] = [];
+
+    for (const file of imageFiles) {
+      const ext = file.name.split(".").pop() || "jpg";
+      const fileName = `${userId}/${grandOpeningId}/images/${crypto.randomUUID()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("grand-openings")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from("grand-openings")
+        .getPublicUrl(fileName);
+
+      uploadedUrls.push(data.publicUrl);
+    }
+
+    return uploadedUrls;
+  }
+
+  async function uploadVideo(grandOpeningId: string) {
+    if (!videoFile) return null;
+
+    const ext = videoFile.name.split(".").pop() || "mp4";
+    const fileName = `${userId}/${grandOpeningId}/video/${crypto.randomUUID()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("grand-openings")
+      .upload(fileName, videoFile, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from("grand-openings")
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  }
+
   async function submitGrandOpening(e: React.FormEvent) {
     e.preventDefault();
 
@@ -46,41 +174,51 @@ export default function NewGrandOpeningPage() {
 
     setSaving(true);
 
-    const { error } = await supabase.from("grand_openings").insert({
-      user_id: userId,
-      title: title.trim(),
-      business_name: businessName.trim(),
-      description: description.trim() || null,
-      address: address.trim() || null,
-      phone: phone.trim() || null,
-      opening_date: openingDate || null,
-      image_url: imageUrl.trim() || null,
-      status: "pending",
-    });
+    try {
+      const grandOpeningId = crypto.randomUUID();
+      const imageUrls = await uploadImages(grandOpeningId);
+      const uploadedVideoUrl = await uploadVideo(grandOpeningId);
 
-    setSaving(false);
+      const { error } = await supabase.from("grand_openings").insert({
+        id: grandOpeningId,
+        user_id: userId,
+        title: title.trim(),
+        business_name: businessName.trim(),
+        description: description.trim() || null,
+        address: address.trim() || null,
+        lat,
+        lng,
+        phone: phone.trim() || null,
+        opening_date: openingDate || null,
+        images: imageUrls,
+        video_url: uploadedVideoUrl || videoUrl.trim() || null,
+        link_url: linkUrl.trim() || null,
+        status: "pending",
+      });
 
-    if (error) {
-      alert(error.message);
-      return;
+      if (error) throw error;
+
+      alert("Grand Opening submitted for approval.");
+      router.push("/");
+    } catch (err: any) {
+      alert(err?.message || "Failed to submit Grand Opening.");
+    } finally {
+      setSaving(false);
     }
-
-    alert("Grand Opening submitted for approval.");
-    router.push("/");
   }
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="mb-5 flex items-center justify-between border-b border-[#E8DED1] pb-3">
-		  <Link href="/" className="text-sm font-black">
-			← Back
-		  </Link>
+          <Link href="/" className="text-sm font-black">
+            ← Back
+          </Link>
 
-		  <h1 className="text-lg font-black">Grand Opening</h1>
+          <h1 className="text-lg font-black">Grand Opening</h1>
 
-		  <ProfileButton />
-		</div>
+          <ProfileButton />
+        </div>
 
         <form
           onSubmit={submitGrandOpening}
@@ -122,12 +260,39 @@ export default function NewGrandOpeningPage() {
 
           <div>
             <label className="mb-1 block text-sm font-black">Address</label>
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
-              placeholder="Business address"
-            />
+
+            {isLoaded ? (
+              <Autocomplete
+                onLoad={(autocomplete) => {
+                  autocompleteRef.current = autocomplete;
+                }}
+                onPlaceChanged={handlePlaceChanged}
+              >
+                <input
+                  value={address}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setLat(null);
+                    setLng(null);
+                  }}
+                  className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
+                  placeholder="Start typing address..."
+                />
+              </Autocomplete>
+            ) : (
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
+                placeholder="Loading Google Maps..."
+              />
+            )}
+
+            {lat && lng && (
+              <p className="mt-1 text-xs font-bold text-green-700">
+                Address selected
+              </p>
+            )}
           </div>
 
           <div>
@@ -141,13 +306,99 @@ export default function NewGrandOpeningPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-black">Image URL</label>
+            <label className="mb-1 block text-sm font-black">
+              Website / Link URL
+            </label>
             <input
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
               className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
               placeholder="https://..."
             />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-black">Video</label>
+
+            <input
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
+              placeholder="YouTube, Instagram, TikTok, or video link"
+            />
+
+            <div className="mt-2">
+              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#E8DED1] bg-[#F8F3EC] px-4 py-3 text-sm font-black text-[#172033] active:scale-95">
+                Attach Video
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => handleVideo(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {videoPreview && (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-[#E8DED1]">
+                <video src={videoPreview} controls className="w-full bg-black" />
+
+                <button
+                  type="button"
+                  onClick={removeVideo}
+                  className="block w-full bg-red-50 px-4 py-3 text-sm font-black text-red-600"
+                >
+                  Remove Video
+                </button>
+              </div>
+            )}
+
+            <p className="mt-2 text-xs font-bold text-gray-500">
+              You can attach one video file or paste a video link.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-black">
+              Images Max 5
+            </label>
+
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => handleImages(e.target.files)}
+              className="w-full rounded-xl border border-[#E8DED1] bg-white px-4 py-3 text-sm"
+            />
+
+            {imagePreviews.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {imagePreviews.map((src, index) => (
+                  <div
+                    key={src}
+                    className="relative aspect-square overflow-hidden rounded-xl border border-[#E8DED1]"
+                  >
+                    <img
+                      src={src}
+                      alt={`Preview ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs font-black text-white"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-2 text-xs font-bold text-gray-500">
+              {imageFiles.length}/5 images selected
+            </p>
           </div>
 
           <div>
