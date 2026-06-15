@@ -264,15 +264,15 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   typeof window !== "undefined" &&
   window.matchMedia("(orientation: landscape)").matches;
 
-		map.flyTo(
-		  isLandscape
-			? [lat - 0.05, lng] // 가로모드만 아래로
-			: [lat - 0.15, lng], // 세로모드는 기존 유지
-		  Math.max(map.getZoom() - 2, 9),
-		  {
-			animate: true,
-		  }
-		);
+	map.flyTo(
+	  isLandscape
+		? [lat - 0.01, lng] // 가로모드만 아래로
+		: [lat - 0.15, lng], // 세로모드는 기존 유지
+	  Math.max(map.getZoom() - 2, 9),
+	  {
+		animate: true,
+	  }
+	);
   }, [lat, lng, map]);
 
   return null;
