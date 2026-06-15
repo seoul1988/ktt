@@ -872,209 +872,204 @@ export default function BusinessMap({
             : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
         }`}
       >
-        {cardSpots.map((spot, index) => {
-          const spotKey = getSpotKey(spot);
-          const cardKey = `${spotKey}-${index}`;
-          const businessId = getBusinessId(spot);
+       <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
 
-          const images =
-            spot.image_urls && spot.image_urls.length > 0
-              ? spot.image_urls
-              : [spot.image_url, spot.image_url_2, spot.image_url_3].filter(
-                  Boolean
-                );
+{cardSpots.map((spot, index) => {
+  const spotKey = getSpotKey(spot);
+  const cardKey = `${spotKey}-${index}`;
+  const businessId = getBusinessId(spot);
 
-          const current = imageIndexes[spotKey] || 0;
-          const status = getOpenStatus(spot);
-          const firstCoupon = spot.coupons?.[0];
+  const images =
+    spot.image_urls && spot.image_urls.length > 0
+      ? spot.image_urls
+      : [spot.image_url, spot.image_url_2, spot.image_url_3].filter(Boolean);
 
-          const eventLabel =
-            spot.coupon_badge ||
-            firstCoupon?.title ||
-            spot.event_title ||
-            spot.event_name ||
-            spot.coupon_title ||
-            spot.deal_title ||
-            null;
+  const current = imageIndexes[spotKey] || 0;
+  const status = getOpenStatus(spot);
+  const firstCoupon = spot.coupons?.[0];
 
-          return (
-            <a
-              key={cardKey}
-              ref={(el) => {
-                cardRefs.current[spotKey] = el;
-              }}
-              href={getDetailHref(spot, businessId, communityMode)}
-              onClick={() => {
-                setSelectedSpotKey(spotKey);
-                saveMapState({
-                  selectedSpotKey: spotKey,
-                });
-              }}
-              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
-  spotKey === selectedSpotKey
-    ? "border-4 border-red-600"
-    : "border-2 border-white"
-}`}
-            >
-              <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
-                {images.length > 0 ? (
-                  <div
-                    id={`image-scroll-${spotKey}`}
-                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth landscape:overflow-hidden"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    onScroll={(e) => {
-                      const target = e.currentTarget;
-                      const width = target.clientWidth;
-                      const scrollLeft = target.scrollLeft;
+  const eventLabel =
+    spot.coupon_badge ||
+    firstCoupon?.title ||
+    spot.event_title ||
+    spot.event_name ||
+    spot.coupon_title ||
+    spot.deal_title ||
+    null;
 
-                      if (!width) return;
+  return (
+    <a
+      key={cardKey}
+      ref={(el) => {
+        cardRefs.current[spotKey] = el;
+      }}
+      href={getDetailHref(spot, businessId, communityMode)}
+      onClick={() => {
+        setSelectedSpotKey(spotKey);
+        saveMapState({
+          selectedSpotKey: spotKey,
+        });
+      }}
+      className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
+        spotKey === selectedSpotKey
+          ? "border-4 border-red-600"
+          : "border-2 border-white"
+      }`}
+    >
+      <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
+        {images.length > 0 ? (
+          <div
+            id={`image-scroll-${spotKey}`}
+            className="flex h-full w-full snap-x overflow-x-auto scroll-smooth landscape:overflow-hidden"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onScroll={(e) => {
+              const target = e.currentTarget;
+              const width = target.clientWidth;
+              const scrollLeft = target.scrollLeft;
 
-                      setImageIndexes((prev) => ({
-                        ...prev,
-                        [spotKey]: Math.round(scrollLeft / width),
-                      }));
-                    }}
-                  >
-                    {images.map((image, imageIndex) => (
-                      <img
-                        key={imageIndex}
-                        src={image as string}
-                        alt={spot.name}
-                        draggable={false}
-                        className={`h-full w-full shrink-0 snap-center ${
-                          communityMode ? "object-contain" : "object-cover"
-                        } landscape:object-cover`}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 landscape:text-[9px]">
-                    No Photo
-                  </div>
-                )}
+              if (!width) return;
 
-                {eventLabel && (
-                  <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md landscape:hidden">
-                    <span className="line-clamp-1">{eventLabel}</span>
-                  </div>
-                )}
+              setImageIndexes((prev) => ({
+                ...prev,
+                [spotKey]: Math.round(scrollLeft / width),
+              }));
+            }}
+          >
+            {images.map((image, imageIndex) => (
+              <img
+                key={imageIndex}
+                src={image as string}
+                alt={spot.name}
+                draggable={false}
+                className={`h-full w-full shrink-0 snap-center ${
+                  communityMode ? "object-contain" : "object-cover"
+                } landscape:object-cover`}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 landscape:text-[9px]">
+            No Photo
+          </div>
+        )}
 
-                {images.length > 1 && current > 0 && (
-                  <div
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+        {eventLabel && (
+          <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md landscape:hidden">
+            <span className="line-clamp-1">{eventLabel}</span>
+          </div>
+        )}
 
-                      const c = document.getElementById(
-                        `image-scroll-${spotKey}`
-                      );
+        {images.length > 1 && current > 0 && (
+          <div
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
 
-                      if (!c) return;
+              const c = document.getElementById(`image-scroll-${spotKey}`);
+              if (!c) return;
 
-                      c.scrollTo({
-                        left: c.scrollLeft - c.clientWidth,
-                        behavior: "smooth",
-                      });
-                    }}
-                    className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
-                  >
-                    ←
-                  </div>
-                )}
+              c.scrollTo({
+                left: c.scrollLeft - c.clientWidth,
+                behavior: "smooth",
+              });
+            }}
+            className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
+          >
+            ←
+          </div>
+        )}
 
-                {images.length > 1 && current < images.length - 1 && (
-                  <div
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+        {images.length > 1 && current < images.length - 1 && (
+          <div
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
 
-                      const c = document.getElementById(
-                        `image-scroll-${spotKey}`
-                      );
+              const c = document.getElementById(`image-scroll-${spotKey}`);
+              if (!c) return;
 
-                      if (!c) return;
+              c.scrollTo({
+                left: c.scrollLeft + c.clientWidth,
+                behavior: "smooth",
+              });
+            }}
+            className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
+          >
+            →
+          </div>
+        )}
 
-                      c.scrollTo({
-                        left: c.scrollLeft + c.clientWidth,
-                        behavior: "smooth",
-                      });
-                    }}
-                    className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
-                  >
-                    →
-                  </div>
-                )}
-
-                {images.length > 1 && (
-                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 landscape:hidden">
-                    {images.map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-2 w-2 rounded-full ${
-                          i === current ? "bg-white" : "bg-white/40"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
-                    {spot.name}
-                  </h3>
-
-                  <div className="flex shrink-0 items-center gap-2 landscape:hidden">
-                    <button
-                      onClick={(e) => toggleLike(e, businessId)}
-                      className={`rounded-full border px-2 py-1 text-xs font-bold ${
-                        likedIds[businessId]
-                          ? "border-red-200 bg-red-50 text-red-500"
-                          : "border-pink-100 bg-pink-50 text-pink-500"
-                      }`}
-                    >
-                      {likedIds[businessId] ? "♥" : "♡"}{" "}
-                      {likeCounts[businessId] || 0}
-                    </button>
-
-                    <div
-                      className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
-                        status.text === "Open"
-                          ? "bg-green-100 text-green-700"
-                          : status.text === "Break Time"
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-white text-gray-600"
-                      }`}
-                    >
-                      {status.text}
-                    </div>
-                  </div>
-                </div>
-
-                <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
-                  {spot.category} · {spot.city || "Triangle"}
-                  {spot.rating && (
-                    <>
-                      {" · "}⭐ {spot.rating}
-                      {spot.review_count ? ` (${spot.review_count})` : ""}
-                    </>
-                  )}
-                </p>
-
-                <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
-                  {userLocation && spot.distance !== undefined
-                    ? `${spot.distance.toFixed(1)} miles away`
-                    : "Near Triangle"}
-                </p>
-              </div>
-            </a>
-          );
-        })}
+        {images.length > 1 && (
+          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 landscape:hidden">
+            {images.map((_, i) => (
+              <div
+                key={i}
+                className={`h-2 w-2 rounded-full ${
+                  i === current ? "bg-white" : "bg-white/40"
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
+            {spot.name}
+          </h3>
+
+          <div className="flex shrink-0 items-center gap-2 landscape:hidden">
+            <button
+              onClick={(e) => toggleLike(e, businessId)}
+              className={`rounded-full border px-2 py-1 text-xs font-bold ${
+                likedIds[businessId]
+                  ? "border-red-200 bg-red-50 text-red-500"
+                  : "border-pink-100 bg-pink-50 text-pink-500"
+              }`}
+            >
+              {likedIds[businessId] ? "♥" : "♡"}{" "}
+              {likeCounts[businessId] || 0}
+            </button>
+
+            <div
+              className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
+                status.text === "Open"
+                  ? "bg-green-100 text-green-700"
+                  : status.text === "Break Time"
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-white text-gray-600"
+              }`}
+            >
+              {status.text}
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
+          {spot.category} · {spot.city || "Triangle"}
+          {spot.rating && (
+            <>
+              {" · "}⭐ {spot.rating}
+              {spot.review_count ? ` (${spot.review_count})` : ""}
+            </>
+          )}
+        </p>
+
+        <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
+          {userLocation && spot.distance !== undefined
+            ? `${spot.distance.toFixed(1)} miles away`
+            : "Near Triangle"}
+        </p>
+      </div>
+    </a>
+  );
+})}
+
+<div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
 
       {!communityMode && (
         <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[70%] landscape:max-w-sm landscape:py-2 landscape:text-[11px]">
