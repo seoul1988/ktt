@@ -1070,7 +1070,7 @@ export default function BusinessMap({
 })}
 
 <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
-
+      </div>
       {!communityMode && (
         <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[70%] landscape:max-w-sm landscape:py-2 landscape:text-[11px]">
           <a
