@@ -133,6 +133,7 @@ export default async function Home() {
     `)
     .eq("status", "approved")
     .eq("active", true)
+    .or("deal_scope.is.null,deal_scope.neq.community")
     .lte("start_date", today)
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false })
@@ -143,6 +144,7 @@ export default async function Home() {
     .select("id, business_id")
     .eq("status", "approved")
     .eq("active", true)
+    .or("deal_scope.is.null,deal_scope.neq.community")
     .lte("start_date", today)
     .or(`end_date.is.null,end_date.gte.${today}`);
 

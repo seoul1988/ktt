@@ -25,12 +25,17 @@ export default async function DealsPage() {
     `)
     .eq("status", "approved")
     .eq("active", true)
+
+    // 커뮤니티 딜 제외: 메인 Deals에는 일반 딜만 표시
+    .or("deal_scope.is.null,deal_scope.neq.community")
+
+    // 만료되지 않은 딜만 표시
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false });
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-2 pb-28 text-[#172033]">
-  <div className="mx-auto w-full max-w-2xl">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="relative mb-4 flex items-center justify-center">
           <Link
             href="/"
@@ -70,6 +75,12 @@ export default async function DealsPage() {
                 ? deal.businesses[0]
                 : deal.businesses;
 
+              const itemCount =
+                1 +
+                (Array.isArray(deal.deal_items)
+                  ? deal.deal_items.length
+                  : 0);
+
               return (
                 <Link
                   key={deal.id}
@@ -84,23 +95,19 @@ export default async function DealsPage() {
                     />
 
                     <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1 text-xs font-black text-white">
-                      1/
-                      {1 +
-                        (Array.isArray(deal.deal_items)
-                          ? deal.deal_items.length
-                          : 0)}
+                      1/{itemCount}
                     </div>
                   </div>
 
                   <div className="p-5">
                     <div className="mb-3 rounded-2xl bg-[#F8F3EC] p-3">
                       <p className="text-base font-black">
-                        {business?.name || "Business"}
+                        {business?.name || deal.business_name || "Business"}
                       </p>
 
-                      {business?.phone && (
+                      {(business?.phone || deal.phone) && (
                         <p className="mt-1 text-sm font-bold text-blue-600">
-                          📞 {business.phone}
+                          📞 {business?.phone || deal.phone}
                         </p>
                       )}
                     </div>
@@ -110,7 +117,9 @@ export default async function DealsPage() {
                       {deal.end_date ? ` ~ ${deal.end_date}` : ""}
                     </p>
 
-                    <h2 className="mt-2 text-xl font-black">{deal.title}</h2>
+                    <h2 className="mt-2 text-xl font-black">
+                      {deal.title}
+                    </h2>
 
                     <p className="mt-2 line-clamp-3 text-sm leading-6 text-gray-600">
                       {deal.description}
@@ -123,7 +132,7 @@ export default async function DealsPage() {
         )}
       </div>
 
-      <BottomNav activeNav="deals"/>
+      <BottomNav activeNav="deals" />
     </main>
   );
 }

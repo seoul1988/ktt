@@ -39,6 +39,7 @@ export default function NewCommunityDealPage() {
   }, []);
 
   useEffect(() => {
+    if (checkingUser) return;
     if (!addressInputRef.current) return;
 
     const existingScript = document.getElementById("google-maps-script");
@@ -103,6 +104,7 @@ export default function NewCommunityDealPage() {
 
     if (!file.type.startsWith("image/")) {
       alert("이미지 파일만 업로드할 수 있습니다.");
+      e.target.value = "";
       return;
     }
 
@@ -121,9 +123,7 @@ export default function NewCommunityDealPage() {
           upsert: false,
         });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage
         .from("deal-images")
@@ -135,6 +135,7 @@ export default function NewCommunityDealPage() {
       alert("이미지 업로드 중 오류가 발생했습니다.");
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   }
 
@@ -182,8 +183,11 @@ export default function NewCommunityDealPage() {
       image_url: imageUrl || null,
       start_date: startDate || null,
       end_date: endDate,
+
       active: true,
       status: "approved",
+
+      // 중요: 이 페이지에서 등록한 딜은 커뮤니티 전용
       deal_scope: "community",
     });
 
@@ -201,7 +205,8 @@ export default function NewCommunityDealPage() {
       return;
     }
 
-    router.push("/community");
+    alert("커뮤니티 딜이 등록되었습니다.");
+    router.push("/community/deals");
   }
 
   if (checkingUser) {
@@ -215,22 +220,17 @@ export default function NewCommunityDealPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-    <div className="mb-6">
-  <div className="relative flex items-center h-8">
-    <Link
-      href="/community"
-      className="text-sm font-black text-[#C4483A]"
-    >
-      ← Back
-    </Link>
+        <div className="mb-6">
+          <div className="relative flex h-8 items-center">
+            <Link href="/community" className="text-sm font-black text-[#C4483A]">
+              ← Back
+            </Link>
 
-    <h1 className="absolute left-1/2 -translate-x-1/2 text-base font-extrabold text-[#172033]">
-      COMMUNITY DEAL
-    </h1>
-  </div>
-
-
-</div>
+            <h1 className="absolute left-1/2 -translate-x-1/2 text-base font-extrabold text-[#172033]">
+              COMMUNITY DEAL
+            </h1>
+          </div>
+        </div>
 
         <form
           onSubmit={handleSubmit}
@@ -257,9 +257,7 @@ export default function NewCommunityDealPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-black">
-              할인 내용 *
-            </label>
+            <label className="mb-1 block text-sm font-black">할인 내용 *</label>
             <input
               value={discountText}
               onChange={(e) => setDiscountText(e.target.value)}
@@ -291,9 +289,7 @@ export default function NewCommunityDealPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-black">
-                종료일 *
-              </label>
+              <label className="mb-1 block text-sm font-black">종료일 *</label>
               <input
                 type="date"
                 value={endDate}
@@ -345,56 +341,52 @@ export default function NewCommunityDealPage() {
           </div>
 
           <div>
-  <label className="mb-2 block text-sm font-black">
-    이미지
-  </label>
+            <label className="mb-2 block text-sm font-black">이미지</label>
 
-  <label
-    className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-[#F8F3EC] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#F3EEE6]"
-  >
-    📷 이미지 선택
+            <label className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-[#F8F3EC] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#F3EEE6]">
+              📷 이미지 선택
 
-    <input
-      type="file"
-      accept="image/*"
-      onChange={handleImageUpload}
-      disabled={uploading}
-      className="hidden"
-    />
-  </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
 
-  {uploading && (
-    <p className="mt-2 text-xs font-bold text-[#6B6257]">
-      업로드 중...
-    </p>
-  )}
+            {uploading && (
+              <p className="mt-2 text-xs font-bold text-[#6B6257]">
+                업로드 중...
+              </p>
+            )}
 
-  {imageUrl && (
-    <div className="mt-3 overflow-hidden rounded-2xl">
-      <img
-        src={imageUrl}
-        alt="preview"
-        className="h-48 w-full object-cover"
-      />
+            {imageUrl && (
+              <div className="mt-3 overflow-hidden rounded-2xl">
+                <img
+                  src={imageUrl}
+                  alt="preview"
+                  className="h-48 w-full object-cover"
+                />
 
-      <button
-        type="button"
-        onClick={() => setImageUrl("")}
-        className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-[#172033]"
-      >
-        이미지 삭제
-      </button>
-    </div>
-  )}
-</div>
+                <button
+                  type="button"
+                  onClick={() => setImageUrl("")}
+                  className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-[#172033]"
+                >
+                  이미지 삭제
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
-  type="submit"
-  disabled={loading || uploading}
-  className="mt-3 w-full rounded-xl bg-[#172033] px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
->
-  {loading ? "등록 중..." : "등록"}
-</button>
+            type="submit"
+            disabled={loading || uploading}
+            className="mt-3 w-full rounded-xl bg-[#172033] px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
+          >
+            {loading ? "등록 중..." : "등록"}
+          </button>
         </form>
       </section>
 
