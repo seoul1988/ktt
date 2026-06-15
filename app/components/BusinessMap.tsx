@@ -904,7 +904,7 @@ export default function BusinessMap({
                   : "border-white"
               }`}
             >
-              <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-12 landscape:w-12 landscape:shrink-0 landscape:rounded-xl">
+              <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
                 {images.length > 0 ? (
                   <div
                     id={`image-scroll-${spotKey}`}
