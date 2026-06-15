@@ -359,17 +359,55 @@ export default function NewGrandOpeningPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-black">
-              Images Max 5
-            </label>
+           
 
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handleImages(e.target.files)}
-              className="w-full rounded-xl border border-[#E8DED1] bg-white px-4 py-3 text-sm"
-            />
+           <div>
+  <div className="flex items-center gap-3">
+  <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#E8DED1] bg-[#F8F3EC] px-4 py-3 text-sm font-black text-[#172033] active:scale-95">
+    📷 Attach Images
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={(e) => handleImages(e.target.files)}
+      className="hidden"
+    />
+  </label>
+
+  <span className="text-xs font-bold text-gray-500">
+    Max 5 Images
+  </span>
+</div>
+
+  {imagePreviews.length > 0 && (
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      {imagePreviews.map((src, index) => (
+        <div
+          key={src}
+          className="relative aspect-square overflow-hidden rounded-xl border border-[#E8DED1]"
+        >
+          <img
+            src={src}
+            alt={`Preview ${index + 1}`}
+            className="h-full w-full object-cover"
+          />
+
+          <button
+            type="button"
+            onClick={() => removeImage(index)}
+            className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs font-black text-white"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+
+  <p className="mt-2 text-xs font-bold text-gray-500">
+    {imageFiles.length}/5 images selected
+  </p>
+</div>
 
             {imagePreviews.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -396,9 +434,7 @@ export default function NewGrandOpeningPage() {
               </div>
             )}
 
-            <p className="mt-2 text-xs font-bold text-gray-500">
-              {imageFiles.length}/5 images selected
-            </p>
+          
           </div>
 
           <div>
