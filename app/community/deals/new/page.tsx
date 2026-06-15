@@ -345,10 +345,10 @@ export default function NewCommunityDealPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-black">딜 이미지</label>
+            <label className="mb-2 block text-sm font-black"> 이미지</label>
 
-            <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F8F3EC] px-4 py-5 text-sm font-black text-[#6B6257]">
-              📷 이미지 선택
+            className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-[#F8F3EC] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#F3EEE6]"
+			📷 이미지 선택
               <input
                 type="file"
                 accept="image/*"
@@ -374,7 +374,7 @@ export default function NewCommunityDealPage() {
                 <button
                   type="button"
                   onClick={() => setImageUrl("")}
-                  className="mt-2 rounded-full bg-gray-200 px-3 py-1 text-xs font-black text-[#172033]"
+                  className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-[#172033]"
                 >
                   이미지 삭제
                 </button>
@@ -383,12 +383,12 @@ export default function NewCommunityDealPage() {
           </div>
 
           <button
-            type="submit"
-            disabled={loading || uploading}
-            className="mt-3 w-full rounded-2xl bg-[#C4483A] px-5 py-4 text-sm font-black text-white shadow-sm disabled:opacity-60"
-          >
-            {loading ? "등록 중..." : "🔥 딜 등록하기"}
-          </button>
+  type="submit"
+  disabled={loading || uploading}
+  className="mt-3 w-full rounded-xl bg-[#172033] px-5 py-3 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-60"
+>
+  {loading ? "등록 중..." : "등록"}
+</button>
         </form>
       </section>
 
