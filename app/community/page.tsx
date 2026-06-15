@@ -85,14 +85,6 @@ export default async function CommunityPage() {
               Events, deals, new places, and local highlights.
             </p>
 
-            <div className="mt-4">
-              <Link
-                href="/community/deals/new"
-                className="inline-flex items-center gap-2 rounded-full bg-[#C4483A] px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:scale-105"
-              >
-                🔥 + 딜 등록
-              </Link>
-            </div>
           </div>
 
           <ProfileButton />
