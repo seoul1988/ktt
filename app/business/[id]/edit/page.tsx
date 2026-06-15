@@ -365,67 +365,69 @@ export default function EditBusinessPage() {
   }
 
   async function removeExistingPhoto(index: number) {
-  if (!business) return;
-  if (!confirm("이 사진을 삭제하시겠습니까?")) return;
+    if (!business) return;
+    if (!confirm("이 사진을 삭제하시겠습니까?")) return;
 
-  const targetUrl = existingImageUrls[index];
-  const nextImageUrls = existingImageUrls.filter((_, i) => i !== index);
-  const nextMainImage = nextImageUrls[0] || null;
+    const targetUrl = existingImageUrls[index];
+    const nextImageUrls = existingImageUrls.filter((_, i) => i !== index);
+    const nextMainImage = nextImageUrls[0] || null;
 
-  try {
-    setDeletingPhotoIndex(index);
+    try {
+      setDeletingPhotoIndex(index);
 
-    const { data: updatedBusiness, error: dbError } = await supabase
-      .from("businesses")
-      .update({
-        image_urls: nextImageUrls,
-        image_url: nextMainImage,
-      })
-      .eq("id", business.id)
-      .select("id,image_url,image_urls")
-      .maybeSingle();
+      const { data: updatedBusiness, error: dbError } = await supabase
+        .from("businesses")
+        .update({
+          image_urls: nextImageUrls,
+          image_url: nextMainImage,
+        })
+        .eq("id", business.id)
+        .select("id,image_url,image_urls")
+        .maybeSingle();
 
-    console.log("IMAGE DB UPDATE:", updatedBusiness);
-    console.log("IMAGE DB ERROR:", dbError);
+      console.log("IMAGE DB UPDATE:", updatedBusiness);
+      console.log("IMAGE DB ERROR:", dbError);
 
-    if (dbError) throw dbError;
+      if (dbError) throw dbError;
 
-    if (!updatedBusiness) {
-      alert("DB에서 이미지가 삭제되지 않았습니다. RLS 권한을 확인하세요.");
-      return;
+      if (!updatedBusiness) {
+        alert("DB에서 이미지가 삭제되지 않았습니다. RLS 권한을 확인하세요.");
+        return;
+      }
+
+      const storagePath = getBusinessImagePathFromPublicUrl(targetUrl);
+
+      if (storagePath) {
+        const { error: storageError } = await supabase.storage
+          .from("business-images")
+          .remove([storagePath]);
+
+        console.log("STORAGE DELETE PATH:", storagePath);
+        console.log("STORAGE DELETE ERROR:", storageError);
+
+        if (storageError) {
+          alert(
+            "DB에서는 삭제됐지만 Storage 파일 삭제 권한이 없습니다.\nSupabase Storage RLS 정책을 확인하세요."
+          );
+        }
+      }
+
+      setExistingImageUrls(updatedBusiness.image_urls || []);
+      setBusiness({
+        ...business,
+        image_urls: updatedBusiness.image_urls || [],
+        image_url: updatedBusiness.image_url || null,
+      });
+
+      alert("이미지가 삭제되었습니다.");
+    } catch (err: any) {
+      console.error("business image delete error:", err);
+      alert(err?.message || "이미지 삭제 오류");
+    } finally {
+      setDeletingPhotoIndex(null);
     }
-
-    const storagePath = getBusinessImagePathFromPublicUrl(targetUrl);
-
-    if (storagePath) {
-      const { error: storageError } = await supabase.storage
-  .from("business-images")
-  .remove([storagePath]);
-
-console.log("STORAGE DELETE PATH:", storagePath);
-console.log("STORAGE DELETE ERROR:", storageError);
-
-if (storageError) {
-  alert(
-    "DB에서는 삭제됐지만 Storage 파일 삭제 권한이 없습니다.\nSupabase Storage RLS 정책을 확인하세요."
-  );
-}
-
-    setExistingImageUrls(updatedBusiness.image_urls || []);
-    setBusiness({
-      ...business,
-      image_urls: updatedBusiness.image_urls || [],
-      image_url: updatedBusiness.image_url || null,
-    });
-
-    alert("이미지가 삭제되었습니다.");
-  } catch (err: any) {
-    console.error("business image delete error:", err);
-    alert(err?.message || "이미지 삭제 오류");
-  } finally {
-    setDeletingPhotoIndex(null);
   }
-}
+
   function removeNewPhoto(index: number) {
     setNewPhotoFiles((prev) => prev.filter((_, i) => i !== index));
 
