@@ -634,32 +634,46 @@ export default function BusinessMap({
   }
 
   const handleScroll = () => {
-    let closestKey: string | null = null;
-    let closestDistance = Infinity;
+  let closestKey: string | null = null;
+  let closestDistance = Infinity;
 
-    cardSpots.forEach((spot) => {
-      const spotKey = getSpotKey(spot);
-      const el = cardRefs.current[spotKey];
-      if (!el) return;
+  const isLandscape =
+    typeof window !== "undefined" &&
+    window.matchMedia("(orientation: landscape)").matches;
 
+  cardSpots.forEach((spot) => {
+    const spotKey = getSpotKey(spot);
+    const el = cardRefs.current[spotKey];
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+
+    let distance = 0;
+
+    if (isLandscape) {
+      // 폰 가로모드: 왼쪽 리스트 맨 위에 가장 가까운 카드 기준
+      const listTop = cardScrollRef.current?.getBoundingClientRect().top || 76;
+      distance = Math.abs(rect.top - listTop);
+    } else {
+      // 세로모드: 기존처럼 가운데 카드 기준
       const viewportCenter = window.innerWidth / 2;
-      const rect = el.getBoundingClientRect();
       const cardCenter = rect.left + rect.width / 2;
-      const distance = Math.abs(cardCenter - viewportCenter);
-
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestKey = spotKey;
-      }
-    });
-
-    if (closestKey) {
-      setSelectedSpotKey(closestKey);
-      saveMapState({
-        selectedSpotKey: closestKey,
-      });
+      distance = Math.abs(cardCenter - viewportCenter);
     }
-  };
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestKey = spotKey;
+    }
+  });
+
+  if (closestKey) {
+    setSelectedSpotKey(closestKey);
+    saveMapState({
+      selectedSpotKey: closestKey,
+    });
+  }
+};
 
   const selectedMapSpot =
     cardSpots.find(
