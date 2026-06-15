@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
+import BottomNav from "../../components/BottomNav";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -9,6 +11,18 @@ export const revalidate = 0;
 type PageParams = Promise<{
   id: string;
 }>;
+
+async function deleteGrandOpening(formData: FormData) {
+  "use server";
+
+  const id = String(formData.get("id") || "");
+
+  if (id) {
+    await supabase.from("grand_openings").delete().eq("id", id);
+  }
+
+  redirect("/grand-openings");
+}
 
 export default async function GrandOpeningDetailPage({
   params,
@@ -34,6 +48,8 @@ export default async function GrandOpeningDetailPage({
         >
           ← Back
         </Link>
+
+        <BottomNav activeNav="map" />
       </main>
     );
   }
@@ -45,7 +61,6 @@ export default async function GrandOpeningDetailPage({
   const videos = item.video_url ? [item.video_url] : [];
 
   const title = item.title || item.business_name || "Grand Opening";
-
   const mapQuery = item.address || item.location || title;
 
   return (
@@ -73,14 +88,35 @@ export default async function GrandOpeningDetailPage({
         <BusinessMediaViewer images={images} videos={videos} name={title} />
 
         <section className="px-5 pb-32 pt-5">
-          <div className="mb-4">
-            <h2 className="text-2xl font-black leading-tight">{title}</h2>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-2xl font-black leading-tight">{title}</h2>
 
-            {item.business_name && (
-              <p className="mt-2 text-base font-bold text-[#8A5A20]">
-                {item.business_name}
-              </p>
-            )}
+              {item.business_name && (
+                <p className="mt-2 text-base font-bold text-[#8A5A20]">
+                  {item.business_name}
+                </p>
+              )}
+            </div>
+
+            <div className="flex shrink-0 gap-2 pt-1">
+              <Link
+                href={`/grand-openings/${id}/edit`}
+                className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
+              >
+                수정
+              </Link>
+
+              <form action={deleteGrandOpening}>
+                <input type="hidden" name="id" value={id} />
+                <button
+                  type="submit"
+                  className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600"
+                >
+                  삭제
+                </button>
+              </form>
+            </div>
           </div>
 
           {item.description && (
@@ -96,37 +132,9 @@ export default async function GrandOpeningDetailPage({
           <hr className="my-5 border-gray-200" />
 
           <div className="space-y-3 text-[15px] leading-6">
-            {item.event_date && (
-              <p>
-                <span className="font-semibold">Date: </span>
-                {item.event_date}
-              </p>
-            )}
-
-            {item.address && (
-              <p>
-                <span className="font-semibold">Address: </span>
-                {item.address}
-              </p>
-            )}
-
-            {item.location && !item.address && (
-              <p>
-                <span className="font-semibold">Location: </span>
-                {item.location}
-              </p>
-            )}
-
-            {item.phone && (
-              <p>
-                <span className="font-semibold">Phone: </span>
-                {item.phone}
-              </p>
-            )}
-
             {item.link_url && (
               <p>
-                <span className="font-semibold">Link: </span>
+                <span className="font-semibold">Website: </span>
                 <a
                   href={item.link_url}
                   target="_blank"
@@ -164,6 +172,8 @@ export default async function GrandOpeningDetailPage({
           </div>
         </section>
       </div>
+
+      <BottomNav activeNav="map" />
     </main>
   );
 }
