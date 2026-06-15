@@ -123,22 +123,11 @@ export default function ProfileButton() {
     }
   }
 
-  if (checking) {
+  if (checking || !userId) {
     return (
       <Link
         href="/login"
-        className="relative z-[99999] inline-flex items-center justify-center rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow"
-      >
-        Login
-      </Link>
-    );
-  }
-
-  if (!userId) {
-    return (
-      <Link
-        href="/login"
-        className="relative z-[99999] inline-flex items-center justify-center rounded-full bg-[#172033] px-4 py-2 text-sm font-black text-white shadow"
+        className="relative z-[99999] inline-flex h-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white px-3 text-xs font-black text-[#172033] shadow-sm"
       >
         Login
       </Link>
@@ -154,45 +143,45 @@ export default function ProfileButton() {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="relative z-[99999] flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-black/10 active:scale-95"
+        className="relative z-[99999] flex h-8 w-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white text-[#172033] shadow-sm active:scale-95"
         aria-label="Open profile menu"
       >
-        <span className="flex flex-col items-center justify-center gap-[3px]">
-          <span className="h-[5px] w-[5px] rounded-full bg-[#172033]" />
-          <span className="h-[5px] w-[5px] rounded-full bg-[#172033]" />
-          <span className="h-[5px] w-[5px] rounded-full bg-[#172033]" />
+        <span className="flex flex-col items-center justify-center gap-[2px]">
+          <span className="h-[3px] w-[3px] rounded-full bg-[#172033]" />
+          <span className="h-[3px] w-[3px] rounded-full bg-[#172033]" />
+          <span className="h-[3px] w-[3px] rounded-full bg-[#172033]" />
         </span>
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 z-[999999] w-56 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 text-sm font-bold text-[#172033] shadow-2xl">
-          <Link href="/profile" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+        <div className="absolute right-0 top-10 z-[999999] w-52 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
+          <Link href="/profile" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
             Edit Profile
           </Link>
 
-          <Link href="/my-coupons" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+          <Link href="/my-coupons" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
             My Coupons
           </Link>
 
           {(isOwner || isAdmin) && (
             <>
-              <Link href="/owner" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/owner" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 My Business
               </Link>
 
-              <Link href="/business/new" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/business/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Register Business
               </Link>
 
-              <Link href="/events/new" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/events/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Create Event
               </Link>
 
-              <Link href="/deals/new" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/deals/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Create Deal
               </Link>
 
-              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Register Coupon
               </Link>
             </>
@@ -200,15 +189,15 @@ export default function ProfileButton() {
 
           {isAdmin && (
             <>
-              <Link href="/admin/owner-requests" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/admin/owner-requests" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Owner Requests
               </Link>
 
-              <Link href="/admin/categories" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/admin/categories" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Categories
               </Link>
 
-              <Link href="/admin/event-requests" className="block px-4 py-3 hover:bg-gray-100" onClick={() => setOpen(false)}>
+              <Link href="/admin/event-requests" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Event Requests
               </Link>
             </>
