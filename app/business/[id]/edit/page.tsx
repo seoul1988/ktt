@@ -159,9 +159,7 @@ export default function EditBusinessPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deletingPhotoIndex, setDeletingPhotoIndex] = useState<number | null>(
-    null
-  );
+  const [deletingPhotoIndex, setDeletingPhotoIndex] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [business, setBusiness] = useState<Business | null>(null);
@@ -232,10 +230,14 @@ export default function EditBusinessPage() {
       return;
     }
 
-    const { data: categoryData } = await supabase
+    const { data: categoryData, error: categoryError } = await supabase
       .from("categories")
       .select("id, name, emoji")
       .order("name", { ascending: true });
+
+    if (categoryError) {
+      console.log("Categories load error:", categoryError);
+    }
 
     setCategories((categoryData || []) as Category[]);
 
@@ -294,6 +296,13 @@ export default function EditBusinessPage() {
 
     if (!file.type.startsWith("video/")) {
       alert("Please select a video file.");
+      e.target.value = "";
+      return;
+    }
+
+    if (externalVideoUrl.trim()) {
+      alert("동영상은 업로드 또는 링크 중 하나만 가능합니다. 링크를 지운 후 업로드하세요.");
+      e.target.value = "";
       return;
     }
 
@@ -385,9 +394,6 @@ export default function EditBusinessPage() {
         .select("id,image_url,image_urls")
         .maybeSingle();
 
-      console.log("IMAGE DB UPDATE:", updatedBusiness);
-      console.log("IMAGE DB ERROR:", dbError);
-
       if (dbError) throw dbError;
 
       if (!updatedBusiness) {
@@ -401,9 +407,6 @@ export default function EditBusinessPage() {
         const { error: storageError } = await supabase.storage
           .from("business-images")
           .remove([storagePath]);
-
-        console.log("STORAGE DELETE PATH:", storagePath);
-        console.log("STORAGE DELETE ERROR:", storageError);
 
         if (storageError) {
           alert(
@@ -754,6 +757,43 @@ export default function EditBusinessPage() {
             />
 
             <div className="rounded-2xl border bg-gray-50 p-4">
+              <p className="mb-3 font-black">Categories</p>
+
+              {categories.length === 0 ? (
+                <p className="text-sm font-bold text-gray-500">
+                  No categories found.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {categories.map((cat) => {
+                    const checked = selectedCategories.includes(cat.name);
+
+                    return (
+                      <label
+                        key={cat.id}
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold ${
+                          checked
+                            ? "border-[#172033] bg-white"
+                            : "border-gray-200 bg-white/60"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCategory(cat.name)}
+                          className="h-4 w-4"
+                        />
+
+                        <span>{cat.emoji || "🏷️"}</span>
+                        <span className="truncate">{cat.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border bg-gray-50 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="font-black">Business Photos</p>
@@ -826,6 +866,93 @@ export default function EditBusinessPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
+              <p className="font-black">Business Video</p>
+
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                onChange={handleVideoChange}
+                className="hidden"
+              />
+
+              {!existingVideoUrl && !newVideoPreview ? (
+                <button
+                  type="button"
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={!!externalVideoUrl.trim()}
+                  className="w-full rounded-xl bg-[#172033] px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+                >
+                  영상첨부
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <video
+                    src={newVideoPreview || existingVideoUrl}
+                    controls
+                    className="h-48 w-full rounded-xl bg-black"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={removeVideo}
+                    className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
+                  >
+                    Remove Video
+                  </button>
+                </div>
+              )}
+
+              <div className="relative flex items-center justify-center py-1">
+                <div className="h-px w-full bg-gray-200" />
+                <span className="absolute bg-gray-50 px-3 text-xs font-black text-gray-400">
+                  OR
+                </span>
+              </div>
+
+              <input
+                value={externalVideoUrl}
+                onChange={(e) => {
+                  setExternalVideoUrl(e.target.value);
+                  if (e.target.value.trim()) {
+                    setExistingVideoUrl("");
+                    setNewVideoFile(null);
+                    if (newVideoPreview) URL.revokeObjectURL(newVideoPreview);
+                    setNewVideoPreview("");
+                  }
+                }}
+                disabled={!!newVideoFile || !!existingVideoUrl}
+                placeholder="YouTube / Facebook / Instagram video link"
+                className="w-full rounded-xl border bg-white px-4 py-3 disabled:bg-gray-100 disabled:text-gray-400"
+              />
+            </div>
+
+            <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
+              <p className="font-black">Business Info</p>
+
+              <input
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="Tags (Korean, Family, BBQ, Late Night)"
+                className="w-full rounded-xl border bg-white px-4 py-3"
+              />
+
+              <input
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="Website (https://...)"
+                className="w-full rounded-xl border bg-white px-4 py-3"
+              />
+
+              <input
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                placeholder="Instagram (https://instagram.com/...)"
+                className="w-full rounded-xl border bg-white px-4 py-3"
+              />
             </div>
 
             <textarea
