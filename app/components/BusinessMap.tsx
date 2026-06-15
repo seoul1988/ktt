@@ -641,6 +641,8 @@ export default function BusinessMap({
     typeof window !== "undefined" &&
     window.matchMedia("(orientation: landscape)").matches;
 
+  const listRect = cardScrollRef.current?.getBoundingClientRect();
+
   cardSpots.forEach((spot) => {
     const spotKey = getSpotKey(spot);
     const el = cardRefs.current[spotKey];
@@ -651,16 +653,16 @@ export default function BusinessMap({
     let distance = 0;
 
     if (isLandscape) {
-      // 가로모드 → 카드 세로 중앙이 화면 세로 중앙에 가장 가까운 카드
-      const viewportCenterY = window.innerHeight / 0.50;
-      const cardCenterY = rect.top + rect.height / 2;
+      // 가로모드: 왼쪽 카드 리스트의 중앙 기준
+      const targetY = listRect
+        ? listRect.top + listRect.height / 2
+        : window.innerHeight / 2;
 
-      distance = Math.abs(cardCenterY - viewportCenterY);
+      const cardCenterY = rect.top + rect.height / 2;
+      distance = Math.abs(cardCenterY - targetY);
     } else {
-      // 세로모드 → 기존 가로 스크롤 카드 중앙
       const viewportCenterX = window.innerWidth / 2;
       const cardCenterX = rect.left + rect.width / 2;
-
       distance = Math.abs(cardCenterX - viewportCenterX);
     }
 
@@ -670,7 +672,7 @@ export default function BusinessMap({
     }
   });
 
-  if (closestKey) {
+  if (closestKey && closestKey !== selectedSpotKey) {
     setSelectedSpotKey(closestKey);
 
     saveMapState({
@@ -898,11 +900,11 @@ export default function BusinessMap({
                   selectedSpotKey: spotKey,
                 });
               }}
-              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] border-2 bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:border landscape:p-2 landscape:shadow-xl ${
-                spotKey === selectedSpotKey
-                  ? "border-red-500"
-                  : "border-white"
-              }`}
+              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
+  spotKey === selectedSpotKey
+    ? "border-4 border-red-600"
+    : "border-2 border-white"
+}`}
             >
               <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
                 {images.length > 0 ? (
