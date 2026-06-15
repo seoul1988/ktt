@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "../../components/ProfileButton";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,27 +19,22 @@ export default async function CommunityEventsPage() {
       <section className="mx-auto max-w-xl px-5 pb-28 pt-5">
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
-          <Link
-            href="/community"
-            className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#172033] shadow-sm"
-          >
-            Back
-          </Link>
+  <Link
+    href="/community"
+    className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#172033] shadow-sm"
+  >
+    Back
+  </Link>
 
-          <div className="text-center">
-            <h1 className="text-lg font-black leading-tight">
-              <span className="text-[#C4483A]">COMMUNITY</span>{" "}
-              <span className="text-[#172033]">Events</span>
-            </h1>
-          </div>
+  <div className="text-center">
+    <h1 className="text-lg font-black">
+      <span className="text-[#C4483A]">COMMUNITY</span>{" "}
+      <span className="text-[#172033]">Events</span>
+    </h1>
+  </div>
 
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xl font-black text-[#172033] shadow-sm"
-          >
-            ⋯
-          </button>
-        </div>
+  <ProfileButton />
+</div>
 
         <div className="space-y-4">
           {events?.map((event) => (
