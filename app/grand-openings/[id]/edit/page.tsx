@@ -49,7 +49,16 @@ export default function EditGrandOpeningPage() {
     loadItem();
   }, [id]);
 
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+      if (videoPreview) URL.revokeObjectURL(videoPreview);
+    };
+  }, [imagePreviews, videoPreview]);
+
   async function loadItem() {
+    setLoading(true);
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -85,6 +94,10 @@ export default function EditGrandOpeningPage() {
     setVideoUrl(data.video_url || "");
     setOldImages(Array.isArray(data.images) ? data.images.filter(Boolean) : []);
     setDeletedImages([]);
+    setImageFiles([]);
+    setImagePreviews([]);
+    setVideoFile(null);
+    setVideoPreview(null);
 
     setLoading(false);
   }
@@ -132,7 +145,10 @@ export default function EditGrandOpeningPage() {
 
     if (!target) return;
 
-    setDeletedImages((prev) => [...prev, target]);
+    setDeletedImages((prev) =>
+      prev.includes(target) ? prev : [...prev, target]
+    );
+
     setOldImages((prev) => prev.filter((_, i) => i !== index));
   }
 
@@ -140,7 +156,8 @@ export default function EditGrandOpeningPage() {
     setImageFiles((prev) => prev.filter((_, i) => i !== index));
 
     setImagePreviews((prev) => {
-      URL.revokeObjectURL(prev[index]);
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target);
       return prev.filter((_, i) => i !== index);
     });
   }
@@ -160,6 +177,31 @@ export default function EditGrandOpeningPage() {
 
     setVideoFile(null);
     setVideoPreview(null);
+  }
+
+  function getStoragePathFromPublicUrl(url: string) {
+    const marker = "/storage/v1/object/public/grand-openings/";
+    const index = url.indexOf(marker);
+
+    if (index === -1) return null;
+
+    return decodeURIComponent(url.slice(index + marker.length));
+  }
+
+  async function deleteStorageImages(urls: string[]) {
+    const paths = urls
+      .map(getStoragePathFromPublicUrl)
+      .filter(Boolean) as string[];
+
+    if (paths.length === 0) return;
+
+    const { error } = await supabase.storage
+      .from("grand-openings")
+      .remove(paths);
+
+    if (error) {
+      console.error("Storage delete error:", error);
+    }
   }
 
   async function uploadImages() {
@@ -224,7 +266,9 @@ export default function EditGrandOpeningPage() {
       const newImages = await uploadImages();
       const uploadedVideoUrl = await uploadVideo();
 
-      const finalImages = [...oldImages, ...newImages].filter(Boolean).slice(0, 5);
+      const finalImages = [...oldImages, ...newImages]
+        .filter(Boolean)
+        .slice(0, 5);
 
       const { error } = await supabase
         .from("grand_openings")
@@ -245,10 +289,15 @@ export default function EditGrandOpeningPage() {
 
       if (error) throw error;
 
+      if (deletedImages.length > 0) {
+        await deleteStorageImages(deletedImages);
+      }
+
       alert("수정되었습니다.");
       router.push(`/grand-openings/${id}`);
       router.refresh();
     } catch (err: any) {
+      console.error(err);
       alert(err?.message || "수정 실패");
       setSaving(false);
     }
