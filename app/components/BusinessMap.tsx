@@ -51,6 +51,8 @@ type Spot = {
   marketplace_id?: number | string | null;
   name: string;
   category: string | null;
+  categories?: string | null;
+  matched_categories?: string[] | null;
   city: string | null;
   image_url: string | null;
   image_urls?: string[] | null;
@@ -145,6 +147,24 @@ function milesBetween(a: [number, number], b: [number, number]) {
 
 function normalizeCategory(value: string) {
   return value.trim().toLowerCase().replace(/s$/, "");
+}
+
+function getSpotCategoryList(spot: Spot) {
+  const fromMatched = Array.isArray(spot.matched_categories)
+    ? spot.matched_categories
+    : [];
+
+  const fromCategories = String(spot.categories || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const fromCategory = String(spot.category || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set([...fromMatched, ...fromCategories, ...fromCategory]));
 }
 
 function timeTextToMinutes(timeText?: string | null) {
@@ -307,11 +327,7 @@ export default function BusinessMap({
     const names = new Set<string>();
 
     normalizedSpots.forEach((spot) => {
-      String(spot.category || "")
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean)
-        .forEach((v) => names.add(v));
+      getSpotCategoryList(spot).forEach((v) => names.add(v));
     });
 
     return Array.from(names)
@@ -451,25 +467,29 @@ export default function BusinessMap({
 
   const mapSpots = useMemo(() => {
     return normalizedSpots.filter((spot) => {
+      const spotCategoryList = getSpotCategoryList(spot);
+
       const searchText = `
         ${spot.name || ""}
         ${spot.category || ""}
+        ${spot.categories || ""}
+        ${spotCategoryList.join(" ")}
         ${spot.tags || ""}
         ${spot.city || ""}
         ${spot.description || ""}
         ${spot.coupon_badge || ""}
       `.toLowerCase();
 
-      const spotCategories = String(spot.category || "")
-        .split(",")
-        .map((item) => normalizeCategory(item));
+      const normalizedCategoryList = spotCategoryList.map((item) =>
+        normalizeCategory(item)
+      );
 
       const matchesSearch = search
         ? searchText.includes(search.trim().toLowerCase())
         : true;
 
       const matchesCategory = selectedCategory
-        ? spotCategories.includes(normalizeCategory(selectedCategory))
+        ? normalizedCategoryList.includes(normalizeCategory(selectedCategory))
         : true;
 
       if (!selectedCategory && !search) {
@@ -876,178 +896,176 @@ export default function BusinessMap({
                 max-w-[420px]
                 shrink-0
                 snap-center
+                overflow-hidden
                 rounded-[24px]
                 border-2
                 bg-white
-                p-[4px]
                 shadow-2xl
                 ${
                   spotKey === selectedSpotKey
                     ? "border-red-500"
-                    : "border-transparent"
+                    : "border-white"
                 }
               `}
             >
-              <div className="flex flex-col gap-1">
-                <div className="relative h-[145px] w-full overflow-hidden rounded-[20px] bg-white">
-                  {images.length > 0 ? (
-                    <div
-                      id={`image-scroll-${spotKey}`}
-                      className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                      onScroll={(e) => {
-                        const target = e.currentTarget;
-                        const width = target.clientWidth;
-                        const scrollLeft = target.scrollLeft;
+              <div className="relative h-[145px] w-full overflow-hidden bg-white">
+                {images.length > 0 ? (
+                  <div
+                    id={`image-scroll-${spotKey}`}
+                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onScroll={(e) => {
+                      const target = e.currentTarget;
+                      const width = target.clientWidth;
+                      const scrollLeft = target.scrollLeft;
 
-                        if (!width) return;
+                      if (!width) return;
 
-                        setImageIndexes((prev) => ({
-                          ...prev,
-                          [spotKey]: Math.round(scrollLeft / width),
-                        }));
-                      }}
-                    >
-                      {images.map((image, imageIndex) => (
-                        <img
-                          key={imageIndex}
-                          src={image as string}
-                          alt={spot.name}
-                          draggable={false}
-                          className={`h-full w-full shrink-0 snap-center ${
-                            communityMode ? "object-contain" : "object-cover"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400">
-                      No Photo
-                    </div>
-                  )}
-
-                  {eventLabel && (
-                    <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md">
-                      <span className="line-clamp-1">{eventLabel}</span>
-                    </div>
-                  )}
-
-                  {images.length > 1 && current > 0 && (
-                    <div
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        const c = document.getElementById(
-                          `image-scroll-${spotKey}`
-                        );
-
-                        if (!c) return;
-
-                        c.scrollTo({
-                          left: c.scrollLeft - c.clientWidth,
-                          behavior: "smooth",
-                        });
-                      }}
-                      className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
-                    >
-                      ←
-                    </div>
-                  )}
-
-                  {images.length > 1 && current < images.length - 1 && (
-                    <div
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        const c = document.getElementById(
-                          `image-scroll-${spotKey}`
-                        );
-
-                        if (!c) return;
-
-                        c.scrollTo({
-                          left: c.scrollLeft + c.clientWidth,
-                          behavior: "smooth",
-                        });
-                      }}
-                      className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
-                    >
-                      →
-                    </div>
-                  )}
-
-                  {images.length > 1 && (
-                    <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
-                      {images.map((_, i) => (
-                        <div
-                          key={i}
-                          className={`h-2 w-2 rounded-full ${
-                            i === current ? "bg-white" : "bg-white/40"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="px-1 pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="line-clamp-2 text-xl font-bold">
-                      {spot.name}
-                    </h3>
-
-                    <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        onClick={(e) => toggleLike(e, businessId)}
-                        className={`rounded-full border px-2 py-1 text-xs font-bold ${
-                          likedIds[businessId]
-                            ? "border-red-200 bg-red-50 text-red-500"
-                            : "border-pink-100 bg-pink-50 text-pink-500"
+                      setImageIndexes((prev) => ({
+                        ...prev,
+                        [spotKey]: Math.round(scrollLeft / width),
+                      }));
+                    }}
+                  >
+                    {images.map((image, imageIndex) => (
+                      <img
+                        key={imageIndex}
+                        src={image as string}
+                        alt={spot.name}
+                        draggable={false}
+                        className={`h-full w-full shrink-0 snap-center ${
+                          communityMode ? "object-contain" : "object-cover"
                         }`}
-                      >
-                        {likedIds[businessId] ? "♥" : "♡"}{" "}
-                        {likeCounts[businessId] || 0}
-                      </button>
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400">
+                    No Photo
+                  </div>
+                )}
 
+                {eventLabel && (
+                  <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md">
+                    <span className="line-clamp-1">{eventLabel}</span>
+                  </div>
+                )}
+
+                {images.length > 1 && current > 0 && (
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+
+                      const c = document.getElementById(
+                        `image-scroll-${spotKey}`
+                      );
+
+                      if (!c) return;
+
+                      c.scrollTo({
+                        left: c.scrollLeft - c.clientWidth,
+                        behavior: "smooth",
+                      });
+                    }}
+                    className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+                  >
+                    ←
+                  </div>
+                )}
+
+                {images.length > 1 && current < images.length - 1 && (
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+
+                      const c = document.getElementById(
+                        `image-scroll-${spotKey}`
+                      );
+
+                      if (!c) return;
+
+                      c.scrollTo({
+                        left: c.scrollLeft + c.clientWidth,
+                        behavior: "smooth",
+                      });
+                    }}
+                    className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white"
+                  >
+                    →
+                  </div>
+                )}
+
+                {images.length > 1 && (
+                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+                    {images.map((_, i) => (
                       <div
-                        className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
-                          status.text === "Open"
-                            ? "bg-green-100 text-green-700"
-                            : status.text === "Break Time"
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-gray-100 text-gray-600"
+                        key={i}
+                        className={`h-2 w-2 rounded-full ${
+                          i === current ? "bg-white" : "bg-white/40"
                         }`}
-                      >
-                        {status.text}
-                      </div>
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="line-clamp-2 text-xl font-black text-[#172033]">
+                    {spot.name}
+                  </h3>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={(e) => toggleLike(e, businessId)}
+                      className={`rounded-full border px-2 py-1 text-xs font-bold ${
+                        likedIds[businessId]
+                          ? "border-red-200 bg-red-50 text-red-500"
+                          : "border-pink-100 bg-pink-50 text-pink-500"
+                      }`}
+                    >
+                      {likedIds[businessId] ? "♥" : "♡"}{" "}
+                      {likeCounts[businessId] || 0}
+                    </button>
+
+                    <div
+                      className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
+                        status.text === "Open"
+                          ? "bg-green-100 text-green-700"
+                          : status.text === "Break Time"
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-white text-gray-600"
+                      }`}
+                    >
+                      {status.text}
                     </div>
                   </div>
-
-                  <p className="mt-1 text-sm text-gray-600">
-                    {spot.category} · {spot.city || "Triangle"}
-                    {spot.rating && (
-                      <>
-                        {" · "}⭐ {spot.rating}
-                        {spot.review_count ? ` (${spot.review_count})` : ""}
-                      </>
-                    )}
-                  </p>
-
-                  <p className="mt-1 text-sm font-semibold text-[#2453A6]">
-                    {userLocation && spot.distance !== undefined
-                      ? `${spot.distance.toFixed(1)} miles away`
-                      : "Near Triangle"}
-                  </p>
-
-                  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
-                    {spot.description || "Tap to view details"}
-                  </p>
                 </div>
+
+                <p className="mt-1 text-sm font-semibold text-gray-700">
+                  {spot.category} · {spot.city || "Triangle"}
+                  {spot.rating && (
+                    <>
+                      {" · "}⭐ {spot.rating}
+                      {spot.review_count ? ` (${spot.review_count})` : ""}
+                    </>
+                  )}
+                </p>
+
+                <p className="mt-1 text-sm font-bold text-[#2453A6]">
+                  {userLocation && spot.distance !== undefined
+                    ? `${spot.distance.toFixed(1)} miles away`
+                    : "Near Triangle"}
+                </p>
+
+                <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-600">
+                  {spot.description || "Tap to view details"}
+                </p>
               </div>
             </a>
           );
