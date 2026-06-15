@@ -180,29 +180,37 @@ export default function EditGrandOpeningPage() {
   }
 
   function getStoragePathFromPublicUrl(url: string) {
-    const marker = "/storage/v1/object/public/grand-openings/";
-    const index = url.indexOf(marker);
+  const marker = "/storage/v1/object/public/grand-openings/";
+  const index = url.indexOf(marker);
 
-    if (index === -1) return null;
-
-    return decodeURIComponent(url.slice(index + marker.length));
+  if (index === -1) {
+    console.log("STORAGE PATH NOT FOUND:", url);
+    return null;
   }
 
-  async function deleteStorageImages(urls: string[]) {
-    const paths = urls
-      .map(getStoragePathFromPublicUrl)
-      .filter(Boolean) as string[];
+  return decodeURIComponent(url.slice(index + marker.length).split("?")[0]);
+}
 
-    if (paths.length === 0) return;
+async function deleteStorageImages(urls: string[]) {
+  const paths = urls
+    .map(getStoragePathFromPublicUrl)
+    .filter(Boolean) as string[];
 
-    const { error } = await supabase.storage
-      .from("grand-openings")
-      .remove(paths);
+  console.log("DELETE STORAGE PATHS:", paths);
 
-    if (error) {
-      console.error("Storage delete error:", error);
-    }
+  if (paths.length === 0) return;
+
+  const { data, error } = await supabase.storage
+    .from("grand-openings")
+    .remove(paths);
+
+  console.log("STORAGE DELETE DATA:", data);
+  console.log("STORAGE DELETE ERROR:", error);
+
+  if (error) {
+    alert("DB에서는 삭제됐지만 Storage 파일 삭제 권한 문제가 있습니다.");
   }
+}
 
   async function uploadImages() {
     if (!userId) return [];
@@ -255,53 +263,64 @@ export default function EditGrandOpeningPage() {
   }
 
   async function updateGrandOpening(e: React.FormEvent) {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!businessName.trim()) return alert("Business name is required.");
-    if (!title.trim()) return alert("Title is required.");
+  if (!businessName.trim()) return alert("Business name is required.");
+  if (!title.trim()) return alert("Title is required.");
 
-    setSaving(true);
+  setSaving(true);
 
-    try {
-      const newImages = await uploadImages();
-      const uploadedVideoUrl = await uploadVideo();
+  try {
+    const newImages = await uploadImages();
+    const uploadedVideoUrl = await uploadVideo();
 
-      const finalImages = [...oldImages, ...newImages]
-        .filter(Boolean)
-        .slice(0, 5);
+    const finalImages = [...oldImages, ...newImages]
+      .filter(Boolean)
+      .slice(0, 5);
 
-      const { error } = await supabase
-        .from("grand_openings")
-        .update({
-          title: title.trim(),
-          business_name: businessName.trim(),
-          description: description.trim() || null,
-          address: address.trim() || null,
-          lat,
-          lng,
-          phone: phone.trim() || null,
-          opening_date: openingDate || null,
-          images: finalImages,
-          video_url: uploadedVideoUrl || videoUrl.trim() || null,
-          link_url: linkUrl.trim() || null,
-        })
-        .eq("id", id);
+    console.log("FINAL IMAGES TO DB:", finalImages);
+    console.log("DELETED IMAGES:", deletedImages);
 
-      if (error) throw error;
+    const { data: updated, error } = await supabase
+      .from("grand_openings")
+      .update({
+        title: title.trim(),
+        business_name: businessName.trim(),
+        description: description.trim() || null,
+        address: address.trim() || null,
+        lat,
+        lng,
+        phone: phone.trim() || null,
+        opening_date: openingDate || null,
+        images: finalImages,
+        video_url: uploadedVideoUrl || videoUrl.trim() || null,
+        link_url: linkUrl.trim() || null,
+      })
+      .eq("id", id)
+      .select("id, images")
+      .single();
 
-      if (deletedImages.length > 0) {
-        await deleteStorageImages(deletedImages);
-      }
+    if (error) throw error;
 
-      alert("수정되었습니다.");
-      router.push(`/grand-openings/${id}`);
-      router.refresh();
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.message || "수정 실패");
-      setSaving(false);
+    console.log("UPDATED DB RESULT:", updated);
+
+    if (deletedImages.length > 0) {
+      await deleteStorageImages(deletedImages);
     }
+
+    setDeletedImages([]);
+    setImageFiles([]);
+    setImagePreviews([]);
+
+    alert("수정되었습니다.");
+    router.replace(`/grand-openings/${id}?updated=${Date.now()}`);
+    router.refresh();
+  } catch (err: any) {
+    console.error("UPDATE GRAND OPENING ERROR:", err);
+    alert(err?.message || "수정 실패");
+    setSaving(false);
   }
+}
 
   if (loading) {
     return (

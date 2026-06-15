@@ -1,67 +1,131 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
 import BottomNav from "../../components/BottomNav";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-type PageParams = Promise<{
+type GrandOpening = {
   id: string;
-}>;
+  title: string | null;
+  business_name: string | null;
+  description: string | null;
+  address: string | null;
+  location: string | null;
+  phone: string | null;
+  phone_number?: string | null;
+  contact_phone?: string | null;
+  images: string[] | null;
+  video_url: string | null;
+  link_url: string | null;
+};
 
-async function deleteGrandOpening(formData: FormData) {
-  "use server";
+function getStoragePath(url: string) {
+  const marker = "/storage/v1/object/public/grand-openings/";
+  const index = url.indexOf(marker);
 
-  const id = String(formData.get("id") || "");
+  if (index === -1) return null;
 
-  if (id) {
-    await supabase.from("grand_openings").delete().eq("id", id);
-  }
-
-  redirect("/grand-openings");
+  return decodeURIComponent(url.slice(index + marker.length).split("?")[0]);
 }
 
-export default async function GrandOpeningDetailPage({
-  params,
-}: {
-  params: PageParams;
-}) {
-  const { id } = await params;
+export default function GrandOpeningDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const id = String(params.id);
 
-  const { data: item, error } = await supabase
-    .from("grand_openings")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [item, setItem] = useState<GrandOpening | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
-  if (!item || error) {
+  useEffect(() => {
+    loadItem();
+  }, [id]);
+
+  async function loadItem() {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("grand_openings")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !data) {
+      window.location.href = "/";
+      return;
+    }
+
+    setItem(data);
+    setLoading(false);
+  }
+
+  async function handleDelete() {
+    if (deleting) return;
+
+    const ok = confirm("정말 삭제하시겠습니까?");
+    if (!ok) return;
+
+    setDeleting(true);
+
+    try {
+      const { data } = await supabase
+        .from("grand_openings")
+        .select("images, video_url")
+        .eq("id", id)
+        .single();
+
+      const paths: string[] = [];
+
+      if (Array.isArray(data?.images)) {
+        data.images.forEach((url: string) => {
+          const path = getStoragePath(url);
+          if (path) paths.push(path);
+        });
+      }
+
+      if (data?.video_url) {
+        const path = getStoragePath(data.video_url);
+        if (path) paths.push(path);
+      }
+
+      if (paths.length > 0) {
+        await supabase.storage.from("grand-openings").remove(paths);
+      }
+
+      const { error } = await supabase
+        .from("grand_openings")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      window.location.href = "/";
+    } catch (err: any) {
+      console.error("DELETE ERROR:", err);
+      alert(err?.message || "삭제 실패");
+      setDeleting(false);
+    }
+  }
+
+  if (loading || !item) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
-        <p>Grand Opening 정보를 찾을 수 없습니다.</p>
-
-        <Link
-          href="/grand-openings"
-          className="mt-4 inline-block rounded-full bg-black px-4 py-2 text-sm font-bold text-white"
-        >
-          ← Back
-        </Link>
-
+        <p className="font-bold">Loading...</p>
         <BottomNav activeNav="map" />
       </main>
     );
   }
 
-  const images = Array.isArray(item.images)
-    ? item.images.filter(Boolean)
-    : [];
-
+  const images = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
   const videos = item.video_url ? [item.video_url] : [];
 
   const title = item.title || item.business_name || "Grand Opening";
   const mapQuery = item.address || item.location || title;
+  const phone = item.phone || item.phone_number || item.contact_phone || "";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
@@ -107,15 +171,14 @@ export default async function GrandOpeningDetailPage({
                 수정
               </Link>
 
-              <form action={deleteGrandOpening}>
-                <input type="hidden" name="id" value={id} />
-                <button
-                  type="submit"
-                  className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600"
-                >
-                  삭제
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="rounded-full border border-red-200 bg-white px-3 py-1.5 text-xs font-bold text-red-600 disabled:opacity-50"
+              >
+                {deleting ? "삭제중" : "삭제"}
+              </button>
             </div>
           </div>
 
@@ -131,8 +194,8 @@ export default async function GrandOpeningDetailPage({
 
           <hr className="my-5 border-gray-200" />
 
-          <div className="space-y-3 text-[15px] leading-6">
-            {item.link_url && (
+          {item.link_url && (
+            <div className="space-y-3 text-[15px] leading-6">
               <p>
                 <span className="font-semibold">Website: </span>
                 <a
@@ -144,31 +207,33 @@ export default async function GrandOpeningDetailPage({
                   {item.link_url}
                 </a>
               </p>
-            )}
-          </div>
+            </div>
+          )}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
-            {item.phone && (
-              <a
-                href={`tel:${item.phone}`}
-                className="rounded-2xl bg-black px-4 py-3 text-center text-sm font-extrabold text-white"
-              >
-                ☎ Call
-              </a>
-            )}
+            <a
+              href={phone ? `tel:${phone}` : "#"}
+              onClick={(e) => {
+                if (!phone) {
+                  e.preventDefault();
+                  alert("전화번호가 등록되어 있지 않습니다.");
+                }
+              }}
+              className="rounded-2xl bg-black px-4 py-3 text-center text-sm font-extrabold text-white"
+            >
+              ☎ Call
+            </a>
 
-            {mapQuery && (
-              <a
-                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  mapQuery
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-2xl bg-[#8A5A20] px-4 py-3 text-center text-sm font-extrabold text-white"
-              >
-                ↱ Directions
-              </a>
-            )}
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                mapQuery
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-2xl bg-[#8A5A20] px-4 py-3 text-center text-sm font-extrabold text-white"
+            >
+              ↱ Directions
+            </a>
           </div>
         </section>
       </div>
