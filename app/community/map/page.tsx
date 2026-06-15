@@ -77,82 +77,106 @@ export default async function CommunityMapPage() {
   }
 
   const businessSpots =
-    businesses?.flatMap((business: any) => {
-      const rawCategories = splitCategories(
-        business.category || business.categories || ""
-      );
+    businesses
+      ?.map((business: any) => {
+        const rawCategories = splitCategories(
+          business.category || business.categories || ""
+        );
 
-      return rawCategories
-        .filter((cat) => allowedCategoryNames.has(normalizeCategory(cat)))
-        .map((cat) => {
-          const normalizedCat = normalizeCategory(cat);
-          const businessId = business.id;
+        const matchedCategories = rawCategories.filter((cat) =>
+          allowedCategoryNames.has(normalizeCategory(cat))
+        );
 
-          return {
-            ...business,
+        if (matchedCategories.length === 0) return null;
 
-            id: businessId,
-            business_id: businessId,
-            original_business_id: businessId,
-            original_id: businessId,
+        const firstCategory = matchedCategories[0];
+        const normalizedFirstCategory = normalizeCategory(firstCategory);
+        const businessId = business.id;
 
-            name: business.name,
-            category: cat,
-            emoji:
-              categoryEmojiMap.get(normalizedCat) || business.emoji || "📍",
+        return {
+          ...business,
 
-            image_url: business.image_url || business.logo_url || null,
+          id: businessId,
+          business_id: businessId,
+          original_business_id: businessId,
+          original_id: businessId,
 
-            lat: business.lat,
-            lng: business.lng,
+          name: business.name,
 
-            type: "business",
-            source_type: "community-business",
+          // 카드에는 대표 카테고리 1개만 보여줌
+          category: firstCategory,
 
-            map_key: `community-business-${businessId}-${normalizedCat}-${business.name || "business"}`,
-          };
-        });
-    }) || [];
+          // 필터용 전체 카테고리
+          categories: matchedCategories.join(", "),
+          matched_categories: matchedCategories,
+
+          emoji:
+            categoryEmojiMap.get(normalizedFirstCategory) ||
+            business.emoji ||
+            "📍",
+
+          image_url: business.image_url || business.logo_url || null,
+
+          lat: business.lat,
+          lng: business.lng,
+
+          type: "business",
+          source_type: "community-business",
+
+          // 상점당 key 1개만
+          map_key: `community-business-${businessId}`,
+        };
+      })
+      .filter(Boolean) || [];
 
   const marketplaceSpots =
-    marketplaceItems?.flatMap((item: any) => {
-      const rawCategories = splitCategories(item.category || "Marketplace");
+    marketplaceItems
+      ?.map((item: any) => {
+        const rawCategories = splitCategories(item.category || "Marketplace");
 
-      return rawCategories
-        .filter((cat) => allowedCategoryNames.has(normalizeCategory(cat)))
-        .map((cat) => {
-          const normalizedCat = normalizeCategory(cat);
-          const marketplaceId = item.id;
+        const matchedCategories = rawCategories.filter((cat) =>
+          allowedCategoryNames.has(normalizeCategory(cat))
+        );
 
-          return {
-            ...item,
+        if (matchedCategories.length === 0) return null;
 
-            id: marketplaceId,
-            marketplace_id: marketplaceId,
-            original_id: marketplaceId,
+        const firstCategory = matchedCategories[0];
+        const normalizedFirstCategory = normalizeCategory(firstCategory);
+        const marketplaceId = item.id;
 
-            business_id: marketplaceId,
-            original_business_id: marketplaceId,
+        return {
+          ...item,
 
-            name: item.title,
-            category: cat,
-            emoji: categoryEmojiMap.get(normalizedCat) || "🛍️",
+          id: marketplaceId,
+          marketplace_id: marketplaceId,
+          original_id: marketplaceId,
 
-            image_url: item.image_urls?.[0] || null,
-            image_urls: item.image_urls || null,
+          business_id: marketplaceId,
+          original_business_id: marketplaceId,
 
-            lat: item.latitude,
-            lng: item.longitude,
+          name: item.title,
 
-            price: item.price,
+          category: firstCategory,
+          categories: matchedCategories.join(", "),
+          matched_categories: matchedCategories,
 
-            type: "marketplace",
-            source_type: "marketplace",
+          emoji: categoryEmojiMap.get(normalizedFirstCategory) || "🛍️",
 
-            map_key: `marketplace-${marketplaceId}-${normalizedCat}-${item.title || "item"}-${item.created_at || ""}`,
-          };
-        });
-    }) || [];
+          image_url: item.image_urls?.[0] || null,
+          image_urls: item.image_urls || null,
+
+          lat: item.latitude,
+          lng: item.longitude,
+
+          price: item.price,
+
+          type: "marketplace",
+          source_type: "marketplace",
+
+          map_key: `marketplace-${marketplaceId}`,
+        };
+      })
+      .filter(Boolean) || [];
 
   const spots = [...businessSpots, ...marketplaceSpots];
 
