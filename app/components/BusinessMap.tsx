@@ -652,7 +652,7 @@ export default function BusinessMap({
 
     if (isLandscape) {
       // 가로모드 → 카드 세로 중앙이 화면 세로 중앙에 가장 가까운 카드
-      const viewportCenterY = window.innerHeight / 0.60;
+      const viewportCenterY = window.innerHeight / 0.50;
       const cardCenterY = rect.top + rect.height / 2;
 
       distance = Math.abs(cardCenterY - viewportCenterY);
