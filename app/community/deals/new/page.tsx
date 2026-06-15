@@ -398,7 +398,7 @@ export default function NewCommunityDealPage() {
         </form>
       </section>
 
-      <CommunityBottomNav activeNav="community" />
+      <CommunityBottomNav activeNav="deals" />
     </main>
   );
 }

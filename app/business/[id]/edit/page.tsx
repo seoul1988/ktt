@@ -399,18 +399,17 @@ export default function EditBusinessPage() {
 
     if (storagePath) {
       const { error: storageError } = await supabase.storage
-        .from("business-images")
-        .remove([storagePath]);
+  .from("business-images")
+  .remove([storagePath]);
 
-      console.log("STORAGE DELETE PATH:", storagePath);
-      console.log("STORAGE DELETE ERROR:", storageError);
+console.log("STORAGE DELETE PATH:", storagePath);
+console.log("STORAGE DELETE ERROR:", storageError);
 
-      if (storageError) {
-        alert(
-          "DB에서는 삭제됐지만 Storage 파일 삭제 권한이 없습니다.\nSupabase Storage RLS 정책을 확인하세요."
-        );
-      }
-    }
+if (storageError) {
+  alert(
+    "DB에서는 삭제됐지만 Storage 파일 삭제 권한이 없습니다.\nSupabase Storage RLS 정책을 확인하세요."
+  );
+}
 
     setExistingImageUrls(updatedBusiness.image_urls || []);
     setBusiness({
