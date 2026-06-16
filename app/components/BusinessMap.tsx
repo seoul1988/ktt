@@ -260,12 +260,12 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
 
     movedRef.current = key;
 
-   const isPhoneLandscape =
-      typeof window !== "undefined" &&
-      window.matchMedia("(max-width: 768px) and (orientation: landscape)").matches;
+   const isLandscape =
+  typeof window !== "undefined" &&
+  window.matchMedia("(orientation: landscape)").matches;
 
 	map.flyTo(
-	  isPhoneLandscape
+	  isLandscape
 		 ? [lat + 0.05, lng] // 가로모드만 아래로
 		: [lat - 0.15, lng], // 세로모드는 기존 유지
 	  Math.max(map.getZoom() - 2, 9),
@@ -647,9 +647,9 @@ export default function BusinessMap({
   let closestKey: string | null = null;
   let closestDistance = Infinity;
 
-  const isPhoneLandscape =
+  const isLandscape =
     typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 768px) and (orientation: landscape)").matches;
+    window.matchMedia("(orientation: landscape)").matches;
 
   const listRect = cardScrollRef.current?.getBoundingClientRect();
 
@@ -662,7 +662,7 @@ export default function BusinessMap({
 
     let distance = 0;
 
-    if (isPhoneLandscape) {
+    if (isLandscape) {
       // 가로모드: 왼쪽 카드 리스트의 중앙 기준
       const targetY = listRect
         ? listRect.top + listRect.height / 2
@@ -701,9 +701,9 @@ export default function BusinessMap({
 
   return (
     <div className="relative min-h-screen">
-      <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3 max-md:landscape:left-3 max-md:landscape:right-3 max-md:landscape:top-3">
+      <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3 landscape:left-3 landscape:right-3 landscape:top-3">
         {showAllOnLoad && !communityMode && !selectedCategory && !search && (
-          <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl max-md:landscape:hidden">
+          <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl landscape:hidden">
             {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
           </div>
         )}
@@ -726,7 +726,7 @@ export default function BusinessMap({
             });
           }}
           placeholder="Search Korean spots..."
-          className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none max-md:landscape:px-4 max-md:landscape:py-3 max-md:landscape:text-xs"
+          className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none landscape:px-4 landscape:py-3 landscape:text-xs"
         />
 
         <div className="shrink-0">
@@ -735,7 +735,7 @@ export default function BusinessMap({
       </div>
 
       {categoryPanelOpen && (
-        <div className="fixed right-0 top-24 z-[1300] max-h-[72vh] w-[88px] overflow-y-auto rounded-l-[24px] bg-white p-2 shadow-2xl scrollbar-hide max-md:landscape:top-16 max-md:landscape:max-h-[78vh] max-md:landscape:w-[78px]">
+        <div className="fixed right-0 top-24 z-[1300] max-h-[72vh] w-[88px] overflow-y-auto rounded-l-[24px] bg-white p-2 shadow-2xl scrollbar-hide landscape:top-16 landscape:max-h-[78vh] landscape:w-[78px]">
           <p className="mb-3 text-center text-xs font-extrabold text-gray-500">
             Category
           </p>
@@ -758,14 +758,14 @@ export default function BusinessMap({
       {!categoryPanelOpen && (
         <button
           onClick={openCategoryPanel}
-          className="fixed right-0 top-1/2 z-[1400] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl max-md:landscape:py-5"
+          className="fixed right-0 top-1/2 z-[1400] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl landscape:py-5"
         >
           ☰
         </button>
       )}
 
       {selectedCategory && !categoryPanelOpen && (
-        <div className="fixed left-4 top-[88px] z-[1100] rounded-full bg-white/95 px-4 py-2 text-xs font-extrabold text-[#172033] shadow-xl max-md:landscape:left-3 max-md:landscape:top-[62px]">
+        <div className="fixed left-4 top-[88px] z-[1100] rounded-full bg-white/95 px-4 py-2 text-xs font-extrabold text-[#172033] shadow-xl landscape:left-3 landscape:top-[62px]">
           {selectedCategory}
         </div>
       )}
@@ -866,13 +866,13 @@ export default function BusinessMap({
       <div
         ref={cardScrollRef}
         onScroll={handleScroll}
-        className={`fixed z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 max-md:landscape:left-3 max-md:landscape:right-auto max-md:landscape:top-[76px] max-md:landscape:bottom-5 max-md:landscape:w-[210px] max-md:landscape:flex-col max-md:landscape:gap-2 max-md:landscape:overflow-y-auto max-md:landscape:overflow-x-hidden max-md:landscape:px-0 max-md:landscape:pb-0 max-md:landscape:pt-0 ${
+        className={`fixed z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 landscape:left-3 landscape:right-auto landscape:top-[76px] landscape:bottom-5 landscape:w-[210px] landscape:flex-col landscape:gap-2 landscape:overflow-y-auto landscape:overflow-x-hidden landscape:px-0 landscape:pb-0 landscape:pt-0 ${
           showCards
             ? "left-0 right-0 bottom-[82px] opacity-100"
-            : "left-0 right-0 bottom-[-360px] opacity-0 max-md:landscape:left-[-190px] max-md:landscape:right-auto max-md:landscape:bottom-5"
+            : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
         }`}
       >
-       <div className="hidden max-md:landscape:block max-md:landscape:h-[calc((100vh-112px)/3)] max-md:landscape:shrink-0" />
+       <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
 
 {cardSpots.map((spot, index) => {
   const spotKey = getSpotKey(spot);
@@ -910,17 +910,17 @@ export default function BusinessMap({
           selectedSpotKey: spotKey,
         });
       }}
-      className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] max-md:landscape:flex max-md:landscape:h-[calc((100vh-112px)/3)] max-md:landscape:w-[200px] max-md:landscape:max-w-[200px] max-md:landscape:items-center max-md:landscape:gap-2 max-md:landscape:rounded-2xl max-md:landscape:p-2 max-md:landscape:shadow-xl ${
+      className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
         spotKey === selectedSpotKey
           ? "border-4 border-red-600"
           : "border-2 border-white"
       }`}
     >
-      <div className="relative h-[145px] w-full overflow-hidden bg-white max-md:landscape:h-14 max-md:landscape:w-14 max-md:landscape:shrink-0 max-md:landscape:rounded-xl">
+      <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
         {images.length > 0 ? (
           <div
             id={`image-scroll-${spotKey}`}
-            className="flex h-full w-full snap-x overflow-x-auto scroll-smooth max-md:landscape:overflow-hidden"
+            className="flex h-full w-full snap-x overflow-x-auto scroll-smooth landscape:overflow-hidden"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -946,18 +946,18 @@ export default function BusinessMap({
                 draggable={false}
                 className={`h-full w-full shrink-0 snap-center ${
                   communityMode ? "object-contain" : "object-cover"
-                } max-md:landscape:object-cover`}
+                } landscape:object-cover`}
               />
             ))}
           </div>
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 max-md:landscape:text-[9px]">
+          <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 landscape:text-[9px]">
             No Photo
           </div>
         )}
 
         {eventLabel && (
-          <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md max-md:landscape:hidden">
+          <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md landscape:hidden">
             <span className="line-clamp-1">{eventLabel}</span>
           </div>
         )}
@@ -976,7 +976,7 @@ export default function BusinessMap({
                 behavior: "smooth",
               });
             }}
-            className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white max-md:landscape:hidden"
+            className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
           >
             ←
           </div>
@@ -996,14 +996,14 @@ export default function BusinessMap({
                 behavior: "smooth",
               });
             }}
-            className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white max-md:landscape:hidden"
+            className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
           >
             →
           </div>
         )}
 
         {images.length > 1 && (
-          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 max-md:landscape:hidden">
+          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 landscape:hidden">
             {images.map((_, i) => (
               <div
                 key={i}
@@ -1016,13 +1016,13 @@ export default function BusinessMap({
         )}
       </div>
 
-      <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 max-md:landscape:min-w-0 max-md:landscape:flex-1 max-md:landscape:border-0 max-md:landscape:bg-transparent max-md:landscape:p-0">
+      <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-xl font-black text-[#172033] max-md:landscape:text-[12px] max-md:landscape:leading-tight">
+          <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
             {spot.name}
           </h3>
 
-          <div className="flex shrink-0 items-center gap-2 max-md:landscape:hidden">
+          <div className="flex shrink-0 items-center gap-2 landscape:hidden">
             <button
               onClick={(e) => toggleLike(e, businessId)}
               className={`rounded-full border px-2 py-1 text-xs font-bold ${
@@ -1049,7 +1049,7 @@ export default function BusinessMap({
           </div>
         </div>
 
-        <p className="mt-1 text-sm font-semibold text-gray-700 max-md:landscape:hidden">
+        <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
           {spot.category} · {spot.city || "Triangle"}
           {spot.rating && (
             <>
@@ -1059,7 +1059,7 @@ export default function BusinessMap({
           )}
         </p>
 
-        <p className="mt-1 text-sm font-bold text-[#2453A6] max-md:landscape:hidden">
+        <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
           {userLocation && spot.distance !== undefined
             ? `${spot.distance.toFixed(1)} miles away`
             : "Near Triangle"}
@@ -1069,10 +1069,10 @@ export default function BusinessMap({
   );
 })}
 
-<div className="hidden max-md:landscape:block max-md:landscape:h-[calc((100vh-112px)/3)] max-md:landscape:shrink-0" />
+<div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
       </div>
       {!communityMode && (
-        <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl max-md:landscape:bottom-3 max-md:landscape:w-[70%] max-md:landscape:max-w-sm max-md:landscape:py-2 max-md:landscape:text-[11px]">
+        <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[70%] landscape:max-w-sm landscape:py-2 landscape:text-[11px]">
           <a
             href="/"
             className={activeNav === "home" ? "text-[#F7B955]" : undefined}
