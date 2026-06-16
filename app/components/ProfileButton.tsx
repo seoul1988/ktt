@@ -185,16 +185,15 @@ export default function ProfileButton() {
               </Link>
 
               <Link
-				  href="/grand-opening/new"
-				  className="block px-4 py-3 hover:bg-[#F8F3EC]"
-				  onClick={() => setOpen(false)}
-				>
-				  🎉 Grand Opening
-				</Link>
-
-
-
-
+	  href="/grand-opening/new"
+	  className="block px-4 py-3 hover:bg-[#F8F3EC]"
+	  onClick={() => setOpen(false)}
+	>
+	  🎉 Grand Opening
+	</Link>
+ <Link href="/business/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+                Register Business
+              </Link>
 
 
               <Link
@@ -235,13 +234,7 @@ export default function ProfileButton() {
                 Owner Requests
               </Link>
 
-              <Link
-                href="/admin/categories"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
-                Categories
-              </Link>
+              
 
               <Link
                 href="/admin/event-requests"
