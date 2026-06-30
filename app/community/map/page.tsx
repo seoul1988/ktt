@@ -103,10 +103,7 @@ export default async function CommunityMapPage() {
 
           name: business.name,
 
-          // 카드에는 대표 카테고리 1개만 보여줌
           category: firstCategory,
-
-          // 필터용 전체 카테고리
           categories: matchedCategories.join(", "),
           matched_categories: matchedCategories,
 
@@ -123,7 +120,6 @@ export default async function CommunityMapPage() {
           type: "business",
           source_type: "community-business",
 
-          // 상점당 key 1개만
           map_key: `community-business-${businessId}`,
         };
       })

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CircleMarker,
@@ -191,17 +192,16 @@ function getOpenStatus(spot: Spot) {
     timeZone: "America/New_York",
   }).format(now);
 
-  const currentMinutes =
-    now
-      .toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: "America/New_York",
-      })
-      .split(":")
-      .map(Number)
-      .reduce((h, m) => h * 60 + m);
+  const currentMinutes = now
+    .toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "America/New_York",
+    })
+    .split(":")
+    .map(Number)
+    .reduce((h, m) => h * 60 + m);
 
   const line = String(spot.hours || "")
     .split("\n")
@@ -260,19 +260,19 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
 
     movedRef.current = key;
 
-   const isLandscape =
-  typeof window !== "undefined" &&
-  window.matchMedia("(orientation: landscape)").matches;
+    const isLandscape =
+      typeof window !== "undefined" &&
+      window.matchMedia("(orientation: landscape)").matches;
 
-	map.flyTo(
-	  isLandscape
-		 ? [lat + 0.05, lng] // 가로모드만 아래로
-		: [lat - 0.15, lng], // 세로모드는 기존 유지
-	  Math.max(map.getZoom() - 2, 9),
-	  {
-		animate: true,
-	  }
-	);
+    map.flyTo(
+      isLandscape
+        ? [lat + 0.05, lng]
+        : [lat - 0.15, lng],
+      Math.max(map.getZoom() - 2, 9),
+      {
+        animate: true,
+      }
+    );
   }, [lat, lng, map]);
 
   return null;
@@ -644,52 +644,51 @@ export default function BusinessMap({
   }
 
   const handleScroll = () => {
-  let closestKey: string | null = null;
-  let closestDistance = Infinity;
+    let closestKey: string | null = null;
+    let closestDistance = Infinity;
 
-  const isLandscape =
-    typeof window !== "undefined" &&
-    window.matchMedia("(orientation: landscape)").matches;
+    const isLandscape =
+      typeof window !== "undefined" &&
+      window.matchMedia("(orientation: landscape)").matches;
 
-  const listRect = cardScrollRef.current?.getBoundingClientRect();
+    const listRect = cardScrollRef.current?.getBoundingClientRect();
 
-  cardSpots.forEach((spot) => {
-    const spotKey = getSpotKey(spot);
-    const el = cardRefs.current[spotKey];
-    if (!el) return;
+    cardSpots.forEach((spot) => {
+      const spotKey = getSpotKey(spot);
+      const el = cardRefs.current[spotKey];
+      if (!el) return;
 
-    const rect = el.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
 
-    let distance = 0;
+      let distance = 0;
 
-    if (isLandscape) {
-      // 가로모드: 왼쪽 카드 리스트의 중앙 기준
-      const targetY = listRect
-        ? listRect.top + listRect.height / 2
-        : window.innerHeight / 2;
+      if (isLandscape) {
+        const targetY = listRect
+          ? listRect.top + listRect.height / 2
+          : window.innerHeight / 2;
 
-      const cardCenterY = rect.top + rect.height / 2;
-      distance = Math.abs(cardCenterY - targetY);
-    } else {
-      const viewportCenterX = window.innerWidth / 2;
-      const cardCenterX = rect.left + rect.width / 2;
-      distance = Math.abs(cardCenterX - viewportCenterX);
-    }
+        const cardCenterY = rect.top + rect.height / 2;
+        distance = Math.abs(cardCenterY - targetY);
+      } else {
+        const viewportCenterX = window.innerWidth / 2;
+        const cardCenterX = rect.left + rect.width / 2;
+        distance = Math.abs(cardCenterX - viewportCenterX);
+      }
 
-    if (distance < closestDistance) {
-      closestDistance = distance;
-      closestKey = spotKey;
-    }
-  });
-
-  if (closestKey && closestKey !== selectedSpotKey) {
-    setSelectedSpotKey(closestKey);
-
-    saveMapState({
-      selectedSpotKey: closestKey,
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestKey = spotKey;
+      }
     });
-  }
-};
+
+    if (closestKey && closestKey !== selectedSpotKey) {
+      setSelectedSpotKey(closestKey);
+
+      saveMapState({
+        selectedSpotKey: closestKey,
+      });
+    }
+  };
 
   const selectedMapSpot =
     cardSpots.find(
@@ -741,6 +740,16 @@ export default function BusinessMap({
           </p>
 
           <div className="space-y-1 overflow-y-auto">
+            {communityMode && (
+              <Link
+                href="/community/directory"
+                className="mb-2 flex w-full flex-col items-center justify-center rounded-xl bg-[#C4483A] px-1 py-3 text-[10px] font-extrabold text-white shadow-lg active:scale-95"
+              >
+                <span className="text-xl">🌐</span>
+                <span className="mt-1 leading-tight">모두보기</span>
+              </Link>
+            )}
+
             {displayCategories.map((cat) => (
               <button
                 key={cat.name}
@@ -872,218 +881,213 @@ export default function BusinessMap({
             : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
         }`}
       >
-       <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
+        <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
 
-{cardSpots.map((spot, index) => {
-  const spotKey = getSpotKey(spot);
-  const cardKey = `${spotKey}-${index}`;
-  const businessId = getBusinessId(spot);
+        {cardSpots.map((spot, index) => {
+          const spotKey = getSpotKey(spot);
+          const cardKey = `${spotKey}-${index}`;
+          const businessId = getBusinessId(spot);
 
-  const images =
-    spot.image_urls && spot.image_urls.length > 0
-      ? spot.image_urls
-      : [spot.image_url, spot.image_url_2, spot.image_url_3].filter(Boolean);
+          const images =
+            spot.image_urls && spot.image_urls.length > 0
+              ? spot.image_urls
+              : [spot.image_url, spot.image_url_2, spot.image_url_3].filter(Boolean);
 
-  const current = imageIndexes[spotKey] || 0;
-  const status = getOpenStatus(spot);
-  const firstCoupon = spot.coupons?.[0];
+          const current = imageIndexes[spotKey] || 0;
+          const status = getOpenStatus(spot);
+          const firstCoupon = spot.coupons?.[0];
 
-  const eventLabel =
-    spot.coupon_badge ||
-    firstCoupon?.title ||
-    spot.event_title ||
-    spot.event_name ||
-    spot.coupon_title ||
-    spot.deal_title ||
-    null;
+          const eventLabel =
+            spot.coupon_badge ||
+            firstCoupon?.title ||
+            spot.event_title ||
+            spot.event_name ||
+            spot.coupon_title ||
+            spot.deal_title ||
+            null;
 
-  return (
-    <a
-      key={cardKey}
-      ref={(el) => {
-        cardRefs.current[spotKey] = el;
-      }}
-      href={getDetailHref(spot, businessId, communityMode)}
-      onClick={() => {
-        setSelectedSpotKey(spotKey);
-        saveMapState({
-          selectedSpotKey: spotKey,
-        });
-      }}
-      className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
-        spotKey === selectedSpotKey
-          ? "border-4 border-red-600"
-          : "border-2 border-white"
-      }`}
-    >
-      <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
-        {images.length > 0 ? (
-          <div
-            id={`image-scroll-${spotKey}`}
-            className="flex h-full w-full snap-x overflow-x-auto scroll-smooth landscape:overflow-hidden"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
-            onScroll={(e) => {
-              const target = e.currentTarget;
-              const width = target.clientWidth;
-              const scrollLeft = target.scrollLeft;
-
-              if (!width) return;
-
-              setImageIndexes((prev) => ({
-                ...prev,
-                [spotKey]: Math.round(scrollLeft / width),
-              }));
-            }}
-          >
-            {images.map((image, imageIndex) => (
-              <img
-                key={imageIndex}
-                src={image as string}
-                alt={spot.name}
-                draggable={false}
-                className={`h-full w-full shrink-0 snap-center ${
-                  communityMode ? "object-contain" : "object-cover"
-                } landscape:object-cover`}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 landscape:text-[9px]">
-            No Photo
-          </div>
-        )}
-
-        {eventLabel && (
-          <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md landscape:hidden">
-            <span className="line-clamp-1">{eventLabel}</span>
-          </div>
-        )}
-
-        {images.length > 1 && current > 0 && (
-          <div
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-
-              const c = document.getElementById(`image-scroll-${spotKey}`);
-              if (!c) return;
-
-              c.scrollTo({
-                left: c.scrollLeft - c.clientWidth,
-                behavior: "smooth",
-              });
-            }}
-            className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
-          >
-            ←
-          </div>
-        )}
-
-        {images.length > 1 && current < images.length - 1 && (
-          <div
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-
-              const c = document.getElementById(`image-scroll-${spotKey}`);
-              if (!c) return;
-
-              c.scrollTo({
-                left: c.scrollLeft + c.clientWidth,
-                behavior: "smooth",
-              });
-            }}
-            className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
-          >
-            →
-          </div>
-        )}
-
-        {images.length > 1 && (
-          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 landscape:hidden">
-            {images.map((_, i) => (
-              <div
-                key={i}
-                className={`h-2 w-2 rounded-full ${
-                  i === current ? "bg-white" : "bg-white/40"
-                }`}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
-            {spot.name}
-          </h3>
-
-          <div className="flex shrink-0 items-center gap-2 landscape:hidden">
-            <button
-              onClick={(e) => toggleLike(e, businessId)}
-              className={`rounded-full border px-2 py-1 text-xs font-bold ${
-                likedIds[businessId]
-                  ? "border-red-200 bg-red-50 text-red-500"
-                  : "border-pink-100 bg-pink-50 text-pink-500"
+          return (
+            <a
+              key={cardKey}
+              ref={(el) => {
+                cardRefs.current[spotKey] = el;
+              }}
+              href={getDetailHref(spot, businessId, communityMode)}
+              onClick={() => {
+                setSelectedSpotKey(spotKey);
+                saveMapState({
+                  selectedSpotKey: spotKey,
+                });
+              }}
+              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
+                spotKey === selectedSpotKey
+                  ? "border-4 border-red-600"
+                  : "border-2 border-white"
               }`}
             >
-              {likedIds[businessId] ? "♥" : "♡"}{" "}
-              {likeCounts[businessId] || 0}
-            </button>
+              <div className="relative h-[145px] w-full overflow-hidden bg-white landscape:h-14 landscape:w-14 landscape:shrink-0 landscape:rounded-xl">
+                {images.length > 0 ? (
+                  <div
+                    id={`image-scroll-${spotKey}`}
+                    className="flex h-full w-full snap-x overflow-x-auto scroll-smooth landscape:overflow-hidden"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                    onScroll={(e) => {
+                      const target = e.currentTarget;
+                      const width = target.clientWidth;
+                      const scrollLeft = target.scrollLeft;
 
-            <div
-              className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
-                status.text === "Open"
-                  ? "bg-green-100 text-green-700"
-                  : status.text === "Break Time"
-                  ? "bg-orange-100 text-orange-700"
-                  : "bg-white text-gray-600"
-              }`}
-            >
-              {status.text}
-            </div>
-          </div>
-        </div>
+                      if (!width) return;
 
-        <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
-          {spot.category} · {spot.city || "Triangle"}
-          {spot.rating && (
-            <>
-              {" · "}⭐ {spot.rating}
-              {spot.review_count ? ` (${spot.review_count})` : ""}
-            </>
-          )}
-        </p>
+                      setImageIndexes((prev) => ({
+                        ...prev,
+                        [spotKey]: Math.round(scrollLeft / width),
+                      }));
+                    }}
+                  >
+                    {images.map((image, imageIndex) => (
+                      <img
+                        key={imageIndex}
+                        src={image as string}
+                        alt={spot.name}
+                        draggable={false}
+                        className={`h-full w-full shrink-0 snap-center ${
+                          communityMode ? "object-contain" : "object-cover"
+                        } landscape:object-cover`}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm font-bold text-gray-400 landscape:text-[9px]">
+                    No Photo
+                  </div>
+                )}
 
-        <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
-          {userLocation && spot.distance !== undefined
-            ? `${spot.distance.toFixed(1)} miles away`
-            : "Near Triangle"}
-        </p>
+                {eventLabel && (
+                  <div className="absolute left-3 top-3 z-40 max-w-[75%] rounded-md bg-yellow-400 px-3 py-1 text-[11px] font-black text-black shadow-md landscape:hidden">
+                    <span className="line-clamp-1">{eventLabel}</span>
+                  </div>
+                )}
+
+                {images.length > 1 && current > 0 && (
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+
+                      const c = document.getElementById(`image-scroll-${spotKey}`);
+                      if (!c) return;
+
+                      c.scrollTo({
+                        left: c.scrollLeft - c.clientWidth,
+                        behavior: "smooth",
+                      });
+                    }}
+                    className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
+                  >
+                    ←
+                  </div>
+                )}
+
+                {images.length > 1 && current < images.length - 1 && (
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+
+                      const c = document.getElementById(`image-scroll-${spotKey}`);
+                      if (!c) return;
+
+                      c.scrollTo({
+                        left: c.scrollLeft + c.clientWidth,
+                        behavior: "smooth",
+                      });
+                    }}
+                    className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white landscape:hidden"
+                  >
+                    →
+                  </div>
+                )}
+
+                {images.length > 1 && (
+                  <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1 landscape:hidden">
+                    {images.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-2 w-2 rounded-full ${
+                          i === current ? "bg-white" : "bg-white/40"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
+                    {spot.name}
+                  </h3>
+
+                  <div className="flex shrink-0 items-center gap-2 landscape:hidden">
+                    <button
+                      onClick={(e) => toggleLike(e, businessId)}
+                      className={`rounded-full border px-2 py-1 text-xs font-bold ${
+                        likedIds[businessId]
+                          ? "border-red-200 bg-red-50 text-red-500"
+                          : "border-pink-100 bg-pink-50 text-pink-500"
+                      }`}
+                    >
+                      {likedIds[businessId] ? "♥" : "♡"}{" "}
+                      {likeCounts[businessId] || 0}
+                    </button>
+
+                    <div
+                      className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
+                        status.text === "Open"
+                          ? "bg-green-100 text-green-700"
+                          : status.text === "Break Time"
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-white text-gray-600"
+                      }`}
+                    >
+                      {status.text}
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
+                  {spot.category} · {spot.city || "Triangle"}
+                  {spot.rating && (
+                    <>
+                      {" · "}⭐ {spot.rating}
+                      {spot.review_count ? ` (${spot.review_count})` : ""}
+                    </>
+                  )}
+                </p>
+
+                <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
+                  {userLocation && spot.distance !== undefined
+                    ? `${spot.distance.toFixed(1)} miles away`
+                    : "Near Triangle"}
+                </p>
+              </div>
+            </a>
+          );
+        })}
+
+        <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
       </div>
-    </a>
-  );
-})}
 
-<div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
-      </div>
       {!communityMode && (
         <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[70%] landscape:max-w-sm landscape:py-2 landscape:text-[11px]">
-          <a
-            href="/"
-            className={activeNav === "home" ? "text-[#F7B955]" : undefined}
-          >
+          <a href="/" className={activeNav === "home" ? "text-[#F7B955]" : undefined}>
             Home
           </a>
 
-          <a
-            href="/map"
-            className={activeNav === "map" ? "text-[#F7B955]" : undefined}
-          >
+          <a href="/map" className={activeNav === "map" ? "text-[#F7B955]" : undefined}>
             Map
           </a>
 
@@ -1096,9 +1100,7 @@ export default function BusinessMap({
 
           <a
             href="/community"
-            className={
-              activeNav === "community" ? "text-[#F7B955]" : undefined
-            }
+            className={activeNav === "community" ? "text-[#F7B955]" : undefined}
           >
             Community
           </a>
@@ -1106,9 +1108,7 @@ export default function BusinessMap({
           {myRole === "admin" && (
             <a
               href="/admin"
-              className={
-                activeNav === "admin" ? "text-[#F7B955]" : undefined
-              }
+              className={activeNav === "admin" ? "text-[#F7B955]" : undefined}
             >
               ADMIN
             </a>
