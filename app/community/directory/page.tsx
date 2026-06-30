@@ -166,7 +166,7 @@ export default async function CommunityDirectoryPage() {
             ← Back
           </Link>
 
-          <h1 className="text-lg font-black tracking-wide">COMMUNITY LIST</h1>
+          <h1 className="text-lg font-black tracking-wide">한인 비즈니스</h1>
 
           <div className="w-[72px]" />
         </div>
