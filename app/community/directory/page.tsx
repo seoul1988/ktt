@@ -37,6 +37,25 @@ function getPhone(item: any) {
   return item.phone || item.phone_number || "";
 }
 
+function formatPhone(phone: string | null | undefined) {
+  if (!phone) return "";
+
+  const digits = phone.replace(/\D/g, "");
+
+  // 미국 11자리(1 포함)
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `(${digits.slice(1, 4)})-${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+
+  // 미국 10자리
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  // 그 외는 원본 반환
+  return phone;
+}
+
 function getCityFromAddress(item: any) {
   const address = String(getAddress(item) || "");
 
@@ -180,7 +199,7 @@ export default async function CommunityDirectoryPage() {
 
                 <div className="divide-y divide-gray-200">
                   {group.items.map((business: any) => {
-                    const phone = getPhone(business);
+                    const phone = formatPhone(getPhone(business));
                     const city = getCityFromAddress(business);
 
                     return (
