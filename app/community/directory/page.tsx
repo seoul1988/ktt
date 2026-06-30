@@ -7,16 +7,26 @@ import CommunityBottomNav from "../../components/CommunityBottomNav";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type CommunityCategory = {
+type Category = {
+  id?: number;
   name: string;
   emoji: string | null;
 };
 
 function normalizeCategory(value: string | null | undefined) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9가-힣]/g, "")
+    .replace(/s$/, "");
 }
 
-function splitCategories(value: string | null | undefined) {
+function splitCategories(value: any) {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean);
+  }
+
   return String(value || "")
     .split(",")
     .map((v) => v.trim())
@@ -35,25 +45,6 @@ function getAddress(item: any) {
 
 function getPhone(item: any) {
   return item.phone || item.phone_number || "";
-}
-
-function formatPhone(phone: string | null | undefined) {
-  if (!phone) return "";
-
-  const digits = phone.replace(/\D/g, "");
-
-  // 미국 11자리(1 포함)
-  if (digits.length === 11 && digits.startsWith("1")) {
-    return `(${digits.slice(1, 4)})-${digits.slice(4, 7)}-${digits.slice(7)}`;
-  }
-
-  // 미국 10자리
-  if (digits.length === 10) {
-    return `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6)}`;
-  }
-
-  // 그 외는 원본 반환
-  return phone;
 }
 
 function getCityFromAddress(item: any) {
@@ -85,17 +76,33 @@ function DirectionsIcon() {
   );
 }
 
+function PhoneIcon() {
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C4483A] text-sm font-black text-white shadow-sm">
+      ☎
+    </span>
+  );
+}
+
 export default async function CommunityDirectoryPage() {
-  const { data: communityCategories } = await supabase
+  const { data: categoriesData } = await supabase
     .from("categories")
-    .select("name, emoji")
-    .eq("show_on_community_map", true)
+    .select("id, name, emoji")
     .order("name", { ascending: true });
 
-  const categoryList = (communityCategories || []) as CommunityCategory[];
+  const categoryList = (categoriesData || []) as Category[];
 
-  const allowedCategoryNames = new Set(
-    categoryList.map((category) => normalizeCategory(category.name))
+  const categoryById = new Map(
+    categoryList
+      .filter((category) => category.id)
+      .map((category) => [Number(category.id), category])
+  );
+
+  const categoryEmojiMap = new Map(
+    categoryList.map((category) => [
+      normalizeCategory(category.name),
+      category.emoji,
+    ])
   );
 
   const { data: businesses, error } = await supabase
@@ -113,31 +120,65 @@ export default async function CommunityDirectoryPage() {
     );
   }
 
-  const communityBusinesses =
+  const { data: businessCategoryRows } = await supabase
+    .from("business_categories")
+    .select("*");
+
+  const businessCategoryMap = new Map<number, string[]>();
+
+  (businessCategoryRows || []).forEach((row: any) => {
+    const businessId = Number(row.business_id);
+    const categoryId = Number(row.category_id);
+
+    const category = categoryById.get(categoryId);
+
+    if (!businessId || !category?.name) return;
+
+    const current = businessCategoryMap.get(businessId) || [];
+    current.push(category.name);
+    businessCategoryMap.set(businessId, current);
+  });
+
+  const businessList =
     businesses
       ?.map((business: any) => {
-        const rawCategories = splitCategories(
-          business.category || business.categories || ""
-        );
+        const linkedCategories = businessCategoryMap.get(Number(business.id)) || [];
 
-        const matchedCategories = rawCategories.filter((cat) =>
-          allowedCategoryNames.has(normalizeCategory(cat))
-        );
+        const rawCategories = [
+          ...linkedCategories,
+          ...splitCategories(
+            business.category ||
+              business.categories ||
+              business.business_category ||
+              business.type ||
+              business.tags ||
+              ""
+          ),
+        ];
 
-        if (matchedCategories.length === 0) return null;
+        const uniqueCategories = Array.from(
+          new Set(rawCategories.map((cat) => String(cat).trim()).filter(Boolean))
+        );
 
         return {
           ...business,
-          matched_categories: matchedCategories,
+          matched_categories:
+            uniqueCategories.length > 0 ? uniqueCategories : ["Other"],
         };
       })
       .filter(Boolean) || [];
 
-  const groupedByCategory = categoryList
-    .map((category) => {
-      const normalizedCategory = normalizeCategory(category.name);
+  const categoryNames = Array.from(
+    new Set(
+      businessList.flatMap((business: any) => business.matched_categories || [])
+    )
+  ).sort((a: string, b: string) => a.localeCompare(b, "ko"));
 
-      const items = communityBusinesses
+  const groupedByCategory = categoryNames
+    .map((categoryName) => {
+      const normalizedCategory = normalizeCategory(categoryName);
+
+      const items = businessList
         .filter((business: any) =>
           business.matched_categories.some(
             (cat: string) => normalizeCategory(cat) === normalizedCategory
@@ -148,8 +189,8 @@ export default async function CommunityDirectoryPage() {
         );
 
       return {
-        name: category.name,
-        emoji: category.emoji || "📍",
+        name: categoryName,
+        emoji: categoryEmojiMap.get(normalizedCategory) || "📍",
         items,
       };
     })
@@ -174,7 +215,7 @@ export default async function CommunityDirectoryPage() {
         <div className="mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
           <h2 className="text-xl font-black">🌐 모두보기</h2>
           <p className="mt-1 text-sm font-semibold opacity-90">
-            카테고리별 업체 리스트
+            전체 카테고리별 업체 리스트
           </p>
         </div>
 
@@ -190,33 +231,33 @@ export default async function CommunityDirectoryPage() {
               </div>
 
               <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                <div className="grid grid-cols-[1fr_86px_112px_70px] border-b bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-500">
+                <div className="grid grid-cols-[1fr_82px_42px_70px] border-b bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-500">
                   <div>Business</div>
                   <div className="text-center">City</div>
-                  <div>Phone</div>
+                  <div className="text-center">Call</div>
                   <div className="text-center">Directions</div>
                 </div>
 
                 <div className="divide-y divide-gray-200">
                   {group.items.map((business: any) => {
-                    const phone = formatPhone(getPhone(business));
+                    const phone = getPhone(business);
                     const city = getCityFromAddress(business);
 
                     return (
                       <div
                         key={`${group.name}-${business.id}`}
-                        className="grid grid-cols-[1fr_86px_112px_70px] items-center gap-2 px-3 py-2 text-xs"
+                        className="grid grid-cols-[1fr_82px_42px_70px] items-center gap-2 px-3 py-2 text-xs"
                       >
                         <Link
                           href={`/business/${business.id}?from=community-directory`}
-                          className="min-w-0 truncate font-black text-[#172033]"
+                          className="min-w-0 break-words font-black leading-tight text-[#172033]"
                         >
                           {business.name}
                         </Link>
 
                         <div className="flex justify-center">
                           {city ? (
-                            <span className="max-w-[84px] truncate rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                            <span className="max-w-[80px] truncate rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
                               {city}
                             </span>
                           ) : (
@@ -224,16 +265,18 @@ export default async function CommunityDirectoryPage() {
                           )}
                         </div>
 
-                        {phone ? (
-                          <a
-                            href={`tel:${phone}`}
-                            className="truncate font-bold text-[#C4483A]"
-                          >
-                            {phone}
-                          </a>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
+                        <div className="flex justify-center">
+                          {phone ? (
+                            <a
+                              href={`tel:${phone}`}
+                              aria-label={`Call ${business.name}`}
+                            >
+                              <PhoneIcon />
+                            </a>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </div>
 
                         <a
                           href={getMapUrl(business)}

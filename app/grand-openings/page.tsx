@@ -4,6 +4,11 @@ export const revalidate = 0;
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
+import BottomNav from "../components/BottomNav";
+
+
+
+
 function getYoutubeEmbedUrl(url: string | null | undefined) {
   if (!url) return null;
 
@@ -133,6 +138,7 @@ export default async function GrandOpeningsPage() {
           </div>
         )}
       </div>
+	   <BottomNav activeNav="home" />
     </main>
   );
 }

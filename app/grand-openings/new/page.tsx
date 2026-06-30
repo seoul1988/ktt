@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
+import BottomNav from "../../components/BottomNav";
 
 const libraries: "places"[] = ["places"];
 
@@ -424,6 +425,7 @@ export default function NewGrandOpeningPage() {
           </button>
         </form>
       </section>
+	  <BottomNav activeNav="home" />
     </main>
   );
 }
