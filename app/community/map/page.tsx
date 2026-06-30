@@ -155,16 +155,14 @@ export default async function CommunityDirectoryPage() {
             ← Back
           </Link>
 
-          <h1 className="text-lg font-black tracking-wide">COMMUNITY LIST</h1>
+          <h1 className="text-lg font-black tracking-wide">한인 비즈니스</h1>
 
           <div className="w-[72px]" />
         </div>
 
         <div className="mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
-          <h2 className="text-xl font-black">🌐 모두보기</h2>
-          <p className="mt-1 text-sm font-semibold opacity-90">
-            카테고리별 업체 리스트
-          </p>
+          <h2 className="text-xl font-black">🌐 카테고리별 업체 리스트</h2>
+          
         </div>
 
         <div className="space-y-7">
