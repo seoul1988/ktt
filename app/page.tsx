@@ -244,9 +244,39 @@ export default async function Home() {
       .filter(Boolean)
   );
 
-  const featured = spots?.[0];
+ // Featured Sponsors
+const featuredSponsors = (spots || []).filter(
+  (spot) => Number(spot.display_order || 0) >= 1000
+);
+
+let featured = null;
+
+if (featuredSponsors.length > 0) {
+  // 하루에 한 번만 랜덤 순서 변경
+  const todaySeed = new Date().toISOString().slice(0, 10);
+
+  const shuffled = [...featuredSponsors].sort((a, b) => {
+    const aValue =
+      (Number(a.display_order || 1000) * 31 +
+        todaySeed.charCodeAt(8) +
+        todaySeed.charCodeAt(9)) %
+      1000;
+
+    const bValue =
+      (Number(b.display_order || 1000) * 31 +
+        todaySeed.charCodeAt(8) +
+        todaySeed.charCodeAt(9)) %
+      1000;
+
+    return aValue - bValue;
+  });
+
+  featured = shuffled[0];
+}
   const deals = activeDeals || [];
-  const trending = spots || [];
+  const trending = (spots || []).filter(
+  (spot) => Number(spot.display_order || 0) < 1000
+);
   const mainEvent = businessEvents?.[0];
   const mainGrandOpening = grandOpenings?.[0];
 
