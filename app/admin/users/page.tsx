@@ -55,10 +55,10 @@ async function sendRoleNotification(email: string, role: string) {
     body: JSON.stringify({ email, role }),
   });
 
-  console.log("Role notification status:", res.status);
+
 
   const result = await res.json().catch(() => null);
-  console.log("Role notification result:", result);
+
 
   if (!res.ok) {
     throw new Error(result?.error || "Failed to send notification email.");

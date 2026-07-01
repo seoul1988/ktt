@@ -30,28 +30,62 @@ export async function POST(req: Request) {
         ? "Business Owner"
         : "User";
 
-    await resend.emails.send({
+    const { data, error } = await resend.emails.send({
       from: "K-Town Triangle <onboarding@resend.dev>",
-      to: email,
+      to: [email],
       subject: "Your K-Town Triangle account has been updated",
       html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <div style="font-family: Arial, sans-serif; line-height:1.6">
           <h2>Your account has been updated</h2>
+
           <p>Hello,</p>
+
           <p>Your K-Town Triangle account role has been updated.</p>
-          <p><strong>New Role:</strong> ${roleLabel}</p>
-          <p>You can now log in and access the features available for your account.</p>
-          <br />
+
+          <p>
+            <strong>New Role:</strong> ${roleLabel}
+          </p>
+
+          <p>
+            You can now log in and access the features available for your account.
+          </p>
+
+          <br>
+
           <p>Thank you,</p>
+
           <p><strong>K-Town Triangle</strong></p>
         </div>
       `,
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
+    // Resend가 오류를 반환했는지 확인
+    if (error) {
+      console.error("Resend Error:", error);
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    console.log("Resend Success:", data);
+
+    return NextResponse.json({
+      success: true,
+      id: data?.id,
+    });
+  } catch (err: any) {
+    console.error(err);
+
     return NextResponse.json(
-      { error: error.message || "Email failed." },
+      {
+        success: false,
+        error: err.message,
+      },
       { status: 500 }
     );
   }
