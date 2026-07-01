@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(req: Request) {
   try {
+    const apiKey = process.env.RESEND_API_KEY;
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "Missing RESEND_API_KEY." },
+        { status: 500 }
+      );
+    }
+
+    const resend = new Resend(apiKey);
+
     const { email, role } = await req.json();
 
     if (!email || !role) {
@@ -15,10 +24,14 @@ export async function POST(req: Request) {
     }
 
     const roleLabel =
-      role === "admin" ? "Administrator" : role === "owner" ? "Business Owner" : "User";
+      role === "admin"
+        ? "Administrator"
+        : role === "owner"
+        ? "Business Owner"
+        : "User";
 
     await resend.emails.send({
-      from: "K-Town Triangle <noreply@ktowntriangle.com>",
+      from: "K-Town Triangle <onboarding@resend.dev>",
       to: email,
       subject: "Your K-Town Triangle account has been updated",
       html: `
