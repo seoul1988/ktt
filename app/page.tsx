@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
+import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
 
 function getYoutubeEmbedUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -146,9 +147,7 @@ export default async function Home() {
     .eq("show_on_community_map", true);
 
   const communityCategorySet = new Set(
-    (communityCategories || []).map((c) =>
-      String(c.name).trim().toLowerCase()
-    )
+    (communityCategories || []).map((c) => String(c.name).trim().toLowerCase()),
   );
 
   const { data: allSpots } = await supabase
@@ -163,11 +162,11 @@ export default async function Home() {
       .filter(Boolean);
 
     const hasCommunityCategory = categories.some((cat) =>
-      communityCategorySet.has(cat)
+      communityCategorySet.has(cat),
     );
 
     const hasMainCategory = categories.some(
-      (cat) => !communityCategorySet.has(cat)
+      (cat) => !communityCategorySet.has(cat),
     );
 
     return !(hasCommunityCategory && !hasMainCategory);
@@ -190,7 +189,8 @@ export default async function Home() {
 
   const { data: activeDeals } = await supabase
     .from("deals")
-    .select(`
+    .select(
+      `
       *,
       businesses (
         id,
@@ -201,7 +201,8 @@ export default async function Home() {
         rating,
         review_count
       )
-    `)
+    `,
+    )
     .eq("status", "approved")
     .eq("active", true)
     .or("deal_scope.is.null,deal_scope.neq.community")
@@ -229,7 +230,7 @@ export default async function Home() {
   const dealBusinessMap = new Map(
     (dealBusinesses || [])
       .filter((d: any) => d.business_id && d.id)
-      .map((d: any) => [d.business_id, d.id])
+      .map((d: any) => [d.business_id, d.id]),
   );
 
   const couponBusinessIds = new Set(
@@ -241,47 +242,29 @@ export default async function Home() {
         return true;
       })
       .map((c: any) => c.business_id)
-      .filter(Boolean)
+      .filter(Boolean),
   );
 
- // Featured Sponsors
-const featuredSponsors = (spots || []).filter(
-  (spot) => Number(spot.display_order || 0) >= 1000
-);
-
-let featured = null;
-
-if (featuredSponsors.length > 0) {
-  // 하루에 한 번만 랜덤 순서 변경
-  const todaySeed = new Date().toISOString().slice(0, 10);
-
-  const shuffled = [...featuredSponsors].sort((a, b) => {
-    const aValue =
-      (Number(a.display_order || 1000) * 31 +
-        todaySeed.charCodeAt(8) +
-        todaySeed.charCodeAt(9)) %
-      1000;
-
-    const bValue =
-      (Number(b.display_order || 1000) * 31 +
-        todaySeed.charCodeAt(8) +
-        todaySeed.charCodeAt(9)) %
-      1000;
-
-    return aValue - bValue;
-  });
-
-  featured = shuffled[0];
-}
+  // Featured Sponsors: display_order 1000 이상은 3초 자동 슬라이드 광고로 표시
+  const featuredSponsors = (spots || [])
+    .filter((spot) => Number(spot.display_order || 0) >= 1000)
+    .sort((a, b) => {
+      const orderDiff =
+        Number(a.display_order || 0) - Number(b.display_order || 0);
+      if (orderDiff !== 0) return orderDiff;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
   const deals = activeDeals || [];
   const trending = (spots || []).filter(
-  (spot) => Number(spot.display_order || 0) < 1000
-);
+    (spot) => Number(spot.display_order || 0) < 1000,
+  );
   const mainEvent = businessEvents?.[0];
   const mainGrandOpening = grandOpenings?.[0];
 
   const grandOpeningImage =
-    mainGrandOpening?.images?.[0] || mainGrandOpening?.image_url || "/event.png";
+    mainGrandOpening?.images?.[0] ||
+    mainGrandOpening?.image_url ||
+    "/event.png";
 
   return (
     <>
@@ -436,45 +419,12 @@ if (featuredSponsors.length > 0) {
           </div>
         </section>
 
-        {featured && (
-          <section className="mx-auto mb-8 max-w-xl">
-            <h2 className="mb-3 text-xl font-bold">⭐ Featured Sponsor</h2>
-
-            <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
-              <Link href={`/business/${featured.id}`} className="block">
-                <div className="h-56 w-full overflow-hidden bg-white">
-                  <BusinessMedia
-                    spot={featured}
-                    className="h-full w-full object-contain"
-                  />
-                </div>
-              </Link>
-
-              <div className="p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`/business/${featured.id}`}>
-                    <h3 className="text-2xl font-bold">{featured.name}</h3>
-                  </Link>
-
-                  <OfferBadges
-                    businessId={featured.id}
-                    dealId={dealBusinessMap.get(featured.id)}
-                    hasDeal={dealBusinessMap.has(featured.id)}
-                    hasCoupon={couponBusinessIds.has(featured.id)}
-                    size="md"
-                  />
-                </div>
-
-                <p className="mt-2 text-sm text-gray-600">
-                  {featured.category} · {featured.city}
-                </p>
-
-                <p className="mt-3 line-clamp-2 text-sm text-gray-700">
-                  {featured.description || featured.tags || featured.tag}
-                </p>
-              </div>
-            </div>
-          </section>
+        {featuredSponsors.length > 0 && (
+          <FeaturedSponsorSlider
+            sponsors={featuredSponsors}
+            dealBusinessEntries={Array.from(dealBusinessMap.entries())}
+            couponBusinessIds={Array.from(couponBusinessIds)}
+          />
         )}
 
         <section className="mx-auto max-w-xl">
