@@ -8,15 +8,6 @@ type Profile = {
   role: string | null;
 };
 
-function timeout<T>(promise: PromiseLike<T>, ms = 5000): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("Request timeout")), ms)
-    ),
-  ]);
-}
-
 export default function ProfileButton() {
   const [userId, setUserId] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
@@ -28,80 +19,70 @@ export default function ProfileButton() {
   const isAdmin = role === "admin";
   const canManage = isOwner || isAdmin;
 
-  async function loadUser() {
-    try {
-      setChecking(true);
+  async function loadRole(id: string) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", id)
+      .maybeSingle<Profile>();
 
-      const sessionResult = await timeout(supabase.auth.getSession(), 5000);
-      const user = sessionResult.data.session?.user || null;
+    setRole(data?.role || "user");
+  }
+
+  async function loadUser() {
+    setChecking(true);
+
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user || null;
+
+    if (!user) {
+      setUserId(null);
+      setRole(null);
+      setOpen(false);
+      setChecking(false);
+      return;
+    }
+
+    setUserId(user.id);
+    await loadRole(user.id);
+    setChecking(false);
+  }
+
+  useEffect(() => {
+    loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const user = session?.user || null;
 
       if (!user) {
         setUserId(null);
         setRole(null);
         setOpen(false);
+        setChecking(false);
         return;
       }
 
       setUserId(user.id);
-
-      try {
-        const { data } = await timeout(
-          supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .maybeSingle<Profile>(),
-          5000
-        );
-
-        setRole(data?.role || "user");
-      } catch {
-        setRole("user");
-      }
-    } catch {
-      setUserId(null);
-      setRole(null);
-      setOpen(false);
-    } finally {
+      await loadRole(user.id);
       setChecking(false);
-    }
-  }
-
-  useEffect(() => {
-    let alive = true;
-
-    async function safeLoad() {
-      if (!alive) return;
-      await loadUser();
-    }
-
-    safeLoad();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
-      safeLoad();
     });
 
-    window.addEventListener("online", safeLoad);
-    window.addEventListener("focus", safeLoad);
-    window.addEventListener("pageshow", safeLoad);
+    window.addEventListener("focus", loadUser);
+    window.addEventListener("pageshow", loadUser);
 
     return () => {
-      alive = false;
       subscription.unsubscribe();
-      window.removeEventListener("online", safeLoad);
-      window.removeEventListener("focus", safeLoad);
-      window.removeEventListener("pageshow", safeLoad);
+      window.removeEventListener("focus", loadUser);
+      window.removeEventListener("pageshow", loadUser);
     };
   }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent | TouchEvent) {
       if (!menuRef.current) return;
-      if (!menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (!menuRef.current.contains(e.target as Node)) setOpen(false);
     }
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -114,17 +95,22 @@ export default function ProfileButton() {
   }, []);
 
   async function logout() {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      setUserId(null);
-      setRole(null);
-      setOpen(false);
-      window.location.href = "/";
-    }
+    await supabase.auth.signOut();
+    setUserId(null);
+    setRole(null);
+    setOpen(false);
+    window.location.href = "/";
   }
 
-  if (checking || !userId) {
+  if (checking) {
+    return (
+      <div className="relative z-[99999] inline-flex h-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white px-3 text-xs font-black text-[#172033] shadow-sm">
+        ...
+      </div>
+    );
+  }
+
+  if (!userId) {
     return (
       <Link
         href="/login"
@@ -156,19 +142,11 @@ export default function ProfileButton() {
 
       {open && (
         <div className="absolute right-0 top-10 z-[999999] w-56 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
-          <Link
-            href="/profile"
-            className="block px-4 py-3 hover:bg-[#F8F3EC]"
-            onClick={() => setOpen(false)}
-          >
+          <Link href="/profile" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
             Edit Profile
           </Link>
 
-          <Link
-            href="/my-coupons"
-            className="block px-4 py-3 hover:bg-[#F8F3EC]"
-            onClick={() => setOpen(false)}
-          >
+          <Link href="/my-coupons" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
             My Coupons
           </Link>
 
@@ -176,47 +154,27 @@ export default function ProfileButton() {
             <>
               <div className="border-t border-[#EFE5D8]" />
 
-              <Link
-                href="/owner"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
+              <Link href="/owner" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 My Business
               </Link>
 
-              <Link
-	  href="/grand-opening/new"
-	  className="block px-4 py-3 hover:bg-[#F8F3EC]"
-	  onClick={() => setOpen(false)}
-	>
-	  🎉 Grand Opening
-	</Link>
- <Link href="/business/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+              <Link href="/grand-opening/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
+                🎉 Grand Opening
+              </Link>
+
+              <Link href="/business/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Register Business
               </Link>
 
-
-              <Link
-                href="/events/new"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
+              <Link href="/events/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Create Event
               </Link>
 
-              <Link
-                href="/deals/new"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
+              <Link href="/deals/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Create Deal
               </Link>
 
-              <Link
-                href="/coupons/new"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
+              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Register Coupon
               </Link>
             </>
@@ -226,21 +184,11 @@ export default function ProfileButton() {
             <>
               <div className="border-t border-[#EFE5D8]" />
 
-              <Link
-                href="/admin/owner-requests"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
+              <Link href="/admin/owner-requests" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Owner Requests
               </Link>
 
-              
-
-              <Link
-                href="/admin/event-requests"
-                className="block px-4 py-3 hover:bg-[#F8F3EC]"
-                onClick={() => setOpen(false)}
-              >
+              <Link href="/admin/event-requests" className="block px-4 py-3 hover:bg-[#F8F3EC]" onClick={() => setOpen(false)}>
                 Event Requests
               </Link>
             </>

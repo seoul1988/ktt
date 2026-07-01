@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import AuthRefreshWrapper from "./AuthRefreshWrapper";
+
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CircleMarker,
@@ -728,9 +731,11 @@ export default function BusinessMap({
           className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none landscape:px-4 landscape:py-3 landscape:text-xs"
         />
 
-        <div className="shrink-0">
-          <ProfileButton />
-        </div>
+      <div className="shrink-0">
+  <AuthRefreshWrapper>
+    <ProfileButton />
+  </AuthRefreshWrapper>
+</div>
       </div>
 
       {categoryPanelOpen && (
