@@ -44,7 +44,7 @@ export default function AdminUsersPage() {
     setLoading(false);
   }
 
- async function sendRoleNotification(email: string, role: string) {
+async function sendRoleNotification(email: string, role: string) {
   console.log("Sending role notification:", email, role);
 
   const res = await fetch("/api/send-role-notification", {
