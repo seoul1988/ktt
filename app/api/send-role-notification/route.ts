@@ -31,7 +31,7 @@ export async function POST(req: Request) {
         : "User";
 
     const { data, error } = await resend.emails.send({
-      from: "K-Town Triangle <onboarding@resend.dev>",
+      from: "K-Town Triangle <noreply@ktowntriangle.com>",
       to: [email],
       subject: "Your K-Town Triangle account has been updated",
       html: `
