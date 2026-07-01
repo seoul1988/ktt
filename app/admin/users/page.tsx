@@ -19,6 +19,7 @@ type UserProfile = {
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [workingId, setWorkingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -43,9 +44,30 @@ export default function AdminUsersPage() {
     setLoading(false);
   }
 
-  async function changeRole(id: string, role: "user" | "owner" | "admin") {
+  async function sendRoleNotification(email: string, role: string) {
+    const res = await fetch("/api/send-role-notification", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, role }),
+    });
+
+    if (!res.ok) {
+      const result = await res.json().catch(() => null);
+      throw new Error(result?.error || "Failed to send notification email.");
+    }
+  }
+
+  async function changeRole(
+    id: string,
+    role: "user" | "owner" | "admin",
+    email: string | null
+  ) {
     const ok = window.confirm(`Change this member role to ${role}?`);
     if (!ok) return;
+
+    setWorkingId(id);
 
     const { error } = await supabase
       .from("profiles")
@@ -54,12 +76,28 @@ export default function AdminUsersPage() {
 
     if (error) {
       alert(error.message);
+      setWorkingId(null);
       return;
     }
 
     setUsers((prev) =>
       prev.map((user) => (user.id === id ? { ...user, role } : user))
     );
+
+    if (email) {
+      try {
+        await sendRoleNotification(email, role);
+        alert(`${email} has been changed to ${role}. Notification email sent.`);
+      } catch (emailError: any) {
+        alert(
+          `${email} has been changed to ${role}, but the notification email failed.\n\n${emailError.message}`
+        );
+      }
+    } else {
+      alert(`Member has been changed to ${role}. No email address found.`);
+    }
+
+    setWorkingId(null);
   }
 
   async function disableProfile(id: string, email: string | null) {
@@ -71,6 +109,8 @@ export default function AdminUsersPage() {
 
     if (!ok) return;
 
+    setWorkingId(id);
+
     const { error } = await supabase
       .from("profiles")
       .update({
@@ -81,10 +121,12 @@ export default function AdminUsersPage() {
 
     if (error) {
       alert(error.message);
+      setWorkingId(null);
       return;
     }
 
     setUsers((prev) => prev.filter((user) => user.id !== id));
+    setWorkingId(null);
   }
 
   return (
@@ -117,6 +159,7 @@ export default function AdminUsersPage() {
           <div className="space-y-4">
             {users.map((user) => {
               const role = String(user.role || "user").toLowerCase();
+              const isWorking = workingId === user.id;
 
               return (
                 <div key={user.id} className="rounded-3xl bg-white p-5 shadow">
@@ -162,36 +205,43 @@ export default function AdminUsersPage() {
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button
-                      disabled={role === "user"}
-                      onClick={() => changeRole(user.id, "user")}
+                      disabled={role === "user" || isWorking}
+                      onClick={() => changeRole(user.id, "user", user.email)}
                       className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       User
                     </button>
 
                     <button
-                      disabled={role === "owner"}
-                      onClick={() => changeRole(user.id, "owner")}
+                      disabled={role === "owner" || isWorking}
+                      onClick={() => changeRole(user.id, "owner", user.email)}
                       className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Owner
                     </button>
 
                     <button
-                      disabled={role === "admin"}
-                      onClick={() => changeRole(user.id, "admin")}
+                      disabled={role === "admin" || isWorking}
+                      onClick={() => changeRole(user.id, "admin", user.email)}
                       className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Admin
                     </button>
 
                     <button
+                      disabled={isWorking}
                       onClick={() => disableProfile(user.id, user.email)}
-                      className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white"
+                      className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Disable
                     </button>
                   </div>
+
+                  {isWorking && (
+                    <p className="mt-3 text-xs font-bold text-gray-400">
+                      Processing...
+                    </p>
+                  )}
                 </div>
               );
             })}
