@@ -44,20 +44,26 @@ export default function AdminUsersPage() {
     setLoading(false);
   }
 
-  async function sendRoleNotification(email: string, role: string) {
-    const res = await fetch("/api/send-role-notification", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, role }),
-    });
+ async function sendRoleNotification(email: string, role: string) {
+  console.log("Sending role notification:", email, role);
 
-    if (!res.ok) {
-      const result = await res.json().catch(() => null);
-      throw new Error(result?.error || "Failed to send notification email.");
-    }
+  const res = await fetch("/api/send-role-notification", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, role }),
+  });
+
+  console.log("Role notification status:", res.status);
+
+  const result = await res.json().catch(() => null);
+  console.log("Role notification result:", result);
+
+  if (!res.ok) {
+    throw new Error(result?.error || "Failed to send notification email.");
   }
+}
 
   async function changeRole(
     id: string,
