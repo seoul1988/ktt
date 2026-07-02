@@ -99,10 +99,34 @@ export default function ProfilePage() {
     return true;
   }
 
+  async function sendOwnerRequestEmail() {
+    if (!profile?.email) return;
+
+    const res = await fetch("/api/send-owner-request", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        businessName: businessName.trim(),
+        email: profile.email,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.error || "Failed to send owner request email.");
+    }
+  }
+
   async function applyOwner() {
     if (!profile) return;
 
     if (!validateRequiredFields()) return;
+
+    setSaving(true);
 
     const { error } = await supabase
       .from("profiles")
@@ -116,9 +140,23 @@ export default function ProfilePage() {
       .eq("id", profile.id);
 
     if (error) {
+      setSaving(false);
       alert(error.message);
       return;
     }
+
+    try {
+      await sendOwnerRequestEmail();
+    } catch (emailError: any) {
+      setSaving(false);
+      alert(
+        "Owner request was submitted, but the admin email failed to send: " +
+          emailError.message
+      );
+      return;
+    }
+
+    setSaving(false);
 
     alert("Owner request submitted.");
     window.location.href = "/map";
@@ -172,7 +210,8 @@ export default function ProfilePage() {
     );
   }
 
-  const isPendingOwner = profile?.owner_status === "pending" && profile?.role === "user";
+  const isPendingOwner =
+    profile?.owner_status === "pending" && profile?.role === "user";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 py-8 text-[#172033]">
@@ -217,19 +256,31 @@ export default function ProfilePage() {
             </span>
 
             <div className="w-full rounded-2xl bg-white px-5 py-4 font-bold">
-              <span className={profile?.role === "admin" ? "text-red-600" : "text-gray-300"}>
+              <span
+                className={
+                  profile?.role === "admin" ? "text-red-600" : "text-gray-300"
+                }
+              >
                 Admin
               </span>
 
               <span className="mx-2 text-gray-300">|</span>
 
-              <span className={profile?.role === "owner" ? "text-red-600" : "text-gray-300"}>
+              <span
+                className={
+                  profile?.role === "owner" ? "text-red-600" : "text-gray-300"
+                }
+              >
                 Owner
               </span>
 
               <span className="mx-2 text-gray-300">|</span>
 
-              <span className={profile?.role === "user" ? "text-red-600" : "text-gray-300"}>
+              <span
+                className={
+                  profile?.role === "user" ? "text-red-600" : "text-gray-300"
+                }
+              >
                 User
               </span>
             </div>
@@ -283,9 +334,10 @@ export default function ProfilePage() {
           {profile?.role === "user" && !isPendingOwner && (
             <button
               onClick={applyOwner}
-              className="mb-4 w-full rounded-2xl bg-[#F6C343] py-4 font-extrabold text-[#172033] shadow-lg"
+              disabled={saving}
+              className="mb-4 w-full rounded-2xl bg-[#F6C343] py-4 font-extrabold text-[#172033] shadow-lg disabled:opacity-60"
             >
-              Apply as Business Owner
+              {saving ? "Submitting..." : "Apply as Business Owner"}
             </button>
           )}
 
