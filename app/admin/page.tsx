@@ -23,7 +23,7 @@ export default function AdminPage() {
           </Link>
 			<a
 			  href="/admin/owner-business-matching"
-			  className="block rounded-2xl bg-white p-5 font-black text-[#172033] shadow"
+			  className="block rounded-2xl bg-[#172033] p-5 font-bold text-white"
 			>
 			  Link Owner to Business
 			</a>

@@ -191,13 +191,13 @@ export default function OwnerBusinessMatchingPage() {
         </div>
 
         <p className="mb-6 text-sm font-bold text-gray-500">
-          Select an owner request and connect it to an existing business.
+          Select an owner and connect it to an existing business.
         </p>
 
         <div className="rounded-3xl bg-white p-5 shadow">
           <label className="block">
             <span className="mb-2 block text-sm font-black text-gray-700">
-              Select Owner / User
+              Select Owner
             </span>
 
             <select
@@ -205,13 +205,11 @@ export default function OwnerBusinessMatchingPage() {
               onChange={(e) => setSelectedUserId(e.target.value)}
               className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 font-bold outline-none"
             >
-              <option value="">Choose owner/user</option>
+              <option value="">Choose owner</option>
 
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.full_name || "No name"} / {u.email || "No email"} /{" "}
-                  {u.owner_status || "none"} / Requested:{" "}
-                  {u.requested_business_name || "None"}
+                  {u.full_name || "No Name"}
                 </option>
               ))}
             </select>
@@ -231,8 +229,7 @@ export default function OwnerBusinessMatchingPage() {
 
               {businesses.map((b) => (
                 <option key={b.id} value={b.id}>
-                  ID {b.id} / {b.name || "No name"} /{" "}
-                  {b.address || "No address"}
+                  #{b.id} | {b.name || "No Name"}
                 </option>
               ))}
             </select>
