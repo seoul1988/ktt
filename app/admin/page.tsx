@@ -21,7 +21,12 @@ export default function AdminPage() {
           >
             👤 Owner Requests
           </Link>
-
+			<a
+			  href="/admin/owner-business-matching"
+			  className="block rounded-2xl bg-white p-5 font-black text-[#172033] shadow"
+			>
+			  Link Owner to Business
+			</a>
           <Link
             href="/admin/event-requests"
             className="block rounded-2xl bg-[#172033] p-5 font-bold text-white"
