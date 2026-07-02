@@ -757,6 +757,122 @@ export default function EditBusinessPage() {
             />
 
             <div className="rounded-2xl border bg-gray-50 p-4">
+              <p className="mb-4 font-black">Business Hours</p>
+
+              <div className="space-y-4">
+                {dayHours.map((item, index) => (
+                  <div key={item.day} className="rounded-xl border bg-white p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <span className="font-bold">{item.day}</span>
+
+                      <label className="flex items-center gap-2 text-sm font-bold text-gray-600">
+                        <input
+                          type="checkbox"
+                          checked={item.closed}
+                          onChange={(e) =>
+                            updateDayHour(index, "closed", e.target.checked)
+                          }
+                          className="h-4 w-4"
+                        />
+                        Closed
+                      </label>
+                    </div>
+
+                    {!item.closed && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="mb-1 text-xs font-black text-gray-500">Open</p>
+                            <select
+                              value={item.open}
+                              onChange={(e) =>
+                                updateDayHour(index, "open", e.target.value)
+                              }
+                              className="w-full rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                            >
+                              {timeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                  {time}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <p className="mb-1 text-xs font-black text-gray-500">Close</p>
+                            <select
+                              value={item.close}
+                              onChange={(e) =>
+                                updateDayHour(index, "close", e.target.value)
+                              }
+                              className="w-full rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                            >
+                              {timeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                  {time}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <label className="flex items-center gap-2 text-sm font-bold text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={item.hasBreak}
+                            onChange={(e) =>
+                              updateDayHour(index, "hasBreak", e.target.checked)
+                            }
+                            className="h-4 w-4"
+                          />
+                          Break Time
+                        </label>
+
+                        {item.hasBreak && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <p className="mb-1 text-xs font-black text-gray-500">Break Start</p>
+                              <select
+                                value={item.breakStart}
+                                onChange={(e) =>
+                                  updateDayHour(index, "breakStart", e.target.value)
+                                }
+                                className="w-full rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                              >
+                                {timeOptions.map((time) => (
+                                  <option key={time} value={time}>
+                                    {time}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <p className="mb-1 text-xs font-black text-gray-500">Break End</p>
+                              <select
+                                value={item.breakEnd}
+                                onChange={(e) =>
+                                  updateDayHour(index, "breakEnd", e.target.value)
+                                }
+                                className="w-full rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                              >
+                                {timeOptions.map((time) => (
+                                  <option key={time} value={time}>
+                                    {time}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border bg-gray-50 p-4">
               <p className="mb-3 font-black">Categories</p>
 
               {categories.length === 0 ? (
