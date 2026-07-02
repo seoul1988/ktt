@@ -9,6 +9,7 @@ type BeforeInstallPromptEvent = Event & {
 
 const HIDE_KEY = "ktt_install_banner_hide_until";
 const HIDE_TIME = 24 * 60 * 60 * 1000;
+const AUTO_HIDE_TIME = 5000;
 
 export default function InstallAppButton() {
   const [installPrompt, setInstallPrompt] =
@@ -25,9 +26,12 @@ export default function InstallAppButton() {
     localStorage.setItem(HIDE_KEY, String(Date.now() + HIDE_TIME));
   }
 
-  function closeBanner() {
+  function hideBanner(save24Hours = false) {
     setIsClosing(true);
-    hideFor24Hours();
+
+    if (save24Hours) {
+      hideFor24Hours();
+    }
 
     window.setTimeout(() => {
       setShowBanner(false);
@@ -38,6 +42,11 @@ export default function InstallAppButton() {
   function openBanner() {
     setShowBanner(true);
     setIsClosing(false);
+  }
+
+  function shouldShowBanner() {
+    const hideUntil = Number(localStorage.getItem(HIDE_KEY) || 0);
+    return Date.now() > hideUntil;
   }
 
   useEffect(() => {
@@ -58,33 +67,44 @@ export default function InstallAppButton() {
 
     setIsIOS(ios);
 
-    const hideUntil = Number(localStorage.getItem(HIDE_KEY) || 0);
+    let autoTimer: number | null = null;
 
-    let timer: number | null = null;
+    function showThenAutoHide() {
+      if (!shouldShowBanner()) return;
 
-    if (Date.now() > hideUntil) {
       setShowBanner(true);
+      setIsClosing(false);
 
-      timer = window.setTimeout(() => {
-        closeBanner();
-      }, 5000);
+      if (autoTimer) window.clearTimeout(autoTimer);
+
+      autoTimer = window.setTimeout(() => {
+        hideBanner(true);
+      }, AUTO_HIDE_TIME);
+    }
+
+    if (ios) {
+      showThenAutoHide();
     }
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
+
       setInstallPrompt(event as BeforeInstallPromptEvent);
+
+      showThenAutoHide();
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
       setInstallPrompt(null);
+      setShowBanner(false);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
-      if (timer) window.clearTimeout(timer);
+      if (autoTimer) window.clearTimeout(autoTimer);
 
       window.removeEventListener(
         "beforeinstallprompt",
@@ -98,6 +118,8 @@ export default function InstallAppButton() {
   async function installApp() {
     if (!installPrompt) {
       setShowIOSGuide(true);
+      hideFor24Hours();
+      setShowBanner(false);
       return;
     }
 
@@ -116,7 +138,7 @@ export default function InstallAppButton() {
 
   function handleTouchEnd(x: number) {
     if (touchStartX !== null && x - touchStartX > 80) {
-      closeBanner();
+      hideBanner(true);
     }
 
     setTouchStartX(null);
@@ -137,9 +159,7 @@ export default function InstallAppButton() {
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
-              <p className="text-sm font-black">
-                📱 Install KTown Triangle
-              </p>
+              <p className="text-sm font-black">📱 Install KTown Triangle</p>
 
               <p className="mt-1 text-xs font-semibold text-white/75">
                 Add this app to your phone for faster access.
@@ -147,7 +167,7 @@ export default function InstallAppButton() {
             </div>
 
             <button
-              onClick={closeBanner}
+              onClick={() => hideBanner(true)}
               className="rounded-full bg-white/15 px-3 py-1 text-xs font-black"
             >
               ✕
