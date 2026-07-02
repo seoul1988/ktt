@@ -90,14 +90,18 @@ export default async function CommunityPage() {
         </div>
 
         {/* Upcoming Events */}
-        <section className="mb-8">
-          <div className="mb-4 flex items-center justify-between rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="h-7 w-1.5 rounded-full bg-[#C4483A]" />
+        <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">
+          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F3CFC7] bg-white text-xl shadow-sm">
+                🎉
+              </div>
+
               <div>
                 <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
                   Events
                 </p>
+
                 <h2 className="text-xl font-black text-[#172033]">
                   Upcoming Events
                 </h2>
@@ -106,7 +110,7 @@ export default async function CommunityPage() {
 
             <Link
               href="/community/events"
-              className="rounded-full bg-[#C4483A] px-3 py-1.5 text-xs font-black text-white shadow-sm"
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
             >
               View all
             </Link>
@@ -116,7 +120,7 @@ export default async function CommunityPage() {
             className={
               eventCount === 1
                 ? "grid grid-cols-1 gap-4"
-                : "flex gap-4 overflow-x-auto pb-2"
+                : "flex gap-4 overflow-x-auto pb-1"
             }
           >
             {events?.map((event) => (
@@ -126,7 +130,7 @@ export default async function CommunityPage() {
                 className={
                   eventCount === 1
                     ? "overflow-hidden rounded-3xl bg-white shadow-sm"
-                    : "min-w-[260px] overflow-hidden rounded-3xl bg-[#2A3448] text-white shadow-sm"
+                    : "min-w-[260px] overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
                 }
               >
                 <div
@@ -148,7 +152,7 @@ export default async function CommunityPage() {
                     </div>
                   )}
 
-                  <div className="absolute left-3 top-3 rounded-full bg-[#172033]/90 px-3 py-1 text-[10px] font-black text-white backdrop-blur-sm">
+                  <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
                     {event.category || "EVENT"}
                   </div>
                 </div>
@@ -164,25 +168,13 @@ export default async function CommunityPage() {
                     {event.title}
                   </h3>
 
-                  <p
-                    className={
-                      eventCount === 1
-                        ? "mt-3 text-sm font-bold text-[#6B6257]"
-                        : "mt-1 text-xs font-bold text-white/70"
-                    }
-                  >
+                  <p className="mt-2 text-xs font-bold text-[#6B6257]">
                     {event.event_date
                       ? new Date(event.event_date).toLocaleDateString()
                       : "Date TBA"}
                   </p>
 
-                  <p
-                    className={
-                      eventCount === 1
-                        ? "mt-1 line-clamp-2 text-sm font-semibold text-[#6B6257]"
-                        : "mt-1 line-clamp-1 text-xs font-semibold text-white/70"
-                    }
-                  >
+                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
                     {event.location || event.address || "Location TBA"}
                   </p>
 
@@ -193,13 +185,7 @@ export default async function CommunityPage() {
                   )}
 
                   {event.description && (
-                    <p
-                      className={
-                        eventCount === 1
-                          ? "mt-3 line-clamp-3 text-sm font-semibold leading-6 text-[#6B6257]"
-                          : "mt-2 line-clamp-2 text-xs font-semibold leading-5 text-white/70"
-                      }
-                    >
+                    <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-[#6B6257]">
                       {event.description}
                     </p>
                   )}
@@ -216,14 +202,18 @@ export default async function CommunityPage() {
         </section>
 
         {/* Community Deals */}
-        <section className="mb-8">
-          <div className="mb-4 flex items-center justify-between rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="h-7 w-1.5 rounded-full bg-[#F4C95D]" />
+        <section className="mb-8 overflow-hidden rounded-3xl border border-[#F1DEAB] bg-[#FFF4D8] p-3 shadow-sm">
+          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F1DEAB] bg-white text-xl shadow-sm">
+                🏷️
+              </div>
+
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#B98000]">
                   Deals
                 </p>
+
                 <h2 className="text-xl font-black text-[#172033]">
                   Community Deals
                 </h2>
@@ -232,7 +222,7 @@ export default async function CommunityPage() {
 
             <Link
               href="/community/deals"
-              className="rounded-full bg-[#F4C95D] px-3 py-1.5 text-xs font-black text-[#172033] shadow-sm"
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B98000] shadow-sm"
             >
               View all
             </Link>
@@ -242,7 +232,7 @@ export default async function CommunityPage() {
             className={
               dealCount === 1
                 ? "grid grid-cols-1 gap-4"
-                : "flex gap-4 overflow-x-auto pb-2"
+                : "flex gap-4 overflow-x-auto pb-1"
             }
           >
             {deals?.map((deal) => (
@@ -321,14 +311,18 @@ export default async function CommunityPage() {
         </section>
 
         {/* New in Raleigh */}
-        <section className="mb-8">
-          <div className="mb-4 rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="h-7 w-1.5 rounded-full bg-[#2A3448]" />
+        <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
+          <div className="mb-4 rounded-2xl px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2A3448] text-sm font-black text-white shadow-sm">
+                NEW
+              </div>
+
               <div>
                 <p className="text-[10px] font-black uppercase tracking-wide text-[#2A3448]">
                   New
                 </p>
+
                 <h2 className="text-xl font-black text-[#172033]">
                   New in Raleigh
                 </h2>
@@ -341,7 +335,7 @@ export default async function CommunityPage() {
               <Link
                 key={biz.id}
                 href={`/business/${biz.id}?from=community`}
-                className="overflow-hidden rounded-3xl bg-[#2A3448] text-white shadow-sm"
+                className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
               >
                 <div className="relative h-44 w-full overflow-hidden bg-white">
                   {biz.image_url ? (
@@ -356,7 +350,7 @@ export default async function CommunityPage() {
                     </div>
                   )}
 
-                  <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
                     NEW
                   </div>
                 </div>
@@ -366,17 +360,17 @@ export default async function CommunityPage() {
                     {biz.name}
                   </h3>
 
-                  <p className="line-clamp-1 text-xs font-semibold text-white/70">
+                  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
                     {biz.category || "Business"}
                   </p>
 
                   <p className="mt-1 text-xs">
-                    <span className="font-black text-[#F4C95D]">
+                    <span className="font-black text-[#B98000]">
                       ★ {biz.rating || "New"}
                     </span>
 
                     {biz.review_count ? (
-                      <span className="ml-1 text-gray-400">
+                      <span className="ml-1 text-[#6B6257]">
                         ({biz.review_count})
                       </span>
                     ) : null}
@@ -388,14 +382,18 @@ export default async function CommunityPage() {
         </section>
 
         {/* Featured Business */}
-        <section>
-          <div className="mb-4 rounded-2xl border border-[#E8DED1] bg-white px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="h-7 w-1.5 rounded-full bg-[#172033]" />
+        <section className="overflow-hidden rounded-3xl border border-[#D8DBE3] bg-[#EEF0F5] p-3 shadow-sm">
+          <div className="mb-4 rounded-2xl px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#D8DBE3] bg-white text-xl shadow-sm">
+                ⭐
+              </div>
+
               <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-[#172033]">
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#2A3448]">
                   Featured
                 </p>
+
                 <h2 className="text-xl font-black text-[#172033]">
                   Featured Business
                 </h2>
@@ -407,7 +405,7 @@ export default async function CommunityPage() {
             {featured?.map((item) => (
               <div
                 key={item.id}
-                className="overflow-hidden rounded-3xl bg-[#172033] text-white shadow-sm"
+                className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
               >
                 <div className="h-44 w-full overflow-hidden bg-[#2A3448]">
                   {item.banner_image ? (
@@ -424,7 +422,7 @@ export default async function CommunityPage() {
                 </div>
 
                 <div className="p-4">
-                  <p className="text-[10px] font-black text-[#F4C95D]">
+                  <p className="text-[10px] font-black text-[#2A3448]">
                     FEATURED
                   </p>
 
@@ -432,7 +430,7 @@ export default async function CommunityPage() {
                     {item.title || "Featured Business"}
                   </h3>
 
-                  <p className="mt-1 text-sm font-semibold text-white/75">
+                  <p className="mt-1 text-sm font-semibold text-[#6B6257]">
                     {item.subtitle || "Sponsored local highlight"}
                   </p>
                 </div>
