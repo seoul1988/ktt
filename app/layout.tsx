@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "./components/AuthProvider";
 import "./globals.css";
@@ -99,6 +100,20 @@ export default function RootLayout({
     >
       <body className="min-h-screen bg-[#F8F3EC]">
         <AuthProvider>{children}</AuthProvider>
+
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=AW-18242391009"
+          strategy="afterInteractive"
+        />
+
+        <Script id="google-ads-tag" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'AW-18242391009');
+          `}
+        </Script>
       </body>
     </html>
   );
