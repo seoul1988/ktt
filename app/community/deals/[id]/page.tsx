@@ -217,8 +217,15 @@ export default function CommunityDealDetailPage() {
 
             <div className="mt-6 space-y-3 text-sm font-bold text-[#6B6257]">
               {deal.end_date && (
-                <p>⏰ Ends {new Date(deal.end_date).toLocaleDateString()}</p>
-              )}
+  <div className="rounded-xl border border-[#F3C8C2] bg-[#FFF1EE] px-4 py-3">
+    <p className="text-sm font-black text-[#C4483A]">
+      ⏰ Ends on{" "}
+      <span className="text-lg font-extrabold">
+        {new Date(deal.end_date).toLocaleDateString()}
+      </span>
+    </p>
+  </div>
+)}
 
               {websiteUrl && (
                 <a
