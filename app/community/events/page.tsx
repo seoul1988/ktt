@@ -12,7 +12,7 @@ export default async function CommunityEventsPage() {
     .from("community_events")
     .select("*")
     .eq("status", "approved")
-    .order("event_date", { ascending: true });
+    .order("created_at", { ascending: false });
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
