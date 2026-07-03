@@ -75,6 +75,10 @@ useEffect(() => {
   setSelectedCategory(params.get("category") || "all");
 }, []);
 
+useEffect(() => {
+  loadPage();
+}, [selectedCategory]);
+
   async function loadPage() {
     setLoading(true);
 
