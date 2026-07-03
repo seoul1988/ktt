@@ -199,7 +199,7 @@ export default async function DealDetailPage({
         {dealItems.length > 0 && (
           <section className="pt-5">
             <div className="rounded-3xl bg-white p-5 shadow-xl">
-              <h2 className="mb-4 text-xl font-black">Deal 메뉴</h2>
+              <h2 className="mb-4 text-xl font-black">Deal Menu</h2>
 
               <div className="space-y-4">
                 {dealItems.map((item) => (
