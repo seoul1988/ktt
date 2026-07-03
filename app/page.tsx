@@ -32,25 +32,29 @@ function SectionTitle({
   title,
   emoji,
   color,
+  bgColor,
   moreHref,
 }: {
   label: string;
   title: string;
   emoji: string;
   color: string;
+  bgColor: string;
   moreHref?: string;
 }) {
   return (
-    <div className="mb-4 flex items-center justify-between">
+    <div
+      className={`mb-5 flex items-center justify-between rounded-2xl border px-4 py-3 shadow-sm ${bgColor}`}
+    >
       <div className="flex items-center gap-3">
-        <div className={`h-11 w-2 rounded-full ${color}`} />
+        <div className={`h-10 w-1 rounded-full ${color}`} />
 
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-500">
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-gray-500">
             {label}
           </p>
 
-          <h2 className="text-2xl font-black text-[#172033]">
+          <h2 className="mt-0.5 text-2xl font-black leading-tight text-[#172033]">
             {emoji} {title}
           </h2>
         </div>
@@ -59,7 +63,7 @@ function SectionTitle({
       {moreHref && (
         <Link
           href={moreHref}
-          className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+          className="rounded-full border border-gray-200 bg-white px-5 py-2 text-sm font-black text-[#172033] shadow-sm hover:bg-gray-50"
         >
           More
         </Link>
@@ -296,6 +300,7 @@ export default async function Home() {
     });
 
   const deals = activeDeals || [];
+
   const trending = (spots || []).filter(
     (spot) => Number(spot.display_order || 0) < 1000
   );
@@ -336,12 +341,13 @@ export default async function Home() {
               title="Grand Opening"
               emoji="🎉"
               color="bg-amber-500"
+              bgColor="border-amber-200 bg-amber-50"
               moreHref="/grand-openings"
             />
 
             <Link
               href={`/grand-openings/${mainGrandOpening.id}`}
-              className="block overflow-hidden rounded-3xl border-2 border-amber-200 bg-white shadow-xl"
+              className="block overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-xl"
             >
               <div className="h-64 w-full bg-white">
                 <VideoFirstMedia
@@ -380,12 +386,13 @@ export default async function Home() {
               title="Events"
               emoji="📅"
               color="bg-blue-600"
+              bgColor="border-blue-200 bg-blue-50"
               moreHref="/business-events"
             />
 
             <Link
               href={`/business-events/${mainEvent.id}`}
-              className="block overflow-hidden rounded-3xl border-2 border-blue-100 bg-white shadow-xl"
+              className="block overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl"
             >
               <div className="h-64 w-full bg-white">
                 <VideoFirstMedia
@@ -417,6 +424,7 @@ export default async function Home() {
             title="Deals Near You"
             emoji="🔥"
             color="bg-red-500"
+            bgColor="border-red-200 bg-red-50"
             moreHref="/deals"
           />
 
@@ -466,6 +474,7 @@ export default async function Home() {
             title="Trending Now"
             emoji="📈"
             color="bg-green-600"
+            bgColor="border-green-200 bg-green-50"
           />
 
           <div className="space-y-4">
