@@ -31,6 +31,8 @@ const categoryTabs = [
   { label: "모임", value: "group", href: "/ads?category=group" },
 ];
 
+const validCategories = categoryTabs.map((tab) => tab.value);
+
 function statusLabel(status: string | null) {
   if (status === "active") return "Active";
   if (status === "expired") return "Expired";
@@ -64,12 +66,19 @@ export default function AdsPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+ useEffect(() => {
+  if (typeof window === "undefined") return;
 
-    const params = new URLSearchParams(window.location.search);
-    setSelectedCategory(params.get("category") || "all");
-  }, []);
+  const params = new URLSearchParams(window.location.search);
+  const category = params.get("category") || "all";
+
+  if (validCategories.includes(category)) {
+    setSelectedCategory(category);
+  } else {
+    setSelectedCategory("all");
+    window.history.replaceState(null, "", "/ads");
+  }
+}, []);
 
   useEffect(() => {
     loadPage();
@@ -210,20 +219,21 @@ export default function AdsPage() {
         <div className="mb-4 overflow-x-auto border-b border-[#172033]/15">
           <div className="flex min-w-max gap-5">
             {categoryTabs.map((tab) => (
-              <Link
-                key={tab.value}
-                href={tab.href}
-                className={`relative pb-2 text-[12px] font-black ${
-                  selectedCategory === tab.value
-                    ? "text-[#172033]"
-                    : "text-gray-500"
-                }`}
-              >
-                {tab.label}
-                {selectedCategory === tab.value && (
-                  <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#172033]" />
-                )}
-              </Link>
+          <Link
+  key={tab.value}
+  href={tab.href}
+  onClick={() => setSelectedCategory(tab.value)}
+  className={`relative pb-2 text-[12px] font-black ${
+    selectedCategory === tab.value
+      ? "text-[#172033]"
+      : "text-gray-500"
+  }`}
+>
+  {tab.label}
+  {selectedCategory === tab.value && (
+    <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#172033]" />
+  )}
+</Link>
             ))}
           </div>
         </div>
