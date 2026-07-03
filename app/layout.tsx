@@ -101,19 +101,24 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#F8F3EC]">
         <AuthProvider>{children}</AuthProvider>
 
-        <Script
-          src="https://www.googletagmanager.com/gtag/js?id=AW-18242391009"
-          strategy="afterInteractive"
-        />
+     <Script
+		  src="https://www.googletagmanager.com/gtag/js?id=G-SDZ3B9B4S6"
+		  strategy="afterInteractive"
+		/>
 
-        <Script id="google-ads-tag" strategy="afterInteractive">
-          {`
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'AW-18242391009');
-          `}
-        </Script>
+		<Script id="google-tag" strategy="afterInteractive">
+		  {`
+			window.dataLayer = window.dataLayer || [];
+			function gtag(){dataLayer.push(arguments);}
+			gtag('js', new Date());
+
+			// Google Analytics
+			gtag('config', 'G-SDZ3B9B4S6');
+
+			// Google Ads
+			gtag('config', 'AW-18242391009');
+		  `}
+		</Script>
       </body>
     </html>
   );
