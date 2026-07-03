@@ -34,6 +34,9 @@ export default function NewCommunityDealPage() {
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
 
+  const inputClass =
+    "w-full rounded-2xl border border-[#D8C8B6] bg-[#F1E6D8] px-4 py-3 text-sm font-semibold text-[#172033] outline-none placeholder:text-[#8A7D70] focus:border-[#C4483A] focus:bg-[#F8EFE4]";
+
   useEffect(() => {
     checkUser();
   }, []);
@@ -183,11 +186,8 @@ export default function NewCommunityDealPage() {
       image_url: imageUrl || null,
       start_date: startDate || null,
       end_date: endDate,
-
       active: true,
       status: "approved",
-
-      // 중요: 이 페이지에서 등록한 딜은 커뮤니티 전용
       deal_scope: "community",
     });
 
@@ -234,7 +234,7 @@ export default function NewCommunityDealPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-3xl bg-white p-5 shadow-sm"
+          className="space-y-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#E8DED1]"
         >
           <div>
             <label className="mb-1 block text-sm font-black">딜 제목 *</label>
@@ -242,7 +242,7 @@ export default function NewCommunityDealPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="예: Grand Opening 20% OFF"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -252,7 +252,7 @@ export default function NewCommunityDealPage() {
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
               placeholder="예: Hair Salon"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -262,7 +262,7 @@ export default function NewCommunityDealPage() {
               value={discountText}
               onChange={(e) => setDiscountText(e.target.value)}
               placeholder="예: 20% OFF"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -273,7 +273,7 @@ export default function NewCommunityDealPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="딜 내용을 입력하세요."
               rows={4}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -284,7 +284,7 @@ export default function NewCommunityDealPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+                className={inputClass}
               />
             </div>
 
@@ -294,7 +294,7 @@ export default function NewCommunityDealPage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+                className={inputClass}
               />
             </div>
           </div>
@@ -305,7 +305,7 @@ export default function NewCommunityDealPage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="예: (919) 430-3115"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -320,7 +320,7 @@ export default function NewCommunityDealPage() {
                 setLng(null);
               }}
               placeholder="주소를 입력하고 Google 목록에서 선택하세요"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
 
             {lat && lng && (
@@ -336,14 +336,14 @@ export default function NewCommunityDealPage() {
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
               placeholder="https://..."
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-black">이미지</label>
 
-            <label className="flex cursor-pointer items-center justify-center rounded-xl border border-gray-300 bg-[#F8F3EC] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#F3EEE6]">
+            <label className="flex cursor-pointer items-center justify-center rounded-xl border border-[#D8C8B6] bg-[#F1E6D8] px-4 py-2.5 text-sm font-semibold text-[#6B6257] transition hover:bg-[#E8D8C6]">
               📷 이미지 선택
 
               <input
@@ -372,7 +372,7 @@ export default function NewCommunityDealPage() {
                 <button
                   type="button"
                   onClick={() => setImageUrl("")}
-                  className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-[#172033]"
+                  className="mt-2 rounded-lg border border-[#D8C8B6] bg-[#F1E6D8] px-3 py-1.5 text-xs font-medium text-[#172033]"
                 >
                   이미지 삭제
                 </button>

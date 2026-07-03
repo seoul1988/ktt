@@ -6,7 +6,6 @@ import Link from "next/link";
 import { supabase } from "../../../../../lib/supabase";
 import CommunityBottomNav from "../../../../components/CommunityBottomNav";
 
-
 declare global {
   interface Window {
     google: any;
@@ -39,6 +38,9 @@ export default function EditCommunityDealPage() {
   const [endDate, setEndDate] = useState("");
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
+
+  const inputClass =
+    "w-full rounded-2xl border border-[#D8C8B6] bg-[#F1E6D8] px-4 py-3 text-sm font-semibold text-[#172033] outline-none placeholder:text-[#8A7D70] focus:border-[#C4483A] focus:bg-[#F8EFE4]";
 
   useEffect(() => {
     loadDeal();
@@ -432,14 +434,14 @@ export default function EditCommunityDealPage() {
 
         <form
           onSubmit={handleUpdate}
-          className="space-y-4 rounded-3xl bg-white p-5 shadow-sm"
+          className="space-y-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-[#E8DED1]"
         >
           <div>
             <label className="mb-1 block text-sm font-black">딜 제목 *</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -448,7 +450,7 @@ export default function EditCommunityDealPage() {
             <input
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -457,7 +459,7 @@ export default function EditCommunityDealPage() {
             <input
               value={discountText}
               onChange={(e) => setDiscountText(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -467,7 +469,7 @@ export default function EditCommunityDealPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -478,7 +480,7 @@ export default function EditCommunityDealPage() {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+                className={inputClass}
               />
             </div>
 
@@ -488,7 +490,7 @@ export default function EditCommunityDealPage() {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+                className={inputClass}
               />
             </div>
           </div>
@@ -498,7 +500,7 @@ export default function EditCommunityDealPage() {
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
@@ -513,7 +515,7 @@ export default function EditCommunityDealPage() {
                 setLng(null);
               }}
               placeholder="주소를 입력하고 Google 목록에서 선택하세요"
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
 
             {lat && lng && (
@@ -528,14 +530,14 @@ export default function EditCommunityDealPage() {
             <input
               value={website}
               onChange={(e) => setWebsite(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-semibold outline-none"
+              className={inputClass}
             />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-black">딜 이미지</label>
 
-            <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-[#F8F3EC] px-4 py-5 text-sm font-black text-[#6B6257]">
+            <label className="flex cursor-pointer items-center justify-center rounded-2xl border border-dashed border-[#D8C8B6] bg-[#F1E6D8] px-4 py-5 text-sm font-black text-[#6B6257] transition hover:bg-[#E8D8C6]">
               {uploading ? "업로드 중..." : "📷 이미지 변경"}
               <input
                 type="file"
@@ -547,7 +549,7 @@ export default function EditCommunityDealPage() {
             </label>
 
             {imageUrl ? (
-              <div className="mt-3 rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <div className="mt-3 rounded-2xl border border-[#D8C8B6] bg-[#F1E6D8] p-3">
                 <img
                   src={imageUrl}
                   alt="preview"
@@ -558,7 +560,7 @@ export default function EditCommunityDealPage() {
                   type="button"
                   onClick={handleRemoveImage}
                   disabled={deletingImage || loading || uploading}
-                  className="mt-3 rounded-full bg-gray-200 px-3 py-2 text-xs font-semibold text-[#172033] disabled:opacity-60"
+                  className="mt-3 rounded-full border border-[#D8C8B6] bg-white px-3 py-2 text-xs font-semibold text-[#172033] disabled:opacity-60"
                 >
                   {deletingImage ? "삭제 중..." : "이미지 삭제"}
                 </button>
@@ -583,7 +585,7 @@ export default function EditCommunityDealPage() {
               type="button"
               onClick={handleDelete}
               disabled={loading || uploading || deletingImage}
-              className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+              className="rounded-xl border border-[#D8C8B6] bg-[#F1E6D8] px-4 py-2 text-sm font-semibold text-[#172033] transition hover:bg-[#E8D8C6] disabled:opacity-60"
             >
               삭제
             </button>

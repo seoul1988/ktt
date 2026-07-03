@@ -135,19 +135,19 @@ export default function CommunityDealDetailPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="relative mb-5 border-b border-[#E8DED1] pb-3">
-  <Link
-    href="/community/deals"
-    className="text-sm font-bold text-[#C4483A]"
-  >
-    ← Back
-  </Link>
+          <Link
+            href="/community/deals"
+            className="text-sm font-bold text-[#C4483A]"
+          >
+            ← Back
+          </Link>
 
-  <div className="absolute left-1/2 top-0 -translate-x-1/2">
-    <h2 className="text-lg font-black tracking-wide text-[#172033]">
-      Community Deal
-    </h2>
-  </div>
-</div>
+          <div className="absolute left-1/2 top-0 -translate-x-1/2">
+            <h2 className="text-lg font-black tracking-wide text-[#172033]">
+              Community Deal
+            </h2>
+          </div>
+        </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
           <div className="relative h-72 w-full overflow-hidden bg-[#E8DED1]">
@@ -208,9 +208,11 @@ export default function CommunityDealDetailPage() {
             </p>
 
             {deal.description && (
-              <p className="mt-5 whitespace-pre-wrap text-sm font-semibold leading-7 text-[#6B6257]">
-                {deal.description}
-              </p>
+              <div className="mt-5 rounded-2xl border border-[#E8DED1] bg-[#F8F3EC] p-4">
+                <p className="whitespace-pre-wrap text-sm font-semibold leading-7 text-[#6B6257]">
+                  {deal.description}
+                </p>
+              </div>
             )}
 
             <div className="mt-6 space-y-3 text-sm font-bold text-[#6B6257]">
