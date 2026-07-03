@@ -205,7 +205,7 @@ export default async function DealDetailPage({
                 {dealItems.map((item) => (
                   <div
                     key={item.id}
-                    className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow"
+                    className="overflow-hidden rounded-3xl border border-[#EFE3D4] bg-white shadow-sm"
                   >
                     {item.image_url && (
                       <img
@@ -217,7 +217,9 @@ export default async function DealDetailPage({
 
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-lg font-black">{item.name}</h3>
+                        <h3 className="min-w-0 flex-1 text-lg font-black">
+                          {item.name}
+                        </h3>
 
                         <div className="shrink-0 text-right">
                           {item.original_price !== null && (
@@ -235,9 +237,11 @@ export default async function DealDetailPage({
                       </div>
 
                       {item.description && (
-                        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-gray-600">
-                          {item.description}
-                        </p>
+                        <div className="mt-3 rounded-2xl bg-[#F8F3EC] px-4 py-3">
+                          <p className="whitespace-pre-line text-sm font-semibold leading-6 text-[#4F473F]">
+                            {item.description}
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
