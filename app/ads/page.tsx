@@ -21,18 +21,14 @@ type AdItem = {
 };
 
 const categoryTabs = [
-  { label: "All", value: "all", href: "/ads" },
-  { label: "Jobs", value: "job", href: "/ads?category=job" },
-  { label: "Housing", value: "housing", href: "/ads?category=housing" },
-  { label: "Auto", value: "auto", href: "/ads?category=auto" },
-  { label: "Business", value: "business", href: "/ads?category=business" },
-  { label: "Events", value: "event", href: "/ads?category=event" },
-  { label: "Service", value: "service", href: "/ads?category=service" },
-  {
-    label: "Notice",
-    value: "announcement",
-    href: "/ads?category=announcement",
-  },
+  { label: "전체", value: "all", href: "/ads" },
+  { label: "구인·구직", value: "job", href: "/ads?category=job" },
+  { label: "부동산", value: "housing", href: "/ads?category=housing" },
+  { label: "자동차", value: "auto", href: "/ads?category=auto" },
+  { label: "비즈니스", value: "business", href: "/ads?category=business" },
+  { label: "이벤트", value: "event", href: "/ads?category=event" },
+  { label: "서비스", value: "service", href: "/ads?category=service" },
+  { label: "모임", value: "group", href: "/ads?category=group" },
 ];
 
 function statusLabel(status: string | null) {
@@ -50,17 +46,17 @@ function statusClass(status: string | null) {
 }
 
 function categoryLabel(category: string | null) {
-  if (category === "job") return "Jobs";
-  if (category === "housing") return "Housing";
-  if (category === "auto") return "Auto";
-  if (category === "event") return "Event";
-  if (category === "service") return "Service";
-  if (category === "announcement") return "Notice";
-  return "Business";
+  if (category === "job") return "구인·구직";
+  if (category === "housing") return "부동산";
+  if (category === "auto") return "자동차";
+  if (category === "event") return "이벤트";
+  if (category === "service") return "서비스";
+  if (category === "group") return "모임";
+  return "비즈니스";
 }
 
 export default function AdsPage() {
-const [selectedCategory, setSelectedCategory] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   const [ads, setAds] = useState<AdItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -68,16 +64,16 @@ const [selectedCategory, setSelectedCategory] = useState("all");
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-useEffect(() => {
-  if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  const params = new URLSearchParams(window.location.search);
-  setSelectedCategory(params.get("category") || "all");
-}, []);
+    const params = new URLSearchParams(window.location.search);
+    setSelectedCategory(params.get("category") || "all");
+  }, []);
 
-useEffect(() => {
-  loadPage();
-}, [selectedCategory]);
+  useEffect(() => {
+    loadPage();
+  }, [selectedCategory]);
 
   async function loadPage() {
     setLoading(true);
@@ -191,7 +187,7 @@ useEffect(() => {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
       <div className="mx-auto max-w-md">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between">
           <h1 className="text-2xl font-black text-[#172033]">Ads</h1>
 
           <div className="flex gap-2">
@@ -211,20 +207,25 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {categoryTabs.map((tab) => (
-            <Link
-              key={tab.value}
-              href={tab.href}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-black ${
-                selectedCategory === tab.value
-                  ? "bg-[#172033] text-white"
-                  : "bg-white text-[#172033]"
-              }`}
-            >
-              {tab.label}
-            </Link>
-          ))}
+        <div className="mb-4 overflow-x-auto border-b border-[#172033]/15">
+          <div className="flex min-w-max gap-5">
+            {categoryTabs.map((tab) => (
+              <Link
+                key={tab.value}
+                href={tab.href}
+                className={`relative pb-2 text-[12px] font-black ${
+                  selectedCategory === tab.value
+                    ? "text-[#172033]"
+                    : "text-gray-500"
+                }`}
+              >
+                {tab.label}
+                {selectedCategory === tab.value && (
+                  <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#172033]" />
+                )}
+              </Link>
+            ))}
+          </div>
         </div>
 
         {ads.length === 0 ? (
