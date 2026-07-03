@@ -13,7 +13,7 @@ export default async function CommunityPage() {
     .from("community_events")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(1);
 
   if (eventsError) {
     console.error("community events error:", eventsError);
@@ -184,11 +184,7 @@ export default async function CommunityPage() {
                     </p>
                   )}
 
-                  {event.description && (
-                    <p className="mt-2 line-clamp-2 text-xs font-semibold leading-5 text-[#6B6257]">
-                      {event.description}
-                    </p>
-                  )}
+                 
                 </div>
               </Link>
             ))}
