@@ -16,9 +16,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.ktowntriangle.com"),
-	verification: {
-		google: "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
-	  },
+
+  verification: {
+    google: "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
+  },
+
   title: "KTown Triangle",
   description: "Events, deals and Korean places around the Triangle",
 
@@ -103,24 +105,21 @@ export default function RootLayout({
       <body className="min-h-screen bg-[#F8F3EC]">
         <AuthProvider>{children}</AuthProvider>
 
-     <Script
-		  src="https://www.googletagmanager.com/gtag/js?id=G-SDZ3B9B4S6"
-		  strategy="afterInteractive"
-		/>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-SDZ3B9B4S6"
+          strategy="afterInteractive"
+        />
 
-		<Script id="google-tag" strategy="afterInteractive">
-		  {`
-			window.dataLayer = window.dataLayer || [];
-			function gtag(){dataLayer.push(arguments);}
-			gtag('js', new Date());
+        <Script id="google-tag" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
 
-			// Google Analytics
-			gtag('config', 'G-SDZ3B9B4S6');
-
-			// Google Ads
-			gtag('config', 'AW-18242391009');
-		  `}
-		</Script>
+            gtag('config', 'G-SDZ3B9B4S6');
+            gtag('config', 'AW-18242391009');
+          `}
+        </Script>
       </body>
     </html>
   );
