@@ -5,7 +5,6 @@ import { supabase } from "../../../../lib/supabase";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
 import CommunityAttendeeRegistrationForm from "./CommunityAttendeeRegistrationForm";
 import CommunityAttendeeList from "./CommunityAttendeeList";
-import ImageModal from "../../../components/ImageModal";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -119,9 +118,10 @@ export default async function CommunityEventDetailPage({
 
         {event.image_url && (
           <div className="mb-5 overflow-hidden rounded-3xl bg-white shadow-sm">
-            <ImageModal
+            <img
               src={event.image_url}
               alt={event.title || "Community Event"}
+              className="h-auto w-full object-contain"
             />
           </div>
         )}
@@ -152,40 +152,42 @@ export default async function CommunityEventDetailPage({
           )}
         </div>
 
-        {raffleEnabled && (
-          <div className="mt-4 rounded-2xl bg-yellow-100 px-4 py-4 text-xs font-black text-yellow-900">
-            <div className="text-sm font-black">🎁 Prize Drawing Event</div>
+       {raffleEnabled && (
+  <div className="mt-4 rounded-2xl bg-yellow-100 px-4 py-4 text-xs font-black text-yellow-900">
+    <div className="text-sm font-black">
+      🎁 Prize Drawing Event
+    </div>
 
-            {event.raffle_draw_at && (
-              <div className="mt-2">
-                <span className="font-black">🎯 Drawing Time:</span>
-                <br />
-                {new Date(event.raffle_draw_at).toLocaleString()}
-              </div>
-            )}
+    {event.raffle_draw_at && (
+      <div className="mt-2">
+        <span className="font-black">🎯 Drawing Time:</span>
+        <br />
+        {new Date(event.raffle_draw_at).toLocaleString()}
+      </div>
+    )}
 
-            {event.raffle_draw_at && (
-              <div className="mt-2">
-                <span className="font-black">⏰ Registration Deadline:</span>
-                <br />
-                {new Date(event.raffle_draw_at).toLocaleString()}
-              </div>
-            )}
+    {event.raffle_draw_at && (
+      <div className="mt-2">
+        <span className="font-black">⏰ Registration Deadline:</span>
+        <br />
+        {new Date(event.raffle_draw_at).toLocaleString()}
+      </div>
+    )}
 
-            {event.raffle_winner_count ? (
-              <div className="mt-2">
-                <span className="font-black">🏆 Winners:</span>{" "}
-                {event.raffle_winner_count}
-              </div>
-            ) : null}
+    {event.raffle_winner_count ? (
+      <div className="mt-2">
+        <span className="font-black">🏆 Winners:</span>{" "}
+        {event.raffle_winner_count}
+      </div>
+    ) : null}
 
-            <div className="mt-3 rounded-xl bg-white/50 p-2 text-[11px] leading-5">
-              추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
-              <br />
-              동반인은 추첨 대상에 포함되지 않습니다.
-            </div>
-          </div>
-        )}
+    <div className="mt-3 rounded-xl bg-white/50 p-2 text-[11px] leading-5">
+      추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
+      <br />
+      동반인은 추첨 대상에 포함되지 않습니다.
+    </div>
+  </div>
+)}
 
         {collectAttendees && !drawReady && (
           <CommunityAttendeeRegistrationForm
