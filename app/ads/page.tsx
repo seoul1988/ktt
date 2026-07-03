@@ -57,28 +57,44 @@ function categoryLabel(category: string | null) {
   return "비즈니스";
 }
 
+function getStoragePathFromUrl(url: string, bucketName: string) {
+  if (!url || typeof url !== "string") return null;
+
+  const marker = `/storage/v1/object/public/${bucketName}/`;
+  const index = url.indexOf(marker);
+
+  if (index !== -1) {
+    return decodeURIComponent(url.substring(index + marker.length));
+  }
+
+  if (!url.startsWith("http") && url.includes("/")) {
+    return url;
+  }
+
+  return null;
+}
+
 export default function AdsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
-
   const [ads, setAds] = useState<AdItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
- useEffect(() => {
-  if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  const params = new URLSearchParams(window.location.search);
-  const category = params.get("category") || "all";
+    const params = new URLSearchParams(window.location.search);
+    const category = params.get("category") || "all";
 
-  if (validCategories.includes(category)) {
-    setSelectedCategory(category);
-  } else {
-    setSelectedCategory("all");
-    window.history.replaceState(null, "", "/ads");
-  }
-}, []);
+    if (validCategories.includes(category)) {
+      setSelectedCategory(category);
+    } else {
+      setSelectedCategory("all");
+      window.history.replaceState(null, "", "/ads");
+    }
+  }, []);
 
   useEffect(() => {
     loadPage();
@@ -159,27 +175,65 @@ export default function AdsPage() {
 
     setDeletingId(id);
 
-    const { data, error } = await supabase
-      .from("ads")
-      .delete()
-      .eq("id", id)
-      .select("id");
+    try {
+      const targetAd = ads.find((ad) => ad.id === id);
 
-    setDeletingId(null);
+      const filesToDelete: string[] = [];
 
-    if (error) {
-      alert("Failed to delete ad: " + error.message);
-      return;
+      if (Array.isArray(targetAd?.images)) {
+        targetAd.images.forEach((url) => {
+          const path = getStoragePathFromUrl(url, "ads");
+          if (path) filesToDelete.push(path);
+        });
+      }
+
+      if (targetAd?.video_url) {
+        const videoPath = getStoragePathFromUrl(targetAd.video_url, "ads");
+        if (videoPath) filesToDelete.push(videoPath);
+      }
+
+      const uniqueFilesToDelete = Array.from(new Set(filesToDelete));
+
+      console.log("Files to delete:", uniqueFilesToDelete);
+
+      if (uniqueFilesToDelete.length > 0) {
+        const { data: storageData, error: storageError } =
+          await supabase.storage.from("ads").remove(uniqueFilesToDelete);
+
+        console.log("Storage delete data:", storageData);
+        console.log("Storage delete error:", storageError);
+
+        if (storageError) {
+          alert("Storage file delete failed: " + storageError.message);
+          setDeletingId(null);
+          return;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("ads")
+        .delete()
+        .eq("id", id)
+        .select("id");
+
+      if (error) {
+        alert("Failed to delete ad: " + error.message);
+        setDeletingId(null);
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        alert(
+          "Delete did not complete. This is usually caused by Supabase RLS policy."
+        );
+        setDeletingId(null);
+        return;
+      }
+
+      setAds((prev) => prev.filter((ad) => ad.id !== id));
+    } finally {
+      setDeletingId(null);
     }
-
-    if (!data || data.length === 0) {
-      alert(
-        "Delete did not complete. This is usually caused by Supabase RLS policy."
-      );
-      return;
-    }
-
-    setAds((prev) => prev.filter((ad) => ad.id !== id));
   }
 
   if (loading) {
@@ -219,21 +273,21 @@ export default function AdsPage() {
         <div className="mb-4 overflow-x-auto border-b border-[#172033]/15">
           <div className="flex min-w-max gap-5">
             {categoryTabs.map((tab) => (
-          <Link
-  key={tab.value}
-  href={tab.href}
-  onClick={() => setSelectedCategory(tab.value)}
-  className={`relative pb-2 text-[12px] font-black ${
-    selectedCategory === tab.value
-      ? "text-[#172033]"
-      : "text-gray-500"
-  }`}
->
-  {tab.label}
-  {selectedCategory === tab.value && (
-    <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#172033]" />
-  )}
-</Link>
+              <Link
+                key={tab.value}
+                href={tab.href}
+                onClick={() => setSelectedCategory(tab.value)}
+                className={`relative pb-2 text-[12px] font-black ${
+                  selectedCategory === tab.value
+                    ? "text-[#172033]"
+                    : "text-gray-500"
+                }`}
+              >
+                {tab.label}
+                {selectedCategory === tab.value && (
+                  <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-[#172033]" />
+                )}
+              </Link>
             ))}
           </div>
         </div>
