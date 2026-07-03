@@ -213,13 +213,13 @@ export default function NewAdPage() {
             onChange={(e) => setCategory(e.target.value)}
             className="w-full rounded-2xl border bg-white p-3 text-sm font-bold"
           >
-            <option value="business">📢 Business Ad</option>
-            <option value="job">💼 Jobs</option>
-            <option value="housing">🏠 Housing</option>
-            <option value="auto">🚗 Auto</option>
-            <option value="event">🎉 Event</option>
-            <option value="service">🛠 Service</option>
-            <option value="announcement">📣 Announcement</option>
+            <option value="business">🏢 비즈니스 홍보</option>
+			<option value="job">💼 구인·구직</option>
+			<option value="housing">🏠 부동산·렌트</option>
+			<option value="auto">🚗 자동차</option>
+			<option value="event">🎉 행사·이벤트</option>
+			<option value="service">🛠 생활서비스</option>
+            <option value="group">👥 모임 모집</option>
           </select>
 
           <input

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 
@@ -20,6 +21,21 @@ type AdItem = {
   display_order: number | null;
 };
 
+const categoryTabs = [
+  { label: "All", value: "all", href: "/ads" },
+  { label: "Jobs", value: "job", href: "/ads?category=job" },
+  { label: "Housing", value: "housing", href: "/ads?category=housing" },
+  { label: "Auto", value: "auto", href: "/ads?category=auto" },
+  { label: "Business", value: "business", href: "/ads?category=business" },
+  { label: "Events", value: "event", href: "/ads?category=event" },
+  { label: "Service", value: "service", href: "/ads?category=service" },
+  {
+    label: "Notice",
+    value: "announcement",
+    href: "/ads?category=announcement",
+  },
+];
+
 function statusLabel(status: string | null) {
   if (status === "active") return "Active";
   if (status === "expired") return "Expired";
@@ -34,7 +50,20 @@ function statusClass(status: string | null) {
   return "bg-green-600";
 }
 
+function categoryLabel(category: string | null) {
+  if (category === "job") return "Jobs";
+  if (category === "housing") return "Housing";
+  if (category === "auto") return "Auto";
+  if (category === "event") return "Event";
+  if (category === "service") return "Service";
+  if (category === "announcement") return "Notice";
+  return "Business";
+}
+
 export default function AdsPage() {
+  const searchParams = useSearchParams();
+  const selectedCategory = searchParams.get("category") || "all";
+
   const [ads, setAds] = useState<AdItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -43,7 +72,7 @@ export default function AdsPage() {
 
   useEffect(() => {
     loadPage();
-  }, []);
+  }, [selectedCategory]);
 
   async function loadPage() {
     setLoading(true);
@@ -73,6 +102,10 @@ export default function AdsPage() {
       .select("*")
       .order("display_order", { ascending: true })
       .order("created_at", { ascending: false });
+
+    if (selectedCategory !== "all") {
+      query = query.eq("category", selectedCategory);
+    }
 
     if (!admin && userId) {
       query = query.or(`status.is.null,status.eq.active,user_id.eq.${userId}`);
@@ -110,15 +143,6 @@ export default function AdsPage() {
     );
   }
 
-  function getStoragePathFromPublicUrl(url: string, bucketName: string) {
-    const marker = `/storage/v1/object/public/${bucketName}/`;
-    const index = url.indexOf(marker);
-
-    if (index === -1) return null;
-
-    return decodeURIComponent(url.substring(index + marker.length));
-  }
-
   async function deleteAd(id: number) {
     const ok = window.confirm("Delete this ad?");
     if (!ok) return;
@@ -134,7 +158,6 @@ export default function AdsPage() {
     setDeletingId(null);
 
     if (error) {
-      console.error("Delete ad error:", error);
       alert("Failed to delete ad: " + error.message);
       return;
     }
@@ -181,6 +204,22 @@ export default function AdsPage() {
               + Add
             </Link>
           </div>
+        </div>
+
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+          {categoryTabs.map((tab) => (
+            <Link
+              key={tab.value}
+              href={tab.href}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-black ${
+                selectedCategory === tab.value
+                  ? "bg-[#172033] text-white"
+                  : "bg-white text-[#172033]"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          ))}
         </div>
 
         {ads.length === 0 ? (
@@ -272,11 +311,9 @@ export default function AdsPage() {
                           {ad.title}
                         </h2>
 
-                        {ad.category && (
-                          <span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
-                            {ad.category}
-                          </span>
-                        )}
+                        <span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
+                          {categoryLabel(ad.category)}
+                        </span>
                       </div>
 
                       <div className="mt-1 min-h-[16px]">
