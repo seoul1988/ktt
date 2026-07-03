@@ -16,7 +16,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.ktowntriangle.com"),
-
+	verification: {
+		google: "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
+	  },
   title: "KTown Triangle",
   description: "Events, deals and Korean places around the Triangle",
 
