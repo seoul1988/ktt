@@ -6,6 +6,7 @@ import CommunityBottomNav from "../../../components/CommunityBottomNav";
 import CommunityAttendeeRegistrationForm from "./CommunityAttendeeRegistrationForm";
 import CommunityAttendeeList from "./CommunityAttendeeList";
 import ImageModal from "../../../components/ImageModal";
+import CommunityEventManageButtons from "./CommunityEventManageButtons";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -103,7 +104,7 @@ export default async function CommunityEventDetailPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-md px-5 pb-28 pt-5">
+      <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <Link
             href="/community"
@@ -131,25 +132,10 @@ export default async function CommunityEventDetailPage({
             {event.title}
           </h1>
 
-       {canManage && (
-  <div className="flex shrink-0 items-center gap-1">
-    <Link
-      href={`/community/events/${event.id}/edit`}
-      className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#172033] shadow-sm"
-    >
-      Edit
-    </Link>
-
-    <form action={deleteEvent}>
-      <button
-        type="submit"
-        className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm"
-      >
-        Delete
-      </button>
-    </form>
-  </div>
-)}
+  <CommunityEventManageButtons
+  eventId={event.id}
+  ownerId={event.owner_id || null}
+/>
         </div>
 
         {raffleEnabled && (
