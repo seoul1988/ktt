@@ -198,7 +198,7 @@ export default async function Home() {
   const { data: allSpots } = await supabase
     .from("businesses")
     .select("*")
-    .order("id", { ascending: true });
+    .order("created_at", { ascending: false });
 
   const spots = (allSpots || []).filter((spot) => {
     const categories = String(spot.category || "")
