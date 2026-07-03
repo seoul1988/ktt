@@ -17,7 +17,7 @@ export default function NewAdPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState("business");
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
 
@@ -163,7 +163,7 @@ export default function NewAdPage() {
         user_id: user.id,
         title: title.trim(),
         description: description.trim() || null,
-        category: category.trim() || null,
+        category,
         location: location.trim() || null,
         phone: phone.trim() || null,
         lat,
@@ -208,12 +208,19 @@ export default function NewAdPage() {
             className="min-h-28 w-full rounded-2xl border p-3 text-sm"
           />
 
-          <input
+          <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            placeholder="카테고리 예: 식당, 청소, 구인, 부동산"
-            className="w-full rounded-2xl border p-3 text-sm"
-          />
+            className="w-full rounded-2xl border bg-white p-3 text-sm font-bold"
+          >
+            <option value="business">📢 Business Ad</option>
+            <option value="job">💼 Jobs</option>
+            <option value="housing">🏠 Housing</option>
+            <option value="auto">🚗 Auto</option>
+            <option value="event">🎉 Event</option>
+            <option value="service">🛠 Service</option>
+            <option value="announcement">📣 Announcement</option>
+          </select>
 
           <input
             ref={addressRef}
