@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 
@@ -61,8 +60,7 @@ function categoryLabel(category: string | null) {
 }
 
 export default function AdsPage() {
-  const searchParams = useSearchParams();
-  const selectedCategory = searchParams.get("category") || "all";
+const [selectedCategory, setSelectedCategory] = useState("all");
 
   const [ads, setAds] = useState<AdItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -70,9 +68,12 @@ export default function AdsPage() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  useEffect(() => {
-    loadPage();
-  }, [selectedCategory]);
+useEffect(() => {
+  if (typeof window === "undefined") return;
+
+  const params = new URLSearchParams(window.location.search);
+  setSelectedCategory(params.get("category") || "all");
+}, []);
 
   async function loadPage() {
     setLoading(true);
