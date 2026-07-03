@@ -27,6 +27,47 @@ function getYoutubeEmbedUrl(url: string | null | undefined) {
   return null;
 }
 
+function SectionTitle({
+  label,
+  title,
+  emoji,
+  color,
+  moreHref,
+}: {
+  label: string;
+  title: string;
+  emoji: string;
+  color: string;
+  moreHref?: string;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className={`h-11 w-2 rounded-full ${color}`} />
+
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-gray-500">
+            {label}
+          </p>
+
+          <h2 className="text-2xl font-black text-[#172033]">
+            {emoji} {title}
+          </h2>
+        </div>
+      </div>
+
+      {moreHref && (
+        <Link
+          href={moreHref}
+          className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+        >
+          More
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function VideoFirstMedia({
   videoUrl,
   imageUrl,
@@ -147,7 +188,7 @@ export default async function Home() {
     .eq("show_on_community_map", true);
 
   const communityCategorySet = new Set(
-    (communityCategories || []).map((c) => String(c.name).trim().toLowerCase()),
+    (communityCategories || []).map((c) => String(c.name).trim().toLowerCase())
   );
 
   const { data: allSpots } = await supabase
@@ -162,11 +203,11 @@ export default async function Home() {
       .filter(Boolean);
 
     const hasCommunityCategory = categories.some((cat) =>
-      communityCategorySet.has(cat),
+      communityCategorySet.has(cat)
     );
 
     const hasMainCategory = categories.some(
-      (cat) => !communityCategorySet.has(cat),
+      (cat) => !communityCategorySet.has(cat)
     );
 
     return !(hasCommunityCategory && !hasMainCategory);
@@ -201,7 +242,7 @@ export default async function Home() {
         rating,
         review_count
       )
-    `,
+    `
     )
     .eq("status", "approved")
     .eq("active", true)
@@ -230,7 +271,7 @@ export default async function Home() {
   const dealBusinessMap = new Map(
     (dealBusinesses || [])
       .filter((d: any) => d.business_id && d.id)
-      .map((d: any) => [d.business_id, d.id]),
+      .map((d: any) => [d.business_id, d.id])
   );
 
   const couponBusinessIds = new Set(
@@ -242,10 +283,9 @@ export default async function Home() {
         return true;
       })
       .map((c: any) => c.business_id)
-      .filter(Boolean),
+      .filter(Boolean)
   );
 
-  // Featured Sponsors: display_order 1000 이상은 3초 자동 슬라이드 광고로 표시
   const featuredSponsors = (spots || [])
     .filter((spot) => Number(spot.display_order || 0) >= 1000)
     .sort((a, b) => {
@@ -254,10 +294,12 @@ export default async function Home() {
       if (orderDiff !== 0) return orderDiff;
       return Number(a.id || 0) - Number(b.id || 0);
     });
+
   const deals = activeDeals || [];
   const trending = (spots || []).filter(
-    (spot) => Number(spot.display_order || 0) < 1000,
+    (spot) => Number(spot.display_order || 0) < 1000
   );
+
   const mainEvent = businessEvents?.[0];
   const mainGrandOpening = grandOpenings?.[0];
 
@@ -288,21 +330,18 @@ export default async function Home() {
         </div>
 
         {mainGrandOpening && (
-          <section className="mx-auto mb-8 max-w-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xl font-bold">🎉 Grand Opening</h2>
-
-              <Link
-                href="/grand-openings"
-                className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
-              >
-                More
-              </Link>
-            </div>
+          <section className="mx-auto mb-10 max-w-xl">
+            <SectionTitle
+              label="Featured"
+              title="Grand Opening"
+              emoji="🎉"
+              color="bg-amber-500"
+              moreHref="/grand-openings"
+            />
 
             <Link
               href={`/grand-openings/${mainGrandOpening.id}`}
-              className="block overflow-hidden rounded-3xl bg-white shadow-xl"
+              className="block overflow-hidden rounded-3xl border-2 border-amber-200 bg-white shadow-xl"
             >
               <div className="h-64 w-full bg-white">
                 <VideoFirstMedia
@@ -314,15 +353,15 @@ export default async function Home() {
               </div>
 
               <div className="p-5">
-                <p className="text-xs font-bold text-[#C4483A]">
-                  {mainGrandOpening.opening_date || "Coming Soon"}
+                <p className="text-xs font-black uppercase tracking-wider text-amber-600">
+                  Grand Opening · {mainGrandOpening.opening_date || "Coming Soon"}
                 </p>
 
-                <h3 className="mt-1 text-lg font-bold">
+                <h3 className="mt-1 text-xl font-black">
                   {mainGrandOpening.business_name || "Grand Opening"}
                 </h3>
 
-                <p className="mt-1 text-sm font-semibold text-gray-600">
+                <p className="mt-1 text-sm font-bold text-gray-600">
                   {mainGrandOpening.title}
                 </p>
 
@@ -335,21 +374,18 @@ export default async function Home() {
         )}
 
         {mainEvent && (
-          <section className="mx-auto mb-8 max-w-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xl font-bold">🎉 Events</h2>
-
-              <Link
-                href="/business-events"
-                className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
-              >
-                More
-              </Link>
-            </div>
+          <section className="mx-auto mb-10 max-w-xl">
+            <SectionTitle
+              label="Upcoming"
+              title="Events"
+              emoji="📅"
+              color="bg-blue-600"
+              moreHref="/business-events"
+            />
 
             <Link
               href={`/business-events/${mainEvent.id}`}
-              className="block overflow-hidden rounded-3xl bg-white shadow-xl"
+              className="block overflow-hidden rounded-3xl border-2 border-blue-100 bg-white shadow-xl"
             >
               <div className="h-64 w-full bg-white">
                 <VideoFirstMedia
@@ -361,13 +397,13 @@ export default async function Home() {
               </div>
 
               <div className="p-5">
-                <p className="text-xs font-bold text-[#C4483A]">
-                  {mainEvent.event_date || "Coming Soon"}
+                <p className="text-xs font-black uppercase tracking-wider text-blue-600">
+                  Event · {mainEvent.event_date || "Coming Soon"}
                 </p>
 
-                <h3 className="mt-1 text-lg font-bold">{mainEvent.title}</h3>
+                <h3 className="mt-1 text-xl font-black">{mainEvent.title}</h3>
 
-                <p className="mt-1 line-clamp-2 text-sm text-gray-600">
+                <p className="mt-2 line-clamp-2 text-sm text-gray-600">
                   {mainEvent.description}
                 </p>
               </div>
@@ -375,24 +411,21 @@ export default async function Home() {
           </section>
         )}
 
-        <section className="mx-auto mb-8 max-w-xl">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-bold">🔥 Deals Near You</h2>
-
-            <Link
-              href="/deals"
-              className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
-            >
-              More
-            </Link>
-          </div>
+        <section className="mx-auto mb-10 max-w-xl">
+          <SectionTitle
+            label="Limited Time"
+            title="Deals Near You"
+            emoji="🔥"
+            color="bg-red-500"
+            moreHref="/deals"
+          />
 
           <div className="space-y-4">
             {deals.map((deal) => (
               <Link
                 key={deal.id}
                 href={`/deals/${deal.id}`}
-                className="flex gap-4 rounded-3xl bg-white p-4 shadow-sm"
+                className="flex gap-4 rounded-3xl border border-red-100 bg-white p-4 shadow-sm"
               >
                 <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
                   <DealMedia
@@ -402,11 +435,11 @@ export default async function Home() {
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-[#C4483A]">
+                  <p className="text-xs font-black uppercase tracking-wider text-red-500">
                     Special Deal
                   </p>
 
-                  <h4 className="mt-1 line-clamp-1 font-bold">
+                  <h4 className="mt-1 line-clamp-1 font-black">
                     {deal.title || deal.businesses?.name || "Deal"}
                   </h4>
 
@@ -428,7 +461,12 @@ export default async function Home() {
         )}
 
         <section className="mx-auto max-w-xl">
-          <h2 className="mb-3 text-xl font-bold">📈 Trending Now</h2>
+          <SectionTitle
+            label="Popular"
+            title="Trending Now"
+            emoji="📈"
+            color="bg-green-600"
+          />
 
           <div className="space-y-4">
             {trending.map((spot) => {
@@ -439,7 +477,7 @@ export default async function Home() {
               return (
                 <div
                   key={spot.id}
-                  className="block rounded-3xl bg-white p-4 shadow-sm"
+                  className="block rounded-3xl border border-green-100 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-center gap-4">
                     <Link
@@ -455,7 +493,7 @@ export default async function Home() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link href={`/business/${spot.id}`}>
-                          <h4 className="line-clamp-1 font-bold">
+                          <h4 className="line-clamp-1 font-black">
                             {spot.name}
                           </h4>
                         </Link>
