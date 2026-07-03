@@ -131,25 +131,25 @@ export default async function CommunityEventDetailPage({
             {event.title}
           </h1>
 
-          {canManage && (
-            <div className="flex shrink-0 gap-2">
-              <Link
-                href={`/community/events/${event.id}/edit`}
-                className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#172033] shadow"
-              >
-                수정
-              </Link>
+       {canManage && (
+  <div className="flex shrink-0 items-center gap-1">
+    <Link
+      href={`/community/events/${event.id}/edit`}
+      className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-[#172033] shadow-sm"
+    >
+      Edit
+    </Link>
 
-              <form action={deleteEvent}>
-                <button
-                  type="submit"
-                  className="rounded-full bg-red-600 px-3 py-2 text-xs font-black text-white shadow"
-                >
-                  삭제
-                </button>
-              </form>
-            </div>
-          )}
+    <form action={deleteEvent}>
+      <button
+        type="submit"
+        className="rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-black text-white shadow-sm"
+      >
+        Delete
+      </button>
+    </form>
+  </div>
+)}
         </div>
 
         {raffleEnabled && (
