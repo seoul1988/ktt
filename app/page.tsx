@@ -298,7 +298,7 @@ export default async function Home() {
     if (orderDiff !== 0) return orderDiff;
     return Number(a.id || 0) - Number(b.id || 0);
   });
-
+const deals = activeDeals || [];
 const trending = spots || [];
 
   const mainEvent = businessEvents?.[0];
