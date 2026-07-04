@@ -8,6 +8,7 @@ export const revalidate = 0;
 
 type SearchParams = Promise<{
   view?: string;
+  category?: string;
 }>;
 
 export default async function MapPage({
@@ -16,7 +17,10 @@ export default async function MapPage({
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
+
   const view = params?.view || "";
+  const category = params?.category || "";
+
   const today = new Date().toISOString().slice(0, 10);
 
   if (view === "deals") {
@@ -61,21 +65,17 @@ export default async function MapPage({
 
           return {
             ...business,
-
             id: businessId,
             business_id: businessId,
             original_business_id: businessId,
-
             source_type: "deal",
             map_key: `deal-${deal.id}-business-${businessId}`,
-
             deal_id: deal.id,
             deal_title: deal.title,
             deal_description: deal.description,
             deal_image_url: deal.image_url,
             deal_start_date: deal.start_date,
             deal_end_date: deal.end_date,
-
             has_deal: true,
             has_event: false,
           };
@@ -83,7 +83,12 @@ export default async function MapPage({
         .filter(Boolean) || [];
 
     return (
-      <MapWrapper spots={spots} showAllOnLoad={true} activeNav="deals" />
+      <MapWrapper
+        spots={spots}
+        showAllOnLoad={true}
+        activeNav="deals"
+        initialCategory={category}
+      />
     );
   }
 
@@ -128,20 +133,16 @@ export default async function MapPage({
 
           return {
             ...business,
-
             id: businessId,
             business_id: businessId,
             original_business_id: businessId,
-
             source_type: "event",
             map_key: `event-${event.id}-business-${businessId}`,
-
             event_id: event.id,
             event_title: event.title,
             event_description: event.description,
             event_image_url: event.image_url,
             event_date: event.event_date,
-
             has_event: true,
             has_deal: false,
           };
@@ -149,7 +150,12 @@ export default async function MapPage({
         .filter(Boolean) || [];
 
     return (
-      <MapWrapper spots={spots} showAllOnLoad={true} activeNav="events" />
+      <MapWrapper
+        spots={spots}
+        showAllOnLoad={true}
+        activeNav="events"
+        initialCategory={category}
+      />
     );
   }
 
@@ -174,18 +180,22 @@ export default async function MapPage({
 
       return {
         ...business,
-
         id: businessId,
         business_id: businessId,
         original_business_id: businessId,
-
         source_type: "business",
         map_key: `business-${businessId}`,
-
         has_deal: false,
         has_event: false,
       };
     }) || [];
 
-  return <MapWrapper spots={spots} showAllOnLoad={false} activeNav="map" />;
+  return (
+    <MapWrapper
+      spots={spots}
+      showAllOnLoad={false}
+      activeNav="map"
+      initialCategory={category}
+    />
+  );
 }

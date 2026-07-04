@@ -24,6 +24,7 @@ type MapWrapperProps = {
   activeNav?: "map" | "deals" | "events";
   communityMode?: boolean;
   role?: string | null;
+  initialCategory?: string;
 };
 
 export default function MapWrapper({
@@ -33,8 +34,9 @@ export default function MapWrapper({
   activeNav = "map",
   communityMode = false,
   role = null,
+  initialCategory = "",
 }: MapWrapperProps) {
-  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots.length}`;
+  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots.length}-${initialCategory}`;
 
   return (
     <div key={mapKey} className="min-h-screen">
@@ -45,6 +47,7 @@ export default function MapWrapper({
         activeNav={activeNav}
         communityMode={communityMode}
         role={role}
+        initialCategory={initialCategory}
       />
     </div>
   );
