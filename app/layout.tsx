@@ -87,8 +87,6 @@ export const viewport: Viewport = {
   themeColor: "#172033",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -102,7 +100,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-screen bg-[#F8F3EC]">
+      <body className="min-h-[100dvh] overflow-x-hidden bg-[#F8F3EC]">
         <AuthProvider>{children}</AuthProvider>
 
         <Script
