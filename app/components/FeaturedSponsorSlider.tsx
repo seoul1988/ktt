@@ -28,7 +28,6 @@ export default function FeaturedSponsorSlider({
 
   useEffect(() => {
     if (!sponsors || sponsors.length === 0) return;
-
     setIndex(Math.floor(Math.random() * sponsors.length));
   }, [sponsors]);
 
@@ -46,7 +45,9 @@ export default function FeaturedSponsorSlider({
 
   return (
     <section className="mx-auto mb-8 max-w-xl">
-      <h2 className="mb-3 text-xl font-bold">⭐ Featured Sponsor</h2>
+      <h2 className="mb-3 text-xl font-bold text-[#172033]">
+        ⭐ Featured Sponsor
+      </h2>
 
       <div className="overflow-hidden rounded-3xl">
         <div
@@ -62,7 +63,7 @@ export default function FeaturedSponsorSlider({
 
             return (
               <div key={spot.id} className="w-full shrink-0">
-                <div className="overflow-hidden rounded-3xl bg-white shadow-xl">
+                <div className="flex min-h-[500px] flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
                   <Link href={`/business/${spot.id}`} className="block">
                     <div className="h-56 w-full overflow-hidden bg-white">
                       <img
@@ -73,36 +74,43 @@ export default function FeaturedSponsorSlider({
                     </div>
                   </Link>
 
-                  <div className="p-5">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/business/${spot.id}`}>
-                        <h3 className="text-2xl font-bold">{spot.name}</h3>
+                  <div className="flex flex-1 flex-col p-5">
+                    <div className="flex items-start gap-2">
+                      <Link
+                        href={`/business/${spot.id}`}
+                        className="min-w-0 flex-1"
+                      >
+                        <h3 className="line-clamp-2 min-h-[2.6em] text-2xl font-black leading-tight text-[#172033]">
+                          {spot.name}
+                        </h3>
                       </Link>
 
-                      {hasDeal && dealId && (
-                        <Link
-                          href={`/deals/${dealId}`}
-                          className="rounded-full bg-yellow-400 px-2.5 py-1 text-xs font-black text-black shadow-sm"
-                        >
-                          🔥 DEAL
-                        </Link>
-                      )}
+                      <div className="flex shrink-0 flex-col gap-1">
+                        {hasDeal && dealId && (
+                          <Link
+                            href={`/deals/${dealId}`}
+                            className="rounded-full bg-yellow-400 px-2.5 py-1 text-xs font-black text-black shadow-sm"
+                          >
+                            🔥 DEAL
+                          </Link>
+                        )}
 
-                      {hasCoupon && (
-                        <Link
-                          href={`/business/${spot.id}`}
-                          className="rounded-full bg-purple-600 px-2.5 py-1 text-xs font-black text-white shadow-sm"
-                        >
-                          🎟 COUPON
-                        </Link>
-                      )}
+                        {hasCoupon && (
+                          <Link
+                            href={`/business/${spot.id}`}
+                            className="rounded-full bg-purple-600 px-2.5 py-1 text-xs font-black text-white shadow-sm"
+                          >
+                            🎟 COUPON
+                          </Link>
+                        )}
+                      </div>
                     </div>
 
-                    <p className="mt-2 text-sm text-gray-600">
+                    <p className="mt-2 line-clamp-2 min-h-[2.5em] text-sm leading-snug text-gray-600">
                       {spot.category} · {spot.city}
                     </p>
 
-                    <p className="mt-3 line-clamp-2 text-sm text-gray-700">
+                    <p className="mt-3 line-clamp-3 min-h-[4.8em] text-sm leading-relaxed text-gray-700">
                       {spot.description || spot.tags || spot.tag}
                     </p>
                   </div>
