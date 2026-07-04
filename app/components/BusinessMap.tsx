@@ -316,7 +316,9 @@ export default function BusinessMap({
   initialCategory || null
 );
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(!showAllOnLoad);
-  const [showCards, setShowCards] = useState(showAllOnLoad);
+  const [showCards, setShowCards] = useState(
+  showAllOnLoad || !!initialCategory
+);
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const [likedIds, setLikedIds] = useState<Record<number, boolean>>({});
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
@@ -388,7 +390,13 @@ export default function BusinessMap({
       const parsed = JSON.parse(saved);
 
       if (typeof parsed.search === "string") setSearch(parsed.search);
-      if (parsed.selectedCategory) setSelectedCategory(parsed.selectedCategory);
+    if (initialCategory) {
+  setSelectedCategory(initialCategory);
+  setCategoryPanelOpen(false);
+  setShowCards(true);
+} else if (parsed.selectedCategory) {
+  setSelectedCategory(parsed.selectedCategory);
+}
       if (parsed.selectedSpotKey) setSelectedSpotKey(parsed.selectedSpotKey);
 
       setCategoryPanelOpen(false);
