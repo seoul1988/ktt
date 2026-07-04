@@ -298,19 +298,23 @@ export default function BusinessMap({
   activeNav = "map",
   communityMode = false,
   role = null,
+  initialCategory = "",
 }: {
-  spots: Spot[];
+    spots: Spot[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
   activeNav?: "home" | "map" | "deals" | "events" | "community" | "admin";
   communityMode?: boolean;
   role?: string | null;
+  initialCategory?: string;
 }) {
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedSpotKey, setSelectedSpotKey] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+  initialCategory || null
+);
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(!showAllOnLoad);
   const [showCards, setShowCards] = useState(showAllOnLoad);
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
