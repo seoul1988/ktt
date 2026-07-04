@@ -290,20 +290,16 @@ export default async function Home() {
       .filter(Boolean)
   );
 
-  const featuredSponsors = (spots || [])
-    .filter((spot) => Number(spot.display_order || 0) >= 1000)
-    .sort((a, b) => {
-      const orderDiff =
-        Number(a.display_order || 0) - Number(b.display_order || 0);
-      if (orderDiff !== 0) return orderDiff;
-      return Number(a.id || 0) - Number(b.id || 0);
-    });
+ const featuredSponsors = (spots || [])
+  .filter((spot) => spot.featured_sponsor === true)
+  .sort((a, b) => {
+    const orderDiff =
+      Number(a.display_order || 0) - Number(b.display_order || 0);
+    if (orderDiff !== 0) return orderDiff;
+    return Number(a.id || 0) - Number(b.id || 0);
+  });
 
-  const deals = activeDeals || [];
-
-  const trending = (spots || []).filter(
-    (spot) => Number(spot.display_order || 0) < 1000
-  );
+const trending = spots || [];
 
   const mainEvent = businessEvents?.[0];
   const mainGrandOpening = grandOpenings?.[0];
