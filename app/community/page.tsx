@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -74,20 +75,32 @@ export default async function CommunityPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-black text-[#C4483A]">COMMUNITY</p>
+  <div>
+    <p className="text-sm font-black text-[#C4483A]">
+      COMMUNITY
+    </p>
 
-            <h1 className="text-3xl font-black tracking-tight">
-              KTown Triangle
-            </h1>
+    <h1 className="text-3xl font-black tracking-tight">
+      KTown Triangle
+    </h1>
 
-            <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-              Events, deals, new places, and local highlights.
-            </p>
-          </div>
+    <p className="mt-2 text-sm font-semibold text-[#6B6257]">
+      Events, deals, new places, and local highlights.
+    </p>
+  </div>
 
-          <ProfileButton />
-        </div>
+  <div className="flex items-center gap-3">
+    <Image
+      src="/logo.png"
+      alt="KACC Raleigh"
+      width={42}
+      height={42}
+      className="rounded-full border border-gray-200 bg-white shadow-sm"
+    />
+
+    <ProfileButton />
+  </div>
+</div>
 
         {/* Upcoming Events */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">
