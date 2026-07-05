@@ -96,6 +96,9 @@ export default async function CommunityPage() {
     className="h-20 w-20rounded-full object-contain "
   />
 
+
+
+
   <ProfileButton />
 </div>
 </div>
