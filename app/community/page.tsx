@@ -93,7 +93,7 @@ export default async function CommunityPage() {
   <img
     src="/kacc-logo.png"
     alt="KACC Raleigh"
-    className="h-11 w-11 rounded-full bg-white object-contain shadow-sm"
+    className="h-20 w-20rounded-full object-contain "
   />
 
   <ProfileButton />
