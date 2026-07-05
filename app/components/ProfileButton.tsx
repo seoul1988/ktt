@@ -147,11 +147,11 @@ export default function ProfileButton() {
         className="relative z-[99999] flex h-8 w-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white text-[#172033] shadow-sm active:scale-95"
         aria-label="Open profile menu"
       >
-        <span className="flex flex-col items-center justify-center gap-[2px]">
-          <span className="h-[3px] w-[3px] rounded-full bg-[#172033]" />
-          <span className="h-[3px] w-[3px] rounded-full bg-[#172033]" />
-          <span className="h-[3px] w-[3px] rounded-full bg-[#172033]" />
-        </span>
+        <span className="flex flex-col items-center justify-center gap-[3px]">
+  <span className="h-[2px] w-[14px] rounded-full bg-[#172033]" />
+  <span className="h-[2px] w-[14px] rounded-full bg-[#172033]" />
+  <span className="h-[2px] w-[14px] rounded-full bg-[#172033]" />
+</span>
       </button>
 
       {open && (
