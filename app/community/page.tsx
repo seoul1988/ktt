@@ -85,7 +85,7 @@ export default async function CommunityPage() {
     </h1>
 
     <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-      Events, deals, new places, and local highlights.
+      Discover Korean businesses.
     </p>
   </div>
 
