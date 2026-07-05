@@ -89,17 +89,15 @@ export default async function CommunityPage() {
     </p>
   </div>
 
-  <div className="flex items-center gap-3">
-    <Image
-      src="/kacc-logo.png"
-      alt="KACC Raleigh"
-      width={42}
-      height={42}
-      className="rounded-full border border-gray-200 bg-white shadow-sm"
-    />
+<div className="flex items-center gap-3">
+  <img
+    src="/kacc-logo.png"
+    alt="KACC Raleigh"
+    className="h-11 w-11 rounded-full bg-white object-contain shadow-sm"
+  />
 
-    <ProfileButton />
-  </div>
+  <ProfileButton />
+</div>
 </div>
 
         {/* Upcoming Events */}
