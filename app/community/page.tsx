@@ -91,7 +91,7 @@ export default async function CommunityPage() {
 
   <div className="flex items-center gap-3">
     <Image
-      src="/logo.png"
+      src="/kacc-logo.png"
       alt="KACC Raleigh"
       width={42}
       height={42}
