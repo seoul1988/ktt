@@ -77,53 +77,58 @@ export default async function CommunityMapPage() {
   }
 
   const businessSpots =
-    businesses
-      ?.map((business: any) => {
-        const rawCategories = splitCategories(
-          business.category || business.categories || ""
-        );
+    businesses?.map((business: any) => {
+      const rawCategories = splitCategories(
+        business.category || business.categories || "Business"
+      );
 
-        const matchedCategories = rawCategories.filter((cat) =>
-          allowedCategoryNames.has(normalizeCategory(cat))
-        );
+      const matchedCommunityCategories = rawCategories.filter((cat) =>
+        allowedCategoryNames.has(normalizeCategory(cat))
+      );
 
-        if (matchedCategories.length === 0) return null;
+      const firstCategory =
+        matchedCommunityCategories[0] || rawCategories[0] || "Business";
 
-        const firstCategory = matchedCategories[0];
-        const normalizedFirstCategory = normalizeCategory(firstCategory);
-        const businessId = business.id;
+      const normalizedFirstCategory = normalizeCategory(firstCategory);
+      const businessId = business.id;
 
-        return {
-          ...business,
+      return {
+        ...business,
 
-          id: businessId,
-          business_id: businessId,
-          original_business_id: businessId,
-          original_id: businessId,
+        id: businessId,
+        business_id: businessId,
+        original_business_id: businessId,
+        original_id: businessId,
 
-          name: business.name,
+        name: business.name,
 
-          category: firstCategory,
-          categories: matchedCategories.join(", "),
-          matched_categories: matchedCategories,
+        category: firstCategory,
+        categories: rawCategories.join(", "),
+        matched_categories: matchedCommunityCategories,
 
-          emoji:
-            categoryEmojiMap.get(normalizedFirstCategory) ||
-            business.emoji ||
-            "📍",
+        // 커뮤니티 카테고리에 있으면 그 이모지 사용, 없으면 기존 이모지/기본 핀
+        emoji:
+          categoryEmojiMap.get(normalizedFirstCategory) ||
+          business.emoji ||
+          "📍",
 
-          image_url: business.image_url || business.logo_url || null,
+        image_url: business.image_url || business.logo_url || null,
 
-          lat: business.lat,
-          lng: business.lng,
+        lat: business.lat,
+        lng: business.lng,
 
-          type: "business",
-          source_type: "community-business",
+        type: "business",
+        source_type:
+          matchedCommunityCategories.length > 0
+            ? "community-business"
+            : "business-search-only",
 
-          map_key: `community-business-${businessId}`,
-        };
-      })
-      .filter(Boolean) || [];
+        // 검색에는 포함되지만 커뮤니티 카테고리에는 없을 수 있음
+        community_visible: matchedCommunityCategories.length > 0,
+
+        map_key: `community-business-${businessId}`,
+      };
+    }) || [];
 
   const marketplaceSpots =
     marketplaceItems
@@ -168,6 +173,7 @@ export default async function CommunityMapPage() {
 
           type: "marketplace",
           source_type: "marketplace",
+          community_visible: true,
 
           map_key: `marketplace-${marketplaceId}`,
         };
