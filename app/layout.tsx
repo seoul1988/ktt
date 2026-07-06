@@ -21,15 +21,20 @@ export const metadata: Metadata = {
     google: "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
   },
 
-  title: "KTown Triangle",
-  description: "Events, deals and Korean places around the Triangle",
+  title: {
+    default: "KTown Triangle",
+    template: "%s | KTown Triangle",
+  },
+
+  description:
+    "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
 
   manifest: "/manifest.webmanifest",
 
   openGraph: {
     title: "KTown Triangle",
     description:
-      "Korean food, events, deals, restaurants, markets, and local businesses around the Triangle.",
+      "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
     url: "https://www.ktowntriangle.com",
     siteName: "KTown Triangle",
     images: [
@@ -47,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "KTown Triangle",
     description:
-      "Korean food, events, deals, restaurants, markets, and local businesses around the Triangle.",
+      "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
     images: ["/og-image.png"],
   },
 
@@ -84,10 +89,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#172033",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
+  themeColor: "#172033",
 };
 
 export default function RootLayout({
@@ -99,8 +105,9 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-[100dvh] overflow-x-hidden bg-[#F8F3EC]">
+      <body className="min-h-dvh overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
         <AuthProvider>{children}</AuthProvider>
 
         <Script

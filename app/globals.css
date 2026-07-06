@@ -19,10 +19,67 @@
   }
 }
 
+/* ------------------------------
+   Global
+------------------------------ */
+
+html {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+
+  overflow-x: hidden;
+
+  /* 한국어 줄바꿈 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 이미지가 화면 밖으로 나가지 않도록 */
+img,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* 긴 URL이나 영어 단어 대응 */
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+/* 한국어 텍스트 */
+.break-keep {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* iPhone Safe Area */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* iPhone only */
