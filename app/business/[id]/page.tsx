@@ -129,14 +129,15 @@ export default async function BusinessPage({
     normalizeCategory(cat.name || "")
   );
 
-  const isCommunityBusiness = from === "community";
+  const isCommunityBusiness =
+    from === "community" || from === "community-map";
 
-const backHref =
-  from === "community-map"
-    ? "/community/map"
-    : from === "map"
-    ? "/map"
-    : "/map";
+  const backHref =
+    from === "community-map"
+      ? "/community/map"
+      : from === "map"
+      ? "/map"
+      : "/map";
 
   const now = new Date().toISOString();
 
@@ -386,4 +387,3 @@ const backHref =
     </main>
   );
 }
-

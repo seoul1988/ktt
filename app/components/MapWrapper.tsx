@@ -36,7 +36,9 @@ export default function MapWrapper({
   role = null,
   initialCategory = "",
 }: MapWrapperProps) {
-  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots.length}-${initialCategory}`;
+  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots
+    .map((spot) => spot.map_key || `${spot.type}-${spot.id}`)
+    .join("-")}-${initialCategory}`;
 
   return (
     <div key={mapKey} className="min-h-screen">

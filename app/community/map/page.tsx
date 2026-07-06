@@ -77,62 +77,70 @@ export default async function CommunityMapPage() {
   }
 
   const businessSpots =
-    businesses?.map((business: any) => {
-      const rawCategories = splitCategories(
-        business.category || business.categories || "Business"
-      );
+    businesses
+      ?.map((business: any) => {
+        const businessId = Number(business.id);
 
-      const matchedCommunityCategories = rawCategories.filter((cat) =>
-        allowedCategoryNames.has(normalizeCategory(cat))
-      );
+        const rawCategories = splitCategories(
+          business.category || business.categories || "Business"
+        );
 
-      const firstCategory =
-        matchedCommunityCategories[0] || rawCategories[0] || "Business";
+        const matchedCommunityCategories = rawCategories.filter((cat) =>
+          allowedCategoryNames.has(normalizeCategory(cat))
+        );
 
-      const normalizedFirstCategory = normalizeCategory(firstCategory);
-      const businessId = business.id;
+        const firstCategory =
+          matchedCommunityCategories[0] || rawCategories[0] || "Business";
 
-      return {
-        ...business,
+        const normalizedFirstCategory = normalizeCategory(firstCategory);
 
-        id: businessId,
-        business_id: businessId,
-        original_business_id: businessId,
-        original_id: businessId,
+        return {
+          ...business,
 
-        name: business.name,
+          id: businessId,
+          business_id: businessId,
+          original_business_id: businessId,
+          original_id: businessId,
 
-        category: firstCategory,
-        categories: rawCategories.join(", "),
-        matched_categories: matchedCommunityCategories,
+          name: business.name || "No business name",
 
-        // 커뮤니티 카테고리에 있으면 그 이모지 사용, 없으면 기존 이모지/기본 핀
-        emoji:
-          categoryEmojiMap.get(normalizedFirstCategory) ||
-          business.emoji ||
-          "📍",
+          category: firstCategory,
+          categories: rawCategories.join(", "),
+          matched_categories: matchedCommunityCategories,
 
-        image_url: business.image_url || business.logo_url || null,
+          emoji:
+            categoryEmojiMap.get(normalizedFirstCategory) ||
+            business.emoji ||
+            "📍",
 
-        lat: business.lat,
-        lng: business.lng,
+          image_url: business.image_url || business.logo_url || null,
 
-        type: "business",
-        source_type:
-          matchedCommunityCategories.length > 0
-            ? "community-business"
-            : "business-search-only",
+          lat: Number(business.lat),
+          lng: Number(business.lng),
 
-        // 검색에는 포함되지만 커뮤니티 카테고리에는 없을 수 있음
-        community_visible: matchedCommunityCategories.length > 0,
+          type: "business",
+          source_type:
+            matchedCommunityCategories.length > 0
+              ? "community-business"
+              : "business-search-only",
 
-        map_key: `community-business-${businessId}`,
-      };
-    }) || [];
+          community_visible: matchedCommunityCategories.length > 0,
+
+          map_key: `community-business-${businessId}`,
+        };
+      })
+      .filter((spot: any) => Number.isFinite(spot.lat) && Number.isFinite(spot.lng)) ||
+    [];
+
+  const uniqueBusinessSpots = Array.from(
+    new Map(businessSpots.map((spot: any) => [spot.map_key, spot])).values()
+  );
 
   const marketplaceSpots =
     marketplaceItems
       ?.map((item: any) => {
+        const marketplaceId = Number(item.id);
+
         const rawCategories = splitCategories(item.category || "Marketplace");
 
         const matchedCategories = rawCategories.filter((cat) =>
@@ -143,7 +151,6 @@ export default async function CommunityMapPage() {
 
         const firstCategory = matchedCategories[0];
         const normalizedFirstCategory = normalizeCategory(firstCategory);
-        const marketplaceId = item.id;
 
         return {
           ...item,
@@ -152,10 +159,10 @@ export default async function CommunityMapPage() {
           marketplace_id: marketplaceId,
           original_id: marketplaceId,
 
-          business_id: marketplaceId,
-          original_business_id: marketplaceId,
+          business_id: `marketplace-${marketplaceId}`,
+          original_business_id: `marketplace-${marketplaceId}`,
 
-          name: item.title,
+          name: item.title || "Marketplace Item",
 
           category: firstCategory,
           categories: matchedCategories.join(", "),
@@ -166,8 +173,8 @@ export default async function CommunityMapPage() {
           image_url: item.image_urls?.[0] || null,
           image_urls: item.image_urls || null,
 
-          lat: item.latitude,
-          lng: item.longitude,
+          lat: Number(item.latitude),
+          lng: Number(item.longitude),
 
           price: item.price,
 
@@ -175,12 +182,17 @@ export default async function CommunityMapPage() {
           source_type: "marketplace",
           community_visible: true,
 
-          map_key: `marketplace-${marketplaceId}`,
+          map_key: `community-marketplace-${marketplaceId}`,
         };
       })
-      .filter(Boolean) || [];
+      .filter(
+        (spot: any) =>
+          spot &&
+          Number.isFinite(spot.lat) &&
+          Number.isFinite(spot.lng)
+      ) || [];
 
-  const spots = [...businessSpots, ...marketplaceSpots];
+  const spots = [...uniqueBusinessSpots, ...marketplaceSpots];
 
   return (
     <main className="relative min-h-screen bg-[#F8F3EC]">

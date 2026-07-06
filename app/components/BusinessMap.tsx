@@ -678,13 +678,13 @@ export default function BusinessMap({
       let distance = 0;
 
       if (isLandscape) {
-        const targetY = listRect
-          ? listRect.top + listRect.height / 2
-          : window.innerHeight / 2;
+  const targetY = listRect
+    ? listRect.top + 80
+    : 160;
 
-        const cardCenterY = rect.top + rect.height / 2;
-        distance = Math.abs(cardCenterY - targetY);
-      } else {
+  const cardTop = rect.top;
+  distance = Math.abs(cardTop - targetY);
+} else {
         const viewportCenterX = window.innerWidth / 2;
         const cardCenterX = rect.left + rect.width / 2;
         distance = Math.abs(cardCenterX - viewportCenterX);
@@ -898,7 +898,7 @@ export default function BusinessMap({
             : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
         }`}
       >
-        <div className="hidden landscape:block landscape:h-[calc((100vh-112px)/3)] landscape:shrink-0" />
+        <div className="hidden landscape:block landscape:h-[135px] landscape:shrink-0" />
 
         {cardSpots.map((spot, index) => {
           const spotKey = getSpotKey(spot);
@@ -936,7 +936,7 @@ export default function BusinessMap({
                   selectedSpotKey: spotKey,
                 });
               }}
-              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[calc((100vh-112px)/3)] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
+              className={`w-[88vw] max-w-[420px] shrink-0 snap-center overflow-hidden rounded-[24px] bg-white shadow-2xl iphone:w-[80vw] landscape:flex landscape:h-[135px] landscape:w-[200px] landscape:max-w-[200px] landscape:items-center landscape:gap-2 landscape:rounded-2xl landscape:p-2 landscape:shadow-xl ${
                 spotKey === selectedSpotKey
                   ? "border-4 border-red-600"
                   : "border-2 border-white"
