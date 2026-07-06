@@ -27,8 +27,6 @@ html {
   width: 100%;
   min-height: 100%;
   overflow-x: hidden;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
   scroll-behavior: smooth;
 }
 
@@ -41,6 +39,7 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
 
   overflow-x: hidden;
 
@@ -58,7 +57,6 @@ body {
   min-width: 0;
 }
 
-/* 모바일에서 미디어가 넘치지 않도록 */
 img,
 picture,
 video,
@@ -69,7 +67,6 @@ svg {
   height: auto;
 }
 
-/* form 요소 */
 input,
 textarea,
 select,
@@ -77,18 +74,15 @@ button {
   font: inherit;
 }
 
-/* 긴 영어 단어 */
 .break-anywhere {
   overflow-wrap: anywhere;
 }
 
-/* 한국어 */
 .break-keep {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
 
-/* iPhone Safe Area */
 .safe-top {
   padding-top: env(safe-area-inset-top);
 }
@@ -97,7 +91,6 @@ button {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* iPhone Safari / Instagram / Threads */
 @supports (-webkit-touch-callout: none) {
   body {
     min-height: -webkit-fill-available;
