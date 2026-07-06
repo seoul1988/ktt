@@ -44,17 +44,17 @@ function SectionTitle({
 }) {
   return (
     <div
-      className={`mb-5 flex items-center justify-between rounded-2xl border px-4 py-3 shadow-sm ${bgColor}`}
+      className={`mb-4 flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 shadow-sm ${bgColor}`}
     >
-      <div className="flex items-center gap-3">
-        <div className={`h-10 w-1 rounded-full ${color}`} />
+      <div className="flex min-w-0 items-center gap-2">
+        <div className={`h-9 w-1 shrink-0 rounded-full ${color}`} />
 
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-gray-500">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">
             {label}
           </p>
 
-          <h2 className="mt-0.5 text-2xl font-black leading-tight text-[#172033]">
+          <h2 className="mt-0.5 break-keep text-[22px] font-black leading-tight text-[#172033]">
             {emoji} {title}
           </h2>
         </div>
@@ -63,7 +63,7 @@ function SectionTitle({
       {moreHref && (
         <Link
           href={moreHref}
-          className="rounded-full border border-gray-200 bg-white px-5 py-2 text-sm font-black text-[#172033] shadow-sm hover:bg-gray-50"
+          className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#172033] shadow-sm hover:bg-gray-50"
         >
           More
         </Link>
@@ -313,11 +313,11 @@ const trending = spots || [];
     <>
       <InstallAppButton />
 
-      <main className="min-h-screen bg-[#F8F3EC] px-5 pb-40 pt-8 text-[#172033]">
+      <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
         <div className="mx-auto mb-8 flex max-w-xl items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#C4483A]">KTT</p>
-            <h1 className="text-3xl font-bold">KTown Triangle</h1>
+            <h1 className="text-[30px] font-black leading-tight">KTown Triangle</h1>
             <p className="mt-1 text-sm text-gray-600">
               Events, deals & Korean spots near you
             </p>
@@ -345,7 +345,7 @@ const trending = spots || [];
               href={`/grand-openings/${mainGrandOpening.id}`}
               className="block overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-xl"
             >
-              <div className="h-64 w-full bg-white">
+              <div className="h-56 w-full bg-white">
                 <VideoFirstMedia
                   videoUrl={mainGrandOpening.video_url}
                   imageUrl={grandOpeningImage}
@@ -431,7 +431,7 @@ const trending = spots || [];
                 href={`/deals/${deal.id}`}
                 className="flex gap-4 rounded-3xl border border-red-100 bg-white p-4 shadow-sm"
               >
-                <div className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white">
+                <div className="h-24 w-32 shrink-0 overflow-hidden rounded-2xl bg-white">
                   <DealMedia
                     deal={deal}
                     className="h-full w-full object-contain"
