@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "./components/AuthProvider";
+import InAppBrowserNotice from "./components/InAppBrowserNotice";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -106,15 +107,11 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <head>
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, viewport-fit=cover"
-        />
-      </head>
-
       <body className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <InAppBrowserNotice />
+          {children}
+        </AuthProvider>
 
         <Script
           src="https://www.googletagmanager.com/gtag/js?id=G-SDZ3B9B4S6"
