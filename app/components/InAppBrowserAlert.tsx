@@ -6,6 +6,9 @@ export default function InAppBrowserAlert() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
+    const dismissed = sessionStorage.getItem("inAppBrowserAlertDismissed");
+    if (dismissed === "true") return;
+
     const ua = navigator.userAgent.toLowerCase();
 
     const isInAppBrowser =
@@ -19,12 +22,12 @@ export default function InAppBrowserAlert() {
     if (isInAppBrowser) setShow(true);
   }, []);
 
-  if (!show) return null;
-
-  const copyUrl = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    alert("Website address copied.");
+  const closeAlert = () => {
+    sessionStorage.setItem("inAppBrowserAlertDismissed", "true");
+    setShow(false);
   };
+
+  if (!show) return null;
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/65 px-6">
@@ -35,9 +38,18 @@ export default function InAppBrowserAlert() {
           Chrome Browser
         </h2>
 
+        <p className="mt-6 text-[15px] leading-7 text-gray-600">
+          You are currently viewing this site inside
+          <br />
+          <span className="font-black text-red-600">
+            Instagram, Facebook, or Threads
+          </span>
+          .
+        </p>
 
         <p className="mt-3 text-[15px] leading-7 text-gray-600">
-         
+          If the page does not display correctly,
+          <br />
           please open it in Chrome.
         </p>
 
@@ -56,7 +68,10 @@ export default function InAppBrowserAlert() {
         </button>
 
         <button
-          onClick={copyUrl}
+          onClick={async () => {
+            await navigator.clipboard.writeText(window.location.href);
+            alert("Website address copied.");
+          }}
           className="mt-3 w-full rounded-2xl bg-[#111827] py-4 text-[16px] font-bold text-white"
         >
           Copy Website Address
@@ -66,16 +81,15 @@ export default function InAppBrowserAlert() {
           <span className="rounded-md bg-red-50 px-2 py-1 font-black text-red-600">
             iPhone
           </span>{" "}
-          users can open this site in Safari or Chrome
-          <br />
-          using the share/menu button.
+          users can open this site in Safari or Chrome using the share/menu
+          button.
         </p>
 
         <button
-          onClick={() => setShow(false)}
+          onClick={closeAlert}
           className="mt-5 text-[15px] font-bold text-gray-500 underline"
         >
-          Continue Anyway
+          Continue Here
         </button>
       </div>
     </div>
