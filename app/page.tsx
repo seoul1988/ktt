@@ -312,8 +312,8 @@ const trending = spots || [];
 
   return (
     <>
-         
-         <InAppBrowserAlert />
+          <InstallAppButton />
+       
 
       <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
         <div className="mx-auto mb-8 flex max-w-xl items-center justify-between gap-4">
