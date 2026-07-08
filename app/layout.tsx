@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "./components/AuthProvider";
 import InAppBrowserNotice from "./components/InAppBrowserNotice";
+import KakaoOpenBrowserNotice from "./components/KakaoOpenBrowserNotice";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -110,6 +111,7 @@ export default function RootLayout({
       <body className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
         <AuthProvider>
           <InAppBrowserNotice />
+          <KakaoOpenBrowserNotice />
           {children}
         </AuthProvider>
 
