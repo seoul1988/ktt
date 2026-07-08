@@ -34,7 +34,7 @@ export default function KakaoOpenBrowserNotice() {
     <div className="fixed inset-0 z-[9999] bg-black/70 px-5 flex items-center justify-center">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
         <h2 className="text-xl font-extrabold text-gray-900">
-          Chrome에서 열어주세요
+          Chrome에서 최적화되어있습니다.
         </h2>
 
         <p className="mt-3 text-sm leading-6 text-gray-700">
@@ -43,6 +43,14 @@ export default function KakaoOpenBrowserNotice() {
           화면이 제대로 보이지 않으면 Chrome에서 열어주세요.
         </p>
 
+ <button
+          onClick={openChromeAndroid}
+          className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white"
+        >
+          Android Chrome에서 열기
+        </button>
+		
+		
         <button
           onClick={copyUrl}
           className="mt-5 w-full rounded-xl bg-gray-900 px-4 py-3 text-sm font-bold text-white"
@@ -50,12 +58,7 @@ export default function KakaoOpenBrowserNotice() {
           {copied ? "주소가 복사되었습니다" : "주소 복사하기"}
         </button>
 
-        <button
-          onClick={openChromeAndroid}
-          className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white"
-        >
-          Android Chrome에서 열기
-        </button>
+       
 
         <p className="mt-4 text-xs leading-5 text-gray-500">
           iPhone은 아래쪽 공유 버튼 또는 오른쪽 위 메뉴에서
