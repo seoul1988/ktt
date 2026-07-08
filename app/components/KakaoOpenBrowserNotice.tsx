@@ -34,7 +34,7 @@ export default function KakaoOpenBrowserNotice() {
     <div className="fixed inset-0 z-[9999] bg-black/70 px-5 flex items-center justify-center">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
         <h2 className="text-xl font-extrabold text-gray-900">
-          Chrome에서 최적화되어있습니다.
+          Chrome 브라우저에 최적화되어 있습니다.
         </h2>
 
         <p className="mt-3 text-sm leading-6 text-gray-700">
@@ -61,9 +61,11 @@ export default function KakaoOpenBrowserNotice() {
        
 
         <p className="mt-4 text-xs leading-5 text-gray-500">
-          iPhone은 아래쪽 공유 버튼 또는 오른쪽 위 메뉴에서
-          Safari/Chrome으로 열어주세요.
-        </p>
+  <span className="rounded bg-red-100 px-1 font-bold text-red-700">
+    iPhone
+  </span>{" "}
+  은 아래쪽 공유 버튼 또는 오른쪽 위 메뉴에서 Safari/Chrome으로 열어주세요.
+</p>
 
         <button
           onClick={() => setShow(false)}
