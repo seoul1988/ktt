@@ -35,18 +35,9 @@ export default function InAppBrowserAlert() {
           Chrome Browser
         </h2>
 
-        <p className="mt-6 text-[15px] leading-7 text-gray-600">
-          You are currently viewing this site inside
-          <br />
-          <span className="font-black text-red-600">
-            Instagram, Facebook, or Threads
-          </span>
-          .
-        </p>
 
         <p className="mt-3 text-[15px] leading-7 text-gray-600">
-          If the page does not display correctly,
-          <br />
+         
           please open it in Chrome.
         </p>
 
