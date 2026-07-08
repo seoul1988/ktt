@@ -751,35 +751,41 @@ export default function BusinessMap({
       </div>
 
       {categoryPanelOpen && (
-        <div className="fixed right-0 top-24 z-[1300] max-h-[72vh] w-[88px] overflow-y-auto rounded-l-[24px] bg-white p-2 shadow-2xl scrollbar-hide landscape:top-16 landscape:max-h-[78vh] landscape:w-[78px]">
-          <p className="mb-3 text-center text-xs font-extrabold text-gray-500">
-            Category
-          </p>
+  <div className="fixed right-2 top-24 z-[1300] max-h-[72vh] w-[72px] overflow-y-auto rounded-2xl bg-white/95 p-1.5 shadow-2xl scrollbar-hide landscape:right-2 landscape:top-16 landscape:max-h-[78vh] landscape:w-[68px]">
+    <p className="mb-2 text-center text-[9px] font-black leading-tight text-gray-500">
+      Category
+    </p>
 
-          <div className="space-y-1 overflow-y-auto">
-            {communityMode && (
-              <Link
-                href="/community/directory"
-                className="mb-2 flex w-full flex-col items-center justify-center rounded-xl bg-[#C4483A] px-1 py-3 text-[10px] font-extrabold text-white shadow-lg active:scale-95"
-              >
-                <span className="text-xl">🌐</span>
-                <span className="mt-1 leading-tight">모두보기</span>
-              </Link>
-            )}
-
-            {displayCategories.map((cat) => (
-              <button
-                key={cat.name}
-                onClick={() => selectCategory(cat.name)}
-                className="flex w-full flex-col items-center justify-center rounded-xl bg-gray-50 px-1 py-2 text-[10px] font-extrabold text-[#172033] shadow-sm active:scale-95"
-              >
-                <span className="text-lg">{cat.emoji || "🏷️"}</span>
-                <span className="mt-1 leading-tight">{cat.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+    <div className="space-y-1">
+      {communityMode && (
+        <Link
+          href="/community/directory"
+          className="flex w-full flex-col items-center justify-center rounded-xl bg-[#C4483A] px-1 py-2 text-center text-[9px] font-black text-white shadow-md active:scale-95"
+        >
+          <span className="text-base leading-none">🌐</span>
+          <span className="mt-1 w-full truncate leading-tight">All</span>
+        </Link>
       )}
+
+      {displayCategories.map((cat) => (
+        <button
+          key={cat.name}
+          onClick={() => selectCategory(cat.name)}
+          title={cat.name}
+          className="flex w-full flex-col items-center justify-center rounded-xl bg-gray-50 px-1 py-2 text-center text-[9px] font-black text-[#172033] shadow-sm active:scale-95"
+        >
+          <span className="text-base leading-none">
+            {cat.emoji || "🏷️"}
+          </span>
+
+          <span className="mt-1 block w-full truncate leading-tight">
+            {cat.name}
+          </span>
+        </button>
+      ))}
+    </div>
+  </div>
+)}
 
       {!categoryPanelOpen && (
         <button
