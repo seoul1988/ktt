@@ -8,6 +8,7 @@ import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
+import InAppBrowserAlert from "./components/InAppBrowserAlert";
 
 function getYoutubeEmbedUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -311,7 +312,8 @@ const trending = spots || [];
 
   return (
     <>
-      <InstallAppButton />
+          <InstallAppButton />
+         <InAppBrowserAlert />
 
       <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
         <div className="mx-auto mb-8 flex max-w-xl items-center justify-between gap-4">
