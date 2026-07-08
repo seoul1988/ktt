@@ -82,6 +82,10 @@ export default async function AdminPage() {
           <Link href="/admin/users" className={menuClass}>
             <span>👥 Member Management</span>
           </Link>
+
+          <Link href="/admin/visitors" className={menuClass}>
+            <span>📊 Visitor Statistics</span>
+          </Link>
         </div>
       </div>
 

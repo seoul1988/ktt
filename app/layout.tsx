@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "./components/AuthProvider";
 import InAppBrowserNotice from "./components/InAppBrowserNotice";
 import KakaoOpenBrowserNotice from "./components/KakaoOpenBrowserNotice";
+import VisitorTracker from "./components/VisitorTracker";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -112,6 +113,7 @@ export default function RootLayout({
         <AuthProvider>
           <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
+		   <VisitorTracker />
           {children}
         </AuthProvider>
 
