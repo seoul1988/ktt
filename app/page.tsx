@@ -466,63 +466,83 @@ const trending = spots || [];
           />
         )}
 
-        <section className="mx-auto max-w-xl">
-          <SectionTitle
-            label="Popular"
-            title="Trending Now"
-            emoji="📈"
-            color="bg-green-600"
-            bgColor="border-green-200 bg-green-50"
-          />
+      <section className="mx-auto max-w-xl">
+  <SectionTitle
+    label="Popular"
+    title="Trending Now"
+    emoji="📈"
+    color="bg-green-600"
+    bgColor="border-green-200 bg-green-50"
+  />
 
-          <div className="space-y-4">
-            {trending.map((spot) => {
-              const dealId = dealBusinessMap.get(spot.id);
-              const hasDeal = Boolean(dealId);
-              const hasCoupon = couponBusinessIds.has(spot.id);
+  <div className="space-y-4">
+    {trending.map((spot) => {
+      const dealId = dealBusinessMap.get(spot.id);
+      const hasDeal = Boolean(dealId);
+      const hasCoupon = couponBusinessIds.has(spot.id);
 
-              return (
-                <div
-                  key={spot.id}
-                  className="block rounded-3xl border border-green-100 bg-white p-4 shadow-sm"
-                >
-                  <div className="flex items-center gap-4">
-                    <Link
-                      href={`/business/${spot.id}`}
-                      className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white"
-                    >
-                      <BusinessMedia
-                        spot={spot}
-                        className="h-full w-full object-cover"
-                      />
-                    </Link>
+      return (
+        <div
+          key={spot.id}
+          className="block rounded-3xl border border-green-100 bg-white p-4 shadow-sm"
+        >
+          <div className="flex items-center gap-4">
+            <Link
+              href={`/business/${spot.id}`}
+              className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white"
+            >
+              <BusinessMedia
+                spot={spot}
+                className="h-full w-full object-cover"
+              />
+            </Link>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link href={`/business/${spot.id}`}>
-                          <h4 className="line-clamp-1 font-black">
-                            {spot.name}
-                          </h4>
-                        </Link>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link href={`/business/${spot.id}`}>
+                  <h4 className="line-clamp-1 font-black">
+                    {spot.name}
+                  </h4>
+                </Link>
 
-                        <OfferBadges
-                          businessId={spot.id}
-                          dealId={dealId}
-                          hasDeal={hasDeal}
-                          hasCoupon={hasCoupon}
-                        />
-                      </div>
+                <OfferBadges
+                  businessId={spot.id}
+                  dealId={dealId}
+                  hasDeal={hasDeal}
+                  hasCoupon={hasCoupon}
+                />
+              </div>
 
-                      <p className="line-clamp-1 text-sm text-gray-600">
-                        {spot.category} · {spot.city}
-                      </p>
-                    </div>
-                  </div>
+              <p className="mt-1 line-clamp-1 text-sm text-gray-600">
+                {spot.category} · {spot.city}
+              </p>
+
+              {(spot.rating || spot.review_count) && (
+                <div className="mt-2 flex items-center gap-1 text-sm">
+                  <span className="text-yellow-500">⭐</span>
+
+                  <span className="font-bold text-gray-900">
+                    {Number(spot.rating || 0).toFixed(1)}
+                  </span>
+
+                  {spot.review_count ? (
+                    <span className="text-gray-500">
+                      ({Number(spot.review_count).toLocaleString()} Reviews)
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">
+                      No Reviews
+                    </span>
+                  )}
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
-        </section>
+        </div>
+      );
+    })}
+  </div>
+</section>
 
         <BottomNav activeNav="home" />
       </main>
