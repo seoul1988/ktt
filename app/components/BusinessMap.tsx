@@ -778,7 +778,7 @@ export default function BusinessMap({
             {cat.emoji || "🏷️"}
           </span>
 
-          <span className="mt-1 block w-full truncate leading-tight">
+          <span className="mt-1 block w-full truncate text-[9px] leading-tight">
             {cat.name}
           </span>
         </button>
