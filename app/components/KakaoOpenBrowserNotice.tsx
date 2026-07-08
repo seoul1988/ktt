@@ -34,11 +34,12 @@ export default function KakaoOpenBrowserNotice() {
     <div className="fixed inset-0 z-[9999] bg-black/70 px-5 flex items-center justify-center">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
         <h2 className="text-xl font-extrabold text-gray-900">
-          Chrome 브라우저에 최적화되어 있습니다.
+         현재 카카오톡 브라우저에서 열려 있습니다.
+		 
         </h2>
 
         <p className="mt-3 text-sm leading-6 text-gray-700">
-          현재 카카오톡 브라우저에서 열려 있습니다.
+          Chrome 브라우저에 최적화되어 있습니다.
           <br />
           화면이 제대로 보이지 않으면 Chrome에서 열어주세요.
         </p>
