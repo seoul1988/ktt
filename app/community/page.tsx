@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
+import InquiryTab from "../components/InquiryTab";
 import Image from "next/image";
 
 export const dynamic = "force-dynamic";
@@ -455,7 +456,7 @@ export default async function CommunityPage() {
           </div>
         </section>
       </section>
-
+<InquiryTab />
       <CommunityBottomNav activeNav="community" />
     </main>
   );
