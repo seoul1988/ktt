@@ -81,16 +81,16 @@ export default async function MarketPage() {
 
               const card = (
                 <div
-                  className={`flex h-[285px] flex-col overflow-hidden rounded-2xl bg-white shadow ${
+                  className={`flex h-[380px] flex-col overflow-hidden rounded-2xl bg-white shadow ${
                     isSold ? "cursor-not-allowed opacity-70" : ""
                   }`}
                 >
-                  <div className="relative h-52 bg-gray-200">
+                  <div className="relative h-[255px] shrink-0 overflow-hidden bg-gray-200">
                     {item.images?.[0] ? (
                       <img
                         src={item.images[0]}
                         alt={item.title}
-                        className="h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover object-center"
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xs font-bold text-gray-400">
@@ -120,15 +120,15 @@ export default async function MarketPage() {
                       </div>
                     )}
 
-                    <div className="absolute -bottom-19 left-0 right-0 z-20 bg-black/85 px-3 py-1.5 text-white">
+                    <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/85 px-3 py-2 text-white">
                       <h2 className="line-clamp-1 text-sm font-black leading-tight">
                         {item.title}
                       </h2>
 
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <p className="text-sm font-black text-red-400">
-						  ${Number(item.price || 0).toLocaleString()}
-						</p>
+                          ${Number(item.price || 0).toLocaleString()}
+                        </p>
 
                         {item.location && (
                           <span className="line-clamp-1 text-[10px] font-bold leading-tight text-white/90">
@@ -189,4 +189,3 @@ export default async function MarketPage() {
     </main>
   );
 }
-
