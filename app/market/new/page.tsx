@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import CommunityBottomNav from "../components/CommunityBottomNav";
 import { useRouter } from "next/navigation";
 
 const MARKET_CATEGORIES = [
@@ -321,6 +322,7 @@ export default function NewMarketItemPage() {
           {uploading ? "업로드 중..." : "등록하기"}
         </button>
       </div>
+	        <CommunityBottomNav activeNav="market" />
     </main>
   );
 }
