@@ -25,6 +25,7 @@ export default function VisitorTracker() {
           user_id: user?.id || null,
           page: window.location.pathname,
           user_agent: navigator.userAgent,
+          browser_language: navigator.language || "unknown",
         });
       } catch (error) {
         console.error("Visitor tracking error:", error);
