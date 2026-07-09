@@ -80,12 +80,12 @@ export default async function MarketPage() {
               const isSold = item.status === "sold";
 
               const card = (
-				  <div
-					className={`flex h-[260px] flex-col overflow-hidden rounded-2xl bg-white shadow ${
-					  isSold ? "cursor-not-allowed opacity-70" : ""
-					}`}
-				  >
-                  <div className="relative h-32 bg-gray-200">
+                <div
+                  className={`flex h-[285px] flex-col overflow-hidden rounded-2xl bg-white shadow ${
+                    isSold ? "cursor-not-allowed opacity-70" : ""
+                  }`}
+                >
+                  <div className="relative h-52 bg-gray-200">
                     {item.images?.[0] ? (
                       <img
                         src={item.images[0]}
@@ -98,74 +98,76 @@ export default async function MarketPage() {
                       </div>
                     )}
 
-                    {isSold && (
-                      <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50">
-                        <span className="rounded-xl bg-white px-4 py-2 text-sm font-black text-red-600">
-                          판매완료
-                        </span>
-                      </div>
-                    )}
-
-                    {Array.isArray(item.images) && item.images.length > 1 && (
-                      <div className="absolute bottom-2 right-2 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
-                        1/{item.images.length}
-                      </div>
-                    )}
-
-                    {item.video_url && (
-                      <div className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
-                        VIDEO
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="absolute left-2 top-2 z-20">
                       <span
-                        className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
+                        className={`rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
                           item.status
                         )}`}
                       >
                         {statusLabel(item.status)}
                       </span>
-
-                      <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
-                        {item.location || ""}
-                      </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <h2 className="line-clamp-1 flex-1 text-sm font-black text-[#172033]">
+                    {item.video_url && (
+                      <div className="absolute right-2 top-2 z-20 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white">
+                        VIDEO
+                      </div>
+                    )}
+
+                    {Array.isArray(item.images) && item.images.length > 1 && (
+                      <div className="absolute right-2 top-9 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
+                        1/{item.images.length}
+                      </div>
+                    )}
+
+                    <div className="absolute -bottom-19 left-0 right-0 z-20 bg-black/85 px-3 py-1.5 text-white">
+                      <h2 className="line-clamp-1 text-sm font-black leading-tight">
                         {item.title}
                       </h2>
 
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="text-sm font-black text-red-400">
+						  ${Number(item.price || 0).toLocaleString()}
+						</p>
+
+                        {item.location && (
+                          <span className="line-clamp-1 text-[10px] font-bold leading-tight text-white/90">
+                            {item.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {isSold && (
+                      <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45">
+                        <span className="rounded-xl bg-white px-4 py-2 text-sm font-black text-red-600">
+                          판매완료
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-1 flex-col p-3">
+                    <div className="flex items-center justify-between gap-2">
                       {item.category && (
-                        <span className="shrink-0 rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
+                        <span className="rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
                           {item.category}
                         </span>
                       )}
-                    </div>
-
-                    <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className="text-sm font-black text-[#C2410C]">
-                        ${item.price || 0}
-                      </p>
 
                       <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
                         {item.condition || ""}
                       </span>
                     </div>
 
-                   <div className="mt-2 min-h-[20px]">
-					  {item.description && (
-						<p className="text-xs text-gray-600">
-						  {item.description.length > 16
-							? `${item.description.slice(0, 16)}...`
-							: item.description}
-						</p>
-					  )}
-					</div>
-									  </div>
+                    <div className="mt-2 min-h-[34px]">
+                      {item.description && (
+                        <p className="line-clamp-2 text-xs text-gray-600">
+                          {item.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               );
 
@@ -187,3 +189,4 @@ export default async function MarketPage() {
     </main>
   );
 }
+
