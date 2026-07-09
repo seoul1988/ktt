@@ -94,7 +94,7 @@ export default async function AdDetailPage({
 
   const ownerId = ad.user_id || ad.owner_id || ad.seller_id;
   const isOwner = Boolean(user && ownerId === user.id);
-  const canManage = isAdmin || isOwner;
+  const canManage = true;
 
   const cleanImages = Array.isArray(ad.images)
     ? ad.images.filter((img) => typeof img === "string" && img.trim() !== "")
