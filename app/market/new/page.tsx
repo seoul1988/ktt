@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { supabase } from "../../../lib/supabase";
-import CommunityBottomNav from "../components/CommunityBottomNav";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
 import { useRouter } from "next/navigation";
 
 const MARKET_CATEGORIES = [
