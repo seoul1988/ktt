@@ -19,11 +19,7 @@ type AdItem = {
   status: string | null;
   lat: number | null;
   lng: number | null;
-
-  // 본인 확인용 컬럼
   user_id: string | null;
-  owner_id?: string | null;
-  seller_id?: string | null;
 };
 
 function statusLabel(status: string | null) {
@@ -77,23 +73,17 @@ export default async function AdDetailPage({
 
   const ad = data as AdItem;
 
+  const cookieStore = await cookies();
+  const adminRole = cookieStore.get("ktt_admin")?.value;
+
+  const isAdmin =
+    adminRole === "admin" || adminRole === "super_admin";
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = user
-    ? await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle()
-    : { data: null };
-
-  const isAdmin =
-    profile?.role === "admin" || profile?.role === "super_admin";
-
-  const ownerId = ad.user_id || ad.owner_id || ad.seller_id;
-  const isOwner = Boolean(user && ownerId === user.id);
+  const isOwner = Boolean(user && ad.user_id === user.id);
   const canManage = isAdmin || isOwner;
 
   const cleanImages = Array.isArray(ad.images)
