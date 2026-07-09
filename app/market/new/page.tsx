@@ -140,20 +140,19 @@ export default function NewMarketItemPage() {
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
       <div className="mx-auto max-w-md rounded-3xl bg-white p-5 shadow">
        
-<div className="mb-3">
+<div className="relative mb-5 flex items-center justify-center">
   <button
     type="button"
     onClick={() => router.back()}
-    className="flex items-center gap-2 text-sm font-bold text-[#172033]"
+    className="absolute left-0 text-sm font-bold text-[#172033]"
   >
     ← BACK
   </button>
+
+  <h1 className="text-2xl font-black text-[#172033]">
+    상품 등록
+  </h1>
 </div>
-
-
-	   <h1 className="mb-4 text-2xl font-black text-[#172033]">
-          상품 등록
-        </h1>
 
         <input
           className="mb-3 w-full rounded-xl border p-3"
