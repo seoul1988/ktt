@@ -2,10 +2,8 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import MarketMediaSlider from "../../components/MarketMediaSlider";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
 export default async function MarketDetailPage({
   params,
 }: {
@@ -30,12 +28,6 @@ export default async function MarketDetailPage({
   if (!item) {
     return <div className="p-6">상품을 찾을 수 없습니다.</div>;
   }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isOwner = user?.id === item.seller_id;
 
   const media = [
     ...((item.images || []) as string[]).map((url) => ({
@@ -62,6 +54,7 @@ export default async function MarketDetailPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-72">
+      {/* 상단 헤더 */}
       <div className="mx-auto mb-3 flex max-w-md items-center justify-between">
         <Link
           href="/market"
@@ -78,15 +71,6 @@ export default async function MarketDetailPage({
           </summary>
 
           <div className="absolute right-0 top-12 z-[99999] w-40 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
-            {isOwner && (
-              <Link
-                href={`/market/${item.id}/edit`}
-                className="block px-4 py-3 text-[#C2410C] hover:bg-gray-100"
-              >
-                상품 수정
-              </Link>
-            )}
-
             <Link
               href={`/market/seller/${item.seller_id}`}
               className="block px-4 py-3 text-[#172033] hover:bg-gray-100"
@@ -118,7 +102,9 @@ export default async function MarketDetailPage({
             </span>
           </div>
 
-          <h1 className="text-2xl font-black text-[#172033]">{item.title}</h1>
+          <h1 className="text-2xl font-black text-[#172033]">
+            {item.title}
+          </h1>
 
           <p className="mt-2 text-2xl font-black text-[#C2410C]">
             ${item.price}
@@ -148,15 +134,6 @@ export default async function MarketDetailPage({
               판매자 상품
             </Link>
 
-            {isOwner && (
-              <Link
-                href={`/market/${item.id}/edit`}
-                className="flex-1 border-r border-[#172033] py-2 text-center text-sm font-black text-[#C2410C]"
-              >
-                수정
-              </Link>
-            )}
-
             <Link
               href="/market"
               className="flex-1 py-2 text-center text-sm font-black text-[#172033]"
@@ -167,6 +144,7 @@ export default async function MarketDetailPage({
         </div>
       </div>
 
+      {/* 전화 / 문자 / 딜하기 버튼 */}
       <div className="fixed bottom-24 left-1/2 z-[9999] grid w-[92%] max-w-md -translate-x-1/2 grid-cols-3 gap-2">
         {item.phone ? (
           <>
