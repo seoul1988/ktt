@@ -33,10 +33,11 @@ export default function NewInquiryPage() {
 
     setLoading(false);
 
-    if (error) {
-      alert("문의 등록에 실패했습니다.");
-      return;
-    }
+  if (error) {
+  console.error("문의 등록 에러:", error);
+  alert(error.message);
+  return;
+}
 
     alert("문의가 접수되었습니다.");
     router.push("/community/inquiries");
