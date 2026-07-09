@@ -33,6 +33,10 @@ export default async function AdminVisitorsPage() {
     .from("visitor_logs")
     .select("page");
 
+  const { data: languageData } = await supabase
+    .from("visitor_logs")
+    .select("browser_language");
+
   const allUniqueVisitors = new Set(
     (allUniqueData || []).map((v) => v.visitor_key)
   ).size;
@@ -51,6 +55,28 @@ export default async function AdminVisitorsPage() {
   const topPages = Array.from(pageCounts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
+
+  const languageCounts = new Map<string, number>();
+
+  (languageData || []).forEach((item) => {
+    const lang = item.browser_language || "unknown";
+
+    let label = "🌍 Other / Unknown";
+
+    if (lang.startsWith("ko")) {
+      label = "🇰🇷 Korean";
+    } else if (lang.startsWith("en")) {
+      label = "🇺🇸 English";
+    } else if (lang.startsWith("es")) {
+      label = "🇪🇸 Spanish";
+    }
+
+    languageCounts.set(label, (languageCounts.get(label) || 0) + 1);
+  });
+
+  const languageStats = Array.from(languageCounts.entries()).sort(
+    (a, b) => b[1] - a[1]
+  );
 
   const cardClass =
     "rounded-3xl bg-white p-5 shadow-sm border border-gray-100";
@@ -76,8 +102,8 @@ export default async function AdminVisitorsPage() {
             <h2 className="mb-4 text-xl font-black text-[#172033]">Today</h2>
 
             <div className="space-y-3">
-              <StatRow label="👤 Unique Visitors" value={todayUniqueVisitors} />
-              <StatRow label="👣 Total Visits" value={todayVisits || 0} />
+              <StatRow label="👤 중복 제외 방문자" value={todayUniqueVisitors} />
+              <StatRow label="👣 전체 접속 수" value={todayVisits || 0} />
             </div>
           </div>
 
@@ -85,8 +111,26 @@ export default async function AdminVisitorsPage() {
             <h2 className="mb-4 text-xl font-black text-[#172033]">All Time</h2>
 
             <div className="space-y-3">
-              <StatRow label="👤 Unique Visitors" value={allUniqueVisitors} />
-              <StatRow label="👣 Total Visits" value={totalVisits || 0} />
+              <StatRow label="👤 중복 제외 방문자" value={allUniqueVisitors} />
+              <StatRow label="👣 전체 접속 수" value={totalVisits || 0} />
+            </div>
+          </div>
+
+          <div className={cardClass}>
+            <h2 className="mb-4 text-xl font-black text-[#172033]">
+              🌐 Browser Language
+            </h2>
+
+            <div className="space-y-3">
+              {languageStats.length === 0 ? (
+                <p className="text-sm font-bold text-gray-500">
+                  No language data yet.
+                </p>
+              ) : (
+                languageStats.map(([lang, count]) => (
+                  <StatRow key={lang} label={lang} value={count} />
+                ))
+              )}
             </div>
           </div>
 
