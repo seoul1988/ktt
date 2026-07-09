@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import AdImageGallery from "./AdImageGallery";
@@ -18,6 +19,11 @@ type AdItem = {
   status: string | null;
   lat: number | null;
   lng: number | null;
+
+  // 본인 확인용 컬럼
+  user_id: string | null;
+  owner_id?: string | null;
+  seller_id?: string | null;
 };
 
 function statusLabel(status: string | null) {
@@ -70,6 +76,25 @@ export default async function AdDetailPage({
   }
 
   const ad = data as AdItem;
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const isAdmin =
+    profile?.role === "admin" || profile?.role === "super_admin";
+
+  const ownerId = ad.user_id || ad.owner_id || ad.seller_id;
+  const isOwner = Boolean(user && ownerId === user.id);
+  const canManage = isAdmin || isOwner;
 
   const cleanImages = Array.isArray(ad.images)
     ? ad.images.filter((img) => typeof img === "string" && img.trim() !== "")
@@ -162,6 +187,24 @@ export default async function AdDetailPage({
                     🧭 Directions
                   </a>
                 )}
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Link
+                  href={`/ads/${ad.id}/edit`}
+                  className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white"
+                >
+                  ✏️ 수정
+                </Link>
+
+                <Link
+                  href={`/ads/${ad.id}/delete`}
+                  className="rounded-2xl bg-red-600 py-3 text-center text-sm font-black text-white"
+                >
+                  🗑 삭제
+                </Link>
               </div>
             )}
           </div>
