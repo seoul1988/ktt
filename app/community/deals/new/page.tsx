@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
+
+
 
 declare global {
   interface Window {
@@ -220,17 +225,23 @@ export default function NewCommunityDealPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="mb-6">
-          <div className="relative flex h-8 items-center">
-            <Link href="/community" className="text-sm font-black text-[#C4483A]">
-              ← Back
-            </Link>
+  
 
-            <h1 className="absolute left-1/2 -translate-x-1/2 text-base font-extrabold text-[#172033]">
-              COMMUNITY DEAL
-            </h1>
-          </div>
-        </div>
+ <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
+
+  {/* 가운데 */}
+  <h2 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black tracking-wide text-[#172033]">
+    Community Deal
+  </h2>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
+
 
         <form
           onSubmit={handleSubmit}

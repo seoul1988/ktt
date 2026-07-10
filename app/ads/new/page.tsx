@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
 
 declare global {
   interface Window {
@@ -187,8 +190,21 @@ export default function NewAdPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <h1 className="mb-4 text-2xl font-black">광고 등록</h1>
+      <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
+
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
+    광고 등록
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <form
           onSubmit={handleSubmit}

@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../../../lib/supabase";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
+
 
 type UserProfile = {
   id: string;
@@ -177,18 +181,20 @@ export default function OwnerBusinessMatchingPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-2xl">
-        <div className="mb-6 flex items-center gap-4">
-          <button
-            onClick={() => {
-              window.location.href = "/admin";
-            }}
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-          >
-            ← Back
-          </button>
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <h1 className="text-3xl font-black">Link Owner to Business</h1>
-        </div>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
+    Link Owner to Business
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <p className="mb-6 text-sm font-bold text-gray-500">
           Select an owner and connect it to an existing business.
@@ -244,6 +250,8 @@ export default function OwnerBusinessMatchingPage() {
           </button>
         </div>
       </div>
+	    <CommunityBottomNav activeNav="admin" />
     </main>
+	
   );
 }

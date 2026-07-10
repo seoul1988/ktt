@@ -1,6 +1,9 @@
 import Link from "next/link";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import { supabase } from "../../lib/supabase";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,9 +45,20 @@ export default async function AdminPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5">
       <div className="mx-auto w-full max-w-xl">
-        <h1 className="mb-6 text-3xl font-black text-[#172033]">
-          Admin Dashboard
-        </h1>
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
+
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
+    Admin Dashboard
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="space-y-3">
           <Link href="/admin/owner-requests" className={menuClass}>

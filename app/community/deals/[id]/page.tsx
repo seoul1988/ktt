@@ -5,6 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
 
 export default function CommunityDealDetailPage() {
   const router = useRouter();
@@ -134,20 +137,20 @@ export default function CommunityDealDetailPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
-        <div className="relative mb-5 border-b border-[#E8DED1] pb-3">
-          <Link
-            href="/community/deals"
-            className="text-sm font-bold text-[#C4483A]"
-          >
-            ← Back
-          </Link>
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <div className="absolute left-1/2 top-0 -translate-x-1/2">
-            <h2 className="text-lg font-black tracking-wide text-[#172033]">
-              Community Deal
-            </h2>
-          </div>
-        </div>
+  {/* 가운데 */}
+  <h2 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black tracking-wide text-[#172033]">
+    Community Deal
+  </h2>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-sm">
           <div className="relative h-72 w-full overflow-hidden bg-[#E8DED1]">

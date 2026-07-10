@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../../lib/supabase";
 import CommunityBottomNav from "../../../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
+
 
 declare global {
   interface Window {
@@ -414,23 +418,35 @@ export default function EditCommunityDealPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="mb-6">
-          <div className="relative flex h-8 items-center">
-            <Link
-              href={`/community/deals/${id}`}
-              className="text-sm font-black text-[#C4483A]"
-            >
-              ← Back
-            </Link>
+  <div className="relative flex h-10 items-center border-b border-[#E8DED1] pb-3">
+    {/* 왼쪽 */}
+    <BackButton />
 
-            <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-extrabold text-[#172033]">
-              EDIT COMMUNITY DEAL
-            </h1>
-          </div>
+    {/* 가운데 */}
+    <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-base font-extrabold text-[#172033]">
+      EDIT COMMUNITY DEAL
+    </h1>
 
-          <p className="mt-4 text-center text-sm font-medium text-[#6B6257]">
-            커뮤니티에만 표시되는 딜을 수정합니다.
-          </p>
-        </div>
+    {/* 오른쪽 */}
+    <div className="ml-auto">
+      <ProfileButton />
+    </div>
+  </div>
+
+  <p className="mt-4 text-center text-sm font-medium text-[#6B6257]">
+    커뮤니티에만 표시되는 딜을 수정합니다.
+  </p>
+</div>
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
 
         <form
           onSubmit={handleUpdate}

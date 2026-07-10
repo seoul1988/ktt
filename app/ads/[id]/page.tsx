@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import AdImageGallery from "./AdImageGallery";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -105,10 +107,21 @@ export default async function AdDetailPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <Link href="/ads" className="mb-4 inline-block text-sm font-bold">
-          ← 광고 목록
-        </Link>
+     <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
+
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
+    AD DETAILS
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow">
           {hasVideo && (

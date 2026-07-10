@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
+
 export const dynamic = "force-dynamic";
 
 type AdItem = {
@@ -127,17 +132,28 @@ export default function MyAdsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-black">내 광고</h1>
+      <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <Link
-            href="/ads/new"
-            className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
-          >
-            + 등록
-          </Link>
-        </div>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
+    내 광고
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto flex items-center gap-2">
+    <Link
+      href="/ads/new"
+      className="rounded-full bg-[#172033] px-2.5 py-1 text-[11px] font-bold text-white"
+    >
+      + 등록
+    </Link>
+
+    <ProfileButton />
+  </div>
+</div>
 
         {loading ? (
           <p className="text-sm font-bold text-gray-500">불러오는 중...</p>

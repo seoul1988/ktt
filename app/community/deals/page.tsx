@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,24 +25,26 @@ export default async function CommunityDealsPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-4">
         <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-          <Link
-            href="/community"
-            className="z-10 text-sm font-semibold text-[#172033]"
-          >
-            ← Back
-          </Link>
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
-            Community Deals
-          </h1>
+  {/* 가운데 */}
+  <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
+    Community Deals
+  </h1>
 
-          <Link
-            href="/community/deals/new"
-            className="absolute right-0 rounded-full bg-[#C4483A] px-3 py-1.5 text-xs font-black text-white shadow-sm transition active:scale-95"
-          >
-            + 등록
-          </Link>
-        </div>
+  {/* 오른쪽 */}
+  <div className="ml-auto flex items-center gap-2">
+    <Link
+      href="/community/deals/new"
+      className="rounded-full bg-[#C4483A] px-2.5 py-1 text-[11px] font-black text-white shadow-sm transition active:scale-95"
+    >
+      + 등록
+    </Link>
+
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="space-y-5">
           {deals?.map((deal) => (
