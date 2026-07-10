@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import MarketMediaSlider from "../../components/MarketMediaSlider";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import MarketManageButtons from "../../components/MarketManageButtons";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export default async function MarketDetailPage({
@@ -102,9 +103,18 @@ export default async function MarketDetailPage({
             </span>
           </div>
 
-          <h1 className="text-2xl font-black text-[#172033]">
-            {item.title}
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+  <h1 className="min-w-0 flex-1 break-words text-2xl font-black text-[#172033]">
+    {item.title}
+  </h1>
+
+  <MarketManageButtons
+    itemId={item.id}
+    sellerId={item.seller_id || null}
+    imageUrls={(item.images || []) as string[]}
+    videoUrl={item.video_url || null}
+  />
+</div>
 
           <p className="mt-2 text-2xl font-black text-[#C2410C]">
             ${item.price}
