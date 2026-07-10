@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import BackButton from "@/app/components/BackButton";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,18 +43,29 @@ export default async function CommunityInquiriesPage() {
     <>
       <main className="min-h-screen bg-[#F8F3EC] px-4 py-6 pb-24">
         <div className="mx-auto max-w-md">
-          <div className="mb-5 flex items-center justify-between">
-            <h1 className="text-2xl font-black text-[#172033]">
-              문의 게시판
-            </h1>
 
-            <Link
-              href={inquiryWriteHref}
-              className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
-            >
-              문의하기
-            </Link>
-          </div>
+ 
+ <div className="relative mb-5 flex items-center justify-center">
+  {/* 뒤로가기 버튼 */}
+  <div className="absolute left-0">
+    <BackButton />
+  </div>
+
+  {/* 가운데 제목 */}
+  <h1 className="text-2xl font-black text-[#172033]">
+    문의 게시판
+  </h1>
+
+  {/* 문의하기 버튼 */}
+  <div className="absolute right-0">
+    <Link
+      href={inquiryWriteHref}
+      className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
+    >
+      문의하기
+    </Link>
+  </div>
+</div>
 
           {!user && (
             <div className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">

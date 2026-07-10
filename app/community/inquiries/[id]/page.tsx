@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -188,13 +189,11 @@ export default async function InquiryDetailPage({
       <main className="min-h-screen bg-[#F8F3EC] px-4 py-6 pb-32">
         <div className="mx-auto max-w-md">
           {/* 상단 제목 */}
-          <div className="relative mb-6 flex items-center justify-center">
-            <Link
-              href="/community/inquiries"
-              className="absolute left-0 text-sm font-semibold text-[#172033]"
-            >
-              ← Back
-            </Link>
+           <div className="relative mb-5 flex items-center justify-center">
+  {/* 뒤로가기 버튼 */}
+  <div className="absolute left-0">
+    <BackButton />
+  </div>
 
             <h1 className="text-2xl font-black text-[#172033]">
               문 의
