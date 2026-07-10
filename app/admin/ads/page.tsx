@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+import Link from "next/link";
 
 type Ad = {
   id: number;
@@ -151,17 +153,21 @@ export default function AdminAdsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Link
-            href="/admin"
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-          >
-            ← Back
-          </Link>
+    <div className="mx-auto w-full max-w-xl">
+       <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <h1 className="text-3xl font-black">Ad Management</h1>
-        </div>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+    Ad Management
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         {loading ? (
           <div className="rounded-3xl bg-white p-5 font-bold shadow">

@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
 
 type AdItem = {
   id: number;
@@ -218,16 +221,21 @@ export default function EditAdPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
-      <div className="mx-auto max-w-md">
-        <div className="mb-4 flex items-center justify-between">
-          <Link href={`/ads/${adId}`} className="text-sm font-bold text-gray-600">
-            ← Back
-          </Link>
+      <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <h1 className="text-xl font-black text-[#172033]">Edit Ad</h1>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+    Edit Ad
+  </h1>
 
-          <div className="w-12" />
-        </div>
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
           <div>
@@ -418,6 +426,7 @@ export default function EditAdPage() {
           </button>
         </div>
       </div>
+	  <CommunityBottomNav activeNav="admin" />
     </main>
   );
 }

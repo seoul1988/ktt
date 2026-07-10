@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -157,18 +159,20 @@ export default function AdminBusinessesPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Link
-            href="/admin"
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-          >
-            ← Back
-          </Link>
+      <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+          {/* 왼쪽 */}
+          <BackButton />
 
-          <h1 className="flex-1 text-center text-3xl font-black">
+          {/* 가운데 */}
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
             Businesses
           </h1>
+
+          {/* 오른쪽 */}
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
         </div>
 
         {loading ? (
@@ -226,6 +230,7 @@ export default function AdminBusinessesPage() {
                           <p className="text-[11px] font-black text-gray-500">
                             ORDER
                           </p>
+
                           <input
                             type="number"
                             value={orders[business.id] ?? "999"}
@@ -246,14 +251,16 @@ export default function AdminBusinessesPage() {
                           disabled={savingId === business.id}
                           className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >
-                          {savingId === business.id ? "Saving..." : "Save Order"}
+                          {savingId === business.id
+                            ? "Saving..."
+                            : "Save Order"}
                         </button>
 
                         <button
                           onClick={() =>
                             toggleFeaturedSponsor(
                               business.id,
-                              business.featured_sponsor,
+                              business.featured_sponsor
                             )
                           }
                           disabled={sponsorSavingId === business.id}
@@ -266,8 +273,8 @@ export default function AdminBusinessesPage() {
                           {sponsorSavingId === business.id
                             ? "Saving..."
                             : business.featured_sponsor
-                              ? "⭐ Sponsor"
-                              : "Set Sponsor"}
+                            ? "⭐ Sponsor"
+                            : "Set Sponsor"}
                         </button>
 
                         <Link
@@ -295,7 +302,7 @@ export default function AdminBusinessesPage() {
         )}
       </div>
 
-      <CommunityBottomNav />
+      <CommunityBottomNav activeNav="admin" />
     </main>
   );
 }

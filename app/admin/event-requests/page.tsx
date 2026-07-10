@@ -525,7 +525,7 @@ export default function EventRequestsPage() {
         )}
       </div>
 
-      <CommunityBottomNav />
+       <CommunityBottomNav activeNav="admin" />
     </main>
   );
 }

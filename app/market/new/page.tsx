@@ -4,6 +4,10 @@ import { useState } from "react";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import { useRouter } from "next/navigation";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+
+
 
 const MARKET_CATEGORIES = [
   "가구",
@@ -138,20 +142,22 @@ export default function NewMarketItemPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
-      <div className="mx-auto max-w-md rounded-3xl bg-white p-5 shadow">
-       
-<div className="relative mb-5 flex items-center justify-center">
-  <button
-    type="button"
-    onClick={() => router.back()}
-    className="absolute left-0 text-sm font-bold text-[#172033]"
-  >
-    ← BACK
-  </button>
+      <div className="mx-auto w-full max-w-xl rounded-3xl bg-white p-5 shadow">
+      
+	  
+<div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-  <h1 className="text-2xl font-black text-[#172033]">
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
     상품 등록
   </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
 </div>
 
         <input

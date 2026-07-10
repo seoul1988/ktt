@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabase";
 import { useRouter, useParams } from "next/navigation";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
 
 export default function EditMarketItemPage() {
   const router = useRouter();
@@ -255,10 +258,20 @@ export default function EditMarketItemPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
-      <div className="mx-auto max-w-md rounded-3xl bg-white p-5 shadow">
-        <h1 className="mb-4 text-2xl font-black text-[#172033]">
-          상품 수정
-        </h1>
+      <div className="mx-auto w-full max-w-2xl">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+          <BackButton />
+
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+            상품 수정
+          </h1>
+
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 shadow">
 
         <input
           className="mb-3 w-full rounded-xl border p-3"
@@ -446,7 +459,10 @@ export default function EditMarketItemPage() {
         >
           {saving ? "저장 중..." : "수정 저장"}
         </button>
+        </div>
       </div>
+
+      <CommunityBottomNav activeNav="market" />
     </main>
   );
 }

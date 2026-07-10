@@ -1,6 +1,8 @@
 import Link from "next/link";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import { supabase } from "../../../lib/supabase";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -84,18 +86,20 @@ export default async function AdminVisitorsPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5 pb-32">
       <div className="mx-auto w-full max-w-xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-black text-[#172033]">
-            Visitor Statistics
-          </h1>
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <Link
-            href="/admin"
-            className="rounded-full bg-[#3C465A] px-4 py-2 text-sm font-bold text-white"
-          >
-            Back
-          </Link>
-        </div>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+    Visitor Statistics
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="space-y-4">
           <div className={cardClass}>

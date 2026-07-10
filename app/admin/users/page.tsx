@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
-import ProfileButton from "../../components/ProfileButton";
-import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
+
+
 
 type UserProfile = {
   id: string;
@@ -137,21 +140,21 @@ async function sendRoleNotification(email: string, role: string) {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Link
-            href="/admin"
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-          >
-            ← Back
-          </Link>
+     <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <h1 className="flex-1 text-center text-3xl font-black">
-            Members
-          </h1>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+    Members
+  </h1>
 
-          <ProfileButton />
-        </div>
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         {loading ? (
           <div className="rounded-3xl bg-white p-5 font-bold shadow">
@@ -255,7 +258,7 @@ async function sendRoleNotification(email: string, role: string) {
         )}
       </div>
 
-      <CommunityBottomNav />
+      <CommunityBottomNav activeNav="admin" />
     </main>
   );
 }
