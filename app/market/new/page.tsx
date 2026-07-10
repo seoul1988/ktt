@@ -54,7 +54,7 @@ export default function NewMarketItemPage() {
   // 판매자 공통 정보
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
-
+const [email, setEmail] = useState("");
   // 여러 상품
   const [items, setItems] = useState<MarketItemForm[]>([
     createEmptyItem(),
@@ -211,10 +211,10 @@ export default function NewMarketItemPage() {
       return false;
     }
 
-    if (!phone.trim()) {
-      alert("연락처를 입력하세요.");
-      return false;
-    }
+    if (!phone.trim() && !email.trim()) {
+  alert("전화번호 또는 이메일 중 하나는 입력해주세요.");
+  return false;
+}
 
     for (let index = 0; index < items.length; index++) {
       const item = items[index];
@@ -293,18 +293,19 @@ export default function NewMarketItemPage() {
         }
 
         rowsToInsert.push({
-          seller_id: userData.user.id,
-          title: item.title.trim(),
-          price: Number(item.price || 0),
-          category: item.category,
-          condition: item.condition,
-          location: location.trim(),
-          phone: phone.trim(),
-          description: item.description.trim(),
-          images: uploadedImageUrls,
-          video_url: null,
-          status: "available",
-        });
+		  seller_id: userData.user.id,
+		  title: item.title.trim(),
+		  price: Number(item.price || 0),
+		  category: item.category,
+		  condition: item.condition,
+		  location: location.trim(),
+		  phone: phone.trim(),
+		  email: email.trim().toLowerCase(),
+		  description: item.description.trim(),
+		  images: uploadedImageUrls,
+		  video_url: null,
+		  status: "available",
+		});
       }
 
       const { error: insertError } = await supabase
@@ -346,30 +347,44 @@ export default function NewMarketItemPage() {
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl bg-[#F8F3EC] p-4">
-            <h2 className="mb-1 text-base font-black text-[#172033]">
-              판매자 공통 정보
-            </h2>
+        <div className="mt-5 rounded-2xl bg-[#F8F3EC] p-4">
+  <h2 className="mb-1 text-base font-black text-[#172033]">
+    판매자 공통 정보
+  </h2>
 
-            <p className="mb-4 text-xs leading-5 text-gray-500">
-              아래 지역과 연락처는 등록하는 모든 상품에 동일하게
-              적용됩니다.
-            </p>
+  <p className="mb-4 text-xs leading-5 text-gray-500">
+    아래 정보는 등록하는 모든 상품에 동일하게 적용됩니다.
+    <br />
+    <span className="font-semibold text-[#C2410C]">
+      전화번호 또는 이메일 중 하나는 반드시 입력해주세요.
+    </span>
+  </p>
 
-            <input
-              className="mb-3 w-full rounded-xl border border-gray-200 bg-white p-3 outline-none focus:border-[#172033]"
-              placeholder="거래 지역 예: Raleigh, Cary"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
+  {/* 거래지역 */}
+  <input
+    className="mb-3 w-full rounded-xl border border-gray-200 bg-white p-3 outline-none focus:border-[#172033]"
+    placeholder="거래 지역 (예: Raleigh, Cary)"
+    value={location}
+    onChange={(e) => setLocation(e.target.value)}
+  />
 
-            <input
-              className="w-full rounded-xl border border-gray-200 bg-white p-3 outline-none focus:border-[#172033]"
-              placeholder="연락처"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
+  {/* 전화번호 */}
+  <input
+    className="mb-3 w-full rounded-xl border border-gray-200 bg-white p-3 outline-none focus:border-[#172033]"
+    placeholder="전화번호 (선택)"
+    value={phone}
+    onChange={(e) => setPhone(e.target.value)}
+  />
+
+  {/* 이메일 */}
+  <input
+    className="w-full rounded-xl border border-gray-200 bg-white p-3 outline-none focus:border-[#172033]"
+    type="email"
+    placeholder="이메일 (선택)"
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+  />
+</div>
         </div>
 
         <div className="space-y-4">

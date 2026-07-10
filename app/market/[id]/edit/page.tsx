@@ -19,9 +19,12 @@ export default function EditMarketItemPage() {
   const [price, setPrice] = useState("");
   const [category, setCategory] = useState("");
   const [condition, setCondition] = useState("");
-  const [location, setLocation] = useState("");
-  const [phone, setPhone] = useState("");
-  const [description, setDescription] = useState("");
+  
+const [location, setLocation] = useState("");
+const [phone, setPhone] = useState("");
+const [email, setEmail] = useState("");
+const [description, setDescription] = useState("");
+  
   const [status, setStatus] = useState("available");
 
   const [images, setImages] = useState<string[]>([]);
@@ -91,9 +94,12 @@ export default function EditMarketItemPage() {
     setPrice(String(data.price || ""));
     setCategory(data.category || "");
     setCondition(data.condition || "");
-    setLocation(data.location || "");
-    setPhone(data.phone || "");
-    setDescription(data.description || "");
+  setLocation(data.location || "");
+setPhone(data.phone || "");
+setEmail(data.email || "");
+setDescription(data.description || "");
+	
+	
     setImages(Array.isArray(data.images) ? data.images : []);
     setVideoUrl(data.video_url || null);
     setStatus(data.status || "available");
@@ -223,17 +229,18 @@ export default function EditMarketItemPage() {
       const { error } = await supabase
         .from("market_items")
         .update({
-          title,
-          price: Number(price || 0),
-          category,
-          condition,
-          location,
-          phone,
-          description,
-          images: finalImages,
-          video_url: finalVideoUrl,
-          status,
-        })
+  title: title.trim(),
+  price: Number(price || 0),
+  category,
+  condition,
+  location: location.trim(),
+  phone: phone.trim(),
+  email: email.trim().toLowerCase(),
+  description: description.trim(),
+  images: finalImages,
+  video_url: finalVideoUrl,
+  status,
+})
         .eq("id", id)
         .eq("seller_id", user.id);
 
@@ -314,7 +321,13 @@ export default function EditMarketItemPage() {
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
-
+<input
+  className="mb-3 w-full rounded-xl border p-3"
+  placeholder="이메일 주소"
+  type="email"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+/>
         <select
           className="mb-3 w-full rounded-xl border p-3"
           value={status}
