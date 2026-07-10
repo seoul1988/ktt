@@ -18,8 +18,8 @@ export async function createSupabaseServerClient() {
             cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options);
             });
-          } catch {
-            // Server Component에서는 쿠키 쓰기가 제한될 수 있습니다.
+          } catch (error) {
+            console.error("Supabase cookie setting error:", error);
           }
         },
       },
