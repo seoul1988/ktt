@@ -7,6 +7,8 @@ import CommunityAttendeeRegistrationForm from "./CommunityAttendeeRegistrationFo
 import CommunityAttendeeList from "./CommunityAttendeeList";
 import ImageModal from "../../../components/ImageModal";
 import CommunityEventManageButtons from "./CommunityEventManageButtons";
+import BackButton from "@/app/components/BackButton";
+import ProfileButton from "../../../components/ProfileButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,6 +42,7 @@ export default async function CommunityEventDetailPage({
         </div>
 
         <CommunityBottomNav activeNav="community" />
+
       </main>
     );
   }
@@ -105,18 +108,23 @@ export default async function CommunityEventDetailPage({
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <Link
-            href="/community"
-            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
-          >
-            ← Back
-          </Link>
+        <div className="relative mb-4 flex min-h-10 items-center justify-center">
+				  {/* 뒤로가기 */}
+				  <div className="absolute left-0">
+					<BackButton />
+				  </div>
 
-          <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
-            {event.category || "EVENT"}
-          </span>
-        </div>
+				  {/* 가운데 제목 */}
+				  <h2 className="text-xl font-black text-[#172033]">
+					EVENT
+				  </h2>
+
+				  {/* 오른쪽 카테고리 */}
+				  <div className="absolute right-0">
+<ProfileButton />
+					
+				  </div>
+				</div>
 
         {event.image_url && (
           <div className="mb-5 overflow-hidden rounded-3xl bg-white shadow-sm">
