@@ -1,104 +1,221 @@
-"use client";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import CommunityBottomNav from "../../../components/CommunityBottomNav";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default function NewInquiryPage() {
-  const router = useRouter();
+async function createInquiry(formData: FormData) {
+  "use server";
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [title, setTitle] = useState("");
-  const [message, setMessage] = useState("");
-  const [visibility, setVisibility] = useState("open");
-  const [loading, setLoading] = useState(false);
+  const authSupabase = await createSupabaseServerClient();
 
-  async function submitInquiry() {
-    if (!title.trim() || !message.trim()) {
-      alert("제목과 문의 내용을 입력해주세요.");
-      return;
-    }
+  const {
+    data: { user },
+    error: authError,
+  } = await authSupabase.auth.getUser();
 
-    setLoading(true);
-
-    const { error } = await supabase.from("inquiries").insert({
-      name,
-      email,
-      title,
-      message,
-      visibility,
-      status: "new",
-    });
-
-    setLoading(false);
-
-  if (error) {
-  console.error("문의 등록 에러:", error);
-  alert(error.message);
-  return;
-}
-
-    alert("문의가 접수되었습니다.");
-    router.push("/community/inquiries");
+  if (authError || !user) {
+    redirect("/login?redirect=/community/inquiries/new");
   }
 
+  const title = String(formData.get("title") || "").trim();
+  const message = String(formData.get("message") || "").trim();
+  const enteredName = String(formData.get("name") || "").trim();
+  const selectedVisibility = String(
+    formData.get("visibility") || "private"
+  );
+
+  if (!title || !message) {
+    redirect(
+      `/community/inquiries/new?error=${encodeURIComponent(
+        "제목과 문의 내용을 입력해주세요."
+      )}`
+    );
+  }
+
+  const visibility =
+    selectedVisibility === "public" ? "public" : "private";
+
+  const name =
+    enteredName ||
+    user.user_metadata?.name ||
+    user.user_metadata?.full_name ||
+    user.email?.split("@")[0] ||
+    "회원";
+
+  const { data, error } = await supabaseAdmin
+    .from("inquiries")
+    .insert({
+      title,
+      message,
+      name,
+      visibility,
+      status: "pending",
+      user_id: user.id,
+      email: user.email || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("문의 저장 오류:", error);
+
+    redirect(
+      `/community/inquiries/new?error=${encodeURIComponent(
+        `${error.message}${error.details ? ` / ${error.details}` : ""}`
+      )}`
+    );
+  }
+
+  revalidatePath("/community/inquiries");
+
+  if (data?.id) {
+    redirect(`/community/inquiries/${data.id}`);
+  }
+
+  redirect("/community/inquiries");
+}
+
+type PageProps = {
+  searchParams: Promise<{
+    error?: string;
+  }>;
+};
+
+export default async function NewInquiryPage({
+  searchParams,
+}: PageProps) {
+  const params = await searchParams;
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    redirect("/login?redirect=/community/inquiries/new");
+  }
+
+  const defaultName =
+    user.user_metadata?.name ||
+    user.user_metadata?.full_name ||
+    user.email?.split("@")[0] ||
+    "";
+
   return (
-    <main className="min-h-screen bg-[#F8F3EC] px-4 py-6 pb-24">
-      <div className="mx-auto max-w-md">
-        <h1 className="mb-5 text-2xl font-black text-[#172033]">문의하기</h1>
+    <>
+      <main className="min-h-screen bg-[#F8F3EC] px-4 py-6 pb-24">
+        <div className="mx-auto max-w-md">
+          <h1 className="mb-2 text-2xl font-black text-[#172033]">
+            문의 작성
+          </h1>
 
-        <div className="space-y-4 rounded-3xl bg-white p-5 shadow-sm">
-          <div>
-            <label className="text-sm font-bold">공개 설정</label>
-            <select
-              value={visibility}
-              onChange={(e) => setVisibility(e.target.value)}
-              className="mt-1 w-full rounded-xl border p-3"
-            >
-              <option value="open">오픈 문의</option>
-              <option value="private">비밀 문의</option>
-            </select>
-          </div>
+          <p className="mb-5 text-sm text-gray-500">
+            문의 내용을 작성하면 관리자가 확인 후 답변드립니다.
+          </p>
 
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="이름"
-            className="w-full rounded-xl border p-3"
-          />
+          {params.error && (
+            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+              <p className="font-bold text-red-700">
+                문의를 저장하지 못했습니다.
+              </p>
 
-          <input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="이메일 또는 연락처"
-            className="w-full rounded-xl border p-3"
-          />
+              <p className="mt-1 break-words text-sm text-red-600">
+                {params.error}
+              </p>
+            </div>
+          )}
 
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="제목"
-            className="w-full rounded-xl border p-3"
-          />
-
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="문의 내용을 입력하세요"
-            rows={7}
-            className="w-full rounded-xl border p-3"
-          />
-
-          <button
-            onClick={submitInquiry}
-            disabled={loading}
-            className="w-full rounded-xl bg-[#172033] py-3 font-black text-white disabled:opacity-50"
+          <form
+            action={createInquiry}
+            className="space-y-5 rounded-3xl bg-white p-5 shadow-sm"
           >
-            {loading ? "등록 중..." : "문의 등록"}
-          </button>
+            <div>
+              <label
+                htmlFor="name"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                이름
+              </label>
+
+              <input
+                id="name"
+                type="text"
+                name="name"
+                defaultValue={defaultName}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#172033]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="title"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                제목
+              </label>
+
+              <input
+                id="title"
+                type="text"
+                name="title"
+                required
+                maxLength={200}
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#172033]"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="visibility"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                공개 여부
+              </label>
+
+              <select
+                id="visibility"
+                name="visibility"
+                defaultValue="private"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+              >
+                <option value="private">비밀 문의</option>
+                <option value="public">오픈 문의</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="message"
+                className="mb-2 block text-sm font-bold text-gray-700"
+              >
+                문의 내용
+              </label>
+
+              <textarea
+                id="message"
+                name="message"
+                required
+                rows={8}
+                className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#172033]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-[#172033] py-3.5 font-black text-white"
+            >
+              문의 등록
+            </button>
+          </form>
         </div>
-      </div>
-    </main>
+      </main>
+
+      <CommunityBottomNav activeNav="ads" />
+    </>
   );
 }
