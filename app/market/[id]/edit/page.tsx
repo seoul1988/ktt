@@ -198,6 +198,11 @@ setDescription(data.description || "");
   }
 
   async function updateItem() {
+	  
+	  if (!phone.trim() && !email.trim()) {
+		  alert("전화번호 또는 이메일 중 하나는 입력해주세요.");
+		  return;
+		}
     if (!title.trim()) {
       alert("제목을 입력하세요.");
       return;

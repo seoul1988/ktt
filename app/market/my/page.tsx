@@ -227,15 +227,26 @@ export default function MyMarketItemsPage() {
                           </Link>
                         )}
 
-                        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
-                          {item.status === "available"
-                            ? "판매중"
-                            : item.status === "reserved"
-                            ? "예약중"
-                            : item.status === "sold"
-                            ? "판매완료"
-                            : item.status}
-                        </span>
+                       <span
+  className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white
+    ${
+      item.status === "available"
+        ? "bg-red-600"
+        : item.status === "reserved"
+        ? "bg-yellow-500"
+        : item.status === "sold"
+        ? "bg-gray-600"
+        : "bg-gray-500"
+    }`}
+>
+  {item.status === "available"
+    ? "판매중"
+    : item.status === "reserved"
+    ? "예약중"
+    : item.status === "sold"
+    ? "판매완료"
+    : item.status}
+</span>
                       </div>
 
                       <p className="mt-1 text-sm font-black text-[#C2410C]">
