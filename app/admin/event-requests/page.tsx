@@ -5,6 +5,10 @@ import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import PushSubscribeButton from "../../components/PushSubscribeButton";
+import BackButton from "@/app/components/BackButton";
+
+
+
 export const dynamic = "force-dynamic";
 
 
@@ -359,26 +363,21 @@ export default function EventRequestsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-28">
-      <div className="mx-auto max-w-md">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = "/admin";
-              }}
-              className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-            >
-              ← Back
-            </button>
+      <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  {/* 왼쪽 */}
+  <BackButton />
 
-            <h1 className="text-2xl font-black text-[#172033]">
-              Event Requests
-            </h1>
-          </div>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
+    Event Requests
+  </h1>
 
-          <ProfileButton />
-        </div>
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="mb-5">
           <PushSubscribeButton />

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import BackButton from "@/app/components/BackButton";
 export const dynamic = "force-dynamic";
 
 
@@ -113,21 +114,18 @@ export default function CouponRequestsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-8 text-[#172033]">
-      <div className="mx-auto max-w-md">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <Link
-            href="/admin"
-            className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-          >
-            ← Back
-          </Link>
+     <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+  <BackButton />
 
-          <h1 className="flex-1 text-center text-3xl font-black">
-            Coupon Requests
-          </h1>
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+    Coupon Requests
+  </h1>
 
-          <ProfileButton />
-        </div>
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         {loading ? (
           <div className="rounded-3xl bg-white p-5 font-bold shadow">
@@ -230,7 +228,7 @@ export default function CouponRequestsPage() {
         )}
       </div>
 
-      <CommunityBottomNav />
+     <CommunityBottomNav activeNav="admin" />
     </main>
   );
 }
