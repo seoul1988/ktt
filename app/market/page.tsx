@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
+import ProfileButton from "../components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -48,25 +50,34 @@ export default async function MarketPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
       <div className="mx-auto max-w-md">
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-[#172033]">벼룩시장</h1>
+        <div className="relative mb-5 flex items-center">
+  {/* 왼쪽 */}
+  <BackButton />
 
-          <div className="flex gap-2">
-            <Link
-              href="/market/my"
-              className="rounded-full border border-[#172033] px-4 py-2 text-sm font-bold text-[#172033]"
-            >
-              내 물품
-            </Link>
+  {/* 가운데(항상 화면 중앙) */}
+  <h1 className="absolute left-1/2 -translate-x-1/2 text-2xl font-black text-[#172033]">
+    벼룩시장
+  </h1>
 
-            <Link
-              href="/market/new"
-              className="rounded-full bg-[#172033] px-4 py-2 text-sm font-bold text-white"
-            >
-              + 등록
-            </Link>
-          </div>
-        </div>
+  {/* 오른쪽 */}
+  <div className="ml-auto flex items-center gap-2">
+    <Link
+      href="/market/my"
+      className="rounded-full border border-[#172033] px-2.5 py-1 text-[11px] font-bold text-[#172033]"
+    >
+      내 물품
+    </Link>
+
+    <Link
+      href="/market/new"
+      className="rounded-full bg-[#172033] px-2.5 py-1 text-[11px] font-bold text-white"
+    >
+      + 등록
+    </Link>
+
+    <ProfileButton />
+  </div>
+</div>
 
         {items.length === 0 ? (
           <div className="rounded-3xl bg-white p-8 text-center shadow">
