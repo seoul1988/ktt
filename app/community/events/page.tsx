@@ -2,7 +2,7 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import ProfileButton from "../../components/ProfileButton";
-
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,13 +18,12 @@ export default async function CommunityEventsPage() {
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-5">
         {/* Header */}
-        <div className="mb-5 flex items-center justify-between">
-  <Link
-    href="/community"
-    className="rounded-full bg-white px-4 py-2 text-xs font-black text-[#172033] shadow-sm"
-  >
-    Back
-  </Link>
+         <div className="relative mb-4 flex min-h-10 items-center justify-center">
+				  {/* 뒤로가기 */}
+				  <div className="absolute left-0">
+					<BackButton />
+				  </div>
+ 
 
   <div className="text-center">
     <h1 className="text-lg font-black">
@@ -33,7 +32,10 @@ export default async function CommunityEventsPage() {
     </h1>
   </div>
 
-  <ProfileButton />
+    <div className="absolute right-0">
+                   <ProfileButton />
+					
+				  </div>
 </div>
 
         <div className="space-y-4">

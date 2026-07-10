@@ -121,7 +121,7 @@ export default async function CommunityEventDetailPage({
 
 				  {/* 오른쪽 카테고리 */}
 				  <div className="absolute right-0">
-<ProfileButton />
+                   <ProfileButton />
 					
 				  </div>
 				</div>
