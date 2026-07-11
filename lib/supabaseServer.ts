@@ -15,14 +15,16 @@ export async function createSupabaseServerClient() {
 
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          } catch (error) {
-            console.error("Supabase cookie setting error:", error);
+            cookiesToSet.forEach(
+              ({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              },
+            );
+          } catch {
+            // Server Component 렌더링 중에는 쿠키 수정 불가
           }
         },
       },
-    }
+    },
   );
 }
