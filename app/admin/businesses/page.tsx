@@ -17,6 +17,9 @@ type Business = {
   category: string | null;
   display_order: number | null;
   featured_sponsor: boolean | null;
+
+  // 메인, 지도, 검색 숨김 여부
+  hidden: boolean | null;
 };
 
 export default function AdminBusinessesPage() {
@@ -24,7 +27,11 @@ export default function AdminBusinessesPage() {
   const [loading, setLoading] = useState(true);
 
   const [savingId, setSavingId] = useState<number | null>(null);
-  const [sponsorSavingId, setSponsorSavingId] = useState<number | null>(null);
+  const [sponsorSavingId, setSponsorSavingId] =
+    useState<number | null>(null);
+
+  const [hiddenSavingId, setHiddenSavingId] =
+    useState<number | null>(null);
 
   const [orders, setOrders] = useState<Record<number, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
@@ -39,7 +46,16 @@ export default function AdminBusinessesPage() {
     const { data, error } = await supabase
       .from("businesses")
       .select(
-        "id,name,address,phone,category,display_order,featured_sponsor",
+        `
+          id,
+          name,
+          address,
+          phone,
+          category,
+          display_order,
+          featured_sponsor,
+          hidden
+        `,
       )
       .order("category", {
         ascending: true,
@@ -120,8 +136,9 @@ export default function AdminBusinessesPage() {
       });
     });
 
-    return Object.entries(groups).sort(([categoryA], [categoryB]) =>
-      categoryA.localeCompare(categoryB),
+    return Object.entries(groups).sort(
+      ([categoryA], [categoryB]) =>
+        categoryA.localeCompare(categoryB),
     );
   }, [businesses, searchTerm]);
 
@@ -131,6 +148,12 @@ export default function AdminBusinessesPage() {
       0,
     );
   }, [groupedBusinesses]);
+
+  const hiddenBusinessCount = useMemo(() => {
+    return businesses.filter(
+      (business) => business.hidden === true,
+    ).length;
+  }, [businesses]);
 
   async function saveDisplayOrder(id: number) {
     const value = Number(orders[id] || 999);
@@ -207,6 +230,44 @@ export default function AdminBusinessesPage() {
     setSponsorSavingId(null);
   }
 
+  async function toggleHidden(
+    id: number,
+    currentValue: boolean | null,
+  ) {
+    const nextValue = !Boolean(currentValue);
+
+    setHiddenSavingId(id);
+
+    const { error } = await supabase
+      .from("businesses")
+      .update({
+        hidden: nextValue,
+      })
+      .eq("id", id);
+
+    if (error) {
+      alert(
+        "숨김 상태 변경 실패: " + error.message,
+      );
+
+      setHiddenSavingId(null);
+      return;
+    }
+
+    setBusinesses((prev) =>
+      prev.map((business) =>
+        business.id === id
+          ? {
+              ...business,
+              hidden: nextValue,
+            }
+          : business,
+      ),
+    );
+
+    setHiddenSavingId(null);
+  }
+
   async function deleteBusiness(
     id: number,
     name: string | null,
@@ -226,7 +287,8 @@ export default function AdminBusinessesPage() {
 
     if (ownerError) {
       alert(
-        "business_owners 삭제 실패: " + ownerError.message,
+        "business_owners 삭제 실패: " +
+          ownerError.message,
       );
 
       return;
@@ -239,7 +301,8 @@ export default function AdminBusinessesPage() {
 
     if (businessError) {
       alert(
-        "businesses 삭제 실패: " + businessError.message,
+        "businesses 삭제 실패: " +
+          businessError.message,
       );
 
       return;
@@ -300,15 +363,21 @@ export default function AdminBusinessesPage() {
             <span className="text-xs font-bold text-gray-500">
               {searchTerm
                 ? `${filteredBusinessCount} result${
-                    filteredBusinessCount === 1 ? "" : "s"
+                    filteredBusinessCount === 1
+                      ? ""
+                      : "s"
                   }`
                 : `${businesses.length} businesses`}
             </span>
 
             <span className="text-xs font-bold text-gray-500">
-              낮은 숫자가 먼저 노출
+              숨김 {hiddenBusinessCount}개
             </span>
           </div>
+
+          <p className="mt-1 px-1 text-right text-[11px] font-bold text-gray-400">
+            낮은 숫자가 먼저 노출
+          </p>
         </div>
 
         {loading ? (
@@ -342,145 +411,177 @@ export default function AdminBusinessesPage() {
           </div>
         ) : (
           <div className="space-y-7">
-            {groupedBusinesses.map(([category, items]) => (
-              <section key={category}>
-                {/* 카테고리 타이틀 */}
-                <div className="mb-3 rounded-2xl bg-[#172033] px-4 py-1.5 text-white shadow">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="min-w-0 truncate text-lg font-black">
-                      {category}
-                    </h2>
+            {groupedBusinesses.map(
+              ([category, items]) => (
+                <section key={category}>
+                  {/* 카테고리 타이틀 */}
+                  <div className="mb-3 rounded-2xl bg-[#172033] px-4 py-1.5 text-white shadow">
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="min-w-0 truncate text-lg font-black">
+                        {category}
+                      </h2>
 
-                    <span className="shrink-0 text-xs font-bold text-white/70">
-                      {items.length}
-                    </span>
+                      <span className="shrink-0 text-xs font-bold text-white/70">
+                        {items.length}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {/* 업체 목록 */}
-                <div className="space-y-4">
-                  {items.map((business) => (
-                    <div
-                      key={business.id}
-                      className="rounded-3xl bg-white p-5 shadow"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="break-words text-xl font-black">
-                              {business.name ||
-                                "No business name"}
-                            </h3>
+                  {/* 업체 목록 */}
+                  <div className="space-y-4">
+                    {items.map((business) => (
+                      <div
+                        key={business.id}
+                        className={`rounded-3xl bg-white p-5 shadow ${
+                          business.hidden
+                            ? "border-2 border-red-300 opacity-75"
+                            : ""
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="break-words text-xl font-black">
+                                {business.name ||
+                                  "No business name"}
+                              </h3>
 
-                            {business.featured_sponsor && (
-                              <span className="rounded-full bg-yellow-400 px-2.5 py-1 text-[11px] font-black text-black">
-                                ⭐ Sponsor
-                              </span>
+                              {business.featured_sponsor && (
+                                <span className="rounded-full bg-yellow-400 px-2.5 py-1 text-[11px] font-black text-black">
+                                  ⭐ Sponsor
+                                </span>
+                              )}
+
+                              {business.hidden && (
+                                <span className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-black text-red-700">
+                                  숨김
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="mt-1 break-words text-sm text-gray-600">
+                              {business.address ||
+                                "No address"}
+                            </p>
+
+                            {business.phone && (
+                              <p className="mt-1 text-sm text-gray-600">
+                                Phone: {business.phone}
+                              </p>
                             )}
                           </div>
 
-                          <p className="mt-1 break-words text-sm text-gray-600">
-                            {business.address || "No address"}
-                          </p>
-
-                          {business.phone && (
-                            <p className="mt-1 text-sm text-gray-600">
-                              Phone: {business.phone}
+                          {/* 노출 순서 */}
+                          <div className="shrink-0 text-right">
+                            <p className="text-[11px] font-black text-gray-500">
+                              ORDER
                             </p>
-                          )}
+
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              value={
+                                orders[business.id] ??
+                                "999"
+                              }
+                              onChange={(e) =>
+                                setOrders((prev) => ({
+                                  ...prev,
+                                  [business.id]:
+                                    e.target.value,
+                                }))
+                              }
+                              className="mt-1 w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none focus:border-[#172033] focus:ring-2 focus:ring-[#172033]/10"
+                            />
+                          </div>
                         </div>
 
-                        {/* 노출 순서 */}
-                        <div className="shrink-0 text-right">
-                          <p className="text-[11px] font-black text-gray-500">
-                            ORDER
-                          </p>
+                        {/* 관리 버튼 */}
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+  <button
+    type="button"
+    onClick={() => saveDisplayOrder(business.id)}
+    disabled={savingId === business.id}
+    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    {savingId === business.id ? "Saving..." : "Save"}
+  </button>
 
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            value={
-                              orders[business.id] ?? "999"
-                            }
-                            onChange={(e) =>
-                              setOrders((prev) => ({
-                                ...prev,
-                                [business.id]:
-                                  e.target.value,
-                              }))
-                            }
-                            className="mt-1 w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none focus:border-[#172033] focus:ring-2 focus:ring-[#172033]/10"
-                          />
-                        </div>
+  <button
+    type="button"
+    onClick={() =>
+      toggleFeaturedSponsor(
+        business.id,
+        business.featured_sponsor
+      )
+    }
+    disabled={sponsorSavingId === business.id}
+    className={`rounded-xl px-4 py-2 text-sm font-bold shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${
+      business.featured_sponsor
+        ? "bg-yellow-400 text-black"
+        : "bg-gray-200 text-gray-700"
+    }`}
+  >
+    {sponsorSavingId === business.id
+      ? "Saving..."
+      : business.featured_sponsor
+        ? "⭐ Sponsor"
+        : "Set Sponsor"}
+  </button>
+
+  <Link
+    href={`/business/${business.id}/edit`}
+    className="rounded-xl bg-[#172033] px-4 py-2 text-sm font-bold text-white"
+  >
+    Edit
+  </Link>
+
+  <button
+    type="button"
+    onClick={() =>
+      deleteBusiness(
+        business.id,
+        business.name,
+      )
+    }
+    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white"
+  >
+    Delete
+  </button>
+
+  {/* Delete 옆 체크박스 */}
+  <label className="flex items-center gap-1 text-xs font-bold whitespace-nowrap">
+    <input
+      type="checkbox"
+      checked={Boolean(business.hidden)}
+      disabled={hiddenSavingId === business.id}
+      onChange={() =>
+        toggleHidden(
+          business.id,
+          business.hidden,
+        )
+      }
+      className="h-4 w-4 accent-red-600"
+    />
+    {hiddenSavingId === business.id
+      ? "Saving..."
+      : "Hide"}
+  </label>
+</div>
+
+                        {business.hidden && (
+                          <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                            이 업체는 사용자 메인 목록,
+                            지도 및 검색 결과에서 숨겨진
+                            상태입니다.
+                          </div>
+                        )}
                       </div>
-
-                      {/* 관리 버튼 */}
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            saveDisplayOrder(business.id)
-                          }
-                          disabled={
-                            savingId === business.id
-                          }
-                          className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {savingId === business.id
-                            ? "Saving..."
-                            : "Save Order"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            toggleFeaturedSponsor(
-                              business.id,
-                              business.featured_sponsor,
-                            )
-                          }
-                          disabled={
-                            sponsorSavingId ===
-                            business.id
-                          }
-                          className={`rounded-xl px-4 py-2 text-sm font-bold shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${
-                            business.featured_sponsor
-                              ? "bg-yellow-400 text-black"
-                              : "bg-gray-200 text-gray-700"
-                          }`}
-                        >
-                          {sponsorSavingId === business.id
-                            ? "Saving..."
-                            : business.featured_sponsor
-                              ? "⭐ Sponsor"
-                              : "Set Sponsor"}
-                        </button>
-
-                        <Link
-                          href={`/business/${business.id}/edit`}
-                          className="rounded-xl bg-[#172033] px-4 py-2 text-sm font-bold text-white"
-                        >
-                          Edit
-                        </Link>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            deleteBusiness(
-                              business.id,
-                              business.name,
-                            )
-                          }
-                          className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+                    ))}
+                  </div>
+                </section>
+              ),
+            )}
           </div>
         )}
       </div>

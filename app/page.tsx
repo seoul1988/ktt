@@ -284,9 +284,10 @@ export default async function Home() {
    * Main App Map 허용 비즈니스만 홈 화면 데이터에 포함합니다.
    */
   const { data: allSpots, error: spotsError } = await supabase
-    .from("businesses")
-    .select("*")
-    .order("created_at", { ascending: false });
+  .from("businesses")
+  .select("*")
+  .eq("hidden", false)
+  .order("created_at", { ascending: false });
 
   if (spotsError) {
     console.error("Businesses load error:", spotsError);

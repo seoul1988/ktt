@@ -248,13 +248,14 @@ export default async function CommunityMapPage() {
   /*
    * BUSINESS 불러오기
    */
-  const { data: businesses, error: businessError } =
-    await supabase
-      .from("businesses")
-      .select("*")
-      .not("lat", "is", null)
-      .not("lng", "is", null)
-      .order("id", { ascending: true });
+const { data: businesses, error: businessError } =
+  await supabase
+    .from("businesses")
+    .select("*")
+    .eq("hidden", false)
+    .not("lat", "is", null)
+    .not("lng", "is", null)
+    .order("id", { ascending: true });
 
   if (businessError) {
     return (
