@@ -6,7 +6,6 @@ import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import BackButton from "@/app/components/BackButton";
 
-
 export const dynamic = "force-dynamic";
 
 type Category = {
@@ -16,17 +15,26 @@ type Category = {
   created_at: string | null;
   show_on_main_map: boolean | null;
   show_on_community_map: boolean | null;
+  show_on_b2b: boolean | null;
 };
+
+type VisibilityField =
+  | "show_on_main_map"
+  | "show_on_community_map"
+  | "show_on_b2b";
 
 export default function AdminCategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const [categories, setCategories] = useState<Category[]>([]);
+
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("");
+
   const [showOnMainMap, setShowOnMainMap] = useState(true);
   const [showOnCommunityMap, setShowOnCommunityMap] = useState(false);
+  const [showOnB2B, setShowOnB2B] = useState(false);
 
   useEffect(() => {
     checkAdminAndLoad();
@@ -82,6 +90,12 @@ export default function AdminCategoriesPage() {
     setCategories((data || []) as Category[]);
   }
 
+  function selectHiddenForNewCategory() {
+    setShowOnMainMap(false);
+    setShowOnCommunityMap(false);
+    setShowOnB2B(false);
+  }
+
   async function addCategory() {
     const cleanName = name.trim();
     const cleanEmoji = emoji.trim();
@@ -91,10 +105,14 @@ export default function AdminCategoriesPage() {
       return;
     }
 
-    if (!showOnMainMap && !showOnCommunityMap) {
+    const isHidden =
+      !showOnMainMap && !showOnCommunityMap && !showOnB2B;
+
+    if (isHidden) {
       const ok = window.confirm(
-        "Both maps are unchecked. This category will not show on any map. Continue?"
+        "This category will be Hidden and will not appear on any map. Continue?"
       );
+
       if (!ok) return;
     }
 
@@ -105,6 +123,7 @@ export default function AdminCategoriesPage() {
       emoji: cleanEmoji || null,
       show_on_main_map: showOnMainMap,
       show_on_community_map: showOnCommunityMap,
+      show_on_b2b: showOnB2B,
     });
 
     setSaving(false);
@@ -118,21 +137,25 @@ export default function AdminCategoriesPage() {
     setEmoji("");
     setShowOnMainMap(true);
     setShowOnCommunityMap(false);
+    setShowOnB2B(false);
+
     await loadCategories();
   }
 
   async function updateCategoryVisibility(
     category: Category,
-    field: "show_on_main_map" | "show_on_community_map",
+    field: VisibilityField,
     value: boolean
   ) {
-    const nextCategory = {
+    const nextCategory: Category = {
       ...category,
       [field]: value,
     };
 
     setCategories((prev) =>
-      prev.map((item) => (item.id === category.id ? nextCategory : item))
+      prev.map((item) =>
+        item.id === category.id ? nextCategory : item
+      )
     );
 
     const { error } = await supabase
@@ -148,8 +171,40 @@ export default function AdminCategoriesPage() {
     }
   }
 
+  async function setCategoryHidden(category: Category) {
+    const nextCategory: Category = {
+      ...category,
+      show_on_main_map: false,
+      show_on_community_map: false,
+      show_on_b2b: false,
+    };
+
+    setCategories((prev) =>
+      prev.map((item) =>
+        item.id === category.id ? nextCategory : item
+      )
+    );
+
+    const { error } = await supabase
+      .from("categories")
+      .update({
+        show_on_main_map: false,
+        show_on_community_map: false,
+        show_on_b2b: false,
+      })
+      .eq("id", category.id);
+
+    if (error) {
+      alert(error.message);
+      await loadCategories();
+    }
+  }
+
   async function deleteCategory(category: Category) {
-    const ok = window.confirm(`Delete "${category.name}" category?`);
+    const ok = window.confirm(
+      `Delete "${category.name}" category?`
+    );
+
     if (!ok) return;
 
     const { error } = await supabase
@@ -175,22 +230,20 @@ export default function AdminCategoriesPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-28 text-[#172033]">
-     <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-  {/* 왼쪽 */}
-  <BackButton />
+          <BackButton />
 
-  {/* 가운데 */}
-  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
-    Categories
-  </h1>
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+            Categories
+          </h1>
 
-  {/* 오른쪽 */}
-  <div className="ml-auto">
-    <ProfileButton />
-  </div>
-</div>
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
+        </div>
 
+        {/* Add Category */}
         <div className="rounded-[32px] bg-white p-5 shadow-2xl">
           <h2 className="text-lg font-black">Add Category</h2>
 
@@ -216,25 +269,65 @@ export default function AdminCategoriesPage() {
               Show this category on
             </p>
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {/* Main */}
               <label className="flex cursor-pointer items-center gap-3 text-sm font-extrabold">
                 <input
                   type="checkbox"
                   checked={showOnMainMap}
-                  onChange={(e) => setShowOnMainMap(e.target.checked)}
+                  onChange={(e) =>
+                    setShowOnMainMap(e.target.checked)
+                  }
                   className="h-5 w-5 accent-[#172033]"
                 />
                 <span>Main App Map</span>
               </label>
 
+              {/* B2B */}
+              <label className="flex cursor-pointer items-center gap-3 text-sm font-extrabold">
+                <input
+                  type="checkbox"
+                  checked={showOnB2B}
+                  onChange={(e) =>
+                    setShowOnB2B(e.target.checked)
+                  }
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                <span>B2B Directory</span>
+              </label>
+
+              {/* Community */}
               <label className="flex cursor-pointer items-center gap-3 text-sm font-extrabold">
                 <input
                   type="checkbox"
                   checked={showOnCommunityMap}
-                  onChange={(e) => setShowOnCommunityMap(e.target.checked)}
+                  onChange={(e) =>
+                    setShowOnCommunityMap(e.target.checked)
+                  }
                   className="h-5 w-5 accent-[#172033]"
                 />
                 <span>Community Map</span>
+              </label>
+
+              {/* Hidden */}
+              <label className="flex cursor-pointer items-center gap-3 text-sm font-extrabold">
+                <input
+                  type="checkbox"
+                  checked={
+                    !showOnMainMap &&
+                    !showOnCommunityMap &&
+                    !showOnB2B
+                  }
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      selectHiddenForNewCategory();
+                    } else {
+                      setShowOnMainMap(true);
+                    }
+                  }}
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                <span>Hidden</span>
               </label>
             </div>
           </div>
@@ -248,6 +341,7 @@ export default function AdminCategoriesPage() {
           </button>
         </div>
 
+        {/* Category Cards */}
         <div className="mt-5">
           {categories.length === 0 && (
             <div className="rounded-3xl bg-white p-5 font-bold shadow">
@@ -257,8 +351,25 @@ export default function AdminCategoriesPage() {
 
           <div className="grid grid-cols-2 gap-3">
             {categories.map((category) => {
-              const checkedMain = category.show_on_main_map !== false;
-              const checkedCommunity = category.show_on_community_map === true;
+              const checkedMain =
+                category.show_on_main_map === true;
+
+              const checkedCommunity =
+                category.show_on_community_map === true;
+
+              const checkedB2B =
+                category.show_on_b2b === true;
+
+              const checkedHidden =
+                !checkedMain &&
+                !checkedCommunity &&
+                !checkedB2B;
+
+              const visibilityLabels = [
+                checkedMain ? "📍 Main" : null,
+                checkedCommunity ? "👥 Community" : null,
+                checkedB2B ? "🏢 B2B" : null,
+              ].filter(Boolean);
 
               return (
                 <div
@@ -277,34 +388,35 @@ export default function AdminCategoriesPage() {
                         </div>
 
                         <div className="mt-1 text-[10px] font-bold text-gray-500">
-                          {checkedMain && "📍 Main"}
-                          {checkedMain && checkedCommunity && " • "}
-                          {checkedCommunity && "👥 Community"}
-                          {!checkedMain && !checkedCommunity && "Hidden"}
+                          {checkedHidden
+                            ? "🙈 Hidden"
+                            : visibilityLabels.join(" • ")}
                         </div>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-2 flex justify-end gap-2">
-  <button
-    onClick={() => {
-      window.location.href = `/admin/categories/${category.id}/edit`;
-    }}
-    className="text-xs text-gray-500 hover:text-[#172033]"
-  >
-    ✏️ 수정
-  </button>
+                    <button
+                      onClick={() => {
+                        window.location.href = `/admin/categories/${category.id}/edit`;
+                      }}
+                      className="text-xs text-gray-500 hover:text-[#172033]"
+                    >
+                      ✏️ 수정
+                    </button>
 
-  <button
-    onClick={() => deleteCategory(category)}
-    className="text-xs text-red-500 hover:text-red-700"
-  >
-    🗑 삭제
-  </button>
-</div>
+                    <button
+                      onClick={() => deleteCategory(category)}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      🗑 삭제
+                    </button>
+                  </div>
 
-                  <div className="mt-4 space-y-2 border-t border-gray-100 pt-3">
+                  {/* 2-column visibility controls */}
+                  <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3 border-t border-gray-100 pt-3">
+                    {/* Main */}
                     <label className="flex cursor-pointer items-center gap-2 text-[11px] font-extrabold">
                       <input
                         type="checkbox"
@@ -318,9 +430,27 @@ export default function AdminCategoriesPage() {
                         }
                         className="h-4 w-4 accent-[#172033]"
                       />
-                      Main
+                      <span>Main</span>
                     </label>
 
+                    {/* B2B */}
+                    <label className="flex cursor-pointer items-center gap-2 text-[11px] font-extrabold">
+                      <input
+                        type="checkbox"
+                        checked={checkedB2B}
+                        onChange={(e) =>
+                          updateCategoryVisibility(
+                            category,
+                            "show_on_b2b",
+                            e.target.checked
+                          )
+                        }
+                        className="h-4 w-4 accent-[#172033]"
+                      />
+                      <span>B2B</span>
+                    </label>
+
+                    {/* Community */}
                     <label className="flex cursor-pointer items-center gap-2 text-[11px] font-extrabold">
                       <input
                         type="checkbox"
@@ -334,7 +464,28 @@ export default function AdminCategoriesPage() {
                         }
                         className="h-4 w-4 accent-[#172033]"
                       />
-                      Community
+                      <span>Community</span>
+                    </label>
+
+                    {/* Hidden */}
+                    <label className="flex cursor-pointer items-center gap-2 text-[11px] font-extrabold">
+                      <input
+                        type="checkbox"
+                        checked={checkedHidden}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setCategoryHidden(category);
+                          } else {
+                            updateCategoryVisibility(
+                              category,
+                              "show_on_main_map",
+                              true
+                            );
+                          }
+                        }}
+                        className="h-4 w-4 accent-[#172033]"
+                      />
+                      <span>Hidden</span>
                     </label>
                   </div>
                 </div>
