@@ -183,57 +183,181 @@ function DealMedia({ deal, className }: { deal: any; className: string }) {
   );
 }
 
+
+function normalizeCategory(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function splitCategories(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+
+        if (item && typeof item === "object") {
+          return String(
+            item.name ??
+              item.category ??
+              item.category_name ??
+              ""
+          ).trim();
+        }
+
+        return "";
+      })
+      .filter(Boolean);
+  }
+
+  return String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isMainVisibleBusiness(
+  business: any,
+  allowedCategoryIds: Set<number>,
+  allowedCategoryNames: Set<string>
+) {
+  if (!business) return false;
+
+  const categoryId =
+    business.category_id ??
+    business.business_category_id ??
+    null;
+
+  if (
+    categoryId !== null &&
+    categoryId !== undefined &&
+    categoryId !== ""
+  ) {
+    return allowedCategoryIds.has(Number(categoryId));
+  }
+
+  const categoryValues = [
+    ...splitCategories(business.category),
+    ...splitCategories(business.category_name),
+    ...splitCategories(business.categories),
+  ];
+
+  return categoryValues.some((categoryName) =>
+    allowedCategoryNames.has(
+      normalizeCategory(categoryName)
+    )
+  );
+}
+
+
+
+
+
 export default async function Home() {
   const now = new Date().toISOString();
   const today = now.slice(0, 10);
 
-  const { data: communityCategories } = await supabase
+  /*
+   * Main App Map이 체크된 카테고리만 허용합니다.
+   * show_on_main_map = false인 B2B 전용 및 Hidden 카테고리는 제외됩니다.
+   */
+  const { data: mainCategories, error: categoryError } = await supabase
     .from("categories")
-    .select("name")
-    .eq("show_on_community_map", true);
+    .select("id, name")
+    .eq("show_on_main_map", true);
 
-  const communityCategorySet = new Set(
-    (communityCategories || []).map((c) => String(c.name).trim().toLowerCase())
+  if (categoryError) {
+    console.error("Main category load error:", categoryError);
+  }
+
+  const allowedCategoryIds = new Set<number>(
+    (mainCategories || []).map((category: any) => Number(category.id))
   );
 
-  const { data: allSpots } = await supabase
+  const allowedCategoryNames = new Set<string>(
+    (mainCategories || [])
+      .map((category: any) => normalizeCategory(category.name))
+      .filter(Boolean)
+  );
+
+  /*
+   * Main App Map 허용 비즈니스만 홈 화면 데이터에 포함합니다.
+   */
+  const { data: allSpots, error: spotsError } = await supabase
     .from("businesses")
     .select("*")
     .order("created_at", { ascending: false });
 
-  const spots = (allSpots || []).filter((spot) => {
-    const categories = String(spot.category || "")
-      .split(",")
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean);
+  if (spotsError) {
+    console.error("Businesses load error:", spotsError);
+  }
 
-    const hasCommunityCategory = categories.some((cat) =>
-      communityCategorySet.has(cat)
-    );
+  const spots = (allSpots || []).filter((business: any) =>
+    isMainVisibleBusiness(
+      business,
+      allowedCategoryIds,
+      allowedCategoryNames
+    )
+  );
 
-    const hasMainCategory = categories.some(
-      (cat) => !communityCategorySet.has(cat)
-    );
+  const visibleBusinessIds = new Set(
+    spots
+      .map((business: any) => business.id)
+      .filter((id: any) => id !== null && id !== undefined)
+      .map((id: any) => String(id))
+  );
 
-    return !(hasCommunityCategory && !hasMainCategory);
-  });
-
-  const { data: grandOpenings } = await supabase
+  /*
+   * Grand Openings:
+   * business_id가 있으면 Main 허용 비즈니스만 표시합니다.
+   * business_id가 없는 독립 게시물은 기존처럼 표시합니다.
+   */
+  const { data: allGrandOpenings, error: grandOpeningError } = await supabase
     .from("grand_openings")
     .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .order("created_at", { ascending: false });
 
-  const { data: businessEvents } = await supabase
+  if (grandOpeningError) {
+    console.error("Grand openings load error:", grandOpeningError);
+  }
+
+  const grandOpenings = (allGrandOpenings || []).filter((opening: any) => {
+    if (opening.business_id === null || opening.business_id === undefined) {
+      return true;
+    }
+
+    return visibleBusinessIds.has(String(opening.business_id));
+  });
+
+  /*
+   * Business Events:
+   * B2B 또는 Hidden 비즈니스에 연결된 이벤트는 제외합니다.
+   */
+  const { data: allBusinessEvents, error: eventError } = await supabase
     .from("business_events")
     .select("*")
     .eq("status", "approved")
     .eq("active", true)
     .gte("event_date", today)
-    .order("event_date", { ascending: true })
-    .limit(1);
+    .order("event_date", { ascending: true });
 
-  const { data: activeDeals } = await supabase
+  if (eventError) {
+    console.error("Business events load error:", eventError);
+  }
+
+  const businessEvents = (allBusinessEvents || []).filter((event: any) => {
+    if (event.business_id === null || event.business_id === undefined) {
+      return true;
+    }
+
+    return visibleBusinessIds.has(String(event.business_id));
+  });
+
+  /*
+   * Active Deals:
+   * 연결된 비즈니스가 Main 허용 대상일 때만 표시합니다.
+   */
+  const { data: allActiveDeals, error: dealsError } = await supabase
     .from("deals")
     .select(
       `
@@ -254,56 +378,110 @@ export default async function Home() {
     .or("deal_scope.is.null,deal_scope.neq.community")
     .lte("start_date", today)
     .or(`end_date.is.null,end_date.gte.${today}`)
-    .order("created_at", { ascending: false })
-    .limit(3);
+    .order("created_at", { ascending: false });
 
-  const { data: dealBusinesses } = await supabase
-    .from("deals")
-    .select("id, business_id")
-    .eq("status", "approved")
-    .eq("active", true)
-    .or("deal_scope.is.null,deal_scope.neq.community")
-    .lte("start_date", today)
-    .or(`end_date.is.null,end_date.gte.${today}`);
+  if (dealsError) {
+    console.error("Deals load error:", dealsError);
+  }
 
-  const { data: couponBusinesses } = await supabase
+  const deals = (allActiveDeals || [])
+    .filter((deal: any) => {
+      const business = Array.isArray(deal.businesses)
+        ? deal.businesses[0]
+        : deal.businesses;
+
+      if (!business?.id) return false;
+
+      return visibleBusinessIds.has(String(business.id));
+    })
+    .slice(0, 3);
+
+  /*
+   * Deal badge용 데이터도 Main 허용 비즈니스만 남깁니다.
+   */
+  const { data: allDealBusinesses, error: dealBusinessesError } =
+    await supabase
+      .from("deals")
+      .select("id, business_id")
+      .eq("status", "approved")
+      .eq("active", true)
+      .or("deal_scope.is.null,deal_scope.neq.community")
+      .lte("start_date", today)
+      .or(`end_date.is.null,end_date.gte.${today}`);
+
+  if (dealBusinessesError) {
+    console.error("Deal businesses load error:", dealBusinessesError);
+  }
+
+  const dealBusinesses = (allDealBusinesses || []).filter(
+    (deal: any) =>
+      deal.business_id !== null &&
+      deal.business_id !== undefined &&
+      visibleBusinessIds.has(String(deal.business_id))
+  );
+
+  /*
+   * Coupon badge용 데이터도 Main 허용 비즈니스만 남깁니다.
+   */
+  const { data: allCouponBusinesses, error: couponError } = await supabase
     .from("coupons")
     .select("business_id, usage_limit, used_count")
     .eq("active", true)
     .lte("start_date", now)
     .or(`end_date.is.null,end_date.gte.${now}`);
 
+  if (couponError) {
+    console.error("Coupons load error:", couponError);
+  }
+
+  const couponBusinesses = (allCouponBusinesses || []).filter(
+    (coupon: any) =>
+      coupon.business_id !== null &&
+      coupon.business_id !== undefined &&
+      visibleBusinessIds.has(String(coupon.business_id))
+  );
+
   const dealBusinessMap = new Map(
-    (dealBusinesses || [])
-      .filter((d: any) => d.business_id && d.id)
-      .map((d: any) => [d.business_id, d.id])
+    dealBusinesses
+      .filter((deal: any) => deal.business_id && deal.id)
+      .map((deal: any) => [deal.business_id, deal.id])
   );
 
   const couponBusinessIds = new Set(
-    (couponBusinesses || [])
-      .filter((c: any) => {
-        const usageLimit = Number(c.usage_limit || 0);
-        const usedCount = Number(c.used_count || 0);
-        if (usageLimit > 0 && usedCount >= usageLimit) return false;
+    couponBusinesses
+      .filter((coupon: any) => {
+        const usageLimit = Number(coupon.usage_limit || 0);
+        const usedCount = Number(coupon.used_count || 0);
+
+        if (usageLimit > 0 && usedCount >= usageLimit) {
+          return false;
+        }
+
         return true;
       })
-      .map((c: any) => c.business_id)
+      .map((coupon: any) => coupon.business_id)
       .filter(Boolean)
   );
 
- const featuredSponsors = (spots || [])
-  .filter((spot) => spot.featured_sponsor === true)
-  .sort((a, b) => {
-    const orderDiff =
-      Number(a.display_order || 0) - Number(b.display_order || 0);
-    if (orderDiff !== 0) return orderDiff;
-    return Number(a.id || 0) - Number(b.id || 0);
-  });
-const deals = activeDeals || [];
-const trending = spots || [];
+  /*
+   * spots에는 Main 허용 비즈니스만 있으므로
+   * Featured Sponsor와 Trending에도 B2B/Hidden이 나타나지 않습니다.
+   */
+  const featuredSponsors = spots
+    .filter((spot: any) => spot.featured_sponsor === true)
+    .sort((a: any, b: any) => {
+      const orderDiff =
+        Number(a.display_order || 0) - Number(b.display_order || 0);
 
-  const mainEvent = businessEvents?.[0];
-  const mainGrandOpening = grandOpenings?.[0];
+      if (orderDiff !== 0) return orderDiff;
+
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+
+  const trending = spots;
+
+  const mainEvent = businessEvents[0];
+  const mainGrandOpening = grandOpenings[0];
 
   const grandOpeningImage =
     mainGrandOpening?.images?.[0] ||
