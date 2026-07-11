@@ -1,13 +1,37 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 export default function LoginForm() {
+  const searchParams = useSearchParams();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  /*
+    로그인 페이지 주소 예:
+    /login?redirect=/market/new
+
+    redirect 값이 없거나 외부 주소이면 홈으로 이동합니다.
+  */
+  function getSafeRedirectPath() {
+    const requestedPath = searchParams.get("redirect");
+
+    if (
+      requestedPath &&
+      requestedPath.startsWith("/") &&
+      !requestedPath.startsWith("//") &&
+      !requestedPath.startsWith("/login")
+    ) {
+      return requestedPath;
+    }
+
+    return "/";
+  }
 
   async function login() {
     const cleanEmail = email.trim();
@@ -20,17 +44,24 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password,
-      });
+      const { error } =
+        await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
 
       if (error) {
         alert(error.message);
         return;
       }
 
-      window.location.assign("/");
+      const redirectPath = getSafeRedirectPath();
+
+      /*
+        router.push보다 전체 페이지 이동을 사용하면
+        서버 컴포넌트에서도 로그인 쿠키가 즉시 반영됩니다.
+      */
+      window.location.replace(redirectPath);
     } catch (error) {
       console.error("Email login error:", error);
       alert("An unexpected login error occurred.");
@@ -43,17 +74,22 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const redirectPath = getSafeRedirectPath();
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo,
-          queryParams: {
-            prompt: "select_account",
+      const callbackUrl =
+        `${window.location.origin}/auth/callback` +
+        `?redirect=${encodeURIComponent(redirectPath)}`;
+
+      const { error } =
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: callbackUrl,
+            queryParams: {
+              prompt: "select_account",
+            },
           },
-        },
-      });
+        });
 
       if (error) {
         alert(error.message);
@@ -70,14 +106,19 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const redirectPath = getSafeRedirectPath();
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "facebook",
-        options: {
-          redirectTo,
-        },
-      });
+      const callbackUrl =
+        `${window.location.origin}/auth/callback` +
+        `?redirect=${encodeURIComponent(redirectPath)}`;
+
+      const { error } =
+        await supabase.auth.signInWithOAuth({
+          provider: "facebook",
+          options: {
+            redirectTo: callbackUrl,
+          },
+        });
 
       if (error) {
         alert(error.message);
@@ -94,14 +135,19 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const redirectTo = `${window.location.origin}/auth/callback`;
+      const redirectPath = getSafeRedirectPath();
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "kakao",
-        options: {
-          redirectTo,
-        },
-      });
+      const callbackUrl =
+        `${window.location.origin}/auth/callback` +
+        `?redirect=${encodeURIComponent(redirectPath)}`;
+
+      const { error } =
+        await supabase.auth.signInWithOAuth({
+          provider: "kakao",
+          options: {
+            redirectTo: callbackUrl,
+          },
+        });
 
       if (error) {
         alert(error.message);
@@ -115,12 +161,28 @@ export default function LoginForm() {
   }
 
   function handlePasswordKeyDown(
-    event: React.KeyboardEvent<HTMLInputElement>
+    event: React.KeyboardEvent<HTMLInputElement>,
   ) {
     if (event.key === "Enter" && !isLoading) {
       login();
     }
   }
+
+  const redirectPath = getSafeRedirectPath();
+
+  const signupHref =
+    redirectPath === "/"
+      ? "/signup"
+      : `/signup?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`;
+
+  const forgotPasswordHref =
+    redirectPath === "/"
+      ? "/forgot-password"
+      : `/forgot-password?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#fdf2f8] via-white to-[#fff7ed] px-5 py-8 text-[#172033]">
@@ -129,6 +191,12 @@ export default function LoginForm() {
           <p className="mt-5 text-2xl font-black text-[#172033]">
             Sign in to your account.
           </p>
+
+          {redirectPath !== "/" && (
+            <p className="mt-2 text-sm font-medium text-gray-500">
+              로그인 후 이전 페이지로 돌아갑니다.
+            </p>
+          )}
         </div>
 
         <div className="space-y-5">
@@ -140,7 +208,9 @@ export default function LoginForm() {
             <input
               type="email"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) =>
+                setEmail(event.target.value)
+              }
               placeholder="Enter your email"
               autoComplete="email"
               disabled={isLoading}
@@ -156,7 +226,9 @@ export default function LoginForm() {
             <div className="relative">
               <input
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
                 onKeyDown={handlePasswordKeyDown}
                 placeholder="Enter your password"
                 type={showPassword ? "text" : "password"}
@@ -167,10 +239,16 @@ export default function LoginForm() {
 
               <button
                 type="button"
-                onClick={() => setShowPassword((current) => !current)}
+                onClick={() =>
+                  setShowPassword(
+                    (current) => !current,
+                  )
+                }
                 disabled={isLoading}
                 aria-label={
-                  showPassword ? "Hide password" : "Show password"
+                  showPassword
+                    ? "Hide password"
+                    : "Show password"
                 }
                 className="absolute right-5 top-1/2 -translate-y-1/2 text-xl disabled:opacity-50"
               >
@@ -190,19 +268,27 @@ export default function LoginForm() {
         </div>
 
         <div className="mt-6 text-center text-base font-semibold text-gray-500">
-          <a href="/forgot-username" className="hover:text-[#172033]">
+          <a
+            href="/forgot-username"
+            className="hover:text-[#172033]"
+          >
             Forgot Username
           </a>
 
-          <span className="mx-3 text-gray-300">|</span>
+          <span className="mx-3 text-gray-300">
+            |
+          </span>
 
-          <a href="/forgot-password" className="hover:text-[#172033]">
+          <a
+            href={forgotPasswordHref}
+            className="hover:text-[#172033]"
+          >
             Forgot Password
           </a>
         </div>
 
         <a
-          href="/signup"
+          href={signupHref}
           className="mt-8 block w-full rounded-[22px] border border-gray-200 bg-gray-50 py-2 text-center text-lg font-medium text-[#172033]"
         >
           Create an Account
@@ -263,7 +349,8 @@ export default function LoginForm() {
         </div>
 
         <p className="mt-10 text-center text-sm leading-6 text-gray-400">
-          By signing in, you agree to our Terms of Service and Privacy Policy.
+          By signing in, you agree to our Terms of
+          Service and Privacy Policy.
         </p>
       </div>
     </main>

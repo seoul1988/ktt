@@ -29,7 +29,7 @@ export default async function CommunityEventDetailPage({
   if (error || !event) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] px-5 py-10 text-[#172033]">
-        <div className="mx-auto max-w-md">
+        <div className="mx-auto w-full max-w-xl">
           <h1 className="text-2xl font-black">Event not found</h1>
           <p className="mt-2 text-sm font-bold text-[#6B6257]">ID: {id}</p>
 

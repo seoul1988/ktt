@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
 import CommunityBottomNav from "../../../components/CommunityBottomNav";
+import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,7 +13,8 @@ export const revalidate = 0;
 async function createInquiry(formData: FormData) {
   "use server";
 
-  const authSupabase = await createSupabaseServerClient();
+  const authSupabase =
+    await createSupabaseServerClient();
 
   const {
     data: { user },
@@ -18,26 +22,39 @@ async function createInquiry(formData: FormData) {
   } = await authSupabase.auth.getUser();
 
   if (authError || !user) {
-    redirect("/login?redirect=/community/inquiries/new");
+    redirect(
+      "/login?redirect=/community/inquiries/new",
+    );
   }
 
-  const title = String(formData.get("title") || "").trim();
-  const message = String(formData.get("message") || "").trim();
-  const enteredName = String(formData.get("name") || "").trim();
+  const title = String(
+    formData.get("title") || "",
+  ).trim();
+
+  const message = String(
+    formData.get("message") || "",
+  ).trim();
+
+  const enteredName = String(
+    formData.get("name") || "",
+  ).trim();
+
   const selectedVisibility = String(
-    formData.get("visibility") || "private"
+    formData.get("visibility") || "private",
   );
 
   if (!title || !message) {
     redirect(
       `/community/inquiries/new?error=${encodeURIComponent(
-        "제목과 문의 내용을 입력해주세요."
-      )}`
+        "제목과 문의 내용을 입력해주세요.",
+      )}`,
     );
   }
 
   const visibility =
-    selectedVisibility === "public" ? "public" : "private";
+    selectedVisibility === "public"
+      ? "public"
+      : "private";
 
   const name =
     enteredName ||
@@ -65,15 +82,21 @@ async function createInquiry(formData: FormData) {
 
     redirect(
       `/community/inquiries/new?error=${encodeURIComponent(
-        `${error.message}${error.details ? ` / ${error.details}` : ""}`
-      )}`
+        `${error.message}${
+          error.details
+            ? ` / ${error.details}`
+            : ""
+        }`,
+      )}`,
     );
   }
 
   revalidatePath("/community/inquiries");
 
   if (data?.id) {
-    redirect(`/community/inquiries/${data.id}`);
+    redirect(
+      `/community/inquiries/${data.id}`,
+    );
   }
 
   redirect("/community/inquiries");
@@ -89,7 +112,9 @@ export default async function NewInquiryPage({
   searchParams,
 }: PageProps) {
   const params = await searchParams;
-  const supabase = await createSupabaseServerClient();
+
+  const supabase =
+    await createSupabaseServerClient();
 
   const {
     data: { user },
@@ -97,7 +122,9 @@ export default async function NewInquiryPage({
   } = await supabase.auth.getUser();
 
   if (error || !user) {
-    redirect("/login?redirect=/community/inquiries/new");
+    redirect(
+      "/login?redirect=/community/inquiries/new",
+    );
   }
 
   const defaultName =
@@ -108,14 +135,22 @@ export default async function NewInquiryPage({
 
   return (
     <>
-      <main className="min-h-screen bg-[#F8F3EC] px-4 py-6 pb-24">
-        <div className="mx-auto max-w-md">
-          <h1 className="mb-2 text-2xl font-black text-[#172033]">
-            문의 작성
-          </h1>
+      <main className="min-h-screen bg-[#F8F3EC] px-4 py-6 pb-28 sm:px-6">
+        <div className="mx-auto w-full max-w-xl">
+          {/* 상단 제목 */}
+          <div className="relative mb-5 flex min-h-10 items-center justify-center">
+            <div className="absolute left-0">
+              <BackButton />
+            </div>
 
-          <p className="mb-5 text-sm text-gray-500">
-            문의 내용을 작성하면 관리자가 확인 후 답변드립니다.
+            <h1 className="text-2xl font-black text-[#172033]">
+              문의 작성
+            </h1>
+          </div>
+
+          <p className="mb-5 text-center text-sm leading-6 text-gray-500">
+            문의 내용을 작성하면 관리자가 확인 후
+            답변드립니다.
           </p>
 
           {params.error && (
@@ -124,7 +159,7 @@ export default async function NewInquiryPage({
                 문의를 저장하지 못했습니다.
               </p>
 
-              <p className="mt-1 break-words text-sm text-red-600">
+              <p className="mt-1 break-words text-sm leading-6 text-red-600">
                 {params.error}
               </p>
             </div>
@@ -132,8 +167,9 @@ export default async function NewInquiryPage({
 
           <form
             action={createInquiry}
-            className="space-y-5 rounded-3xl bg-white p-5 shadow-sm"
+            className="space-y-5 rounded-3xl bg-white p-5 shadow-sm sm:p-6"
           >
+            {/* 이름 */}
             <div>
               <label
                 htmlFor="name"
@@ -147,10 +183,12 @@ export default async function NewInquiryPage({
                 type="text"
                 name="name"
                 defaultValue={defaultName}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#172033]"
+                placeholder="이름을 입력하세요"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#172033] focus:ring-2 focus:ring-[#172033]/10"
               />
             </div>
 
+            {/* 제목 */}
             <div>
               <label
                 htmlFor="title"
@@ -165,10 +203,12 @@ export default async function NewInquiryPage({
                 name="title"
                 required
                 maxLength={200}
-                className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#172033]"
+                placeholder="문의 제목을 입력하세요"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#172033] focus:ring-2 focus:ring-[#172033]/10"
               />
             </div>
 
+            {/* 공개 여부 */}
             <div>
               <label
                 htmlFor="visibility"
@@ -181,13 +221,24 @@ export default async function NewInquiryPage({
                 id="visibility"
                 name="visibility"
                 defaultValue="private"
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3"
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#172033] focus:ring-2 focus:ring-[#172033]/10"
               >
-                <option value="private">비밀 문의</option>
-                <option value="public">오픈 문의</option>
+                <option value="private">
+                  비밀 문의
+                </option>
+
+                <option value="public">
+                  오픈 문의
+                </option>
               </select>
+
+              <p className="mt-2 text-xs leading-5 text-gray-500">
+                비밀 문의는 작성자와 관리자만 내용을
+                확인할 수 있습니다.
+              </p>
             </div>
 
+            {/* 문의 내용 */}
             <div>
               <label
                 htmlFor="message"
@@ -200,14 +251,16 @@ export default async function NewInquiryPage({
                 id="message"
                 name="message"
                 required
-                rows={8}
-                className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-[#172033]"
+                rows={9}
+                placeholder="문의 내용을 자세히 입력하세요."
+                className="w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-6 text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#172033] focus:ring-2 focus:ring-[#172033]/10"
               />
             </div>
 
+            {/* 등록 버튼 */}
             <button
               type="submit"
-              className="w-full rounded-xl bg-[#172033] py-3.5 font-black text-white"
+              className="w-full rounded-xl bg-[#172033] py-3.5 text-sm font-black text-white transition hover:bg-[#26334d] active:scale-[0.99]"
             >
               문의 등록
             </button>

@@ -2,10 +2,87 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import MarketMediaSlider from "../../components/MarketMediaSlider";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-import MarketManageButtons from "../../components/MarketManageButtons";
+import MarketItemActions from "../../components/MarketItemActions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+type MarketItem = {
+  id: number;
+  seller_id: string | null;
+  title: string;
+  price: number | null;
+  status: string | null;
+  location: string | null;
+  category: string | null;
+  condition: string | null;
+  description: string | null;
+  images: string[] | null;
+  video_url: string | null;
+  phone: string | null;
+  email: string | null;
+  listing_type: string | null;
+  bundle_id: string | null;
+  created_at: string | null;
+};
+
+function getStatusLabel(status: string | null) {
+  if (status === "available") return "판매중";
+  if (status === "reserved") return "예약중";
+  if (status === "sold") return "판매완료";
+  return status || "판매중";
+}
+
+function getStatusClass(status: string | null) {
+  if (status === "available") {
+    return "bg-green-600";
+  }
+
+  if (status === "reserved") {
+    return "bg-yellow-500";
+  }
+
+  if (status === "sold") {
+    return "bg-gray-500";
+  }
+
+  return "bg-[#172033]";
+}
+
+function isFreeItem(item: MarketItem) {
+  return (
+    item.category === "무료나눔" ||
+    item.price === null ||
+    item.price === undefined ||
+    Number(item.price) === 0
+  );
+}
+
+function getItemMedia(item: MarketItem) {
+  const images = (
+    Array.isArray(item.images)
+      ? item.images
+      : []
+  ).filter(Boolean);
+
+  return {
+    images,
+    media: [
+      ...images.map((url) => ({
+        type: "image" as const,
+        url,
+      })),
+      ...(item.video_url
+        ? [
+            {
+              type: "video" as const,
+              url: item.video_url,
+            },
+          ]
+        : []),
+    ],
+  };
+}
 
 export default async function MarketDetailPage({
   params,
@@ -22,21 +99,25 @@ export default async function MarketDetailPage({
     );
   }
 
-  const { data: item, error } = await supabase
+  const {
+    data: selectedItemData,
+    error: selectedItemError,
+  } = await supabase
     .from("market_items")
     .select("*")
     .eq("id", id)
     .maybeSingle();
 
-  if (error) {
+  if (selectedItemError) {
     return (
       <div className="min-h-screen bg-[#F8F3EC] p-6">
-        상품 불러오기 실패: {error.message}
+        상품 불러오기 실패:{" "}
+        {selectedItemError.message}
       </div>
     );
   }
 
-  if (!item) {
+  if (!selectedItemData) {
     return (
       <div className="min-h-screen bg-[#F8F3EC] p-6">
         상품을 찾을 수 없습니다.
@@ -44,66 +125,58 @@ export default async function MarketDetailPage({
     );
   }
 
-  const images = ((item.images || []) as string[]).filter(Boolean);
+  const selectedItem =
+    selectedItemData as MarketItem;
 
-  const media = [
-    ...images.map((url) => ({
-      type: "image" as const,
-      url,
-    })),
-    ...(item.video_url
-      ? [
-          {
-            type: "video" as const,
-            url: item.video_url as string,
-          },
-        ]
-      : []),
+  const bundleId =
+    typeof selectedItem.bundle_id ===
+    "string"
+      ? selectedItem.bundle_id.trim()
+      : "";
+
+  let detailItems: MarketItem[] = [
+    selectedItem,
   ];
 
-  const phone = String(item.phone || "").trim();
-  const email = String(item.email || "").trim();
+  if (bundleId) {
+    const {
+      data: bundleData,
+      error: bundleError,
+    } = await supabase
+      .from("market_items")
+      .select("*")
+      .eq("bundle_id", bundleId)
+      .or(
+        "status.is.null,status.neq.hidden",
+      )
+      .order("created_at", {
+        ascending: true,
+      });
 
-  const hasPhone = Boolean(phone);
-  const hasEmail = Boolean(email);
+    if (bundleError) {
+      return (
+        <div className="min-h-screen bg-[#F8F3EC] p-6">
+          묶음 상품 불러오기 실패:{" "}
+          {bundleError.message}
+        </div>
+      );
+    }
 
-  const smsMessage = `안녕하세요. 벼룩시장에 올리신 "${item.title}" 보고 연락드립니다. 아직 구매 가능할까요?`;
+    if (
+      Array.isArray(bundleData) &&
+      bundleData.length > 0
+    ) {
+      detailItems =
+        bundleData as MarketItem[];
+    }
+  }
 
-  const dealMessage = `안녕하세요. "${item.title}" 가격 딜 가능할까요?`;
-
-  const smsText = encodeURIComponent(smsMessage);
-  const dealText = encodeURIComponent(dealMessage);
-
-  const emailSubject = encodeURIComponent(
-    `[KTown Triangle] ${item.title} 문의`
-  );
-
-  const emailBody = encodeURIComponent(smsMessage);
-
-  const emailDealSubject = encodeURIComponent(
-    `[KTown Triangle] ${item.title} 가격 문의`
-  );
-
-  const emailDealBody = encodeURIComponent(dealMessage);
-
-  const statusLabel =
-    item.status === "available"
-      ? "판매중"
-      : item.status === "reserved"
-      ? "예약중"
-      : item.status === "sold"
-      ? "판매완료"
-      : item.status || "판매중";
-
-  const isFree =
-    item.category === "무료나눔" ||
-    item.price === null ||
-    item.price === undefined ||
-    Number(item.price) === 0;
+  const isBundle =
+    bundleId.length > 0 &&
+    detailItems.length > 1;
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-3 py-4 pb-72 sm:px-5">
-      {/* 상단 헤더 */}
       <div className="mx-auto mb-4 flex w-full max-w-xl items-center justify-between">
         <Link
           href="/market"
@@ -113,9 +186,19 @@ export default async function MarketDetailPage({
           ←
         </Link>
 
-        <h1 className="text-base font-black text-[#172033] sm:text-lg">
-          상품 상세
-        </h1>
+        <div className="text-center">
+          <h1 className="text-base font-black text-[#172033] sm:text-lg">
+            {isBundle
+              ? "묶음 상품 상세"
+              : "상품 상세"}
+          </h1>
+
+          {isBundle && (
+            <p className="mt-0.5 text-[11px] font-bold text-purple-700">
+              총 {detailItems.length}개 상품
+            </p>
+          )}
+        </div>
 
         <details className="relative">
           <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#172033] shadow">
@@ -123,9 +206,9 @@ export default async function MarketDetailPage({
           </summary>
 
           <div className="absolute right-0 top-12 z-[99999] w-44 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
-            {item.seller_id && (
+            {selectedItem.seller_id && (
               <Link
-                href={`/market/seller/${item.seller_id}`}
+                href={`/market/seller/${selectedItem.seller_id}`}
                 className="block px-4 py-3 text-[#172033] hover:bg-gray-100"
               >
                 판매자 상품
@@ -142,223 +225,170 @@ export default async function MarketDetailPage({
         </details>
       </div>
 
-      {/* 상품 상세 카드 */}
-      <div className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow">
-        {media.length > 0 ? (
-          <MarketMediaSlider media={media} />
-        ) : (
-          <div className="flex aspect-[4/3] w-full items-center justify-center bg-gray-100 text-sm font-bold text-gray-400 sm:aspect-video">
-            등록된 사진이 없습니다.
-          </div>
-        )}
+      {isBundle && (
+        <div className="mx-auto mb-4 w-full max-w-xl rounded-3xl border border-purple-200 bg-purple-50 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-purple-800">
+                묶음 상품
+              </p>
 
-        <div className="p-5 sm:p-7">
-          {/* 상태 및 카테고리 */}
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <span className="rounded-full bg-[#172033] px-3 py-1 text-xs font-bold text-white">
-              {statusLabel}
-            </span>
-
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
-              {item.category || "기타"}
-            </span>
-          </div>
-
-          {/* 제목 및 관리버튼 */}
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="min-w-0 flex-1 break-words text-2xl font-black leading-tight text-[#172033] sm:text-3xl">
-              {item.title}
-            </h1>
-
-            <MarketManageButtons
-              itemId={item.id}
-              sellerId={item.seller_id || null}
-              imageUrls={images}
-              videoUrl={item.video_url || null}
-            />
-          </div>
-
-          {/* 가격 */}
-          <p className="mt-3 text-2xl font-black text-[#C2410C] sm:text-3xl">
-            {isFree ? "무료나눔" : `$${Number(item.price).toLocaleString()}`}
-          </p>
-
-          {/* 지역 */}
-          {item.location && (
-            <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-gray-500 sm:text-base">
-              <span>📍</span>
-              <span>{item.location}</span>
-            </p>
-          )}
-
-          {/* 상품 상태 */}
-          <div className="mt-5 flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 text-sm sm:px-5 sm:py-4">
-            <span className="font-black text-[#172033]">상품 상태</span>
-
-            <span className="rounded-full bg-[#172033] px-3 py-1 text-xs font-black text-white">
-              {item.condition || "중고"}
-            </span>
-          </div>
-
-          {/* 설명 */}
-          {item.description && (
-            <div className="mt-5 rounded-2xl border border-gray-100 bg-white">
-              <h2 className="mb-2 text-sm font-black text-[#172033]">
-                상품 설명
-              </h2>
-
-              <p className="whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-base">
-                {item.description}
+              <p className="mt-1 text-xs leading-5 text-purple-700">
+                아래 상품들은 한 번에 함께 등록된 묶음입니다.
               </p>
             </div>
-          )}
 
-          {/* 연락방법 표시 */}
-          {(hasPhone || hasEmail) && (
-            <div className="mt-5 rounded-2xl bg-[#F8F3EC] p-4">
-              <h2 className="mb-3 text-sm font-black text-[#172033]">
-                판매자 연락방법
-              </h2>
-
-              <div className="space-y-2 text-sm">
-                {hasPhone && (
-                  <div className="flex items-center gap-2">
-                    <span>📞</span>
-
-                    <a
-                      href={`tel:${phone}`}
-                      className="break-all font-bold text-[#172033]"
-                    >
-                      {phone}
-                    </a>
-                  </div>
-                )}
-
-                {hasEmail && (
-                  <div className="flex items-center gap-2">
-                    <span>📧</span>
-
-                    <a
-                      href={`mailto:${email}`}
-                      className="break-all font-bold text-blue-700 underline"
-                    >
-                      {email}
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 판매자 상품 / 목록 */}
-          <div className="mt-5 flex overflow-hidden rounded-full border border-[#172033]">
-            {item.seller_id ? (
-              <Link
-                href={`/market/seller/${item.seller_id}`}
-                className="flex-1 border-r border-[#172033] py-2.5 text-center text-sm font-black text-[#172033]"
-              >
-                판매자 상품
-              </Link>
-            ) : (
-              <span className="flex-1 border-r border-[#172033] py-2.5 text-center text-sm font-black text-gray-400">
-                판매자 정보 없음
-              </span>
-            )}
-
-            <Link
-              href="/market"
-              className="flex-1 py-2.5 text-center text-sm font-black text-[#172033]"
-            >
-              목록으로
-            </Link>
+            <span className="shrink-0 rounded-full bg-purple-700 px-3 py-1 text-xs font-black text-white">
+              {detailItems.length}개
+            </span>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 하단 연락 버튼 */}
-      <div className="fixed bottom-24 left-1/2 z-[9999] w-[94%] max-w-xl -translate-x-1/2">
-        <div className="rounded-3xl bg-white/95 p-3 shadow-2xl backdrop-blur">
-          {hasPhone && hasEmail && (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <a
-                href={`tel:${phone}`}
-                className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white"
+      <div className="mx-auto w-full max-w-xl space-y-5">
+        {detailItems.map(
+          (item, itemIndex) => {
+            const { images, media } =
+              getItemMedia(item);
+
+            const statusLabel =
+              getStatusLabel(item.status);
+
+            const isFree =
+              isFreeItem(item);
+
+            return (
+              <section
+                key={item.id}
+                className="overflow-hidden rounded-3xl bg-white shadow"
               >
-                전화
-              </a>
+                {isBundle && (
+                  <div className="flex items-center justify-between bg-[#172033] px-4 py-3 text-white">
+                    <div>
+                      <p className="text-[10px] font-bold text-white/70">
+                        BUNDLE ITEM
+                      </p>
 
-              <a
-                href={`sms:${phone}?&body=${smsText}`}
-                className="rounded-2xl bg-[#C2410C] py-3 text-center text-sm font-black text-white"
-              >
-                문자
-              </a>
+                      <p className="text-sm font-black">
+                        상품 {itemIndex + 1}
+                      </p>
+                    </div>
 
-              <a
-                href={`sms:${phone}?&body=${dealText}`}
-                className="rounded-2xl bg-green-700 py-3 text-center text-sm font-black text-white"
-              >
-                딜하기
-              </a>
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-black text-white ${getStatusClass(
+                        item.status,
+                      )}`}
+                    >
+                      {statusLabel}
+                    </span>
+                  </div>
+                )}
 
-              <a
-                href={`mailto:${email}?subject=${emailSubject}&body=${emailBody}`}
-                className="rounded-2xl bg-blue-700 py-3 text-center text-sm font-black text-white"
-              >
-                이메일
-              </a>
-            </div>
-          )}
+                {media.length > 0 ? (
+                  <MarketMediaSlider
+                    media={media}
+                  />
+                ) : (
+                  <div className="flex aspect-[4/3] w-full items-center justify-center bg-gray-100 text-sm font-bold text-gray-400 sm:aspect-video">
+                    등록된 사진이 없습니다.
+                  </div>
+                )}
 
-          {hasPhone && !hasEmail && (
-            <div className="grid grid-cols-3 gap-2">
-              <a
-                href={`tel:${phone}`}
-                className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white"
-              >
-                전화
-              </a>
+                <div className="p-5 sm:p-7">
+                  {!isBundle && (
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold text-white ${getStatusClass(
+                          item.status,
+                        )}`}
+                      >
+                        {statusLabel}
+                      </span>
 
-              <a
-                href={`sms:${phone}?&body=${smsText}`}
-                className="rounded-2xl bg-[#C2410C] py-3 text-center text-sm font-black text-white"
-              >
-                문자
-              </a>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+                        {item.category ||
+                          "기타"}
+                      </span>
+                    </div>
+                  )}
 
-              <a
-                href={`sms:${phone}?&body=${dealText}`}
-                className="rounded-2xl bg-green-700 py-3 text-center text-sm font-black text-white"
-              >
-                딜하기
-              </a>
-            </div>
-          )}
+                  {isBundle && (
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-black text-purple-700">
+                        상품 {itemIndex + 1}/
+                        {detailItems.length}
+                      </span>
 
-          {!hasPhone && hasEmail && (
-            <div className="grid grid-cols-2 gap-2">
-              <a
-                href={`mailto:${email}?subject=${emailSubject}&body=${emailBody}`}
-                className="rounded-2xl bg-blue-700 py-3 text-center text-sm font-black text-white"
-              >
-                이메일 문의
-              </a>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
+                        {item.category ||
+                          "기타"}
+                      </span>
+                    </div>
+                  )}
 
-              <a
-                href={`mailto:${email}?subject=${emailDealSubject}&body=${emailDealBody}`}
-                className="rounded-2xl bg-green-700 py-3 text-center text-sm font-black text-white"
-              >
-                이메일 딜하기
-              </a>
-            </div>
-          )}
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="min-w-0 flex-1 break-words text-2xl font-black leading-tight text-[#172033] sm:text-3xl">
+                      {item.title}
+                    </h2>
 
-          {!hasPhone && !hasEmail && (
-            <div className="rounded-2xl bg-gray-400 py-3 text-center text-sm font-black text-white">
-              등록된 연락처가 없습니다.
-            </div>
-          )}
-        </div>
+
+                  </div>
+
+                  <p className="mt-3 text-2xl font-black text-[#C2410C] sm:text-3xl">
+                    {isFree
+                      ? "무료나눔"
+                      : `$${Number(
+                          item.price,
+                        ).toLocaleString()}`}
+                  </p>
+
+                  {item.location && (
+                    <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-gray-500 sm:text-base">
+                      <span>📍</span>
+                      <span>
+                        {item.location}
+                      </span>
+                    </p>
+                  )}
+
+                  <div className="mt-5 flex items-center justify-between rounded-2xl bg-gray-50 px-4 py-3 text-sm sm:px-5 sm:py-4">
+                    <span className="font-black text-[#172033]">
+                      상품 상태
+                    </span>
+
+                    <span className="rounded-full bg-[#172033] px-3 py-1 text-xs font-black text-white">
+                      {item.condition ||
+                        "중고"}
+                    </span>
+                  </div>
+
+                  {item.description && (
+                    <div className="mt-5 rounded-2xl border border-gray-100 bg-white">
+                      <h3 className="mb-2 text-sm font-black text-[#172033]">
+                        상품 설명
+                      </h3>
+
+                      <p className="whitespace-pre-line text-sm leading-7 text-gray-700 sm:text-base">
+                        {item.description}
+                      </p>
+                    </div>
+                  )}
+
+                  <MarketItemActions
+                    itemId={item.id}
+                    sellerId={item.seller_id}
+                    title={item.title}
+                    phone={item.phone}
+                    email={item.email}
+                    imageUrls={images}
+                    videoUrl={item.video_url}
+                    currentStatus={item.status}
+                  />
+                </div>
+              </section>
+            );
+          },
+        )}
       </div>
 
       <CommunityBottomNav activeNav="market" />
