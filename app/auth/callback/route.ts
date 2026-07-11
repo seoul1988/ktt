@@ -1,35 +1,38 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { createClient } from "@supabase/supabase-js";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-
   const code = requestUrl.searchParams.get("code");
-  const requestedRedirect =
-    requestUrl.searchParams.get("redirect");
 
   const redirectPath =
-    requestedRedirect &&
-    requestedRedirect.startsWith("/") &&
-    !requestedRedirect.startsWith("//") &&
-    !requestedRedirect.startsWith("/login")
-      ? requestedRedirect
-      : "/";
+    requestUrl.searchParams.get("redirect") || "/";
+
+  const redirectUrl = new URL(
+    redirectPath,
+    requestUrl.origin,
+  );
 
   if (!code) {
     return NextResponse.redirect(
       new URL(
-        `/login?redirect=${encodeURIComponent(redirectPath)}`,
+        `/login?error=${encodeURIComponent(
+          "인증 코드가 없습니다.",
+        )}`,
         requestUrl.origin,
       ),
     );
   }
 
-  const supabase =
-    await createSupabaseServerClient();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
 
   const { error } =
-    await supabase.auth.exchangeCodeForSession(code);
+    await supabase.auth.exchangeCodeForSession(
+      code,
+    );
 
   if (error) {
     console.error(
@@ -37,26 +40,17 @@ export async function GET(request: Request) {
       error,
     );
 
-    const loginUrl = new URL(
-      "/login",
-      requestUrl.origin,
+    return NextResponse.redirect(
+      new URL(
+        `/login?error=${encodeURIComponent(
+          error.message,
+        )}`,
+        requestUrl.origin,
+      ),
     );
-
-    loginUrl.searchParams.set(
-      "redirect",
-      redirectPath,
-    );
-
-    loginUrl.searchParams.set(
-      "error",
-      error.message,
-    );
-
-    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.redirect(
-    new URL(redirectPath, requestUrl.origin),
+    redirectUrl,
   );
-}
 }
