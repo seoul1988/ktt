@@ -37,10 +37,7 @@ function splitCategories(value: unknown) {
 
         if (item && typeof item === "object") {
           return String(
-            item.name ??
-              item.category ??
-              item.category_name ??
-              ""
+            item.name ?? item.category ?? item.category_name ?? "",
           ).trim();
         }
 
@@ -55,6 +52,54 @@ function splitCategories(value: unknown) {
     .filter(Boolean);
 }
 
+const RALEIGH_CENTER = {
+  lat: 35.7796,
+  lng: -78.6382,
+};
+
+const GREENSBORO_CENTER = {
+  lat: 36.0726,
+  lng: -79.792,
+};
+
+function getDistanceMiles(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+) {
+  const earthRadiusMiles = 3958.8;
+
+  const toRadians = (degree: number) => (degree * Math.PI) / 180;
+
+  const latDifference = toRadians(lat2 - lat1);
+  const lngDifference = toRadians(lng2 - lng1);
+
+  const a =
+    Math.sin(latDifference / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(lngDifference / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusMiles * c;
+}
+
+const RALEIGH_MAP_RADIUS_MILES = getDistanceMiles(
+  RALEIGH_CENTER.lat,
+  RALEIGH_CENTER.lng,
+  GREENSBORO_CENTER.lat,
+  GREENSBORO_CENTER.lng,
+);
+
+function isInsideRaleighMapArea(lat: number, lng: number) {
+  return (
+    getDistanceMiles(RALEIGH_CENTER.lat, RALEIGH_CENTER.lng, lat, lng) <=
+    RALEIGH_MAP_RADIUS_MILES
+  );
+}
+
 /**
  * Community Map에 표시하도록 체크된 카테고리만 가져옵니다.
  */
@@ -66,10 +111,7 @@ async function getCommunityCategories(): Promise<CategoryLoadResult> {
     .order("name", { ascending: true });
 
   if (error) {
-    console.error(
-      "Community map categories load error:",
-      error
-    );
+    console.error("Community map categories load error:", error);
 
     return {
       categoryList: [],
@@ -86,24 +128,20 @@ async function getCommunityCategories(): Promise<CategoryLoadResult> {
     categoryList,
 
     allowedCategoryIds: new Set(
-      categoryList.map((category) =>
-        Number(category.id)
-      )
+      categoryList.map((category) => Number(category.id)),
     ),
 
     allowedCategoryNames: new Set(
       categoryList
-        .map((category) =>
-          normalizeCategory(category.name)
-        )
-        .filter(Boolean)
+        .map((category) => normalizeCategory(category.name))
+        .filter(Boolean),
     ),
 
     categoryEmojiMap: new Map(
       categoryList.map((category) => [
         normalizeCategory(category.name),
         category.emoji,
-      ])
+      ]),
     ),
 
     error: null,
@@ -123,7 +161,7 @@ async function getCommunityCategories(): Promise<CategoryLoadResult> {
 function getMatchedCommunityCategories(
   business: any,
   allowedCategoryIds: Set<number>,
-  allowedCategoryNames: Set<string>
+  allowedCategoryNames: Set<string>,
 ) {
   if (!business) {
     return {
@@ -136,18 +174,14 @@ function getMatchedCommunityCategories(
    * category_id 또는 business_category_id가 있는 경우
    */
   const rawCategoryId =
-    business.category_id ??
-    business.business_category_id ??
-    null;
+    business.category_id ?? business.business_category_id ?? null;
 
   if (
     rawCategoryId !== null &&
     rawCategoryId !== undefined &&
     rawCategoryId !== ""
   ) {
-    const isAllowed = allowedCategoryIds.has(
-      Number(rawCategoryId)
-    );
+    const isAllowed = allowedCategoryIds.has(Number(rawCategoryId));
 
     if (!isAllowed) {
       return {
@@ -167,18 +201,11 @@ function getMatchedCommunityCategories(
   ];
 
   const uniqueCategoryNames = Array.from(
-    new Set(
-      categoryValues
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
+    new Set(categoryValues.map((item) => item.trim()).filter(Boolean)),
   );
 
-  const matchedNames = uniqueCategoryNames.filter(
-    (categoryName) =>
-      allowedCategoryNames.has(
-        normalizeCategory(categoryName)
-      )
+  const matchedNames = uniqueCategoryNames.filter((categoryName) =>
+    allowedCategoryNames.has(normalizeCategory(categoryName)),
   );
 
   /*
@@ -212,16 +239,14 @@ function getMatchedCommunityCategories(
  */
 function getMatchedMarketplaceCategories(
   item: any,
-  allowedCategoryNames: Set<string>
+  allowedCategoryNames: Set<string>,
 ) {
   const rawCategories = splitCategories(
-    item?.category ?? item?.categories ?? "Marketplace"
+    item?.category ?? item?.categories ?? "Marketplace",
   );
 
   return rawCategories.filter((categoryName) =>
-    allowedCategoryNames.has(
-      normalizeCategory(categoryName)
-    )
+    allowedCategoryNames.has(normalizeCategory(categoryName)),
   );
 }
 
@@ -238,8 +263,7 @@ export default async function CommunityMapPage() {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
         <p className="font-bold text-red-600">
-          커뮤니티 카테고리 불러오기 실패:{" "}
-          {categoryError.message}
+          커뮤니티 카테고리 불러오기 실패: {categoryError.message}
         </p>
       </main>
     );
@@ -248,8 +272,7 @@ export default async function CommunityMapPage() {
   /*
    * BUSINESS 불러오기
    */
-const { data: businesses, error: businessError } =
-  await supabase
+  const { data: businesses, error: businessError } = await supabase
     .from("businesses")
     .select("*")
     .eq("hidden", false)
@@ -261,8 +284,7 @@ const { data: businesses, error: businessError } =
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
         <p className="font-bold text-red-600">
-          커뮤니티 지도 불러오기 실패:{" "}
-          {businessError.message}
+          커뮤니티 지도 불러오기 실패: {businessError.message}
         </p>
       </main>
     );
@@ -271,10 +293,7 @@ const { data: businesses, error: businessError } =
   /*
    * MARKETPLACE 불러오기
    */
-  const {
-    data: marketplaceItems,
-    error: marketplaceError,
-  } = await supabase
+  const { data: marketplaceItems, error: marketplaceError } = await supabase
     .from("marketplace_items")
     .select("*")
     .eq("sold", false)
@@ -283,10 +302,7 @@ const { data: businesses, error: businessError } =
     .order("created_at", { ascending: false });
 
   if (marketplaceError) {
-    console.error(
-      "Community marketplace load error:",
-      marketplaceError
-    );
+    console.error("Community marketplace load error:", marketplaceError);
   }
 
   /*
@@ -300,13 +316,10 @@ const { data: businesses, error: businessError } =
   const businessSpots =
     businesses
       ?.map((business: any) => {
-        const {
-          isAllowed,
-          matchedNames,
-        } = getMatchedCommunityCategories(
+        const { isAllowed, matchedNames } = getMatchedCommunityCategories(
           business,
           allowedCategoryIds,
-          allowedCategoryNames
+          allowedCategoryNames,
         );
 
         if (!isAllowed) {
@@ -330,16 +343,12 @@ const { data: businesses, error: businessError } =
             ...splitCategories(business.category),
             ...splitCategories(business.category_name),
             ...splitCategories(business.categories),
-          ])
+          ]),
         );
 
-        const firstCategory =
-          matchedNames[0] ||
-          rawCategories[0] ||
-          "Business";
+        const firstCategory = matchedNames[0] || rawCategories[0] || "Business";
 
-        const normalizedFirstCategory =
-          normalizeCategory(firstCategory);
+        const normalizedFirstCategory = normalizeCategory(firstCategory);
 
         return {
           ...business,
@@ -349,29 +358,24 @@ const { data: businesses, error: businessError } =
           original_business_id: businessId,
           original_id: businessId,
 
-          name:
-            business.name ||
-            business.business_name ||
-            "No business name",
+          name: business.name || business.business_name || "No business name",
 
           category: firstCategory,
           categories: rawCategories.join(", "),
           matched_categories: matchedNames,
 
           emoji:
-            categoryEmojiMap.get(
-              normalizedFirstCategory
-            ) ||
+            categoryEmojiMap.get(normalizedFirstCategory) ||
             business.emoji ||
             "📍",
 
-          image_url:
-            business.image_url ||
-            business.logo_url ||
-            null,
+          image_url: business.image_url || business.logo_url || null,
 
           lat,
           lng,
+
+          // 카드는 계속 표시하고, 지도 마커만 거리 범위에 따라 제어합니다.
+          show_marker: isInsideRaleighMapArea(lat, lng),
 
           type: "business",
           source_type: "community-business",
@@ -387,12 +391,7 @@ const { data: businesses, error: businessError } =
    * 중복 비즈니스 제거
    */
   const uniqueBusinessSpots = Array.from(
-    new Map(
-      businessSpots.map((spot: any) => [
-        spot.map_key,
-        spot,
-      ])
-    ).values()
+    new Map(businessSpots.map((spot: any) => [spot.map_key, spot])).values(),
   );
 
   /*
@@ -401,11 +400,10 @@ const { data: businesses, error: businessError } =
   const marketplaceSpots =
     marketplaceItems
       ?.map((item: any) => {
-        const matchedCategories =
-          getMatchedMarketplaceCategories(
-            item,
-            allowedCategoryNames
-          );
+        const matchedCategories = getMatchedMarketplaceCategories(
+          item,
+          allowedCategoryNames,
+        );
 
         if (matchedCategories.length === 0) {
           return null;
@@ -423,11 +421,9 @@ const { data: businesses, error: businessError } =
           return null;
         }
 
-        const firstCategory =
-          matchedCategories[0];
+        const firstCategory = matchedCategories[0];
 
-        const normalizedFirstCategory =
-          normalizeCategory(firstCategory);
+        const normalizedFirstCategory = normalizeCategory(firstCategory);
 
         return {
           ...item,
@@ -439,29 +435,23 @@ const { data: businesses, error: businessError } =
           business_id: `marketplace-${marketplaceId}`,
           original_business_id: `marketplace-${marketplaceId}`,
 
-          name:
-            item.title ||
-            "Marketplace Item",
+          name: item.title || "Marketplace Item",
 
           category: firstCategory,
           categories: matchedCategories.join(", "),
           matched_categories: matchedCategories,
 
-          emoji:
-            categoryEmojiMap.get(
-              normalizedFirstCategory
-            ) || "🛍️",
+          emoji: categoryEmojiMap.get(normalizedFirstCategory) || "🛍️",
 
-          image_url:
-            item.image_urls?.[0] ||
-            item.image_url ||
-            null,
+          image_url: item.image_urls?.[0] || item.image_url || null,
 
-          image_urls:
-            item.image_urls || null,
+          image_urls: item.image_urls || null,
 
           lat,
           lng,
+
+          // 카드는 계속 표시하고, 지도 마커만 거리 범위에 따라 제어합니다.
+          show_marker: isInsideRaleighMapArea(lat, lng),
 
           price: item.price,
 
@@ -475,10 +465,7 @@ const { data: businesses, error: businessError } =
       })
       .filter(Boolean) || [];
 
-  const spots = [
-    ...uniqueBusinessSpots,
-    ...marketplaceSpots,
-  ];
+  const spots = [...uniqueBusinessSpots, ...marketplaceSpots];
 
   return (
     <main className="relative min-h-screen bg-[#F8F3EC]">

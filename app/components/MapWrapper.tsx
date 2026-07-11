@@ -36,14 +36,31 @@ export default function MapWrapper({
   role = null,
   initialCategory = "",
 }: MapWrapperProps) {
-  const mapKey = `${activeNav}-${communityMode ? "community" : "business"}-${spots
-    .map((spot) => spot.map_key || `${spot.type}-${spot.id}`)
+  /*
+   * 카드 목록에는 전체 spots를 그대로 사용합니다.
+   *
+   * page.tsx에서 show_marker가 false로 지정된 항목만
+   * 지도 마커 목록에서 제외합니다.
+   */
+  const markerSpots = spots.filter(
+    (spot) => spot.show_marker !== false
+  );
+
+  const mapKey = `${activeNav}-${
+    communityMode ? "community" : "business"
+  }-${spots
+    .map(
+      (spot) =>
+        spot.map_key ||
+        `${spot.type}-${spot.id}`
+    )
     .join("-")}-${initialCategory}`;
 
   return (
     <div key={mapKey} className="min-h-screen">
       <BusinessMap
         spots={spots}
+        markerSpots={markerSpots}
         categories={categories}
         showAllOnLoad={showAllOnLoad}
         activeNav={activeNav}

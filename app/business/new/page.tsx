@@ -436,10 +436,10 @@ export default function NewBusinessPage() {
       return;
     }
 
-    if (selectedCategories.length === 0) {
-      alert("Please select at least one category.");
-      return;
-    }
+    if (role !== "admin" && !address.trim()) {
+  alert("Please enter address.");
+  return;
+}
 
     if (videoFile && externalVideoUrl.trim()) {
       alert("동영상은 업로드 또는 링크 중 하나만 가능합니다.");
@@ -462,60 +462,62 @@ export default function NewBusinessPage() {
       uploadedVideoUrl = await uploadBusinessVideo();
 
       if (lat && lng) {
-        coords = {
-          lat: Number(lat),
-          lng: Number(lng),
-        };
-      } else {
-        coords = await geocodeAddress(address);
+	  coords = {
+		lat: Number(lat),
+		lng: Number(lng),
+	  };
+	} else if (address.trim()) {
+	  coords = await geocodeAddress(address);
 
-        if (coords.lat && coords.lng) {
-          setLat(String(coords.lat));
-          setLng(String(coords.lng));
-        }
-      }
+	  if (coords.lat && coords.lng) {
+		setLat(String(coords.lat));
+		setLng(String(coords.lng));
+	  }
+	}
     } catch (error: any) {
       setSaving(false);
       alert("Save error: " + error.message);
       return;
     }
 
-    if (!coords.lat || !coords.lng) {
-      setSaving(false);
-      alert("Could not find this address on the map. Please check the address.");
-      return;
-    }
+   if (role !== "admin" && (!coords.lat || !coords.lng)) {
+  setSaving(false);
+  alert("Could not find this address on the map. Please check the address.");
+  return;
+}
 
     const cleanExternalVideoUrl = externalVideoUrl.trim();
 
-    const { data: business, error: businessError } = await supabase
-      .from("businesses")
-      .insert({
-        name,
-        address,
-        phone,
-        category: selectedCategories.join(", "),
-        hours: formatBusinessHours(),
-        description,
+   const { data: business, error: businessError } = await supabase
+  .from("businesses")
+  .insert({
+    name,
+    address: address.trim() || null,
+    phone,
+    category: selectedCategories.join(", "),
+    hours: formatBusinessHours(),
+    description,
 
-        image_url: imageUrls[0] || "",
-        image_urls: imageUrls,
+    image_url: imageUrls[0] || "",
+    image_urls: imageUrls,
 
-        // Uploaded video files only go here.
-        video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
+    // Uploaded video files only go here.
+    video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
 
-        // YouTube / Facebook / Instagram links go here.
-        external_video_url: uploadedVideoUrl ? null : cleanExternalVideoUrl || null,
+    // YouTube / Facebook / Instagram links go here.
+    external_video_url:
+      uploadedVideoUrl ? null : cleanExternalVideoUrl || null,
 
-        lat: coords.lat,
-        lng: coords.lng,
+    lat: coords.lat,
+    lng: coords.lng,
 
-        tags,
-        website_url: websiteUrl,
-        instagram_url: instagramUrl,
+    tags,
+    website_url: websiteUrl,
+    instagram_url: instagramUrl,
 
-        owner_id: userId,
-      })
+    owner_id: userId,
+  })
+
       .select("id")
       .single();
 
