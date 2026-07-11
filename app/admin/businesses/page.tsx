@@ -497,12 +497,17 @@ export default function AdminBusinessesPage() {
                         </div>
 
                         {/* 관리 버튼 */}
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                   
+
+
+
+				           {/* 관리 버튼 */}
+<div className="mt-4 flex flex-nowrap items-center gap-1 overflow-x-auto">
   <button
     type="button"
     onClick={() => saveDisplayOrder(business.id)}
     disabled={savingId === business.id}
-    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+    className="shrink-0 rounded-lg bg-green-600 px-2.5 py-1.5 text-[11px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs"
   >
     {savingId === business.id ? "Saving..." : "Save"}
   </button>
@@ -516,7 +521,7 @@ export default function AdminBusinessesPage() {
       )
     }
     disabled={sponsorSavingId === business.id}
-    className={`rounded-xl px-4 py-2 text-sm font-bold shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${
+    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs ${
       business.featured_sponsor
         ? "bg-yellow-400 text-black"
         : "bg-gray-200 text-gray-700"
@@ -526,12 +531,12 @@ export default function AdminBusinessesPage() {
       ? "Saving..."
       : business.featured_sponsor
         ? "⭐ Sponsor"
-        : "Set Sponsor"}
+        : "Sponsor"}
   </button>
 
   <Link
     href={`/business/${business.id}/edit`}
-    className="rounded-xl bg-[#172033] px-4 py-2 text-sm font-bold text-white"
+    className="shrink-0 rounded-lg bg-[#172033] px-2.5 py-1.5 text-[11px] font-bold text-white sm:px-3 sm:text-xs"
   >
     Edit
   </Link>
@@ -541,16 +546,15 @@ export default function AdminBusinessesPage() {
     onClick={() =>
       deleteBusiness(
         business.id,
-        business.name,
+        business.name
       )
     }
-    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white"
+    className="shrink-0 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-bold text-white sm:px-3 sm:text-xs"
   >
     Delete
   </button>
 
-  {/* Delete 옆 체크박스 */}
-  <label className="flex items-center gap-1 text-xs font-bold whitespace-nowrap">
+  <label className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-bold sm:text-xs">
     <input
       type="checkbox"
       checked={Boolean(business.hidden)}
@@ -558,11 +562,12 @@ export default function AdminBusinessesPage() {
       onChange={() =>
         toggleHidden(
           business.id,
-          business.hidden,
+          business.hidden
         )
       }
-      className="h-4 w-4 accent-red-600"
+      className="h-3.5 w-3.5 accent-red-600"
     />
+
     {hiddenSavingId === business.id
       ? "Saving..."
       : "Hide"}
