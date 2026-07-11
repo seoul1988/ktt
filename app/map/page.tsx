@@ -437,10 +437,11 @@ export default async function MapPage({
   /*
    * MAIN BUSINESS MAP
    */
-  const { data: businesses, error } = await supabase
-    .from("businesses")
-    .select("*")
-    .order("id", { ascending: true });
+const { data: businesses, error } = await supabase
+  .from("businesses")
+  .select("*")
+  .or("hidden.eq.false,hidden.is.null")
+  .order("id", { ascending: true });
 
   if (error) {
     return (
