@@ -76,7 +76,7 @@ function GrandOpeningMedia({
 
   if (item.video_url) {
     return (
-      <div className="aspect-video w-full overflow-hidden bg-black">
+      <div className="flex h-full w-full items-center justify-center overflow-hidden bg-black">
         <video
           src={item.video_url}
           controls
@@ -88,6 +88,21 @@ function GrandOpeningMedia({
       </div>
     );
   }
+
+  return (
+    <div className="flex h-full w-full items-center justify-center overflow-hidden bg-white">
+      <img
+        src={imageUrl}
+        alt={
+          item.business_name ||
+          item.title ||
+          "Grand Opening"
+        }
+        className="block h-full w-full object-contain"
+      />
+    </div>
+  );
+}
 
   return (
     <div className="flex w-full items-center justify-center overflow-hidden bg-white">
