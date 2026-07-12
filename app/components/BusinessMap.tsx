@@ -293,7 +293,6 @@ function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
 
 export default function BusinessMap({
   spots,
-  markerSpots,
   categories = [],
   showAllOnLoad = false,
   activeNav = "map",
@@ -302,7 +301,6 @@ export default function BusinessMap({
   initialCategory = "",
 }: {
     spots: Spot[];
-  markerSpots?: Spot[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
   activeNav?: "home" | "map" | "deals" | "events" | "community" | "admin";
@@ -339,13 +337,6 @@ export default function BusinessMap({
       map_key: getSpotKey(spot),
     }));
   }, [spots]);
-
-  const normalizedMarkerSpots = useMemo(() => {
-    return (markerSpots ?? spots).map((spot) => ({
-      ...spot,
-      map_key: getSpotKey(spot),
-    }));
-  }, [markerSpots, spots]);
 
   const displayCategories = useMemo(() => {
     if (mapCategories.length > 0) return mapCategories;
@@ -718,7 +709,7 @@ export default function BusinessMap({
     cardSpots.find(
       (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
     ) ||
-    normalizedMarkerSpots.find(
+    mapSpots.find(
       (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
     );
 
@@ -847,7 +838,7 @@ export default function BusinessMap({
           />
         )}
 
-        {normalizedMarkerSpots
+        {mapSpots
           .filter((spot) => spot.lat !== null && spot.lng !== null)
           .map((spot, index) => {
             const baseKey = getSpotKey(spot);
@@ -857,7 +848,7 @@ export default function BusinessMap({
             const lat = Number(spot.lat);
             const lng = Number(spot.lng);
 
-            const sameLocationSpots = normalizedMarkerSpots.filter(
+            const sameLocationSpots = mapSpots.filter(
               (s) =>
                 Number(s.lat).toFixed(6) === lat.toFixed(6) &&
                 Number(s.lng).toFixed(6) === lng.toFixed(6)
