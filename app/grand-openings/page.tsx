@@ -12,40 +12,23 @@ function getYoutubeEmbedUrl(url: string | null | undefined) {
 
   if (value.includes("youtube.com/watch?v=")) {
     const id = value.split("v=")[1]?.split("&")[0];
-
-    return id
-      ? `https://www.youtube.com/embed/${id}`
-      : null;
+    return id ? `https://www.youtube.com/embed/${id}` : null;
   }
 
   if (value.includes("youtu.be/")) {
-    const id = value
-      .split("youtu.be/")[1]
-      ?.split("?")[0];
-
-    return id
-      ? `https://www.youtube.com/embed/${id}`
-      : null;
+    const id = value.split("youtu.be/")[1]?.split("?")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : null;
   }
 
   if (value.includes("youtube.com/shorts/")) {
-    const id = value
-      .split("youtube.com/shorts/")[1]
-      ?.split("?")[0];
-
-    return id
-      ? `https://www.youtube.com/embed/${id}`
-      : null;
+    const id = value.split("youtube.com/shorts/")[1]?.split("?")[0];
+    return id ? `https://www.youtube.com/embed/${id}` : null;
   }
 
   return null;
 }
 
-function GrandOpeningMedia({
-  item,
-}: {
-  item: any;
-}) {
+function GrandOpeningMedia({ item }: { item: any }) {
   const youtubeUrl = getYoutubeEmbedUrl(item.video_url);
 
   const imageUrl =
@@ -55,7 +38,7 @@ function GrandOpeningMedia({
 
   if (youtubeUrl) {
     return (
-      <div className="aspect-[3/2] w-full overflow-hidden bg-white">
+      <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white">
         <iframe
           src={youtubeUrl}
           title={
@@ -73,7 +56,7 @@ function GrandOpeningMedia({
 
   if (item.video_url) {
     return (
-      <div className="aspect-[3/2] w-full overflow-hidden bg-white">
+      <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white p-2">
         <video
           src={item.video_url}
           controls
@@ -87,7 +70,7 @@ function GrandOpeningMedia({
   }
 
   return (
-    <div className="aspect-[3/2] w-full overflow-hidden bg-white">
+    <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white p-2">
       <img
         src={imageUrl}
         alt={
@@ -101,11 +84,7 @@ function GrandOpeningMedia({
   );
 }
 
-
-
-function formatOpeningDate(
-  dateValue: string | null | undefined,
-) {
+function formatOpeningDate(dateValue: string | null | undefined) {
   if (!dateValue) return "Coming Soon";
 
   const date = new Date(dateValue);
@@ -122,10 +101,7 @@ function formatOpeningDate(
 }
 
 export default async function GrandOpeningsPage() {
-  const {
-    data: grandOpenings,
-    error,
-  } = await supabase
+  const { data: grandOpenings, error } = await supabase
     .from("grand_openings")
     .select("*")
     .order("created_at", {
@@ -166,70 +142,58 @@ export default async function GrandOpeningsPage() {
               {error.message}
             </p>
           </div>
-        ) : !grandOpenings ||
-          grandOpenings.length === 0 ? (
+        ) : !grandOpenings || grandOpenings.length === 0 ? (
           <div className="rounded-3xl bg-white p-6 text-center shadow-sm">
-            <p className="font-bold">
-              No grand openings yet.
-            </p>
+            <p className="font-bold">No grand openings yet.</p>
 
             <p className="mt-2 text-sm text-gray-500">
-              New grand openings will appear
-              here.
+              New grand openings will appear here.
             </p>
           </div>
         ) : (
           <div className="space-y-5">
-            {grandOpenings.map(
-              (item: any) => (
-                <Link
-                  key={item.id}
-                  href={`/grand-openings/${item.id}`}
-                  className="block overflow-hidden rounded-3xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
-                >
-                  <div className="h-56 w-full overflow-hidden bg-gray-100 sm:h-64">
-                    <GrandOpeningMedia
-                      item={item}
-                    />
-                  </div>
+            {grandOpenings.map((item: any) => (
+              <Link
+                key={item.id}
+                href={`/grand-openings/${item.id}`}
+                className="block overflow-hidden rounded-3xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
+              >
+                <div className="w-full overflow-hidden bg-white">
+                  <GrandOpeningMedia item={item} />
+                </div>
 
-                  <div className="relative bg-white p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-[#C4483A]">
-                      {formatOpeningDate(
-                        item.opening_date,
-                      )}
+                <div className="relative border-t border-gray-100 bg-white p-5">
+                  <p className="text-xs font-black uppercase tracking-wide text-[#C4483A]">
+                    {formatOpeningDate(item.opening_date)}
+                  </p>
+
+                  <h2 className="mt-1 break-words text-xl font-black leading-tight text-[#172033]">
+                    {item.business_name || "Grand Opening"}
+                  </h2>
+
+                  {item.title && (
+                    <p className="mt-2 break-words text-sm font-bold text-gray-700">
+                      {item.title}
                     </p>
+                  )}
 
-                    <h2 className="mt-1 break-words text-xl font-black leading-tight text-[#172033]">
-                      {item.business_name ||
-                        "Grand Opening"}
-                    </h2>
+                  {item.description && (
+                    <p className="mt-2 line-clamp-3 break-words text-sm leading-6 text-gray-600">
+                      {item.description}
+                    </p>
+                  )}
 
-                    {item.title && (
-                      <p className="mt-2 break-words text-sm font-bold text-gray-700">
-                        {item.title}
-                      </p>
-                    )}
-
-                    {item.description && (
-                      <p className="mt-2 line-clamp-3 break-words text-sm leading-6 text-gray-600">
-                        {item.description}
-                      </p>
-                    )}
-
-                    {item.location && (
-                      <p className="mt-3 flex items-start gap-1 text-sm font-semibold text-gray-500">
-                        <span>📍</span>
-
-                        <span className="break-words">
-                          {item.location}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                </Link>
-              ),
-            )}
+                  {item.location && (
+                    <p className="mt-3 flex items-start gap-1 text-sm font-semibold text-gray-500">
+                      <span>📍</span>
+                      <span className="break-words">
+                        {item.location}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
