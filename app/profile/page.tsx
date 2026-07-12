@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { supabase } from "../../lib/supabase";
 import ProfileButton from "../components/ProfileButton";
+import BottomNav from "../components/BottomNav";
 
 type Profile = {
   id: string;
@@ -272,40 +274,51 @@ export default function ProfilePage() {
           <ProfileButton />
         </header>
 
-        <section className="overflow-hidden rounded-[32px] bg-[#172033] shadow-2xl">
-          <div className="relative px-6 pb-7 pt-8 text-white">
-            <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[#F6C343]/20" />
+        <section className="overflow-hidden rounded-[30px] border-[7px] border-[#F3EFE8] bg-[#172033] shadow-[0_8px_0_#A8A8A8]">
+          <div className="relative px-5 pb-6 pt-8 text-white">
+            <div className="absolute -right-7 -top-8 h-32 w-32 rounded-full bg-[#F6C343]/10" />
             <div className="absolute -bottom-16 -left-10 h-32 w-32 rounded-full bg-white/5" />
 
-            <div className="relative flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F6C343] text-2xl font-black text-[#172033] shadow-lg">
+            <div className="relative flex min-w-0 items-center pr-[88px]">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#F6C343] text-2xl font-black text-[#172033] shadow-lg">
                 {(fullName || profile?.email || "U")
                   .charAt(0)
                   .toUpperCase()}
               </div>
 
-              <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#F6C343]">
+              <div className="ml-4 min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F6C343]">
                   My Profile
                 </p>
-                <h1 className="mt-1 truncate text-2xl font-black">
+                <h1 className="mt-1 truncate text-[23px] font-black leading-tight">
                   {fullName || "Complete your profile"}
                 </h1>
-                <p className="mt-1 truncate text-sm text-white/60">
+                <p className="mt-1 truncate text-sm text-white/55">
                   {profile?.email}
                 </p>
               </div>
+
+              <div className="absolute right-0 top-[-10px] flex h-[76px] w-[76px] items-center justify-center rounded-full bg-white p-1 shadow-xl">
+                <Image
+                  src="/images/kacc-logo.png"
+                  alt="Korean American Chamber of Commerce Raleigh NC"
+                  width={76}
+                  height={76}
+                  priority
+                  className="h-full w-full rounded-full object-contain"
+                />
+              </div>
             </div>
 
-            <div className="relative mt-6 flex items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-              <div>
+            <div className="relative mt-7 flex items-center justify-between rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
+              <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
                   Account type
                 </p>
-                <p className="mt-1 font-black">{roleLabel}</p>
+                <p className="mt-1 truncate font-black">{roleLabel}</p>
               </div>
 
-              <span className="rounded-full bg-[#F6C343] px-3 py-1 text-xs font-black text-[#172033]">
+              <span className="ml-3 shrink-0 rounded-full bg-[#F6C343] px-4 py-1.5 text-xs font-black text-[#172033]">
                 {profile?.role?.toUpperCase() || "USER"}
               </span>
             </div>
@@ -463,41 +476,8 @@ export default function ProfilePage() {
       </div>
 
       <nav className="fixed bottom-4 left-0 right-0 z-50 px-4">
-        <div className="mx-auto flex max-w-md overflow-hidden rounded-full border border-white/10 bg-[#172033]/95 p-1.5 text-[11px] font-black text-white shadow-2xl backdrop-blur">
-          <a
-            href="/"
-            className="flex-1 rounded-full py-3 text-center text-white/70"
-          >
-            Home
-          </a>
-          <a
-            href="/map"
-            className="flex-1 rounded-full py-3 text-center text-white/70"
-          >
-            Map
-          </a>
-          <a
-            href="/my-coupons"
-            className="flex-1 rounded-full py-3 text-center text-white/70"
-          >
-            Deals
-          </a>
-          <a
-            href="/profile"
-            className="flex-1 rounded-full bg-[#F6C343] py-3 text-center text-[#172033]"
-          >
-            Profile
-          </a>
-
-          {profile?.role === "admin" && (
-            <a
-              href="/admin"
-              className="flex-1 rounded-full py-3 text-center text-[#F6C343]"
-            >
-              Admin
-            </a>
-          )}
-        </div>
+       
+		<BottomNav activeNav="home" />
       </nav>
     </main>
   );
