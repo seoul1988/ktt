@@ -293,6 +293,7 @@ function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
 
 export default function BusinessMap({
   spots,
+  markerSpots,
   categories = [],
   showAllOnLoad = false,
   activeNav = "map",
@@ -300,7 +301,8 @@ export default function BusinessMap({
   role = null,
   initialCategory = "",
 }: {
-    spots: Spot[];
+  spots: Spot[];
+  markerSpots?: Spot[];
   categories?: MapCategory[];
   showAllOnLoad?: boolean;
   activeNav?: "home" | "map" | "deals" | "events" | "community" | "admin";
@@ -337,6 +339,13 @@ export default function BusinessMap({
       map_key: getSpotKey(spot),
     }));
   }, [spots]);
+
+  const normalizedMarkerSpots = useMemo(() => {
+    return (markerSpots ?? spots).map((spot) => ({
+      ...spot,
+      map_key: getSpotKey(spot),
+    }));
+  }, [markerSpots, spots]);
 
   const displayCategories = useMemo(() => {
     if (mapCategories.length > 0) return mapCategories;
@@ -516,6 +525,49 @@ export default function BusinessMap({
       return matchesSearch && matchesCategory;
     });
   }, [normalizedSpots, search, selectedCategory, showAllOnLoad]);
+
+  const filteredMarkerSpots = useMemo(() => {
+    return normalizedMarkerSpots.filter((spot) => {
+      const spotCategoryList = getSpotCategoryList(spot);
+
+      const searchText = `
+        ${spot.name || ""}
+        ${spot.category || ""}
+        ${spot.categories || ""}
+        ${spotCategoryList.join(" ")}
+        ${spot.tags || ""}
+        ${spot.city || ""}
+        ${spot.description || ""}
+        ${spot.coupon_badge || ""}
+      `.toLowerCase();
+
+      const normalizedCategoryList = spotCategoryList.map((item) =>
+        normalizeCategory(item)
+      );
+
+      const matchesSearch = search
+        ? searchText.includes(search.trim().toLowerCase())
+        : true;
+
+      const matchesCategory = selectedCategory
+        ? normalizedCategoryList.includes(normalizeCategory(selectedCategory))
+        : true;
+
+      // On main and community maps, do not show markers before a
+      // category is selected or a search is entered.
+      // Deals/events can still opt into initial display with showAllOnLoad.
+      if (!selectedCategory && !search) {
+        return showAllOnLoad;
+      }
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [
+    normalizedMarkerSpots,
+    search,
+    selectedCategory,
+    showAllOnLoad,
+  ]);
 
   const cardSpots: SpotWithDistance[] = useMemo(() => {
     const withDistance = mapSpots.map((spot): SpotWithDistance => ({
@@ -709,7 +761,7 @@ export default function BusinessMap({
     cardSpots.find(
       (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
     ) ||
-    mapSpots.find(
+    filteredMarkerSpots.find(
       (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
     );
 
@@ -838,8 +890,14 @@ export default function BusinessMap({
           />
         )}
 
-        {mapSpots
-          .filter((spot) => spot.lat !== null && spot.lng !== null)
+        {filteredMarkerSpots
+          .filter(
+            (spot) =>
+              spot.lat !== null &&
+              spot.lat !== undefined &&
+              spot.lng !== null &&
+              spot.lng !== undefined
+          )
           .map((spot, index) => {
             const baseKey = getSpotKey(spot);
             const markerKey = `${baseKey}-${index}`;
@@ -848,8 +906,12 @@ export default function BusinessMap({
             const lat = Number(spot.lat);
             const lng = Number(spot.lng);
 
-            const sameLocationSpots = mapSpots.filter(
+            const sameLocationSpots = filteredMarkerSpots.filter(
               (s) =>
+                s.lat !== null &&
+                s.lat !== undefined &&
+                s.lng !== null &&
+                s.lng !== undefined &&
                 Number(s.lat).toFixed(6) === lat.toFixed(6) &&
                 Number(s.lng).toFixed(6) === lng.toFixed(6)
             );

@@ -37,10 +37,8 @@ export default function MapWrapper({
   initialCategory = "",
 }: MapWrapperProps) {
   /*
-   * 카드 목록에는 전체 spots를 그대로 사용합니다.
-   *
-   * page.tsx에서 show_marker가 false로 지정된 항목만
-   * 지도 마커 목록에서 제외합니다.
+   * Cards may use every supplied spot.
+   * Map markers exclude records explicitly marked show_marker = false.
    */
   const markerSpots = spots.filter(
     (spot) => spot.show_marker !== false
@@ -52,7 +50,7 @@ export default function MapWrapper({
     .map(
       (spot) =>
         spot.map_key ||
-        `${spot.type}-${spot.id}`
+        `${spot.type || "spot"}-${spot.id}`
     )
     .join("-")}-${initialCategory}`;
 
