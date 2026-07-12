@@ -46,19 +46,16 @@ function GrandOpeningMedia({
 }: {
   item: any;
 }) {
-  const youtubeUrl = getYoutubeEmbedUrl(
-    item.video_url,
-  );
+  const youtubeUrl = getYoutubeEmbedUrl(item.video_url);
 
   const imageUrl =
-    Array.isArray(item.images) &&
-    item.images.length > 0
+    Array.isArray(item.images) && item.images.length > 0
       ? item.images[0]
       : item.image_url || "/event.png";
 
   if (youtubeUrl) {
     return (
-      <div className="aspect-video w-full overflow-hidden bg-black">
+      <div className="aspect-[3/2] w-full overflow-hidden bg-white">
         <iframe
           src={youtubeUrl}
           title={
@@ -76,7 +73,7 @@ function GrandOpeningMedia({
 
   if (item.video_url) {
     return (
-      <div className="flex h-full w-full items-center justify-center overflow-hidden bg-black">
+      <div className="aspect-[3/2] w-full overflow-hidden bg-white">
         <video
           src={item.video_url}
           controls
@@ -90,7 +87,7 @@ function GrandOpeningMedia({
   }
 
   return (
-    <div className="flex h-full w-full items-center justify-center overflow-hidden bg-white">
+    <div className="aspect-[3/2] w-full overflow-hidden bg-white">
       <img
         src={imageUrl}
         alt={
