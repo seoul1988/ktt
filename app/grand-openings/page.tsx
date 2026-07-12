@@ -58,43 +58,49 @@ function GrandOpeningMedia({
 
   if (youtubeUrl) {
     return (
-      <iframe
-        src={youtubeUrl}
-        title={
-          item.title ||
-          item.business_name ||
-          "Grand Opening"
-        }
-        className="block h-full w-full border-0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-      />
+      <div className="aspect-video w-full overflow-hidden bg-black">
+        <iframe
+          src={youtubeUrl}
+          title={
+            item.title ||
+            item.business_name ||
+            "Grand Opening"
+          }
+          className="block h-full w-full border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
     );
   }
 
   if (item.video_url) {
     return (
-      <video
-        src={item.video_url}
-        controls
-        muted
-        playsInline
-        preload="metadata"
-        className="block h-full w-full bg-black object-cover"
-      />
+      <div className="aspect-video w-full overflow-hidden bg-black">
+        <video
+          src={item.video_url}
+          controls
+          muted
+          playsInline
+          preload="metadata"
+          className="block h-full w-full object-contain"
+        />
+      </div>
     );
   }
 
   return (
-    <img
-      src={imageUrl}
-      alt={
-        item.business_name ||
-        item.title ||
-        "Grand Opening"
-      }
-      className="block h-full w-full object-cover"
-    />
+    <div className="flex w-full items-center justify-center overflow-hidden bg-white">
+      <img
+        src={imageUrl}
+        alt={
+          item.business_name ||
+          item.title ||
+          "Grand Opening"
+        }
+        className="block h-auto max-h-[420px] w-full object-contain"
+      />
+    </div>
   );
 }
 
