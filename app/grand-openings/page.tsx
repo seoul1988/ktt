@@ -101,20 +101,7 @@ function GrandOpeningMedia({
   );
 }
 
-  return (
-    <div className="flex w-full items-center justify-center overflow-hidden bg-white">
-      <img
-        src={imageUrl}
-        alt={
-          item.business_name ||
-          item.title ||
-          "Grand Opening"
-        }
-        className="block h-auto max-h-[420px] w-full object-contain"
-      />
-    </div>
-  );
-}
+
 
 function formatOpeningDate(
   dateValue: string | null | undefined,
