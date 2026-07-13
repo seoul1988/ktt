@@ -28,6 +28,102 @@ function getYoutubeEmbedUrl(url: string | null | undefined) {
   return null;
 }
 
+
+function timeTextToMinutes(timeText?: string | null) {
+  if (!timeText) return null;
+
+  const match = timeText.match(
+    /^(\d{1,2}):(\d{2})\s?(AM|PM)$/i,
+  );
+
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+
+  if (
+    match[3].toUpperCase() === "PM" &&
+    hour !== 12
+  ) {
+    hour += 12;
+  }
+
+  if (
+    match[3].toUpperCase() === "AM" &&
+    hour === 12
+  ) {
+    hour = 0;
+  }
+
+  return hour * 60 + minute;
+}
+
+function getOpenStatus(hours?: string | null) {
+  if (!hours) {
+    return {
+      open: false,
+      text: "Hours not available",
+    };
+  }
+
+  const now = new Date();
+
+  const today = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentMinutes = now
+    .toLocaleTimeString("en-US", {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "America/New_York",
+    })
+    .split(":")
+    .map(Number)
+    .reduce((a, b) => a * 60 + b);
+
+  const line = hours
+    .split("\n")
+    .find((value) => value.trim().startsWith(today));
+
+  if (!line) {
+    return {
+      open: false,
+      text: "Closed",
+    };
+  }
+
+  if (line.toLowerCase().includes("closed")) {
+    return {
+      open: false,
+      text: "Closed Today",
+    };
+  }
+
+  const main = line
+    .split("/ Break")[0]
+    .replace(today, "")
+    .trim();
+
+  const [openText, closeText] = main.split(" - ");
+
+  const open = timeTextToMinutes(openText);
+  const close = timeTextToMinutes(closeText);
+
+  const isOpen =
+    open !== null &&
+    close !== null &&
+    currentMinutes >= open &&
+    currentMinutes < close;
+
+  return {
+    open: isOpen,
+    text: isOpen ? "Open" : "Closed",
+  };
+}
+
 function SectionTitle({
   label,
   title,
@@ -483,7 +579,26 @@ export default async function Home() {
       return Number(a.id || 0) - Number(b.id || 0);
     });
 
-  const trending = spots;
+  const trending = [...spots].sort((a: any, b: any) => {
+    const aOrder =
+      a.display_order === null || a.display_order === undefined
+        ? Number.MAX_SAFE_INTEGER
+        : Number(a.display_order);
+
+    const bOrder =
+      b.display_order === null || b.display_order === undefined
+        ? Number.MAX_SAFE_INTEGER
+        : Number(b.display_order);
+
+    const orderDiff = aOrder - bOrder;
+
+    if (orderDiff !== 0) return orderDiff;
+
+    return (
+      new Date(a.created_at || 0).getTime() -
+      new Date(b.created_at || 0).getTime()
+    );
+  });
 
   const mainEvent = businessEvents[0];
   const mainGrandOpening = grandOpenings[0];
@@ -681,6 +796,7 @@ export default async function Home() {
       const dealId = dealBusinessMap.get(spot.id);
       const hasDeal = Boolean(dealId);
       const hasCoupon = couponBusinessIds.has(spot.id);
+      const status = getOpenStatus(spot.hours);
 
       return (
         <div
@@ -718,25 +834,31 @@ export default async function Home() {
                 {spot.category} · {spot.city}
               </p>
 
-              {(spot.rating || spot.review_count) && (
-                <div className="mt-2 flex items-center gap-1 text-sm">
-                  <span className="text-yellow-500">⭐</span>
+              <div className="mt-2 flex flex-wrap items-center gap-1 text-sm">
+                <span className="text-yellow-500">⭐</span>
 
-                  <span className="font-bold text-gray-900">
-                    {Number(spot.rating || 0).toFixed(1)}
+                <span className="font-bold text-gray-900">
+                  {Number(spot.rating || 0).toFixed(1)}
+                </span>
+
+                {spot.review_count ? (
+                  <span className="text-gray-500">
+                    ({Number(spot.review_count).toLocaleString()} Reviews)
                   </span>
+                ) : (
+                  <span className="text-gray-400">No Reviews</span>
+                )}
 
-                  {spot.review_count ? (
-                    <span className="text-gray-500">
-                      ({Number(spot.review_count).toLocaleString()} Reviews)
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">
-                      No Reviews
-                    </span>
-                  )}
-                </div>
-              )}
+                <span
+                  className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-black ${
+                    status.open
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {status.text.toUpperCase()}
+                </span>
+              </div>
             </div>
           </div>
         </div>
