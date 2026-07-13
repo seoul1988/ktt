@@ -258,7 +258,7 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#FFF9EF] via-[#F8F3EC] to-[#EEE4D7] px-4 py-6 pb-32 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto w-full max-w-xl">
         <header className="mb-6 flex items-center justify-between">
           <button
             type="button"

@@ -282,8 +282,20 @@ export default function AdsPage() {
   </div>
 </div>
 
-        <div className="mb-4 overflow-x-auto border-b border-[#172033]/15">
-          <div className="flex min-w-max gap-5">
+        <div className="mb-4 -mx-4 border-b border-[#172033]/15">
+  <div
+    className="
+      flex
+      overflow-x-auto
+      whitespace-nowrap
+      gap-2
+      px-4
+      pb-2
+      scrollbar-hide
+      snap-x
+      snap-mandatory
+    "
+  >
             {categoryTabs.map((tab) => (
               <Link
                 key={tab.value}
