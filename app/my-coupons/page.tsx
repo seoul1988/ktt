@@ -57,22 +57,27 @@ export default function MyCouponsPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-5 text-[#172033]">
       <div className="mx-auto w-full max-w-xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                window.location.href = "/";
-              }}
-              className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
-            >
-              ← Back
-            </button>
+       <div className="relative mb-6 flex h-12 items-center">
+  {/* 왼쪽 */}
+  <button
+    onClick={() => {
+      window.location.href = "/";
+    }}
+    className="rounded-full bg-white px-4 py-2 text-sm font-bold shadow"
+  >
+    ← Back
+  </button>
 
-            <h1 className="text-3xl font-black">My Coupons</h1>
-          </div>
+  {/* 가운데 */}
+  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-3xl font-black text-[#172033]">
+    My Coupons
+  </h1>
 
-          <ProfileButton />
-        </div>
+  {/* 오른쪽 */}
+  <div className="ml-auto">
+    <ProfileButton />
+  </div>
+</div>
 
         <div className="space-y-4">
           {items.length === 0 ? (
