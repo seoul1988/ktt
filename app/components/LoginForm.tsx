@@ -9,8 +9,10 @@ export default function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] =
+    useState(false);
+  const [isLoading, setIsLoading] =
+    useState(false);
 
   /*
     로그인 페이지 주소 예:
@@ -19,7 +21,8 @@ export default function LoginForm() {
     redirect 값이 없거나 외부 주소이면 홈으로 이동합니다.
   */
   function getSafeRedirectPath() {
-    const requestedPath = searchParams.get("redirect");
+    const requestedPath =
+      searchParams.get("redirect");
 
     if (
       requestedPath &&
@@ -37,7 +40,9 @@ export default function LoginForm() {
     const cleanEmail = email.trim();
 
     if (!cleanEmail || !password) {
-      alert("Please enter your email and password.");
+      alert(
+        "Please enter your email and password.",
+      );
       return;
     }
 
@@ -55,16 +60,19 @@ export default function LoginForm() {
         return;
       }
 
-      const redirectPath = getSafeRedirectPath();
+      const redirectPath =
+        getSafeRedirectPath();
 
-      /*
-        router.push보다 전체 페이지 이동을 사용하면
-        서버 컴포넌트에서도 로그인 쿠키가 즉시 반영됩니다.
-      */
       window.location.replace(redirectPath);
     } catch (error) {
-      console.error("Email login error:", error);
-      alert("An unexpected login error occurred.");
+      console.error(
+        "Email login error:",
+        error,
+      );
+
+      alert(
+        "An unexpected login error occurred.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -74,11 +82,14 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const redirectPath = getSafeRedirectPath();
+      const redirectPath =
+        getSafeRedirectPath();
 
       const callbackUrl =
         `${window.location.origin}/auth/callback` +
-        `?redirect=${encodeURIComponent(redirectPath)}`;
+        `?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`;
 
       const { error } =
         await supabase.auth.signInWithOAuth({
@@ -96,8 +107,15 @@ export default function LoginForm() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error("Google login error:", error);
-      alert("Google login could not be started.");
+      console.error(
+        "Google login error:",
+        error,
+      );
+
+      alert(
+        "Google login could not be started.",
+      );
+
       setIsLoading(false);
     }
   }
@@ -106,11 +124,14 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const redirectPath = getSafeRedirectPath();
+      const redirectPath =
+        getSafeRedirectPath();
 
       const callbackUrl =
         `${window.location.origin}/auth/callback` +
-        `?redirect=${encodeURIComponent(redirectPath)}`;
+        `?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`;
 
       const { error } =
         await supabase.auth.signInWithOAuth({
@@ -125,8 +146,15 @@ export default function LoginForm() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error("Facebook login error:", error);
-      alert("Facebook login could not be started.");
+      console.error(
+        "Facebook login error:",
+        error,
+      );
+
+      alert(
+        "Facebook login could not be started.",
+      );
+
       setIsLoading(false);
     }
   }
@@ -135,11 +163,14 @@ export default function LoginForm() {
     try {
       setIsLoading(true);
 
-      const redirectPath = getSafeRedirectPath();
+      const redirectPath =
+        getSafeRedirectPath();
 
       const callbackUrl =
         `${window.location.origin}/auth/callback` +
-        `?redirect=${encodeURIComponent(redirectPath)}`;
+        `?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`;
 
       const { error } =
         await supabase.auth.signInWithOAuth({
@@ -154,8 +185,15 @@ export default function LoginForm() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error("Kakao login error:", error);
-      alert("Kakao login could not be started.");
+      console.error(
+        "Kakao login error:",
+        error,
+      );
+
+      alert(
+        "Kakao login could not be started.",
+      );
+
       setIsLoading(false);
     }
   }
@@ -163,12 +201,16 @@ export default function LoginForm() {
   function handlePasswordKeyDown(
     event: React.KeyboardEvent<HTMLInputElement>,
   ) {
-    if (event.key === "Enter" && !isLoading) {
+    if (
+      event.key === "Enter" &&
+      !isLoading
+    ) {
       login();
     }
   }
 
-  const redirectPath = getSafeRedirectPath();
+  const redirectPath =
+    getSafeRedirectPath();
 
   const signupHref =
     redirectPath === "/"
@@ -185,23 +227,25 @@ export default function LoginForm() {
         )}`;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#fdf2f8] via-white to-[#fff7ed] px-5 py-8 text-[#172033]">
-      <div className="mx-auto max-w-md rounded-[34px] bg-white px-6 py-9 shadow-2xl">
-        <div className="mb-8 text-center">
-          <p className="mt-5 text-2xl font-black text-[#172033]">
+    <main className="min-h-screen bg-gradient-to-br from-[#fdf2f8] via-white to-[#fff7ed] px-4 py-3 text-[#172033]">
+      <div className="mx-auto w-full max-w-md rounded-[28px] bg-white px-5 py-4 shadow-2xl">
+        {/* 제목 */}
+        <div className="mb-3 text-center">
+          <p className="text-xl font-black text-[#172033]">
             Sign in to your account.
           </p>
 
           {redirectPath !== "/" && (
-            <p className="mt-2 text-sm font-medium text-gray-500">
+            <p className="mt-1 text-xs font-medium text-gray-500">
               로그인 후 이전 페이지로 돌아갑니다.
             </p>
           )}
         </div>
 
-        <div className="space-y-5">
+        {/* 로그인 입력 */}
+        <div className="space-y-3">
           <label className="block">
-            <span className="mb-3 block text-base font-medium text-gray-500">
+            <span className="mb-1.5 block text-sm font-medium text-gray-500">
               Email
             </span>
 
@@ -214,12 +258,12 @@ export default function LoginForm() {
               placeholder="Enter your email"
               autoComplete="email"
               disabled={isLoading}
-              className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 text-lg font-semibold outline-none focus:border-[#172033] disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-2 text-base font-semibold outline-none transition focus:border-[#172033] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             />
           </label>
 
           <label className="block">
-            <span className="mb-3 block text-base font-medium text-gray-500">
+            <span className="mb-1.5 block text-sm font-medium text-gray-500">
               Password
             </span>
 
@@ -227,14 +271,22 @@ export default function LoginForm() {
               <input
                 value={password}
                 onChange={(event) =>
-                  setPassword(event.target.value)
+                  setPassword(
+                    event.target.value,
+                  )
                 }
-                onKeyDown={handlePasswordKeyDown}
+                onKeyDown={
+                  handlePasswordKeyDown
+                }
                 placeholder="Enter your password"
-                type={showPassword ? "text" : "password"}
+                type={
+                  showPassword
+                    ? "text"
+                    : "password"
+                }
                 autoComplete="current-password"
                 disabled={isLoading}
-                className="w-full rounded-[22px] border border-gray-200 bg-gray-50 px-5 py-2 pr-14 text-lg font-semibold outline-none focus:border-[#172033] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-[18px] border border-gray-200 bg-gray-50 px-4 py-2 pr-12 text-base font-semibold outline-none transition focus:border-[#172033] focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               />
 
               <button
@@ -250,9 +302,11 @@ export default function LoginForm() {
                     ? "Hide password"
                     : "Show password"
                 }
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-xl disabled:opacity-50"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-lg disabled:opacity-50"
               >
-                {showPassword ? "🙈" : "👁️"}
+                {showPassword
+                  ? "🙈"
+                  : "👁️"}
               </button>
             </div>
           </label>
@@ -261,13 +315,16 @@ export default function LoginForm() {
             type="button"
             onClick={login}
             disabled={isLoading}
-            className="mt-4 w-full rounded-[22px] bg-black py-2 text-xl font-black text-white shadow-lg transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 w-full rounded-[18px] bg-black py-2 text-lg font-black text-white shadow-lg transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isLoading ? "Please wait..." : "Login"}
+            {isLoading
+              ? "Please wait..."
+              : "Login"}
           </button>
         </div>
 
-        <div className="mt-6 text-center text-base font-semibold text-gray-500">
+        {/* 아이디 / 비밀번호 찾기 */}
+        <div className="mt-3 text-center text-sm font-semibold text-gray-500">
           <a
             href="/forgot-username"
             className="hover:text-[#172033]"
@@ -275,7 +332,7 @@ export default function LoginForm() {
             Forgot Username
           </a>
 
-          <span className="mx-3 text-gray-300">
+          <span className="mx-2 text-gray-300">
             |
           </span>
 
@@ -287,24 +344,27 @@ export default function LoginForm() {
           </a>
         </div>
 
+        {/* 회원가입 */}
         <a
           href={signupHref}
-          className="mt-8 block w-full rounded-[22px] border border-gray-200 bg-gray-50 py-2 text-center text-lg font-medium text-[#172033]"
+          className="mt-4 block w-full rounded-[18px] border border-gray-200 bg-gray-50 py-2 text-center text-base font-medium text-[#172033] transition hover:bg-gray-100"
         >
           Create an Account
         </a>
 
-        <div className="my-9 flex items-center gap-4">
+        {/* 구분선 */}
+        <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-gray-200" />
 
-          <span className="text-base font-semibold text-gray-400">
+          <span className="whitespace-nowrap text-sm font-semibold text-gray-400">
             or continue with
           </span>
 
           <div className="h-px flex-1 bg-gray-200" />
         </div>
 
-        <div className="flex items-center justify-center gap-6">
+        {/* 소셜 로그인 */}
+        <div className="flex items-center justify-center gap-4">
           <button
             type="button"
             onClick={loginWithGoogle}
@@ -315,7 +375,7 @@ export default function LoginForm() {
             <img
               src="/icons/google.png"
               alt="Google Login"
-              className="h-[70px] w-[70px]"
+              className="h-[52px] w-[52px]"
             />
           </button>
 
@@ -329,7 +389,7 @@ export default function LoginForm() {
             <img
               src="/icons/facebook.png"
               alt="Facebook Login"
-              className="h-[70px] w-[70px]"
+              className="h-[52px] w-[52px]"
             />
           </button>
 
@@ -343,14 +403,15 @@ export default function LoginForm() {
             <img
               src="/icons/kakao.png"
               alt="Kakao Login"
-              className="h-[70px] w-[70px]"
+              className="h-[52px] w-[52px]"
             />
           </button>
         </div>
 
-        <p className="mt-10 text-center text-sm leading-6 text-gray-400">
-          By signing in, you agree to our Terms of
-          Service and Privacy Policy.
+        {/* 약관 */}
+        <p className="mt-4 text-center text-xs leading-4 text-gray-400">
+          By signing in, you agree to our
+          Terms of Service and Privacy Policy.
         </p>
       </div>
     </main>
