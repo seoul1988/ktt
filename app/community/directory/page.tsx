@@ -22,6 +22,18 @@ function normalizeCategory(value: string | null | undefined) {
     .replace(/s$/, "");
 }
 
+function parseOrderValue(...values: any[]) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === "") continue;
+
+    const parsed = Number(String(value).trim());
+
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return null;
+}
+
 function splitCategories(value: any) {
   if (Array.isArray(value)) {
     return value.map((v) => String(v).trim()).filter(Boolean);
@@ -95,14 +107,14 @@ export default async function CommunityDirectoryPage() {
   const categoryById = new Map(
     categoryList
       .filter((category) => category.id)
-      .map((category) => [Number(category.id), category])
+      .map((category) => [Number(category.id), category]),
   );
 
   const categoryEmojiMap = new Map(
     categoryList.map((category) => [
       normalizeCategory(category.name),
       category.emoji,
-    ])
+    ]),
   );
 
   const { data: businesses, error } = await supabase
@@ -124,54 +136,105 @@ export default async function CommunityDirectoryPage() {
     .from("business_categories")
     .select("*");
 
-  const businessCategoryMap = new Map<number, string[]>();
+  type LinkedCategory = {
+    name: string;
+    order: number | null;
+  };
+
+  const businessCategoryMap = new Map<number, LinkedCategory[]>();
 
   (businessCategoryRows || []).forEach((row: any) => {
     const businessId = Number(row.business_id);
     const categoryId = Number(row.category_id);
-
     const category = categoryById.get(categoryId);
 
     if (!businessId || !category?.name) return;
 
+    const parsedOrder = parseOrderValue(
+      row.order,
+      row.sort_order,
+      row.display_order,
+      row.category_order,
+      row.order_index,
+      row.sort_index,
+      row.position,
+      row.sequence,
+      row.priority,
+      row.rank,
+    );
+
     const current = businessCategoryMap.get(businessId) || [];
-    current.push(category.name);
+
+    current.push({
+      name: category.name,
+      order: parsedOrder,
+    });
+
     businessCategoryMap.set(businessId, current);
   });
 
   const businessList =
     businesses
       ?.map((business: any) => {
-        const linkedCategories = businessCategoryMap.get(Number(business.id)) || [];
+        const linkedCategories =
+          businessCategoryMap.get(Number(business.id)) || [];
 
-        const rawCategories = [
-          ...linkedCategories,
-          ...splitCategories(
-            business.category ||
-              business.categories ||
-              business.business_category ||
-              business.type ||
-              business.tags ||
-              ""
-          ),
-        ];
+        const fallbackCategories = splitCategories(
+          business.category ||
+            business.categories ||
+            business.business_category ||
+            business.type ||
+            business.tags ||
+            "",
+        );
+
+        const linkedCategoryNames = linkedCategories.map(
+          (category) => category.name,
+        );
+
+        const rawCategories = [...linkedCategoryNames, ...fallbackCategories];
 
         const uniqueCategories = Array.from(
-          new Set(rawCategories.map((cat) => String(cat).trim()).filter(Boolean))
+          new Set(
+            rawCategories.map((cat) => String(cat).trim()).filter(Boolean),
+          ),
+        );
+
+        const categoryOrderMap: Record<string, number | null> = {};
+
+        linkedCategories.forEach((category) => {
+          categoryOrderMap[normalizeCategory(category.name)] = category.order;
+        });
+
+        const businessOrder = parseOrderValue(
+          business.order,
+          business.sort_order,
+          business.display_order,
+          business.category_order,
+          business.order_index,
+          business.sort_index,
+          business.position,
+          business.sequence,
+          business.priority,
+          business.rank,
         );
 
         return {
           ...business,
           matched_categories:
             uniqueCategories.length > 0 ? uniqueCategories : ["Other"],
+          category_order_map: categoryOrderMap,
+          business_order: businessOrder,
         };
       })
       .filter(Boolean) || [];
 
   const categoryNames = Array.from(
     new Set(
-      businessList.flatMap((business: any) => business.matched_categories || [])
-    )
+      businessList.flatMap(
+        (business: any) => business.matched_categories || [],
+      ),
+    ),
   ).sort((a: string, b: string) => a.localeCompare(b, "ko"));
 
   const groupedByCategory = categoryNames
@@ -181,12 +244,27 @@ export default async function CommunityDirectoryPage() {
       const items = businessList
         .filter((business: any) =>
           business.matched_categories.some(
-            (cat: string) => normalizeCategory(cat) === normalizedCategory
-          )
+            (cat: string) => normalizeCategory(cat) === normalizedCategory,
+          ),
         )
-        .sort((a: any, b: any) =>
-          String(a.name || "").localeCompare(String(b.name || ""), "ko")
-        );
+        .sort((a: any, b: any) => {
+          const categoryOrderA =
+            a.category_order_map?.[normalizedCategory] ?? null;
+          const categoryOrderB =
+            b.category_order_map?.[normalizedCategory] ?? null;
+
+          const orderA =
+            categoryOrderA ?? a.business_order ?? Number.MAX_SAFE_INTEGER;
+
+          const orderB =
+            categoryOrderB ?? b.business_order ?? Number.MAX_SAFE_INTEGER;
+
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+
+          return String(a.name || "").localeCompare(String(b.name || ""), "ko");
+        });
 
       return {
         name: categoryName,
