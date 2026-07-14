@@ -24,40 +24,120 @@ type DayHour = {
 const googleLibraries: "places"[] = ["places"];
 
 const defaultHours: DayHour[] = [
-  { day: "Mon", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
-  { day: "Tue", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
-  { day: "Wed", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
-  { day: "Thu", open: "10:00 AM", close: "9:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
-  { day: "Fri", open: "10:00 AM", close: "10:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
-  { day: "Sat", open: "11:00 AM", close: "10:00 PM", closed: false, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
-  { day: "Sun", open: "11:00 AM", close: "8:00 PM", closed: true, hasBreak: false, breakStart: "3:00 PM", breakEnd: "5:00 PM" },
+  {
+    day: "Mon",
+    open: "10:00 AM",
+    close: "9:00 PM",
+    closed: false,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
+  {
+    day: "Tue",
+    open: "10:00 AM",
+    close: "9:00 PM",
+    closed: false,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
+  {
+    day: "Wed",
+    open: "10:00 AM",
+    close: "9:00 PM",
+    closed: false,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
+  {
+    day: "Thu",
+    open: "10:00 AM",
+    close: "9:00 PM",
+    closed: false,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
+  {
+    day: "Fri",
+    open: "10:00 AM",
+    close: "10:00 PM",
+    closed: false,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
+  {
+    day: "Sat",
+    open: "11:00 AM",
+    close: "10:00 PM",
+    closed: false,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
+  {
+    day: "Sun",
+    open: "11:00 AM",
+    close: "8:00 PM",
+    closed: true,
+    hasBreak: false,
+    breakStart: "3:00 PM",
+    breakEnd: "5:00 PM",
+  },
 ];
 
 const timeOptions = [
-  "12:00 AM", "12:30 AM",
-  "1:00 AM", "1:30 AM",
-  "2:00 AM", "2:30 AM",
-  "3:00 AM", "3:30 AM",
-  "4:00 AM", "4:30 AM",
-  "5:00 AM", "5:30 AM",
-  "6:00 AM", "6:30 AM",
-  "7:00 AM", "7:30 AM",
-  "8:00 AM", "8:30 AM",
-  "9:00 AM", "9:30 AM",
-  "10:00 AM", "10:30 AM",
-  "11:00 AM", "11:30 AM",
-  "12:00 PM", "12:30 PM",
-  "1:00 PM", "1:30 PM",
-  "2:00 PM", "2:30 PM",
-  "3:00 PM", "3:30 PM",
-  "4:00 PM", "4:30 PM",
-  "5:00 PM", "5:30 PM",
-  "6:00 PM", "6:30 PM",
-  "7:00 PM", "7:30 PM",
-  "8:00 PM", "8:30 PM",
-  "9:00 PM", "9:30 PM",
-  "10:00 PM", "10:30 PM",
-  "11:00 PM", "11:30 PM",
+  "12:00 AM",
+  "12:30 AM",
+  "1:00 AM",
+  "1:30 AM",
+  "2:00 AM",
+  "2:30 AM",
+  "3:00 AM",
+  "3:30 AM",
+  "4:00 AM",
+  "4:30 AM",
+  "5:00 AM",
+  "5:30 AM",
+  "6:00 AM",
+  "6:30 AM",
+  "7:00 AM",
+  "7:30 AM",
+  "8:00 AM",
+  "8:30 AM",
+  "9:00 AM",
+  "9:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "11:00 AM",
+  "11:30 AM",
+  "12:00 PM",
+  "12:30 PM",
+  "1:00 PM",
+  "1:30 PM",
+  "2:00 PM",
+  "2:30 PM",
+  "3:00 PM",
+  "3:30 PM",
+  "4:00 PM",
+  "4:30 PM",
+  "5:00 PM",
+  "5:30 PM",
+  "6:00 PM",
+  "6:30 PM",
+  "7:00 PM",
+  "7:30 PM",
+  "8:00 PM",
+  "8:30 PM",
+  "9:00 PM",
+  "9:30 PM",
+  "10:00 PM",
+  "10:30 PM",
+  "11:00 PM",
+  "11:30 PM",
 ];
 
 const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -83,9 +163,93 @@ function isAllowedVideoUrl(url: string) {
   }
 }
 
+
+async function optimizeImage(
+  file: File,
+  maxWidth = 1600,
+  maxHeight = 1600,
+  quality = 0.82,
+): Promise<File> {
+  // Animated GIFs and SVG files should not be converted because conversion
+  // would remove animation or vector information.
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Could not read image."));
+        image.src = objectUrl;
+      });
+    }
+
+    if (!source) return file;
+
+    const originalWidth = source.width;
+    const originalHeight = source.height;
+    const scale = Math.min(
+      1,
+      maxWidth / originalWidth,
+      maxHeight / originalHeight,
+    );
+
+    const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+    const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return file;
+    }
+
+    context.drawImage(source, 0, 0, targetWidth, targetHeight);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!blob || blob.size >= file.size) {
+      return file;
+    }
+
+    const baseName = file.name.replace(/\.[^/.]+$/, "") || "image";
+
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } catch (error) {
+    console.warn("Image optimization skipped:", error);
+    return file;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+    if (
+      typeof ImageBitmap !== "undefined" &&
+      source instanceof ImageBitmap
+    ) {
+      source.close();
+    }
+  }
+}
+
 export default function NewBusinessPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const flipbookAdInputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const { isLoaded } = useLoadScript({
@@ -118,6 +282,10 @@ export default function NewBusinessPage() {
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+
+  const [flipbookAdSize, setFlipbookAdSize] = useState<0 | 1 | 2 | 3 | 4>(0);
+  const [flipbookAdFile, setFlipbookAdFile] = useState<File | null>(null);
+  const [flipbookAdPreview, setFlipbookAdPreview] = useState("");
 
   const [bulkDays, setBulkDays] = useState<string[]>(weekDays);
   const [bulkOpen, setBulkOpen] = useState("10:00 AM");
@@ -158,7 +326,9 @@ export default function NewBusinessPage() {
     }
 
     if (externalVideoUrl.trim()) {
-      alert("동영상은 업로드 또는 링크 중 하나만 가능합니다. 링크를 지운 후 업로드하세요.");
+      alert(
+        "동영상은 업로드 또는 링크 중 하나만 가능합니다. 링크를 지운 후 업로드하세요.",
+      );
       e.target.value = "";
       return;
     }
@@ -231,7 +401,7 @@ export default function NewBusinessPage() {
     const query = `${addressText}, North Carolina, USA`;
 
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`,
     );
 
     const data = await response.json();
@@ -249,9 +419,7 @@ export default function NewBusinessPage() {
   function handleAddressChange(value: string) {
     setAddress(value);
 
-    const match = value.match(
-      /^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/
-    );
+    const match = value.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);
 
     if (match) {
       setLat(match[1]);
@@ -270,7 +438,9 @@ export default function NewBusinessPage() {
     setLng(String(location.lng()));
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handlePhotoChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
     const files = Array.from(e.target.files || []);
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
 
@@ -287,15 +457,19 @@ export default function NewBusinessPage() {
       return;
     }
 
-    const newFiles = imageFiles.slice(0, remainCount);
+    const selectedFiles = imageFiles.slice(0, remainCount);
+    e.target.value = "";
 
-    setPhotoFiles((prev) => [...prev, ...newFiles]);
+    // Resize and compress before the files are uploaded to Supabase.
+    const optimizedFiles = await Promise.all(
+      selectedFiles.map((file) => optimizeImage(file, 1600, 1600, 0.82)),
+    );
+
+    setPhotoFiles((prev) => [...prev, ...optimizedFiles]);
     setPhotoPreviews((prev) => [
       ...prev,
-      ...newFiles.map((file) => URL.createObjectURL(file)),
+      ...optimizedFiles.map((file) => URL.createObjectURL(file)),
     ]);
-
-    e.target.value = "";
   }
 
   function removePhoto(index: number) {
@@ -307,29 +481,70 @@ export default function NewBusinessPage() {
     });
   }
 
+  async function handleFlipbookAdChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      e.target.value = "";
+      return;
+    }
+
+    const maxSize = 15 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      alert("광고 이미지는 15MB 이하로 올려주세요.");
+      e.target.value = "";
+      return;
+    }
+
+    e.target.value = "";
+
+    // Ads can keep a little more resolution while still being compressed.
+    const optimizedFile = await optimizeImage(file, 2000, 2400, 0.86);
+
+    if (flipbookAdPreview) {
+      URL.revokeObjectURL(flipbookAdPreview);
+    }
+
+    setFlipbookAdFile(optimizedFile);
+    setFlipbookAdPreview(URL.createObjectURL(optimizedFile));
+  }
+
+  function removeFlipbookAd() {
+    if (flipbookAdPreview) {
+      URL.revokeObjectURL(flipbookAdPreview);
+    }
+
+    setFlipbookAdFile(null);
+    setFlipbookAdPreview("");
+  }
+
   function toggleCategory(categoryName: string) {
     setSelectedCategories((prev) =>
       prev.includes(categoryName)
         ? prev.filter((item) => item !== categoryName)
-        : [...prev, categoryName]
+        : [...prev, categoryName],
     );
   }
 
   function updateDayHour(
     index: number,
     field: keyof DayHour,
-    value: string | boolean
+    value: string | boolean,
   ) {
     setDayHours((prev) =>
-      prev.map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      )
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
     );
   }
 
   function toggleBulkDay(day: string) {
     setBulkDays((prev) =>
-      prev.includes(day) ? prev.filter((item) => item !== day) : [...prev, day]
+      prev.includes(day) ? prev.filter((item) => item !== day) : [...prev, day],
     );
   }
 
@@ -351,12 +566,17 @@ export default function NewBusinessPage() {
               breakStart: bulkBreakStart,
               breakEnd: bulkBreakEnd,
             }
-          : item
-      )
+          : item,
+      ),
     );
   }
 
-  function quickApply(days: string[], open: string, close: string, closed = false) {
+  function quickApply(
+    days: string[],
+    open: string,
+    close: string,
+    closed = false,
+  ) {
     setBulkDays(days);
     setBulkOpen(open);
     setBulkClose(close);
@@ -373,8 +593,8 @@ export default function NewBusinessPage() {
               closed,
               hasBreak: false,
             }
-          : item
-      )
+          : item,
+      ),
     );
   }
 
@@ -423,6 +643,34 @@ export default function NewBusinessPage() {
     return uploadedUrls;
   }
 
+  async function uploadFlipbookAdImage() {
+    if (!flipbookAdFile) return "";
+
+    const rawExtension = flipbookAdFile.name.split(".").pop() || "jpg";
+    const fileExtension =
+      rawExtension.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const fileName = `flipbook-ads/${userId}-${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2)}.${fileExtension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("business-images")
+      .upload(fileName, flipbookAdFile, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("business-images")
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  }
+
   async function saveBusiness() {
     if (!userId) return;
 
@@ -437,9 +685,9 @@ export default function NewBusinessPage() {
     }
 
     if (role !== "admin" && !address.trim()) {
-  alert("Please enter address.");
-  return;
-}
+      alert("Please enter address.");
+      return;
+    }
 
     if (videoFile && externalVideoUrl.trim()) {
       alert("동영상은 업로드 또는 링크 중 하나만 가능합니다.");
@@ -451,72 +699,96 @@ export default function NewBusinessPage() {
       return;
     }
 
+    if (role === "admin" && flipbookAdSize > 0 && !flipbookAdFile) {
+      alert("광고 크기를 선택한 경우 플립북 광고 이미지를 등록해야 합니다.");
+      return;
+    }
+
+    if (role === "admin" && flipbookAdSize === 0 && flipbookAdFile) {
+      alert("광고 이미지를 등록한 경우 광고 크기를 선택해 주세요.");
+      return;
+    }
+
     setSaving(true);
 
     let imageUrls: string[] = [];
     let uploadedVideoUrl = "";
+    let uploadedFlipbookAdUrl = "";
     let coords = { lat: null as number | null, lng: null as number | null };
 
     try {
       imageUrls = await uploadBusinessPhotos();
       uploadedVideoUrl = await uploadBusinessVideo();
+      uploadedFlipbookAdUrl =
+        role === "admin" ? await uploadFlipbookAdImage() : "";
 
       if (lat && lng) {
-	  coords = {
-		lat: Number(lat),
-		lng: Number(lng),
-	  };
-	} else if (address.trim()) {
-	  coords = await geocodeAddress(address);
+        coords = {
+          lat: Number(lat),
+          lng: Number(lng),
+        };
+      } else if (address.trim()) {
+        coords = await geocodeAddress(address);
 
-	  if (coords.lat && coords.lng) {
-		setLat(String(coords.lat));
-		setLng(String(coords.lng));
-	  }
-	}
+        if (coords.lat && coords.lng) {
+          setLat(String(coords.lat));
+          setLng(String(coords.lng));
+        }
+      }
     } catch (error: any) {
       setSaving(false);
       alert("Save error: " + error.message);
       return;
     }
 
-   if (role !== "admin" && (!coords.lat || !coords.lng)) {
-  setSaving(false);
-  alert("Could not find this address on the map. Please check the address.");
-  return;
-}
+    if (role !== "admin" && (!coords.lat || !coords.lng)) {
+      setSaving(false);
+      alert(
+        "Could not find this address on the map. Please check the address.",
+      );
+      return;
+    }
 
     const cleanExternalVideoUrl = externalVideoUrl.trim();
 
-   const { data: business, error: businessError } = await supabase
-  .from("businesses")
-  .insert({
-    name,
-    address: address.trim() || null,
-    phone,
-    category: selectedCategories.join(", "),
-    hours: formatBusinessHours(),
-    description,
+    const { data: business, error: businessError } = await supabase
+      .from("businesses")
+      .insert({
+        name,
+        address: address.trim() || null,
+        phone,
+        category: selectedCategories.join(", "),
+        hours: formatBusinessHours(),
+        description,
 
-    image_url: imageUrls[0] || "",
-    image_urls: imageUrls,
+        image_url: imageUrls[0] || "",
+        image_urls: imageUrls,
 
-    // Uploaded video files only go here.
-    video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
+        // Uploaded video files only go here.
+        video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
 
-    // YouTube / Facebook / Instagram links go here.
-    external_video_url:
-      uploadedVideoUrl ? null : cleanExternalVideoUrl || null,
+        // YouTube / Facebook / Instagram links go here.
+        external_video_url: uploadedVideoUrl
+          ? null
+          : cleanExternalVideoUrl || null,
 
-    lat: coords.lat,
-    lng: coords.lng,
+        lat: coords.lat,
+        lng: coords.lng,
 
-    tags,
-    website_url: websiteUrl,
-    instagram_url: instagramUrl,
+        tags,
+        website_url: websiteUrl,
+        instagram_url: instagramUrl,
 
-    owner_id: userId,
-  })
+        // Flipbook advertisement: 관리자만 설정할 수 있습니다.
+        flipbook_ad_size: role === "admin" ? flipbookAdSize : 0,
+        flipbook_ad_image_url:
+          role === "admin" ? uploadedFlipbookAdUrl || null : null,
+        flipbook_enabled:
+          role === "admin" && flipbookAdSize > 0 && !!uploadedFlipbookAdUrl,
+        flipbook_priority: 0,
+
+        owner_id: userId,
+      })
 
       .select("id")
       .single();
@@ -635,7 +907,8 @@ export default function NewBusinessPage() {
             <div>
               <p className="font-black">Business Video</p>
               <p className="text-xs font-bold text-gray-500">
-                Upload one video OR paste one YouTube / Facebook / Instagram link.
+                Upload one video OR paste one YouTube / Facebook / Instagram
+                link.
               </p>
             </div>
 
@@ -690,7 +963,8 @@ export default function NewBusinessPage() {
             />
 
             <p className="text-[11px] font-bold text-gray-500">
-              동영상은 1개만 저장됩니다. 업로드 영상이 있으면 링크 입력은 잠깁니다.
+              동영상은 1개만 저장됩니다. 업로드 영상이 있으면 링크 입력은
+              잠깁니다.
             </p>
           </div>
 
@@ -747,6 +1021,94 @@ export default function NewBusinessPage() {
               </div>
             )}
           </div>
+
+          {role === "admin" && (
+            <>
+              <div className="space-y-4 rounded-2xl border border-[#D8C7AE] bg-[#FFF8EA] p-4">
+                <div>
+                  <p className="font-black">Flipbook Advertisement</p>
+                  <p className="mt-1 text-xs font-bold leading-5 text-[#6B6257]">
+                    플립북에 사용할 광고 전용 이미지 1개를 등록하세요. 일반
+                    비즈니스 사진과 별도로 저장됩니다.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black">
+                    Advertisement Size
+                  </label>
+
+                  <select
+                    value={flipbookAdSize}
+                    onChange={(e) =>
+                      setFlipbookAdSize(
+                        Number(e.target.value) as 0 | 1 | 2 | 3 | 4,
+                      )
+                    }
+                    className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-bold"
+                  >
+                    <option value={0}>0 — 광고 표시 안 함</option>
+                    <option value={1}>1 — 전체면 100%</option>
+                    <option value={2}>2 — 반면 50%</option>
+                    <option value={3}>3 — 1/4면 25%</option>
+                    <option value={4}>4 — 1/6면</option>
+                  </select>
+                </div>
+
+                <input
+                  ref={flipbookAdInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFlipbookAdChange}
+                  className="hidden"
+                />
+
+                {!flipbookAdPreview ? (
+                  <button
+                    type="button"
+                    onClick={() => flipbookAdInputRef.current?.click()}
+                    className="w-full rounded-2xl bg-[#C4483A] px-4 py-3 text-sm font-extrabold text-white"
+                  >
+                    광고 이미지 첨부
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="overflow-hidden rounded-2xl border bg-white">
+                      <img
+                        src={flipbookAdPreview}
+                        alt="Flipbook advertisement preview"
+                        className="max-h-[520px] w-full object-contain"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => flipbookAdInputRef.current?.click()}
+                        className="rounded-xl bg-[#172033] px-4 py-3 text-sm font-black text-white"
+                      >
+                        이미지 변경
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={removeFlipbookAd}
+                        className="rounded-xl bg-red-500 px-4 py-3 text-sm font-black text-white"
+                      >
+                        이미지 삭제
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[11px] font-bold leading-5 text-[#6B6257]">
+                  광고 크기가 1~4이면 광고 이미지가 반드시 필요합니다. 광고를
+                  표시하지 않으려면 크기를 0으로 두고 이미지를 등록하지 마세요.
+                  최대 파일 크기: 15MB.
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="rounded-2xl border bg-gray-50 p-4">
             <p className="mb-3 font-black">Categories</p>
@@ -817,7 +1179,9 @@ export default function NewBusinessPage() {
 
                 <button
                   type="button"
-                  onClick={() => quickApply(["Sun"], "11:00 AM", "8:00 PM", true)}
+                  onClick={() =>
+                    quickApply(["Sun"], "11:00 AM", "8:00 PM", true)
+                  }
                   className="rounded-xl bg-red-500 px-3 py-3 text-xs font-black text-white"
                 >
                   Sunday Closed
@@ -825,7 +1189,9 @@ export default function NewBusinessPage() {
               </div>
 
               <div className="rounded-2xl border bg-gray-50 p-3">
-                <p className="mb-2 text-sm font-black">Apply To Selected Days</p>
+                <p className="mb-2 text-sm font-black">
+                  Apply To Selected Days
+                </p>
 
                 <div className="mb-3 grid grid-cols-4 gap-2">
                   {allDays.map((day) => {
@@ -940,7 +1306,10 @@ export default function NewBusinessPage() {
 
             <div className="space-y-3">
               {dayHours.map((item, index) => (
-                <div key={item.day} className="rounded-2xl bg-white p-3 shadow-sm">
+                <div
+                  key={item.day}
+                  className="rounded-2xl bg-white p-3 shadow-sm"
+                >
                   <div className="mb-2 flex items-center justify-between">
                     <p className="font-black">{item.day}</p>
 
@@ -1090,7 +1459,10 @@ export default function NewBusinessPage() {
             Map
           </a>
 
-          <a href="/business/new" className="flex-1 py-4 text-center text-[#F6C343]">
+          <a
+            href="/business/new"
+            className="flex-1 py-4 text-center text-[#F6C343]"
+          >
             Business
           </a>
 
