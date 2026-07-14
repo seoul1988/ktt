@@ -1410,13 +1410,23 @@ export default function NewBusinessPage() {
       }
 
       if (role === "admin" && uploadedFlipbookAds.length > 0) {
-        const adRows = uploadedFlipbookAds.map((ad) => ({
-          business_id: business.id,
-          ad_size: ad.size,
-          image_url: ad.imageUrl,
-          enabled: ad.enabled,
-          priority: 0,
-        }));
+        const adRows: Array<{
+          business_id: number;
+          ad_size: FlipbookAdSize;
+          image_url: string;
+          enabled: boolean;
+          priority: number;
+        }> = [];
+
+        for (const ad of uploadedFlipbookAds) {
+          adRows.push({
+            business_id: business.id,
+            ad_size: ad.size,
+            image_url: ad.imageUrl,
+            enabled: ad.enabled,
+            priority: 0,
+          });
+        }
 
         const { error: adError } = await supabase
           .from("business_flipbook_ads")
