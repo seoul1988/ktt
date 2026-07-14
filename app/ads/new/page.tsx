@@ -234,8 +234,10 @@ export default function NewAdPage() {
 			<option value="housing">🏠 부동산·렌트</option>
 			<option value="auto">🚗 자동차</option>
 			<option value="event">🎉 행사·이벤트</option>
+			<option value="group">🎭 공연·문화</option>
 			<option value="service">🛠 생활서비스</option>
             <option value="group">👥 모임 모집</option>
+			
           </select>
 
           <input
