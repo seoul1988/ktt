@@ -33,7 +33,7 @@ type FlipbookAdRecord = {
 };
 
 const flipbookAdOptions = [
-  { size: 1 as FlipbookAdSize, label: "Size 1", description: "전체면 100%", recommendedSize: "1080 × 1920 px" },
+  { size: 1 as FlipbookAdSize, label: "Size 1", description: "전체면 100%", recommendedSize: "1080 × 1527 px" },
   { size: 2 as FlipbookAdSize, label: "Size 2", description: "반면 50%", recommendedSize: "1080 × 960 px" },
   { size: 3 as FlipbookAdSize, label: "Size 3", description: "1/4면 25%", recommendedSize: "540 × 960 px" },
   { size: 4 as FlipbookAdSize, label: "Size 4", description: "1/6면", recommendedSize: "540 × 640 px" },
