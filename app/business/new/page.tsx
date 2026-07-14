@@ -36,7 +36,7 @@ const flipbookAdOptions: FlipbookAdItem[] = [
     size: 1,
     label: "Size 1",
     description: "전체면 100%",
-    recommendedSize: "1080 × 1920 px",
+    recommendedSize: "1080 × 1527 px",
   },
   {
     size: 2,
