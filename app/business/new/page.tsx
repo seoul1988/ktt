@@ -163,7 +163,6 @@ function isAllowedVideoUrl(url: string) {
   }
 }
 
-
 async function optimizeImage(
   file: File,
   maxWidth = 1600,
@@ -237,10 +236,7 @@ async function optimizeImage(
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
 
-    if (
-      typeof ImageBitmap !== "undefined" &&
-      source instanceof ImageBitmap
-    ) {
+    if (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap) {
       source.close();
     }
   }
@@ -271,6 +267,11 @@ export default function NewBusinessPage() {
   const [lng, setLng] = useState("");
   const [phone, setPhone] = useState("");
   const [dayHours, setDayHours] = useState<DayHour[]>(defaultHours);
+  const [hoursSource, setHoursSource] = useState<"google" | "manual" | "none">(
+    "none",
+  );
+  const [googleHoursMessage, setGoogleHoursMessage] = useState("");
+  const [searchingGoogleHours, setSearchingGoogleHours] = useState(false);
   const [description, setDescription] = useState("");
   const [tags, setTags] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
@@ -419,6 +420,15 @@ export default function NewBusinessPage() {
   function handleAddressChange(value: string) {
     setAddress(value);
 
+    // 사용자가 Google에서 선택한 주소를 다시 수정하면 이전 Google 영업시간이
+    // 그대로 남아 있지 않도록 검색 상태를 초기화합니다.
+    if (hoursSource === "google") {
+      setHoursSource("none");
+      setGoogleHoursMessage(
+        "주소를 수정했습니다. Google 추천 목록에서 업체 또는 주소를 다시 선택해 주세요.",
+      );
+    }
+
     const match = value.match(/^\s*(-?\d+(\.\d+)?)\s*,\s*(-?\d+(\.\d+)?)\s*$/);
 
     if (match) {
@@ -427,20 +437,413 @@ export default function NewBusinessPage() {
     }
   }
 
-  function handlePlaceChanged() {
+  function minutesToTime(totalMinutes: number) {
+    const normalized = ((totalMinutes % 1440) + 1440) % 1440;
+    const hour24 = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+    const suffix = hour24 >= 12 ? "PM" : "AM";
+    const hour12 = hour24 % 12 || 12;
+
+    return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+  }
+
+  function applyGoogleOpeningHours(
+    openingHours?: google.maps.places.PlaceOpeningHours,
+  ) {
+    const periods = openingHours?.periods;
+
+    if (!periods || periods.length === 0) {
+      setHoursSource("manual");
+      setGoogleHoursMessage(
+        "Google에 등록된 영업시간이 없습니다. 직접 입력해 주세요.",
+      );
+      setDayHours(defaultHours.map((item) => ({ ...item })));
+      return;
+    }
+
+    const googleDayToAppDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const grouped = new Map<
+      string,
+      google.maps.places.PlaceOpeningHoursPeriod[]
+    >();
+
+    for (const period of periods) {
+      if (!period.open) continue;
+      const day = googleDayToAppDay[period.open.day];
+      grouped.set(day, [...(grouped.get(day) || []), period]);
+    }
+
+    const importedHours = defaultHours.map((fallback) => {
+      const dayPeriods = (grouped.get(fallback.day) || []).sort((a, b) =>
+        (a.open?.time || "").localeCompare(b.open?.time || ""),
+      );
+
+      if (dayPeriods.length === 0) {
+        return { ...fallback, closed: true, hasBreak: false };
+      }
+
+      const first = dayPeriods[0];
+      const second = dayPeriods[1];
+      const openMinutes =
+        Number(first.open?.hours || 0) * 60 + Number(first.open?.minutes || 0);
+
+      // 24-hour businesses may not include a close value.
+      const closeMinutes = first.close
+        ? Number(first.close.hours || 0) * 60 + Number(first.close.minutes || 0)
+        : 23 * 60 + 30;
+
+      const nextOpenMinutes = second
+        ? Number(second.open?.hours || 0) * 60 +
+          Number(second.open?.minutes || 0)
+        : 0;
+      const finalCloseMinutes = second?.close
+        ? Number(second.close.hours || 0) * 60 +
+          Number(second.close.minutes || 0)
+        : closeMinutes;
+
+      return {
+        day: fallback.day,
+        open: minutesToTime(openMinutes),
+        close: minutesToTime(second ? finalCloseMinutes : closeMinutes),
+        closed: false,
+        hasBreak: !!second && !!first.close,
+        breakStart: first.close
+          ? minutesToTime(
+              Number(first.close.hours || 0) * 60 +
+                Number(first.close.minutes || 0),
+            )
+          : fallback.breakStart,
+        breakEnd: second ? minutesToTime(nextOpenMinutes) : fallback.breakEnd,
+      };
+    });
+
+    setDayHours(importedHours);
+    setHoursSource("google");
+    setGoogleHoursMessage("Google에 등록된 영업시간을 불러왔습니다.");
+  }
+
+  function normalizeBusinessName(value: string) {
+    return value
+      .split("|")[0]
+      .split("—")[0]
+      .split("-")[0]
+      .replace(/\b(korean|restaurant|bbq|cary|nc|north carolina)\b/gi, " ")
+      .replace(/[^a-z0-9가-힣]+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function placeDistanceMeters(
+    a: google.maps.LatLng | google.maps.LatLngLiteral,
+    b?: google.maps.LatLng,
+  ) {
+    if (!b) return Number.MAX_SAFE_INTEGER;
+
+    const aLat =
+      typeof (a as google.maps.LatLng).lat === "function"
+        ? (a as google.maps.LatLng).lat()
+        : (a as google.maps.LatLngLiteral).lat;
+    const aLng =
+      typeof (a as google.maps.LatLng).lng === "function"
+        ? (a as google.maps.LatLng).lng()
+        : (a as google.maps.LatLngLiteral).lng;
+
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const earthRadius = 6371000;
+    const dLat = toRad(b.lat() - aLat);
+    const dLng = toRad(b.lng() - aLng);
+    const lat1 = toRad(aLat);
+    const lat2 = toRad(b.lat());
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+    return 2 * earthRadius * Math.asin(Math.sqrt(h));
+  }
+
+  async function findGoogleBusinessHours(
+    businessName: string,
+    businessAddress: string,
+    location?: google.maps.LatLng | google.maps.LatLngLiteral,
+  ): Promise<boolean> {
+    if (!window.google?.maps?.places || !businessName.trim()) return false;
+
+    const service = new google.maps.places.PlacesService(
+      document.createElement("div"),
+    );
+
+    const cleanName =
+      normalizeBusinessName(businessName) || businessName.trim();
+    const normalizedTarget = cleanName.toLowerCase();
+
+    const searchResults = async () => {
+      const collected: google.maps.places.PlaceResult[] = [];
+
+      if (location) {
+        const nearby = await new Promise<google.maps.places.PlaceResult[]>(
+          (resolve) => {
+            service.nearbySearch(
+              {
+                location,
+                radius: 1500,
+                keyword: cleanName,
+              },
+              (results, status) => {
+                resolve(
+                  status === google.maps.places.PlacesServiceStatus.OK &&
+                    results
+                    ? results
+                    : [],
+                );
+              },
+            );
+          },
+        );
+        collected.push(...nearby);
+      }
+
+      const queries = [
+        `${cleanName}, ${businessAddress}`,
+        `${cleanName} Cary NC`,
+        cleanName,
+      ];
+
+      for (const query of queries) {
+        const textResults = await new Promise<google.maps.places.PlaceResult[]>(
+          (resolve) => {
+            service.textSearch(
+              {
+                query,
+                ...(location ? { location, radius: 5000 } : {}),
+              },
+              (results, status) => {
+                resolve(
+                  status === google.maps.places.PlacesServiceStatus.OK &&
+                    results
+                    ? results
+                    : [],
+                );
+              },
+            );
+          },
+        );
+        collected.push(...textResults);
+        if (collected.some((item) => item.place_id)) break;
+      }
+
+      const unique = new Map<string, google.maps.places.PlaceResult>();
+      for (const item of collected) {
+        if (item.place_id) unique.set(item.place_id, item);
+      }
+
+      return [...unique.values()];
+    };
+
+    const results = await searchResults();
+
+    if (!results.length) {
+      console.warn("Google business search returned no results:", {
+        businessName,
+        cleanName,
+        businessAddress,
+      });
+      return false;
+    }
+
+    const scored = results
+      .map((item) => {
+        const candidateName = normalizeBusinessName(
+          String(item.name || ""),
+        ).toLowerCase();
+        let score = 0;
+
+        if (candidateName === normalizedTarget) score += 100;
+        else if (
+          candidateName.includes(normalizedTarget) ||
+          normalizedTarget.includes(candidateName)
+        )
+          score += 70;
+
+        const addressWords = businessAddress
+          .toLowerCase()
+          .replace(/[^a-z0-9 ]/g, " ")
+          .split(/\s+/)
+          .filter((word) => word.length >= 3);
+        const candidateAddress = String(
+          item.formatted_address || item.vicinity || "",
+        ).toLowerCase();
+        const matchedAddressWords = addressWords.filter((word) =>
+          candidateAddress.includes(word),
+        ).length;
+        score += Math.min(matchedAddressWords * 5, 40);
+
+        if (location) {
+          const distance = placeDistanceMeters(
+            location,
+            item.geometry?.location,
+          );
+          if (distance < 100) score += 50;
+          else if (distance < 500) score += 30;
+          else if (distance < 1500) score += 10;
+        }
+
+        return { item, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    for (const { item } of scored.slice(0, 5)) {
+      if (!item.place_id) continue;
+
+      const details = await new Promise<google.maps.places.PlaceResult | null>(
+        (resolve) => {
+          service.getDetails(
+            {
+              placeId: item.place_id!,
+              fields: [
+                "place_id",
+                "name",
+                "formatted_address",
+                "geometry",
+                "opening_hours",
+                "business_status",
+              ],
+            },
+            (place, status) => {
+              resolve(
+                status === google.maps.places.PlacesServiceStatus.OK && place
+                  ? place
+                  : null,
+              );
+            },
+          );
+        },
+      );
+
+      if (details?.opening_hours?.periods?.length) {
+        applyGoogleOpeningHours(details.opening_hours);
+        setGoogleHoursMessage(
+          `${details.name || cleanName}의 Google 영업시간을 불러왔습니다.`,
+        );
+        console.log("Matched Google business:", {
+          placeId: details.place_id,
+          name: details.name,
+          address: details.formatted_address,
+          businessStatus: details.business_status,
+          periodsCount: details.opening_hours?.periods?.length || 0,
+        });
+        return true;
+      }
+    }
+
+    console.warn(
+      "Matched places did not return opening hours:",
+      scored.slice(0, 5),
+    );
+    return false;
+  }
+
+  async function searchGoogleHoursManually() {
+    if (!name.trim()) {
+      setHoursSource("manual");
+      setGoogleHoursMessage("업체명을 먼저 입력해 주세요.");
+      return;
+    }
+
+    if (!address.trim()) {
+      setHoursSource("manual");
+      setGoogleHoursMessage("주소를 먼저 입력해 주세요.");
+      return;
+    }
+
+    setSearchingGoogleHours(true);
+    setHoursSource("none");
+    setGoogleHoursMessage("Google에서 업체 영업시간을 다시 찾고 있습니다.");
+
+    try {
+      const location =
+        lat && lng ? { lat: Number(lat), lng: Number(lng) } : undefined;
+
+      const found = await findGoogleBusinessHours(name, address, location);
+
+      if (!found) {
+        setHoursSource("manual");
+        setDayHours(defaultHours.map((item) => ({ ...item })));
+        setGoogleHoursMessage(
+          "Google에 등록된 영업시간이 없습니다. 아래에서 직접 입력해 주세요.",
+        );
+      }
+    } catch (error) {
+      console.error("Google hours manual search error:", error);
+      setHoursSource("manual");
+      setGoogleHoursMessage(
+        "Google 영업시간 검색 중 오류가 발생했습니다. 직접 입력해 주세요.",
+      );
+    } finally {
+      setSearchingGoogleHours(false);
+    }
+  }
+
+  async function handlePlaceChanged() {
     const place = autocompleteRef.current?.getPlace();
     const location = place?.geometry?.location;
 
     if (!place || !location) return;
 
-    setAddress(place.formatted_address || place.name || "");
+    const selectedAddress = place.formatted_address || place.name || "";
+
+    setAddress(selectedAddress);
     setLat(String(location.lat()));
     setLng(String(location.lng()));
+    setSearchingGoogleHours(true);
+    setHoursSource("none");
+    setGoogleHoursMessage("Google에서 업체 영업시간을 확인하고 있습니다.");
+
+    try {
+      // 사용자가 자동완성에서 업체 자체를 선택한 경우에는 해당 Place의
+      // opening_hours를 우선 사용합니다.
+      if (place.opening_hours?.periods?.length) {
+        applyGoogleOpeningHours(place.opening_hours);
+        setGoogleHoursMessage(
+          `${place.name || name || "선택한 업체"}의 Google 영업시간을 불러왔습니다.`,
+        );
+        return;
+      }
+
+      // 주소 Place에는 영업시간이 없을 수 있으므로 업체명 + 주소로 실제
+      // 비즈니스 Place를 다시 찾아 상세 영업시간을 가져옵니다.
+      const found = await findGoogleBusinessHours(
+        name,
+        selectedAddress,
+        location,
+      );
+
+      if (!found) {
+        setHoursSource("manual");
+        setDayHours(defaultHours.map((item) => ({ ...item })));
+
+        if (!name.trim()) {
+          setGoogleHoursMessage(
+            "업체명을 먼저 입력한 뒤 Google 추천 목록에서 주소를 다시 선택해 주세요. 찾지 못하면 직접 입력할 수 있습니다.",
+          );
+        } else {
+          setGoogleHoursMessage(
+            "Google에 등록된 영업시간이 없습니다. 아래에서 직접 입력해 주세요.",
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Google business hours lookup error:", error);
+      setHoursSource("manual");
+      setDayHours(defaultHours.map((item) => ({ ...item })));
+      setGoogleHoursMessage(
+        "Google 영업시간을 불러오는 중 오류가 발생했습니다. 직접 입력해 주세요.",
+      );
+    } finally {
+      setSearchingGoogleHours(false);
+    }
   }
 
-  async function handlePhotoChange(
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) {
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
 
@@ -863,6 +1266,15 @@ export default function NewBusinessPage() {
                 autocompleteRef.current = autocomplete;
               }}
               onPlaceChanged={handlePlaceChanged}
+              options={{
+                fields: [
+                  "place_id",
+                  "name",
+                  "formatted_address",
+                  "geometry",
+                  "opening_hours",
+                ],
+              }}
             >
               <input
                 value={address}
@@ -879,6 +1291,27 @@ export default function NewBusinessPage() {
               className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
             />
           )}
+
+          <button
+            type="button"
+            onClick={searchGoogleHoursManually}
+            disabled={searchingGoogleHours || !isLoaded}
+            className={`w-full rounded-2xl border px-4 py-3 text-sm font-black disabled:opacity-50 ${
+              hoursSource === "google"
+                ? "border-green-700 bg-green-50 text-green-800"
+                : googleHoursMessage.includes("등록된 영업시간이 없습니다")
+                  ? "border-red-600 bg-red-50 text-red-700"
+                  : "border-[#172033] bg-white text-[#172033]"
+            }`}
+          >
+            {searchingGoogleHours
+              ? "Google 영업시간 찾는 중..."
+              : hoursSource === "google"
+                ? "✓ Google 영업시간을 찾았습니다"
+                : googleHoursMessage.includes("등록된 영업시간이 없습니다")
+                  ? "Google에 등록된 영업시간이 없습니다"
+                  : "Google에서 영업시간 다시 찾기"}
+          </button>
 
           <div className="grid grid-cols-2 gap-2">
             <input
@@ -1142,240 +1575,146 @@ export default function NewBusinessPage() {
           </div>
 
           <div className="rounded-2xl border bg-gray-50 p-4">
-            <p className="mb-3 font-black">Business Hours</p>
-
-            <div className="mb-4 space-y-3 rounded-2xl bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <p className="font-black">Quick Setup</p>
-                <p className="text-xs font-bold text-gray-500">
-                  같은 시간대 요일을 한 번에 적용하세요.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => quickApply(weekDays, "10:00 AM", "9:00 PM")}
-                  className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
-                >
-                  Mon-Fri Same
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => quickApply(allDays, "10:00 AM", "9:00 PM")}
-                  className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
-                >
-                  All Days Same
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => quickApply(weekendDays, "11:00 AM", "8:00 PM")}
-                  className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
-                >
-                  Weekend Same
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    quickApply(["Sun"], "11:00 AM", "8:00 PM", true)
-                  }
-                  className="rounded-xl bg-red-500 px-3 py-3 text-xs font-black text-white"
-                >
-                  Sunday Closed
-                </button>
-              </div>
-
-              <div className="rounded-2xl border bg-gray-50 p-3">
-                <p className="mb-2 text-sm font-black">
-                  Apply To Selected Days
-                </p>
-
-                <div className="mb-3 grid grid-cols-4 gap-2">
-                  {allDays.map((day) => {
-                    const checked = bulkDays.includes(day);
-
-                    return (
-                      <label
-                        key={day}
-                        className={`flex cursor-pointer items-center justify-center rounded-xl border px-2 py-2 text-xs font-black ${
-                          checked
-                            ? "border-[#172033] bg-white text-[#172033]"
-                            : "border-gray-200 bg-white/50 text-gray-400"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleBulkDay(day)}
-                          className="hidden"
-                        />
-                        {day}
-                      </label>
-                    );
-                  })}
-                </div>
-
-                <label className="mb-3 flex items-center gap-2 text-sm font-bold">
-                  <input
-                    type="checkbox"
-                    checked={bulkClosed}
-                    onChange={(e) => setBulkClosed(e.target.checked)}
-                  />
-                  Closed selected days
-                </label>
-
-                {!bulkClosed && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <select
-                        value={bulkOpen}
-                        onChange={(e) => setBulkOpen(e.target.value)}
-                        className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
-                      >
-                        {timeOptions.map((time) => (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={bulkClose}
-                        onChange={(e) => setBulkClose(e.target.value)}
-                        className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
-                      >
-                        {timeOptions.map((time) => (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-sm font-bold">
-                      <input
-                        type="checkbox"
-                        checked={bulkHasBreak}
-                        onChange={(e) => setBulkHasBreak(e.target.checked)}
-                      />
-                      Same break time
-                    </label>
-
-                    {bulkHasBreak && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <select
-                          value={bulkBreakStart}
-                          onChange={(e) => setBulkBreakStart(e.target.value)}
-                          className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
-                        >
-                          {timeOptions.map((time) => (
-                            <option key={time} value={time}>
-                              {time}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={bulkBreakEnd}
-                          onChange={(e) => setBulkBreakEnd(e.target.value)}
-                          className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
-                        >
-                          {timeOptions.map((time) => (
-                            <option key={time} value={time}>
-                              {time}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
+                <p className="font-black">Business Hours</p>
+                {googleHoursMessage && (
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    {searchingGoogleHours ? "⏳ " : ""}
+                    {googleHoursMessage}
+                  </p>
                 )}
+              </div>
 
+              {hoursSource === "google" && (
                 <button
                   type="button"
-                  onClick={() => applyHoursToDays()}
-                  className="mt-3 w-full rounded-xl bg-[#F6C343] px-4 py-3 text-sm font-black text-[#172033]"
+                  onClick={() => setHoursSource("manual")}
+                  className="shrink-0 rounded-xl border bg-white px-3 py-2 text-xs font-black"
                 >
-                  Apply To Selected Days
+                  직접 수정
                 </button>
-              </div>
+              )}
             </div>
 
-            <div className="space-y-3">
-              {dayHours.map((item, index) => (
-                <div
-                  key={item.day}
-                  className="rounded-2xl bg-white p-3 shadow-sm"
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="font-black">{item.day}</p>
+            {hoursSource === "google" && (
+              <div className="mb-4 space-y-2 rounded-2xl bg-white p-3 shadow-sm">
+                {dayHours.map((item) => (
+                  <div
+                    key={item.day}
+                    className="flex items-start justify-between gap-4 text-sm"
+                  >
+                    <span className="font-black">{item.day}</span>
+                    <span className="text-right font-bold text-gray-600">
+                      {item.closed
+                        ? "Closed"
+                        : `${item.open} - ${item.close}${
+                            item.hasBreak
+                              ? ` / Break ${item.breakStart} - ${item.breakEnd}`
+                              : ""
+                          }`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
-                    <label className="flex items-center gap-2 text-sm font-bold">
-                      <input
-                        type="checkbox"
-                        checked={item.closed}
-                        onChange={(e) =>
-                          updateDayHour(index, "closed", e.target.checked)
-                        }
-                      />
-                      Closed
-                    </label>
+            {hoursSource !== "google" && (
+              <>
+                <div className="mb-4 space-y-3 rounded-2xl bg-white p-3 shadow-sm">
+                  <div>
+                    <p className="font-black">Quick Setup</p>
+                    <p className="text-xs font-bold text-gray-500">
+                      같은 시간대 요일을 한 번에 적용하세요.
+                    </p>
                   </div>
 
-                  {!item.closed && (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <select
-                          value={item.open}
-                          onChange={(e) =>
-                            updateDayHour(index, "open", e.target.value)
-                          }
-                          className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
-                        >
-                          {timeOptions.map((time) => (
-                            <option key={time} value={time}>
-                              {time}
-                            </option>
-                          ))}
-                        </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        quickApply(weekDays, "10:00 AM", "9:00 PM")
+                      }
+                      className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
+                    >
+                      Mon-Fri Same
+                    </button>
 
-                        <select
-                          value={item.close}
-                          onChange={(e) =>
-                            updateDayHour(index, "close", e.target.value)
-                          }
-                          className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
-                        >
-                          {timeOptions.map((time) => (
-                            <option key={time} value={time}>
-                              {time}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <button
+                      type="button"
+                      onClick={() => quickApply(allDays, "10:00 AM", "9:00 PM")}
+                      className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
+                    >
+                      All Days Same
+                    </button>
 
-                      <label className="flex items-center gap-2 text-sm font-bold">
-                        <input
-                          type="checkbox"
-                          checked={item.hasBreak}
-                          onChange={(e) =>
-                            updateDayHour(index, "hasBreak", e.target.checked)
-                          }
-                        />
-                        Break time
-                      </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        quickApply(weekendDays, "11:00 AM", "8:00 PM")
+                      }
+                      className="rounded-xl bg-[#172033] px-3 py-3 text-xs font-black text-white"
+                    >
+                      Weekend Same
+                    </button>
 
-                      {item.hasBreak && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        quickApply(["Sun"], "11:00 AM", "8:00 PM", true)
+                      }
+                      className="rounded-xl bg-red-500 px-3 py-3 text-xs font-black text-white"
+                    >
+                      Sunday Closed
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border bg-gray-50 p-3">
+                    <p className="mb-2 text-sm font-black">
+                      Apply To Selected Days
+                    </p>
+
+                    <div className="mb-3 grid grid-cols-4 gap-2">
+                      {allDays.map((day) => {
+                        const checked = bulkDays.includes(day);
+
+                        return (
+                          <label
+                            key={day}
+                            className={`flex cursor-pointer items-center justify-center rounded-xl border px-2 py-2 text-xs font-black ${
+                              checked
+                                ? "border-[#172033] bg-white text-[#172033]"
+                                : "border-gray-200 bg-white/50 text-gray-400"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleBulkDay(day)}
+                              className="hidden"
+                            />
+                            {day}
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <label className="mb-3 flex items-center gap-2 text-sm font-bold">
+                      <input
+                        type="checkbox"
+                        checked={bulkClosed}
+                        onChange={(e) => setBulkClosed(e.target.checked)}
+                      />
+                      Closed selected days
+                    </label>
+
+                    {!bulkClosed && (
+                      <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
                           <select
-                            value={item.breakStart}
-                            onChange={(e) =>
-                              updateDayHour(index, "breakStart", e.target.value)
-                            }
-                            className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                            value={bulkOpen}
+                            onChange={(e) => setBulkOpen(e.target.value)}
+                            className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
                           >
                             {timeOptions.map((time) => (
                               <option key={time} value={time}>
@@ -1385,11 +1724,9 @@ export default function NewBusinessPage() {
                           </select>
 
                           <select
-                            value={item.breakEnd}
-                            onChange={(e) =>
-                              updateDayHour(index, "breakEnd", e.target.value)
-                            }
-                            className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                            value={bulkClose}
+                            onChange={(e) => setBulkClose(e.target.value)}
+                            className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
                           >
                             {timeOptions.map((time) => (
                               <option key={time} value={time}>
@@ -1398,12 +1735,172 @@ export default function NewBusinessPage() {
                             ))}
                           </select>
                         </div>
+
+                        <label className="flex items-center gap-2 text-sm font-bold">
+                          <input
+                            type="checkbox"
+                            checked={bulkHasBreak}
+                            onChange={(e) => setBulkHasBreak(e.target.checked)}
+                          />
+                          Same break time
+                        </label>
+
+                        {bulkHasBreak && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={bulkBreakStart}
+                              onChange={(e) =>
+                                setBulkBreakStart(e.target.value)
+                              }
+                              className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
+                            >
+                              {timeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                  {time}
+                                </option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={bulkBreakEnd}
+                              onChange={(e) => setBulkBreakEnd(e.target.value)}
+                              className="rounded-xl border bg-white px-3 py-3 text-sm font-bold"
+                            >
+                              {timeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                  {time}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => applyHoursToDays()}
+                      className="mt-3 w-full rounded-xl bg-[#F6C343] px-4 py-3 text-sm font-black text-[#172033]"
+                    >
+                      Apply To Selected Days
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {dayHours.map((item, index) => (
+                    <div
+                      key={item.day}
+                      className="rounded-2xl bg-white p-3 shadow-sm"
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="font-black">{item.day}</p>
+
+                        <label className="flex items-center gap-2 text-sm font-bold">
+                          <input
+                            type="checkbox"
+                            checked={item.closed}
+                            onChange={(e) =>
+                              updateDayHour(index, "closed", e.target.checked)
+                            }
+                          />
+                          Closed
+                        </label>
+                      </div>
+
+                      {!item.closed && (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={item.open}
+                              onChange={(e) =>
+                                updateDayHour(index, "open", e.target.value)
+                              }
+                              className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                            >
+                              {timeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                  {time}
+                                </option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={item.close}
+                              onChange={(e) =>
+                                updateDayHour(index, "close", e.target.value)
+                              }
+                              className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                            >
+                              {timeOptions.map((time) => (
+                                <option key={time} value={time}>
+                                  {time}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <label className="flex items-center gap-2 text-sm font-bold">
+                            <input
+                              type="checkbox"
+                              checked={item.hasBreak}
+                              onChange={(e) =>
+                                updateDayHour(
+                                  index,
+                                  "hasBreak",
+                                  e.target.checked,
+                                )
+                              }
+                            />
+                            Break time
+                          </label>
+
+                          {item.hasBreak && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <select
+                                value={item.breakStart}
+                                onChange={(e) =>
+                                  updateDayHour(
+                                    index,
+                                    "breakStart",
+                                    e.target.value,
+                                  )
+                                }
+                                className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                              >
+                                {timeOptions.map((time) => (
+                                  <option key={time} value={time}>
+                                    {time}
+                                  </option>
+                                ))}
+                              </select>
+
+                              <select
+                                value={item.breakEnd}
+                                onChange={(e) =>
+                                  updateDayHour(
+                                    index,
+                                    "breakEnd",
+                                    e.target.value,
+                                  )
+                                }
+                                className="rounded-xl border bg-gray-50 px-3 py-3 text-sm font-bold"
+                              >
+                                {timeOptions.map((time) => (
+                                  <option key={time} value={time}>
+                                    {time}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            )}
           </div>
 
           <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
