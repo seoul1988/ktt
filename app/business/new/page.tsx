@@ -941,6 +941,11 @@ export default function NewBusinessPage() {
   async function handleFlipbookAdChange(
     e: React.ChangeEvent<HTMLInputElement>,
   ) {
+    if (role !== "admin") {
+      e.target.value = "";
+      return;
+    }
+
     const file = e.target.files?.[0];
 
     if (!file) return;
@@ -1101,7 +1106,7 @@ export default function NewBusinessPage() {
   }
 
   async function uploadFlipbookAdImage() {
-    if (!flipbookAdFile) return "";
+    if (role !== "admin" || !flipbookAdFile) return "";
 
     const rawExtension = flipbookAdFile.name.split(".").pop() || "jpg";
     const fileExtension =
@@ -1156,15 +1161,8 @@ export default function NewBusinessPage() {
       return;
     }
 
-    if (role === "admin" && flipbookAdSize > 0 && !flipbookAdFile) {
-      alert("광고 크기를 선택한 경우 플립북 광고 이미지를 등록해야 합니다.");
-      return;
-    }
-
-    if (role === "admin" && flipbookAdSize === 0 && flipbookAdFile) {
-      alert("광고 이미지를 등록한 경우 광고 크기를 선택해 주세요.");
-      return;
-    }
+    // 플립북 광고 이미지는 관리자만 선택할 수 있으며 선택 사항입니다.
+    // 이미지를 첨부하지 않아도 비즈니스 등록을 계속할 수 있습니다.
 
     setSaving(true);
 
@@ -1515,8 +1513,8 @@ export default function NewBusinessPage() {
                 <div>
                   <p className="font-black">Flipbook Advertisement</p>
                   <p className="mt-1 text-xs font-bold leading-5 text-[#6B6257]">
-                    플립북에 사용할 광고 전용 이미지 1개를 등록하세요. 일반
-                    비즈니스 사진과 별도로 저장됩니다.
+                    관리자만 플립북 광고 이미지를 등록할 수 있습니다. 광고
+                    이미지는 선택 사항이며 일반 비즈니스 사진과 별도로 저장됩니다.
                   </p>
                 </div>
 
@@ -1589,9 +1587,9 @@ export default function NewBusinessPage() {
                 )}
 
                 <p className="text-[11px] font-bold leading-5 text-[#6B6257]">
-                  광고 크기가 1~4이면 광고 이미지가 반드시 필요합니다. 광고를
-                  표시하지 않으려면 크기를 0으로 두고 이미지를 등록하지 마세요.
-                  최대 파일 크기: 15MB.
+                  광고 이미지는 선택 사항입니다. 이미지를 첨부하지 않아도
+                  비즈니스를 등록할 수 있습니다. 이미지와 광고 크기가 모두 설정된
+                  경우에만 플립북 광고가 활성화됩니다. 최대 파일 크기: 15MB.
                 </p>
               </div>
             </>
