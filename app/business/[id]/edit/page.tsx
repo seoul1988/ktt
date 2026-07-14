@@ -1328,27 +1328,35 @@ export default function EditBusinessPage() {
         }
       }
 
-      const adRows = flipbookAdOptions
-        .map((option) => {
-          const size = option.size;
-          if (removedFlipbookAdSizes.includes(size)) return null;
+      const adRows: Array<{
+        business_id: number;
+        ad_size: FlipbookAdSize;
+        image_url: string;
+        enabled: boolean;
+        priority: number;
+      }> = [];
 
-          const imageUrl =
-            uploadedAdUrls[size] || existingFlipbookAds[size]?.image_url || "";
-          if (!imageUrl) return null;
+      for (const option of flipbookAdOptions) {
+        const size = option.size;
 
-          return {
-            business_id: business.id,
-            ad_size: size,
-            image_url: imageUrl,
-            enabled: flipbookAdEnabled[size],
-            priority: Math.max(
-              0,
-              Math.min(1000, Number(flipbookPriorities[size] || 0)),
-            ),
-          };
-        })
-        .filter(Boolean);
+        if (removedFlipbookAdSizes.includes(size)) continue;
+
+        const imageUrl =
+          uploadedAdUrls[size] || existingFlipbookAds[size]?.image_url || "";
+
+        if (!imageUrl) continue;
+
+        adRows.push({
+          business_id: business.id,
+          ad_size: size,
+          image_url: imageUrl,
+          enabled: flipbookAdEnabled[size],
+          priority: Math.max(
+            0,
+            Math.min(1000, Number(flipbookPriorities[size] || 0)),
+          ),
+        });
+      }
 
       if (adRows.length > 0) {
         const { error: adError } = await supabase
