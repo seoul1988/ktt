@@ -21,6 +21,43 @@ type DayHour = {
   breakEnd: string;
 };
 
+
+type FlipbookAdSize = 1 | 2 | 3 | 4;
+
+type FlipbookAdItem = {
+  size: FlipbookAdSize;
+  label: string;
+  description: string;
+  recommendedSize: string;
+};
+
+const flipbookAdOptions: FlipbookAdItem[] = [
+  {
+    size: 1,
+    label: "Size 1",
+    description: "전체면 100%",
+    recommendedSize: "1080 × 1920 px",
+  },
+  {
+    size: 2,
+    label: "Size 2",
+    description: "반면 50%",
+    recommendedSize: "1080 × 960 px",
+  },
+  {
+    size: 3,
+    label: "Size 3",
+    description: "1/4면 25%",
+    recommendedSize: "540 × 960 px",
+  },
+  {
+    size: 4,
+    label: "Size 4",
+    description: "1/6면",
+    recommendedSize: "540 × 640 px",
+  },
+];
+
 const googleLibraries: "places"[] = ["places"];
 
 const defaultHours: DayHour[] = [
@@ -245,7 +282,6 @@ async function optimizeImage(
 export default function NewBusinessPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
-  const flipbookAdInputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const { isLoaded } = useLoadScript({
@@ -284,9 +320,22 @@ export default function NewBusinessPage() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 
-  const [flipbookAdSize, setFlipbookAdSize] = useState<0 | 1 | 2 | 3 | 4>(0);
-  const [flipbookAdFile, setFlipbookAdFile] = useState<File | null>(null);
-  const [flipbookAdPreview, setFlipbookAdPreview] = useState("");
+  const [flipbookAdFiles, setFlipbookAdFiles] = useState<
+    Partial<Record<FlipbookAdSize, File>>
+  >({});
+
+  const [flipbookAdPreviews, setFlipbookAdPreviews] = useState<
+    Partial<Record<FlipbookAdSize, string>>
+  >({});
+
+  const [flipbookAdEnabled, setFlipbookAdEnabled] = useState<
+    Record<FlipbookAdSize, boolean>
+  >({
+    1: false,
+    2: false,
+    3: false,
+    4: false,
+  });
 
   const [bulkDays, setBulkDays] = useState<string[]>(weekDays);
   const [bulkOpen, setBulkOpen] = useState("10:00 AM");
@@ -939,6 +988,7 @@ export default function NewBusinessPage() {
   }
 
   async function handleFlipbookAdChange(
+    size: FlipbookAdSize,
     e: React.ChangeEvent<HTMLInputElement>,
   ) {
     if (role !== "admin") {
@@ -966,24 +1016,81 @@ export default function NewBusinessPage() {
 
     e.target.value = "";
 
-    // Ads can keep a little more resolution while still being compressed.
-    const optimizedFile = await optimizeImage(file, 2000, 2400, 0.86);
+    const sizeSettings: Record<
+      FlipbookAdSize,
+      { maxWidth: number; maxHeight: number }
+    > = {
+      1: { maxWidth: 1080, maxHeight: 1920 },
+      2: { maxWidth: 1080, maxHeight: 960 },
+      3: { maxWidth: 540, maxHeight: 960 },
+      4: { maxWidth: 540, maxHeight: 640 },
+    };
 
-    if (flipbookAdPreview) {
-      URL.revokeObjectURL(flipbookAdPreview);
+    const setting = sizeSettings[size];
+    const optimizedFile = await optimizeImage(
+      file,
+      setting.maxWidth,
+      setting.maxHeight,
+      0.86,
+    );
+
+    const previousPreview = flipbookAdPreviews[size];
+
+    if (previousPreview) {
+      URL.revokeObjectURL(previousPreview);
     }
 
-    setFlipbookAdFile(optimizedFile);
-    setFlipbookAdPreview(URL.createObjectURL(optimizedFile));
+    setFlipbookAdFiles((prev) => ({
+      ...prev,
+      [size]: optimizedFile,
+    }));
+
+    setFlipbookAdPreviews((prev) => ({
+      ...prev,
+      [size]: URL.createObjectURL(optimizedFile),
+    }));
+
+    setFlipbookAdEnabled((prev) => ({
+      ...prev,
+      [size]: true,
+    }));
   }
 
-  function removeFlipbookAd() {
-    if (flipbookAdPreview) {
-      URL.revokeObjectURL(flipbookAdPreview);
+  function removeFlipbookAd(size: FlipbookAdSize) {
+    const preview = flipbookAdPreviews[size];
+
+    if (preview) {
+      URL.revokeObjectURL(preview);
     }
 
-    setFlipbookAdFile(null);
-    setFlipbookAdPreview("");
+    setFlipbookAdFiles((prev) => {
+      const next = { ...prev };
+      delete next[size];
+      return next;
+    });
+
+    setFlipbookAdPreviews((prev) => {
+      const next = { ...prev };
+      delete next[size];
+      return next;
+    });
+
+    setFlipbookAdEnabled((prev) => ({
+      ...prev,
+      [size]: false,
+    }));
+  }
+
+  function toggleFlipbookAdEnabled(size: FlipbookAdSize) {
+    if (!flipbookAdFiles[size]) {
+      alert("먼저 해당 사이즈의 광고 이미지를 첨부해 주세요.");
+      return;
+    }
+
+    setFlipbookAdEnabled((prev) => ({
+      ...prev,
+      [size]: !prev[size],
+    }));
   }
 
   function toggleCategory(categoryName: string) {
@@ -1105,32 +1212,57 @@ export default function NewBusinessPage() {
     return uploadedUrls;
   }
 
-  async function uploadFlipbookAdImage() {
-    if (role !== "admin" || !flipbookAdFile) return "";
-
-    const rawExtension = flipbookAdFile.name.split(".").pop() || "jpg";
-    const fileExtension =
-      rawExtension.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const fileName = `flipbook-ads/${userId}-${Date.now()}-${Math.random()
-      .toString(36)
-      .substring(2)}.${fileExtension}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("business-images")
-      .upload(fileName, flipbookAdFile, {
-        cacheControl: "3600",
-        upsert: false,
-      });
-
-    if (uploadError) {
-      throw uploadError;
+  async function uploadFlipbookAdImages() {
+    if (role !== "admin") {
+      return [] as {
+        size: FlipbookAdSize;
+        imageUrl: string;
+        enabled: boolean;
+      }[];
     }
 
-    const { data } = supabase.storage
-      .from("business-images")
-      .getPublicUrl(fileName);
+    const uploadedAds: {
+      size: FlipbookAdSize;
+      imageUrl: string;
+      enabled: boolean;
+    }[] = [];
 
-    return data.publicUrl;
+    for (const option of flipbookAdOptions) {
+      const size = option.size;
+      const file = flipbookAdFiles[size];
+
+      if (!file) continue;
+
+      const rawExtension = file.name.split(".").pop() || "jpg";
+      const fileExtension =
+        rawExtension.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const fileName =
+        `flipbook-ads/${userId}-${size}-${Date.now()}-` +
+        `${Math.random().toString(36).substring(2)}.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("business-images")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from("business-images")
+        .getPublicUrl(fileName);
+
+      uploadedAds.push({
+        size,
+        imageUrl: data.publicUrl,
+        enabled: flipbookAdEnabled[size],
+      });
+    }
+
+    return uploadedAds;
   }
 
   async function saveBusiness() {
@@ -1163,19 +1295,34 @@ export default function NewBusinessPage() {
 
     // 플립북 광고 이미지는 관리자만 선택할 수 있으며 선택 사항입니다.
     // 이미지를 첨부하지 않아도 비즈니스 등록을 계속할 수 있습니다.
+    if (role === "admin") {
+      const checkedWithoutImage = flipbookAdOptions.some(
+        (option) =>
+          flipbookAdEnabled[option.size] && !flipbookAdFiles[option.size],
+      );
+
+      if (checkedWithoutImage) {
+        alert("표시할 광고에는 반드시 이미지를 첨부해 주세요.");
+        return;
+      }
+    }
 
     setSaving(true);
 
     let imageUrls: string[] = [];
     let uploadedVideoUrl = "";
-    let uploadedFlipbookAdUrl = "";
+    let uploadedFlipbookAds: {
+      size: FlipbookAdSize;
+      imageUrl: string;
+      enabled: boolean;
+    }[] = [];
     let coords = { lat: null as number | null, lng: null as number | null };
 
     try {
       imageUrls = await uploadBusinessPhotos();
       uploadedVideoUrl = await uploadBusinessVideo();
-      uploadedFlipbookAdUrl =
-        role === "admin" ? await uploadFlipbookAdImage() : "";
+      uploadedFlipbookAds =
+        role === "admin" ? await uploadFlipbookAdImages() : [];
 
       if (lat && lng) {
         coords = {
@@ -1234,14 +1381,6 @@ export default function NewBusinessPage() {
         website_url: websiteUrl,
         instagram_url: instagramUrl,
 
-        // Flipbook advertisement: 관리자만 설정할 수 있습니다.
-        flipbook_ad_size: role === "admin" ? flipbookAdSize : 0,
-        flipbook_ad_image_url:
-          role === "admin" ? uploadedFlipbookAdUrl || null : null,
-        flipbook_enabled:
-          role === "admin" && flipbookAdSize > 0 && !!uploadedFlipbookAdUrl,
-        flipbook_priority: 0,
-
         owner_id: userId,
       })
 
@@ -1268,6 +1407,26 @@ export default function NewBusinessPage() {
         setSaving(false);
         alert(ownerError.message);
         return;
+      }
+
+      if (role === "admin" && uploadedFlipbookAds.length > 0) {
+        const adRows = uploadedFlipbookAds.map((ad) => ({
+          business_id: business.id,
+          ad_size: ad.size,
+          image_url: ad.imageUrl,
+          enabled: ad.enabled,
+          priority: 0,
+        }));
+
+        const { error: adError } = await supabase
+          .from("business_flipbook_ads")
+          .insert(adRows);
+
+        if (adError) {
+          setSaving(false);
+          alert("광고 저장 오류: " + adError.message);
+          return;
+        }
       }
     }
 
@@ -1508,91 +1667,117 @@ export default function NewBusinessPage() {
           </div>
 
           {role === "admin" && (
-            <>
-              <div className="space-y-4 rounded-2xl border border-[#D8C7AE] bg-[#FFF8EA] p-4">
-                <div>
-                  <p className="font-black">Flipbook Advertisement</p>
-                  <p className="mt-1 text-xs font-bold leading-5 text-[#6B6257]">
-                    관리자만 플립북 광고 이미지를 등록할 수 있습니다. 광고
-                    이미지는 선택 사항이며 일반 비즈니스 사진과 별도로 저장됩니다.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black">
-                    Advertisement Size
-                  </label>
-
-                  <select
-                    value={flipbookAdSize}
-                    onChange={(e) =>
-                      setFlipbookAdSize(
-                        Number(e.target.value) as 0 | 1 | 2 | 3 | 4,
-                      )
-                    }
-                    className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-bold"
-                  >
-                    <option value={0}>0 — 광고 표시 안 함</option>
-                    <option value={1}>1 — 전체면 100%</option>
-                    <option value={2}>2 — 반면 50%</option>
-                    <option value={3}>3 — 1/4면 25%</option>
-                    <option value={4}>4 — 1/6면</option>
-                  </select>
-                </div>
-
-                <input
-                  ref={flipbookAdInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFlipbookAdChange}
-                  className="hidden"
-                />
-
-                {!flipbookAdPreview ? (
-                  <button
-                    type="button"
-                    onClick={() => flipbookAdInputRef.current?.click()}
-                    className="w-full rounded-2xl bg-[#C4483A] px-4 py-3 text-sm font-extrabold text-white"
-                  >
-                    광고 이미지 첨부
-                  </button>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="overflow-hidden rounded-2xl border bg-white">
-                      <img
-                        src={flipbookAdPreview}
-                        alt="Flipbook advertisement preview"
-                        className="max-h-[520px] w-full object-contain"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => flipbookAdInputRef.current?.click()}
-                        className="rounded-xl bg-[#172033] px-4 py-3 text-sm font-black text-white"
-                      >
-                        이미지 변경
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={removeFlipbookAd}
-                        className="rounded-xl bg-red-500 px-4 py-3 text-sm font-black text-white"
-                      >
-                        이미지 삭제
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-[11px] font-bold leading-5 text-[#6B6257]">
-                  광고 이미지는 선택 사항입니다. 이미지를 첨부하지 않아도
-                  비즈니스를 등록할 수 있습니다. 이미지와 광고 크기가 모두 설정된
-                  경우에만 플립북 광고가 활성화됩니다. 최대 파일 크기: 15MB.
+            <div className="space-y-4 rounded-2xl border border-[#D8C7AE] bg-[#FFF8EA] p-4">
+              <div>
+                <p className="font-black">Flipbook Advertisement</p>
+                <p className="mt-1 text-xs font-bold leading-5 text-[#6B6257]">
+                  사이즈별로 광고 이미지를 각각 첨부할 수 있습니다. 체크된
+                  광고만 플립북에 표시됩니다.
                 </p>
               </div>
-            </>
+
+              <div className="space-y-4">
+                {flipbookAdOptions.map((option) => {
+                  const size = option.size;
+                  const preview = flipbookAdPreviews[size];
+                  const hasImage = !!flipbookAdFiles[size];
+                  const checked = flipbookAdEnabled[size];
+
+                  return (
+                    <div
+                      key={size}
+                      className="space-y-3 rounded-2xl border bg-white p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={!hasImage}
+                            onChange={() => toggleFlipbookAdEnabled(size)}
+                            className="mt-1 h-5 w-5"
+                          />
+
+                          <span>
+                            <span className="block text-sm font-black">
+                              {option.label} — {option.description}
+                            </span>
+                            <span className="mt-1 block text-xs font-bold text-gray-500">
+                              권장 이미지 크기: {option.recommendedSize}
+                            </span>
+                          </span>
+                        </label>
+
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${
+                            checked
+                              ? "bg-green-100 text-green-700"
+                              : "bg-gray-100 text-gray-500"
+                          }`}
+                        >
+                          {checked ? "표시" : "숨김"}
+                        </span>
+                      </div>
+
+                      <input
+                        id={`flipbook-ad-input-${size}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFlipbookAdChange(size, e)}
+                        className="hidden"
+                      />
+
+                      {!preview ? (
+                        <label
+                          htmlFor={`flipbook-ad-input-${size}`}
+                          className="block w-full cursor-pointer rounded-xl bg-[#C4483A] px-4 py-3 text-center text-sm font-extrabold text-white"
+                        >
+                          Size {size} 광고 이미지 첨부
+                        </label>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="overflow-hidden rounded-xl border bg-gray-50">
+                            <img
+                              src={preview}
+                              alt={`Flipbook advertisement size ${size}`}
+                              className="max-h-[360px] w-full object-contain"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <label
+                              htmlFor={`flipbook-ad-input-${size}`}
+                              className="cursor-pointer rounded-xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
+                            >
+                              이미지 변경
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() => removeFlipbookAd(size)}
+                              className="rounded-xl bg-red-500 px-4 py-3 text-sm font-black text-white"
+                            >
+                              이미지 삭제
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {!hasImage && (
+                        <p className="text-[11px] font-bold text-gray-400">
+                          이미지를 첨부하면 표시 체크박스가 활성화됩니다.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] font-bold leading-5 text-[#6B6257]">
+                광고는 최대 4개까지 등록할 수 있습니다. 각 이미지 최대 파일
+                크기는 15MB입니다. 체크된 사이즈만 플립북에 표시됩니다.
+              </p>
+            </div>
           )}
 
           <div className="rounded-2xl border bg-gray-50 p-4">
