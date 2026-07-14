@@ -561,6 +561,83 @@ export default function NewBusinessPage() {
     return 2 * earthRadius * Math.asin(Math.sqrt(h));
   }
 
+  function normalizeAddress(value: string) {
+    return value
+      .toLowerCase()
+      .replace(/\bnorth carolina\b/g, "nc")
+      .replace(/\broad\b/g, "rd")
+      .replace(/\bstreet\b/g, "st")
+      .replace(/\bavenue\b/g, "ave")
+      .replace(/\bboulevard\b/g, "blvd")
+      .replace(/\bdrive\b/g, "dr")
+      .replace(/\blane\b/g, "ln")
+      .replace(/\bhighway\b/g, "hwy")
+      .replace(/[^a-z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function getHouseNumber(value: string) {
+    return normalizeAddress(value).match(/^\d+/)?.[0] || "";
+  }
+
+  function hasStrongNameMatch(target: string, candidate: string) {
+    const targetWords = normalizeBusinessName(target)
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word.length >= 2);
+    const candidateWords = normalizeBusinessName(candidate)
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((word) => word.length >= 2);
+
+    if (!targetWords.length || !candidateWords.length) return false;
+
+    const targetText = targetWords.join(" ");
+    const candidateText = candidateWords.join(" ");
+
+    if (targetText === candidateText) return true;
+    if (targetText.length >= 4 && candidateText.includes(targetText)) return true;
+    if (candidateText.length >= 4 && targetText.includes(candidateText)) return true;
+
+    const matchedWords = targetWords.filter((word) =>
+      candidateWords.includes(word),
+    ).length;
+
+    return matchedWords / targetWords.length >= 0.75;
+  }
+
+  function hasStrongAddressMatch(targetAddress: string, candidateAddress: string) {
+    const target = normalizeAddress(targetAddress);
+    const candidate = normalizeAddress(candidateAddress);
+    const targetHouseNumber = getHouseNumber(targetAddress);
+    const candidateHouseNumber = getHouseNumber(candidateAddress);
+
+    if (
+      targetHouseNumber &&
+      candidateHouseNumber &&
+      targetHouseNumber !== candidateHouseNumber
+    ) {
+      return false;
+    }
+
+    const ignored = new Set(["usa", "united", "states", "nc"]);
+    const targetWords = target
+      .split(/\s+/)
+      .filter(
+        (word) =>
+          word.length >= 3 &&
+          !ignored.has(word) &&
+          word !== targetHouseNumber,
+      );
+
+    const matchedWords = targetWords.filter((word) =>
+      candidate.includes(word),
+    ).length;
+
+    return matchedWords >= Math.min(3, Math.max(1, targetWords.length));
+  }
+
   async function findGoogleBusinessHours(
     businessName: string,
     businessAddress: string,
@@ -574,75 +651,82 @@ export default function NewBusinessPage() {
 
     const cleanName =
       normalizeBusinessName(businessName) || businessName.trim();
-    const normalizedTarget = cleanName.toLowerCase();
 
-    const searchResults = async () => {
-      const collected: google.maps.places.PlaceResult[] = [];
+    const collected: google.maps.places.PlaceResult[] = [];
 
-      if (location) {
-        const nearby = await new Promise<google.maps.places.PlaceResult[]>(
-          (resolve) => {
-            service.nearbySearch(
-              {
-                location,
-                radius: 1500,
-                keyword: cleanName,
-              },
-              (results, status) => {
-                resolve(
-                  status === google.maps.places.PlacesServiceStatus.OK &&
-                    results
-                    ? results
-                    : [],
-                );
-              },
+    if (location) {
+      const nearby = await new Promise<google.maps.places.PlaceResult[]>(
+        (resolve) => {
+          service.nearbySearch(
+            {
+              location,
+              radius: 500,
+              keyword: cleanName,
+            },
+            (results, status) => {
+              resolve(
+                status === google.maps.places.PlacesServiceStatus.OK && results
+                  ? results
+                  : [],
+              );
+            },
+          );
+        },
+      );
+      collected.push(...nearby);
+    }
+
+    const textResults = await new Promise<google.maps.places.PlaceResult[]>(
+      (resolve) => {
+        service.textSearch(
+          {
+            query: `${cleanName}, ${businessAddress}`,
+            ...(location ? { location, radius: 1000 } : {}),
+          },
+          (results, status) => {
+            resolve(
+              status === google.maps.places.PlacesServiceStatus.OK && results
+                ? results
+                : [],
             );
           },
         );
-        collected.push(...nearby);
-      }
+      },
+    );
+    collected.push(...textResults);
 
-      const queries = [
-        `${cleanName}, ${businessAddress}`,
-        `${cleanName} Cary NC`,
-        cleanName,
-      ];
+    const unique = new Map<string, google.maps.places.PlaceResult>();
+    for (const item of collected) {
+      if (item.place_id) unique.set(item.place_id, item);
+    }
 
-      for (const query of queries) {
-        const textResults = await new Promise<google.maps.places.PlaceResult[]>(
-          (resolve) => {
-            service.textSearch(
-              {
-                query,
-                ...(location ? { location, radius: 5000 } : {}),
-              },
-              (results, status) => {
-                resolve(
-                  status === google.maps.places.PlacesServiceStatus.OK &&
-                    results
-                    ? results
-                    : [],
-                );
-              },
-            );
-          },
+    const validCandidates = [...unique.values()]
+      .filter((item) => {
+        const candidateName = String(item.name || "");
+        const candidateAddress = String(
+          item.formatted_address || item.vicinity || "",
         );
-        collected.push(...textResults);
-        if (collected.some((item) => item.place_id)) break;
-      }
+        const nameMatches = hasStrongNameMatch(cleanName, candidateName);
+        const addressMatches = hasStrongAddressMatch(
+          businessAddress,
+          candidateAddress,
+        );
+        const distance = location
+          ? placeDistanceMeters(location, item.geometry?.location)
+          : 0;
 
-      const unique = new Map<string, google.maps.places.PlaceResult>();
-      for (const item of collected) {
-        if (item.place_id) unique.set(item.place_id, item);
-      }
+        return nameMatches && addressMatches && (!location || distance <= 250);
+      })
+      .sort((a, b) => {
+        if (!location) return 0;
+        return (
+          placeDistanceMeters(location, a.geometry?.location) -
+          placeDistanceMeters(location, b.geometry?.location)
+        );
+      });
 
-      return [...unique.values()];
-    };
-
-    const results = await searchResults();
-
-    if (!results.length) {
-      console.warn("Google business search returned no results:", {
+    if (!validCandidates.length) {
+      console.warn("No exact Google business match:", {
         businessName,
         cleanName,
         businessAddress,
@@ -650,48 +734,7 @@ export default function NewBusinessPage() {
       return false;
     }
 
-    const scored = results
-      .map((item) => {
-        const candidateName = normalizeBusinessName(
-          String(item.name || ""),
-        ).toLowerCase();
-        let score = 0;
-
-        if (candidateName === normalizedTarget) score += 100;
-        else if (
-          candidateName.includes(normalizedTarget) ||
-          normalizedTarget.includes(candidateName)
-        )
-          score += 70;
-
-        const addressWords = businessAddress
-          .toLowerCase()
-          .replace(/[^a-z0-9 ]/g, " ")
-          .split(/\s+/)
-          .filter((word) => word.length >= 3);
-        const candidateAddress = String(
-          item.formatted_address || item.vicinity || "",
-        ).toLowerCase();
-        const matchedAddressWords = addressWords.filter((word) =>
-          candidateAddress.includes(word),
-        ).length;
-        score += Math.min(matchedAddressWords * 5, 40);
-
-        if (location) {
-          const distance = placeDistanceMeters(
-            location,
-            item.geometry?.location,
-          );
-          if (distance < 100) score += 50;
-          else if (distance < 500) score += 30;
-          else if (distance < 1500) score += 10;
-        }
-
-        return { item, score };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    for (const { item } of scored.slice(0, 5)) {
+    for (const item of validCandidates.slice(0, 3)) {
       if (!item.place_id) continue;
 
       const details = await new Promise<google.maps.places.PlaceResult | null>(
@@ -719,7 +762,23 @@ export default function NewBusinessPage() {
         },
       );
 
-      if (details?.opening_hours?.periods?.length) {
+      if (!details) continue;
+
+      const exactName = hasStrongNameMatch(cleanName, details.name || "");
+      const exactAddress = hasStrongAddressMatch(
+        businessAddress,
+        details.formatted_address || "",
+      );
+      const exactDistance = location
+        ? placeDistanceMeters(location, details.geometry?.location)
+        : 0;
+
+      if (
+        exactName &&
+        exactAddress &&
+        (!location || exactDistance <= 250) &&
+        details.opening_hours?.periods?.length
+      ) {
         applyGoogleOpeningHours(details.opening_hours);
         setGoogleHoursMessage(
           `${details.name || cleanName}의 Google 영업시간을 불러왔습니다.`,
@@ -728,17 +787,12 @@ export default function NewBusinessPage() {
           placeId: details.place_id,
           name: details.name,
           address: details.formatted_address,
-          businessStatus: details.business_status,
-          periodsCount: details.opening_hours?.periods?.length || 0,
+          periodsCount: details.opening_hours.periods.length,
         });
         return true;
       }
     }
 
-    console.warn(
-      "Matched places did not return opening hours:",
-      scored.slice(0, 5),
-    );
     return false;
   }
 
