@@ -4,6 +4,7 @@ import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
 import InquiryTab from "../components/InquiryTab";
 import AdTab from "../components/AdTab";
+import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -69,12 +70,21 @@ export default async function CommunityPage() {
       })
       .slice(0, 6) || [];
 
-  const { data: featured } = await supabase
-    .from("featured_businesses")
-    .select("*")
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(3);
+  const featuredBusinesses =
+    allBusinesses
+      ?.filter((biz) => {
+        const bizCategories = String(biz.category || "")
+          .split(",")
+          .map((cat) => cat.trim().toLowerCase())
+          .filter(Boolean);
+
+        const isCommunityCategory = bizCategories.some((cat) =>
+          communityCategoryNames.has(cat)
+        );
+
+        return isCommunityCategory && biz.featured_sponsor === true;
+      })
+      .slice(0, 3) || [];
 
   const eventCount = events?.length || 0;
   const dealCount = deals?.length || 0;
@@ -342,6 +352,9 @@ export default async function CommunityPage() {
 
 
 
+        <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
+
+
         {/* New in Raleigh */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
           <div className="mb-4 rounded-2xl px-2 py-2">
@@ -413,69 +426,6 @@ export default async function CommunityPage() {
           </div>
         </section>
 
-        {/* Featured Business */}
-        <section className="overflow-hidden rounded-3xl border border-[#D8DBE3] bg-[#EEF0F5] p-3 shadow-sm">
-          <div className="mb-4 rounded-2xl px-2 py-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#D8DBE3] bg-white text-xl shadow-sm">
-                ⭐
-              </div>
-
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-[#2A3448]">
-                  Featured
-                </p>
-
-                <h2 className="text-xl font-black text-[#172033]">
-                  Featured Business
-                </h2>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {featured?.map((item) => (
-              <div
-                key={item.id}
-                className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
-              >
-                <div className="h-44 w-full overflow-hidden bg-[#2A3448]">
-                  {item.banner_image ? (
-                    <img
-                      src={item.banner_image}
-                      alt={item.title || "Featured Business"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#2A3448] text-xs font-black text-white/60">
-                      No Photo
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-4">
-                  <p className="text-[10px] font-black text-[#2A3448]">
-                    FEATURED
-                  </p>
-
-                  <h3 className="mt-1 text-lg font-black">
-                    {item.title || "Featured Business"}
-                  </h3>
-
-                  <p className="mt-1 text-sm font-semibold text-[#6B6257]">
-                    {item.subtitle || "Sponsored local highlight"}
-                  </p>
-                </div>
-              </div>
-            ))}
-
-            {!featured?.length && (
-              <div className="rounded-3xl bg-white p-6 text-sm font-bold text-[#6B6257] shadow-sm">
-                No featured businesses yet.
-              </div>
-            )}
-          </div>
-        </section>
       </section>
 <InquiryTab />
       <AdTab />
