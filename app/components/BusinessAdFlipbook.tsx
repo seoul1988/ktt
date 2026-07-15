@@ -93,7 +93,6 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
   const zoomRef = useRef(1);
   const panValueRef = useRef({ x: 0, y: 0 });
   const [currentPage, setCurrentPage] = useState(0);
-  const [interactionEpoch, setInteractionEpoch] = useState(0);
   const [pageSize, setPageSize] = useState({
     width: 360,
     height: 509,
@@ -458,7 +457,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     setPan(value);
   };
 
-  const resetZoom = (reactivateFlipbook = false) => {
+  const resetZoom = () => {
     zoomRef.current = 1;
     panValueRef.current = { x: 0, y: 0 };
     setZoom(1);
@@ -470,18 +469,15 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
       viewportRef.current.style.touchAction = "none";
     }
 
-    if (reactivateFlipbook) {
-      setInteractionEpoch((value) => value + 1);
-    }
   };
 
   useEffect(() => {
-    // 전체화면 진입/종료와 화면 회전 시 이전 확대 상태를 제거하고,
-    // 새 크기로 생성된 플립북이 즉시 스와이프를 받도록 다시 활성화합니다.
-    resetZoom(true);
+    // 전체화면 진입/종료와 화면 회전 시 이전 확대 상태를 제거합니다.
+    // 플립북을 다시 마운트하지 않아 페이지 전환 후 깜박임을 방지합니다.
+    resetZoom();
 
     const timer = window.setTimeout(() => {
-      resetZoom(true);
+      resetZoom();
     }, 420);
 
     return () => window.clearTimeout(timer);
@@ -649,8 +645,12 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
      * 모든 손가락을 뗐을 때 1배 근처면 정확히 1로 초기화하고
      * 플립북 입력 인스턴스를 새로 활성화합니다.
      */
-    if (event.touches.length === 0 && currentZoom <= 1.06) {
-      resetZoom(true);
+    if (
+      event.touches.length === 0 &&
+      currentZoom > 1 &&
+      currentZoom <= 1.06
+    ) {
+      resetZoom();
       return;
     }
 
@@ -744,7 +744,6 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                         pageSize.height,
                         visibleAdPages.length,
                         coverAdPage?.id ?? "default-cover",
-                        interactionEpoch,
                       ].join("-")}
                       ref={bookRef}
                       width={pageSize.width}
@@ -829,7 +828,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                 {zoom > 1 && (
                   <button
                     type="button"
-                    onClick={() => resetZoom(true)}
+                    onClick={resetZoom}
                     className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-3 text-xs font-black hover:bg-white/20"
                     aria-label="확대 초기화"
                     title="확대 초기화"
