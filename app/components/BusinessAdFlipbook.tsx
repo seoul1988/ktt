@@ -89,36 +89,59 @@ export default function BusinessAdFlipbook({
   adPages: AdPage[];
 }) {
   const bookRef = useRef<any>(null);
-  const pinchRef = useRef({
-    startDistance: 0,
-    startZoom: 1,
-  });
-  const panRef = useRef({
-    startX: 0,
-    startY: 0,
-    originX: 0,
-    originY: 0,
-  });
+  const playerRef = useRef<HTMLDivElement>(null);
 
   const [isMobile, setIsMobile] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [pageSize, setPageSize] = useState({
     width: 360,
     height: 509,
   });
 
   useEffect(() => {
+    const PAGE_RATIO = 594 / 420;
+
     function updatePageSize() {
       const mobile = window.innerWidth < 768;
+      const fullscreenActive = !!document.fullscreenElement;
+
       setIsMobile(mobile);
+      setIsFullscreen(fullscreenActive);
+
+      if (fullscreenActive) {
+        /*
+         * 전체화면에서는 유튜브 플레이어처럼 좌우 2페이지가
+         * 화면에 최대한 크게 들어가도록 너비와 높이를 함께 계산합니다.
+         */
+        const controlsHeight = 72;
+        const availableWidth = Math.max(
+          320,
+          window.innerWidth - 12,
+        );
+        const availableHeight = Math.max(
+          220,
+          window.innerHeight - controlsHeight,
+        );
+
+        const widthByScreen = availableWidth / 2;
+        const widthByHeight = availableHeight / PAGE_RATIO;
+        const width = Math.max(
+          160,
+          Math.floor(
+            Math.min(widthByScreen, widthByHeight),
+          ),
+        );
+
+        setPageSize({
+          width,
+          height: Math.round(width * PAGE_RATIO),
+        });
+        return;
+      }
 
       if (mobile) {
-        /*
-         * 모바일에서도 항상 좌우 2페이지가 보이도록
-         * 화면 너비를 반으로 나눠 한 페이지 크기를 계산합니다.
-         */
         const availableSpreadWidth = Math.max(
           320,
           window.innerWidth - 16,
@@ -129,7 +152,7 @@ export default function BusinessAdFlipbook({
 
         setPageSize({
           width,
-          height: Math.round(width * (594 / 420)),
+          height: Math.round(width * PAGE_RATIO),
         });
         return;
       }
@@ -141,11 +164,28 @@ export default function BusinessAdFlipbook({
     }
 
     updatePageSize();
+
     window.addEventListener("resize", updatePageSize);
+    window.addEventListener(
+      "orientationchange",
+      updatePageSize,
+    );
+    document.addEventListener(
+      "fullscreenchange",
+      updatePageSize,
+    );
 
     return () => {
       window.removeEventListener(
         "resize",
+        updatePageSize,
+      );
+      window.removeEventListener(
+        "orientationchange",
+        updatePageSize,
+      );
+      document.removeEventListener(
+        "fullscreenchange",
         updatePageSize,
       );
     };
@@ -344,113 +384,97 @@ export default function BusinessAdFlipbook({
 
   const spreadWidth = pageSize.width * 2;
 
-  const clampZoom = (value: number) =>
-    Math.min(4, Math.max(1, value));
+  const enterFullscreen = async () => {
+    const player = playerRef.current;
 
-  const zoomOut = () => {
-    setZoom((value) => {
-      const nextZoom = clampZoom(
-        Number((value - 0.25).toFixed(2)),
-      );
-
-      if (nextZoom === 1) {
-        setPan({ x: 0, y: 0 });
-      }
-
-      return nextZoom;
-    });
-  };
-
-  const zoomIn = () => {
-    setZoom((value) =>
-      clampZoom(Number((value + 0.25).toFixed(2))),
-    );
-  };
-
-  const resetZoom = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
-
-  const getTouchDistance = (
-    first: React.Touch,
-    second: React.Touch,
-  ) =>
-    Math.hypot(
-      second.clientX - first.clientX,
-      second.clientY - first.clientY,
-    );
-
-  const handleTouchStart = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
-    if (event.touches.length === 2) {
-      pinchRef.current = {
-        startDistance: getTouchDistance(
-          event.touches[0],
-          event.touches[1],
-        ),
-        startZoom: zoom,
-      };
+    if (!player) {
       return;
     }
 
-    if (event.touches.length === 1 && zoom > 1) {
-      panRef.current = {
-        startX: event.touches[0].clientX,
-        startY: event.touches[0].clientY,
-        originX: pan.x,
-        originY: pan.y,
-      };
+    try {
+      await player.requestFullscreen();
+
+      /*
+       * Android Chrome 등 지원되는 브라우저에서는
+       * 전체화면 진입 후 가로 방향으로 전환합니다.
+       * iPhone Safari는 화면 방향 잠금을 지원하지 않을 수 있습니다.
+       */
+      const orientation = screen.orientation as
+        | (ScreenOrientation & {
+            lock?: (
+  orientation: string,
+) => Promise<void>;
+          })
+        | undefined;
+
+      if (orientation?.lock) {
+        try {
+          await orientation.lock("landscape");
+        } catch {
+          // 방향 잠금이 지원되지 않으면 현재 방향을 유지합니다.
+        }
+      }
+    } catch {
+      // 브라우저가 전체화면을 거부하면 아무 작업도 하지 않습니다.
     }
   };
 
-  const handleTouchMove = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
-    if (event.touches.length === 2) {
-      event.preventDefault();
-
-      const distance = getTouchDistance(
-        event.touches[0],
-        event.touches[1],
-      );
-      const startDistance =
-        pinchRef.current.startDistance || distance;
-
-      const nextZoom = clampZoom(
-        pinchRef.current.startZoom *
-          (distance / startDistance),
-      );
-
-      setZoom(nextZoom);
-
-      if (nextZoom === 1) {
-        setPan({ x: 0, y: 0 });
+  const exitFullscreen = async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
       }
 
+      const orientation = screen.orientation as
+        | (ScreenOrientation & {
+            unlock?: () => void;
+          })
+        | undefined;
+
+      orientation?.unlock?.();
+    } catch {
+      // 전체화면 종료 실패 시 현재 화면을 유지합니다.
+    }
+  };
+
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) {
+      await exitFullscreen();
       return;
     }
 
-    if (event.touches.length === 1 && zoom > 1) {
-      event.preventDefault();
+    await enterFullscreen();
+  };
 
-      setPan({
-        x:
-          panRef.current.originX +
-          event.touches[0].clientX -
-          panRef.current.startX,
-        y:
-          panRef.current.originY +
-          event.touches[0].clientY -
-          panRef.current.startY,
-      });
+  const handleTouchStartCapture = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (event.touches.length >= 2) {
+      setIsPinching(true);
+
+      /*
+       * 두 손가락 확대 동작이 페이지 넘김으로 인식되지 않도록
+       * 플립북까지 이벤트가 전달되는 것을 막습니다.
+       */
+      event.stopPropagation();
     }
   };
 
-  const handleTouchEnd = () => {
-    if (zoom <= 1) {
-      setPan({ x: 0, y: 0 });
+  const handleTouchMoveCapture = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (event.touches.length >= 2 || isPinching) {
+      event.stopPropagation();
+    }
+  };
+
+  const handleTouchEndCapture = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (event.touches.length < 2) {
+      window.setTimeout(() => {
+        setIsPinching(false);
+      }, 120);
     }
   };
 
@@ -491,141 +515,148 @@ export default function BusinessAdFlipbook({
         ) : (
           <>
             <div
-              className="relative flex w-full items-center justify-center overflow-hidden bg-black/5 pb-2"
-              style={{
-                height: `${pageSize.height}px`,
-                touchAction: zoom > 1 ? "none" : "pan-y",
-              }}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
+              ref={playerRef}
+              onTouchStartCapture={handleTouchStartCapture}
+              onTouchMoveCapture={handleTouchMoveCapture}
+              onTouchEndCapture={handleTouchEndCapture}
+              className={
+                isFullscreen
+                  ? "flex h-screen w-screen flex-col overflow-hidden bg-black"
+                  : "w-full overflow-hidden rounded-2xl bg-black shadow-2xl"
+              }
             >
-              <div
-                style={{
-                  width: `${spreadWidth}px`,
-                  height: `${pageSize.height}px`,
-                  flex: "0 0 auto",
-                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                  transformOrigin: "center center",
-                  transition:
-                    zoom === 1
-                      ? "transform 180ms ease"
-                      : "none",
-                  willChange: "transform",
-                }}
-              >
-                <HTMLFlipBook
-                  key={[
-                    isMobile,
-                    pageSize.width,
-                    pageSize.height,
-                    visibleAdPages.length,
-                    coverAdPage?.id ?? "default-cover",
-                  ].join("-")}
-                  ref={bookRef}
-                  width={pageSize.width}
-                  height={pageSize.height}
-                  size="fixed"
-                  minWidth={pageSize.width}
-                  maxWidth={pageSize.width}
-                  minHeight={pageSize.height}
-                  maxHeight={pageSize.height}
-                  showCover={true}
-                  usePortrait={false}
-                  mobileScrollSupport={true}
-                  drawShadow={true}
-                  maxShadowOpacity={0.5}
-                  flippingTime={900}
-                  showPageCorners={true}
-                  disableFlipByClick={zoom > 1}
-                  clickEventForward={zoom === 1}
-                  useMouseEvents={zoom === 1}
-                  swipeDistance={25}
-                  autoSize={false}
-                  startPage={0}
-                  startZIndex={0}
-                  className=""
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+                <div
                   style={{
                     width: `${spreadWidth}px`,
                     height: `${pageSize.height}px`,
-                  }}
-                  onFlip={(event: any) => {
-                    setCurrentPage(
-                      Number(event?.data || 0),
-                    );
-                    resetZoom();
+                    flex: "0 0 auto",
                   }}
                 >
-                  {flipPages}
-                </HTMLFlipBook>
+                  <HTMLFlipBook
+                    key={[
+                      isMobile,
+                      isFullscreen,
+                      pageSize.width,
+                      pageSize.height,
+                      visibleAdPages.length,
+                      coverAdPage?.id ?? "default-cover",
+                    ].join("-")}
+                    ref={bookRef}
+                    width={pageSize.width}
+                    height={pageSize.height}
+                    size="fixed"
+                    minWidth={pageSize.width}
+                    maxWidth={pageSize.width}
+                    minHeight={pageSize.height}
+                    maxHeight={pageSize.height}
+                    showCover={true}
+                    usePortrait={false}
+                    mobileScrollSupport={true}
+                    drawShadow={true}
+                    maxShadowOpacity={0.5}
+                    flippingTime={900}
+                    showPageCorners={true}
+                    disableFlipByClick={true}
+                    clickEventForward={false}
+                    useMouseEvents={!isPinching}
+                    swipeDistance={35}
+                    autoSize={false}
+                    startPage={0}
+                    startZIndex={0}
+                    className=""
+                    style={{
+                      width: `${spreadWidth}px`,
+                      height: `${pageSize.height}px`,
+                    }}
+                    onFlip={(event: any) => {
+                      setCurrentPage(
+                        Number(event?.data || 0),
+                      );
+                    }}
+                  >
+                    {flipPages}
+                  </HTMLFlipBook>
+                </div>
+              </div>
+
+              <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
+                <button
+                  type="button"
+                  onClick={() =>
+                    bookRef.current
+                      ?.pageFlip()
+                      ?.flipPrev()
+                  }
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl font-black hover:bg-white/20"
+                  aria-label="이전 페이지"
+                >
+                  ‹
+                </button>
+
+                <div className="min-w-[64px] text-sm font-black">
+                  {currentPage + 1} / {flipPages.length}
+                </div>
+
+                <input
+                  type="range"
+                  min={0}
+                  max={Math.max(0, flipPages.length - 1)}
+                  value={Math.min(
+                    currentPage,
+                    Math.max(0, flipPages.length - 1),
+                  )}
+                  onChange={(event) => {
+                    const page = Number(event.target.value);
+                    bookRef.current
+                      ?.pageFlip()
+                      ?.turnToPage(page);
+                  }}
+                  className="min-w-0 flex-1 accent-white"
+                  aria-label="페이지 이동"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    bookRef.current
+                      ?.pageFlip()
+                      ?.flipNext()
+                  }
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl font-black hover:bg-white/20"
+                  aria-label="다음 페이지"
+                >
+                  ›
+                </button>
+
+                <button
+                  type="button"
+                  onClick={toggleFullscreen}
+                  className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-3 text-xl font-black hover:bg-white/20"
+                  aria-label={
+                    isFullscreen
+                      ? "전체화면 종료"
+                      : "전체화면"
+                  }
+                  title={
+                    isFullscreen
+                      ? "전체화면 종료"
+                      : "전체화면"
+                  }
+                >
+                  {isFullscreen ? "✕" : "⛶"}
+                </button>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  bookRef.current
-                    ?.pageFlip()
-                    ?.flipPrev()
-                }
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow-lg"
-                aria-label="이전 페이지"
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={zoomOut}
-                disabled={zoom <= 1}
-                className="flex h-11 min-w-11 items-center justify-center rounded-full bg-white px-3 text-xl font-black shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="축소"
-              >
-                −
-              </button>
-
-              <button
-                type="button"
-                onClick={resetZoom}
-                className="h-11 min-w-[76px] rounded-full bg-white px-4 text-sm font-black shadow-lg"
-                aria-label="확대 비율 초기화"
-              >
-                {Math.round(zoom * 100)}%
-              </button>
-
-              <button
-                type="button"
-                onClick={zoomIn}
-                disabled={zoom >= 4}
-                className="flex h-11 min-w-11 items-center justify-center rounded-full bg-white px-3 text-xl font-black shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="확대"
-              >
-                +
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  bookRef.current
-                    ?.pageFlip()
-                    ?.flipNext()
-                }
-                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#172033] text-2xl font-black text-white shadow-lg"
-                aria-label="다음 페이지"
-              >
-                ›
-              </button>
-            </div>
-
-            <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-              두 손가락으로 플립북 자체를 확대·축소하고, 확대 후 한 손가락으로 이동하세요.
-            </p>
+            {!isFullscreen && (
+              <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
+                페이지는 클릭이 아니라 좌우 스와이프로 넘깁니다. 두 손가락 확대 동작은 페이지 넘김으로 처리되지 않습니다.
+              </p>
+            )}
           </>
         )}
       </section>
     </main>
   );
 }
-
-
