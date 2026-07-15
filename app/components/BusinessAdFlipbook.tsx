@@ -470,14 +470,22 @@ export default function BusinessAdFlipbook({
     y: number,
     scale: number,
   ) => {
-    const frameWidth = spreadWidth;
-    const frameHeight = pageSize.height;
-    const minX = frameWidth - frameWidth * scale;
-    const minY = frameHeight - frameHeight * scale;
+    /*
+     * 플립북 중앙을 기준으로 확대하므로 이동 범위도
+     * 좌우·상하 대칭으로 계산합니다.
+     */
+    const maxX = Math.max(
+      0,
+      (spreadWidth * scale - spreadWidth) / 2,
+    );
+    const maxY = Math.max(
+      0,
+      (pageSize.height * scale - pageSize.height) / 2,
+    );
 
     return {
-      x: Math.min(0, Math.max(minX, x)),
-      y: Math.min(0, Math.max(minY, y)),
+      x: Math.min(maxX, Math.max(-maxX, x)),
+      y: Math.min(maxY, Math.max(-maxY, y)),
     };
   };
 
@@ -537,12 +545,22 @@ export default function BusinessAdFlipbook({
 
       const localX = center.x - frameRect.left;
       const localY = center.y - frameRect.top;
+      const frameCenterX = frameRect.width / 2;
+      const frameCenterY = frameRect.height / 2;
 
+      /*
+       * 현재 두 손가락 아래에 있는 플립북 좌표를 저장합니다.
+       * transform-origin이 중앙이므로 중앙 기준 좌표로 환산합니다.
+       */
       pinchRef.current = {
         startDistance: distance,
         startZoom: zoom,
-        contentX: (localX - pan.x) / zoom,
-        contentY: (localY - pan.y) / zoom,
+        contentX:
+          frameCenterX +
+          (localX - frameCenterX - pan.x) / zoom,
+        contentY:
+          frameCenterY +
+          (localY - frameCenterY - pan.y) / zoom,
       };
 
       setIsPinching(true);
@@ -594,10 +612,18 @@ export default function BusinessAdFlipbook({
 
       const localX = center.x - frameRect.left;
       const localY = center.y - frameRect.top;
+      const frameCenterX = frameRect.width / 2;
+      const frameCenterY = frameRect.height / 2;
 
       const nextPan = clampPan(
-        localX - pinchRef.current.contentX * nextZoom,
-        localY - pinchRef.current.contentY * nextZoom,
+        localX -
+          frameCenterX -
+          (pinchRef.current.contentX - frameCenterX) *
+            nextZoom,
+        localY -
+          frameCenterY -
+          (pinchRef.current.contentY - frameCenterY) *
+            nextZoom,
         nextZoom,
       );
 
@@ -713,7 +739,7 @@ export default function BusinessAdFlipbook({
                       width: `${spreadWidth}px`,
                       height: `${pageSize.height}px`,
                       transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                      transformOrigin: "top left",
+                      transformOrigin: "center center",
                       transition:
                         zoom === 1
                           ? "transform 160ms ease"
@@ -770,20 +796,21 @@ export default function BusinessAdFlipbook({
                     </HTMLFlipBook>
                   </div>
 
-                  {zoom > 1 && (
-                    <div
-                      className="absolute inset-0 z-40 cursor-grab active:cursor-grabbing"
-                      style={{
-                        touchAction: "none",
-                        background: "transparent",
-                      }}
-                      onTouchStart={handleTouchStartCapture}
-                      onTouchMove={handleTouchMoveCapture}
-                      onTouchEnd={handleTouchEndCapture}
-                      aria-label="확대된 플립북 이동 영역"
-                    />
-                  )}
                 </div>
+
+                {zoom > 1 && (
+                  <div
+                    className="absolute inset-0 z-40 cursor-grab active:cursor-grabbing"
+                    style={{
+                      touchAction: "none",
+                      background: "transparent",
+                    }}
+                    onTouchStart={handleTouchStartCapture}
+                    onTouchMove={handleTouchMoveCapture}
+                    onTouchEnd={handleTouchEndCapture}
+                    aria-label="확대된 플립북 이동 영역"
+                  />
+                )}
               </div>
 
               <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
@@ -869,7 +896,7 @@ export default function BusinessAdFlipbook({
 
             {!isFullscreen && (
               <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-                확대·축소와 상하좌우 이동은 플립북 영역 안에서만 작동합니다. 원래 크기에서는 플립북을 좌우로 스와이프해 페이지를 넘기세요.
+                플립북에서 두 손가락으로 확대를 시작하세요. 확대된 뒤에는 화면 전체를 이동 영역으로 사용해 상하좌우로 움직일 수 있습니다.
               </p>
             )}
           </>
