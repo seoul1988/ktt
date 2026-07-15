@@ -82,6 +82,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     startY: 0,
     originX: 0,
     originY: 0,
+    active: false,
   });
 
   const [isMobile, setIsMobile] = useState(true);
@@ -89,6 +90,8 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
   const [isPinching, setIsPinching] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoomRef = useRef(1);
+  const panValueRef = useRef({ x: 0, y: 0 });
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState({
     width: 360,
@@ -427,58 +430,84 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     y: (first.clientY + second.clientY) / 2,
   });
 
+  const applyZoom = (value: number) => {
+    zoomRef.current = value;
+    setZoom(value);
+  };
+
+  const applyPan = (value: { x: number; y: number }) => {
+    panValueRef.current = value;
+    setPan(value);
+  };
+
   const resetZoom = () => {
+    zoomRef.current = 1;
+    panValueRef.current = { x: 0, y: 0 };
     setZoom(1);
     setPan({ x: 0, y: 0 });
+    panRef.current.active = false;
     setIsPinching(false);
   };
 
   useEffect(() => {
-    setPan((currentPan) =>
-      zoom <= 1 ? { x: 0, y: 0 } : clampPan(currentPan.x, currentPan.y, zoom),
-    );
-  }, [pageSize.height, pageSize.width, zoom]);
+    const currentZoom = zoomRef.current;
+    const currentPan = panValueRef.current;
+    const nextPan =
+      currentZoom <= 1
+        ? { x: 0, y: 0 }
+        : clampPan(currentPan.x, currentPan.y, currentZoom);
+
+    panValueRef.current = nextPan;
+    setPan(nextPan);
+  }, [pageSize.height, pageSize.width]);
 
   const handleTouchStartCapture = (event: React.TouchEvent<HTMLDivElement>) => {
+    const currentZoom = zoomRef.current;
+    const currentPan = panValueRef.current;
+
     if (event.touches.length >= 2) {
+      event.preventDefault();
+      event.stopPropagation();
+
       const distance = getTouchDistance(event.touches[0], event.touches[1]);
       const center = getTouchCenter(event.touches[0], event.touches[1]);
-      const frameRect = bookFrameRef.current?.getBoundingClientRect();
+      const viewportRect = viewportRef.current?.getBoundingClientRect();
 
-      if (!frameRect) {
-        return;
-      }
+      if (!viewportRect) return;
 
-      const localX = center.x - frameRect.left;
-      const localY = center.y - frameRect.top;
-      const frameCenterX = frameRect.width / 2;
-      const frameCenterY = frameRect.height / 2;
+      const localX = center.x - viewportRect.left;
+      const localY = center.y - viewportRect.top;
+      const viewportCenterX = viewportRect.width / 2;
+      const viewportCenterY = viewportRect.height / 2;
 
-      /*
-       * 현재 두 손가락 아래에 있는 플립북 좌표를 저장합니다.
-       * transform-origin이 중앙이므로 중앙 기준 좌표로 환산합니다.
-       */
+      panRef.current.active = false;
+
       pinchRef.current = {
         startDistance: distance,
-        startZoom: zoom,
-        contentX: frameCenterX + (localX - frameCenterX - pan.x) / zoom,
-        contentY: frameCenterY + (localY - frameCenterY - pan.y) / zoom,
+        startZoom: currentZoom,
+        contentX:
+          viewportCenterX +
+          (localX - viewportCenterX - currentPan.x) / currentZoom,
+        contentY:
+          viewportCenterY +
+          (localY - viewportCenterY - currentPan.y) / currentZoom,
       };
 
       setIsPinching(true);
-      event.stopPropagation();
       return;
     }
 
-    if (event.touches.length === 1 && zoom > 1) {
+    if (event.touches.length === 1 && currentZoom > 1) {
+      event.preventDefault();
+      event.stopPropagation();
+
       panRef.current = {
         startX: event.touches[0].clientX,
         startY: event.touches[0].clientY,
-        originX: pan.x,
-        originY: pan.y,
+        originX: currentPan.x,
+        originY: currentPan.y,
+        active: true,
       };
-
-      event.stopPropagation();
     }
   };
 
@@ -489,40 +518,54 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
 
       const distance = getTouchDistance(event.touches[0], event.touches[1]);
       const center = getTouchCenter(event.touches[0], event.touches[1]);
-      const frameRect = bookFrameRef.current?.getBoundingClientRect();
+      const viewportRect = viewportRef.current?.getBoundingClientRect();
 
-      if (!frameRect) {
-        return;
-      }
+      if (!viewportRect) return;
 
       const startDistance = pinchRef.current.startDistance || distance;
-      const startZoom = pinchRef.current.startZoom || 1;
+      const startZoom = pinchRef.current.startZoom || zoomRef.current;
       const nextZoom = clampZoom(startZoom * (distance / startDistance));
 
-      const localX = center.x - frameRect.left;
-      const localY = center.y - frameRect.top;
-      const frameCenterX = frameRect.width / 2;
-      const frameCenterY = frameRect.height / 2;
+      const localX = center.x - viewportRect.left;
+      const localY = center.y - viewportRect.top;
+      const viewportCenterX = viewportRect.width / 2;
+      const viewportCenterY = viewportRect.height / 2;
 
       const nextPan = clampPan(
         localX -
-          frameCenterX -
-          (pinchRef.current.contentX - frameCenterX) * nextZoom,
+          viewportCenterX -
+          (pinchRef.current.contentX - viewportCenterX) * nextZoom,
         localY -
-          frameCenterY -
-          (pinchRef.current.contentY - frameCenterY) * nextZoom,
+          viewportCenterY -
+          (pinchRef.current.contentY - viewportCenterY) * nextZoom,
         nextZoom,
       );
 
-      setZoom(nextZoom);
-      setPan(nextZoom === 1 ? { x: 0, y: 0 } : nextPan);
-
+      applyZoom(nextZoom);
+      applyPan(nextZoom <= 1 ? { x: 0, y: 0 } : nextPan);
       return;
     }
 
-    if (event.touches.length === 1 && zoom > 1) {
+    const currentZoom = zoomRef.current;
+
+    if (event.touches.length === 1 && currentZoom > 1) {
       event.preventDefault();
       event.stopPropagation();
+
+      /*
+       * 핀치 도중 한 손가락이 먼저 떨어졌거나 브라우저가 touchstart를
+       * 생략한 경우에도 현재 손가락 위치를 즉시 새 드래그 시작점으로 잡습니다.
+       */
+      if (!panRef.current.active) {
+        panRef.current = {
+          startX: event.touches[0].clientX,
+          startY: event.touches[0].clientY,
+          originX: panValueRef.current.x,
+          originY: panValueRef.current.y,
+          active: true,
+        };
+        return;
+      }
 
       const nextPan = clampPan(
         panRef.current.originX +
@@ -531,35 +574,35 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
         panRef.current.originY +
           event.touches[0].clientY -
           panRef.current.startY,
-        zoom,
+        currentZoom,
       );
 
-      setPan(nextPan);
+      applyPan(nextPan);
     }
   };
 
   const handleTouchEndCapture = (event: React.TouchEvent<HTMLDivElement>) => {
-    /*
-     * 핀치 확대 중 한 손가락만 떼었을 때 남은 손가락으로
-     * 곧바로 이동을 계속할 수 있도록 시작점을 다시 잡습니다.
-     */
-    if (event.touches.length === 1 && zoom > 1) {
+    const currentZoom = zoomRef.current;
+    const currentPan = panValueRef.current;
+
+    if (event.touches.length === 1 && currentZoom > 1) {
       panRef.current = {
         startX: event.touches[0].clientX,
         startY: event.touches[0].clientY,
-        originX: pan.x,
-        originY: pan.y,
+        originX: currentPan.x,
+        originY: currentPan.y,
+        active: true,
       };
+    } else if (event.touches.length === 0) {
+      panRef.current.active = false;
     }
 
     if (event.touches.length < 2) {
-      window.setTimeout(() => {
-        setIsPinching(false);
-      }, 120);
+      setIsPinching(false);
     }
 
-    if (zoom <= 1) {
-      setPan({ x: 0, y: 0 });
+    if (event.touches.length === 0 && currentZoom <= 1) {
+      applyPan({ x: 0, y: 0 });
     }
   };
 
@@ -609,12 +652,13 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                 ref={viewportRef}
                 className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
                 style={{
-                  touchAction: zoom > 1 ? "none" : "pan-y",
+                  touchAction: "none",
                   overscrollBehavior: "none",
                 }}
                 onTouchStartCapture={handleTouchStartCapture}
                 onTouchMoveCapture={handleTouchMoveCapture}
                 onTouchEndCapture={handleTouchEndCapture}
+                onTouchCancelCapture={handleTouchEndCapture}
               >
                 <div
                   ref={bookFrameRef}
@@ -682,16 +726,6 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                   </div>
                 </div>
 
-                {zoom > 1 && (
-                  <div
-                    className="absolute inset-0 z-40 cursor-grab active:cursor-grabbing"
-                    style={{
-                      touchAction: "none",
-                      background: "transparent",
-                    }}
-                    aria-label="확대된 플립북 이동 영역"
-                  />
-                )}
               </div>
 
               <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
@@ -769,5 +803,3 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     </main>
   );
 }
-
-
