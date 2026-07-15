@@ -36,6 +36,30 @@ const selectedMarkerIcon = new L.Icon({
   iconAnchor: [12, 41],
 });
 
+const kiotiMarkerIcon = L.divIcon({
+  className: "kioti-map-marker",
+  html: `
+    <div style="
+      width:44px;
+      height:44px;
+      overflow:hidden;
+      border-radius:50%;
+      border:3px solid white;
+      background:#000;
+      box-shadow:0 3px 10px rgba(0,0,0,.45);
+    ">
+      <img
+        src="/images/kioti-logo.jpg"
+        alt="KIOTI"
+        style="display:block;width:100%;height:100%;object-fit:cover;"
+      />
+    </div>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  popupAnchor: [0, -24],
+});
+
 type MapCategory = {
   id?: number;
   name: string;
@@ -316,6 +340,7 @@ export default function BusinessMap({
   const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
   const [myRole, setMyRole] = useState<string | null>(role);
+  const [kiotiSpot, setKiotiSpot] = useState<Spot | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -338,11 +363,37 @@ export default function BusinessMap({
   }, [spots]);
 
   const normalizedMarkerSpots = useMemo(() => {
-    return (markerSpots ?? spots).map((spot) => ({
+    const baseSpots = (markerSpots ?? spots).map((spot) => ({
       ...spot,
       map_key: getSpotKey(spot),
     }));
-  }, [markerSpots, spots]);
+
+    if (!kiotiSpot) return baseSpots;
+
+    const alreadyIncluded = baseSpots.some(
+      (spot) => getBusinessId(spot) === 199
+    );
+
+    if (alreadyIncluded) {
+      return baseSpots.map((spot) =>
+        getBusinessId(spot) === 199
+          ? {
+              ...spot,
+              ...kiotiSpot,
+              map_key: getSpotKey(kiotiSpot),
+            }
+          : spot
+      );
+    }
+
+    return [
+      ...baseSpots,
+      {
+        ...kiotiSpot,
+        map_key: getSpotKey(kiotiSpot),
+      },
+    ];
+  }, [markerSpots, spots, kiotiSpot]);
 
   const displayCategories = useMemo(() => {
     if (mapCategories.length > 0) return mapCategories;
@@ -456,6 +507,54 @@ export default function BusinessMap({
   }, []);
 
   useEffect(() => {
+    async function loadKiotiSpot() {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("id", 199)
+        .maybeSingle();
+
+      if (error) {
+        console.log("KIOTI business load error:", error);
+        return;
+      }
+
+      if (!data) return;
+
+      const lat = Number(
+        data.lat ??
+          data.latitude ??
+          data.google_lat ??
+          data.location_lat
+      );
+      const lng = Number(
+        data.lng ??
+          data.longitude ??
+          data.google_lng ??
+          data.location_lng
+      );
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.log("KIOTI business 199 has no valid lat/lng:", data);
+        return;
+      }
+
+      setKiotiSpot({
+        ...data,
+        id: 199,
+        business_id: 199,
+        lat,
+        lng,
+        map_key: "business-199-kioti",
+        source_type: "business",
+        type: "business",
+      } as Spot);
+    }
+
+    loadKiotiSpot();
+  }, []);
+
+  useEffect(() => {
     async function loadCategories() {
       if (categories.length > 0) {
         setMapCategories(categories);
@@ -525,6 +624,11 @@ export default function BusinessMap({
 
   const filteredMarkerSpots = useMemo(() => {
     return normalizedMarkerSpots.filter((spot) => {
+      // Business ID 199 is a permanent sponsored marker.
+      // Its saved lat/lng coordinates are used, and it stays visible
+      // even when no category is selected or a search is active.
+      if (getBusinessId(spot) === 199) return true;
+
       const spotCategoryList = getSpotCategoryList(spot);
 
       const searchText = `
@@ -919,6 +1023,7 @@ export default function BusinessMap({
             const baseKey = getSpotKey(spot);
             const markerKey = `${baseKey}-${index}`;
             const isSelected = baseKey === selectedSpotKey;
+            const isKioti = getBusinessId(spot) === 199;
 
             const lat = Number(spot.lat);
             const lng = Number(spot.lng);
@@ -945,11 +1050,28 @@ export default function BusinessMap({
               <Marker
                 key={markerKey}
                 position={[lat + markerOffset, lng + markerOffset]}
-                icon={isSelected ? selectedMarkerIcon : markerIcon}
-                zIndexOffset={isSelected ? 10000 : sameLocationIndex}
+                icon={
+                  isKioti
+                    ? kiotiMarkerIcon
+                    : isSelected
+                    ? selectedMarkerIcon
+                    : markerIcon
+                }
+                zIndexOffset={
+                  isKioti ? 20000 : isSelected ? 10000 : sameLocationIndex
+                }
                 eventHandlers={{
                   click: (e) => {
                     L.DomEvent.stopPropagation(e.originalEvent);
+
+                    if (isKioti) {
+                      window.location.href = getDetailHref(
+                        spot,
+                        199,
+                        communityMode
+                      );
+                      return;
+                    }
 
                     setSelectedSpotKey(baseKey);
                     setCategoryPanelOpen(false);

@@ -37,12 +37,17 @@ export default function MapWrapper({
   initialCategory = "",
 }: MapWrapperProps) {
   /*
-   * Cards may use every supplied spot.
-   * Map markers exclude records explicitly marked show_marker = false.
+   * 비즈니스 ID 199는 전용 KIOTI 로고를 사용합니다.
+   * show_marker가 false인 경우에는 다른 비즈니스와 마찬가지로 제외됩니다.
    */
-  const markerSpots = spots.filter(
-    (spot) => spot.show_marker !== false
-  );
+  const markerSpots = spots
+    .filter((spot) => spot.show_marker !== false)
+    .map((spot) => ({
+      ...spot,
+
+      // id가 문자열 "199"로 들어오는 경우까지 처리
+      alwaysShowKiotiLogo: String(spot.id) === "199",
+    }));
 
   const mapKey = `${activeNav}-${
     communityMode ? "community" : "business"
