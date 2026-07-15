@@ -1,9 +1,10 @@
 import { supabase } from "../../../lib/supabase";
 import BusinessAdFlipbook from "../../components/BusinessAdFlipbook";
 import type {
+  AdPage,
   FlipbookAd,
   FlipbookAdSize,
-} from "@/components/flipbookTypes";
+} from "../../components/flipbookTypes";   
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -101,6 +102,8 @@ function buildAdPages(ads: FlipbookAd[]): AdPage[] {
 
   return pages;
 }
+
+
 
 export default async function BusinessAdsPage() {
   /*
