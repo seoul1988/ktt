@@ -415,8 +415,8 @@ export default function BusinessAdFlipbook({
       const orientation = screen.orientation as
         | (ScreenOrientation & {
             lock?: (
-              orientation: OrientationLockType,
-            ) => Promise<void>;
+  orientation: string,
+) => Promise<void>;
           })
         | undefined;
 
