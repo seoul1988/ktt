@@ -11,15 +11,18 @@ export default function AdTab() {
     <Link
       href="/community/ads"
       aria-label="광고 책자 보기"
-      className={`fixed right-4 z-50 flex h-14 w-14 flex-col items-center justify-center rounded-full border shadow-xl transition active:scale-95 ${
-        isActive
-          ? "border-[#172033] bg-[#172033] text-white"
-          : "border-[#E7D8C7] bg-white text-[#172033]"
-      }`}
-      style={{ bottom: "calc(6.1rem + env(safe-area-inset-bottom))" }}
+      className={
+        `fixed top-3 right-3 z-50 flex h-11 w-11 flex-col items-center justify-center rounded-full border shadow-lg transition active:scale-95 ${
+          isActive
+            ? "border-red-700 bg-red-700 text-white"
+            : "border-red-600 bg-red-600 text-white hover:bg-red-700"
+        }`
+      }
     >
-      <span className="text-xl leading-none">📖</span>
-      <span className="mt-0.5 text-[9px] font-black">광고</span>
+      <span className="text-base leading-none">📖</span>
+      <span className="mt-0.5 text-[8px] font-black leading-none">
+        광고
+      </span>
     </Link>
   );
 }
