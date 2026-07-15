@@ -94,6 +94,10 @@ export default function BusinessAdFlipbook({
   const pinchRef = useRef({
     startDistance: 0,
     startZoom: 1,
+    startCenterX: 0,
+    startCenterY: 0,
+    startPanX: 0,
+    startPanY: 0,
   });
   const panRef = useRef({
     startX: 0,
@@ -415,8 +419,8 @@ export default function BusinessAdFlipbook({
       const orientation = screen.orientation as
         | (ScreenOrientation & {
             lock?: (
-  orientation: string,
-) => Promise<void>;
+              orientation: string,
+            ) => Promise<void>;
           })
         | undefined;
 
@@ -471,6 +475,14 @@ export default function BusinessAdFlipbook({
       second.clientY - first.clientY,
     );
 
+  const getTouchCenter = (
+    first: React.Touch,
+    second: React.Touch,
+  ) => ({
+    x: (first.clientX + second.clientX) / 2,
+    y: (first.clientY + second.clientY) / 2,
+  });
+
   const resetZoom = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
@@ -485,10 +497,18 @@ export default function BusinessAdFlipbook({
         event.touches[0],
         event.touches[1],
       );
+      const center = getTouchCenter(
+        event.touches[0],
+        event.touches[1],
+      );
 
       pinchRef.current = {
         startDistance: distance,
         startZoom: zoom,
+        startCenterX: center.x,
+        startCenterY: center.y,
+        startPanX: pan.x,
+        startPanY: pan.y,
       };
 
       setIsPinching(true);
@@ -519,18 +539,43 @@ export default function BusinessAdFlipbook({
         event.touches[0],
         event.touches[1],
       );
+      const center = getTouchCenter(
+        event.touches[0],
+        event.touches[1],
+      );
       const startDistance =
         pinchRef.current.startDistance || distance;
+      const startZoom =
+        pinchRef.current.startZoom || 1;
 
       const nextZoom = clampZoom(
-        pinchRef.current.startZoom *
-          (distance / startDistance),
+        startZoom * (distance / startDistance),
       );
+      const scaleRatio = nextZoom / startZoom;
+
+      /*
+       * 두 손가락의 중심점을 확대 기준점으로 사용합니다.
+       * 따라서 오른쪽 위를 집어서 확대하면 그 부분이 화면 중심 쪽으로
+       * 따라오며 확대되고, 플립북 중앙을 기준으로 확대되지 않습니다.
+       */
+      const nextPanX =
+        center.x -
+        pinchRef.current.startCenterX * scaleRatio +
+        pinchRef.current.startPanX * scaleRatio;
+      const nextPanY =
+        center.y -
+        pinchRef.current.startCenterY * scaleRatio +
+        pinchRef.current.startPanY * scaleRatio;
 
       setZoom(nextZoom);
 
       if (nextZoom === 1) {
         setPan({ x: 0, y: 0 });
+      } else {
+        setPan({
+          x: nextPanX,
+          y: nextPanY,
+        });
       }
 
       return;
