@@ -32,6 +32,19 @@ type FlipbookAdRecord = {
   priority: number;
 };
 
+type BusinessPhotoItem =
+  | {
+      id: string;
+      kind: "existing";
+      url: string;
+    }
+  | {
+      id: string;
+      kind: "new";
+      url: string;
+      file: File;
+    };
+
 const flipbookAdOptions = [
   { size: 1 as FlipbookAdSize, label: "Size 1", description: "전체면 100%", recommendedSize: "1080 × 1527 px" },
   { size: 2 as FlipbookAdSize, label: "Size 2", description: "반면 50%", recommendedSize: "1080 × 764 px" },
@@ -302,9 +315,10 @@ export default function EditBusinessPage() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [instagramUrl, setInstagramUrl] = useState("");
 
-  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
-  const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
-  const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
+  const [photoItems, setPhotoItems] = useState<BusinessPhotoItem[]>([]);
+  const [draggedPhotoId, setDraggedPhotoId] = useState<string | null>(null);
+  const [touchDragPhotoId, setTouchDragPhotoId] = useState<string | null>(null);
+  const touchDragPhotoIdRef = useRef<string | null>(null);
 
   const [existingVideoUrl, setExistingVideoUrl] = useState("");
   const [externalVideoUrl, setExternalVideoUrl] = useState("");
@@ -429,7 +443,13 @@ export default function EditBusinessPage() {
     setTags(b.tags || "");
     setWebsiteUrl(b.website_url || "");
     setInstagramUrl(b.instagram_url || "");
-    setExistingImageUrls(images);
+    setPhotoItems(
+      images.map((url, index) => ({
+        id: `existing-${index}-${url}`,
+        kind: "existing" as const,
+        url,
+      })),
+    );
     setExistingVideoUrl(
       b.video_urls && b.video_urls.length > 0 ? b.video_urls[0] : "",
     );
@@ -553,9 +573,7 @@ export default function EditBusinessPage() {
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-
-    const currentTotal = existingImageUrls.length + newPhotoFiles.length;
-    const remainCount = 6 - currentTotal;
+    const remainCount = 6 - photoItems.length;
 
     if (remainCount <= 0) {
       alert("You can upload up to 6 photos.");
@@ -563,32 +581,113 @@ export default function EditBusinessPage() {
       return;
     }
 
-    const newFiles = imageFiles.slice(0, remainCount);
+    const newItems: BusinessPhotoItem[] = imageFiles
+      .slice(0, remainCount)
+      .map((file) => ({
+        id: `new-${crypto.randomUUID()}`,
+        kind: "new" as const,
+        url: URL.createObjectURL(file),
+        file,
+      }));
 
-    setNewPhotoFiles((prev) => [...prev, ...newFiles]);
-    setNewPhotoPreviews((prev) => [
-      ...prev,
-      ...newFiles.map((file) => URL.createObjectURL(file)),
-    ]);
-
+    setPhotoItems((prev) => [...prev, ...newItems]);
     e.target.value = "";
   }
 
-  async function removeExistingPhoto(index: number) {
+  function movePhoto(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+
+    setPhotoItems((prev) => {
+      const sourceIndex = prev.findIndex((item) => item.id === sourceId);
+      const targetIndex = prev.findIndex((item) => item.id === targetId);
+
+      if (sourceIndex < 0 || targetIndex < 0) return prev;
+
+      const next = [...prev];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }
+
+  function handlePhotoDragStart(
+    event: React.DragEvent<HTMLDivElement>,
+    photoId: string,
+  ) {
+    setDraggedPhotoId(photoId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", photoId);
+  }
+
+  function handlePhotoDrop(
+    event: React.DragEvent<HTMLDivElement>,
+    targetId: string,
+  ) {
+    event.preventDefault();
+    const sourceId =
+      draggedPhotoId || event.dataTransfer.getData("text/plain");
+
+    if (sourceId) movePhoto(sourceId, targetId);
+    setDraggedPhotoId(null);
+  }
+
+  function handlePhotoTouchStart(photoId: string) {
+    touchDragPhotoIdRef.current = photoId;
+    setTouchDragPhotoId(photoId);
+  }
+
+  function handlePhotoTouchMove(event: React.TouchEvent<HTMLDivElement>) {
+    const sourceId = touchDragPhotoIdRef.current;
+    if (!sourceId) return;
+
+    const touch = event.touches[0];
+    const element = document.elementFromPoint(
+      touch.clientX,
+      touch.clientY,
+    ) as HTMLElement | null;
+    const target = element?.closest<HTMLElement>("[data-photo-id]");
+    const targetId = target?.dataset.photoId;
+
+    if (targetId && targetId !== sourceId) {
+      movePhoto(sourceId, targetId);
+    }
+  }
+
+  function handlePhotoTouchEnd() {
+    touchDragPhotoIdRef.current = null;
+    setTouchDragPhotoId(null);
+  }
+
+  async function removePhoto(item: BusinessPhotoItem) {
     if (!business) return;
     if (!confirm("이 사진을 삭제하시겠습니까?")) return;
 
-    const targetUrl = existingImageUrls[index];
-    const nextImageUrls = existingImageUrls.filter((_, i) => i !== index);
-    const nextMainImage = nextImageUrls[0] || null;
+    if (item.kind === "new") {
+      URL.revokeObjectURL(item.url);
+      setPhotoItems((prev) =>
+        prev.filter((photo) => photo.id !== item.id),
+      );
+      return;
+    }
+
+    const nextItems = photoItems.filter((photo) => photo.id !== item.id);
+    const nextExistingUrls = nextItems
+      .filter(
+        (photo): photo is Extract<BusinessPhotoItem, { kind: "existing" }> =>
+          photo.kind === "existing",
+      )
+      .map((photo) => photo.url);
+    const nextMainImage = nextExistingUrls[0] || null;
 
     try {
-      setDeletingPhotoIndex(index);
+      setDeletingPhotoIndex(
+        photoItems.findIndex((photo) => photo.id === item.id),
+      );
 
       const { data: updatedBusiness, error: dbError } = await supabase
         .from("businesses")
         .update({
-          image_urls: nextImageUrls,
+          image_urls: nextExistingUrls,
           image_url: nextMainImage,
         })
         .eq("id", business.id)
@@ -602,7 +701,7 @@ export default function EditBusinessPage() {
         return;
       }
 
-      const storagePath = getBusinessImagePathFromPublicUrl(targetUrl);
+      const storagePath = getBusinessImagePathFromPublicUrl(item.url);
 
       if (storagePath) {
         const { error: storageError } = await supabase.storage
@@ -616,29 +715,18 @@ export default function EditBusinessPage() {
         }
       }
 
-      setExistingImageUrls(updatedBusiness.image_urls || []);
+      setPhotoItems(nextItems);
       setBusiness({
         ...business,
         image_urls: updatedBusiness.image_urls || [],
         image_url: updatedBusiness.image_url || null,
       });
-
-      alert("이미지가 삭제되었습니다.");
     } catch (err: any) {
       console.error("business image delete error:", err);
       alert(err?.message || "이미지 삭제 오류");
     } finally {
       setDeletingPhotoIndex(null);
     }
-  }
-
-  function removeNewPhoto(index: number) {
-    setNewPhotoFiles((prev) => prev.filter((_, i) => i !== index));
-
-    setNewPhotoPreviews((prev) => {
-      URL.revokeObjectURL(prev[index]);
-      return prev.filter((_, i) => i !== index);
-    });
   }
 
   async function handleFlipbookAdChange(
@@ -1189,19 +1277,22 @@ export default function EditBusinessPage() {
   }
 
   async function uploadNewPhotos() {
-    if (newPhotoFiles.length === 0) return [];
+    const newItems = photoItems.filter(
+      (item): item is Extract<BusinessPhotoItem, { kind: "new" }> =>
+        item.kind === "new",
+    );
 
-    const uploadedUrls: string[] = [];
+    const uploadedById = new Map<string, string>();
 
-    for (const file of newPhotoFiles) {
-      const fileExt = file.name.split(".").pop();
+    for (const item of newItems) {
+      const fileExt = item.file.name.split(".").pop();
       const fileName = `${businessId}-${Date.now()}-${Math.random()
         .toString(36)
         .substring(2)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("business-images")
-        .upload(fileName, file);
+        .upload(fileName, item.file);
 
       if (uploadError) throw uploadError;
 
@@ -1209,10 +1300,10 @@ export default function EditBusinessPage() {
         .from("business-images")
         .getPublicUrl(fileName);
 
-      uploadedUrls.push(data.publicUrl);
+      uploadedById.set(item.id, data.publicUrl);
     }
 
-    return uploadedUrls;
+    return uploadedById;
   }
 
   async function saveBusiness() {
@@ -1250,12 +1341,12 @@ export default function EditBusinessPage() {
 
     setSaving(true);
 
-    let uploadedUrls: string[] = [];
+    let uploadedPhotoUrls = new Map<string, string>();
     let uploadedVideoUrl = "";
     let uploadedAdUrls: Partial<Record<FlipbookAdSize, string>> = {};
 
     try {
-      uploadedUrls = await uploadNewPhotos();
+      uploadedPhotoUrls = await uploadNewPhotos();
       uploadedVideoUrl = await uploadVideo();
 
       if (isAdmin) {
@@ -1267,7 +1358,14 @@ export default function EditBusinessPage() {
       return;
     }
 
-    const finalImageUrls = [...existingImageUrls, ...uploadedUrls].slice(0, 6);
+    const finalImageUrls = photoItems
+      .map((item) =>
+        item.kind === "existing"
+          ? item.url
+          : uploadedPhotoUrls.get(item.id) || "",
+      )
+      .filter(Boolean)
+      .slice(0, 6);
     const cleanExternalVideoUrl = externalVideoUrl.trim();
 
     const finalUploadedVideoUrl =
@@ -1384,7 +1482,7 @@ export default function EditBusinessPage() {
     );
   }
 
-  const totalPhotos = existingImageUrls.length + newPhotoFiles.length;
+  const totalPhotos = photoItems.length;
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-32 text-[#172033]">
@@ -1807,14 +1905,53 @@ export default function EditBusinessPage() {
                 className="hidden"
               />
 
+              <p className="mb-3 text-[11px] font-bold text-gray-500">
+                사진을 길게 누르거나 마우스로 끌어서 순서를 바꾸세요.
+                첫 번째 사진이 메인 이미지입니다.
+              </p>
+
               <div className="grid grid-cols-3 gap-2">
-                {existingImageUrls.map((url, index) => (
-                  <div key={url} className="relative">
+                {photoItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    data-photo-id={item.id}
+                    draggable
+                    onDragStart={(event) =>
+                      handlePhotoDragStart(event, item.id)
+                    }
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) =>
+                      handlePhotoDrop(event, item.id)
+                    }
+                    onDragEnd={() => setDraggedPhotoId(null)}
+                    onTouchStart={() =>
+                      handlePhotoTouchStart(item.id)
+                    }
+                    onTouchMove={handlePhotoTouchMove}
+                    onTouchEnd={handlePhotoTouchEnd}
+                    className={`relative select-none touch-none rounded-xl ${
+                      draggedPhotoId === item.id ||
+                      touchDragPhotoId === item.id
+                        ? "scale-95 opacity-60"
+                        : ""
+                    } ${
+                      index === 0
+                        ? "ring-2 ring-[#C4483A]"
+                        : ""
+                    }`}
+                  >
                     <img
-                      src={url}
-                      alt={`Existing photo ${index + 1}`}
+                      src={item.url}
+                      alt={`Business photo ${index + 1}`}
+                      draggable={false}
                       className="h-24 w-full rounded-xl object-cover"
                     />
+
+                    {index === 0 && (
+                      <span className="absolute left-1 top-1 rounded-full bg-[#C4483A] px-2 py-0.5 text-[9px] font-black text-white shadow">
+                        메인
+                      </span>
+                    )}
 
                     <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
                       {index + 1}
@@ -1822,34 +1959,16 @@ export default function EditBusinessPage() {
 
                     <button
                       type="button"
-                      onClick={() => removeExistingPhoto(index)}
+                      onClick={() => void removePhoto(item)}
                       disabled={deletingPhotoIndex === index}
                       className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow disabled:opacity-50"
                     >
                       {deletingPhotoIndex === index ? "…" : "×"}
                     </button>
-                  </div>
-                ))}
 
-                {newPhotoPreviews.map((preview, index) => (
-                  <div key={preview} className="relative">
-                    <img
-                      src={preview}
-                      alt={`New photo ${index + 1}`}
-                      className="h-24 w-full rounded-xl object-cover"
-                    />
-
-                    <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
-                      {existingImageUrls.length + index + 1}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => removeNewPhoto(index)}
-                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
-                    >
-                      ×
-                    </button>
+                    <div className="absolute bottom-1 right-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-gray-700 shadow">
+                      ↕
+                    </div>
                   </div>
                 ))}
               </div>
