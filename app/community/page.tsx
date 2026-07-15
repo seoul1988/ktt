@@ -50,6 +50,13 @@ export default async function CommunityPage() {
       .map((cat) => String(cat.name).trim().toLowerCase())
   );
 
+
+
+
+
+
+
+
   const newBusinesses =
     allBusinesses
       ?.filter((biz) => {
@@ -325,6 +332,15 @@ export default async function CommunityPage() {
             )}
           </div>
         </section>
+
+
+
+
+
+
+
+
+
 
         {/* New in Raleigh */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">

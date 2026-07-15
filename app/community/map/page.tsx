@@ -122,7 +122,9 @@ async function getCommunityCategories(): Promise<CategoryLoadResult> {
     };
   }
 
-  const categoryList = (data || []) as CommunityCategory[];
+ const categoryList = ((data || []) as CommunityCategory[]).filter(
+  (category) => normalizeCategory(category.name) !== "beauty supply",
+);
 
   return {
     categoryList,

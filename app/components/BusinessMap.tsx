@@ -60,6 +60,59 @@ const kiotiMarkerIcon = L.divIcon({
   popupAnchor: [0, -24],
 });
 
+const caryMarkerIcon = L.divIcon({
+  className: "cary-map-marker",
+  html: `
+    <div style="
+      width:44px;
+      height:44px;
+      overflow:hidden;
+      border-radius:50%;
+      border:3px solid white;
+      background:white;
+      box-shadow:0 3px 10px rgba(0,0,0,.45);
+    ">
+      <img
+        src="/images/cary.png"
+        alt="Business 15"
+        style="display:block;width:100%;height:100%;object-fit:contain;"
+      />
+    </div>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  popupAnchor: [0, -24],
+});
+
+
+
+const business16MarkerIcon = L.divIcon({
+  className: "business16-map-marker",
+  html: `
+    <div style="
+      width:44px;
+      height:44px;
+      overflow:hidden;
+      border-radius:50%;
+      border:3px solid white;
+      background:white;
+      box-shadow:0 3px 10px rgba(0,0,0,.45);
+    ">
+      <img
+        src="/images/lee.png"
+        alt="Business 16"
+        onerror="this.onerror=null;this.src='/lee.png';"
+        style="display:block;width:100%;height:100%;object-fit:contain;"
+      />
+    </div>
+  `,
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
+  popupAnchor: [0, -24],
+});
+
+
+
 type MapCategory = {
   id?: number;
   name: string;
@@ -341,6 +394,8 @@ export default function BusinessMap({
   const [mapCategories, setMapCategories] = useState<MapCategory[]>([]);
   const [myRole, setMyRole] = useState<string | null>(role);
   const [kiotiSpot, setKiotiSpot] = useState<Spot | null>(null);
+  const [carySpot, setCarySpot] = useState<Spot | null>(null);
+  const [business16Spot, setBusiness16Spot] = useState<Spot | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -363,37 +418,43 @@ export default function BusinessMap({
   }, [spots]);
 
   const normalizedMarkerSpots = useMemo(() => {
-    const baseSpots = (markerSpots ?? spots).map((spot) => ({
+    let result = (markerSpots ?? spots).map((spot) => ({
       ...spot,
       map_key: getSpotKey(spot),
     }));
 
-    if (!kiotiSpot) return baseSpots;
+    const permanentSpots = [
+      kiotiSpot,
+      carySpot,
+      business16Spot,
+    ].filter(Boolean) as Spot[];
 
-    const alreadyIncluded = baseSpots.some(
-      (spot) => getBusinessId(spot) === 199
-    );
-
-    if (alreadyIncluded) {
-      return baseSpots.map((spot) =>
-        getBusinessId(spot) === 199
-          ? {
-              ...spot,
-              ...kiotiSpot,
-              map_key: getSpotKey(kiotiSpot),
-            }
-          : spot
+    permanentSpots.forEach((permanentSpot) => {
+      const permanentBusinessId = getBusinessId(permanentSpot);
+      const alreadyIncluded = result.some(
+        (spot) => getBusinessId(spot) === permanentBusinessId
       );
-    }
 
-    return [
-      ...baseSpots,
-      {
-        ...kiotiSpot,
-        map_key: getSpotKey(kiotiSpot),
-      },
-    ];
-  }, [markerSpots, spots, kiotiSpot]);
+      if (alreadyIncluded) {
+        result = result.map((spot) =>
+          getBusinessId(spot) === permanentBusinessId
+            ? {
+                ...spot,
+                ...permanentSpot,
+                map_key: getSpotKey(permanentSpot),
+              }
+            : spot
+        );
+      } else {
+        result.push({
+          ...permanentSpot,
+          map_key: getSpotKey(permanentSpot),
+        });
+      }
+    });
+
+    return result;
+  }, [markerSpots, spots, kiotiSpot, carySpot, business16Spot]);
 
   const displayCategories = useMemo(() => {
     if (mapCategories.length > 0) return mapCategories;
@@ -555,6 +616,142 @@ export default function BusinessMap({
   }, []);
 
   useEffect(() => {
+    async function loadCarySpot() {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("id", 15)
+        .maybeSingle();
+
+      if (error) {
+        console.log("Business 15 load error:", error);
+        return;
+      }
+
+      if (!data) return;
+
+      const lat = Number(
+        data.lat ??
+          data.latitude ??
+          data.google_lat ??
+          data.location_lat
+      );
+      const lng = Number(
+        data.lng ??
+          data.longitude ??
+          data.google_lng ??
+          data.location_lng
+      );
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.log("Business 15 has no valid lat/lng:", data);
+        return;
+      }
+
+      setCarySpot({
+        ...data,
+        id: 15,
+        business_id: 15,
+        lat,
+        lng,
+        map_key: "business-15-cary",
+        source_type: "business",
+        type: "business",
+      } as Spot);
+    }
+
+    loadCarySpot();
+  }, []);
+
+  useEffect(() => {
+    async function loadBusiness16Spot() {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("id", 16)
+        .maybeSingle();
+
+      if (error) {
+        console.log("Business 16 load error:", error);
+        return;
+      }
+
+      if (!data) {
+        console.log("Business 16 was not found.");
+        return;
+      }
+
+      let lat = Number(
+        data.lat ??
+          data.latitude ??
+          data.google_lat ??
+          data.location_lat ??
+          data.latitude_value
+      );
+
+      let lng = Number(
+        data.lng ??
+          data.longitude ??
+          data.google_lng ??
+          data.location_lng ??
+          data.longitude_value
+      );
+
+      // If coordinates are missing, geocode the saved business address.
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        const addressText = [
+          data.address,
+          data.city,
+          data.state || "NC",
+          data.zip || data.zip_code,
+        ]
+          .filter(Boolean)
+          .join(", ");
+
+        if (addressText) {
+          try {
+            const geocodeUrl =
+              "https://nominatim.openstreetmap.org/search" +
+              `?format=jsonv2&limit=1&q=${encodeURIComponent(addressText)}`;
+
+            const geocodeRes = await fetch(geocodeUrl, {
+              headers: {
+                Accept: "application/json",
+              },
+            });
+
+            const geocodeData = await geocodeRes.json();
+            const firstResult = geocodeData?.[0];
+
+            lat = Number(firstResult?.lat);
+            lng = Number(firstResult?.lon);
+          } catch (geocodeError) {
+            console.log("Business 16 geocoding error:", geocodeError);
+          }
+        }
+      }
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.log("Business 16 has no valid coordinates:", data);
+        return;
+      }
+
+      setBusiness16Spot({
+        ...data,
+        id: 16,
+        business_id: 16,
+        lat,
+        lng,
+        map_key: "business-16-lee",
+        source_type: "business",
+        type: "business",
+      } as Spot);
+    }
+
+    loadBusiness16Spot();
+  }, []);
+
+  useEffect(() => {
     async function loadCategories() {
       if (categories.length > 0) {
         setMapCategories(categories);
@@ -627,7 +824,7 @@ export default function BusinessMap({
       // Business ID 199 is a permanent sponsored marker.
       // Its saved lat/lng coordinates are used, and it stays visible
       // even when no category is selected or a search is active.
-      if (getBusinessId(spot) === 199) return true;
+      if ([199, 15, 16].includes(getBusinessId(spot))) return true;
 
       const spotCategoryList = getSpotCategoryList(spot);
 
@@ -1024,6 +1221,8 @@ export default function BusinessMap({
             const markerKey = `${baseKey}-${index}`;
             const isSelected = baseKey === selectedSpotKey;
             const isKioti = getBusinessId(spot) === 199;
+            const isCary = getBusinessId(spot) === 15;
+            const isBusiness16 = getBusinessId(spot) === 16;
 
             const lat = Number(spot.lat);
             const lng = Number(spot.lng);
@@ -1053,21 +1252,29 @@ export default function BusinessMap({
                 icon={
                   isKioti
                     ? kiotiMarkerIcon
+                    : isCary
+                    ? caryMarkerIcon
+                    : isBusiness16
+                    ? business16MarkerIcon
                     : isSelected
                     ? selectedMarkerIcon
                     : markerIcon
                 }
                 zIndexOffset={
-                  isKioti ? 20000 : isSelected ? 10000 : sameLocationIndex
+                  isKioti || isCary || isBusiness16
+                    ? 20000
+                    : isSelected
+                    ? 10000
+                    : sameLocationIndex
                 }
                 eventHandlers={{
                   click: (e) => {
                     L.DomEvent.stopPropagation(e.originalEvent);
 
-                    if (isKioti) {
+                    if (isKioti || isCary || isBusiness16) {
                       window.location.href = getDetailHref(
                         spot,
-                        199,
+                        getBusinessId(spot),
                         communityMode
                       );
                       return;
