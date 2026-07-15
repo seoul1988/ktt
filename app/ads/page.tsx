@@ -30,6 +30,7 @@ const categoryTabs = [
   { label: "자동차", value: "auto", href: "/ads?category=auto" },
   { label: "비즈니스", value: "business", href: "/ads?category=business" },
   { label: "이벤트", value: "event", href: "/ads?category=event" },
+  { label: "공연/문화", value: "culture", href: "/ads?category=culture" },
   { label: "서비스", value: "service", href: "/ads?category=service" },
   { label: "모임", value: "group", href: "/ads?category=group" },
 ];
