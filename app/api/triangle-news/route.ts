@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTriangleNews } from "../../../lib/triangleNews";
+
 
 export const runtime = "nodejs";
 export const revalidate = 3600;
