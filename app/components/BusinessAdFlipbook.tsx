@@ -91,13 +91,12 @@ export default function BusinessAdFlipbook({
   const bookRef = useRef<any>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const bookFrameRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef({
     startDistance: 0,
     startZoom: 1,
-    startCenterX: 0,
-    startCenterY: 0,
-    startPanX: 0,
-    startPanY: 0,
+    contentX: 0,
+    contentY: 0,
   });
   const panRef = useRef({
     startX: 0,
@@ -466,6 +465,22 @@ export default function BusinessAdFlipbook({
   const clampZoom = (value: number) =>
     Math.min(4, Math.max(1, value));
 
+  const clampPan = (
+    x: number,
+    y: number,
+    scale: number,
+  ) => {
+    const frameWidth = spreadWidth;
+    const frameHeight = pageSize.height;
+    const minX = frameWidth - frameWidth * scale;
+    const minY = frameHeight - frameHeight * scale;
+
+    return {
+      x: Math.min(0, Math.max(minX, x)),
+      y: Math.min(0, Math.max(minY, y)),
+    };
+  };
+
   const getTouchDistance = (
     first: React.Touch,
     second: React.Touch,
@@ -489,6 +504,18 @@ export default function BusinessAdFlipbook({
     setIsPinching(false);
   };
 
+  useEffect(() => {
+    setPan((currentPan) =>
+      zoom <= 1
+        ? { x: 0, y: 0 }
+        : clampPan(
+            currentPan.x,
+            currentPan.y,
+            zoom,
+          ),
+    );
+  }, [pageSize.height, pageSize.width, zoom]);
+
   const handleTouchStartCapture = (
     event: React.TouchEvent<HTMLDivElement>,
   ) => {
@@ -501,14 +528,21 @@ export default function BusinessAdFlipbook({
         event.touches[0],
         event.touches[1],
       );
+      const frameRect =
+        bookFrameRef.current?.getBoundingClientRect();
+
+      if (!frameRect) {
+        return;
+      }
+
+      const localX = center.x - frameRect.left;
+      const localY = center.y - frameRect.top;
 
       pinchRef.current = {
         startDistance: distance,
         startZoom: zoom,
-        startCenterX: center.x,
-        startCenterY: center.y,
-        startPanX: pan.x,
-        startPanY: pan.y,
+        contentX: (localX - pan.x) / zoom,
+        contentY: (localY - pan.y) / zoom,
       };
 
       setIsPinching(true);
@@ -543,40 +577,36 @@ export default function BusinessAdFlipbook({
         event.touches[0],
         event.touches[1],
       );
+      const frameRect =
+        bookFrameRef.current?.getBoundingClientRect();
+
+      if (!frameRect) {
+        return;
+      }
+
       const startDistance =
         pinchRef.current.startDistance || distance;
       const startZoom =
         pinchRef.current.startZoom || 1;
-
       const nextZoom = clampZoom(
         startZoom * (distance / startDistance),
       );
-      const scaleRatio = nextZoom / startZoom;
 
-      /*
-       * 두 손가락의 중심점을 확대 기준점으로 사용합니다.
-       * 따라서 오른쪽 위를 집어서 확대하면 그 부분이 화면 중심 쪽으로
-       * 따라오며 확대되고, 플립북 중앙을 기준으로 확대되지 않습니다.
-       */
-      const nextPanX =
-        center.x -
-        pinchRef.current.startCenterX * scaleRatio +
-        pinchRef.current.startPanX * scaleRatio;
-      const nextPanY =
-        center.y -
-        pinchRef.current.startCenterY * scaleRatio +
-        pinchRef.current.startPanY * scaleRatio;
+      const localX = center.x - frameRect.left;
+      const localY = center.y - frameRect.top;
+
+      const nextPan = clampPan(
+        localX - pinchRef.current.contentX * nextZoom,
+        localY - pinchRef.current.contentY * nextZoom,
+        nextZoom,
+      );
 
       setZoom(nextZoom);
-
-      if (nextZoom === 1) {
-        setPan({ x: 0, y: 0 });
-      } else {
-        setPan({
-          x: nextPanX,
-          y: nextPanY,
-        });
-      }
+      setPan(
+        nextZoom === 1
+          ? { x: 0, y: 0 }
+          : nextPan,
+      );
 
       return;
     }
@@ -585,16 +615,17 @@ export default function BusinessAdFlipbook({
       event.preventDefault();
       event.stopPropagation();
 
-      setPan({
-        x:
-          panRef.current.originX +
+      const nextPan = clampPan(
+        panRef.current.originX +
           event.touches[0].clientX -
           panRef.current.startX,
-        y:
-          panRef.current.originY +
+        panRef.current.originY +
           event.touches[0].clientY -
           panRef.current.startY,
-      });
+        zoom,
+      );
+
+      setPan(nextPan);
     }
   };
 
@@ -664,6 +695,7 @@ export default function BusinessAdFlipbook({
                 }}
               >
                 <div
+                  ref={bookFrameRef}
                   className="relative overflow-hidden"
                   style={{
                     width: `${spreadWidth}px`,
@@ -681,7 +713,7 @@ export default function BusinessAdFlipbook({
                       width: `${spreadWidth}px`,
                       height: `${pageSize.height}px`,
                       transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                      transformOrigin: "center center",
+                      transformOrigin: "top left",
                       transition:
                         zoom === 1
                           ? "transform 160ms ease"
