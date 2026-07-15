@@ -91,11 +91,16 @@ export default async function CommunityPage() {
   </div>
 
 <div className="flex items-center gap-3">
+  <Link
+  href="https://kacctriangle.org"
+  target="_blank"
+>
   <img
     src="/kacc-logo.png"
     alt="KACC Raleigh"
-    className="h-19 w-19 rounded-full object-contain "
+    className="h-19 w-19 rounded-full object-contain cursor-pointer"
   />
+</Link>
 
 
 
