@@ -89,10 +89,21 @@ export default function BusinessAdFlipbook({
   adPages: AdPage[];
 }) {
   const bookRef = useRef<any>(null);
+  const pinchRef = useRef({
+    startDistance: 0,
+    startZoom: 1,
+  });
+  const panRef = useRef({
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+  });
 
   const [isMobile, setIsMobile] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [pageSize, setPageSize] = useState({
     width: 360,
     height: 509,
@@ -332,25 +343,115 @@ export default function BusinessAdFlipbook({
     !!coverAdPage || visibleAdPages.length > 0;
 
   const spreadWidth = pageSize.width * 2;
-  const scaledSpreadWidth = Math.round(spreadWidth * zoom);
-  const scaledSpreadHeight = Math.round(
-    pageSize.height * zoom,
-  );
+
+  const clampZoom = (value: number) =>
+    Math.min(4, Math.max(1, value));
 
   const zoomOut = () => {
-    setZoom((value) =>
-      Math.max(0.75, Number((value - 0.25).toFixed(2))),
-    );
+    setZoom((value) => {
+      const nextZoom = clampZoom(
+        Number((value - 0.25).toFixed(2)),
+      );
+
+      if (nextZoom === 1) {
+        setPan({ x: 0, y: 0 });
+      }
+
+      return nextZoom;
+    });
   };
 
   const zoomIn = () => {
     setZoom((value) =>
-      Math.min(3, Number((value + 0.25).toFixed(2))),
+      clampZoom(Number((value + 0.25).toFixed(2))),
     );
   };
 
   const resetZoom = () => {
     setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const getTouchDistance = (
+    first: React.Touch,
+    second: React.Touch,
+  ) =>
+    Math.hypot(
+      second.clientX - first.clientX,
+      second.clientY - first.clientY,
+    );
+
+  const handleTouchStart = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (event.touches.length === 2) {
+      pinchRef.current = {
+        startDistance: getTouchDistance(
+          event.touches[0],
+          event.touches[1],
+        ),
+        startZoom: zoom,
+      };
+      return;
+    }
+
+    if (event.touches.length === 1 && zoom > 1) {
+      panRef.current = {
+        startX: event.touches[0].clientX,
+        startY: event.touches[0].clientY,
+        originX: pan.x,
+        originY: pan.y,
+      };
+    }
+  };
+
+  const handleTouchMove = (
+    event: React.TouchEvent<HTMLDivElement>,
+  ) => {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+
+      const distance = getTouchDistance(
+        event.touches[0],
+        event.touches[1],
+      );
+      const startDistance =
+        pinchRef.current.startDistance || distance;
+
+      const nextZoom = clampZoom(
+        pinchRef.current.startZoom *
+          (distance / startDistance),
+      );
+
+      setZoom(nextZoom);
+
+      if (nextZoom === 1) {
+        setPan({ x: 0, y: 0 });
+      }
+
+      return;
+    }
+
+    if (event.touches.length === 1 && zoom > 1) {
+      event.preventDefault();
+
+      setPan({
+        x:
+          panRef.current.originX +
+          event.touches[0].clientX -
+          panRef.current.startX,
+        y:
+          panRef.current.originY +
+          event.touches[0].clientY -
+          panRef.current.startY,
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (zoom <= 1) {
+      setPan({ x: 0, y: 0 });
+    }
   };
 
   return (
@@ -389,67 +490,74 @@ export default function BusinessAdFlipbook({
           </div>
         ) : (
           <>
-            <div className="w-full overflow-x-auto overflow-y-hidden pb-2">
+            <div
+              className="relative flex w-full items-center justify-center overflow-hidden bg-black/5 pb-2"
+              style={{
+                height: `${pageSize.height}px`,
+                touchAction: zoom > 1 ? "none" : "pan-y",
+              }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               <div
-                className="mx-auto"
                 style={{
-                  width: `${scaledSpreadWidth}px`,
-                  height: `${scaledSpreadHeight}px`,
-                  minWidth: `${scaledSpreadWidth}px`,
+                  width: `${spreadWidth}px`,
+                  height: `${pageSize.height}px`,
+                  flex: "0 0 auto",
+                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                  transformOrigin: "center center",
+                  transition:
+                    zoom === 1
+                      ? "transform 180ms ease"
+                      : "none",
+                  willChange: "transform",
                 }}
               >
-                <div
+                <HTMLFlipBook
+                  key={[
+                    isMobile,
+                    pageSize.width,
+                    pageSize.height,
+                    visibleAdPages.length,
+                    coverAdPage?.id ?? "default-cover",
+                  ].join("-")}
+                  ref={bookRef}
+                  width={pageSize.width}
+                  height={pageSize.height}
+                  size="fixed"
+                  minWidth={pageSize.width}
+                  maxWidth={pageSize.width}
+                  minHeight={pageSize.height}
+                  maxHeight={pageSize.height}
+                  showCover={true}
+                  usePortrait={false}
+                  mobileScrollSupport={true}
+                  drawShadow={true}
+                  maxShadowOpacity={0.5}
+                  flippingTime={900}
+                  showPageCorners={true}
+                  disableFlipByClick={zoom > 1}
+                  clickEventForward={zoom === 1}
+                  useMouseEvents={zoom === 1}
+                  swipeDistance={25}
+                  autoSize={false}
+                  startPage={0}
+                  startZIndex={0}
+                  className=""
                   style={{
                     width: `${spreadWidth}px`,
                     height: `${pageSize.height}px`,
-                    transform: `scale(${zoom})`,
-                    transformOrigin: "top left",
+                  }}
+                  onFlip={(event: any) => {
+                    setCurrentPage(
+                      Number(event?.data || 0),
+                    );
+                    resetZoom();
                   }}
                 >
-                  <HTMLFlipBook
-                    key={[
-                      isMobile,
-                      pageSize.width,
-                      pageSize.height,
-                      visibleAdPages.length,
-                      coverAdPage?.id ?? "default-cover",
-                    ].join("-")}
-                    ref={bookRef}
-                    width={pageSize.width}
-                    height={pageSize.height}
-                    size="fixed"
-                    minWidth={pageSize.width}
-                    maxWidth={pageSize.width}
-                    minHeight={pageSize.height}
-                    maxHeight={pageSize.height}
-                    showCover={true}
-                    usePortrait={false}
-                    mobileScrollSupport={true}
-                    drawShadow={true}
-                    maxShadowOpacity={0.5}
-                    flippingTime={900}
-                    showPageCorners={true}
-                    disableFlipByClick={false}
-                    clickEventForward={true}
-                    useMouseEvents={true}
-                    swipeDistance={25}
-                    autoSize={false}
-                    startPage={0}
-                    startZIndex={0}
-                    className=""
-                    style={{
-                      width: `${spreadWidth}px`,
-                      height: `${pageSize.height}px`,
-                    }}
-                    onFlip={(event: any) => {
-                      setCurrentPage(
-                        Number(event?.data || 0),
-                      );
-                    }}
-                  >
-                    {flipPages}
-                  </HTMLFlipBook>
-                </div>
+                  {flipPages}
+                </HTMLFlipBook>
               </div>
             </div>
 
@@ -470,7 +578,7 @@ export default function BusinessAdFlipbook({
               <button
                 type="button"
                 onClick={zoomOut}
-                disabled={zoom <= 0.75}
+                disabled={zoom <= 1}
                 className="flex h-11 min-w-11 items-center justify-center rounded-full bg-white px-3 text-xl font-black shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="축소"
               >
@@ -489,7 +597,7 @@ export default function BusinessAdFlipbook({
               <button
                 type="button"
                 onClick={zoomIn}
-                disabled={zoom >= 3}
+                disabled={zoom >= 4}
                 className="flex h-11 min-w-11 items-center justify-center rounded-full bg-white px-3 text-xl font-black shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="확대"
               >
@@ -511,7 +619,7 @@ export default function BusinessAdFlipbook({
             </div>
 
             <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-              모바일에서도 좌우 2페이지로 표시됩니다. 확대 후에는 화면을 좌우로 움직여 보세요.
+              두 손가락으로 플립북 자체를 확대·축소하고, 확대 후 한 손가락으로 이동하세요.
             </p>
           </>
         )}
