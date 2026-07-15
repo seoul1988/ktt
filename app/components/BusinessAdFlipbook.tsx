@@ -829,7 +829,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                 {zoom > 1 && (
                   <button
                     type="button"
-                    onClick={resetZoom}
+                    onClick={() => resetZoom(true)}
                     className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-3 text-xs font-black hover:bg-white/20"
                     aria-label="확대 초기화"
                     title="확대 초기화"
