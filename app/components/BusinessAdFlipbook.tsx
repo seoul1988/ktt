@@ -90,10 +90,22 @@ export default function BusinessAdFlipbook({
 }) {
   const bookRef = useRef<any>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+  const pinchRef = useRef({
+    startDistance: 0,
+    startZoom: 1,
+  });
+  const panRef = useRef({
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+  });
 
   const [isMobile, setIsMobile] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize, setPageSize] = useState({
     width: 360,
@@ -402,8 +414,8 @@ export default function BusinessAdFlipbook({
       const orientation = screen.orientation as
         | (ScreenOrientation & {
             lock?: (
-  orientation: string,
-) => Promise<void>;
+              orientation: OrientationLockType,
+            ) => Promise<void>;
           })
         | undefined;
 
@@ -446,16 +458,51 @@ export default function BusinessAdFlipbook({
     await enterFullscreen();
   };
 
+  const clampZoom = (value: number) =>
+    Math.min(4, Math.max(1, value));
+
+  const getTouchDistance = (
+    first: React.Touch,
+    second: React.Touch,
+  ) =>
+    Math.hypot(
+      second.clientX - first.clientX,
+      second.clientY - first.clientY,
+    );
+
+  const resetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setIsPinching(false);
+  };
+
   const handleTouchStartCapture = (
     event: React.TouchEvent<HTMLDivElement>,
   ) => {
     if (event.touches.length >= 2) {
-      setIsPinching(true);
+      const distance = getTouchDistance(
+        event.touches[0],
+        event.touches[1],
+      );
 
-      /*
-       * 두 손가락 확대 동작이 페이지 넘김으로 인식되지 않도록
-       * 플립북까지 이벤트가 전달되는 것을 막습니다.
-       */
+      pinchRef.current = {
+        startDistance: distance,
+        startZoom: zoom,
+      };
+
+      setIsPinching(true);
+      event.stopPropagation();
+      return;
+    }
+
+    if (event.touches.length === 1 && zoom > 1) {
+      panRef.current = {
+        startX: event.touches[0].clientX,
+        startY: event.touches[0].clientY,
+        originX: pan.x,
+        originY: pan.y,
+      };
+
       event.stopPropagation();
     }
   };
@@ -463,8 +510,45 @@ export default function BusinessAdFlipbook({
   const handleTouchMoveCapture = (
     event: React.TouchEvent<HTMLDivElement>,
   ) => {
-    if (event.touches.length >= 2 || isPinching) {
+    if (event.touches.length >= 2) {
+      event.preventDefault();
       event.stopPropagation();
+
+      const distance = getTouchDistance(
+        event.touches[0],
+        event.touches[1],
+      );
+      const startDistance =
+        pinchRef.current.startDistance || distance;
+
+      const nextZoom = clampZoom(
+        pinchRef.current.startZoom *
+          (distance / startDistance),
+      );
+
+      setZoom(nextZoom);
+
+      if (nextZoom === 1) {
+        setPan({ x: 0, y: 0 });
+      }
+
+      return;
+    }
+
+    if (event.touches.length === 1 && zoom > 1) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      setPan({
+        x:
+          panRef.current.originX +
+          event.touches[0].clientX -
+          panRef.current.startX,
+        y:
+          panRef.current.originY +
+          event.touches[0].clientY -
+          panRef.current.startY,
+      });
     }
   };
 
@@ -475,6 +559,10 @@ export default function BusinessAdFlipbook({
       window.setTimeout(() => {
         setIsPinching(false);
       }, 120);
+    }
+
+    if (zoom <= 1) {
+      setPan({ x: 0, y: 0 });
     }
   };
 
@@ -525,12 +613,24 @@ export default function BusinessAdFlipbook({
                   : "w-full overflow-hidden rounded-2xl bg-black shadow-2xl"
               }
             >
-              <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+              <div
+                className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
+                style={{
+                  touchAction: zoom > 1 ? "none" : "pan-y",
+                }}
+              >
                 <div
                   style={{
                     width: `${spreadWidth}px`,
                     height: `${pageSize.height}px`,
                     flex: "0 0 auto",
+                    transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                    transformOrigin: "center center",
+                    transition:
+                      zoom === 1
+                        ? "transform 160ms ease"
+                        : "none",
+                    willChange: "transform",
                   }}
                 >
                   <HTMLFlipBook
@@ -559,7 +659,7 @@ export default function BusinessAdFlipbook({
                     showPageCorners={true}
                     disableFlipByClick={true}
                     clickEventForward={false}
-                    useMouseEvents={!isPinching}
+                    useMouseEvents={!isPinching && zoom === 1}
                     swipeDistance={35}
                     autoSize={false}
                     startPage={0}
@@ -573,6 +673,7 @@ export default function BusinessAdFlipbook({
                       setCurrentPage(
                         Number(event?.data || 0),
                       );
+                      resetZoom();
                     }}
                   >
                     {flipPages}
@@ -629,6 +730,18 @@ export default function BusinessAdFlipbook({
                   ›
                 </button>
 
+                {zoom > 1 && (
+                  <button
+                    type="button"
+                    onClick={resetZoom}
+                    className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-3 text-xs font-black hover:bg-white/20"
+                    aria-label="확대 초기화"
+                    title="확대 초기화"
+                  >
+                    원래크기
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={toggleFullscreen}
@@ -651,7 +764,7 @@ export default function BusinessAdFlipbook({
 
             {!isFullscreen && (
               <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-                페이지는 클릭이 아니라 좌우 스와이프로 넘깁니다. 두 손가락 확대 동작은 페이지 넘김으로 처리되지 않습니다.
+                페이지는 좌우 스와이프로 넘기고, 두 손가락으로 플립북 자체를 확대·축소할 수 있습니다. 확대 후에는 한 손가락으로 이동하세요.
               </p>
             )}
           </>
