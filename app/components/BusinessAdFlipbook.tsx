@@ -90,6 +90,7 @@ export default function BusinessAdFlipbook({
 }) {
   const bookRef = useRef<any>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef({
     startDistance: 0,
     startZoom: 1,
@@ -604,9 +605,6 @@ export default function BusinessAdFlipbook({
           <>
             <div
               ref={playerRef}
-              onTouchStartCapture={handleTouchStartCapture}
-              onTouchMoveCapture={handleTouchMoveCapture}
-              onTouchEndCapture={handleTouchEndCapture}
               className={
                 isFullscreen
                   ? "flex h-screen w-screen flex-col overflow-hidden bg-black"
@@ -614,10 +612,15 @@ export default function BusinessAdFlipbook({
               }
             >
               <div
-                className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
+                ref={viewportRef}
+                className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
                 style={{
                   touchAction: zoom > 1 ? "none" : "pan-y",
+                  overscrollBehavior: "none",
                 }}
+                onTouchStartCapture={handleTouchStartCapture}
+                onTouchMoveCapture={handleTouchMoveCapture}
+                onTouchEndCapture={handleTouchEndCapture}
               >
                 <div
                   style={{
@@ -631,6 +634,7 @@ export default function BusinessAdFlipbook({
                         ? "transform 160ms ease"
                         : "none",
                     willChange: "transform",
+                    pointerEvents: zoom > 1 ? "none" : "auto",
                   }}
                 >
                   <HTMLFlipBook
@@ -679,6 +683,20 @@ export default function BusinessAdFlipbook({
                     {flipPages}
                   </HTMLFlipBook>
                 </div>
+
+                {zoom > 1 && (
+                  <div
+                    className="absolute inset-0 z-40 cursor-grab active:cursor-grabbing"
+                    style={{
+                      touchAction: "none",
+                      background: "transparent",
+                    }}
+                    onTouchStart={handleTouchStartCapture}
+                    onTouchMove={handleTouchMoveCapture}
+                    onTouchEnd={handleTouchEndCapture}
+                    aria-label="확대된 플립북 이동 영역"
+                  />
+                )}
               </div>
 
               <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
@@ -764,7 +782,7 @@ export default function BusinessAdFlipbook({
 
             {!isFullscreen && (
               <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-                페이지는 좌우 스와이프로 넘기고, 두 손가락으로 플립북 자체를 확대·축소할 수 있습니다. 확대 후에는 한 손가락으로 이동하세요.
+                두 손가락으로 확대·축소한 뒤, 화면 안의 플립북을 한 손가락으로 상하좌우 움직여 볼 수 있습니다. 원래 크기에서는 좌우 스와이프로 페이지가 넘어갑니다.
               </p>
             )}
           </>
