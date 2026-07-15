@@ -256,26 +256,16 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   const movedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!lat || !lng) return;
+    if (lat == null || lng == null) return;
 
     const key = `${lat},${lng}`;
     if (movedRef.current === key) return;
 
     movedRef.current = key;
 
-    const isLandscape =
-      typeof window !== "undefined" &&
-      window.matchMedia("(orientation: landscape)").matches;
-
-    map.flyTo(
-      isLandscape
-        ? [lat + 0.05, lng]
-        : [lat - 0.15, lng],
-      Math.max(map.getZoom() - 2, 9),
-      {
-        animate: true,
-      }
-    );
+    map.flyTo([lat, lng], Math.max(map.getZoom(), 13), {
+      animate: true,
+    });
   }, [lat, lng, map]);
 
   return null;
@@ -330,6 +320,13 @@ export default function BusinessMap({
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
   const restoredRef = useRef(false);
+
+  // 마커 클릭으로 카드를 이동하는 동안 onScroll이 다른 카드를
+  // 다시 선택하지 못하도록 잠시 막습니다.
+  const programmaticScrollRef = useRef(false);
+  const programmaticScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const storageKey = `${MAP_STATE_KEY}-${communityMode ? "community" : activeNav}`;
 
@@ -605,12 +602,22 @@ export default function BusinessMap({
 
     restoredRef.current = true;
 
+    programmaticScrollRef.current = true;
+
+    if (programmaticScrollTimerRef.current) {
+      clearTimeout(programmaticScrollTimerRef.current);
+    }
+
     setTimeout(() => {
       cardRefs.current[selectedSpotKey]?.scrollIntoView({
         behavior: "auto",
         inline: "center",
-        block: "nearest",
+        block: "center",
       });
+
+      programmaticScrollTimerRef.current = setTimeout(() => {
+        programmaticScrollRef.current = false;
+      }, 250);
     }, 150);
   }, [cardSpots, selectedSpotKey]);
 
@@ -711,6 +718,8 @@ export default function BusinessMap({
   }
 
   const handleScroll = () => {
+    if (programmaticScrollRef.current) return;
+
     let closestKey: string | null = null;
     let closestDistance = Infinity;
 
@@ -756,6 +765,14 @@ export default function BusinessMap({
       });
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (programmaticScrollTimerRef.current) {
+        clearTimeout(programmaticScrollTimerRef.current);
+      }
+    };
+  }, []);
 
   const selectedMapSpot =
     cardSpots.find(
@@ -920,7 +937,9 @@ export default function BusinessMap({
               (s) => getSpotKey(s) === baseKey
             );
 
-            const markerOffset = sameLocationIndex * 0.00012;
+            // 실제 등록 좌표와 마커 위치가 정확히 일치하도록
+            // 중복 좌표에 대한 인위적인 좌표 이동을 사용하지 않습니다.
+            const markerOffset = 0;
 
             return (
               <Marker
@@ -1202,4 +1221,4 @@ export default function BusinessMap({
       )}
     </div>
   );
-}    
+} 
