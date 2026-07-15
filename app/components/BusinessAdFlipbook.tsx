@@ -92,6 +92,7 @@ export default function BusinessAdFlipbook({
 
   const [isMobile, setIsMobile] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [pageSize, setPageSize] = useState({
     width: 360,
     height: 509,
@@ -103,11 +104,17 @@ export default function BusinessAdFlipbook({
       setIsMobile(mobile);
 
       if (mobile) {
-        const availableWidth = Math.max(
-          280,
-          window.innerWidth - 24,
+        /*
+         * 모바일에서도 항상 좌우 2페이지가 보이도록
+         * 화면 너비를 반으로 나눠 한 페이지 크기를 계산합니다.
+         */
+        const availableSpreadWidth = Math.max(
+          320,
+          window.innerWidth - 16,
         );
-        const width = Math.min(420, availableWidth);
+        const width = Math.floor(
+          Math.min(840, availableSpreadWidth) / 2,
+        );
 
         setPageSize({
           width,
@@ -324,6 +331,28 @@ export default function BusinessAdFlipbook({
   const hasAnyAds =
     !!coverAdPage || visibleAdPages.length > 0;
 
+  const spreadWidth = pageSize.width * 2;
+  const scaledSpreadWidth = Math.round(spreadWidth * zoom);
+  const scaledSpreadHeight = Math.round(
+    pageSize.height * zoom,
+  );
+
+  const zoomOut = () => {
+    setZoom((value) =>
+      Math.max(0.75, Number((value - 0.25).toFixed(2))),
+    );
+  };
+
+  const zoomIn = () => {
+    setZoom((value) =>
+      Math.min(3, Number((value + 0.25).toFixed(2))),
+    );
+  };
+
+  const resetZoom = () => {
+    setZoom(1);
+  };
+
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#D8D0C5] text-[#172033]">
       <header className="sticky top-0 z-50 border-b border-black/10 bg-[#F8F3EC]/95 px-4 py-3 backdrop-blur">
@@ -360,64 +389,71 @@ export default function BusinessAdFlipbook({
           </div>
         ) : (
           <>
-            <div
-              className="flex w-full justify-center overflow-visible"
-              style={{
-                width: isMobile
-                  ? `${pageSize.width}px`
-                  : `${pageSize.width * 2}px`,
-                maxWidth: "100%",
-                height: `${pageSize.height}px`,
-              }}
-            >
-              <HTMLFlipBook
-                key={[
-                  isMobile,
-                  pageSize.width,
-                  pageSize.height,
-                  visibleAdPages.length,
-                  coverAdPage?.id ?? "default-cover",
-                ].join("-")}
-                ref={bookRef}
-                width={pageSize.width}
-                height={pageSize.height}
-                size="fixed"
-                minWidth={pageSize.width}
-                maxWidth={pageSize.width}
-                minHeight={pageSize.height}
-                maxHeight={pageSize.height}
-                showCover={true}
-                usePortrait={isMobile}
-                mobileScrollSupport={true}
-                drawShadow={true}
-                maxShadowOpacity={0.5}
-                flippingTime={900}
-                showPageCorners={true}
-                disableFlipByClick={false}
-                clickEventForward={true}
-                useMouseEvents={true}
-                swipeDistance={25}
-                autoSize={false}
-                startPage={0}
-                startZIndex={0}
-                className=""
+            <div className="w-full overflow-x-auto overflow-y-hidden pb-2">
+              <div
+                className="mx-auto"
                 style={{
-                  width: isMobile
-                    ? `${pageSize.width}px`
-                    : `${pageSize.width * 2}px`,
-                  height: `${pageSize.height}px`,
-                }}
-                onFlip={(event: any) => {
-                  setCurrentPage(
-                    Number(event?.data || 0),
-                  );
+                  width: `${scaledSpreadWidth}px`,
+                  height: `${scaledSpreadHeight}px`,
+                  minWidth: `${scaledSpreadWidth}px`,
                 }}
               >
-                {flipPages}
-              </HTMLFlipBook>
+                <div
+                  style={{
+                    width: `${spreadWidth}px`,
+                    height: `${pageSize.height}px`,
+                    transform: `scale(${zoom})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <HTMLFlipBook
+                    key={[
+                      isMobile,
+                      pageSize.width,
+                      pageSize.height,
+                      visibleAdPages.length,
+                      coverAdPage?.id ?? "default-cover",
+                    ].join("-")}
+                    ref={bookRef}
+                    width={pageSize.width}
+                    height={pageSize.height}
+                    size="fixed"
+                    minWidth={pageSize.width}
+                    maxWidth={pageSize.width}
+                    minHeight={pageSize.height}
+                    maxHeight={pageSize.height}
+                    showCover={true}
+                    usePortrait={false}
+                    mobileScrollSupport={true}
+                    drawShadow={true}
+                    maxShadowOpacity={0.5}
+                    flippingTime={900}
+                    showPageCorners={true}
+                    disableFlipByClick={false}
+                    clickEventForward={true}
+                    useMouseEvents={true}
+                    swipeDistance={25}
+                    autoSize={false}
+                    startPage={0}
+                    startZIndex={0}
+                    className=""
+                    style={{
+                      width: `${spreadWidth}px`,
+                      height: `${pageSize.height}px`,
+                    }}
+                    onFlip={(event: any) => {
+                      setCurrentPage(
+                        Number(event?.data || 0),
+                      );
+                    }}
+                  >
+                    {flipPages}
+                  </HTMLFlipBook>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-6 flex items-center gap-4">
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
                 onClick={() =>
@@ -425,15 +461,40 @@ export default function BusinessAdFlipbook({
                     ?.pageFlip()
                     ?.flipPrev()
                 }
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl font-black shadow-lg"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black shadow-lg"
                 aria-label="이전 페이지"
               >
                 ‹
               </button>
 
-              <p className="text-center text-xs font-bold text-[#6B6257]">
-                페이지를 좌우로 넘겨보세요
-              </p>
+              <button
+                type="button"
+                onClick={zoomOut}
+                disabled={zoom <= 0.75}
+                className="flex h-11 min-w-11 items-center justify-center rounded-full bg-white px-3 text-xl font-black shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="축소"
+              >
+                −
+              </button>
+
+              <button
+                type="button"
+                onClick={resetZoom}
+                className="h-11 min-w-[76px] rounded-full bg-white px-4 text-sm font-black shadow-lg"
+                aria-label="확대 비율 초기화"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+
+              <button
+                type="button"
+                onClick={zoomIn}
+                disabled={zoom >= 3}
+                className="flex h-11 min-w-11 items-center justify-center rounded-full bg-white px-3 text-xl font-black shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="확대"
+              >
+                +
+              </button>
 
               <button
                 type="button"
@@ -442,12 +503,16 @@ export default function BusinessAdFlipbook({
                     ?.pageFlip()
                     ?.flipNext()
                 }
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-[#172033] text-2xl font-black text-white shadow-lg"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#172033] text-2xl font-black text-white shadow-lg"
                 aria-label="다음 페이지"
               >
                 ›
               </button>
             </div>
+
+            <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
+              모바일에서도 좌우 2페이지로 표시됩니다. 확대 후에는 화면을 좌우로 움직여 보세요.
+            </p>
           </>
         )}
       </section>
