@@ -42,19 +42,19 @@ const flipbookAdOptions: FlipbookAdItem[] = [
     size: 2,
     label: "Size 2",
     description: "반면 50%",
-    recommendedSize: "1080 × 960 px",
+    recommendedSize: "1080 × 764 px",
   },
   {
     size: 3,
     label: "Size 3",
     description: "1/4면 25%",
-    recommendedSize: "540 × 960 px",
+    recommendedSize: "540 × 764 px",
   },
   {
     size: 4,
     label: "Size 4",
     description: "1/6면",
-    recommendedSize: "540 × 640 px",
+    recommendedSize: "540 × 509 px",
   },
 ];
 
