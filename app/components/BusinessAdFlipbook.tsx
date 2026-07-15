@@ -2,20 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import {
-  forwardRef,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import FlipbookAdGridPage from "./FlipbookAdGridPage";
 import type { AdPage } from "./flipbookTypes";
 
-const HTMLFlipBook = dynamic(
-  () => import("react-pageflip"),
-  { ssr: false },
-) as any;
+const HTMLFlipBook = dynamic(() => import("react-pageflip"), {
+  ssr: false,
+}) as any;
 
 const COVER_BUSINESS_ID = "83";
 
@@ -26,45 +19,38 @@ type FlipPageProps = {
   pageHeight: number;
 };
 
-const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(
-  function FlipPage(
-    {
-      children,
-      className = "",
-      pageWidth,
-      pageHeight,
-    },
-    ref,
-  ) {
-    return (
+const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(function FlipPage(
+  { children, className = "", pageWidth, pageHeight },
+  ref,
+) {
+  return (
+    <div
+      ref={ref}
+      className={`relative overflow-hidden bg-white ${className}`}
+      style={{
+        width: `${pageWidth}px`,
+        height: `${pageHeight}px`,
+        minWidth: `${pageWidth}px`,
+        maxWidth: `${pageWidth}px`,
+        minHeight: `${pageHeight}px`,
+        maxHeight: `${pageHeight}px`,
+        position: "relative",
+      }}
+    >
       <div
-        ref={ref}
-        className={`relative overflow-hidden bg-white ${className}`}
         style={{
+          position: "absolute",
+          inset: 0,
           width: `${pageWidth}px`,
           height: `${pageHeight}px`,
-          minWidth: `${pageWidth}px`,
-          maxWidth: `${pageWidth}px`,
-          minHeight: `${pageHeight}px`,
-          maxHeight: `${pageHeight}px`,
-          position: "relative",
+          overflow: "hidden",
         }}
       >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: `${pageWidth}px`,
-            height: `${pageHeight}px`,
-            overflow: "hidden",
-          }}
-        >
-          {children}
-        </div>
+        {children}
       </div>
-    );
-  },
-);
+    </div>
+  );
+});
 
 function getBusinessId(ad: unknown) {
   const adData = ad as {
@@ -76,18 +62,11 @@ function getBusinessId(ad: unknown) {
   };
 
   return (
-    adData?.business_id ??
-    adData?.businessId ??
-    adData?.business?.id ??
-    null
+    adData?.business_id ?? adData?.businessId ?? adData?.business?.id ?? null
   );
 }
 
-export default function BusinessAdFlipbook({
-  adPages,
-}: {
-  adPages: AdPage[];
-}) {
+export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
   const bookRef = useRef<any>(null);
   const playerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -132,10 +111,7 @@ export default function BusinessAdFlipbook({
          * 화면에 최대한 크게 들어가도록 너비와 높이를 함께 계산합니다.
          */
         const controlsHeight = 72;
-        const availableWidth = Math.max(
-          320,
-          window.innerWidth - 12,
-        );
+        const availableWidth = Math.max(320, window.innerWidth - 12);
         const availableHeight = Math.max(
           220,
           window.innerHeight - controlsHeight,
@@ -145,9 +121,7 @@ export default function BusinessAdFlipbook({
         const widthByHeight = availableHeight / PAGE_RATIO;
         const width = Math.max(
           160,
-          Math.floor(
-            Math.min(widthByScreen, widthByHeight),
-          ),
+          Math.floor(Math.min(widthByScreen, widthByHeight)),
         );
 
         setPageSize({
@@ -158,13 +132,8 @@ export default function BusinessAdFlipbook({
       }
 
       if (mobile) {
-        const availableSpreadWidth = Math.max(
-          320,
-          window.innerWidth - 16,
-        );
-        const width = Math.floor(
-          Math.min(840, availableSpreadWidth) / 2,
-        );
+        const availableSpreadWidth = Math.max(320, window.innerWidth - 16);
+        const width = Math.floor(Math.min(840, availableSpreadWidth) / 2);
 
         setPageSize({
           width,
@@ -182,35 +151,17 @@ export default function BusinessAdFlipbook({
     updatePageSize();
 
     window.addEventListener("resize", updatePageSize);
-    window.addEventListener(
-      "orientationchange",
-      updatePageSize,
-    );
-    document.addEventListener(
-      "fullscreenchange",
-      updatePageSize,
-    );
+    window.addEventListener("orientationchange", updatePageSize);
+    document.addEventListener("fullscreenchange", updatePageSize);
 
     return () => {
-      window.removeEventListener(
-        "resize",
-        updatePageSize,
-      );
-      window.removeEventListener(
-        "orientationchange",
-        updatePageSize,
-      );
-      document.removeEventListener(
-        "fullscreenchange",
-        updatePageSize,
-      );
+      window.removeEventListener("resize", updatePageSize);
+      window.removeEventListener("orientationchange", updatePageSize);
+      document.removeEventListener("fullscreenchange", updatePageSize);
     };
   }, []);
 
-  const {
-    coverAdPage,
-    visibleAdPages,
-  } = useMemo(() => {
+  const { coverAdPage, visibleAdPages } = useMemo(() => {
     if (!Array.isArray(adPages)) {
       return {
         coverAdPage: null as AdPage | null,
@@ -222,9 +173,7 @@ export default function BusinessAdFlipbook({
     const normalPages: AdPage[] = [];
 
     adPages.forEach((page, pageIndex) => {
-      const pageAds = Array.isArray(page?.ads)
-        ? page.ads
-        : [];
+      const pageAds = Array.isArray(page?.ads) ? page.ads : [];
 
       const enabledAds = pageAds.filter(
         (ad) =>
@@ -235,15 +184,11 @@ export default function BusinessAdFlipbook({
       );
 
       const coverAds = enabledAds.filter(
-        (ad) =>
-          String(getBusinessId(ad)) ===
-          COVER_BUSINESS_ID,
+        (ad) => String(getBusinessId(ad)) === COVER_BUSINESS_ID,
       );
 
       const regularAds = enabledAds.filter(
-        (ad) =>
-          String(getBusinessId(ad)) !==
-          COVER_BUSINESS_ID,
+        (ad) => String(getBusinessId(ad)) !== COVER_BUSINESS_ID,
       );
 
       /*
@@ -320,9 +265,7 @@ export default function BusinessAdFlipbook({
               </h2>
             </div>
 
-            <p className="text-sm font-black">
-              KTOWNTRIANGLE.COM
-            </p>
+            <p className="text-sm font-black">KTOWNTRIANGLE.COM</p>
           </div>
         </FlipPage>,
       );
@@ -376,9 +319,7 @@ export default function BusinessAdFlipbook({
         className="bg-[#C4483A] text-white"
       >
         <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center">
-          <h2 className="text-4xl font-black">
-            KTown Triangle
-          </h2>
+          <h2 className="text-4xl font-black">KTown Triangle</h2>
 
           <p className="mt-8 rounded-full bg-white px-6 py-3 text-sm font-black text-[#C4483A]">
             KTOWNTRIANGLE.COM
@@ -388,15 +329,9 @@ export default function BusinessAdFlipbook({
     );
 
     return pages;
-  }, [
-    coverAdPage,
-    pageSize.height,
-    pageSize.width,
-    visibleAdPages,
-  ]);
+  }, [coverAdPage, pageSize.height, pageSize.width, visibleAdPages]);
 
-  const hasAnyAds =
-    !!coverAdPage || visibleAdPages.length > 0;
+  const hasAnyAds = !!coverAdPage || visibleAdPages.length > 0;
 
   const spreadWidth = pageSize.width * 2;
 
@@ -417,9 +352,7 @@ export default function BusinessAdFlipbook({
        */
       const orientation = screen.orientation as
         | (ScreenOrientation & {
-            lock?: (
-              orientation: string,
-            ) => Promise<void>;
+            lock?: (orientation: string) => Promise<void>;
           })
         | undefined;
 
@@ -462,26 +395,23 @@ export default function BusinessAdFlipbook({
     await enterFullscreen();
   };
 
-  const clampZoom = (value: number) =>
-    Math.min(4, Math.max(1, value));
+  const clampZoom = (value: number) => Math.min(4, Math.max(1, value));
 
-  const clampPan = (
-    x: number,
-    y: number,
-    scale: number,
-  ) => {
+  const clampPan = (x: number, y: number, scale: number) => {
     /*
-     * 플립북 중앙을 기준으로 확대하므로 이동 범위도
-     * 좌우·상하 대칭으로 계산합니다.
+     * 확대된 책과 실제 검은색 표시 영역(viewport)의 크기를 비교하여
+     * 책의 가장자리까지 이동할 수 있는 범위를 계산합니다.
      */
-    const maxX = Math.max(
-      0,
-      (spreadWidth * scale - spreadWidth) / 2,
-    );
-    const maxY = Math.max(
-      0,
-      (pageSize.height * scale - pageSize.height) / 2,
-    );
+    const viewportRect = viewportRef.current?.getBoundingClientRect();
+
+    const viewportWidth = viewportRect?.width ?? spreadWidth;
+    const viewportHeight = viewportRect?.height ?? pageSize.height;
+
+    const scaledWidth = spreadWidth * scale;
+    const scaledHeight = pageSize.height * scale;
+
+    const maxX = Math.max(0, (scaledWidth - viewportWidth) / 2);
+    const maxY = Math.max(0, (scaledHeight - viewportHeight) / 2);
 
     return {
       x: Math.min(maxX, Math.max(-maxX, x)),
@@ -489,19 +419,10 @@ export default function BusinessAdFlipbook({
     };
   };
 
-  const getTouchDistance = (
-    first: React.Touch,
-    second: React.Touch,
-  ) =>
-    Math.hypot(
-      second.clientX - first.clientX,
-      second.clientY - first.clientY,
-    );
+  const getTouchDistance = (first: React.Touch, second: React.Touch) =>
+    Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
 
-  const getTouchCenter = (
-    first: React.Touch,
-    second: React.Touch,
-  ) => ({
+  const getTouchCenter = (first: React.Touch, second: React.Touch) => ({
     x: (first.clientX + second.clientX) / 2,
     y: (first.clientY + second.clientY) / 2,
   });
@@ -514,30 +435,15 @@ export default function BusinessAdFlipbook({
 
   useEffect(() => {
     setPan((currentPan) =>
-      zoom <= 1
-        ? { x: 0, y: 0 }
-        : clampPan(
-            currentPan.x,
-            currentPan.y,
-            zoom,
-          ),
+      zoom <= 1 ? { x: 0, y: 0 } : clampPan(currentPan.x, currentPan.y, zoom),
     );
   }, [pageSize.height, pageSize.width, zoom]);
 
-  const handleTouchStartCapture = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
+  const handleTouchStartCapture = (event: React.TouchEvent<HTMLDivElement>) => {
     if (event.touches.length >= 2) {
-      const distance = getTouchDistance(
-        event.touches[0],
-        event.touches[1],
-      );
-      const center = getTouchCenter(
-        event.touches[0],
-        event.touches[1],
-      );
-      const frameRect =
-        bookFrameRef.current?.getBoundingClientRect();
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      const center = getTouchCenter(event.touches[0], event.touches[1]);
+      const frameRect = bookFrameRef.current?.getBoundingClientRect();
 
       if (!frameRect) {
         return;
@@ -555,12 +461,8 @@ export default function BusinessAdFlipbook({
       pinchRef.current = {
         startDistance: distance,
         startZoom: zoom,
-        contentX:
-          frameCenterX +
-          (localX - frameCenterX - pan.x) / zoom,
-        contentY:
-          frameCenterY +
-          (localY - frameCenterY - pan.y) / zoom,
+        contentX: frameCenterX + (localX - frameCenterX - pan.x) / zoom,
+        contentY: frameCenterY + (localY - frameCenterY - pan.y) / zoom,
       };
 
       setIsPinching(true);
@@ -580,35 +482,22 @@ export default function BusinessAdFlipbook({
     }
   };
 
-  const handleTouchMoveCapture = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
+  const handleTouchMoveCapture = (event: React.TouchEvent<HTMLDivElement>) => {
     if (event.touches.length >= 2) {
       event.preventDefault();
       event.stopPropagation();
 
-      const distance = getTouchDistance(
-        event.touches[0],
-        event.touches[1],
-      );
-      const center = getTouchCenter(
-        event.touches[0],
-        event.touches[1],
-      );
-      const frameRect =
-        bookFrameRef.current?.getBoundingClientRect();
+      const distance = getTouchDistance(event.touches[0], event.touches[1]);
+      const center = getTouchCenter(event.touches[0], event.touches[1]);
+      const frameRect = bookFrameRef.current?.getBoundingClientRect();
 
       if (!frameRect) {
         return;
       }
 
-      const startDistance =
-        pinchRef.current.startDistance || distance;
-      const startZoom =
-        pinchRef.current.startZoom || 1;
-      const nextZoom = clampZoom(
-        startZoom * (distance / startDistance),
-      );
+      const startDistance = pinchRef.current.startDistance || distance;
+      const startZoom = pinchRef.current.startZoom || 1;
+      const nextZoom = clampZoom(startZoom * (distance / startDistance));
 
       const localX = center.x - frameRect.left;
       const localY = center.y - frameRect.top;
@@ -618,21 +507,15 @@ export default function BusinessAdFlipbook({
       const nextPan = clampPan(
         localX -
           frameCenterX -
-          (pinchRef.current.contentX - frameCenterX) *
-            nextZoom,
+          (pinchRef.current.contentX - frameCenterX) * nextZoom,
         localY -
           frameCenterY -
-          (pinchRef.current.contentY - frameCenterY) *
-            nextZoom,
+          (pinchRef.current.contentY - frameCenterY) * nextZoom,
         nextZoom,
       );
 
       setZoom(nextZoom);
-      setPan(
-        nextZoom === 1
-          ? { x: 0, y: 0 }
-          : nextPan,
-      );
+      setPan(nextZoom === 1 ? { x: 0, y: 0 } : nextPan);
 
       return;
     }
@@ -655,9 +538,20 @@ export default function BusinessAdFlipbook({
     }
   };
 
-  const handleTouchEndCapture = (
-    event: React.TouchEvent<HTMLDivElement>,
-  ) => {
+  const handleTouchEndCapture = (event: React.TouchEvent<HTMLDivElement>) => {
+    /*
+     * 핀치 확대 중 한 손가락만 떼었을 때 남은 손가락으로
+     * 곧바로 이동을 계속할 수 있도록 시작점을 다시 잡습니다.
+     */
+    if (event.touches.length === 1 && zoom > 1) {
+      panRef.current = {
+        startX: event.touches[0].clientX,
+        startY: event.touches[0].clientY,
+        originX: pan.x,
+        originY: pan.y,
+      };
+    }
+
     if (event.touches.length < 2) {
       window.setTimeout(() => {
         setIsPinching(false);
@@ -699,9 +593,7 @@ export default function BusinessAdFlipbook({
       <section className="mx-auto flex min-h-[calc(100vh-70px)] max-w-7xl flex-col items-center justify-center px-2 pb-24 pt-6">
         {!hasAnyAds ? (
           <div className="rounded-3xl bg-white p-8 text-center shadow-xl">
-            <p className="font-black">
-              표시할 광고가 없습니다.
-            </p>
+            <p className="font-black">표시할 광고가 없습니다.</p>
           </div>
         ) : (
           <>
@@ -717,22 +609,21 @@ export default function BusinessAdFlipbook({
                 ref={viewportRef}
                 className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
                 style={{
+                  touchAction: zoom > 1 ? "none" : "pan-y",
                   overscrollBehavior: "none",
                 }}
+                onTouchStartCapture={handleTouchStartCapture}
+                onTouchMoveCapture={handleTouchMoveCapture}
+                onTouchEndCapture={handleTouchEndCapture}
               >
                 <div
                   ref={bookFrameRef}
-                  className="relative overflow-hidden"
+                  className="relative overflow-visible"
                   style={{
                     width: `${spreadWidth}px`,
                     height: `${pageSize.height}px`,
                     flex: "0 0 auto",
-                    touchAction: zoom > 1 ? "none" : "pan-y",
-                    overscrollBehavior: "none",
                   }}
-                  onTouchStartCapture={handleTouchStartCapture}
-                  onTouchMoveCapture={handleTouchMoveCapture}
-                  onTouchEndCapture={handleTouchEndCapture}
                 >
                   <div
                     style={{
@@ -740,62 +631,55 @@ export default function BusinessAdFlipbook({
                       height: `${pageSize.height}px`,
                       transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                       transformOrigin: "center center",
-                      transition:
-                        zoom === 1
-                          ? "transform 160ms ease"
-                          : "none",
+                      transition: zoom === 1 ? "transform 160ms ease" : "none",
                       willChange: "transform",
-                      pointerEvents:
-                        zoom > 1 ? "none" : "auto",
+                      pointerEvents: zoom > 1 ? "none" : "auto",
                     }}
                   >
-                  <HTMLFlipBook
-                    key={[
-                      isMobile,
-                      isFullscreen,
-                      pageSize.width,
-                      pageSize.height,
-                      visibleAdPages.length,
-                      coverAdPage?.id ?? "default-cover",
-                    ].join("-")}
-                    ref={bookRef}
-                    width={pageSize.width}
-                    height={pageSize.height}
-                    size="fixed"
-                    minWidth={pageSize.width}
-                    maxWidth={pageSize.width}
-                    minHeight={pageSize.height}
-                    maxHeight={pageSize.height}
-                    showCover={true}
-                    usePortrait={false}
-                    mobileScrollSupport={true}
-                    drawShadow={true}
-                    maxShadowOpacity={0.5}
-                    flippingTime={900}
-                    showPageCorners={true}
-                    disableFlipByClick={true}
-                    clickEventForward={false}
-                    useMouseEvents={!isPinching && zoom === 1}
-                    swipeDistance={35}
-                    autoSize={false}
-                    startPage={0}
-                    startZIndex={0}
-                    className=""
-                    style={{
-                      width: `${spreadWidth}px`,
-                      height: `${pageSize.height}px`,
-                    }}
-                    onFlip={(event: any) => {
-                      setCurrentPage(
-                        Number(event?.data || 0),
-                      );
-                      resetZoom();
-                    }}
-                  >
-                    {flipPages}
+                    <HTMLFlipBook
+                      key={[
+                        isMobile,
+                        isFullscreen,
+                        pageSize.width,
+                        pageSize.height,
+                        visibleAdPages.length,
+                        coverAdPage?.id ?? "default-cover",
+                      ].join("-")}
+                      ref={bookRef}
+                      width={pageSize.width}
+                      height={pageSize.height}
+                      size="fixed"
+                      minWidth={pageSize.width}
+                      maxWidth={pageSize.width}
+                      minHeight={pageSize.height}
+                      maxHeight={pageSize.height}
+                      showCover={true}
+                      usePortrait={false}
+                      mobileScrollSupport={true}
+                      drawShadow={true}
+                      maxShadowOpacity={0.5}
+                      flippingTime={900}
+                      showPageCorners={true}
+                      disableFlipByClick={true}
+                      clickEventForward={false}
+                      useMouseEvents={!isPinching && zoom === 1}
+                      swipeDistance={35}
+                      autoSize={false}
+                      startPage={0}
+                      startZIndex={0}
+                      className=""
+                      style={{
+                        width: `${spreadWidth}px`,
+                        height: `${pageSize.height}px`,
+                      }}
+                      onFlip={(event: any) => {
+                        setCurrentPage(Number(event?.data || 0));
+                        resetZoom();
+                      }}
+                    >
+                      {flipPages}
                     </HTMLFlipBook>
                   </div>
-
                 </div>
 
                 {zoom > 1 && (
@@ -805,9 +689,6 @@ export default function BusinessAdFlipbook({
                       touchAction: "none",
                       background: "transparent",
                     }}
-                    onTouchStart={handleTouchStartCapture}
-                    onTouchMove={handleTouchMoveCapture}
-                    onTouchEnd={handleTouchEndCapture}
                     aria-label="확대된 플립북 이동 영역"
                   />
                 )}
@@ -816,11 +697,7 @@ export default function BusinessAdFlipbook({
               <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
                 <button
                   type="button"
-                  onClick={() =>
-                    bookRef.current
-                      ?.pageFlip()
-                      ?.flipPrev()
-                  }
+                  onClick={() => bookRef.current?.pageFlip()?.flipPrev()}
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl font-black hover:bg-white/20"
                   aria-label="이전 페이지"
                 >
@@ -841,9 +718,7 @@ export default function BusinessAdFlipbook({
                   )}
                   onChange={(event) => {
                     const page = Number(event.target.value);
-                    bookRef.current
-                      ?.pageFlip()
-                      ?.turnToPage(page);
+                    bookRef.current?.pageFlip()?.turnToPage(page);
                   }}
                   className="min-w-0 flex-1 accent-white"
                   aria-label="페이지 이동"
@@ -851,11 +726,7 @@ export default function BusinessAdFlipbook({
 
                 <button
                   type="button"
-                  onClick={() =>
-                    bookRef.current
-                      ?.pageFlip()
-                      ?.flipNext()
-                  }
+                  onClick={() => bookRef.current?.pageFlip()?.flipNext()}
                   className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-2xl font-black hover:bg-white/20"
                   aria-label="다음 페이지"
                 >
@@ -878,16 +749,8 @@ export default function BusinessAdFlipbook({
                   type="button"
                   onClick={toggleFullscreen}
                   className="flex h-10 min-w-10 items-center justify-center rounded-full bg-white/10 px-3 text-xl font-black hover:bg-white/20"
-                  aria-label={
-                    isFullscreen
-                      ? "전체화면 종료"
-                      : "전체화면"
-                  }
-                  title={
-                    isFullscreen
-                      ? "전체화면 종료"
-                      : "전체화면"
-                  }
+                  aria-label={isFullscreen ? "전체화면 종료" : "전체화면"}
+                  title={isFullscreen ? "전체화면 종료" : "전체화면"}
                 >
                   {isFullscreen ? "✕" : "⛶"}
                 </button>
@@ -896,7 +759,8 @@ export default function BusinessAdFlipbook({
 
             {!isFullscreen && (
               <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-                플립북에서 두 손가락으로 확대를 시작하세요. 확대된 뒤에는 화면 전체를 이동 영역으로 사용해 상하좌우로 움직일 수 있습니다.
+                플립북에서 두 손가락으로 확대를 시작하세요. 확대된 뒤에는 화면
+                전체를 이동 영역으로 사용해 상하좌우로 움직일 수 있습니다.
               </p>
             )}
           </>
