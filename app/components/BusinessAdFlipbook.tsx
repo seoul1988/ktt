@@ -93,6 +93,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
   const zoomRef = useRef(1);
   const panValueRef = useRef({ x: 0, y: 0 });
   const [currentPage, setCurrentPage] = useState(0);
+  const [interactionEpoch, setInteractionEpoch] = useState(0);
   const [pageSize, setPageSize] = useState({
     width: 360,
     height: 509,
@@ -440,13 +441,21 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     setPan(value);
   };
 
-  const resetZoom = () => {
+  const resetZoom = (reactivateFlipbook = false) => {
     zoomRef.current = 1;
     panValueRef.current = { x: 0, y: 0 };
     setZoom(1);
     setPan({ x: 0, y: 0 });
     panRef.current.active = false;
     setIsPinching(false);
+
+    if (viewportRef.current) {
+      viewportRef.current.style.touchAction = "pan-y";
+    }
+
+    if (reactivateFlipbook) {
+      setInteractionEpoch((value) => value + 1);
+    }
   };
 
   useEffect(() => {
@@ -492,6 +501,10 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
           viewportCenterY +
           (localY - viewportCenterY - currentPan.y) / currentZoom,
       };
+
+      if (viewportRef.current) {
+        viewportRef.current.style.touchAction = "none";
+      }
 
       setIsPinching(true);
       return;
@@ -601,8 +614,20 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
       setIsPinching(false);
     }
 
-    if (event.touches.length === 0 && currentZoom <= 1) {
-      applyPan({ x: 0, y: 0 });
+    /*
+     * 화면상 원래 크기처럼 보여도 1.01~1.05 값이 남으면
+     * react-pageflip이 계속 비활성화될 수 있습니다.
+     * 모든 손가락을 뗐을 때 1배 근처면 정확히 1로 초기화하고
+     * 플립북 입력 인스턴스를 새로 활성화합니다.
+     */
+    if (event.touches.length === 0 && currentZoom <= 1.06) {
+      resetZoom(true);
+      return;
+    }
+
+    if (event.touches.length === 0 && viewportRef.current) {
+      viewportRef.current.style.touchAction =
+        currentZoom > 1.06 ? "none" : "pan-y";
     }
   };
 
@@ -652,7 +677,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                 ref={viewportRef}
                 className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
                 style={{
-                  touchAction: "none",
+                  touchAction: zoom > 1.06 || isPinching ? "none" : "pan-y",
                   overscrollBehavior: "none",
                 }}
                 onTouchStartCapture={handleTouchStartCapture}
@@ -677,7 +702,8 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                       transformOrigin: "center center",
                       transition: zoom === 1 ? "transform 160ms ease" : "none",
                       willChange: "transform",
-                      pointerEvents: zoom > 1 ? "none" : "auto",
+                      pointerEvents:
+                        zoom > 1.06 || isPinching ? "none" : "auto",
                     }}
                   >
                     <HTMLFlipBook
@@ -688,6 +714,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                         pageSize.height,
                         visibleAdPages.length,
                         coverAdPage?.id ?? "default-cover",
+                        interactionEpoch,
                       ].join("-")}
                       ref={bookRef}
                       width={pageSize.width}
@@ -706,10 +733,13 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                       showPageCorners={true}
                       disableFlipByClick={true}
                       clickEventForward={false}
-                      useMouseEvents={!isPinching && zoom === 1}
+                      useMouseEvents={!isPinching && zoom <= 1.06}
                       swipeDistance={35}
                       autoSize={false}
-                      startPage={0}
+                      startPage={Math.min(
+                        currentPage,
+                        Math.max(0, flipPages.length - 1),
+                      )}
                       startZIndex={0}
                       className=""
                       style={{
@@ -725,7 +755,6 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                     </HTMLFlipBook>
                   </div>
                 </div>
-
               </div>
 
               <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
