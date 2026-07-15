@@ -6,27 +6,33 @@ export default function InquiryTab() {
   return (
     <Link
       href="/community/inquiries"
+      aria-label="문의하기"
       className="
         fixed
-        -right-6
+        right-0
         top-1/2
         z-50
+        flex
+        h-10
+        w-5
         -translate-y-1/2
+        items-center
+        justify-center
         rounded-l-xl
         bg-[#C4483A]
-        px-1.5
-        py-3
-        text-[11px]
-        font-bold
         text-white
         shadow-lg
         transition-all
         duration-300
-        hover:right-0
+        hover:w-9
       "
-      style={{ writingMode: "vertical-rl" }}
     >
-      문의
+      <span
+        className="text-[10px] font-black leading-none"
+        style={{ writingMode: "vertical-rl" }}
+      >
+        문의
+      </span>
     </Link>
   );
 }
