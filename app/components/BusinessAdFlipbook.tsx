@@ -660,28 +660,37 @@ export default function BusinessAdFlipbook({
                 ref={viewportRef}
                 className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
                 style={{
-                  touchAction: zoom > 1 ? "none" : "pan-y",
                   overscrollBehavior: "none",
                 }}
-                onTouchStartCapture={handleTouchStartCapture}
-                onTouchMoveCapture={handleTouchMoveCapture}
-                onTouchEndCapture={handleTouchEndCapture}
               >
                 <div
+                  className="relative overflow-hidden"
                   style={{
                     width: `${spreadWidth}px`,
                     height: `${pageSize.height}px`,
                     flex: "0 0 auto",
-                    transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                    transformOrigin: "center center",
-                    transition:
-                      zoom === 1
-                        ? "transform 160ms ease"
-                        : "none",
-                    willChange: "transform",
-                    pointerEvents: zoom > 1 ? "none" : "auto",
+                    touchAction: zoom > 1 ? "none" : "pan-y",
+                    overscrollBehavior: "none",
                   }}
+                  onTouchStartCapture={handleTouchStartCapture}
+                  onTouchMoveCapture={handleTouchMoveCapture}
+                  onTouchEndCapture={handleTouchEndCapture}
                 >
+                  <div
+                    style={{
+                      width: `${spreadWidth}px`,
+                      height: `${pageSize.height}px`,
+                      transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                      transformOrigin: "center center",
+                      transition:
+                        zoom === 1
+                          ? "transform 160ms ease"
+                          : "none",
+                      willChange: "transform",
+                      pointerEvents:
+                        zoom > 1 ? "none" : "auto",
+                    }}
+                  >
                   <HTMLFlipBook
                     key={[
                       isMobile,
@@ -726,22 +735,23 @@ export default function BusinessAdFlipbook({
                     }}
                   >
                     {flipPages}
-                  </HTMLFlipBook>
-                </div>
+                    </HTMLFlipBook>
+                  </div>
 
-                {zoom > 1 && (
-                  <div
-                    className="absolute inset-0 z-40 cursor-grab active:cursor-grabbing"
-                    style={{
-                      touchAction: "none",
-                      background: "transparent",
-                    }}
-                    onTouchStart={handleTouchStartCapture}
-                    onTouchMove={handleTouchMoveCapture}
-                    onTouchEnd={handleTouchEndCapture}
-                    aria-label="확대된 플립북 이동 영역"
-                  />
-                )}
+                  {zoom > 1 && (
+                    <div
+                      className="absolute inset-0 z-40 cursor-grab active:cursor-grabbing"
+                      style={{
+                        touchAction: "none",
+                        background: "transparent",
+                      }}
+                      onTouchStart={handleTouchStartCapture}
+                      onTouchMove={handleTouchMoveCapture}
+                      onTouchEnd={handleTouchEndCapture}
+                      aria-label="확대된 플립북 이동 영역"
+                    />
+                  )}
+                </div>
               </div>
 
               <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
@@ -827,7 +837,7 @@ export default function BusinessAdFlipbook({
 
             {!isFullscreen && (
               <p className="mt-3 text-center text-xs font-bold text-[#6B6257]">
-                두 손가락으로 확대·축소한 뒤, 화면 안의 플립북을 한 손가락으로 상하좌우 움직여 볼 수 있습니다. 원래 크기에서는 좌우 스와이프로 페이지가 넘어갑니다.
+                확대·축소와 상하좌우 이동은 플립북 영역 안에서만 작동합니다. 원래 크기에서는 플립북을 좌우로 스와이프해 페이지를 넘기세요.
               </p>
             )}
           </>
