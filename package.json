@@ -11,7 +11,7 @@
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
     "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.106.1",
+    "@supabase/supabase-js": "^2.110.5",
     "embla-carousel-react": "^8.6.0",
     "leaflet": "^1.9.4",
     "next": "16.2.6",
@@ -19,7 +19,9 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-leaflet": "^5.0.0",
+    "react-pageflip": "^2.0.3",
     "resend": "^6.16.0",
+    "sharp": "^0.35.3",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

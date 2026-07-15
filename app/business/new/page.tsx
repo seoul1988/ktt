@@ -302,6 +302,7 @@ export default function NewBusinessPage() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [phone, setPhone] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
   const [dayHours, setDayHours] = useState<DayHour[]>(defaultHours);
   const [hoursSource, setHoursSource] = useState<"google" | "manual" | "none">(
     "none",
@@ -1020,10 +1021,10 @@ export default function NewBusinessPage() {
       FlipbookAdSize,
       { maxWidth: number; maxHeight: number }
     > = {
-      1: { maxWidth: 1080, maxHeight: 1920 },
-      2: { maxWidth: 1080, maxHeight: 960 },
-      3: { maxWidth: 540, maxHeight: 960 },
-      4: { maxWidth: 540, maxHeight: 640 },
+      1: { maxWidth: 1080, maxHeight: 1527 },
+      2: { maxWidth: 1080, maxHeight: 764 },
+      3: { maxWidth: 540, maxHeight: 764 },
+      4: { maxWidth: 540, maxHeight: 509 },
     };
 
     const setting = sizeSettings[size];
@@ -1359,6 +1360,7 @@ export default function NewBusinessPage() {
         name,
         address: address.trim() || null,
         phone,
+		owner_phone: ownerPhone,
         category: selectedCategories.join(", "),
         hours: formatBusinessHours(),
         description,
@@ -1550,12 +1552,19 @@ export default function NewBusinessPage() {
             />
           </div>
 
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone"
-            className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
-          />
+        <input
+  value={phone}
+  onChange={(e) => setPhone(e.target.value)}
+  placeholder="Business Phone"
+  className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
+/>
+
+<input
+  value={ownerPhone}
+  onChange={(e) => setOwnerPhone(e.target.value)}
+  placeholder="Owner Phone (Optional)"
+  className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
+/>
 
           <div className="space-y-3 rounded-2xl border bg-gray-50 p-4">
             <div>

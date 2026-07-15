@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
 import InquiryTab from "../components/InquiryTab";
-import Image from "next/image";
+import AdTab from "../components/AdTab";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -457,6 +457,7 @@ export default async function CommunityPage() {
         </section>
       </section>
 <InquiryTab />
+      <AdTab />
       <CommunityBottomNav activeNav="community" />
     </main>
   );

@@ -58,6 +58,7 @@ type Business = {
   name: string;
   address: string | null;
   phone: string | null;
+  owner_phone?: string | null;
   category: string | null;
   hours: string | null;
   description: string | null;
@@ -303,6 +304,7 @@ export default function EditBusinessPage() {
   const [selectedLng, setSelectedLng] = useState<number | null>(null);
 
   const [phone, setPhone] = useState("");
+  const [ownerPhone, setOwnerPhone] = useState("");
   const [dayHours, setDayHours] = useState<DayHour[]>(defaultHours);
   const [searchingGoogleHours, setSearchingGoogleHours] = useState(false);
   const [googleHoursStatus, setGoogleHoursStatus] = useState<
@@ -350,21 +352,7 @@ export default function EditBusinessPage() {
     loadPage();
   }, []);
 
-  useEffect(() => {
-    if (!isLoaded || !business?.id || !business.address) return;
-    if (googleHoursAutoCheckedRef.current === business.id) return;
 
-    googleHoursAutoCheckedRef.current = business.id;
-
-    void lookupAndApplyGoogleHours(
-      business.name,
-      business.address,
-      business.lat && business.lng
-        ? { lat: business.lat, lng: business.lng }
-        : undefined,
-      true,
-    );
-  }, [isLoaded, business?.id]);
 
   async function loadPage() {
     setLoading(true);
@@ -439,6 +427,7 @@ export default function EditBusinessPage() {
     setName(b.name || "");
     setAddress(b.address || "");
     setPhone(b.phone || "");
+    setOwnerPhone(b.owner_phone || "");
     setDescription(b.description || "");
     setTags(b.tags || "");
     setWebsiteUrl(b.website_url || "");
@@ -1112,7 +1101,7 @@ export default function EditBusinessPage() {
           ? placeDistanceMeters(location, item.geometry?.location)
           : 0;
 
-        return nameMatches && addressMatches && (!location || distance <= 250);
+        return nameMatches && addressMatches && (!location || distance <= 50);
       })
       .sort((a, b) => {
         if (!location) return 0;
@@ -1174,7 +1163,7 @@ export default function EditBusinessPage() {
       if (
         exactName &&
         exactAddress &&
-        (!location || exactDistance <= 250) &&
+        (!location || exactDistance <= 50) &&
         details.opening_hours?.periods?.length &&
         applyGoogleOpeningHours(details.opening_hours)
       ) {
@@ -1386,6 +1375,7 @@ export default function EditBusinessPage() {
       name,
       address,
       phone,
+      owner_phone: ownerPhone.trim() || null,
       category: selectedCategories.join(", "),
       hours: formatBusinessHours(),
       description,
@@ -1663,7 +1653,16 @@ export default function EditBusinessPage() {
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone"
+              placeholder="Business Phone"
+              inputMode="tel"
+              className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
+            />
+
+            <input
+              value={ownerPhone}
+              onChange={(e) => setOwnerPhone(e.target.value)}
+              placeholder="Owner Phone (Optional)"
+              inputMode="tel"
               className="w-full rounded-2xl border bg-gray-50 px-5 py-4"
             />
 
