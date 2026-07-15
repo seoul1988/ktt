@@ -152,16 +152,33 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
       });
     }
 
-    updatePageSize();
+    let resizeTimer1: number | undefined;
+    let resizeTimer2: number | undefined;
 
-    window.addEventListener("resize", updatePageSize);
-    window.addEventListener("orientationchange", updatePageSize);
-    document.addEventListener("fullscreenchange", updatePageSize);
+    const refreshLayout = () => {
+      updatePageSize();
+
+      window.cancelAnimationFrame(resizeTimer1 ?? 0);
+      resizeTimer1 = window.requestAnimationFrame(updatePageSize);
+
+      window.clearTimeout(resizeTimer2);
+      resizeTimer2 = window.setTimeout(updatePageSize, 350);
+    };
+
+    refreshLayout();
+
+    window.addEventListener("resize", refreshLayout);
+    window.addEventListener("orientationchange", refreshLayout);
+    window.visualViewport?.addEventListener("resize", refreshLayout);
+    document.addEventListener("fullscreenchange", refreshLayout);
 
     return () => {
-      window.removeEventListener("resize", updatePageSize);
-      window.removeEventListener("orientationchange", updatePageSize);
-      document.removeEventListener("fullscreenchange", updatePageSize);
+      window.removeEventListener("resize", refreshLayout);
+      window.removeEventListener("orientationchange", refreshLayout);
+      window.visualViewport?.removeEventListener("resize", refreshLayout);
+      document.removeEventListener("fullscreenchange", refreshLayout);
+      window.cancelAnimationFrame(resizeTimer1 ?? 0);
+      window.clearTimeout(resizeTimer2);
     };
   }, []);
 
@@ -450,13 +467,25 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     setIsPinching(false);
 
     if (viewportRef.current) {
-      viewportRef.current.style.touchAction = "pan-y";
+      viewportRef.current.style.touchAction = "none";
     }
 
     if (reactivateFlipbook) {
       setInteractionEpoch((value) => value + 1);
     }
   };
+
+  useEffect(() => {
+    // 전체화면 진입/종료와 화면 회전 시 이전 확대 상태를 제거하고,
+    // 새 크기로 생성된 플립북이 즉시 스와이프를 받도록 다시 활성화합니다.
+    resetZoom(true);
+
+    const timer = window.setTimeout(() => {
+      resetZoom(true);
+    }, 420);
+
+    return () => window.clearTimeout(timer);
+  }, [isFullscreen]);
 
   useEffect(() => {
     const currentZoom = zoomRef.current;
@@ -626,8 +655,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     }
 
     if (event.touches.length === 0 && viewportRef.current) {
-      viewportRef.current.style.touchAction =
-        currentZoom > 1.06 ? "none" : "pan-y";
+      viewportRef.current.style.touchAction = "none";
     }
   };
 
@@ -677,8 +705,10 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                 ref={viewportRef}
                 className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black"
                 style={{
-                  touchAction: zoom > 1.06 || isPinching ? "none" : "pan-y",
+                  touchAction: "none",
                   overscrollBehavior: "none",
+                  WebkitUserSelect: "none",
+                  userSelect: "none",
                 }}
                 onTouchStartCapture={handleTouchStartCapture}
                 onTouchMoveCapture={handleTouchMoveCapture}
@@ -726,7 +756,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                       maxHeight={pageSize.height}
                       showCover={true}
                       usePortrait={false}
-                      mobileScrollSupport={true}
+                      mobileScrollSupport={false}
                       drawShadow={true}
                       maxShadowOpacity={0.5}
                       flippingTime={900}
