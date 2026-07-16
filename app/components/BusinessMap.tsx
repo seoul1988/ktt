@@ -1571,6 +1571,4 @@ export default function BusinessMap({
       )}
     </div>
   );
-}    
-
-
+} 
