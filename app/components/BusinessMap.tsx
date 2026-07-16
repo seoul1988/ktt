@@ -371,6 +371,27 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   return null;
 }
 
+function ResetMapOnSearch({ search }: { search: string }) {
+  const map = useMap();
+  const previousSearchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const nextSearch = search.trim();
+
+    if (previousSearchRef.current === nextSearch) return;
+
+    previousSearchRef.current = nextSearch;
+
+    // 새 검색을 시작하거나 검색어를 모두 지우면
+    // Triangle 전체가 보이는 기본 위치로 지도를 먼저 되돌립니다.
+    map.setView([35.82, -78.82], 10, {
+      animate: false,
+    });
+  }, [search, map]);
+
+  return null;
+}
+
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
     click: () => {
@@ -1122,6 +1143,10 @@ export default function BusinessMap({
 
             setSearch(value);
             setSelectedCategory(null);
+
+            // 이전 검색에서 선택된 카드와 마커를 해제합니다.
+            setSelectedSpotKey(null);
+
             setCategoryPanelOpen(false);
             setShowCards(true);
             restoredRef.current = false;
@@ -1201,6 +1226,8 @@ export default function BusinessMap({
   zoomControl={false}
   className="h-screen w-full"
 >
+        <ResetMapOnSearch search={search} />
+
         <MoveMap
           lat={selectedMapSpot?.lat || undefined}
           lng={selectedMapSpot?.lng || undefined}
