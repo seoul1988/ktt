@@ -375,6 +375,56 @@ function ResetMapView({
 
   return null;
 }
+function PanToSelectedSpot({
+  lat,
+  lng,
+}: {
+  lat?: number;
+  lng?: number;
+}) {
+  const map = useMap();
+  const previousPositionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (lat == null || lng == null) return;
+
+    const positionKey = `${lat},${lng}`;
+    if (previousPositionRef.current === positionKey) return;
+
+    previousPositionRef.current = positionKey;
+
+    // 카드 선택 시 초기 줌(9)을 절대 변경하지 않고 위치만 이동합니다.
+    // 이전 코드나 다른 효과가 줌을 변경했더라도 항상 Zoom 9로 고정합니다.
+    map.stop();
+    map.setView([lat, lng], INITIAL_MAP_ZOOM, {
+      animate: true,
+      duration: 0.35,
+    });
+
+    const isMobilePortrait =
+      window.innerWidth < 768 &&
+      !window.matchMedia("(orientation: landscape)").matches;
+
+    let offsetTimer: ReturnType<typeof setTimeout> | null = null;
+
+    if (isMobilePortrait) {
+      offsetTimer = setTimeout(() => {
+        // 아래쪽 카드에 가리지 않도록 선택 마커를 화면 중앙보다 위에 표시합니다.
+        map.panBy([0, 180], {
+          animate: true,
+          duration: 0.25,
+        });
+      }, 400);
+    }
+
+    return () => {
+      if (offsetTimer) clearTimeout(offsetTimer);
+    };
+  }, [lat, lng, map]);
+
+  return null;
+}
+
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
     click: () => {
@@ -1202,6 +1252,11 @@ export default function BusinessMap({
         <ResetMapView
           search={search}
           selectedCategory={selectedCategory}
+        />
+
+        <PanToSelectedSpot
+          lat={selectedMapSpot?.lat || undefined}
+          lng={selectedMapSpot?.lng || undefined}
         />
 
         <TileLayer
