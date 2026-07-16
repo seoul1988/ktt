@@ -309,29 +309,26 @@ export default async function CommunityPage() {
                 </div>
 
                 <div className="p-4">
-                  <h3 className="line-clamp-2 text-lg font-black text-[#172033]">
-                    {deal.title || "Community Deal"}
-                  </h3>
+  <h3 className="line-clamp-2 text-lg font-black text-[#172033]">
+    {deal.title || "Community Deal"}
+  </h3>
 
-                  <p className="mt-1 line-clamp-1 text-sm font-bold text-[#6B6257]">
-                    {deal.business_name ||
-                      deal.business ||
-                      deal.store_name ||
-                      "Local Business"}
-                  </p>
+ <div className="mt-2 flex items-center justify-between gap-2">
+  <p className="line-clamp-1 text-sm font-bold text-[#6B6257]">
+    {deal.business_name ||
+      deal.business ||
+      deal.store_name ||
+      "Local Business"}
+  </p>
 
-                  {deal.description && (
-                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-[#6B6257]">
-                      {deal.description}
-                    </p>
-                  )}
+  {deal.end_date && (
+    <span className="shrink-0 text-xs font-black text-[#C4483A]">
+      Ends {new Date(deal.end_date).toLocaleDateString()}
+    </span>
+  )}
+</div>
 
-                  {deal.end_date && (
-                    <p className="mt-3 text-xs font-black text-[#C4483A]">
-                      Ends {new Date(deal.end_date).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
+</div>
               </Link>
             ))}
 
@@ -405,21 +402,23 @@ export default async function CommunityPage() {
                     {biz.name}
                   </h3>
 
-                  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
-                    {biz.category || "Business"}
-                  </p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
+    {biz.category || "Business"}
+  </p>
 
-                  <p className="mt-1 text-xs">
-                    <span className="font-black text-[#B98000]">
-                      ★ {biz.rating || "New"}
-                    </span>
+  <div className="shrink-0 text-xs">
+    <span className="font-black text-[#B98000]">
+      ★ {biz.rating || "New"}
+    </span>
 
-                    {biz.review_count ? (
-                      <span className="ml-1 text-[#6B6257]">
-                        ({biz.review_count})
-                      </span>
-                    ) : null}
-                  </p>
+    {biz.review_count ? (
+      <span className="ml-1 text-[#6B6257]">
+        ({biz.review_count})
+      </span>
+    ) : null}
+  </div>
+</div>
                 </div>
               </Link>
             ))}
