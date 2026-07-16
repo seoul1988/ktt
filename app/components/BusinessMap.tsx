@@ -21,13 +21,10 @@ import { supabase } from "../../lib/supabase";
 
 const MAP_STATE_KEY = "ktt_map_state_v1";
 
-// Triangle 지역이 너무 확대되거나 축소되지 않도록 초기 범위를 약간 넓게 표시
-const INITIAL_MAP_BOUNDS = L.latLngBounds([
-  [35.45, -79.30],
-  [36.08, -77.95],
-]).pad(0.00);
-
-const INITIAL_MAP_PADDING: [number, number] = [2, 2];
+// 초기 지도 중심과 줌 레벨을 고정합니다.
+// 숫자가 클수록 더 가까이 보이고, 작을수록 더 넓게 보입니다.
+const INITIAL_MAP_CENTER: [number, number] = [35.765, -78.625];
+const INITIAL_MAP_ZOOM = 9;
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -336,7 +333,7 @@ function getOpenStatus(spot: Spot) {
   return { text: "Closed" };
 }
 
-function InitialMapBounds() {
+function InitialMapView() {
   const map = useMap();
   const initializedRef = useRef(false);
 
@@ -345,8 +342,7 @@ function InitialMapBounds() {
 
     initializedRef.current = true;
 
-    map.fitBounds(INITIAL_MAP_BOUNDS, {
-      padding: INITIAL_MAP_PADDING,
+    map.setView(INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM, {
       animate: false,
     });
   }, [map]);
@@ -415,8 +411,7 @@ function ResetMapView({
     previousValueRef.current = currentValue;
 
     map.stop();
-    map.fitBounds(INITIAL_MAP_BOUNDS, {
-      padding: INITIAL_MAP_PADDING,
+    map.setView(INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM, {
       animate: false,
     });
   }, [search, selectedCategory, map]);
@@ -1246,12 +1241,12 @@ export default function BusinessMap({
       )}
 
      <MapContainer
-  center={[35.73, -78.90]}
-  zoom={8}
+  center={INITIAL_MAP_CENTER}
+  zoom={INITIAL_MAP_ZOOM}
   zoomControl={false}
   className="h-screen w-full"
 >
-        <InitialMapBounds />
+        <InitialMapView />
 
         <ResetMapView
           search={search}
