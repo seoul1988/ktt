@@ -21,6 +21,13 @@ import { supabase } from "../../lib/supabase";
 
 const MAP_STATE_KEY = "ktt_map_state_v1";
 
+const INITIAL_MAP_BOUNDS = L.latLngBounds([
+  [35.45, -79.30], // Chapel Hill보다 더 서쪽/남쪽
+  [36.08, -77.95], // Smithfield보다 더 동쪽/북쪽
+]);
+
+const INITIAL_MAP_PADDING: [number, number] = [5, 5];
+
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -328,6 +335,24 @@ function getOpenStatus(spot: Spot) {
   return { text: "Closed" };
 }
 
+function InitialMapBounds() {
+  const map = useMap();
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+
+    initializedRef.current = true;
+
+    map.fitBounds(INITIAL_MAP_BOUNDS, {
+      padding: INITIAL_MAP_PADDING,
+      animate: false,
+    });
+  }, [map]);
+
+  return null;
+}
+
 function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   const map = useMap();
   const movedRef = useRef<string | null>(null);
@@ -383,8 +408,9 @@ function ResetMapOnSearch({ search }: { search: string }) {
     previousSearchRef.current = nextSearch;
 
     // 새 검색을 시작하거나 검색어를 모두 지우면
-    // Triangle 전체가 보이는 기본 위치로 지도를 먼저 되돌립니다.
-    map.setView([35.82, -78.82], 10, {
+    // Chapel Hill 서쪽부터 Smithfield 동쪽까지 보이는 범위로 되돌립니다.
+    map.fitBounds(INITIAL_MAP_BOUNDS, {
+      padding: INITIAL_MAP_PADDING,
       animate: false,
     });
   }, [search, map]);
@@ -1229,6 +1255,8 @@ export default function BusinessMap({
   zoomControl={false}
   className="h-screen w-full"
 >
+        <InitialMapBounds />
+
         <ResetMapOnSearch search={search} />
 
         <MoveMap
