@@ -1195,12 +1195,12 @@ export default function BusinessMap({
         </div>
       )}
 
-      <MapContainer
-        center={userLocation || [35.7796, -78.6382]}
-        zoom={12}
-        zoomControl={false}
-        className="h-screen w-full"
-      >
+     <MapContainer
+  center={[35.82, -78.82]}
+  zoom={10}
+  zoomControl={false}
+  className="h-screen w-full"
+>
         <MoveMap
           lat={selectedMapSpot?.lat || undefined}
           lng={selectedMapSpot?.lng || undefined}
