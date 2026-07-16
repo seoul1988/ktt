@@ -27,7 +27,7 @@ const INITIAL_MAP_BOUNDS = L.latLngBounds([
   [36.08, -77.95],
 ]).pad(0.00);
 
-const INITIAL_MAP_PADDING: [number, number] = [5, 5];
+const INITIAL_MAP_PADDING: [number, number] = [2, 2];
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
