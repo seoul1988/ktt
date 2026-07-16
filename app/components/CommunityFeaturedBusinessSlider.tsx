@@ -100,40 +100,12 @@ export default function CommunityFeaturedBusinessSlider({
                   </div>
                 )}
 
-                <div className="absolute left-4 top-4 rounded-full bg-[#172033] px-4 py-1.5 text-[11px] font-black text-white shadow-lg">
-                  SPONSOR
-                </div>
+               <div className="absolute right-4 top-4 rounded-full bg-yellow-400 px-4 py-1.5 text-[11px] font-black text-[#172033] shadow-lg">
+  SPONSOR
+</div>
               </div>
 
-              <div className="min-h-[240px] p-5 sm:p-6">
-                <h3 className="text-2xl font-black leading-tight">
-                  {business.name || "Featured Sponsor"}
-                </h3>
 
-                <p className="mt-5 text-sm font-semibold text-[#6B6257]">
-                  {[business.category, business.city].filter(Boolean).join(" · ") ||
-                    "Sponsored local business"}
-                </p>
-
-                {business.description && (
-                  <p className="mt-6 line-clamp-3 text-sm leading-6 text-[#374151]">
-                    {business.description}
-                  </p>
-                )}
-
-                {(business.rating || business.review_count) && (
-                  <p className="mt-5 text-sm">
-                    <span className="font-black text-[#B98000]">
-                      ★ {Number(business.rating || 0).toFixed(1)}
-                    </span>
-                    {business.review_count ? (
-                      <span className="ml-1 text-[#6B6257]">
-                        ({Number(business.review_count).toLocaleString()})
-                      </span>
-                    ) : null}
-                  </p>
-                )}
-              </div>
             </Link>
           </div>
         ))}
