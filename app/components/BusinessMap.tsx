@@ -21,11 +21,11 @@ import { supabase } from "../../lib/supabase";
 
 const MAP_STATE_KEY = "ktt_map_state_v1";
 
-// 초기 지도 범위를 현재보다 약 10~12마일 정도 더 넓게 표시
+// Triangle 지역이 너무 확대되거나 축소되지 않도록 초기 범위를 약간 넓게 표시
 const INITIAL_MAP_BOUNDS = L.latLngBounds([
   [35.45, -79.30],
   [36.08, -77.95],
-]).pad(0.10);
+]).pad(0.06);
 
 const INITIAL_MAP_PADDING: [number, number] = [5, 5];
 
@@ -397,28 +397,32 @@ function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
   return null;
 }
 
-function ResetMapOnSearch({ search }: { search: string }) {
+function ResetMapView({
+  search,
+  selectedCategory,
+}: {
+  search: string;
+  selectedCategory: string | null;
+}) {
   const map = useMap();
-  const previousSearchRef = useRef<string | null>(null);
+  const previousValueRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const nextSearch = search.trim();
+    const currentValue = `${search.trim()}|${selectedCategory || ""}`;
 
-    if (previousSearchRef.current === nextSearch) return;
+    if (previousValueRef.current === currentValue) return;
 
-    previousSearchRef.current = nextSearch;
+    previousValueRef.current = currentValue;
 
-    // 새 검색을 시작하거나 검색어를 모두 지우면
-    // Chapel Hill 서쪽부터 Smithfield 동쪽까지 보이는 범위로 되돌립니다.
+    map.stop();
     map.fitBounds(INITIAL_MAP_BOUNDS, {
       padding: INITIAL_MAP_PADDING,
       animate: false,
     });
-  }, [search, map]);
+  }, [search, selectedCategory, map]);
 
   return null;
 }
-
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
     click: () => {
@@ -958,16 +962,6 @@ export default function BusinessMap({
   }, [mapSpots, userLocation]);
 
   useEffect(() => {
-    // 카테고리 선택 시 첫 번째 비즈니스를 자동 선택하지 않습니다.
-    // 검색 결과가 있을 때만 첫 번째 결과를 자동 선택합니다.
-    if (selectedSpotKey) return;
-    if (selectedCategory && !search) return;
-
-    const firstSpot = cardSpots[0];
-    setSelectedSpotKey(firstSpot ? getSpotKey(firstSpot) : null);
-  }, [cardSpots, selectedSpotKey, selectedCategory, search]);
-
-  useEffect(() => {
     if (restoredRef.current) return;
     if (!selectedSpotKey) return;
     if (cardSpots.length === 0) return;
@@ -1076,6 +1070,7 @@ export default function BusinessMap({
   function selectCategory(category: string) {
     setSelectedCategory(category);
     setSearch("");
+    setSelectedSpotKey(null);
     setCategoryPanelOpen(false);
     setShowCards(true);
     restoredRef.current = false;
@@ -1258,7 +1253,10 @@ export default function BusinessMap({
 >
         <InitialMapBounds />
 
-        <ResetMapOnSearch search={search} />
+        <ResetMapView
+          search={search}
+          selectedCategory={selectedCategory}
+        />
 
         <MoveMap
           lat={selectedMapSpot?.lat || undefined}
