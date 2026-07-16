@@ -1221,8 +1221,8 @@ export default function BusinessMap({
       )}
 
      <MapContainer
-  center={[35.82, -78.82]}
-  zoom={10}
+  center={[35.73, -78.90]}
+  zoom={8}
   zoomControl={false}
   className="h-screen w-full"
 >
