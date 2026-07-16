@@ -1358,9 +1358,16 @@ export default function MagazineEditor({
   };
 
   return (
-    <div className="mx-auto grid max-w-[1600px] gap-4 px-4 py-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-      {/* 광고 라이브러리 */}
-      <aside className="min-w-0 rounded-[28px] bg-white p-4 shadow-lg xl:sticky xl:top-[82px] xl:h-[calc(100vh-102px)]">
+    <div className="min-h-screen bg-[#F8F3EC]">
+      {/* 휴대폰에서도 PC 편집 화면의 너비와 구성을 그대로 유지합니다. */}
+      <div className="sticky top-0 z-[70] border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-black text-amber-900 xl:hidden">
+        PC 편집 화면입니다. 화면을 좌우로 밀어 편집하세요. 광고는 먼저 선택한 뒤 원하는 빈칸을 누르면 배치됩니다.
+      </div>
+
+      <div className="w-full overflow-x-auto overscroll-x-contain">
+        <div className="mx-auto grid min-w-[1180px] max-w-[1600px] grid-cols-[340px_minmax(0,1fr)] gap-4 px-4 py-5">
+          {/* 광고 라이브러리 */}
+      <aside className="sticky top-[82px] h-[calc(100vh-102px)] min-w-0 rounded-[28px] bg-white p-4 shadow-lg">
         <div className="flex h-full min-h-0 flex-col">
           <div>
             <div className="flex items-center justify-between gap-3">
@@ -1551,7 +1558,7 @@ export default function MagazineEditor({
       {/* 페이지 편집 영역 */}
       <section className="min-w-0 space-y-4">
         <div className="rounded-[28px] bg-white p-5 shadow-lg">
-          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
+          <div className="flex flex-row items-end justify-between gap-4">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4483A]">
                 Page Builder
@@ -1569,7 +1576,7 @@ export default function MagazineEditor({
               </p>
             </div>
 
-            <div className="flex w-full max-w-4xl flex-col gap-3 lg:items-end">
+            <div className="flex w-full max-w-4xl flex-col items-end gap-3">
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <span className="rounded-full bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-800">
                   ● {formatSavedTime(lastSavedAt)}
@@ -1712,7 +1719,7 @@ export default function MagazineEditor({
 
         {/* 페이지 선택 탭 */}
         <div className="rounded-[24px] bg-white p-3 shadow-sm">
-          <div className="mb-2 flex flex-col justify-between gap-1 px-1 sm:flex-row sm:items-center">
+          <div className="mb-2 flex flex-row items-center justify-between gap-1 px-1">
             <p className="text-xs font-black text-[#756C61]">
               전체 {pages.length}페이지
             </p>
@@ -1968,7 +1975,7 @@ export default function MagazineEditor({
                                                   slot,
                                                 )
                                               }
-                                              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-sm font-black text-white opacity-0 transition group-hover:opacity-100 disabled:opacity-50"
+                                              className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/80 text-lg font-black text-white opacity-100 transition xl:h-7 xl:w-7 xl:text-sm xl:opacity-0 xl:group-hover:opacity-100 disabled:opacity-50"
                                               title="광고 제거"
                                             >
                                               ×
@@ -2018,7 +2025,9 @@ export default function MagazineEditor({
             )}
           </div>
         )}
-      </section>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
