@@ -10,7 +10,6 @@ const HTMLFlipBook = dynamic(() => import("react-pageflip"), {
   ssr: false,
 }) as any;
 
-const COVER_BUSINESS_ID = "83";
 
 type FlipPageProps = {
   children: React.ReactNode;
@@ -181,64 +180,51 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
     };
   }, []);
 
+  /*
+   * 편집기에서 저장한 잡지 페이지 순서와 슬롯 구성을 그대로 사용합니다.
+   *
+   * 이전 코드에서는 business_id 83 광고를 어느 페이지에 있든 강제로 꺼내
+   * 앞표지로 이동시켰습니다. 그 결과 한 페이지에 배치한 두 광고 중 하나가
+   * 사라지고 레이아웃이 깨졌습니다.
+   *
+   * 이제 첫 번째 잡지 페이지 자체를 앞표지로 사용하고, 나머지 페이지도
+   * 광고를 다른 페이지로 옮기거나 제거하지 않은 채 그대로 렌더링합니다.
+   */
   const { coverAdPage, visibleAdPages } = useMemo(() => {
-    if (!Array.isArray(adPages)) {
+    if (!Array.isArray(adPages) || adPages.length === 0) {
       return {
         coverAdPage: null as AdPage | null,
         visibleAdPages: [] as AdPage[],
       };
     }
 
-    let selectedCoverPage: AdPage | null = null;
-    const normalPages: AdPage[] = [];
+    const normalizedPages = adPages.map(
+      (page, pageIndex) => {
+        const pageAds = Array.isArray(page?.ads)
+          ? page.ads
+          : [];
 
-    adPages.forEach((page, pageIndex) => {
-      const pageAds = Array.isArray(page?.ads) ? page.ads : [];
+        const enabledAds = pageAds.filter(
+          (ad) =>
+            !!ad &&
+            ad.enabled === true &&
+            typeof ad.image_url === "string" &&
+            ad.image_url.trim().length > 0,
+        );
 
-      const enabledAds = pageAds.filter(
-        (ad) =>
-          !!ad &&
-          ad.enabled === true &&
-          typeof ad.image_url === "string" &&
-          ad.image_url.trim().length > 0,
-      );
-
-      const coverAds = enabledAds.filter(
-        (ad) => String(getBusinessId(ad)) === COVER_BUSINESS_ID,
-      );
-
-      const regularAds = enabledAds.filter(
-        (ad) => String(getBusinessId(ad)) !== COVER_BUSINESS_ID,
-      );
-
-      /*
-       * 비즈니스 ID 83 광고가 여러 개 있더라도
-       * 가장 먼저 발견된 광고 1개만 표지로 사용합니다.
-       */
-      if (!selectedCoverPage && coverAds.length > 0) {
-        selectedCoverPage = {
+        return {
           ...page,
-          id: `front-cover-${page?.id ?? pageIndex}`,
-          ads: [coverAds[0]],
-        };
-      }
-
-      /*
-       * 비즈니스 ID 83 광고는 일반 광고 페이지에서 제거하여
-       * 표지와 내부 페이지에 중복 노출되지 않게 합니다.
-       */
-      if (regularAds.length > 0) {
-        normalPages.push({
-          ...page,
-          id: page?.id ?? `ad-page-${pageIndex}`,
-          ads: regularAds,
-        });
-      }
-    });
+          id:
+            page?.id ??
+            `magazine-page-${pageIndex + 1}`,
+          ads: enabledAds,
+        } as AdPage;
+      },
+    );
 
     return {
-      coverAdPage: selectedCoverPage,
-      visibleAdPages: normalPages,
+      coverAdPage: normalizedPages[0] || null,
+      visibleAdPages: normalizedPages.slice(1),
     };
   }, [adPages]);
 
