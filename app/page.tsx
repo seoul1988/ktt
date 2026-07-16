@@ -655,22 +655,18 @@ export default async function Home() {
 </div>
 
               <div className="p-5">
-                <p className="text-xs font-black uppercase tracking-wider text-amber-600">
-                  Grand Opening · {mainGrandOpening.opening_date || "Coming Soon"}
-                </p>
+			  <p className="text-xs font-black uppercase tracking-wider text-amber-600">
+				Grand Opening · {mainGrandOpening.opening_date || "Coming Soon"}
+			  </p>
 
-                <h3 className="mt-1 text-xl font-black">
-                  {mainGrandOpening.business_name || "Grand Opening"}
-                </h3>
+			  <h3 className="mt-1 text-xl font-black">
+				{mainGrandOpening.business_name || "Grand Opening"}
+			  </h3>
 
-                <p className="mt-1 text-sm font-bold text-gray-600">
-                  {mainGrandOpening.title}
-                </p>
-
-                <p className="mt-2 line-clamp-2 text-sm text-gray-600">
-                  {mainGrandOpening.description}
-                </p>
-              </div>
+			  <p className="mt-1 text-sm font-bold text-gray-600">
+				{mainGrandOpening.title}
+			  </p>
+			</div>
             </Link>
           </section>
         )}

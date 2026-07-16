@@ -28,17 +28,18 @@ export default function FeaturedSponsorSlider({
 
   useEffect(() => {
     if (!sponsors || sponsors.length === 0) return;
+
     setIndex(Math.floor(Math.random() * sponsors.length));
   }, [sponsors]);
 
   useEffect(() => {
     if (!sponsors || sponsors.length <= 1) return;
 
-    const timer = setInterval(() => {
+    const timer = window.setInterval(() => {
       setIndex((prev) => (prev + 1) % sponsors.length);
     }, 6500);
 
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, [sponsors]);
 
   if (!sponsors || sponsors.length === 0) return null;
@@ -63,7 +64,7 @@ export default function FeaturedSponsorSlider({
 
             return (
               <div key={spot.id} className="w-full shrink-0">
-                <div className="flex min-h-[500px] flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
+                <div className="flex flex-col overflow-hidden rounded-3xl bg-white shadow-xl">
                   <Link href={`/business/${spot.id}`} className="block">
                     <div className="h-56 w-full overflow-hidden bg-white">
                       <img
@@ -74,13 +75,13 @@ export default function FeaturedSponsorSlider({
                     </div>
                   </Link>
 
-                  <div className="flex flex-1 flex-col p-5">
+                  <div className="p-5">
                     <div className="flex items-start gap-2">
                       <Link
                         href={`/business/${spot.id}`}
                         className="min-w-0 flex-1"
                       >
-                        <h3 className="line-clamp-2 min-h-[2.6em] text-2xl font-black leading-tight text-[#172033]">
+                        <h3 className="line-clamp-2 text-2xl font-black leading-tight text-[#172033]">
                           {spot.name}
                         </h3>
                       </Link>
@@ -106,13 +107,32 @@ export default function FeaturedSponsorSlider({
                       </div>
                     </div>
 
-                    <p className="mt-2 line-clamp-2 min-h-[2.5em] text-sm leading-snug text-gray-600">
-                      {spot.category} · {spot.city}
+                    <p className="mt-2 line-clamp-1 text-sm text-gray-600">
+                      {[spot.category, spot.city].filter(Boolean).join(" · ") ||
+                        "Sponsored local business"}
                     </p>
 
-                    <p className="mt-3 line-clamp-3 min-h-[4.8em] text-sm leading-relaxed text-gray-700">
-                      {spot.description || spot.tags || spot.tag}
-                    </p>
+                    {(spot.rating || spot.review_count) && (
+                      <div className="mt-2 flex items-center gap-1 text-sm">
+                        <span className="text-yellow-500">⭐</span>
+
+                        <span className="font-bold text-gray-900">
+                          {Number(spot.rating || 0).toFixed(1)}
+                        </span>
+
+                        {spot.review_count ? (
+                          <span className="text-gray-500">
+                            (
+                            {Number(
+                              spot.review_count,
+                            ).toLocaleString()}{" "}
+                            Reviews)
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">No Reviews</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -129,7 +149,9 @@ export default function FeaturedSponsorSlider({
               type="button"
               onClick={() => setIndex(dotIndex)}
               className={`h-2 rounded-full transition-all duration-500 ${
-                dotIndex === index ? "w-6 bg-[#C4483A]" : "w-2 bg-gray-300"
+                dotIndex === index
+                  ? "w-6 bg-[#C4483A]"
+                  : "w-2 bg-gray-300"
               }`}
               aria-label={`Go to sponsor ${dotIndex + 1}`}
             />
