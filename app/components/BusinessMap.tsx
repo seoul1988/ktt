@@ -25,7 +25,7 @@ const MAP_STATE_KEY = "ktt_map_state_v1";
 const INITIAL_MAP_BOUNDS = L.latLngBounds([
   [35.45, -79.30],
   [36.08, -77.95],
-]).pad(0.02);
+]).pad(0.00);
 
 const INITIAL_MAP_PADDING: [number, number] = [5, 5];
 
