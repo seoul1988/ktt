@@ -105,6 +105,23 @@ function getOpenStatus(hours?: string | null) {
   };
 }
 
+function getTodayHours(hours?: string | null) {
+  if (!hours) return "Hours not available";
+
+  const today = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: "America/New_York",
+  }).format(new Date());
+
+  return (
+    hours
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.startsWith(today)) ||
+    "Hours not available"
+  );
+}
+
 type SearchParams = Promise<{
   from?: string;
 }>;
@@ -346,6 +363,7 @@ export default async function BusinessPage({
   ].filter(Boolean);
 
   const status = getOpenStatus(spot.hours);
+  const todayHours = getTodayHours(spot.hours);
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
@@ -481,13 +499,25 @@ export default async function BusinessPage({
             </p>
 
             <div>
-              <span className="font-semibold">
-                Hours:{" "}
-              </span>
+              <span className="font-semibold">Hours:</span>
 
-              <div className="mt-1 whitespace-pre-wrap font-sans">
-                {spot.hours ||
-                  "Hours not available"}
+              <div className="mt-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                <p className="font-semibold text-[#172033]">
+                  {todayHours}
+                </p>
+
+                {spot.hours && spot.hours.trim() !== todayHours.trim() && (
+                  <details className="group mt-2">
+                    <summary className="cursor-pointer list-none text-sm font-black text-[#C4483A]">
+                      <span className="group-open:hidden">View All Hours ▼</span>
+                      <span className="hidden group-open:inline">Hide Hours ▲</span>
+                    </summary>
+
+                    <div className="mt-3 whitespace-pre-wrap border-t border-gray-200 pt-3 font-sans text-sm leading-6 text-gray-700">
+                      {spot.hours}
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
 
