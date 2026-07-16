@@ -644,26 +644,7 @@ async function loadLatestPublishedMagazinePages(): Promise<
    *
    * return adPages.filter((page) => page.ads.length > 0);
    */
-  console.info("Published flipbook diagnostics:", {
-    issueId: issue.id,
-    pageCount: pages.length,
-    slotCount: slots.length,
-    referencedAdIds: adIds,
-    loadedAdCount: magazineAds.length,
-    loadedAdIds: magazineAds.map((ad) => String(ad.id)),
-    pages: adPages.map((page) => ({
-      id: page.id,
-      page_number: page.page_number,
-      adCount: page.ads.length,
-      ads: page.ads.map((ad) => ({
-        id: String(ad.id),
-        grid_column_start: ad.grid_column_start,
-        grid_row_start: ad.grid_row_start,
-        grid_column_span: ad.grid_column_span,
-        grid_row_span: ad.grid_row_span,
-      })),
-    })),
-  });
+
 
   return adPages;
 }

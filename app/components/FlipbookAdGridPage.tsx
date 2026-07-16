@@ -6,12 +6,6 @@ import type {
   FlipbookAdSize,
 } from "./flipbookTypes";
 
-type Props = {
-  page: AdPage;
-  pageWidth: number;
-  pageHeight: number;
-};
-
 type LeafNode = {
   id: string;
   type: "leaf";
@@ -39,6 +33,12 @@ type PublicAdPage = AdPage & {
   page_title?: string | null;
 };
 
+type Props = {
+  page: PublicAdPage;
+  pageWidth: number;
+  pageHeight: number;
+};
+
 type PublicFlipbookAd = FlipbookAd & {
   slot_key?: string | null;
 };
@@ -62,21 +62,19 @@ function getFallbackSpan(ad: FlipbookAd) {
       };
 
     case 2:
-      if (ad.orientation === "vertical") {
-        return {
-          columnStart: 1,
-          rowStart: 1,
-          columnSpan: 3,
-          rowSpan: 6,
-        };
-      }
-
-      return {
-        columnStart: 1,
-        rowStart: 1,
-        columnSpan: 6,
-        rowSpan: 3,
-      };
+      return ad.orientation === "vertical"
+        ? {
+            columnStart: 1,
+            rowStart: 1,
+            columnSpan: 3,
+            rowSpan: 6,
+          }
+        : {
+            columnStart: 1,
+            rowStart: 1,
+            columnSpan: 6,
+            rowSpan: 3,
+          };
 
     case 3:
       return {
@@ -101,6 +99,14 @@ function getFallbackSpan(ad: FlipbookAd) {
         columnSpan: 3,
         rowSpan: 1,
       };
+
+    default:
+      return {
+        columnStart: 1,
+        rowStart: 1,
+        columnSpan: 6,
+        rowSpan: 6,
+      };
   }
 }
 
@@ -114,15 +120,22 @@ function getAdUrl(ad: FlipbookAd) {
 function isCustomLayoutDocument(
   value: unknown,
 ): value is CustomLayoutDocument {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("root" in value)
-  ) {
+  if (!value || typeof value !== "object") {
     return false;
   }
 
-  return true;
+  if (!("root" in value)) {
+    return false;
+  }
+
+  const root = (value as { root?: unknown }).root;
+
+  return (
+    !!root &&
+    typeof root === "object" &&
+    "id" in root &&
+    "type" in root
+  );
 }
 
 function AdImage({
@@ -130,14 +143,12 @@ function AdImage({
   fitMode = "contain",
 }: {
   ad: FlipbookAd;
-  fitMode?: "contain" | "cover";
+  fitMode?: "contain" | "fill";
 }) {
   const objectFit: React.CSSProperties["objectFit"] =
-    fitMode === "cover"
+    fitMode === "fill" || ad.object_fit === "fill"
       ? "fill"
-      : ad.object_fit === "fill"
-        ? "fill"
-        : "contain";
+      : "contain";
 
   return (
     <img
@@ -168,7 +179,7 @@ function AdContent({
   fitMode = "contain",
 }: {
   ad: FlipbookAd;
-  fitMode?: "contain" | "cover";
+  fitMode?: "contain" | "fill";
 }) {
   const destinationUrl = getAdUrl(ad);
 
@@ -178,10 +189,7 @@ function AdContent({
 
   const content = (
     <>
-      <AdImage
-        ad={ad}
-        fitMode={fitMode}
-      />
+      <AdImage ad={ad} fitMode={fitMode} />
 
       {ad.show_size_badge && (
         <span className="pointer-events-none absolute right-2 top-2 z-10 rounded-full bg-black/70 px-2 py-1 text-[9px] font-black text-white">
@@ -220,20 +228,16 @@ function GridAdTile({ ad }: { ad: FlipbookAd }) {
   const fallback = getFallbackSpan(ad);
 
   const columnStart =
-    Number(ad.grid_column_start) ||
-    fallback.columnStart;
+    Number(ad.grid_column_start) || fallback.columnStart;
 
   const rowStart =
-    Number(ad.grid_row_start) ||
-    fallback.rowStart;
+    Number(ad.grid_row_start) || fallback.rowStart;
 
   const columnSpan =
-    Number(ad.grid_column_span) ||
-    fallback.columnSpan;
+    Number(ad.grid_column_span) || fallback.columnSpan;
 
   const rowSpan =
-    Number(ad.grid_row_span) ||
-    fallback.rowSpan;
+    Number(ad.grid_row_span) || fallback.rowSpan;
 
   return (
     <div
@@ -245,10 +249,7 @@ function GridAdTile({ ad }: { ad: FlipbookAd }) {
         gridRowEnd: `span ${rowSpan}`,
       }}
     >
-      <AdContent
-        ad={ad}
-        fitMode="contain"
-      />
+      <AdContent ad={ad} fitMode="contain" />
     </div>
   );
 }
@@ -260,17 +261,14 @@ function CustomLayoutPage({
   document: CustomLayoutDocument;
   ads: PublicFlipbookAd[];
 }) {
-  const adBySlotKey = new Map(
+  const adBySlotKey = new Map<string, PublicFlipbookAd>(
     ads
       .filter(
         (ad) =>
           typeof ad.slot_key === "string" &&
           ad.slot_key.length > 0,
       )
-      .map((ad) => [
-        String(ad.slot_key),
-        ad,
-      ]),
+      .map((ad) => [String(ad.slot_key), ad]),
   );
 
   const renderNode = (
@@ -292,8 +290,8 @@ function CustomLayoutPage({
           <div
             className={
               node.direction === "horizontal"
-                ? "h-[1px] shrink-0 bg-black/10"
-                : "w-[1px] shrink-0 bg-black/10"
+                ? "h-px shrink-0 bg-black/10"
+                : "w-px shrink-0 bg-black/10"
             }
           />
 
@@ -304,19 +302,14 @@ function CustomLayoutPage({
       );
     }
 
-    const ad = adBySlotKey.get(node.id);
+    const ad = adBySlotKey.get(node.id) || null;
 
     return (
       <div
         className="relative h-full min-h-0 w-full min-w-0 overflow-hidden bg-white"
         data-slot-key={node.id}
       >
-        {ad ? (
-          <AdContent
-            ad={ad}
-            fitMode="cover"
-          />
-        ) : null}
+        {ad ? <AdContent ad={ad} fitMode="fill" /> : null}
       </div>
     );
   };
@@ -333,12 +326,8 @@ export default function FlipbookAdGridPage({
   pageWidth,
   pageHeight,
 }: Props) {
-  const publicPage = page as PublicAdPage;
-
   const visibleAds = (
-    Array.isArray(publicPage?.ads)
-      ? publicPage.ads
-      : []
+    Array.isArray(page.ads) ? page.ads : []
   ).filter(
     (ad): ad is PublicFlipbookAd =>
       !!ad &&
@@ -347,19 +336,19 @@ export default function FlipbookAdGridPage({
       ad.image_url.trim().length > 0,
   );
 
-  const useCustomTree =
-    publicPage.layout_type === "custom" &&
-    isCustomLayoutDocument(
-      publicPage.layout_json,
-    );
+  const customLayoutDocument:
+    | CustomLayoutDocument
+    | null =
+    page.layout_type === "custom" &&
+    isCustomLayoutDocument(page.layout_json)
+      ? page.layout_json
+      : null;
 
   return (
     <div
       className="relative overflow-hidden bg-white"
-      data-page-id={String(publicPage.id)}
-      data-layout-type={
-        publicPage.layout_type || "custom"
-      }
+      data-page-id={String(page.id)}
+      data-layout-type={page.layout_type || "custom"}
       data-ad-count={visibleAds.length}
       style={{
         width: `${pageWidth}px`,
@@ -373,24 +362,19 @@ export default function FlipbookAdGridPage({
         boxSizing: "border-box",
         overflow: "hidden",
         backgroundColor:
-          publicPage.background_color ||
-          "#ffffff",
+          page.background_color || "#ffffff",
       }}
     >
-      {publicPage.page_image_url &&
-      visibleAds.length === 0 ? (
+      {page.page_image_url && visibleAds.length === 0 ? (
         <img
-          src={publicPage.page_image_url}
-          alt={
-            publicPage.page_title ||
-            "잡지 페이지"
-          }
+          src={page.page_image_url}
+          alt={page.page_title || "잡지 페이지"}
           draggable={false}
           className="absolute inset-0 h-full w-full object-contain"
         />
-      ) : useCustomTree ? (
+      ) : customLayoutDocument ? (
         <CustomLayoutPage
-          document={publicPage.layout_json}
+          document={customLayoutDocument}
           ads={visibleAds}
         />
       ) : (
@@ -408,8 +392,7 @@ export default function FlipbookAdGridPage({
             <GridAdTile
               key={[
                 ad.id ?? index,
-                ad.business_id ??
-                  "business",
+                ad.business_id ?? "business",
                 ad.slot_key ?? "slot",
               ].join("-")}
               ad={ad}
