@@ -931,11 +931,14 @@ export default function BusinessMap({
   }, [mapSpots, userLocation]);
 
   useEffect(() => {
+    // 카테고리 선택 시 첫 번째 비즈니스를 자동 선택하지 않습니다.
+    // 검색 결과가 있을 때만 첫 번째 결과를 자동 선택합니다.
     if (selectedSpotKey) return;
+    if (selectedCategory && !search) return;
 
     const firstSpot = cardSpots[0];
     setSelectedSpotKey(firstSpot ? getSpotKey(firstSpot) : null);
-  }, [cardSpots, selectedSpotKey]);
+  }, [cardSpots, selectedSpotKey, selectedCategory, search]);
 
   useEffect(() => {
     if (restoredRef.current) return;
@@ -1601,4 +1604,3 @@ export default function BusinessMap({
     </div>
   );
 } 
-
