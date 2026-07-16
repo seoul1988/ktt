@@ -22,7 +22,7 @@ type DayHour = {
   breakEnd: string;
 };
 
-type FlipbookAdSize = 1 | 2 | 3 | 4;
+type FlipbookAdSize = 1 | 2 | 3 | 4 | 5;
 
 type FlipbookAdRecord = {
   id?: string;
@@ -50,6 +50,12 @@ const flipbookAdOptions = [
   { size: 2 as FlipbookAdSize, label: "Size 2", description: "반면 50%", recommendedSize: "1080 × 764 px" },
   { size: 3 as FlipbookAdSize, label: "Size 3", description: "1/4면 25%", recommendedSize: "540 × 764 px" },
   { size: 4 as FlipbookAdSize, label: "Size 4", description: "1/6면", recommendedSize: "540 × 509 px" },
+  {
+    size: 5 as FlipbookAdSize,
+    label: "Size 5",
+    description: "1/12면",
+    recommendedSize: "540 × 255 px",
+  },
 ];
 
 
@@ -340,10 +346,10 @@ export default function EditBusinessPage() {
   >({});
   const [flipbookAdEnabled, setFlipbookAdEnabled] = useState<
     Record<FlipbookAdSize, boolean>
-  >({ 1: false, 2: false, 3: false, 4: false });
+  >({ 1: false, 2: false, 3: false, 4: false, 5: false });
   const [flipbookPriorities, setFlipbookPriorities] = useState<
     Record<FlipbookAdSize, number>
-  >({ 1: 0, 2: 0, 3: 0, 4: 0 });
+  >({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [removedFlipbookAdSizes, setRemovedFlipbookAdSizes] = useState<
     FlipbookAdSize[]
   >([]);
@@ -463,17 +469,19 @@ export default function EditBusinessPage() {
         2: false,
         3: false,
         4: false,
+		5: false,
       };
       const priorityMap: Record<FlipbookAdSize, number> = {
         1: 0,
         2: 0,
         3: 0,
         4: 0,
+        5: 0,
       };
 
       for (const item of adData || []) {
         const size = Number(item.ad_size) as FlipbookAdSize;
-        if (![1, 2, 3, 4].includes(size)) continue;
+        if (![1, 2, 3, 4, 5].includes(size)) continue;
         adMap[size] = item as FlipbookAdRecord;
         enabledMap[size] = Boolean(item.enabled);
         priorityMap[size] = Number(item.priority || 0);

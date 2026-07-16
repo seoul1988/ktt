@@ -4,7 +4,7 @@ import type {
   AdPage,
   FlipbookAd,
   FlipbookAdSize,
-} from "../../components/flipbookTypes";   
+} from "../../components/flipbookTypes";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,91 +25,204 @@ type BusinessRow = {
   website_url: string | null;
 };
 
-const PAGE_CAPACITY = 12;
+type PackedAd = FlipbookAd & {
+  grid_column_start: number;
+  grid_row_start: number;
+  grid_column_span: number;
+  grid_row_span: number;
+};
 
-const AD_UNITS: Record<FlipbookAdSize, number> = {
-  1: 12, // 전체면
-  2: 6,  // 반면
-  3: 3,  // 1/4면
-  4: 2,  // 1/6면
+type Shape = {
+  columnSpan: number;
+  rowSpan: number;
+};
+
+const GRID_COLUMNS = 6;
+const GRID_ROWS = 6;
+
+const AD_SHAPES: Record<FlipbookAdSize, Shape> = {
+  1: { columnSpan: 6, rowSpan: 6 },
+  2: { columnSpan: 6, rowSpan: 3 },
+  3: { columnSpan: 3, rowSpan: 3 },
+  4: { columnSpan: 3, rowSpan: 2 },
+  5: { columnSpan: 3, rowSpan: 1 },
 };
 
 function normalizeAdSize(value: unknown): FlipbookAdSize | null {
   const size = Number(value);
 
-  if (size === 1 || size === 2 || size === 3 || size === 4) {
+  if (
+    size === 1 ||
+    size === 2 ||
+    size === 3 ||
+    size === 4 ||
+    size === 5
+  ) {
     return size;
   }
 
   return null;
 }
 
+function createGrid() {
+  return Array.from({ length: GRID_ROWS }, () =>
+    Array.from({ length: GRID_COLUMNS }, () => false),
+  );
+}
+
+function canPlace(
+  grid: boolean[][],
+  rowStart: number,
+  columnStart: number,
+  shape: Shape,
+) {
+  if (
+    rowStart + shape.rowSpan > GRID_ROWS ||
+    columnStart + shape.columnSpan > GRID_COLUMNS
+  ) {
+    return false;
+  }
+
+  for (let row = rowStart; row < rowStart + shape.rowSpan; row += 1) {
+    for (
+      let column = columnStart;
+      column < columnStart + shape.columnSpan;
+      column += 1
+    ) {
+      if (grid[row][column]) return false;
+    }
+  }
+
+  return true;
+}
+
+function occupy(
+  grid: boolean[][],
+  rowStart: number,
+  columnStart: number,
+  shape: Shape,
+) {
+  for (let row = rowStart; row < rowStart + shape.rowSpan; row += 1) {
+    for (
+      let column = columnStart;
+      column < columnStart + shape.columnSpan;
+      column += 1
+    ) {
+      grid[row][column] = true;
+    }
+  }
+}
+
+function findPlacement(grid: boolean[][], size: FlipbookAdSize) {
+  const shape = AD_SHAPES[size];
+
+  for (let row = 0; row < GRID_ROWS; row += 1) {
+    for (let column = 0; column < GRID_COLUMNS; column += 1) {
+      if (canPlace(grid, row, column, shape)) {
+        return {
+          rowStart: row,
+          columnStart: column,
+          shape,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function adArea(ad: FlipbookAd) {
+  const shape = AD_SHAPES[ad.ad_size];
+  return shape.columnSpan * shape.rowSpan;
+}
+
 /**
- * 광고를 우선순위 순서대로 한 페이지 최대 12단위에 맞춰 배치합니다.
+ * 페이지를 실제 6×6 좌표로 배치합니다.
  *
- * Size 1 = 12단위 = 전체면
- * Size 2 =  6단위 = 반면
- * Size 3 =  3단위 = 1/4면
- * Size 4 =  2단위 = 1/6면
+ * 핵심:
+ * 1. 큰 광고부터 먼저 넣어 공간이 조각나는 것을 막습니다.
+ * 2. 같은 크기에서는 Display Priority가 높은 광고를 먼저 넣습니다.
+ * 3. 각 광고의 정확한 grid row/column 좌표를 저장합니다.
+ * 4. 화면 컴포넌트가 이 좌표를 그대로 사용하므로 다시 섞이지 않습니다.
  */
 function buildAdPages(ads: FlipbookAd[]): AdPage[] {
   const pages: AdPage[] = [];
-  let currentAds: FlipbookAd[] = [];
-  let currentUnits = 0;
+  let remaining = [...ads];
 
-  function completeCurrentPage() {
-    if (currentAds.length === 0) return;
+  while (remaining.length > 0) {
+    /*
+     * 페이지마다 큰 광고를 우선 배치합니다.
+     * 따라서 다음 페이지의 큰 광고가 현재 페이지 빈 공간에 들어갈 수 있으면
+     * 작은 광고보다 먼저 끌어와 페이지를 채웁니다.
+     */
+    const candidates = [...remaining].sort((a, b) => {
+      const areaDifference = adArea(b) - adArea(a);
+
+      if (areaDifference !== 0) {
+        return areaDifference;
+      }
+
+      return Number(b.priority || 0) - Number(a.priority || 0);
+    });
+
+    const grid = createGrid();
+    const packed: PackedAd[] = [];
+    const usedIds = new Set<string>();
+
+    for (const ad of candidates) {
+      const placement = findPlacement(grid, ad.ad_size);
+
+      if (!placement) continue;
+
+      occupy(
+        grid,
+        placement.rowStart,
+        placement.columnStart,
+        placement.shape,
+      );
+
+      packed.push({
+        ...ad,
+        grid_column_start: placement.columnStart + 1,
+        grid_row_start: placement.rowStart + 1,
+        grid_column_span: placement.shape.columnSpan,
+        grid_row_span: placement.shape.rowSpan,
+      });
+
+      usedIds.add(String(ad.id));
+
+      if (ad.ad_size === 1) {
+        break;
+      }
+    }
+
+    if (packed.length === 0) {
+      const fallback = remaining[0];
+      const shape = AD_SHAPES[fallback.ad_size];
+
+      packed.push({
+        ...fallback,
+        grid_column_start: 1,
+        grid_row_start: 1,
+        grid_column_span: shape.columnSpan,
+        grid_row_span: shape.rowSpan,
+      });
+
+      usedIds.add(String(fallback.id));
+    }
 
     pages.push({
       id: `ad-page-${pages.length + 1}`,
-      ads: currentAds,
+      ads: packed,
     });
 
-    currentAds = [];
-    currentUnits = 0;
+    remaining = remaining.filter((ad) => !usedIds.has(String(ad.id)));
   }
-
-  for (const ad of ads) {
-    const units = AD_UNITS[ad.ad_size];
-
-    // 전체면 광고는 반드시 단독 페이지로 표시합니다.
-    if (ad.ad_size === 1) {
-      completeCurrentPage();
-
-      pages.push({
-        id: `ad-page-${pages.length + 1}`,
-        ads: [ad],
-      });
-
-      continue;
-    }
-
-    // 현재 페이지에 들어가지 않으면 새 페이지를 시작합니다.
-    if (currentUnits + units > PAGE_CAPACITY) {
-      completeCurrentPage();
-    }
-
-    currentAds.push(ad);
-    currentUnits += units;
-
-    // 페이지가 정확히 채워졌으면 바로 완료합니다.
-    if (currentUnits === PAGE_CAPACITY) {
-      completeCurrentPage();
-    }
-  }
-
-  completeCurrentPage();
 
   return pages;
 }
 
-
-
 export default async function BusinessAdsPage() {
-  /*
-   * 새 광고 테이블에서 활성화된 광고만 가져옵니다.
-   * 등록/수정 페이지의 체크박스가 enabled 값으로 저장됩니다.
-   */
   const { data: adData, error: adError } = await supabase
     .from("business_flipbook_ads")
     .select(`
@@ -133,10 +246,6 @@ export default async function BusinessAdsPage() {
 
   const rawAds = (adData || []) as FlipbookAdRow[];
 
-  /*
-   * 광고에 표시할 업체명과 웹사이트를 businesses 테이블에서 따로 가져옵니다.
-   * 관계 설정 여부와 상관없이 안정적으로 작동하도록 두 번 조회합니다.
-   */
   const businessIds = Array.from(
     new Set(
       rawAds
@@ -198,18 +307,6 @@ export default async function BusinessAdsPage() {
       show_size_badge: false,
     });
   }
-
-  ads.sort((a, b) => {
-    const priorityDifference =
-      Number(b.priority || 0) - Number(a.priority || 0);
-
-    if (priorityDifference !== 0) {
-      return priorityDifference;
-    }
-
-    // 같은 우선순위에서는 큰 광고부터 배치합니다.
-    return a.ad_size - b.ad_size;
-  });
 
   const adPages = buildAdPages(ads);
 

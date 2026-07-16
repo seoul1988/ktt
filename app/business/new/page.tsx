@@ -22,7 +22,7 @@ type DayHour = {
 };
 
 
-type FlipbookAdSize = 1 | 2 | 3 | 4;
+type FlipbookAdSize = 1 | 2 | 3 | 4 | 5;
 
 type FlipbookAdItem = {
   size: FlipbookAdSize;
@@ -56,6 +56,15 @@ const flipbookAdOptions: FlipbookAdItem[] = [
     description: "1/6면",
     recommendedSize: "540 × 509 px",
   },
+  
+  {
+    size: 5,
+    label: "Size 5",
+    description: "1/12면",
+    recommendedSize: "540 × 255 px",
+  },
+  
+  
 ];
 
 const googleLibraries: "places"[] = ["places"];
@@ -336,6 +345,7 @@ export default function NewBusinessPage() {
     2: false,
     3: false,
     4: false,
+	5:false,
   });
 
   const [bulkDays, setBulkDays] = useState<string[]>(weekDays);
@@ -1025,6 +1035,7 @@ export default function NewBusinessPage() {
       2: { maxWidth: 1080, maxHeight: 764 },
       3: { maxWidth: 540, maxHeight: 764 },
       4: { maxWidth: 540, maxHeight: 509 },
+	  5:{maxWidth:540,maxHeight:255},
     };
 
     const setting = sizeSettings[size];
