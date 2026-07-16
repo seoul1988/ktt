@@ -21,12 +21,13 @@ import { supabase } from "../../lib/supabase";
 
 const MAP_STATE_KEY = "ktt_map_state_v1";
 
+// 초기 지도 범위를 현재보다 약 10~12마일 정도 더 넓게 표시
 const INITIAL_MAP_BOUNDS = L.latLngBounds([
-  [35.45, -79.30], // Chapel Hill보다 더 서쪽/남쪽
-  [36.08, -77.95], // Smithfield보다 더 동쪽/북쪽
-]);
+  [35.45, -79.30],
+  [36.08, -77.95],
+]).pad(0.18);
 
-const INITIAL_MAP_PADDING: [number, number] = [5, 5];
+const INITIAL_MAP_PADDING: [number, number] = [40, 40];
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
