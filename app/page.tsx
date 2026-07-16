@@ -316,6 +316,63 @@ function splitCategories(value: unknown) {
     .filter(Boolean);
 }
 
+function isFeaturedSponsorFoodCategory(business: any) {
+  const categoryValues = [
+    ...splitCategories(business?.category),
+    ...splitCategories(business?.category_name),
+    ...splitCategories(business?.categories),
+  ].map((value) => normalizeCategory(value));
+
+  const foodKeywords = [
+    "restaurant",
+    "restaurants",
+    "korean restaurant",
+    "bbq",
+    "barbecue",
+    "korean bbq",
+    "bakery",
+    "cafe",
+    "café",
+    "cafe & bakery",
+    "coffee",
+    "dessert",
+    "bubble tea",
+    "boba",
+    "chicken",
+    "fried chicken",
+    "noodles",
+    "noodle",
+    "sushi",
+    "food",
+    "dining",
+    "레스토랑",
+    "식당",
+    "한식",
+    "고기",
+    "바베큐",
+    "바비큐",
+    "빵",
+    "베이커리",
+    "카페",
+    "커피",
+    "디저트",
+    "치킨",
+    "국수",
+    "스시",
+    "초밥",
+    "버블티",
+  ];
+
+  return categoryValues.some((category) =>
+    foodKeywords.some(
+      (keyword) =>
+        category === keyword ||
+        category.includes(keyword) ||
+        keyword.includes(category)
+    )
+  );
+}
+
 function isMainVisibleBusiness(
   business: any,
   allowedCategoryIds: Set<number>,
@@ -569,7 +626,11 @@ export default async function Home() {
    * Featured Sponsor와 Trending에도 B2B/Hidden이 나타나지 않습니다.
    */
   const featuredSponsors = spots
-    .filter((spot: any) => spot.featured_sponsor === true)
+    .filter(
+      (spot: any) =>
+        spot.featured_sponsor === true &&
+        isFeaturedSponsorFoodCategory(spot)
+    )
     .sort((a: any, b: any) => {
       const orderDiff =
         Number(a.display_order || 0) - Number(b.display_order || 0);
