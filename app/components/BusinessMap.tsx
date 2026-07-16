@@ -350,49 +350,6 @@ function InitialMapView() {
   return null;
 }
 
-function MoveMap({ lat, lng }: { lat?: number; lng?: number }) {
-  const map = useMap();
-  const movedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (lat == null || lng == null) return;
-
-    const key = `${lat},${lng}`;
-    if (movedRef.current === key) return;
-
-    movedRef.current = key;
-
-    const isMobilePortrait =
-      window.innerWidth < 768 &&
-      !window.matchMedia("(orientation: landscape)").matches;
-
-    let offsetTimer: ReturnType<typeof setTimeout> | null = null;
-
-    map.flyTo([lat, lng], Math.max(map.getZoom(), 13), {
-      animate: true,
-      duration: 0.35,
-    });
-
-    if (isMobilePortrait) {
-      offsetTimer = setTimeout(() => {
-        // 지도를 아래로 이동해서 선택된 마커가 화면 중앙보다 위에 보이게 합니다.
-        map.panBy([0, 180], {
-          animate: true,
-          duration: 0.25,
-        });
-      }, 400);
-    }
-
-    return () => {
-      if (offsetTimer) {
-        clearTimeout(offsetTimer);
-      }
-    };
-  }, [lat, lng, map]);
-
-  return null;
-}
-
 function ResetMapView({
   search,
   selectedCategory,
@@ -1139,13 +1096,7 @@ export default function BusinessMap({
     };
   }, []);
 
-  const selectedMapSpot =
-    cardSpots.find(
-      (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
-    ) ||
-    filteredMarkerSpots.find(
-      (spot) => getSpotKey(spot) === selectedSpotKey && spot.lat && spot.lng
-    );
+
 
   return (
     <div className="relative min-h-screen">
@@ -1251,11 +1202,6 @@ export default function BusinessMap({
         <ResetMapView
           search={search}
           selectedCategory={selectedCategory}
-        />
-
-        <MoveMap
-          lat={selectedMapSpot?.lat || undefined}
-          lng={selectedMapSpot?.lng || undefined}
         />
 
         <TileLayer
@@ -1625,4 +1571,4 @@ export default function BusinessMap({
       )}
     </div>
   );
-}   
+} 
