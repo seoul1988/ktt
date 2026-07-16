@@ -32,7 +32,11 @@ type CustomLayoutDocument = {
 };
 
 type PublicAdPage = AdPage & {
+  layout_type?: string | null;
   layout_json?: CustomLayoutDocument | null;
+  background_color?: string | null;
+  page_image_url?: string | null;
+  page_title?: string | null;
 };
 
 type PublicFlipbookAd = FlipbookAd & {
