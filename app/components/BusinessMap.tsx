@@ -136,6 +136,8 @@ type Spot = {
   original_id?: number | string | null;
   marketplace_id?: number | string | null;
   name: string;
+  business_name?: string | null;
+  title?: string | null;
   category: string | null;
   categories?: string | null;
   matched_categories?: string[] | null;
@@ -150,7 +152,9 @@ type Spot = {
   lat?: number | null;
   lng?: number | null;
   hours?: string | null;
-  tags?: string | null;
+  tags?: string | string[] | null;
+  tag?: string | string[] | null;
+  search_text?: string | null;
   event_title?: string | null;
   event_name?: string | null;
   coupon_title?: string | null;
@@ -233,6 +237,84 @@ function milesBetween(a: [number, number], b: [number, number]) {
 
 function normalizeCategory(value: string) {
   return value.trim().toLowerCase().replace(/s$/, "");
+}
+
+/**
+ * 한글 조합형과 공백 차이를 통일하여 한 글자 부분 검색도 가능하게 합니다.
+ */
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFC")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+/**
+ * tags가 배열, 일반 문자열 또는 JSON 배열 문자열이어도 검색할 수 있게 변환합니다.
+ */
+function getTagsText(tags: unknown) {
+  if (Array.isArray(tags)) {
+    return tags
+      .map((tag) => String(tag ?? ""))
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (typeof tags === "string") {
+    const trimmed = tags.trim();
+    if (!trimmed) return "";
+
+    try {
+      const parsed = JSON.parse(trimmed);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((tag) => String(tag ?? ""))
+          .filter(Boolean)
+          .join(" ");
+      }
+    } catch {
+      // JSON이 아닌 일반 문자열은 그대로 사용합니다.
+    }
+
+    return trimmed;
+  }
+
+  return "";
+}
+
+/**
+ * 업체 제목, 상호명, 태그 및 기존 검색 항목을 하나의 문자열로 만듭니다.
+ */
+function createSpotSearchText(spot: Spot, categoryList: string[]) {
+  return normalizeSearchText(
+    [
+      spot.business_name,
+      spot.name,
+      spot.title,
+      getTagsText(spot.tags),
+      getTagsText(spot.tag),
+      spot.category,
+      spot.categories,
+      categoryList.join(" "),
+      spot.city,
+      spot.description,
+      spot.coupon_badge,
+      spot.event_title,
+      spot.event_name,
+      spot.coupon_title,
+      spot.deal_title,
+      spot.search_text,
+    ]
+      .filter(
+        (value) =>
+          value !== null &&
+          value !== undefined &&
+          String(value).trim() !== ""
+      )
+      .join(" ")
+  );
 }
 
 function getSpotCategoryList(spot: Spot) {
@@ -864,23 +946,19 @@ export default function BusinessMap({
     return normalizedSpots.filter((spot) => {
       const spotCategoryList = getSpotCategoryList(spot);
 
-      const searchText = `
-        ${spot.name || ""}
-        ${spot.category || ""}
-        ${spot.categories || ""}
-        ${spotCategoryList.join(" ")}
-        ${spot.tags || ""}
-        ${spot.city || ""}
-        ${spot.description || ""}
-        ${spot.coupon_badge || ""}
-      `.toLowerCase();
+      const searchText = createSpotSearchText(
+        spot,
+        spotCategoryList
+      );
+
+      const normalizedSearch = normalizeSearchText(search);
 
       const normalizedCategoryList = spotCategoryList.map((item) =>
         normalizeCategory(item)
       );
 
-      const matchesSearch = search
-        ? searchText.includes(search.trim().toLowerCase())
+      const matchesSearch = normalizedSearch
+        ? searchText.includes(normalizedSearch)
         : true;
 
       const matchesCategory = selectedCategory
@@ -901,27 +979,29 @@ export default function BusinessMap({
       // Business ID 199 is a permanent sponsored marker.
       // Its saved lat/lng coordinates are used, and it stays visible
       // even when no category is selected or a search is active.
-      if ([199, 15, 16].includes(getBusinessId(spot))) return true;
+      const isPermanentMarker = [199, 15, 16].includes(
+        getBusinessId(spot)
+      );
+
+      if (isPermanentMarker && !selectedCategory && !search.trim()) {
+        return true;
+      }
 
       const spotCategoryList = getSpotCategoryList(spot);
 
-      const searchText = `
-        ${spot.name || ""}
-        ${spot.category || ""}
-        ${spot.categories || ""}
-        ${spotCategoryList.join(" ")}
-        ${spot.tags || ""}
-        ${spot.city || ""}
-        ${spot.description || ""}
-        ${spot.coupon_badge || ""}
-      `.toLowerCase();
+      const searchText = createSpotSearchText(
+        spot,
+        spotCategoryList
+      );
+
+      const normalizedSearch = normalizeSearchText(search);
 
       const normalizedCategoryList = spotCategoryList.map((item) =>
         normalizeCategory(item)
       );
 
-      const matchesSearch = search
-        ? searchText.includes(search.trim().toLowerCase())
+      const matchesSearch = normalizedSearch
+        ? searchText.includes(normalizedSearch)
         : true;
 
       const matchesCategory = selectedCategory
@@ -942,6 +1022,24 @@ export default function BusinessMap({
     search,
     selectedCategory,
     showAllOnLoad,
+  ]);
+
+  const selectedMapSpot = useMemo(() => {
+    if (!selectedSpotKey) return null;
+
+    return (
+      filteredMarkerSpots.find(
+        (spot) => getSpotKey(spot) === selectedSpotKey
+      ) ??
+      normalizedMarkerSpots.find(
+        (spot) => getSpotKey(spot) === selectedSpotKey
+      ) ??
+      null
+    );
+  }, [
+    filteredMarkerSpots,
+    normalizedMarkerSpots,
+    selectedSpotKey,
   ]);
 
   const cardSpots: SpotWithDistance[] = useMemo(() => {
@@ -1178,7 +1276,7 @@ export default function BusinessMap({
               selectedSpotKey: null,
             });
           }}
-          placeholder="Search Korean spots..."
+          placeholder="업체명 또는 태그 검색..."
           className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none landscape:px-4 landscape:py-3 landscape:text-xs"
         />
 
@@ -1255,8 +1353,8 @@ export default function BusinessMap({
         />
 
         <PanToSelectedSpot
-          lat={selectedMapSpot?.lat || undefined}
-          lng={selectedMapSpot?.lng || undefined}
+          lat={selectedMapSpot?.lat ?? undefined}
+          lng={selectedMapSpot?.lng ?? undefined}
         />
 
         <TileLayer
