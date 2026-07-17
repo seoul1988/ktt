@@ -427,6 +427,18 @@ function InitialMapView() {
     map.setView(INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM, {
       animate: false,
     });
+
+    // 처음 열릴 때 중심을 조금 위로 이동
+    setTimeout(() => {
+      const offset =
+        window.innerWidth < 768
+          ? 170 // 모바일
+          : 80; // PC
+
+      map.panBy([0, offset], {
+        animate: false,
+      });
+    }, 0);
   }, [map]);
 
   return null;
