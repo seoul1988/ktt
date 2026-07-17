@@ -347,28 +347,29 @@ export default function AdsPage() {
               return (
                 <div
                   key={ad.id}
-                  className={`flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow ${
+                  className={`relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow ${
                     ad.status === "expired" || ad.status === "hidden"
                       ? "opacity-70"
                       : ""
                   }`}
                 >
-                  <Link href={`/ads/${ad.id}`} className="flex flex-1 flex-col">
+                  <Link href={`/ads/${ad.id}`} className="flex min-h-0 flex-1 flex-col">
                     {hasMedia && (
-                      <div className="relative h-32 bg-black">
+                      <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-gray-100">
                         {hasVideo ? (
                           <video
                             src={cleanVideoUrl || ""}
                             muted
                             playsInline
                             preload="metadata"
-                            className="h-full w-full object-cover"
+                            className="absolute inset-0 h-full w-full object-cover"
                           />
                         ) : (
                           <img
                             src={cleanImages[0]}
                             alt={ad.title}
-                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            className="absolute inset-0 h-full w-full object-cover"
                           />
                         )}
 
@@ -386,7 +387,7 @@ export default function AdsPage() {
                       </div>
                     )}
 
-                    <div className="flex flex-1 flex-col p-3">
+                    <div className="flex min-h-0 flex-1 flex-col bg-white p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <span
                           className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
@@ -411,7 +412,7 @@ export default function AdsPage() {
                         </span>
                       </div>
 
-                      <div className="mt-1 min-h-[16px]">
+                      <div className="mt-1 h-5 overflow-hidden">
                         {ad.phone ? (
                           <p className="text-xs font-bold text-[#C2410C]">
                             {ad.phone}
@@ -421,13 +422,13 @@ export default function AdsPage() {
                         )}
                       </div>
 
-                      <div className="mt-2 min-h-[42px]">
+                      <div className="mt-2 h-10 overflow-hidden">
                         {ad.description ? (
-                          <p className="line-clamp-2 text-xs leading-5 text-gray-600">
+                          <p className="line-clamp-2 h-10 overflow-hidden text-xs leading-5 text-gray-600">
                             {ad.description}
                           </p>
                         ) : (
-                          <p className="text-xs leading-5 text-transparent">
+                          <p className="h-10 overflow-hidden text-xs leading-5 text-transparent">
                             No description
                           </p>
                         )}
@@ -436,7 +437,7 @@ export default function AdsPage() {
                   </Link>
 
                   {canManage && (
-                    <div className="mt-auto grid grid-cols-3 gap-1 border-t p-2">
+                    <div className="relative z-10 mt-auto grid shrink-0 grid-cols-3 gap-1 border-t bg-white p-2">
                       <button
                         type="button"
                         onClick={() => toggleVisibility(ad.id, ad.status)}
