@@ -354,7 +354,7 @@ export default async function CommunityPage() {
 
         {/* New in Raleigh */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
-          <div className="mb-4 rounded-2xl px-2 py-2">
+          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2A3448] text-sm font-black text-white shadow-sm">
                 NEW
@@ -370,6 +370,13 @@ export default async function CommunityPage() {
                 </h2>
               </div>
             </div>
+
+            <Link
+              href="https://www.ktowntriangle.com/community/directory"
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#2A3448] shadow-sm"
+            >
+              모두보기
+            </Link>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
