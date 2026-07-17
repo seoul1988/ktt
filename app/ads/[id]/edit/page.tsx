@@ -155,7 +155,7 @@ export default function EditAdPage() {
 
     for (const file of newImages) {
       const ext = getFileExtension(file.name, "jpg");
-      const fileName = `${folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      const fileName = `${folder}/images/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from(IMAGE_BUCKET)
@@ -181,7 +181,7 @@ export default function EditAdPage() {
 
     const folder = getUploadFolder();
     const ext = getFileExtension(newVideo.name, "mp4");
-    const fileName = `${folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const fileName = `${folder}/videos/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
     const { error } = await supabase.storage
       .from(VIDEO_BUCKET)
