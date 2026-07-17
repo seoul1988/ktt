@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { supabase } from "../../../../lib/supabase";
 import ProfileButton from "@/app/components/ProfileButton";
 import BackButton from "@/app/components/BackButton";
@@ -51,6 +50,9 @@ export default function EditAdPage() {
 
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newVideo, setNewVideo] = useState<File | null>(null);
+
+  const [deletedImages, setDeletedImages] = useState<string[]>([]);
+  const [deletedVideoUrl, setDeletedVideoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadAd();
@@ -116,22 +118,58 @@ export default function EditAdPage() {
     }
   }
 
+  function getUploadFolder() {
+    return ad?.user_id || String(adId);
+  }
+
+  function getFileExtension(fileName: string, fallback: string) {
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    return extension && extension !== fileName ? extension : fallback;
+  }
+
+  function getStoragePathFromUrl(url: string, bucket: string) {
+    try {
+      const decodedUrl = decodeURIComponent(url);
+      const publicMarker = `/storage/v1/object/public/${bucket}/`;
+      const signedMarker = `/storage/v1/object/sign/${bucket}/`;
+
+      const publicIndex = decodedUrl.indexOf(publicMarker);
+      if (publicIndex !== -1) {
+        return decodedUrl.slice(publicIndex + publicMarker.length).split("?")[0];
+      }
+
+      const signedIndex = decodedUrl.indexOf(signedMarker);
+      if (signedIndex !== -1) {
+        return decodedUrl.slice(signedIndex + signedMarker.length).split("?")[0];
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async function uploadImages() {
     const uploadedUrls: string[] = [];
+    const folder = getUploadFolder();
 
     for (const file of newImages) {
-      const ext = file.name.split(".").pop();
-      const fileName = `${adId}/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}.${ext}`;
+      const ext = getFileExtension(file.name, "jpg");
+      const fileName = `${folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from(IMAGE_BUCKET)
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
 
       if (error) throw error;
 
-      const { data } = supabase.storage.from(IMAGE_BUCKET).getPublicUrl(fileName);
+      const { data } = supabase.storage
+        .from(IMAGE_BUCKET)
+        .getPublicUrl(fileName);
+
       uploadedUrls.push(data.publicUrl);
     }
 
@@ -141,28 +179,62 @@ export default function EditAdPage() {
   async function uploadVideo() {
     if (!newVideo) return videoUrl;
 
-    const ext = newVideo.name.split(".").pop();
-    const fileName = `${adId}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
+    const folder = getUploadFolder();
+    const ext = getFileExtension(newVideo.name, "mp4");
+    const fileName = `${folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
     const { error } = await supabase.storage
       .from(VIDEO_BUCKET)
-      .upload(fileName, newVideo, { upsert: true });
+      .upload(fileName, newVideo, {
+        cacheControl: "3600",
+        upsert: false,
+      });
 
     if (error) throw error;
 
-    const { data } = supabase.storage.from(VIDEO_BUCKET).getPublicUrl(fileName);
+    const { data } = supabase.storage
+      .from(VIDEO_BUCKET)
+      .getPublicUrl(fileName);
+
     return data.publicUrl;
   }
 
   function removeImage(url: string) {
     setImages((prev) => prev.filter((img) => img !== url));
+    setDeletedImages((prev) =>
+      prev.includes(url) ? prev : [...prev, url]
+    );
+  }
+
+  function removeNewImage(index: number) {
+    setNewImages((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   }
 
   function removeVideo() {
+    if (videoUrl) {
+      setDeletedVideoUrl(videoUrl);
+    }
+
     setVideoUrl(null);
     setNewVideo(null);
+  }
+
+  async function deleteStorageFiles(
+    bucket: string,
+    urls: Array<string | null>
+  ) {
+    const paths = urls
+      .filter((url): url is string => Boolean(url))
+      .map((url) => getStoragePathFromUrl(url, bucket))
+      .filter((path): path is string => Boolean(path));
+
+    if (paths.length === 0) return;
+
+    const { error } = await supabase.storage.from(bucket).remove(paths);
+
+    if (error) {
+      throw new Error(`Storage deletion failed: ${error.message}`);
+    }
   }
 
   async function saveAd() {
@@ -195,14 +267,22 @@ export default function EditAdPage() {
         .eq("id", adId);
 
       if (error) {
-        alert("Failed to update ad: " + error.message);
-        setSaving(false);
-        return;
+        throw new Error("Failed to update ad: " + error.message);
+      }
+
+      await deleteStorageFiles(IMAGE_BUCKET, deletedImages);
+
+      if (deletedVideoUrl && deletedVideoUrl !== finalVideoUrl) {
+        await deleteStorageFiles(VIDEO_BUCKET, [deletedVideoUrl]);
       }
 
       router.push(`/ads/${adId}`);
-    } catch (err: any) {
-      alert("Upload failed: " + err.message);
+      router.refresh();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "An unknown error occurred.";
+
+      alert("Save failed: " + message);
       setSaving(false);
     }
   }
@@ -338,7 +418,7 @@ export default function EditAdPage() {
               <div className="grid grid-cols-3 gap-2">
                 {images.map((img) => (
                   <div key={img} className="relative overflow-hidden rounded-xl">
-                    <img src={img} className="h-24 w-full object-cover" />
+                    <img src={img} alt="Current advertisement" className="h-24 w-full object-cover" />
                     <button
                       type="button"
                       onClick={() => removeImage(img)}
@@ -363,6 +443,30 @@ export default function EditAdPage() {
               onChange={(e) => setNewImages(Array.from(e.target.files || []))}
               className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
             />
+
+            {newImages.length > 0 && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {newImages.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.lastModified}-${index}`}
+                    className="relative overflow-hidden rounded-xl"
+                  >
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt={file.name}
+                      className="h-24 w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeNewImage(index)}
+                      className="absolute right-1 top-1 rounded-full bg-red-600 px-2 py-1 text-[10px] font-black text-white"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
