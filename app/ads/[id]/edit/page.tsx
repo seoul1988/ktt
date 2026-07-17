@@ -23,8 +23,8 @@ type AdItem = {
   lng: number | null;
 };
 
-const IMAGE_BUCKET = "ad-images";
-const VIDEO_BUCKET = "ad-videos";
+const IMAGE_BUCKET = "ads";
+const VIDEO_BUCKET = "ads";
 
 export default function EditAdPage() {
   const params = useParams();
