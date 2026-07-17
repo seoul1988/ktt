@@ -373,7 +373,7 @@ export default async function CommunityPage() {
 
             <Link
               href="https://www.ktowntriangle.com/community/directory"
-              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#2A3448] shadow-sm"
+              className="rounded-full bg-[#C4483A] px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-[#A8382D]"
             >
               모두보기
             </Link>
