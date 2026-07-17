@@ -432,7 +432,7 @@ function InitialMapView() {
     setTimeout(() => {
       const offset =
         window.innerWidth < 768
-          ? 120 // 모바일
+          ? 140 // 모바일
           : 50; // PC
 
       map.panBy([0, offset], {
