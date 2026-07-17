@@ -27,8 +27,58 @@ type MainMapCategoryResult = {
  */
 function normalizeText(value: unknown) {
   return String(value ?? "")
+    .normalize("NFC")
     .trim()
     .toLowerCase();
+}
+
+/**
+ * tags가 배열, 일반 문자열 또는 JSON 문자열이어도
+ * 검색 가능한 하나의 문자열로 변환합니다.
+ */
+function normalizeTags(tags: unknown) {
+  if (Array.isArray(tags)) {
+    return tags.map((item) => String(item ?? "")).join(" ");
+  }
+
+  if (typeof tags === "string") {
+    try {
+      const parsed = JSON.parse(tags);
+
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item ?? "")).join(" ");
+      }
+    } catch {
+      // JSON이 아닌 일반 문자열이면 그대로 사용합니다.
+    }
+
+    return tags;
+  }
+
+  return "";
+}
+
+/**
+ * MapWrapper 검색창에서 사용할 통합 검색 문자열입니다.
+ * 업체명과 tags를 포함하여 한글 한 글자 부분검색을 지원합니다.
+ */
+function createSearchText(business: any) {
+  return [
+    business?.business_name,
+    business?.name,
+    business?.title,
+    normalizeTags(business?.tags),
+    business?.description,
+    business?.category,
+    business?.category_name,
+    business?.address,
+    business?.city,
+    business?.phone,
+    business?.website,
+  ]
+    .map((value) => normalizeText(value))
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
@@ -207,6 +257,9 @@ function createBusinessSpot(business: any) {
 
     has_deal: false,
     has_event: false,
+
+    // MapWrapper 검색창에서 제목과 tags를 한글 한 글자로도 검색할 수 있습니다.
+    search_text: createSearchText(business),
   };
 }
 
@@ -330,6 +383,17 @@ export default async function MapPage({
 
             has_deal: true,
             has_event: false,
+
+            search_text: createSearchText({
+              ...business,
+              title: deal.title,
+              description: [
+                business.description,
+                deal.description,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }),
           };
         })
         .filter(Boolean) || [];
@@ -420,6 +484,17 @@ export default async function MapPage({
 
             has_event: true,
             has_deal: false,
+
+            search_text: createSearchText({
+              ...business,
+              title: event.title,
+              description: [
+                business.description,
+                event.description,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }),
           };
         })
         .filter(Boolean) || [];
@@ -437,11 +512,11 @@ export default async function MapPage({
   /*
    * MAIN BUSINESS MAP
    */
-const { data: businesses, error } = await supabase
-  .from("businesses")
-  .select("*")
-  .or("hidden.eq.false,hidden.is.null")
-  .order("id", { ascending: true });
+  const { data: businesses, error } = await supabase
+    .from("businesses")
+    .select("*")
+    .or("hidden.eq.false,hidden.is.null")
+    .order("id", { ascending: true });
 
   if (error) {
     return (
