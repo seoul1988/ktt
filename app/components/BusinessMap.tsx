@@ -487,33 +487,34 @@ function PanToSelectedSpot({
 
     previousPositionRef.current = positionKey;
 
-    // 카드 선택 시 초기 줌(9)을 절대 변경하지 않고 위치만 이동합니다.
-    // 이전 코드나 다른 효과가 줌을 변경했더라도 항상 Zoom 9로 고정합니다.
-    map.stop();
-    map.setView([lat, lng], INITIAL_MAP_ZOOM, {
-      animate: true,
-      duration: 0.35,
-    });
-
     const isMobilePortrait =
       window.innerWidth < 768 &&
       !window.matchMedia("(orientation: landscape)").matches;
 
-    let offsetTimer: ReturnType<typeof setTimeout> | null = null;
+    /*
+     * 선택한 마커를 화면 중앙에 먼저 놓은 뒤 다시 panBy 하지 않고,
+     * 카드에 가리지 않는 최종 중심 좌표를 미리 계산하여 한 번에 이동합니다.
+     */
+    const offsetY = isMobilePortrait ? 110 : 45;
 
-    if (isMobilePortrait) {
-      offsetTimer = setTimeout(() => {
-        // 아래쪽 카드에 가리지 않도록 선택 마커를 화면 중앙보다 위에 표시합니다.
-        map.panBy([0, 180], {
-          animate: true,
-          duration: 0.25,
-        });
-      }, 400);
-    }
+    const markerPoint = map.project(
+      [lat, lng],
+      INITIAL_MAP_ZOOM
+    );
 
-    return () => {
-      if (offsetTimer) clearTimeout(offsetTimer);
-    };
+    const adjustedCenterPoint = markerPoint.add([0, offsetY]);
+
+    const adjustedCenter = map.unproject(
+      adjustedCenterPoint,
+      INITIAL_MAP_ZOOM
+    );
+
+    map.stop();
+
+    map.setView(adjustedCenter, INITIAL_MAP_ZOOM, {
+      animate: true,
+      duration: 0.3,
+    });
   }, [lat, lng, map]);
 
   return null;
