@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import ProfileButton from "@/app/components/ProfileButton";
@@ -108,6 +108,8 @@ async function optimizeImage(
 }
 
 export default function EditAdPage() {
+  const newImageInputRef = useRef<HTMLInputElement | null>(null);
+  const previewUrlsRef = useRef<string[]>([]);
   const params = useParams();
   const router = useRouter();
   const adId = Number(params.id);
@@ -145,9 +147,12 @@ export default function EditAdPage() {
 
   useEffect(() => {
     return () => {
-      newImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+      previewUrlsRef.current.forEach((preview) =>
+        URL.revokeObjectURL(preview),
+      );
+      previewUrlsRef.current = [];
     };
-  }, [newImagePreviews]);
+  }, []);
 
   async function loadAd() {
     setLoading(true);
@@ -241,8 +246,8 @@ export default function EditAdPage() {
     }
   }
 
-  async function handleNewImages(files: FileList | null) {
-    const selectedFiles = Array.from(files || []).filter((file) =>
+  async function handleNewImages(files: File[]) {
+    const selectedFiles = files.filter((file) =>
       file.type.startsWith("image/"),
     );
 
@@ -259,6 +264,7 @@ export default function EditAdPage() {
         URL.createObjectURL(file),
       );
 
+      previewUrlsRef.current.push(...previews);
       setNewImages((prev) => [...prev, ...optimizedFiles]);
       setNewImagePreviews((prev) => [...prev, ...previews]);
     } catch (error) {
@@ -336,6 +342,9 @@ export default function EditAdPage() {
 
       if (target) {
         URL.revokeObjectURL(target);
+        previewUrlsRef.current = previewUrlsRef.current.filter(
+          (preview) => preview !== target,
+        );
       }
 
       return prev.filter((_, itemIndex) => itemIndex !== index);
@@ -414,7 +423,10 @@ export default function EditAdPage() {
         await deleteStorageFiles(VIDEO_BUCKET, [deletedVideoUrl]);
       }
 
-      newImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+      newImagePreviews.forEach((preview) =>
+        URL.revokeObjectURL(preview),
+      );
+      previewUrlsRef.current = [];
 
       router.push(`/ads/${adId}`);
       router.refresh();
@@ -595,14 +607,18 @@ export default function EditAdPage() {
             </label>
 
             <input
+              ref={newImageInputRef}
               type="file"
               accept="image/*"
               multiple
               disabled={optimizingImages}
               onChange={async (e) => {
-                const files = e.target.files;
-                e.target.value = "";
-                await handleNewImages(files);
+                // FileList는 input 값을 비우면 함께 사라질 수 있으므로
+                // 먼저 독립된 File 배열로 복사해야 합니다.
+                const selectedFiles = Array.from(e.currentTarget.files || []);
+                e.currentTarget.value = "";
+
+                await handleNewImages(selectedFiles);
               }}
               className="w-full rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50"
             />
