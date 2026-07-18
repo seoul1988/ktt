@@ -16,6 +16,7 @@ type AdItem = {
   category: string | null;
   location: string | null;
   phone: string | null;
+  website_url: string | null;
   images: string[] | null;
   video_url: string | null;
   status: string | null;
@@ -42,13 +43,23 @@ function cleanPhone(phone: string) {
   return phone.replace(/[^\d+]/g, "");
 }
 
+function normalizeWebsiteUrl(url: string) {
+  const trimmedUrl = url.trim();
+
+  if (/^https?:\/\//i.test(trimmedUrl)) {
+    return trimmedUrl;
+  }
+
+  return `https://${trimmedUrl}`;
+}
+
 function getDirectionUrl(ad: AdItem) {
   if (ad.lat !== null && ad.lng !== null) {
     return `https://www.google.com/maps/dir/?api=1&destination=${ad.lat},${ad.lng}`;
   }
 
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    ad.location || ""
+    ad.location || "",
   )}`;
 }
 
@@ -89,7 +100,9 @@ export default async function AdDetailPage({
   const canManage = isAdmin || isOwner;
 
   const cleanImages = Array.isArray(ad.images)
-    ? ad.images.filter((img) => typeof img === "string" && img.trim() !== "")
+    ? ad.images.filter(
+        (img) => typeof img === "string" && img.trim() !== "",
+      )
     : [];
 
   const cleanVideoUrl =
@@ -97,31 +110,45 @@ export default async function AdDetailPage({
       ? ad.video_url
       : null;
 
+  const cleanWebsiteUrl =
+    typeof ad.website_url === "string" && ad.website_url.trim() !== ""
+      ? normalizeWebsiteUrl(ad.website_url)
+      : null;
+
   const hasImage = cleanImages.length > 0;
   const hasVideo = Boolean(cleanVideoUrl);
   const hasPhone = Boolean(ad.phone && ad.phone.trim() !== "");
+  const hasWebsite = Boolean(cleanWebsiteUrl);
   const hasLocation = Boolean(
     (ad.location && ad.location.trim() !== "") ||
-      (ad.lat !== null && ad.lng !== null)
+      (ad.lat !== null && ad.lng !== null),
   );
+
+  const actionCount = [hasPhone, hasLocation, hasWebsite].filter(
+    Boolean,
+  ).length;
+
+  const actionGridClass =
+    actionCount === 1
+      ? "grid-cols-1"
+      : actionCount === 2
+        ? "grid-cols-2"
+        : "grid-cols-3";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
-     <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-  {/* 왼쪽 */}
-  <BackButton />
+          <BackButton />
 
-  {/* 가운데 */}
-  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
-    AD DETAILS
-  </h1>
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
+            AD DETAILS
+          </h1>
 
-  {/* 오른쪽 */}
-  <div className="ml-auto">
-    <ProfileButton />
-  </div>
-</div>
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
+        </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow">
           {hasVideo && (
@@ -139,7 +166,7 @@ export default async function AdDetailPage({
           )}
 
           <div className="p-5">
-            <div className="mb-2 flex items-center gap-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               {ad.category && (
                 <span className="rounded-full bg-[#172033]/10 px-3 py-1 text-xs font-black text-[#172033]">
                   {ad.category}
@@ -148,7 +175,7 @@ export default async function AdDetailPage({
 
               <span
                 className={`rounded-full px-3 py-1 text-xs font-black text-white ${statusClass(
-                  ad.status
+                  ad.status,
                 )}`}
               >
                 {statusLabel(ad.status)}
@@ -163,18 +190,35 @@ export default async function AdDetailPage({
               </p>
             )}
 
+            {ad.phone && (
+              <p className="mt-2 text-sm font-bold text-gray-500">
+                📞 {ad.phone}
+              </p>
+            )}
+
+            {ad.website_url && cleanWebsiteUrl && (
+              <a
+                href={cleanWebsiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block break-all text-sm font-bold text-blue-600 underline underline-offset-2"
+              >
+                🌐 {ad.website_url}
+              </a>
+            )}
+
             {ad.description && (
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">
                 {ad.description}
               </p>
             )}
 
-            {(hasPhone || hasLocation) && (
-              <div className="mt-5 grid grid-cols-2 gap-2">
+            {actionCount > 0 && (
+              <div className={`mt-5 grid gap-2 ${actionGridClass}`}>
                 {hasPhone && (
                   <a
                     href={`tel:${cleanPhone(ad.phone || "")}`}
-                    className="rounded-2xl bg-green-600 py-3 text-center text-sm font-black text-white"
+                    className="rounded-2xl bg-green-600 px-2 py-3 text-center text-sm font-black text-white"
                   >
                     📞 Call
                   </a>
@@ -185,9 +229,20 @@ export default async function AdDetailPage({
                     href={getDirectionUrl(ad)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-2xl bg-orange-500 py-3 text-center text-sm font-black text-white"
+                    className="rounded-2xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white"
                   >
                     🧭 Directions
+                  </a>
+                )}
+
+                {hasWebsite && cleanWebsiteUrl && (
+                  <a
+                    href={cleanWebsiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-blue-600 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    🌐 Website
                   </a>
                 )}
               </div>
