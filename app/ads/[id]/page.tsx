@@ -79,7 +79,9 @@ export default async function AdDetailPage({
   if (error || !data) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
-        <p className="font-bold text-red-600">광고를 찾을 수 없습니다.</p>
+        <p className="font-bold text-red-600">
+          광고를 찾을 수 없습니다.
+        </p>
       </main>
     );
   }
@@ -101,32 +103,40 @@ export default async function AdDetailPage({
 
   const cleanImages = Array.isArray(ad.images)
     ? ad.images.filter(
-        (img) => typeof img === "string" && img.trim() !== "",
+        (img) =>
+          typeof img === "string" &&
+          img.trim() !== "",
       )
     : [];
 
   const cleanVideoUrl =
-    typeof ad.video_url === "string" && ad.video_url.trim() !== ""
-      ? ad.video_url
+    typeof ad.video_url === "string" &&
+    ad.video_url.trim() !== ""
+      ? ad.video_url.trim()
       : null;
 
   const cleanWebsiteUrl =
-    typeof ad.website_url === "string" && ad.website_url.trim() !== ""
+    typeof ad.website_url === "string" &&
+    ad.website_url.trim() !== ""
       ? normalizeWebsiteUrl(ad.website_url)
       : null;
 
   const hasImage = cleanImages.length > 0;
   const hasVideo = Boolean(cleanVideoUrl);
-  const hasPhone = Boolean(ad.phone && ad.phone.trim() !== "");
+  const hasPhone = Boolean(
+    ad.phone && ad.phone.trim() !== "",
+  );
   const hasWebsite = Boolean(cleanWebsiteUrl);
   const hasLocation = Boolean(
     (ad.location && ad.location.trim() !== "") ||
       (ad.lat !== null && ad.lng !== null),
   );
 
-  const actionCount = [hasPhone, hasLocation, hasWebsite].filter(
-    Boolean,
-  ).length;
+  const actionCount = [
+    hasPhone,
+    hasLocation,
+    hasWebsite,
+  ].filter(Boolean).length;
 
   const actionGridClass =
     actionCount === 1
@@ -162,7 +172,10 @@ export default async function AdDetailPage({
           )}
 
           {!hasVideo && hasImage && (
-            <AdImageGallery images={cleanImages} title={ad.title} />
+            <AdImageGallery
+              images={cleanImages}
+              title={ad.title}
+            />
           )}
 
           <div className="p-5">
@@ -182,7 +195,9 @@ export default async function AdDetailPage({
               </span>
             </div>
 
-            <h1 className="text-2xl font-black">{ad.title}</h1>
+            <h1 className="text-2xl font-black">
+              {ad.title}
+            </h1>
 
             {ad.location && (
               <p className="mt-2 text-sm font-bold text-gray-500">
@@ -196,17 +211,6 @@ export default async function AdDetailPage({
               </p>
             )}
 
-            {ad.website_url && cleanWebsiteUrl && (
-              <a
-                href={cleanWebsiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 block break-all text-sm font-bold text-blue-600 underline underline-offset-2"
-              >
-                🌐 {ad.website_url}
-              </a>
-            )}
-
             {ad.description && (
               <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">
                 {ad.description}
@@ -214,13 +218,17 @@ export default async function AdDetailPage({
             )}
 
             {actionCount > 0 && (
-              <div className={`mt-5 grid gap-2 ${actionGridClass}`}>
+              <div
+                className={`mt-5 grid gap-2 ${actionGridClass}`}
+              >
                 {hasPhone && (
                   <a
-                    href={`tel:${cleanPhone(ad.phone || "")}`}
+                    href={`tel:${cleanPhone(
+                      ad.phone || "",
+                    )}`}
                     className="rounded-2xl bg-green-600 px-2 py-3 text-center text-sm font-black text-white"
                   >
-                    📞 Call
+                    📞 전화하기
                   </a>
                 )}
 
@@ -231,7 +239,7 @@ export default async function AdDetailPage({
                     rel="noopener noreferrer"
                     className="rounded-2xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white"
                   >
-                    🧭 Directions
+                    🧭 길찾기
                   </a>
                 )}
 
@@ -242,7 +250,7 @@ export default async function AdDetailPage({
                     rel="noopener noreferrer"
                     className="rounded-2xl bg-blue-600 px-2 py-3 text-center text-sm font-black text-white"
                   >
-                    🌐 Website
+                    🌐 웹사이트 방문
                   </a>
                 )}
               </div>
