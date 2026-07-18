@@ -461,11 +461,89 @@ function ResetMapView({
 
     previousValueRef.current = currentValue;
 
-    map.stop();
-    map.setView(INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM, {
-      animate: false,
-    });
+    // 검색어나 카테고리가 모두 없을 때만 기본 Raleigh 위치로 돌아갑니다.
+    // 검색 중에는 FitFilteredMarkers가 검색된 업체 위치로 지도를 이동합니다.
+    if (!search.trim() && !selectedCategory) {
+      map.stop();
+      map.setView(INITIAL_MAP_CENTER, INITIAL_MAP_ZOOM, {
+        animate: false,
+      });
+    }
   }, [search, selectedCategory, map]);
+
+  return null;
+}
+
+function FitFilteredMarkers({
+  spots,
+  enabled,
+}: {
+  spots: Spot[];
+  enabled: boolean;
+}) {
+  const map = useMap();
+  const previousBoundsKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    if (!enabled) {
+      previousBoundsKeyRef.current = "";
+      return;
+    }
+
+    const validSpots = spots.filter((spot) => {
+      const lat = Number(spot.lat);
+      const lng = Number(spot.lng);
+
+      return Number.isFinite(lat) && Number.isFinite(lng);
+    });
+
+    if (validSpots.length === 0) return;
+
+    // 같은 검색 결과로 불필요하게 지도가 반복 이동하지 않게 합니다.
+    const boundsKey = validSpots
+      .map((spot) => `${getSpotKey(spot)}:${Number(spot.lat)},${Number(spot.lng)}`)
+      .sort()
+      .join("|");
+
+    if (previousBoundsKeyRef.current === boundsKey) return;
+    previousBoundsKeyRef.current = boundsKey;
+
+    map.stop();
+
+    // 검색 결과가 한 곳이면 해당 업체 위치를 충분히 확대해서 보여줍니다.
+    if (validSpots.length === 1) {
+      map.setView(
+        [Number(validSpots[0].lat), Number(validSpots[0].lng)],
+        11,
+        {
+          animate: true,
+          duration: 0.35,
+        }
+      );
+      return;
+    }
+
+    // 여러 업체가 선택되면 76마일 이상 떨어진 업체도 포함하여
+    // 모든 마커가 화면 안에 들어오도록 자동으로 축소합니다.
+    const bounds = L.latLngBounds(
+      validSpots.map(
+        (spot) =>
+          [Number(spot.lat), Number(spot.lng)] as [number, number]
+      )
+    );
+
+    const isMobilePortrait =
+      window.innerWidth < 768 &&
+      !window.matchMedia("(orientation: landscape)").matches;
+
+    map.fitBounds(bounds, {
+      paddingTopLeft: isMobilePortrait ? [30, 105] : [45, 90],
+      paddingBottomRight: isMobilePortrait ? [30, 285] : [45, 190],
+      maxZoom: 11,
+      animate: true,
+      duration: 0.35,
+    });
+  }, [spots, enabled, map]);
 
   return null;
 }
@@ -1363,6 +1441,11 @@ export default function BusinessMap({
         <ResetMapView
           search={search}
           selectedCategory={selectedCategory}
+        />
+
+        <FitFilteredMarkers
+          spots={filteredMarkerSpots}
+          enabled={Boolean(search.trim() || selectedCategory || showAllOnLoad)}
         />
 
         <PanToSelectedSpot
