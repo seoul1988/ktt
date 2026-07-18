@@ -52,53 +52,6 @@ function splitCategories(value: unknown) {
     .filter(Boolean);
 }
 
-const RALEIGH_CENTER = {
-  lat: 35.7796,
-  lng: -78.6382,
-};
-
-const GREENSBORO_CENTER = {
-  lat: 36.0726,
-  lng: -79.792,
-};
-
-function getDistanceMiles(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-) {
-  const earthRadiusMiles = 3958.8;
-
-  const toRadians = (degree: number) => (degree * Math.PI) / 180;
-
-  const latDifference = toRadians(lat2 - lat1);
-  const lngDifference = toRadians(lng2 - lng1);
-
-  const a =
-    Math.sin(latDifference / 2) ** 2 +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(lngDifference / 2) ** 2;
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusMiles * c;
-}
-
-const RALEIGH_MAP_RADIUS_MILES = getDistanceMiles(
-  RALEIGH_CENTER.lat,
-  RALEIGH_CENTER.lng,
-  GREENSBORO_CENTER.lat,
-  GREENSBORO_CENTER.lng,
-);
-
-function isInsideRaleighMapArea(lat: number, lng: number) {
-  return (
-    getDistanceMiles(RALEIGH_CENTER.lat, RALEIGH_CENTER.lng, lat, lng) <=
-    RALEIGH_MAP_RADIUS_MILES
-  );
-}
 
 /**
  * Community Map에 표시하도록 체크된 카테고리만 가져옵니다.
@@ -376,8 +329,8 @@ export default async function CommunityMapPage() {
           lat,
           lng,
 
-          // 카드는 계속 표시하고, 지도 마커만 거리 범위에 따라 제어합니다.
-          show_marker: isInsideRaleighMapArea(lat, lng),
+          // 유효한 좌표가 있는 항목은 거리 제한 없이 지도 마커를 표시합니다.
+          show_marker: true,
 
           type: "business",
           source_type: "community-business",
@@ -452,8 +405,8 @@ export default async function CommunityMapPage() {
           lat,
           lng,
 
-          // 카드는 계속 표시하고, 지도 마커만 거리 범위에 따라 제어합니다.
-          show_marker: isInsideRaleighMapArea(lat, lng),
+          // 유효한 좌표가 있는 항목은 거리 제한 없이 지도 마커를 표시합니다.
+          show_marker: true,
 
           price: item.price,
 

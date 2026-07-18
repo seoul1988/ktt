@@ -181,46 +181,6 @@ type SpotWithDistance = Spot & {
   distance?: number;
 };
 
-function getValidCoordinate(...values: unknown[]) {
-  for (const value of values) {
-    if (
-      value === null ||
-      value === undefined ||
-      String(value).trim() === ""
-    ) {
-      continue;
-    }
-
-    const numericValue = Number(value);
-
-    if (Number.isFinite(numericValue)) {
-      return numericValue;
-    }
-  }
-
-  return null;
-}
-
-function normalizeSpotCoordinates(spot: Spot & Record<string, any>): Spot {
-  return {
-    ...spot,
-    lat: getValidCoordinate(
-      spot.lat,
-      spot.latitude,
-      spot.google_lat,
-      spot.location_lat,
-      spot.latitude_value
-    ),
-    lng: getValidCoordinate(
-      spot.lng,
-      spot.longitude,
-      spot.google_lng,
-      spot.location_lng,
-      spot.longitude_value
-    ),
-  };
-}
-
 function getSpotKey(spot: Spot | null | undefined) {
   if (!spot) return "";
 
@@ -701,45 +661,17 @@ export default function BusinessMap({
   const storageKey = `${MAP_STATE_KEY}-${communityMode ? "community" : activeNav}`;
 
   const normalizedSpots = useMemo(() => {
-    return spots.map((spot) => {
-      const normalizedSpot = normalizeSpotCoordinates(
-        spot as Spot & Record<string, any>
-      );
-
-      return {
-        ...normalizedSpot,
-        map_key: getSpotKey(normalizedSpot),
-      };
-    });
+    return spots.map((spot) => ({
+      ...spot,
+      map_key: getSpotKey(spot),
+    }));
   }, [spots]);
 
   const normalizedMarkerSpots = useMemo(() => {
-    /*
-     * 카드 목록(spots)과 별도 마커 목록(markerSpots)을 합칩니다.
-     * 예전에 markerSpots를 만들 때 거리나 다른 조건으로 제외된 업체도
-     * 카드에 존재하고 유효한 좌표가 있으면 지도에 다시 포함됩니다.
-     */
-    const markerSource = [...spots, ...(markerSpots ?? [])];
-    const markerMap = new Map<string, Spot>();
-
-    markerSource.forEach((spot) => {
-      const normalizedSpot = normalizeSpotCoordinates(
-        spot as Spot & Record<string, any>
-      );
-      const key = getSpotKey(normalizedSpot);
-
-      if (!key) return;
-
-      const previousSpot = markerMap.get(key);
-
-      markerMap.set(key, {
-        ...(previousSpot || {}),
-        ...normalizedSpot,
-        map_key: key,
-      } as Spot);
-    });
-
-    let result = Array.from(markerMap.values());
+    let result = (markerSpots ?? spots).map((spot) => ({
+      ...spot,
+      map_key: getSpotKey(spot),
+    }));
 
     const permanentSpots = [
       kiotiSpot,
@@ -1547,12 +1479,13 @@ export default function BusinessMap({
         )}
 
         {filteredMarkerSpots
-          .filter((spot) => {
-            const lat = Number(spot.lat);
-            const lng = Number(spot.lng);
-
-            return Number.isFinite(lat) && Number.isFinite(lng);
-          })
+          .filter(
+            (spot) =>
+              spot.lat !== null &&
+              spot.lat !== undefined &&
+              spot.lng !== null &&
+              spot.lng !== undefined
+          )
           .map((spot, index) => {
             const baseKey = getSpotKey(spot);
             const markerKey = `${baseKey}-${index}`;
