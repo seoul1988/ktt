@@ -277,6 +277,83 @@ function parseHours(hoursText: string | null): DayHour[] {
   });
 }
 
+
+async function optimizeImage(
+  file: File,
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.76,
+): Promise<File> {
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    }
+
+    if (!source) return file;
+
+    const scale = Math.min(
+      1,
+      maxWidth / source.width,
+      maxHeight / source.height,
+    );
+
+    const targetWidth = Math.max(1, Math.round(source.width * scale));
+    const targetHeight = Math.max(1, Math.round(source.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("이미지 변환 기능을 사용할 수 없습니다.");
+    }
+
+    context.drawImage(source, 0, 0, targetWidth, targetHeight);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!blob) {
+      throw new Error("WebP 이미지 변환에 실패했습니다.");
+    }
+
+    const baseName = file.name.replace(/\.[^/.]+$/, "") || "image";
+
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+    if (
+      typeof ImageBitmap !== "undefined" &&
+      source instanceof ImageBitmap
+    ) {
+      source.close();
+    }
+  }
+}
+
 export default function EditBusinessPage() {
   const params = useParams();
   const businessId = Number(params.id);
@@ -295,6 +372,9 @@ export default function EditBusinessPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [optimizingPhotos, setOptimizingPhotos] = useState(false);
+  const [optimizingFlipbookSize, setOptimizingFlipbookSize] =
+    useState<FlipbookAdSize | null>(null);
   const [deletingPhotoIndex, setDeletingPhotoIndex] = useState<number | null>(
     null,
   );
@@ -567,28 +647,52 @@ export default function EditBusinessPage() {
     return data.publicUrl;
   }
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+  async function handlePhotoChange(
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) {
+    const selectedFiles = Array.from(e.currentTarget.files || []);
+    e.currentTarget.value = "";
+
+    const imageFiles = selectedFiles.filter((file) =>
+      file.type.startsWith("image/"),
+    );
     const remainCount = 6 - photoItems.length;
 
     if (remainCount <= 0) {
       alert("You can upload up to 6 photos.");
-      e.target.value = "";
       return;
     }
 
-    const newItems: BusinessPhotoItem[] = imageFiles
-      .slice(0, remainCount)
-      .map((file) => ({
+    const filesToProcess = imageFiles.slice(0, remainCount);
+
+    if (filesToProcess.length === 0) return;
+
+    setOptimizingPhotos(true);
+
+    try {
+      const optimizedFiles = await Promise.all(
+        filesToProcess.map((file) =>
+          optimizeImage(file, 1200, 1200, 0.76),
+        ),
+      );
+
+      const newItems: BusinessPhotoItem[] = optimizedFiles.map((file) => ({
         id: `new-${crypto.randomUUID()}`,
         kind: "new" as const,
         url: URL.createObjectURL(file),
         file,
       }));
 
-    setPhotoItems((prev) => [...prev, ...newItems]);
-    e.target.value = "";
+      setPhotoItems((prev) => [...prev, ...newItems]);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "이미지 축소에 실패했습니다.";
+      alert(message);
+    } finally {
+      setOptimizingPhotos(false);
+    }
   }
 
   function movePhoto(sourceId: string, targetId: string) {
@@ -731,36 +835,68 @@ export default function EditBusinessPage() {
     e: React.ChangeEvent<HTMLInputElement>,
   ) {
     if (!isAdmin) {
-      e.target.value = "";
+      e.currentTarget.value = "";
       return;
     }
 
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selectedFile = e.currentTarget.files?.[0];
+    e.currentTarget.value = "";
 
-    if (!file.type.startsWith("image/")) {
+    if (!selectedFile) return;
+
+    if (!selectedFile.type.startsWith("image/")) {
       alert("Please select an image file.");
-      e.target.value = "";
       return;
     }
 
-    if (file.size > 15 * 1024 * 1024) {
+    if (selectedFile.size > 15 * 1024 * 1024) {
       alert("광고 이미지는 15MB 이하만 가능합니다.");
-      e.target.value = "";
       return;
     }
 
-    const previousPreview = newFlipbookAdPreviews[size];
-    if (previousPreview) URL.revokeObjectURL(previousPreview);
+    const sizeSettings: Record<
+      FlipbookAdSize,
+      { maxWidth: number; maxHeight: number }
+    > = {
+      1: { maxWidth: 1080, maxHeight: 1527 },
+      2: { maxWidth: 1080, maxHeight: 764 },
+      3: { maxWidth: 540, maxHeight: 764 },
+      4: { maxWidth: 540, maxHeight: 509 },
+      5: { maxWidth: 540, maxHeight: 255 },
+    };
 
-    setNewFlipbookAdFiles((prev) => ({ ...prev, [size]: file }));
-    setNewFlipbookAdPreviews((prev) => ({
-      ...prev,
-      [size]: URL.createObjectURL(file),
-    }));
-    setFlipbookAdEnabled((prev) => ({ ...prev, [size]: true }));
-    setRemovedFlipbookAdSizes((prev) => prev.filter((item) => item !== size));
-    e.target.value = "";
+    setOptimizingFlipbookSize(size);
+
+    try {
+      const setting = sizeSettings[size];
+      const file = await optimizeImage(
+        selectedFile,
+        setting.maxWidth,
+        setting.maxHeight,
+        0.82,
+      );
+
+      const previousPreview = newFlipbookAdPreviews[size];
+      if (previousPreview) URL.revokeObjectURL(previousPreview);
+
+      setNewFlipbookAdFiles((prev) => ({ ...prev, [size]: file }));
+      setNewFlipbookAdPreviews((prev) => ({
+        ...prev,
+        [size]: URL.createObjectURL(file),
+      }));
+      setFlipbookAdEnabled((prev) => ({ ...prev, [size]: true }));
+      setRemovedFlipbookAdSizes((prev) =>
+        prev.filter((item) => item !== size),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "광고 이미지 축소에 실패했습니다.";
+      alert(message);
+    } finally {
+      setOptimizingFlipbookSize(null);
+    }
   }
 
   function removeFlipbookAdImage(size: FlipbookAdSize) {
@@ -807,7 +943,10 @@ export default function EditBusinessPage() {
       const file = newFlipbookAdFiles[size];
       if (!file) continue;
 
-      const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const fileExt =
+        file.type === "image/webp"
+          ? "webp"
+          : file.name.split(".").pop()?.toLowerCase() || "webp";
       const fileName = `flipbook-ads/${businessId}-${size}-${Date.now()}-${Math.random()
         .toString(36)
         .substring(2)}.${fileExt}`;
@@ -816,6 +955,7 @@ export default function EditBusinessPage() {
         .from("business-images")
         .upload(fileName, file, {
           cacheControl: "3600",
+          contentType: file.type || "image/webp",
           upsert: false,
         });
 
@@ -1282,14 +1422,21 @@ export default function EditBusinessPage() {
     const uploadedById = new Map<string, string>();
 
     for (const item of newItems) {
-      const fileExt = item.file.name.split(".").pop();
+      const fileExt =
+        item.file.type === "image/webp"
+          ? "webp"
+          : item.file.name.split(".").pop() || "webp";
       const fileName = `${businessId}-${Date.now()}-${Math.random()
         .toString(36)
         .substring(2)}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("business-images")
-        .upload(fileName, item.file);
+        .upload(fileName, item.file, {
+          cacheControl: "3600",
+          contentType: item.file.type || "image/webp",
+          upsert: false,
+        });
 
       if (uploadError) throw uploadError;
 
@@ -1912,10 +2059,19 @@ export default function EditBusinessPage() {
                 className="hidden"
               />
 
-              <p className="mb-3 text-[11px] font-bold text-gray-500">
+              <p className="mb-1 text-[11px] font-bold text-gray-500">
                 사진을 길게 누르거나 마우스로 끌어서 순서를 바꾸세요.
                 첫 번째 사진이 메인 이미지입니다.
               </p>
+              <p className="mb-3 text-[11px] font-bold text-blue-600">
+                새 사진은 최대 1200px, WebP 품질 76%로 자동 축소됩니다.
+              </p>
+
+              {optimizingPhotos && (
+                <p className="mb-3 text-xs font-black text-blue-600">
+                  이미지를 축소하고 있습니다...
+                </p>
+              )}
 
               <div className="grid grid-cols-3 gap-2">
                 {photoItems.map((item, index) => (
@@ -2044,6 +2200,12 @@ export default function EditBusinessPage() {
                         onChange={(e) => handleFlipbookAdChange(size, e)}
                         className="hidden"
                       />
+
+                      {optimizingFlipbookSize === size && (
+                        <p className="text-xs font-black text-blue-600">
+                          광고 이미지를 축소하고 있습니다...
+                        </p>
+                      )}
 
                       {preview ? (
                         <div className="space-y-3">
@@ -2209,10 +2371,16 @@ export default function EditBusinessPage() {
 
             <button
               onClick={saveBusiness}
-              disabled={saving}
+              disabled={saving || optimizingPhotos || optimizingFlipbookSize !== null}
               className="w-full rounded-xl bg-[#172033] py-3 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Save Changes"}
+              {optimizingPhotos
+                ? "Optimizing Photos..."
+                : optimizingFlipbookSize !== null
+                  ? "Optimizing Ad Image..."
+                  : saving
+                    ? "Saving..."
+                    : "Save Changes"}
             </button>
           </div>
         </div>
