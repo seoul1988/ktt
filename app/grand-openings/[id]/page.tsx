@@ -40,6 +40,7 @@ export default function GrandOpeningDetailPage() {
   const [item, setItem] = useState<GrandOpening | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
 
   useEffect(() => {
     loadItem();
@@ -47,6 +48,7 @@ export default function GrandOpeningDetailPage() {
 
   async function loadItem() {
     setLoading(true);
+    setShowVideo(false);
 
     const { data, error } = await supabase
       .from("grand_openings")
@@ -120,12 +122,18 @@ export default function GrandOpeningDetailPage() {
     );
   }
 
-  const images = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
-  const videos = item.video_url ? [item.video_url] : [];
+  const images = Array.isArray(item.images)
+    ? item.images.filter(Boolean)
+    : [];
+
+  const hasVideo = Boolean(item.video_url);
+  const videos =
+    showVideo && item.video_url ? [item.video_url] : [];
 
   const title = item.title || item.business_name || "Grand Opening";
   const mapQuery = item.address || item.location || title;
-  const phone = item.phone || item.phone_number || item.contact_phone || "";
+  const phone =
+    item.phone || item.phone_number || item.contact_phone || "";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
@@ -149,7 +157,29 @@ export default function GrandOpeningDetailPage() {
           </div>
         </header>
 
-        <BusinessMediaViewer images={images} videos={videos} name={title} />
+        <BusinessMediaViewer
+          images={images}
+          videos={videos}
+          name={title}
+        />
+
+        {hasVideo && (
+          <div className="px-5 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowVideo((current) => !current)}
+              className="w-full rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white"
+            >
+              {showVideo ? "🖼 이미지 보기" : "▶ 동영상 보기"}
+            </button>
+
+            {!showVideo && (
+              <p className="mt-2 text-center text-xs font-bold text-gray-500">
+                동영상은 버튼을 누를 때만 불러옵니다.
+              </p>
+            )}
+          </div>
+        )}
 
         <section className="px-5 pb-32 pt-5">
           <div className="mb-4 flex items-start justify-between gap-3">
@@ -226,7 +256,7 @@ export default function GrandOpeningDetailPage() {
 
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                mapQuery
+                mapQuery,
               )}`}
               target="_blank"
               rel="noopener noreferrer"

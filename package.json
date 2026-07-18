@@ -11,7 +11,7 @@
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
     "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.110.5",
+    "@supabase/supabase-js": "^2.110.7",
     "cheerio": "^1.2.0",
     "embla-carousel-react": "^8.6.0",
     "leaflet": "^1.9.4",

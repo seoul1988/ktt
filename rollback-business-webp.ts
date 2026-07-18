@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+const SUPABASE_URL=process.env.SUPABASE_URL;
+const SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ROLLBACK_PATH=process.env.ROLLBACK_PATH;
+if(!SUPABASE_URL||!SERVICE_ROLE_KEY||!ROLLBACK_PATH) throw new Error('SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ROLLBACK_PATH required.');
+if(process.env.APPLY_ROLLBACK!=='true') throw new Error('Safety stop: set APPLY_ROLLBACK=true.');
+const payload=JSON.parse(fs.readFileSync(ROLLBACK_PATH,'utf8'));
+const supabase=createClient(SUPABASE_URL,SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+(async()=>{let restored=0,skipped=0;for(const r of payload.rows){const {data,error}=await supabase.from(payload.table).update({[payload.image_column]:r.old_url}).eq(payload.id_column,r.id).eq(payload.image_column,r.new_url).select(payload.id_column);if(error||!data||data.length!==1){skipped++;continue;}restored++;}console.log({restored,skipped});})().catch(e=>{console.error(e);process.exit(1)});

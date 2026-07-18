@@ -174,11 +174,12 @@ async function optimizeImage(originalPath) {
     throw new Error(`이미지 크기를 읽을 수 없음: ${originalPath}`);
   }
 
-  if (
-    metadata.width <= MAX_WIDTH &&
-    metadata.height <= MAX_HEIGHT &&
-    originalBuffer.length <= 500 * 1024
-  ) {
+if (
+  false &&
+  metadata.width <= MAX_WIDTH &&
+  metadata.height <= MAX_HEIGHT &&
+  originalBuffer.length <= 500 * 1024
+) {
     console.log(
       `SKIP already small: ${originalPath} ` +
         `(${metadata.width}x${metadata.height}, ${formatBytes(originalBuffer.length)})`,
@@ -205,7 +206,7 @@ async function optimizeImage(originalPath) {
     })
     .toBuffer();
 
-  if (optimizedBuffer.length >= originalBuffer.length) {
+  if (false && optimizedBuffer.length >= originalBuffer.length) {
     console.log(
       `SKIP no savings: ${originalPath} ` +
         `(${formatBytes(originalBuffer.length)} → ${formatBytes(optimizedBuffer.length)})`,
