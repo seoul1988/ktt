@@ -9,6 +9,98 @@ import ProfileButton from "../../../components/ProfileButton";
 
 const libraries: "places"[] = ["places"];
 
+async function optimizeImage(
+  file: File,
+  maxWidth = 1200,
+  maxHeight = 1200,
+  quality = 0.76,
+): Promise<File> {
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () =>
+          reject(new Error("이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    }
+
+    if (!source) return file;
+
+    const scale = Math.min(
+      1,
+      maxWidth / source.width,
+      maxHeight / source.height,
+    );
+
+    const targetWidth = Math.max(
+      1,
+      Math.round(source.width * scale),
+    );
+    const targetHeight = Math.max(
+      1,
+      Math.round(source.height * scale),
+    );
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("이미지 변환 기능을 사용할 수 없습니다.");
+    }
+
+    context.drawImage(
+      source,
+      0,
+      0,
+      targetWidth,
+      targetHeight,
+    );
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!blob) {
+      throw new Error("WebP 이미지 변환에 실패했습니다.");
+    }
+
+    const baseName =
+      file.name.replace(/\.[^/.]+$/, "") || "image";
+
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+
+    if (
+      typeof ImageBitmap !== "undefined" &&
+      source instanceof ImageBitmap
+    ) {
+      source.close();
+    }
+  }
+}
+
 export default function EditGrandOpeningPage() {
   const router = useRouter();
   const params = useParams();
@@ -25,6 +117,7 @@ export default function EditGrandOpeningPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [optimizingImages, setOptimizingImages] = useState(false);
 
   const [title, setTitle] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -117,11 +210,11 @@ export default function EditGrandOpeningPage() {
     }
   }
 
-  function handleImages(files: FileList | null) {
+  async function handleImages(files: FileList | null) {
     if (!files) return;
 
     const selected = Array.from(files).filter((file) =>
-      file.type.startsWith("image/")
+      file.type.startsWith("image/"),
     );
 
     const remain = 5 - oldImages.length - imageFiles.length;
@@ -131,13 +224,35 @@ export default function EditGrandOpeningPage() {
       return;
     }
 
-    const addFiles = selected.slice(0, remain);
+    const filesToProcess = selected.slice(0, remain);
 
-    setImageFiles((prev) => [...prev, ...addFiles]);
-    setImagePreviews((prev) => [
-      ...prev,
-      ...addFiles.map((file) => URL.createObjectURL(file)),
-    ]);
+    if (filesToProcess.length === 0) return;
+
+    setOptimizingImages(true);
+
+    try {
+      const optimizedFiles = await Promise.all(
+        filesToProcess.map((file) =>
+          optimizeImage(file, 1200, 1200, 0.76),
+        ),
+      );
+
+      const previews = optimizedFiles.map((file) =>
+        URL.createObjectURL(file),
+      );
+
+      setImageFiles((prev) => [...prev, ...optimizedFiles]);
+      setImagePreviews((prev) => [...prev, ...previews]);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "이미지 축소에 실패했습니다.";
+
+      alert(message);
+    } finally {
+      setOptimizingImages(false);
+    }
   }
 
   function removeOldImage(index: number) {
@@ -218,13 +333,17 @@ async function deleteStorageImages(urls: string[]) {
     const uploadedUrls: string[] = [];
 
     for (const file of imageFiles) {
-      const ext = file.name.split(".").pop() || "jpg";
+      const ext =
+        file.type === "image/webp"
+          ? "webp"
+          : file.name.split(".").pop() || "webp";
       const fileName = `${userId}/${id}/images/${crypto.randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from("grand-openings")
         .upload(fileName, file, {
           cacheControl: "3600",
+          contentType: file.type || "image/webp",
           upsert: false,
         });
 
@@ -267,6 +386,11 @@ async function deleteStorageImages(urls: string[]) {
 
   if (!businessName.trim()) return alert("Business name is required.");
   if (!title.trim()) return alert("Title is required.");
+
+  if (optimizingImages) {
+    alert("이미지 축소 작업이 끝날 때까지 기다려 주세요.");
+    return;
+  }
 
   setSaving(true);
 
@@ -478,7 +602,11 @@ async function deleteStorageImages(urls: string[]) {
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={(e) => handleImages(e.target.files)}
+                  onChange={async (e) => {
+                    const files = e.currentTarget.files;
+                    await handleImages(files);
+                    e.currentTarget.value = "";
+                  }}
                   className="hidden"
                 />
               </label>
@@ -487,6 +615,16 @@ async function deleteStorageImages(urls: string[]) {
                 {oldImages.length + imageFiles.length}/5 Images
               </span>
             </div>
+
+            <p className="mt-2 text-[11px] font-bold text-blue-600">
+              새 이미지는 최대 1200px, WebP 품질 76%로 자동 축소됩니다.
+            </p>
+
+            {optimizingImages && (
+              <p className="mt-2 text-xs font-black text-blue-600">
+                이미지를 축소하고 있습니다...
+              </p>
+            )}
 
             {(oldImages.length > 0 || imagePreviews.length > 0) && (
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -549,10 +687,14 @@ async function deleteStorageImages(urls: string[]) {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || optimizingImages}
             className="w-full rounded-xl bg-[#172033] px-4 py-3 text-sm font-black text-white disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Grand Opening"}
+            {optimizingImages
+              ? "Optimizing Images..."
+              : saving
+                ? "Saving..."
+                : "Save Grand Opening"}
           </button>
         </form>
       </section>

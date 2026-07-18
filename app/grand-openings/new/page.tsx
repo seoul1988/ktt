@@ -10,6 +10,83 @@ import BottomNav from "../../components/BottomNav";
 
 const libraries: "places"[] = ["places"];
 
+const MAX_IMAGES = 5;
+const MAX_IMAGE_WIDTH = 1600;
+const MAX_IMAGE_HEIGHT = 1600;
+const WEBP_QUALITY = 0.82;
+
+function loadImage(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error(`이미지를 읽을 수 없습니다: ${file.name}`));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function optimizeImageFile(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error(`${file.name} 파일은 이미지가 아닙니다.`);
+  }
+
+  const image = await loadImage(file);
+
+  const scale = Math.min(
+    1,
+    MAX_IMAGE_WIDTH / image.naturalWidth,
+    MAX_IMAGE_HEIGHT / image.naturalHeight,
+  );
+
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    throw new Error("이미지 처리 기능을 사용할 수 없습니다.");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, width, height);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(new Error(`${file.name} WebP 변환에 실패했습니다.`));
+        }
+      },
+      "image/webp",
+      WEBP_QUALITY,
+    );
+  });
+
+  const originalName = file.name.replace(/\.[^.]+$/, "") || "image";
+  const safeName = originalName.replace(/[^a-zA-Z0-9_-]/g, "-");
+
+  return new File([blob], `${safeName}.webp`, {
+    type: "image/webp",
+    lastModified: Date.now(),
+  });
+}
+
 export default function NewGrandOpeningPage() {
   const router = useRouter();
 
@@ -37,6 +114,7 @@ export default function NewGrandOpeningPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [optimizingImages, setOptimizingImages] = useState(false);
 
   useEffect(() => {
     async function loadUser() {
@@ -77,16 +155,50 @@ export default function NewGrandOpeningPage() {
     }
   }
 
-  function handleImages(files: FileList | null) {
+  async function handleImages(files: FileList | null) {
     if (!files) return;
 
-    const selected = Array.from(files);
-    const merged = [...imageFiles, ...selected].slice(0, 5);
+    const remainingCount = MAX_IMAGES - imageFiles.length;
 
-    imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+    if (remainingCount <= 0) {
+      alert(`이미지는 최대 ${MAX_IMAGES}개까지 등록할 수 있습니다.`);
+      return;
+    }
 
-    setImageFiles(merged);
-    setImagePreviews(merged.map((file) => URL.createObjectURL(file)));
+    const selected = Array.from(files).slice(0, remainingCount);
+
+    if (selected.length === 0) return;
+
+    setOptimizingImages(true);
+
+    try {
+      const optimizedFiles: File[] = [];
+
+      for (const file of selected) {
+        try {
+          const optimized = await optimizeImageFile(file);
+          optimizedFiles.push(optimized);
+        } catch (error) {
+          console.error(error);
+          alert(
+            error instanceof Error
+              ? error.message
+              : `${file.name} 이미지 처리에 실패했습니다.`,
+          );
+        }
+      }
+
+      if (optimizedFiles.length === 0) return;
+
+      const merged = [...imageFiles, ...optimizedFiles].slice(0, MAX_IMAGES);
+
+      imagePreviews.forEach((url) => URL.revokeObjectURL(url));
+
+      setImageFiles(merged);
+      setImagePreviews(merged.map((file) => URL.createObjectURL(file)));
+    } finally {
+      setOptimizingImages(false);
+    }
   }
 
   function removeImage(index: number) {
@@ -122,13 +234,13 @@ export default function NewGrandOpeningPage() {
     const uploadedUrls: string[] = [];
 
     for (const file of imageFiles) {
-      const ext = file.name.split(".").pop() || "jpg";
-      const fileName = `${userId}/${grandOpeningId}/images/${crypto.randomUUID()}.${ext}`;
+      const fileName = `${userId}/${grandOpeningId}/images/${crypto.randomUUID()}.webp`;
 
       const { error: uploadError } = await supabase.storage
         .from("grand-openings")
         .upload(fileName, file, {
-          cacheControl: "3600",
+          cacheControl: "31536000",
+          contentType: "image/webp",
           upsert: false,
         });
 
@@ -172,6 +284,7 @@ export default function NewGrandOpeningPage() {
     if (!userId) return alert("Please login first.");
     if (!businessName.trim()) return alert("Business name is required.");
     if (!title.trim()) return alert("Title is required.");
+    if (optimizingImages) return alert("이미지를 처리하고 있습니다. 잠시만 기다려주세요.");
 
     setSaving(true);
 
@@ -201,8 +314,12 @@ export default function NewGrandOpeningPage() {
 
       alert("Grand Opening submitted for approval.");
       router.push("/");
-    } catch (err: any) {
-      alert(err?.message || "Failed to submit Grand Opening.");
+    } catch (err: unknown) {
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Failed to submit Grand Opening.",
+      );
     } finally {
       setSaving(false);
     }
@@ -289,7 +406,7 @@ export default function NewGrandOpeningPage() {
               />
             )}
 
-            {lat && lng && (
+            {lat !== null && lng !== null && (
               <p className="mt-1 text-xs font-bold text-green-700">
                 Address selected
               </p>
@@ -361,21 +478,35 @@ export default function NewGrandOpeningPage() {
 
           <div>
             <div className="flex items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center justify-center rounded-xl border border-[#E8DED1] bg-[#F8F3EC] px-4 py-3 text-sm font-black text-[#172033] active:scale-95">
-                📷 Attach Images
+              <label
+                className={`inline-flex items-center justify-center rounded-xl border border-[#E8DED1] bg-[#F8F3EC] px-4 py-3 text-sm font-black text-[#172033] ${
+                  optimizingImages
+                    ? "cursor-wait opacity-60"
+                    : "cursor-pointer active:scale-95"
+                }`}
+              >
+                {optimizingImages ? "⏳ Optimizing..." : "📷 Attach Images"}
                 <input
                   type="file"
                   accept="image/*"
                   multiple
-                  onChange={(e) => handleImages(e.target.files)}
+                  disabled={optimizingImages}
+                  onChange={async (e) => {
+                    await handleImages(e.target.files);
+                    e.target.value = "";
+                  }}
                   className="hidden"
                 />
               </label>
 
               <span className="text-xs font-bold text-gray-500">
-                {imageFiles.length}/5 Images
+                {imageFiles.length}/{MAX_IMAGES} Images
               </span>
             </div>
+
+            <p className="mt-2 text-xs font-bold text-gray-500">
+              업로드 전에 최대 1600×1600px, WebP 품질 82%로 자동 최적화됩니다.
+            </p>
 
             {imagePreviews.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -418,14 +549,19 @@ export default function NewGrandOpeningPage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || optimizingImages}
             className="w-full rounded-xl bg-[#172033] px-4 py-3 text-sm font-black text-white disabled:opacity-50"
           >
-            {saving ? "Submitting..." : "Submit Grand Opening"}
+            {saving
+              ? "Submitting..."
+              : optimizingImages
+                ? "Optimizing Images..."
+                : "Submit Grand Opening"}
           </button>
         </form>
       </section>
-	  <BottomNav activeNav="home" />
+
+      <BottomNav activeNav="home" />
     </main>
   );
 }
