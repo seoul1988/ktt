@@ -266,16 +266,29 @@ async function optimizeImage(
       canvas.toBlob(resolve, "image/webp", quality);
     });
 
-    if (!blob || blob.size >= file.size) {
-      return file;
+    // JPG/PNG 등 일반 이미지는 원본보다 WebP가 조금 커지더라도
+    // 항상 WebP 파일로 저장합니다. 그래야 Storage에 원본 확장자가
+    // 섞여 올라가는 문제를 막을 수 있습니다.
+    if (!blob) {
+      throw new Error("WebP conversion failed.");
     }
 
     const baseName = file.name.replace(/\.[^/.]+$/, "") || "image";
-
-    return new File([blob], `${baseName}.webp`, {
+    const optimizedFile = new File([blob], `${baseName}.webp`, {
       type: "image/webp",
       lastModified: Date.now(),
     });
+
+    console.log("Image optimized:", {
+      originalName: file.name,
+      originalSize: file.size,
+      optimizedName: optimizedFile.name,
+      optimizedSize: optimizedFile.size,
+      originalDimensions: `${originalWidth}x${originalHeight}`,
+      optimizedDimensions: `${targetWidth}x${targetHeight}`,
+    });
+
+    return optimizedFile;
   } catch (error) {
     console.warn("Image optimization skipped:", error);
     return file;
@@ -979,7 +992,7 @@ export default function NewBusinessPage() {
 
     // Resize and compress before the files are uploaded to Supabase.
     const optimizedFiles = await Promise.all(
-      selectedFiles.map((file) => optimizeImage(file, 1600, 1600, 0.82)),
+      selectedFiles.map((file) => optimizeImage(file, 1200, 1200, 0.75)),
     );
 
     setPhotoFiles((prev) => [...prev, ...optimizedFiles]);
@@ -1043,7 +1056,7 @@ export default function NewBusinessPage() {
       file,
       setting.maxWidth,
       setting.maxHeight,
-      0.86,
+      0.82,
     );
 
     const previousPreview = flipbookAdPreviews[size];
