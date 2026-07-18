@@ -202,6 +202,8 @@ export default async function CommunityDirectoryPage() {
     );
   }
 
+  const registeredBusinessCount = businesses?.length || 0;
+
   const {
     data: businessCategoryRows,
   } = await supabase
@@ -538,13 +540,27 @@ export default async function CommunityDirectoryPage() {
         </div>
 
         <div className="mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
-          <h2 className="text-xl font-black">
-            🌐 모두보기
-          </h2>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-xl font-black">
+                🌐 모두보기
+              </h2>
 
-          <p className="mt-1 text-sm font-semibold opacity-90">
-            전체 카테고리별 업체 리스트
-          </p>
+              <p className="mt-1 text-sm font-semibold opacity-90">
+                전체 카테고리별 업체 리스트
+              </p>
+            </div>
+
+            <div className="shrink-0 rounded-full bg-white/20 px-3 py-2 text-right shadow-sm backdrop-blur-sm">
+              <p className="text-[10px] font-black uppercase tracking-wide opacity-90">
+                등록된 비즈니스 업체
+              </p>
+
+              <p className="mt-0.5 text-lg font-black leading-none">
+                {registeredBusinessCount.toLocaleString()}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-7">
