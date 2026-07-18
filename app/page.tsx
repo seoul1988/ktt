@@ -706,14 +706,15 @@ export default async function Home() {
               href={`/grand-openings/${mainGrandOpening.id}`}
               className="block overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-xl"
             >
-       <div className="aspect-video w-full overflow-hidden bg-black">
-  <VideoFirstMedia
-    videoUrl={mainGrandOpening.video_url}
-    imageUrl={grandOpeningImage}
-    alt={mainGrandOpening.title || "Grand Opening"}
-    className="block h-full w-full"
-  />
-</div>
+              <div className="aspect-video w-full overflow-hidden bg-white">
+                <img
+                  src={grandOpeningImage}
+                  alt={mainGrandOpening.title || "Grand Opening"}
+                  loading="lazy"
+                  decoding="async"
+                  className="block h-full w-full object-contain"
+                />
+              </div>
 
               <div className="p-5">
 			  <p className="text-xs font-black uppercase tracking-wider text-amber-600">
@@ -929,5 +930,4 @@ export default async function Home() {
     </>
   );
 }
-
 
