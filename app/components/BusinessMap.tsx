@@ -26,6 +26,51 @@ const MAP_STATE_KEY = "ktt_map_state_v1";
 const INITIAL_MAP_CENTER: [number, number] = [35.765, -78.625];
 const INITIAL_MAP_ZOOM = 9;
 
+// 처음 지도에 표시할 Raleigh 중심 반경입니다.
+const INITIAL_MARKER_RADIUS_MILES = 40;
+
+type MapBoundsValue = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
+function isSpotInsideBounds(
+  spot: Spot,
+  bounds: MapBoundsValue | null
+) {
+  if (!bounds) return false;
+
+  const lat = Number(spot.lat);
+  const lng = Number(spot.lng);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return false;
+  }
+
+  return (
+    lat <= bounds.north &&
+    lat >= bounds.south &&
+    lng <= bounds.east &&
+    lng >= bounds.west
+  );
+}
+
+function isSpotInsideInitialRadius(spot: Spot) {
+  const lat = Number(spot.lat);
+  const lng = Number(spot.lng);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return false;
+  }
+
+  return (
+    milesBetween(INITIAL_MAP_CENTER, [lat, lng]) <=
+    INITIAL_MARKER_RADIUS_MILES
+  );
+}
+
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -598,6 +643,31 @@ function PanToSelectedSpot({
   return null;
 }
 
+function MapViewportWatcher({
+  ignoreMoveRef,
+  onMapMoved,
+}: {
+  ignoreMoveRef: React.MutableRefObject<boolean>;
+  onMapMoved: (bounds: MapBoundsValue) => void;
+}) {
+  const map = useMapEvents({
+    moveend: () => {
+      if (ignoreMoveRef.current) return;
+
+      const bounds = map.getBounds();
+
+      onMapMoved({
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+      });
+    },
+  });
+
+  return null;
+}
+
 function MapEmptyClickHandler({ onToggle }: { onToggle: () => void }) {
   useMapEvents({
     click: () => {
@@ -646,6 +716,18 @@ export default function BusinessMap({
   const [kiotiSpot, setKiotiSpot] = useState<Spot | null>(null);
   const [carySpot, setCarySpot] = useState<Spot | null>(null);
   const [business16Spot, setBusiness16Spot] = useState<Spot | null>(null);
+
+  // 지도 이동 후 사용자가 "이 지역에서 검색"을 눌렀을 때 적용할 범위입니다.
+  // null이면 Raleigh 중심 반경 40마일을 사용합니다.
+  const [activeSearchBounds, setActiveSearchBounds] =
+    useState<MapBoundsValue | null>(null);
+  const [pendingSearchBounds, setPendingSearchBounds] =
+    useState<MapBoundsValue | null>(null);
+  const [showSearchAreaButton, setShowSearchAreaButton] = useState(false);
+
+  const ignoreMapMoveRef = useRef(false);
+  const ignoreMapMoveTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1074,7 +1156,8 @@ export default function BusinessMap({
         getBusinessId(spot)
       );
 
-      if (isPermanentMarker && !selectedCategory && !search.trim()) {
+      // 199, 15, 16은 검색, 카테고리, 지도 범위와 관계없이 항상 표시합니다.
+      if (isPermanentMarker) {
         return true;
       }
 
@@ -1115,6 +1198,34 @@ export default function BusinessMap({
     showAllOnLoad,
   ]);
 
+  const visibleMarkerSpots = useMemo(() => {
+    return filteredMarkerSpots.filter((spot) => {
+      const businessId = getBusinessId(spot);
+
+      // 특별 마커는 항상 표시합니다.
+      if ([199, 15, 16].includes(businessId)) {
+        return true;
+      }
+
+      // 카드가 선택되면 현재 지도 검색 범위 밖이어도 해당 마커를 표시합니다.
+      if (selectedSpotKey && getSpotKey(spot) === selectedSpotKey) {
+        return true;
+      }
+
+      // "이 지역에서 검색"을 누른 뒤에는 현재 지도 화면 범위를 사용합니다.
+      if (activeSearchBounds) {
+        return isSpotInsideBounds(spot, activeSearchBounds);
+      }
+
+      // 처음에는 Raleigh 중심 반경 40마일 안의 마커만 표시합니다.
+      return isSpotInsideInitialRadius(spot);
+    });
+  }, [
+    filteredMarkerSpots,
+    activeSearchBounds,
+    selectedSpotKey,
+  ]);
+
   const selectedMapSpot = useMemo(() => {
     if (!selectedSpotKey) return null;
 
@@ -1131,6 +1242,33 @@ export default function BusinessMap({
     filteredMarkerSpots,
     normalizedMarkerSpots,
     selectedSpotKey,
+  ]);
+
+  useEffect(() => {
+    // 검색 결과 자동 맞춤 또는 카드 선택으로 지도가 움직일 때
+    // "이 지역에서 검색" 버튼이 잘못 나타나는 것을 막습니다.
+    if (
+      selectedMapSpot ||
+      search.trim() ||
+      selectedCategory ||
+      showAllOnLoad
+    ) {
+      ignoreMapMoveRef.current = true;
+
+      if (ignoreMapMoveTimerRef.current) {
+        clearTimeout(ignoreMapMoveTimerRef.current);
+      }
+
+      ignoreMapMoveTimerRef.current = setTimeout(() => {
+        ignoreMapMoveRef.current = false;
+      }, 900);
+    }
+  }, [
+    selectedMapSpot,
+    search,
+    selectedCategory,
+    showAllOnLoad,
+    visibleMarkerSpots,
   ]);
 
   const cardSpots: SpotWithDistance[] = useMemo(() => {
@@ -1332,6 +1470,10 @@ export default function BusinessMap({
       if (programmaticScrollTimerRef.current) {
         clearTimeout(programmaticScrollTimerRef.current);
       }
+
+      if (ignoreMapMoveTimerRef.current) {
+        clearTimeout(ignoreMapMoveTimerRef.current);
+      }
     };
   }, []);
 
@@ -1430,6 +1572,21 @@ export default function BusinessMap({
         </div>
       )}
 
+      {showSearchAreaButton && pendingSearchBounds && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveSearchBounds(pendingSearchBounds);
+            setShowSearchAreaButton(false);
+            setSelectedSpotKey(null);
+            setShowCards(true);
+          }}
+          className="fixed left-1/2 top-[86px] z-[1500] -translate-x-1/2 rounded-full bg-white px-5 py-3 text-sm font-black text-[#172033] shadow-2xl active:scale-95 landscape:top-[62px] landscape:px-4 landscape:py-2 landscape:text-xs"
+        >
+          🔍 이 지역에서 검색
+        </button>
+      )}
+
      <MapContainer
   center={INITIAL_MAP_CENTER}
   zoom={INITIAL_MAP_ZOOM}
@@ -1443,8 +1600,16 @@ export default function BusinessMap({
           selectedCategory={selectedCategory}
         />
 
+        <MapViewportWatcher
+          ignoreMoveRef={ignoreMapMoveRef}
+          onMapMoved={(bounds) => {
+            setPendingSearchBounds(bounds);
+            setShowSearchAreaButton(true);
+          }}
+        />
+
         <FitFilteredMarkers
-          spots={filteredMarkerSpots}
+          spots={visibleMarkerSpots}
           enabled={Boolean(search.trim() || selectedCategory || showAllOnLoad)}
         />
 
@@ -1478,7 +1643,7 @@ export default function BusinessMap({
           />
         )}
 
-        {filteredMarkerSpots
+        {visibleMarkerSpots
           .filter(
             (spot) =>
               spot.lat !== null &&
@@ -1497,7 +1662,7 @@ export default function BusinessMap({
             const lat = Number(spot.lat);
             const lng = Number(spot.lng);
 
-            const sameLocationSpots = filteredMarkerSpots.filter(
+            const sameLocationSpots = visibleMarkerSpots.filter(
               (s) =>
                 s.lat !== null &&
                 s.lat !== undefined &&
