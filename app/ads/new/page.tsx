@@ -14,6 +14,77 @@ declare global {
   }
 }
 
+
+async function optimizeImage(
+  file: File,
+  maxWidth = 1600,
+  maxHeight = 1600,
+  quality = 0.78,
+): Promise<File> {
+  // Keep animated GIFs and SVG files unchanged.
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file, {
+        imageOrientation: "from-image",
+      });
+    } else {
+      objectUrl = URL.createObjectURL(file);
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    }
+
+    const originalWidth = source.width;
+    const originalHeight = source.height;
+    const scale = Math.min(
+      1,
+      maxWidth / originalWidth,
+      maxHeight / originalHeight,
+    );
+
+    const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+    const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("이미지 변환을 시작할 수 없습니다.");
+
+    context.drawImage(source, 0, 0, targetWidth, targetHeight);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!blob) throw new Error("WebP 이미지 변환에 실패했습니다.");
+
+    const baseName = file.name.replace(/\.[^/.]+$/, "") || "ad-image";
+
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+    if (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap) {
+      source.close();
+    }
+  }
+}
+
 export default function NewAdPage() {
   const router = useRouter();
   const addressRef = useRef<HTMLInputElement | null>(null);
@@ -23,11 +94,12 @@ export default function NewAdPage() {
   const [category, setCategory] = useState("business");
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
 
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
 
-  const [imageFiles, setImageFiles] = useState<FileList | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
@@ -86,15 +158,36 @@ export default function NewAdPage() {
     });
   }
 
-  function handleImageChange(files: FileList | null) {
-    setImageFiles(files);
+  async function handleImageChange(files: FileList | null) {
+    imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
 
     if (!files || files.length === 0) {
+      setImageFiles([]);
       setImagePreviews([]);
       return;
     }
 
-    setImagePreviews(Array.from(files).map((file) => URL.createObjectURL(file)));
+    try {
+      const selectedFiles = Array.from(files).filter((file) =>
+        file.type.startsWith("image/"),
+      );
+
+      // Resize large images and convert JPG/PNG/HEIC-capable browser images
+      // to WebP before uploading to Supabase.
+      const optimizedFiles = await Promise.all(
+        selectedFiles.map((file) => optimizeImage(file, 1600, 1600, 0.78)),
+      );
+
+      setImageFiles(optimizedFiles);
+      setImagePreviews(
+        optimizedFiles.map((file) => URL.createObjectURL(file)),
+      );
+    } catch (error) {
+      console.error("Image optimization error:", error);
+      alert("이미지 크기 조정 중 오류가 발생했습니다.");
+      setImageFiles([]);
+      setImagePreviews([]);
+    }
   }
 
   function handleVideoChange(file: File | null) {
@@ -103,12 +196,12 @@ export default function NewAdPage() {
   }
 
   async function uploadImages(userId: string) {
-    if (!imageFiles || imageFiles.length === 0) return [];
+    if (imageFiles.length === 0) return [];
 
     const urls: string[] = [];
 
-    for (const file of Array.from(imageFiles)) {
-      const ext = file.name.split(".").pop();
+    for (const file of imageFiles) {
+      const ext = file.name.split(".").pop() || "webp";
       const path = `${userId}/images/${Date.now()}-${Math.random()
         .toString(36)
         .slice(2)}.${ext}`;
@@ -169,6 +262,7 @@ export default function NewAdPage() {
         category,
         location: location.trim() || null,
         phone: phone.trim() || null,
+        website_url: websiteUrl.trim() || null,
         lat,
         lng,
         images: imageUrls,
@@ -265,6 +359,15 @@ export default function NewAdPage() {
             className="w-full rounded-2xl border p-3 text-sm"
           />
 
+          <input
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            placeholder="링크 주소 (https://...)"
+            type="url"
+            inputMode="url"
+            className="w-full rounded-2xl border p-3 text-sm"
+          />
+
           <div>
             <p className="mb-2 text-sm font-black">이미지</p>
 
@@ -279,7 +382,7 @@ export default function NewAdPage() {
               />
             </label>
 
-            {imageFiles && imageFiles.length > 0 && (
+            {imageFiles.length > 0 && (
               <p className="mt-2 text-xs font-bold text-gray-500">
                 {imageFiles.length}개 이미지 선택됨
               </p>
