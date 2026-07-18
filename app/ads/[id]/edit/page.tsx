@@ -15,6 +15,7 @@ type AdItem = {
   category: string | null;
   location: string | null;
   phone: string | null;
+  website_url: string | null;
   images: string[] | null;
   video_url: string | null;
   status: string | null;
@@ -25,6 +26,87 @@ type AdItem = {
 const IMAGE_BUCKET = "ads";
 const VIDEO_BUCKET = "ads";
 
+async function optimizeImage(
+  file: File,
+  maxWidth = 1600,
+  maxHeight = 1600,
+  quality = 0.78,
+): Promise<File> {
+  if (file.type === "image/gif" || file.type === "image/svg+xml") {
+    return file;
+  }
+
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    }
+
+    if (!source) return file;
+
+    const originalWidth = source.width;
+    const originalHeight = source.height;
+
+    const scale = Math.min(
+      1,
+      maxWidth / originalWidth,
+      maxHeight / originalHeight,
+    );
+
+    const targetWidth = Math.max(1, Math.round(originalWidth * scale));
+    const targetHeight = Math.max(1, Math.round(originalHeight * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("이미지 변환 기능을 사용할 수 없습니다.");
+    }
+
+    context.drawImage(source, 0, 0, targetWidth, targetHeight);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!blob) {
+      throw new Error("WebP 이미지 변환에 실패했습니다.");
+    }
+
+    const baseName = file.name.replace(/\.[^/.]+$/, "") || "image";
+
+    return new File([blob], `${baseName}.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+
+    if (
+      typeof ImageBitmap !== "undefined" &&
+      source instanceof ImageBitmap
+    ) {
+      source.close();
+    }
+  }
+}
+
 export default function EditAdPage() {
   const params = useParams();
   const router = useRouter();
@@ -32,6 +114,7 @@ export default function EditAdPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [optimizingImages, setOptimizingImages] = useState(false);
 
   const [ad, setAd] = useState<AdItem | null>(null);
 
@@ -40,6 +123,7 @@ export default function EditAdPage() {
   const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
   const [phone, setPhone] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [status, setStatus] = useState("active");
 
   const [lat, setLat] = useState("");
@@ -49,6 +133,7 @@ export default function EditAdPage() {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const [newImages, setNewImages] = useState<File[]>([]);
+  const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
   const [newVideo, setNewVideo] = useState<File | null>(null);
 
   const [deletedImages, setDeletedImages] = useState<string[]>([]);
@@ -57,6 +142,12 @@ export default function EditAdPage() {
   useEffect(() => {
     loadAd();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      newImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    };
+  }, [newImagePreviews]);
 
   async function loadAd() {
     setLoading(true);
@@ -81,9 +172,10 @@ export default function EditAdPage() {
     setCategory(item.category || "");
     setLocation(item.location || "");
     setPhone(item.phone || "");
+    setWebsiteUrl(item.website_url || "");
     setStatus(item.status || "active");
-    setLat(item.lat ? String(item.lat) : "");
-    setLng(item.lng ? String(item.lng) : "");
+    setLat(item.lat !== null ? String(item.lat) : "");
+    setLng(item.lng !== null ? String(item.lng) : "");
     setImages(Array.isArray(item.images) ? item.images : []);
     setVideoUrl(item.video_url || null);
 
@@ -99,8 +191,8 @@ export default function EditAdPage() {
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          location
-        )}&limit=1`
+          location,
+        )}&limit=1`,
       );
 
       const data = await res.json();
@@ -149,18 +241,48 @@ export default function EditAdPage() {
     }
   }
 
+  async function handleNewImages(files: FileList | null) {
+    const selectedFiles = Array.from(files || []).filter((file) =>
+      file.type.startsWith("image/"),
+    );
+
+    if (selectedFiles.length === 0) return;
+
+    setOptimizingImages(true);
+
+    try {
+      const optimizedFiles = await Promise.all(
+        selectedFiles.map((file) => optimizeImage(file)),
+      );
+
+      const previews = optimizedFiles.map((file) =>
+        URL.createObjectURL(file),
+      );
+
+      setNewImages((prev) => [...prev, ...optimizedFiles]);
+      setNewImagePreviews((prev) => [...prev, ...previews]);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "이미지 변환에 실패했습니다.";
+      alert(message);
+    } finally {
+      setOptimizingImages(false);
+    }
+  }
+
   async function uploadImages() {
     const uploadedUrls: string[] = [];
     const folder = getUploadFolder();
 
     for (const file of newImages) {
-      const ext = getFileExtension(file.name, "jpg");
+      const ext = getFileExtension(file.name, "webp");
       const fileName = `${folder}/images/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from(IMAGE_BUCKET)
         .upload(fileName, file, {
           cacheControl: "3600",
+          contentType: file.type || "image/webp",
           upsert: false,
         });
 
@@ -202,12 +324,22 @@ export default function EditAdPage() {
   function removeImage(url: string) {
     setImages((prev) => prev.filter((img) => img !== url));
     setDeletedImages((prev) =>
-      prev.includes(url) ? prev : [...prev, url]
+      prev.includes(url) ? prev : [...prev, url],
     );
   }
 
   function removeNewImage(index: number) {
     setNewImages((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+
+    setNewImagePreviews((prev) => {
+      const target = prev[index];
+
+      if (target) {
+        URL.revokeObjectURL(target);
+      }
+
+      return prev.filter((_, itemIndex) => itemIndex !== index);
+    });
   }
 
   function removeVideo() {
@@ -221,7 +353,7 @@ export default function EditAdPage() {
 
   async function deleteStorageFiles(
     bucket: string,
-    urls: Array<string | null>
+    urls: Array<string | null>,
   ) {
     const paths = urls
       .filter((url): url is string => Boolean(url))
@@ -243,6 +375,11 @@ export default function EditAdPage() {
       return;
     }
 
+    if (optimizingImages) {
+      alert("이미지 축소 작업이 끝날 때까지 기다려 주세요.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -258,6 +395,7 @@ export default function EditAdPage() {
           category: category.trim() || null,
           location: location.trim() || null,
           phone: phone.trim() || null,
+          website_url: websiteUrl.trim() || null,
           status,
           lat: lat ? Number(lat) : null,
           lng: lng ? Number(lng) : null,
@@ -275,6 +413,8 @@ export default function EditAdPage() {
       if (deletedVideoUrl && deletedVideoUrl !== finalVideoUrl) {
         await deleteStorageFiles(VIDEO_BUCKET, [deletedVideoUrl]);
       }
+
+      newImagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
 
       router.push(`/ads/${adId}`);
       router.refresh();
@@ -303,19 +443,16 @@ export default function EditAdPage() {
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24">
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-  {/* 왼쪽 */}
-  <BackButton />
+          <BackButton />
 
-  {/* 가운데 */}
-  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
-    Edit Ad
-  </h1>
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
+            Edit Ad
+          </h1>
 
-  {/* 오른쪽 */}
-  <div className="ml-auto">
-    <ProfileButton />
-  </div>
-</div>
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
+        </div>
 
         <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
           <div>
@@ -408,6 +545,22 @@ export default function EditAdPage() {
           </div>
 
           <div>
+            <label className="mb-1 block text-xs font-black text-gray-500">
+              Website / Link
+            </label>
+            <input
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+              placeholder="https://example.com"
+              inputMode="url"
+              className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+            />
+            <p className="mt-1 text-[11px] font-bold text-gray-400">
+              웹사이트, 인스타그램, 페이스북 등의 링크를 입력하세요.
+            </p>
+          </div>
+
+          <div>
             <label className="mb-2 block text-xs font-black text-gray-500">
               Current Images
             </label>
@@ -418,7 +571,11 @@ export default function EditAdPage() {
               <div className="grid grid-cols-3 gap-2">
                 {images.map((img) => (
                   <div key={img} className="relative overflow-hidden rounded-xl">
-                    <img src={img} alt="Current advertisement" className="h-24 w-full object-cover" />
+                    <img
+                      src={img}
+                      alt="Current advertisement"
+                      className="h-24 w-full object-cover"
+                    />
                     <button
                       type="button"
                       onClick={() => removeImage(img)}
@@ -436,13 +593,29 @@ export default function EditAdPage() {
             <label className="mb-1 block text-xs font-black text-gray-500">
               Add Images
             </label>
+
             <input
               type="file"
               accept="image/*"
               multiple
-              onChange={(e) => setNewImages(Array.from(e.target.files || []))}
-              className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+              disabled={optimizingImages}
+              onChange={async (e) => {
+                const files = e.target.files;
+                e.target.value = "";
+                await handleNewImages(files);
+              }}
+              className="w-full rounded-xl border px-4 py-3 text-sm font-bold disabled:opacity-50"
             />
+
+            <p className="mt-1 text-[11px] font-bold text-gray-400">
+              새 이미지는 최대 1600px, WebP 품질 78%로 자동 축소됩니다.
+            </p>
+
+            {optimizingImages && (
+              <p className="mt-2 text-xs font-black text-blue-600">
+                이미지를 축소하고 있습니다...
+              </p>
+            )}
 
             {newImages.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -452,10 +625,15 @@ export default function EditAdPage() {
                     className="relative overflow-hidden rounded-xl"
                   >
                     <img
-                      src={URL.createObjectURL(file)}
+                      src={newImagePreviews[index]}
                       alt={file.name}
                       className="h-24 w-full object-cover"
                     />
+
+                    <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                      WebP
+                    </span>
+
                     <button
                       type="button"
                       onClick={() => removeNewImage(index)}
@@ -523,14 +701,19 @@ export default function EditAdPage() {
 
           <button
             onClick={saveAd}
-            disabled={saving}
+            disabled={saving || optimizingImages}
             className="w-full rounded-2xl bg-[#172033] py-4 text-sm font-black text-white disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {optimizingImages
+              ? "Optimizing Images..."
+              : saving
+                ? "Saving..."
+                : "Save Changes"}
           </button>
         </div>
       </div>
-	  <CommunityBottomNav activeNav="admin" />
+
+      <CommunityBottomNav activeNav="admin" />
     </main>
   );
 }
