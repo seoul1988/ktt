@@ -5,69 +5,11 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
 
-function getYoutubeEmbedUrl(url: string | null | undefined) {
-  if (!url) return null;
-
-  const value = String(url).trim();
-
-  if (value.includes("youtube.com/watch?v=")) {
-    const id = value.split("v=")[1]?.split("&")[0];
-    return id ? `https://www.youtube.com/embed/${id}` : null;
-  }
-
-  if (value.includes("youtu.be/")) {
-    const id = value.split("youtu.be/")[1]?.split("?")[0];
-    return id ? `https://www.youtube.com/embed/${id}` : null;
-  }
-
-  if (value.includes("youtube.com/shorts/")) {
-    const id = value.split("youtube.com/shorts/")[1]?.split("?")[0];
-    return id ? `https://www.youtube.com/embed/${id}` : null;
-  }
-
-  return null;
-}
-
 function GrandOpeningMedia({ item }: { item: any }) {
-  const youtubeUrl = getYoutubeEmbedUrl(item.video_url);
-
   const imageUrl =
     Array.isArray(item.images) && item.images.length > 0
       ? item.images[0]
       : item.image_url || "/event.png";
-
-  if (youtubeUrl) {
-    return (
-      <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white">
-        <iframe
-          src={youtubeUrl}
-          title={
-            item.title ||
-            item.business_name ||
-            "Grand Opening"
-          }
-          className="block h-full w-full border-0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    );
-  }
-
-  if (item.video_url) {
-    return (
-      <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white p-2">
-        <video
-          src={item.video_url}
-          controls
-          muted
-          playsInline
-          preload="metadata"
-          className="block h-full w-full object-contain"
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white p-2">
@@ -78,6 +20,8 @@ function GrandOpeningMedia({ item }: { item: any }) {
           item.title ||
           "Grand Opening"
         }
+        loading="lazy"
+        decoding="async"
         className="block h-full w-full object-contain"
       />
     </div>
