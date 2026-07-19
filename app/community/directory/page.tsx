@@ -11,6 +11,9 @@ type Category = {
   id?: number;
   name: string;
   emoji: string | null;
+  show_on_main_map?: boolean | null;
+  show_on_community_map?: boolean | null;
+  show_on_b2b?: boolean | null;
 };
 
 function normalizeCategory(value: string | null | undefined) {
@@ -113,15 +116,21 @@ function PhoneIcon() {
 export default async function CommunityDirectoryPage() {
 
   /*
-   * 카테고리는 표시 조건 없이 모두 가져옵니다.
-   * 등록된 비즈니스 업체는 카테고리 설정과 관계없이 전부 표시합니다.
+   * Hidden 상태를 판단하기 위해 카테고리 표시 옵션을 모두 가져옵니다.
+   *
+   * Hidden은 별도 컬럼이 아니라 아래 세 값이 모두 false인 상태입니다.
+   * - show_on_main_map
+   * - show_on_community_map
+   * - show_on_b2b
    */
   const {
     data: categoriesData,
     error: categoriesError,
   } = await supabase
     .from("categories")
-    .select("id, name, emoji")
+    .select(
+      "id, name, emoji, show_on_main_map, show_on_community_map, show_on_b2b",
+    )
     .order("name", {
       ascending: true,
     });
@@ -136,11 +145,44 @@ export default async function CommunityDirectoryPage() {
     );
   }
 
-  const categoryList = (
+  const allCategories = (
     (categoriesData || []) as Category[]
   ).filter((category) =>
     Boolean(category.name?.trim()),
   );
+
+  /*
+   * Main, Community, B2B가 모두 꺼진 카테고리는 Hidden입니다.
+   * Hidden 카테고리는 디렉토리 그룹에서 제외합니다.
+   */
+  const categoryList = allCategories.filter(
+    (category) =>
+      category.show_on_main_map === true ||
+      category.show_on_community_map === true ||
+      category.show_on_b2b === true,
+  );
+
+  const hiddenCategoryNames = new Set(
+    allCategories
+      .filter(
+        (category) =>
+          category.show_on_main_map !== true &&
+          category.show_on_community_map !== true &&
+          category.show_on_b2b !== true,
+      )
+      .map((category) =>
+        normalizeCategory(category.name),
+      )
+      .filter(Boolean),
+  );
+
+  function isHiddenCategory(
+    value: string | null | undefined,
+  ) {
+    return hiddenCategoryNames.has(
+      normalizeCategory(value),
+    );
+  }
 
   const categoryById = new Map(
     categoryList
@@ -258,7 +300,7 @@ export default async function CommunityDirectoryPage() {
 
         /*
          * 문자열 카테고리를 fallback으로 사용할 때도
-         * B2B Directory에 허용된 카테고리만 사용합니다.
+         * Hidden 카테고리는 제외합니다.
          */
         const fallbackCategories = splitCategories(
           business.category ||
@@ -267,12 +309,18 @@ export default async function CommunityDirectoryPage() {
             business.type ||
             business.tags ||
             "",
+        ).filter(
+          (categoryName) =>
+            !isHiddenCategory(categoryName),
         );
 
         const linkedCategoryNames =
-          linkedCategories.map(
-            (category) => category.name,
-          );
+          linkedCategories
+            .map((category) => category.name)
+            .filter(
+              (categoryName) =>
+                !isHiddenCategory(categoryName),
+            );
 
         const rawCategories = [
           ...linkedCategoryNames,
@@ -285,7 +333,11 @@ export default async function CommunityDirectoryPage() {
               .map((categoryName) =>
                 String(categoryName).trim(),
               )
-              .filter(Boolean),
+              .filter(Boolean)
+              .filter(
+                (categoryName) =>
+                  !isHiddenCategory(categoryName),
+              ),
           ),
         );
 
