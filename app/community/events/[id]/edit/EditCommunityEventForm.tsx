@@ -275,7 +275,7 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
-      <div className="mx-auto max-w-5xl px-2 lg:px-4">
+      <div className="mx-auto max-w-3xl px-2 lg:px-4">
         <div className="relative mb-5 flex items-center justify-center">
           <Link
             href={`/community/events/${event.id}`}
