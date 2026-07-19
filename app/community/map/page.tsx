@@ -1,628 +1,625 @@
-// app/community/map/page.tsx
+// app/community/directory/page.tsx
 
+import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-import MapWrapper from "../../components/MapWrapper";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type CommunityCategory = {
-  id: number;
+type Category = {
+  id?: number;
   name: string;
   emoji: string | null;
 };
 
-type CategoryLoadResult = {
-  categoryList: CommunityCategory[];
-  allowedCategoryIds: Set<number>;
-  allowedCategoryNames: Set<string>;
-  categoryEmojiMap: Map<string, string | null>;
-  error: any | null;
-};
+function parseOrderValue(...values: any[]) {
+  for (const value of values) {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) {
+      continue;
+    }
 
-type CommunityMapPageProps = {
-  searchParams: Promise<{
-    category?: string | string[];
-    search?: string | string[];
-  }>;
-};
+    const parsed = Number(
+      String(value).trim(),
+    );
 
-function normalizeCategory(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9가-힣]/g, "");
-}
-
-function getSearchParamValue(
-  value: string | string[] | undefined,
-) {
-  if (Array.isArray(value)) {
-    return value[0] || "";
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
   }
 
-  return value || "";
+  return null;
 }
 
-function splitCategories(value: unknown) {
+function splitCategories(value: any) {
   if (Array.isArray(value)) {
     return value
-      .map((item) => {
-        if (typeof item === "string") {
-          return item.trim();
-        }
-
-        if (item && typeof item === "object") {
-          const objectItem = item as Record<string, unknown>;
-
-          return String(
-            objectItem.name ??
-              objectItem.category ??
-              objectItem.category_name ??
-              "",
-          ).trim();
-        }
-
-        return String(item ?? "").trim();
-      })
+      .map((v) => String(v).trim())
       .filter(Boolean);
   }
 
-  return String(value ?? "")
+  return String(value || "")
     .split(",")
-    .map((item) => item.trim())
+    .map((v) => v.trim())
     .filter(Boolean);
 }
 
-/**
- * URL에서 받은 category 값을 실제 카테고리 이름으로 변환합니다.
- *
- * 예:
- * hair → Hair
- * hair salon → Hair Salon
- * beauty-salon → Beauty Salon
- */
-function resolveInitialCategory(
-  requestedCategory: string,
-  categoryList: CommunityCategory[],
-) {
-  const normalizedRequested =
-    normalizeCategory(requestedCategory);
-
-  if (!normalizedRequested) {
-    return "";
-  }
-
-  /*
-   * 먼저 정확히 일치하는 카테고리를 찾습니다.
-   */
-  const exactMatch = categoryList.find(
-    (category) =>
-      normalizeCategory(category.name) ===
-      normalizedRequested,
+function getAddress(item: any) {
+  return (
+    item.address ||
+    item.full_address ||
+    item.formatted_address ||
+    item.location ||
+    [
+      item.street,
+      item.city,
+      item.state,
+      item.zip,
+    ]
+      .filter(Boolean)
+      .join(", ")
   );
-
-  if (exactMatch) {
-    return exactMatch.name;
-  }
-
-  /*
-   * hair 입력 시 Hair Salon처럼
-   * 해당 단어를 포함하는 카테고리를 찾습니다.
-   */
-  const startsWithMatch = categoryList.find(
-    (category) =>
-      normalizeCategory(category.name).startsWith(
-        normalizedRequested,
-      ),
-  );
-
-  if (startsWithMatch) {
-    return startsWithMatch.name;
-  }
-
-  const includesMatch = categoryList.find(
-    (category) =>
-      normalizeCategory(category.name).includes(
-        normalizedRequested,
-      ),
-  );
-
-  if (includesMatch) {
-    return includesMatch.name;
-  }
-
-  return "";
 }
 
-/**
- * Community Map에 표시하도록 체크된 카테고리만 가져옵니다.
- *
- * categories 테이블의 show_on_community_map 값이 true인
- * 카테고리만 지도에 표시합니다.
- */
-async function getCommunityCategories(): Promise<CategoryLoadResult> {
-  const { data, error } = await supabase
-    .from("categories")
-    .select("id, name, emoji")
-    .eq("show_on_community_map", true)
+function getPhone(item: any) {
+  return (
+    item.phone ||
+    item.phone_number ||
+    ""
+  );
+}
+
+function getCityFromAddress(item: any) {
+  const address = String(
+    getAddress(item) || "",
+  );
+
+  const parts = address
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return parts[1];
+  }
+
+  return item.city || "";
+}
+
+function getMapUrl(item: any) {
+  const address = getAddress(item);
+
+  const query = encodeURIComponent(
+    address || item.name || "",
+  );
+
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
+function DirectionsIcon() {
+  return (
+    <span className="relative block h-5 w-5">
+      <span className="absolute left-[5px] top-[3px] h-[15px] w-[2px] bg-[#172033]" />
+      <span className="absolute left-[5px] top-[3px] h-[2px] w-[11px] bg-[#172033]" />
+      <span className="absolute left-[11px] top-[1px] h-[8px] w-[8px] rotate-45 border-r-2 border-t-2 border-[#172033]" />
+    </span>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#C4483A] text-sm font-black text-white shadow-sm">
+      ☎
+    </span>
+  );
+}
+
+export default async function CommunityDirectoryPage() {
+  const { data: categoriesData } =
+    await supabase
+      .from("categories")
+      .select("id, name, emoji")
+      .eq("show_on_community_map", true)
+      .order("name", {
+        ascending: true,
+      });
+
+  /*
+   * show_on_community_map=true인 카테고리만
+   * 디렉토리에 표시합니다.
+   */
+  const categoryList = (
+    (categoriesData || []) as Category[]
+  ).filter((category) =>
+    Boolean(category.name?.trim()),
+  );
+
+  const categoryById = new Map(
+    categoryList
+      .filter(
+        (category) => category.id,
+      )
+      .map((category) => [
+        Number(category.id),
+        category,
+      ]),
+  );
+
+  const categoryEmojiMap = new Map(
+    categoryList.map((category) => [
+      normalizeCategory(
+        category.name,
+      ),
+      category.emoji,
+    ]),
+  );
+
+  const {
+    data: businesses,
+    error,
+  } = await supabase
+    .from("businesses")
+    .select("*")
     .order("name", {
       ascending: true,
     });
 
   if (error) {
-    console.error(
-      "Community map categories load error:",
-      error.message,
-    );
-
-    return {
-      categoryList: [],
-      allowedCategoryIds: new Set<number>(),
-      allowedCategoryNames: new Set<string>(),
-      categoryEmojiMap: new Map<
-        string,
-        string | null
-      >(),
-      error,
-    };
-  }
-
-  /*
-   * show_on_community_map=true인 카테고리 중
-   * 이름이 있는 항목만 사용합니다.
-   */
-  const categoryList = (
-    (data || []) as CommunityCategory[]
-  ).filter((category) =>
-    Boolean(category.name?.trim()),
-  );
-
-  return {
-    categoryList,
-
-    allowedCategoryIds: new Set(
-      categoryList.map((category) =>
-        Number(category.id),
-      ),
-    ),
-
-    allowedCategoryNames: new Set(
-      categoryList
-        .map((category) =>
-          normalizeCategory(category.name),
-        )
-        .filter(Boolean),
-    ),
-
-    categoryEmojiMap: new Map(
-      categoryList.map((category) => [
-        normalizeCategory(category.name),
-        category.emoji,
-      ]),
-    ),
-
-    error: null,
-  };
-}
-
-/**
- * 업체가 Community Map 허용 카테고리에 속하는지 확인합니다.
- *
- * 지원 필드:
- * category_id
- * business_category_id
- * category
- * category_name
- * categories
- */
-function getMatchedCommunityCategories(
-  business: any,
-  allowedCategoryIds: Set<number>,
-  allowedCategoryNames: Set<string>,
-) {
-  if (!business) {
-    return {
-      isAllowed: false,
-      matchedNames: [] as string[],
-    };
-  }
-
-  const rawCategoryId =
-    business.category_id ??
-    business.business_category_id ??
-    null;
-
-  const hasCategoryId =
-    rawCategoryId !== null &&
-    rawCategoryId !== undefined &&
-    rawCategoryId !== "";
-
-  /*
-   * ID가 있지만 허용 카테고리가 아니면 제외합니다.
-   */
-  if (
-    hasCategoryId &&
-    !allowedCategoryIds.has(Number(rawCategoryId))
-  ) {
-    return {
-      isAllowed: false,
-      matchedNames: [] as string[],
-    };
-  }
-
-  const categoryValues = [
-    ...splitCategories(business.category),
-    ...splitCategories(business.category_name),
-    ...splitCategories(business.categories),
-  ];
-
-  const uniqueCategoryNames = Array.from(
-    new Set(
-      categoryValues
-        .map((item) => item.trim())
-        .filter(Boolean),
-    ),
-  );
-
-  const matchedNames =
-    uniqueCategoryNames.filter((categoryName) =>
-      allowedCategoryNames.has(
-        normalizeCategory(categoryName),
-      ),
-    );
-
-  /*
-   * 허용된 category_id가 있으면
-   * 문자열 카테고리가 없어도 표시합니다.
-   */
-  if (
-    hasCategoryId &&
-    allowedCategoryIds.has(Number(rawCategoryId))
-  ) {
-    return {
-      isAllowed: true,
-      matchedNames,
-    };
-  }
-
-  return {
-    isAllowed: matchedNames.length > 0,
-    matchedNames,
-  };
-}
-
-/**
- * Marketplace 아이템의 카테고리가
- * Community Map 허용 카테고리인지 확인합니다.
- */
-function getMatchedMarketplaceCategories(
-  item: any,
-  allowedCategoryNames: Set<string>,
-) {
-  const rawCategories = splitCategories(
-    item?.category ??
-      item?.categories ??
-      "Marketplace",
-  );
-
-  return rawCategories.filter((categoryName) =>
-    allowedCategoryNames.has(
-      normalizeCategory(categoryName),
-    ),
-  );
-}
-
-export default async function CommunityMapPage({
-  searchParams,
-}: CommunityMapPageProps) {
-  const params = await searchParams;
-
-  const requestedCategory = decodeURIComponent(
-    getSearchParamValue(params.category),
-  ).trim();
-
-  const requestedSearch = decodeURIComponent(
-    getSearchParamValue(params.search),
-  ).trim();
-
-  const {
-    categoryList,
-    allowedCategoryIds,
-    allowedCategoryNames,
-    categoryEmojiMap,
-    error: categoryError,
-  } = await getCommunityCategories();
-
-  if (categoryError) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
         <p className="font-bold text-red-600">
-          커뮤니티 카테고리 불러오기 실패:{" "}
-          {categoryError.message}
+          업체 리스트 불러오기 실패:{" "}
+          {error.message}
         </p>
       </main>
     );
   }
 
-  /*
-   * URL의 category=hair를
-   * 실제 DB 카테고리 이름으로 변환합니다.
-   */
-  const initialCategory =
-    resolveInitialCategory(
-      requestedCategory,
-      categoryList,
+  const registeredBusinessCount = businesses?.length || 0;
+
+  const {
+    data: businessCategoryRows,
+  } = await supabase
+    .from("business_categories")
+    .select("*");
+
+  type LinkedCategory = {
+    name: string;
+    order: number | null;
+  };
+
+  const businessCategoryMap =
+    new Map<
+      number,
+      LinkedCategory[]
+    >();
+
+  (
+    businessCategoryRows || []
+  ).forEach((row: any) => {
+    const businessId = Number(
+      row.business_id,
     );
 
-  /*
-   * BUSINESS 불러오기
-   */
-  const {
-    data: businesses,
-    error: businessError,
-  } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("hidden", false)
-    .not("lat", "is", null)
-    .not("lng", "is", null)
-    .order("id", {
-      ascending: true,
+    const categoryId = Number(
+      row.category_id,
+    );
+
+    const category =
+      categoryById.get(categoryId);
+
+    if (
+      !businessId ||
+      !category?.name
+    ) {
+      return;
+    }
+
+    const parsedOrder =
+      parseOrderValue(
+        row.order,
+        row.sort_order,
+        row.display_order,
+        row.category_order,
+        row.order_index,
+        row.sort_index,
+        row.position,
+        row.sequence,
+        row.priority,
+        row.rank,
+      );
+
+    const current =
+      businessCategoryMap.get(
+        businessId,
+      ) || [];
+
+    current.push({
+      name: category.name,
+      order: parsedOrder,
     });
 
-  if (businessError) {
-    return (
-      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
-        <p className="font-bold text-red-600">
-          커뮤니티 지도 불러오기 실패:{" "}
-          {businessError.message}
-        </p>
-      </main>
+    businessCategoryMap.set(
+      businessId,
+      current,
     );
-  }
+  });
 
-  /*
-   * MARKETPLACE 불러오기
-   */
-  const {
-    data: marketplaceItems,
-    error: marketplaceError,
-  } = await supabase
-    .from("marketplace_items")
-    .select("*")
-    .eq("sold", false)
-    .not("latitude", "is", null)
-    .not("longitude", "is", null)
-    .order("created_at", {
-      ascending: false,
-    });
-
-  if (marketplaceError) {
-    console.error(
-      "Community marketplace load error:",
-      marketplaceError,
-    );
-  }
-
-  const businessSpots =
+  const businessList =
     businesses
       ?.map((business: any) => {
-        const {
-          isAllowed,
-          matchedNames,
-        } =
-          getMatchedCommunityCategories(
-            business,
-            allowedCategoryIds,
-            allowedCategoryNames,
+        const linkedCategories =
+          businessCategoryMap.get(
+            Number(business.id),
+          ) || [];
+
+        const fallbackCategories =
+          splitCategories(
+            business.category ||
+              business.categories ||
+              business.business_category ||
+              business.type ||
+              business.tags ||
+              "",
           );
 
-        if (!isAllowed) {
-          return null;
-        }
+        const linkedCategoryNames =
+          linkedCategories
+            .map(
+              (category) =>
+                category.name,
+            )
+            ;
 
-        const businessId = Number(business.id);
-        const lat = Number(business.lat);
-        const lng = Number(business.lng);
+        const rawCategories = [
+          ...linkedCategoryNames,
+          ...fallbackCategories,
+        ];
 
-        if (
-          !Number.isFinite(businessId) ||
-          !Number.isFinite(lat) ||
-          !Number.isFinite(lng)
-        ) {
-          return null;
-        }
+        const uniqueCategories =
+          Array.from(
+            new Set(
+              rawCategories
+                .map((cat) =>
+                  String(cat).trim(),
+                )
+                .filter(Boolean)
+                ,
+            ),
+          );
 
-        const rawCategories = Array.from(
-          new Set([
-            ...splitCategories(
-              business.category,
-            ),
-            ...splitCategories(
-              business.category_name,
-            ),
-            ...splitCategories(
-              business.categories,
-            ),
-          ]),
+        const categoryOrderMap: Record<
+          string,
+          number | null
+        > = {};
+
+        linkedCategories.forEach(
+          (category) => {
+
+            categoryOrderMap[
+              normalizeCategory(
+                category.name,
+              )
+            ] = category.order;
+          },
         );
 
-        const visibleCategories =
-          rawCategories.filter((categoryName) =>
-            allowedCategoryNames.has(
-              normalizeCategory(categoryName),
-            ),
+        const businessOrder =
+          parseOrderValue(
+            business.order,
+            business.sort_order,
+            business.display_order,
+            business.category_order,
+            business.order_index,
+            business.sort_index,
+            business.position,
+            business.sequence,
+            business.priority,
+            business.rank,
           );
-
-        const firstCategory =
-          matchedNames[0] ||
-          visibleCategories[0] ||
-          "Business";
-
-        const normalizedFirstCategory =
-          normalizeCategory(firstCategory);
 
         return {
           ...business,
 
-          id: businessId,
-          business_id: businessId,
-          original_business_id: businessId,
-          original_id: businessId,
+          matched_categories:
+            uniqueCategories.length > 0
+              ? uniqueCategories
+              : ["Other"],
 
-          name:
-            business.name ||
-            business.business_name ||
-            "No business name",
+          category_order_map:
+            categoryOrderMap,
 
-          category: firstCategory,
-          categories:
-            visibleCategories.join(", "),
-          matched_categories: matchedNames,
-
-          emoji:
-            categoryEmojiMap.get(
-              normalizedFirstCategory,
-            ) ||
-            business.emoji ||
-            "📍",
-
-          image_url:
-            business.image_url ||
-            business.logo_url ||
-            null,
-
-          lat,
-          lng,
-
-          show_marker: true,
-
-          type: "business",
-          source_type: "community-business",
-
-          community_visible: true,
-
-          map_key: `community-business-${businessId}`,
+          business_order:
+            businessOrder,
         };
       })
       .filter(Boolean) || [];
 
-  /*
-   * 중복 비즈니스 제거
-   */
-  const uniqueBusinessSpots =
+  const categoryNames =
     Array.from(
-      new Map(
-        businessSpots.map((spot: any) => [
-          spot.map_key,
-          spot,
-        ]),
-      ).values(),
-    );
+      new Set(
+        businessList.flatMap(
+          (business: any) =>
+            business.matched_categories ||
+            [],
+        ),
+      ),
+    )
+      
+      .sort(
+        (
+          a: string,
+          b: string,
+        ) =>
+          a.localeCompare(
+            b,
+            "ko",
+          ),
+      );
 
-  /*
-   * Community Map 허용 카테고리의 Marketplace만 포함
-   */
-  const marketplaceSpots =
-    marketplaceItems
-      ?.map((item: any) => {
-        const matchedCategories =
-          getMatchedMarketplaceCategories(
-            item,
-            allowedCategoryNames,
+  const groupedByCategory =
+    categoryNames
+      .map((categoryName) => {
+        const normalizedCategory =
+          normalizeCategory(
+            categoryName,
           );
 
-        if (matchedCategories.length === 0) {
-          return null;
-        }
 
-        const marketplaceId = Number(item.id);
-        const lat = Number(item.latitude);
-        const lng = Number(item.longitude);
+        const items =
+          businessList
+            .filter(
+              (business: any) =>
+                business.matched_categories.some(
+                  (
+                    cat: string,
+                  ) =>
+                    normalizeCategory(
+                      cat,
+                    ) ===
+                    normalizedCategory,
+                ),
+            )
+            .sort(
+              (
+                a: any,
+                b: any,
+              ) => {
+                const categoryOrderA =
+                  a.category_order_map?.[
+                    normalizedCategory
+                  ] ?? null;
 
-        if (
-          !Number.isFinite(marketplaceId) ||
-          !Number.isFinite(lat) ||
-          !Number.isFinite(lng)
-        ) {
-          return null;
-        }
+                const categoryOrderB =
+                  b.category_order_map?.[
+                    normalizedCategory
+                  ] ?? null;
 
-        const firstCategory =
-          matchedCategories[0];
+                const orderA =
+                  categoryOrderA ??
+                  a.business_order ??
+                  Number.MAX_SAFE_INTEGER;
 
-        const normalizedFirstCategory =
-          normalizeCategory(firstCategory);
+                const orderB =
+                  categoryOrderB ??
+                  b.business_order ??
+                  Number.MAX_SAFE_INTEGER;
+
+                if (
+                  orderA !== orderB
+                ) {
+                  return (
+                    orderA -
+                    orderB
+                  );
+                }
+
+                return String(
+                  a.name || "",
+                ).localeCompare(
+                  String(
+                    b.name || "",
+                  ),
+                  "ko",
+                );
+              },
+            );
 
         return {
-          ...item,
-
-          id: marketplaceId,
-          marketplace_id: marketplaceId,
-          original_id: marketplaceId,
-
-          business_id: `marketplace-${marketplaceId}`,
-          original_business_id: `marketplace-${marketplaceId}`,
-
-          name:
-            item.title ||
-            "Marketplace Item",
-
-          category: firstCategory,
-          categories:
-            matchedCategories.join(", "),
-          matched_categories:
-            matchedCategories,
-
+          name: categoryName,
           emoji:
             categoryEmojiMap.get(
-              normalizedFirstCategory,
-            ) || "🛍️",
-
-          image_url:
-            item.image_urls?.[0] ||
-            item.image_url ||
-            null,
-
-          image_urls:
-            item.image_urls || null,
-
-          lat,
-          lng,
-
-          show_marker: true,
-
-          price: item.price,
-
-          type: "marketplace",
-          source_type: "marketplace",
-
-          community_visible: true,
-
-          map_key: `community-marketplace-${marketplaceId}`,
+              normalizedCategory,
+            ) || "📍",
+          items,
         };
       })
-      .filter(Boolean) || [];
-
-  const spots = [
-    ...uniqueBusinessSpots,
-    ...marketplaceSpots,
-  ];
+      .filter(
+        (
+          group,
+        ): group is {
+          name: string;
+          emoji: string;
+          items: any[];
+        } =>
+          Boolean(
+            group &&
+              group.items.length >
+                0,
+          ),
+      );
 
   return (
-    <main className="relative min-h-screen bg-[#F8F3EC]">
-      <MapWrapper
-        spots={spots}
-        categories={categoryList}
-        showAllOnLoad={false}
-        activeNav="map"
-        communityMode={true}
-        initialCategory={initialCategory}
-        initialSearch={requestedSearch}
-      />
+    <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-5 flex items-center justify-between">
+          <Link
+            href="/community/map"
+            className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
+          >
+            ← Back
+          </Link>
+
+          <h1 className="text-lg font-black tracking-wide">
+            한인 비즈니스
+          </h1>
+
+          <div className="w-[72px]" />
+        </div>
+
+        <div className="mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-xl font-black">
+                🌐 모두보기
+              </h2>
+
+              <p className="mt-1 text-sm font-semibold opacity-90">
+                전체 카테고리별 업체 리스트
+              </p>
+            </div>
+
+            <div className="shrink-0 rounded-full bg-white/20 px-3 py-2 text-right shadow-sm backdrop-blur-sm">
+              <p className="text-[10px] font-black uppercase tracking-wide opacity-90">
+                등록된 비즈니스 업체
+              </p>
+
+              <p className="mt-0.5 text-lg font-black leading-none">
+                {registeredBusinessCount.toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-7">
+          {groupedByCategory.map(
+            (group) => (
+              <section
+                key={group.name}
+              >
+                <div className="mb-2 flex items-center gap-2 border-b border-gray-300 pb-2">
+                  <span className="text-2xl">
+                    {group.emoji}
+                  </span>
+
+                  <h2 className="text-lg font-black">
+                    {group.name}
+                  </h2>
+
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-gray-500 shadow-sm">
+                    {
+                      group.items
+                        .length
+                    }
+                  </span>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+                  <div className="grid grid-cols-[1fr_82px_42px_70px] border-b bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-500">
+                    <div>
+                      Business
+                    </div>
+
+                    <div className="text-center">
+                      City
+                    </div>
+
+                    <div className="text-center">
+                      Call
+                    </div>
+
+                    <div className="text-center">
+                      Directions
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-gray-200">
+                    {group.items.map(
+                      (
+                        business: any,
+                      ) => {
+                        const phone =
+                          getPhone(
+                            business,
+                          );
+
+                        const city =
+                          getCityFromAddress(
+                            business,
+                          );
+
+                        return (
+                          <div
+                            key={`${group.name}-${business.id}`}
+                            className="grid grid-cols-[1fr_82px_42px_70px] items-center gap-2 px-3 py-2 text-xs"
+                          >
+                            <Link
+                              href={`/business/${business.id}?from=community-directory`}
+                              className="min-w-0 break-words font-black leading-tight text-[#172033]"
+                            >
+                              {
+                                business.name
+                              }
+                            </Link>
+
+                            <div className="flex justify-center">
+                              {city ? (
+                                <span className="max-w-[80px] truncate rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                                  {
+                                    city
+                                  }
+                                </span>
+                              ) : (
+                                <span className="text-gray-300">
+                                  —
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex justify-center">
+                              {phone ? (
+                                <a
+                                  href={`tel:${phone}`}
+                                  aria-label={`Call ${business.name}`}
+                                >
+                                  <PhoneIcon />
+                                </a>
+                              ) : (
+                                <span className="text-gray-300">
+                                  —
+                                </span>
+                              )}
+                            </div>
+
+                            <a
+                              href={getMapUrl(
+                                business,
+                              )}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex flex-col items-center justify-center text-[#172033] active:scale-95"
+                            >
+                              <DirectionsIcon />
+
+                              <span className="mt-0.5 text-[8px] font-bold leading-none">
+                                Directions
+                              </span>
+                            </a>
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
+                </div>
+              </section>
+            ),
+          )}
+        </div>
+      </div>
 
       <CommunityBottomNav activeNav="map" />
     </main>
