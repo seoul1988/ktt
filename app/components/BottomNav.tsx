@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
@@ -9,7 +10,10 @@ type BottomNavProps = {
 };
 
 export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
+  const router = useRouter();
+
   const [role, setRole] = useState<string | null>(null);
+  const [isIOS, setIsIOS] = useState(false);
 
   const activeClass = "text-[#F7B955]";
   const normalClass = "text-white";
@@ -20,7 +24,10 @@ export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) return;
+      if (!user) {
+        setRole(null);
+        return;
+      }
 
       const { data } = await supabase
         .from("profiles")
@@ -34,32 +41,73 @@ export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
     loadRole();
   }, []);
 
+  useEffect(() => {
+    const userAgent = window.navigator.userAgent;
+    const platform = window.navigator.platform;
+    const touchPoints = window.navigator.maxTouchPoints;
+
+    const iphoneOrIPad =
+      /iPhone|iPad|iPod/i.test(userAgent) ||
+      (platform === "MacIntel" && touchPoints > 1);
+
+    setIsIOS(iphoneOrIPad);
+  }, []);
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  }
+
   return (
-    <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl">
+    <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-[1000] flex w-[94%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-xs font-semibold text-white shadow-2xl">
+      {isIOS && (
+        <button
+          type="button"
+          onClick={handleBack}
+          aria-label="Go back"
+          className="flex min-w-0 flex-col items-center justify-center gap-1 text-white active:scale-95"
+        >
+          <span className="text-lg leading-none">←</span>
+          <span>Back</span>
+        </button>
+      )}
+
       <Link
         href="/"
-        className={activeNav === "home" ? activeClass : normalClass}
+        className={`flex flex-col items-center justify-center ${
+          activeNav === "home" ? activeClass : normalClass
+        }`}
       >
         Home
       </Link>
 
       <Link
         href="/map"
-        className={activeNav === "map" ? activeClass : normalClass}
+        className={`flex flex-col items-center justify-center ${
+          activeNav === "map" ? activeClass : normalClass
+        }`}
       >
         Map
       </Link>
 
       <Link
         href="/deals"
-        className={activeNav === "deals" ? activeClass : normalClass}
+        className={`flex flex-col items-center justify-center ${
+          activeNav === "deals" ? activeClass : normalClass
+        }`}
       >
         Deals
       </Link>
 
       <Link
         href="/community"
-        className={activeNav === "community" ? activeClass : normalClass}
+        className={`flex flex-col items-center justify-center ${
+          activeNav === "community" ? activeClass : normalClass
+        }`}
       >
         Community
       </Link>
@@ -67,7 +115,9 @@ export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
       {role === "admin" && (
         <Link
           href="/admin"
-          className={activeNav === "admin" ? activeClass : normalClass}
+          className={`flex flex-col items-center justify-center ${
+            activeNav === "admin" ? activeClass : normalClass
+          }`}
         >
           Admin
         </Link>
