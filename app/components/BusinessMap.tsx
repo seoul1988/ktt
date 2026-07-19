@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AuthRefreshWrapper from "./AuthRefreshWrapper";
 
 
@@ -627,6 +628,9 @@ export default function BusinessMap({
   role?: string | null;
   initialCategory?: string;
 }) {
+  const router = useRouter();
+
+  const [isIOS, setIsIOS] = useState(false);
   const [search, setSearch] = useState("");
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
@@ -659,6 +663,27 @@ export default function BusinessMap({
   );
 
   const storageKey = `${MAP_STATE_KEY}-${communityMode ? "community" : activeNav}`;
+
+  useEffect(() => {
+    const userAgent = window.navigator.userAgent;
+    const platform = window.navigator.platform;
+    const touchPoints = window.navigator.maxTouchPoints;
+
+    const isAppleMobile =
+      /iPhone|iPad|iPod/i.test(userAgent) ||
+      (platform === "MacIntel" && touchPoints > 1);
+
+    setIsIOS(isAppleMobile);
+  }, []);
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  }
 
   const normalizedSpots = useMemo(() => {
     return spots.map((spot) => ({
@@ -1785,36 +1810,69 @@ export default function BusinessMap({
       </div>
 
       {!communityMode && (
-        <nav className="fixed bottom-4 left-1/2 z-[1000] flex w-[90%] max-w-md -translate-x-1/2 justify-around rounded-3xl bg-[#172033] px-4 py-3 text-xs font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[70%] landscape:max-w-sm landscape:py-2 landscape:text-[11px]">
-          <a href="/" className={activeNav === "home" ? "text-[#F7B955]" : undefined}>
-            Home
-          </a>
+        <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-[1000] flex w-[94%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[74%] landscape:max-w-md landscape:py-2 landscape:text-[10px]">
+          {isIOS && (
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Go back"
+              className="flex min-w-[42px] flex-col items-center justify-center gap-0.5 text-white transition active:scale-90 active:opacity-70"
+            >
+              <span className="text-lg leading-none">←</span>
+              <span>BACK</span>
+            </button>
+          )}
 
-          <a href="/map" className={activeNav === "map" ? "text-[#F7B955]" : undefined}>
-            Map
-          </a>
+          <Link
+            href="/"
+            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
+              activeNav === "home" ? "text-[#F7B955]" : "text-white"
+            }`}
+          >
+            <span className="text-lg leading-none">🏠</span>
+            <span>HOME</span>
+          </Link>
 
-          <a
+          <Link
+            href="/map"
+            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
+              activeNav === "map" ? "text-[#F7B955]" : "text-white"
+            }`}
+          >
+            <span className="text-lg leading-none">🗺️</span>
+            <span>MAP</span>
+          </Link>
+
+          <Link
             href="/deals"
-            className={activeNav === "deals" ? "text-[#F7B955]" : undefined}
+            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
+              activeNav === "deals" ? "text-[#F7B955]" : "text-white"
+            }`}
           >
-            Deals
-          </a>
+            <span className="text-lg leading-none">🔥</span>
+            <span>DEALS</span>
+          </Link>
 
-          <a
+          <Link
             href="/community"
-            className={activeNav === "community" ? "text-[#F7B955]" : undefined}
+            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
+              activeNav === "community" ? "text-[#F7B955]" : "text-white"
+            }`}
           >
-            Community
-          </a>
+            <span className="text-lg leading-none">👥</span>
+            <span>SOCIAL</span>
+          </Link>
 
           {myRole === "admin" && (
-            <a
+            <Link
               href="/admin"
-              className={activeNav === "admin" ? "text-[#F7B955]" : undefined}
+              className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
+                activeNav === "admin" ? "text-[#F7B955]" : "text-white"
+              }`}
             >
-              ADMIN
-            </a>
+              <span className="text-lg leading-none">⚙️</span>
+              <span>ADMIN</span>
+            </Link>
           )}
         </nav>
       )}
