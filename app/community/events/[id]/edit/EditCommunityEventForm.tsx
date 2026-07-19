@@ -65,6 +65,7 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
   );
 
   const [saving, setSaving] = useState(false);
+  const [optimizingImage, setOptimizingImage] = useState(false);
 
   function onPlaceChanged() {
     const place = autocompleteRef.current?.getPlace();
@@ -81,11 +82,48 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
     }
   }
 
-  function handleImage(file: File | null) {
+
+  async function optimizeImage(file: File) {
+    if (file.type === "image/gif" || file.type==="image/svg+xml") return file;
+
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1,1200/bitmap.width,1200/bitmap.height);
+
+    const w=Math.round(bitmap.width*scale);
+    const h=Math.round(bitmap.height*scale);
+
+    const canvas=document.createElement("canvas");
+    canvas.width=w;
+    canvas.height=h;
+
+    const ctx=canvas.getContext("2d");
+    if(!ctx) return file;
+
+    ctx.drawImage(bitmap,0,0,w,h);
+
+    const blob=await new Promise<Blob|null>(r=>canvas.toBlob(r,"image/webp",0.76));
+    bitmap.close();
+
+    if(!blob) return file;
+
+    return new File([blob],file.name.replace(/\.[^.]+$/,"")+".webp",{
+      type:"image/webp",
+      lastModified:Date.now(),
+    });
+  }
+
+  async function handleImage(file: File | null) {
     if (!file) return;
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setOptimizingImage(true);
+
+    try {
+      const optimized=await optimizeImage(file);
+      setImageFile(optimized);
+      setImagePreview(URL.createObjectURL(optimized));
+    } finally {
+      setOptimizingImage(false);
+    }
   }
 
   function handleVideo(file: File | null) {
@@ -113,7 +151,7 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
       .upload(fileName, file, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type,
+        contentType: file.type || "image/webp",
       });
 
     if (error) {
@@ -237,7 +275,7 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-5xl px-2 lg:px-4">
         <div className="relative mb-5 flex items-center justify-center">
           <Link
             href={`/community/events/${event.id}`}
@@ -499,11 +537,13 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleImage(e.target.files?.[0] || null)}
+                  onChange={async (e)=>{await handleImage(e.target.files?.[0]||null); e.currentTarget.value="";}}
                   className="hidden"
                 />
               </label>
             </div>
+
+            <p className="mt-2 text-xs font-bold text-blue-600">New images are automatically resized to max 1200px and converted to WebP.</p>
 
             {imagePreview && (
               <img
@@ -564,11 +604,11 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || optimizingImage}
             onClick={submitEvent}
             className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
           >
-            {saving ? "Saving..." : "Save Changes"}
+            {optimizingImage ? "Optimizing Image..." : saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
