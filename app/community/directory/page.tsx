@@ -11,11 +11,8 @@ type Category = {
   id?: number;
   name: string;
   emoji: string | null;
+  hidden?: boolean | null;
 };
-
-const HIDDEN_DIRECTORY_CATEGORIES = new Set([
-  "beautysupply",
-]);
 
 function normalizeCategory(value: string | null | undefined) {
   return String(value || "")
@@ -26,27 +23,13 @@ function normalizeCategory(value: string | null | undefined) {
     .replace(/s$/, "");
 }
 
-function isHiddenDirectoryCategory(
-  value: string | null | undefined,
-) {
-  return HIDDEN_DIRECTORY_CATEGORIES.has(
-    normalizeCategory(value),
-  );
-}
-
 function parseOrderValue(...values: any[]) {
   for (const value of values) {
-    if (
-      value === null ||
-      value === undefined ||
-      value === ""
-    ) {
+    if (value === null || value === undefined || value === "") {
       continue;
     }
 
-    const parsed = Number(
-      String(value).trim(),
-    );
+    const parsed = Number(String(value).trim());
 
     if (Number.isFinite(parsed)) {
       return parsed;
@@ -59,13 +42,13 @@ function parseOrderValue(...values: any[]) {
 function splitCategories(value: any) {
   if (Array.isArray(value)) {
     return value
-      .map((v) => String(v).trim())
+      .map((item) => String(item).trim())
       .filter(Boolean);
   }
 
   return String(value || "")
     .split(",")
-    .map((v) => v.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
 }
 
@@ -75,33 +58,22 @@ function getAddress(item: any) {
     item.full_address ||
     item.formatted_address ||
     item.location ||
-    [
-      item.street,
-      item.city,
-      item.state,
-      item.zip,
-    ]
+    [item.street, item.city, item.state, item.zip]
       .filter(Boolean)
       .join(", ")
   );
 }
 
 function getPhone(item: any) {
-  return (
-    item.phone ||
-    item.phone_number ||
-    ""
-  );
+  return item.phone || item.phone_number || "";
 }
 
 function getCityFromAddress(item: any) {
-  const address = String(
-    getAddress(item) || "",
-  );
+  const address = String(getAddress(item) || "");
 
   const parts = address
     .split(",")
-    .map((v) => v.trim())
+    .map((item) => item.trim())
     .filter(Boolean);
 
   if (parts.length >= 2) {
@@ -140,32 +112,68 @@ function PhoneIcon() {
 }
 
 export default async function CommunityDirectoryPage() {
-  const { data: categoriesData } =
-    await supabase
-      .from("categories")
-      .select("id, name, emoji")
-      .order("name", {
-        ascending: true,
-      });
+  /*
+   * hidden이 false이거나 null인 카테고리만 가져옵니다.
+   * 일부 기존 데이터가 hidden=null일 수 있으므로
+   * 조회 후 한 번 더 안전하게 필터링합니다.
+   */
+  const {
+    data: categoriesData,
+    error: categoriesError,
+  } = await supabase
+    .from("categories")
+    .select("id, name, emoji, hidden")
+    .order("name", {
+      ascending: true,
+    });
+
+  if (categoriesError) {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+        <p className="font-bold text-red-600">
+          카테고리 불러오기 실패: {categoriesError.message}
+        </p>
+      </main>
+    );
+  }
 
   /*
-   * 디렉토리에서 Beauty Supply 카테고리를 제거합니다.
-   * 지도나 다른 페이지에는 영향을 주지 않습니다.
+   * categories.hidden = true인 카테고리는
+   * 디렉토리에서 완전히 제외합니다.
    */
   const categoryList = (
     (categoriesData || []) as Category[]
   ).filter(
     (category) =>
-      !isHiddenDirectoryCategory(
-        category.name,
-      ),
+      category.hidden !== true &&
+      Boolean(category.name?.trim()),
   );
+
+  /*
+   * 숨김 처리된 카테고리 이름을 추적합니다.
+   * businesses.category 같은 fallback 문자열에도
+   * 숨김 카테고리가 들어 있을 수 있으므로 사용합니다.
+   */
+  const hiddenCategoryNames = new Set(
+    ((categoriesData || []) as Category[])
+      .filter((category) => category.hidden === true)
+      .map((category) =>
+        normalizeCategory(category.name),
+      )
+      .filter(Boolean),
+  );
+
+  function isHiddenCategory(
+    value: string | null | undefined,
+  ) {
+    return hiddenCategoryNames.has(
+      normalizeCategory(value),
+    );
+  }
 
   const categoryById = new Map(
     categoryList
-      .filter(
-        (category) => category.id,
-      )
+      .filter((category) => category.id)
       .map((category) => [
         Number(category.id),
         category,
@@ -174,16 +182,14 @@ export default async function CommunityDirectoryPage() {
 
   const categoryEmojiMap = new Map(
     categoryList.map((category) => [
-      normalizeCategory(
-        category.name,
-      ),
+      normalizeCategory(category.name),
       category.emoji,
     ]),
   );
 
   const {
     data: businesses,
-    error,
+    error: businessesError,
   } = await supabase
     .from("businesses")
     .select("*")
@@ -191,79 +197,74 @@ export default async function CommunityDirectoryPage() {
       ascending: true,
     });
 
-  if (error) {
+  if (businessesError) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
         <p className="font-bold text-red-600">
           업체 리스트 불러오기 실패:{" "}
-          {error.message}
+          {businessesError.message}
         </p>
       </main>
     );
   }
 
-  const registeredBusinessCount = businesses?.length || 0;
-
   const {
     data: businessCategoryRows,
+    error: businessCategoriesError,
   } = await supabase
     .from("business_categories")
     .select("*");
+
+  if (businessCategoriesError) {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+        <p className="font-bold text-red-600">
+          업체 카테고리 연결정보 불러오기 실패:{" "}
+          {businessCategoriesError.message}
+        </p>
+      </main>
+    );
+  }
 
   type LinkedCategory = {
     name: string;
     order: number | null;
   };
 
-  const businessCategoryMap =
-    new Map<
-      number,
-      LinkedCategory[]
-    >();
+  const businessCategoryMap = new Map<
+    number,
+    LinkedCategory[]
+  >();
 
-  (
-    businessCategoryRows || []
-  ).forEach((row: any) => {
-    const businessId = Number(
-      row.business_id,
-    );
-
-    const categoryId = Number(
-      row.category_id,
-    );
-
-    const category =
-      categoryById.get(categoryId);
+  (businessCategoryRows || []).forEach((row: any) => {
+    const businessId = Number(row.business_id);
+    const categoryId = Number(row.category_id);
 
     /*
-     * Beauty Supply는 categoryById에서 이미 제거됐으므로
-     * 이 연결 정보도 디렉토리에 포함되지 않습니다.
+     * categoryById에는 hidden=true 카테고리가 없으므로
+     * 숨김 카테고리 연결은 자동으로 제외됩니다.
      */
-    if (
-      !businessId ||
-      !category?.name
-    ) {
+    const category = categoryById.get(categoryId);
+
+    if (!businessId || !category?.name) {
       return;
     }
 
-    const parsedOrder =
-      parseOrderValue(
-        row.order,
-        row.sort_order,
-        row.display_order,
-        row.category_order,
-        row.order_index,
-        row.sort_index,
-        row.position,
-        row.sequence,
-        row.priority,
-        row.rank,
-      );
+    const parsedOrder = parseOrderValue(
+      row.order,
+      row.sort_order,
+      row.display_order,
+      row.category_order,
+      row.order_index,
+      row.sort_index,
+      row.position,
+      row.sequence,
+      row.priority,
+      row.rank,
+    );
 
     const current =
-      businessCategoryMap.get(
-        businessId,
-      ) || [];
+      businessCategoryMap.get(businessId) || [];
 
     current.push({
       name: category.name,
@@ -284,32 +285,29 @@ export default async function CommunityDirectoryPage() {
             Number(business.id),
           ) || [];
 
-        const fallbackCategories =
-          splitCategories(
-            business.category ||
-              business.categories ||
-              business.business_category ||
-              business.type ||
-              business.tags ||
-              "",
-          ).filter(
-            (categoryName) =>
-              !isHiddenDirectoryCategory(
-                categoryName,
-              ),
-          );
+        /*
+         * businesses 테이블의 category 문자열을
+         * fallback으로 사용하는 경우에도
+         * hidden 카테고리를 제거합니다.
+         */
+        const fallbackCategories = splitCategories(
+          business.category ||
+            business.categories ||
+            business.business_category ||
+            business.type ||
+            business.tags ||
+            "",
+        ).filter(
+          (categoryName) =>
+            !isHiddenCategory(categoryName),
+        );
 
         const linkedCategoryNames =
           linkedCategories
-            .map(
-              (category) =>
-                category.name,
-            )
+            .map((category) => category.name)
             .filter(
               (categoryName) =>
-                !isHiddenDirectoryCategory(
-                  categoryName,
-                ),
+                !isHiddenCategory(categoryName),
             );
 
         const rawCategories = [
@@ -317,59 +315,47 @@ export default async function CommunityDirectoryPage() {
           ...fallbackCategories,
         ];
 
-        const uniqueCategories =
-          Array.from(
-            new Set(
-              rawCategories
-                .map((cat) =>
-                  String(cat).trim(),
-                )
-                .filter(Boolean)
-                .filter(
-                  (categoryName) =>
-                    !isHiddenDirectoryCategory(
-                      categoryName,
-                    ),
-                ),
-            ),
-          );
+        const uniqueCategories = Array.from(
+          new Set(
+            rawCategories
+              .map((categoryName) =>
+                String(categoryName).trim(),
+              )
+              .filter(Boolean)
+              .filter(
+                (categoryName) =>
+                  !isHiddenCategory(categoryName),
+              ),
+          ),
+        );
 
         const categoryOrderMap: Record<
           string,
           number | null
         > = {};
 
-        linkedCategories.forEach(
-          (category) => {
-            if (
-              isHiddenDirectoryCategory(
-                category.name,
-              )
-            ) {
-              return;
-            }
+        linkedCategories.forEach((category) => {
+          if (isHiddenCategory(category.name)) {
+            return;
+          }
 
-            categoryOrderMap[
-              normalizeCategory(
-                category.name,
-              )
-            ] = category.order;
-          },
+          categoryOrderMap[
+            normalizeCategory(category.name)
+          ] = category.order;
+        });
+
+        const businessOrder = parseOrderValue(
+          business.order,
+          business.sort_order,
+          business.display_order,
+          business.category_order,
+          business.order_index,
+          business.sort_index,
+          business.position,
+          business.sequence,
+          business.priority,
+          business.rank,
         );
-
-        const businessOrder =
-          parseOrderValue(
-            business.order,
-            business.sort_order,
-            business.display_order,
-            business.category_order,
-            business.order_index,
-            business.sort_index,
-            business.position,
-            business.sequence,
-            business.priority,
-            business.rank,
-          );
 
         return {
           ...business,
@@ -388,138 +374,111 @@ export default async function CommunityDirectoryPage() {
       })
       .filter(Boolean) || [];
 
-  /*
-   * Beauty Supply 카테고리 이름을
-   * 디렉토리 그룹 목록에서 제외합니다.
-   */
-  const categoryNames =
-    Array.from(
-      new Set(
-        businessList.flatMap(
-          (business: any) =>
-            business.matched_categories ||
-            [],
-        ),
+  const categoryNames = Array.from(
+    new Set(
+      businessList.flatMap(
+        (business: any) =>
+          business.matched_categories || [],
       ),
+    ),
+  )
+    .filter(
+      (categoryName: string) =>
+        !isHiddenCategory(categoryName),
     )
-      .filter(
-        (categoryName: string) =>
-          !isHiddenDirectoryCategory(
-            categoryName,
-          ),
-      )
-      .sort(
-        (
-          a: string,
-          b: string,
-        ) =>
-          a.localeCompare(
-            b,
-            "ko",
-          ),
-      );
+    .sort((a: string, b: string) =>
+      a.localeCompare(b, "ko"),
+    );
 
-  const groupedByCategory =
-    categoryNames
-      .map((categoryName) => {
-        const normalizedCategory =
-          normalizeCategory(
-            categoryName,
-          );
+  const groupedByCategory = categoryNames
+    .map((categoryName) => {
+      if (isHiddenCategory(categoryName)) {
+        return null;
+      }
 
-        /*
-         * 마지막 단계에서도 Beauty Supply 그룹을 방지합니다.
-         */
-        if (
-          isHiddenDirectoryCategory(
-            categoryName,
-          )
-        ) {
-          return null;
-        }
+      const normalizedCategory =
+        normalizeCategory(categoryName);
 
-        const items =
-          businessList
-            .filter(
-              (business: any) =>
-                business.matched_categories.some(
-                  (
-                    cat: string,
-                  ) =>
-                    normalizeCategory(
-                      cat,
-                    ) ===
-                    normalizedCategory,
-                ),
-            )
-            .sort(
-              (
-                a: any,
-                b: any,
-              ) => {
-                const categoryOrderA =
-                  a.category_order_map?.[
-                    normalizedCategory
-                  ] ?? null;
-
-                const categoryOrderB =
-                  b.category_order_map?.[
-                    normalizedCategory
-                  ] ?? null;
-
-                const orderA =
-                  categoryOrderA ??
-                  a.business_order ??
-                  Number.MAX_SAFE_INTEGER;
-
-                const orderB =
-                  categoryOrderB ??
-                  b.business_order ??
-                  Number.MAX_SAFE_INTEGER;
-
-                if (
-                  orderA !== orderB
-                ) {
-                  return (
-                    orderA -
-                    orderB
-                  );
-                }
-
-                return String(
-                  a.name || "",
-                ).localeCompare(
-                  String(
-                    b.name || "",
-                  ),
-                  "ko",
-                );
-              },
-            );
-
-        return {
-          name: categoryName,
-          emoji:
-            categoryEmojiMap.get(
+      const items = businessList
+        .filter((business: any) =>
+          business.matched_categories.some(
+            (category: string) =>
+              normalizeCategory(category) ===
               normalizedCategory,
-            ) || "📍",
-          items,
-        };
-      })
-      .filter(
-        (
-          group,
-        ): group is {
-          name: string;
-          emoji: string;
-          items: any[];
-        } =>
-          Boolean(
-            group &&
-              group.items.length >
-                0,
           ),
+        )
+        .sort((a: any, b: any) => {
+          const categoryOrderA =
+            a.category_order_map?.[
+              normalizedCategory
+            ] ?? null;
+
+          const categoryOrderB =
+            b.category_order_map?.[
+              normalizedCategory
+            ] ?? null;
+
+          const orderA =
+            categoryOrderA ??
+            a.business_order ??
+            Number.MAX_SAFE_INTEGER;
+
+          const orderB =
+            categoryOrderB ??
+            b.business_order ??
+            Number.MAX_SAFE_INTEGER;
+
+          if (orderA !== orderB) {
+            return orderA - orderB;
+          }
+
+          return String(
+            a.name || "",
+          ).localeCompare(
+            String(b.name || ""),
+            "ko",
+          );
+        });
+
+      return {
+        name: categoryName,
+        emoji:
+          categoryEmojiMap.get(
+            normalizedCategory,
+          ) || "📍",
+        items,
+      };
+    })
+    .filter(
+      (
+        group,
+      ): group is {
+        name: string;
+        emoji: string;
+        items: any[];
+      } =>
+        Boolean(
+          group &&
+            group.items.length > 0,
+        ),
+    );
+
+  /*
+   * 실제 디렉토리에 표시되는 업체 수입니다.
+   * 모든 카테고리가 hidden인 업체는 제외합니다.
+   */
+  const visibleBusinessIds = new Set<number>();
+
+  groupedByCategory.forEach((group) => {
+    group.items.forEach((business: any) => {
+      visibleBusinessIds.add(
+        Number(business.id),
       );
+    });
+  });
+
+  const registeredBusinessCount =
+    visibleBusinessIds.size;
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
@@ -564,127 +523,118 @@ export default async function CommunityDirectoryPage() {
         </div>
 
         <div className="space-y-7">
-          {groupedByCategory.map(
-            (group) => (
-              <section
-                key={group.name}
-              >
-                <div className="mb-2 flex items-center gap-2 border-b border-gray-300 pb-2">
-                  <span className="text-2xl">
-                    {group.emoji}
-                  </span>
+          {groupedByCategory.map((group) => (
+            <section key={group.name}>
+              <div className="mb-2 flex items-center gap-2 border-b border-gray-300 pb-2">
+                <span className="text-2xl">
+                  {group.emoji}
+                </span>
 
-                  <h2 className="text-lg font-black">
-                    {group.name}
-                  </h2>
+                <h2 className="text-lg font-black">
+                  {group.name}
+                </h2>
 
-                  <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-gray-500 shadow-sm">
-                    {
-                      group.items
-                        .length
-                    }
-                  </span>
-                </div>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-gray-500 shadow-sm">
+                  {group.items.length}
+                </span>
+              </div>
 
-                <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                  <div className="grid grid-cols-[1fr_82px_42px_70px] border-b bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-500">
-                    <div>
-                      Business
-                    </div>
+              <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+                <div className="grid grid-cols-[1fr_82px_42px_70px] border-b bg-gray-100 px-3 py-2 text-[11px] font-black text-gray-500">
+                  <div>Business</div>
 
-                    <div className="text-center">
-                      City
-                    </div>
-
-                    <div className="text-center">
-                      Call
-                    </div>
-
-                    <div className="text-center">
-                      Directions
-                    </div>
+                  <div className="text-center">
+                    City
                   </div>
 
-                  <div className="divide-y divide-gray-200">
-                    {group.items.map(
-                      (
-                        business: any,
-                      ) => {
-                        const phone =
-                          getPhone(
-                            business,
-                          );
+                  <div className="text-center">
+                    Call
+                  </div>
 
-                        const city =
-                          getCityFromAddress(
-                            business,
-                          );
+                  <div className="text-center">
+                    Directions
+                  </div>
+                </div>
 
-                        return (
-                          <div
-                            key={`${group.name}-${business.id}`}
-                            className="grid grid-cols-[1fr_82px_42px_70px] items-center gap-2 px-3 py-2 text-xs"
-                          >
-                            <Link
-                              href={`/business/${business.id}?from=community-directory`}
-                              className="min-w-0 break-words font-black leading-tight text-[#172033]"
-                            >
-                              {
-                                business.name
-                              }
-                            </Link>
+                <div className="divide-y divide-gray-200">
+                  {group.items.map(
+                    (business: any) => {
+                      const phone =
+                        getPhone(business);
 
-                            <div className="flex justify-center">
-                              {city ? (
-                                <span className="max-w-[80px] truncate rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
-                                  {
-                                    city
-                                  }
-                                </span>
-                              ) : (
-                                <span className="text-gray-300">
-                                  —
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex justify-center">
-                              {phone ? (
-                                <a
-                                  href={`tel:${phone}`}
-                                  aria-label={`Call ${business.name}`}
-                                >
-                                  <PhoneIcon />
-                                </a>
-                              ) : (
-                                <span className="text-gray-300">
-                                  —
-                                </span>
-                              )}
-                            </div>
-
-                            <a
-                              href={getMapUrl(
-                                business,
-                              )}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex flex-col items-center justify-center text-[#172033] active:scale-95"
-                            >
-                              <DirectionsIcon />
-
-                              <span className="mt-0.5 text-[8px] font-bold leading-none">
-                                Directions
-                              </span>
-                            </a>
-                          </div>
+                      const city =
+                        getCityFromAddress(
+                          business,
                         );
-                      },
-                    )}
-                  </div>
+
+                      return (
+                        <div
+                          key={`${group.name}-${business.id}`}
+                          className="grid grid-cols-[1fr_82px_42px_70px] items-center gap-2 px-3 py-2 text-xs"
+                        >
+                          <Link
+                            href={`/business/${business.id}?from=community-directory`}
+                            className="min-w-0 break-words font-black leading-tight text-[#172033]"
+                          >
+                            {business.name}
+                          </Link>
+
+                          <div className="flex justify-center">
+                            {city ? (
+                              <span className="max-w-[80px] truncate rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black text-blue-700">
+                                {city}
+                              </span>
+                            ) : (
+                              <span className="text-gray-300">
+                                —
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex justify-center">
+                            {phone ? (
+                              <a
+                                href={`tel:${phone}`}
+                                aria-label={`Call ${business.name}`}
+                              >
+                                <PhoneIcon />
+                              </a>
+                            ) : (
+                              <span className="text-gray-300">
+                                —
+                              </span>
+                            )}
+                          </div>
+
+                          <a
+                            href={getMapUrl(
+                              business,
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-col items-center justify-center text-[#172033] active:scale-95"
+                          >
+                            <DirectionsIcon />
+
+                            <span className="mt-0.5 text-[8px] font-bold leading-none">
+                              Directions
+                            </span>
+                          </a>
+                        </div>
+                      );
+                    },
+                  )}
                 </div>
-              </section>
-            ),
+              </div>
+            </section>
+          ))}
+
+          {groupedByCategory.length === 0 && (
+            <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
+              <p className="font-black text-gray-500">
+                표시할 비즈니스가 없습니다.
+              </p>
+            </div>
           )}
         </div>
       </div>
