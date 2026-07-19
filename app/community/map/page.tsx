@@ -11,7 +11,6 @@ type CommunityCategory = {
   id: number;
   name: string;
   emoji: string | null;
-  hidden?: boolean | null;
 };
 
 type CategoryLoadResult = {
@@ -140,12 +139,14 @@ function resolveInitialCategory(
 
 /**
  * Community Map에 표시하도록 체크된 카테고리만 가져옵니다.
- * hidden=true인 카테고리는 표시하지 않습니다.
+ *
+ * categories 테이블의 show_on_community_map 값이 true인
+ * 카테고리만 지도에 표시합니다.
  */
 async function getCommunityCategories(): Promise<CategoryLoadResult> {
   const { data, error } = await supabase
     .from("categories")
-    .select("id, name, emoji, hidden")
+    .select("id, name, emoji")
     .eq("show_on_community_map", true)
     .order("name", {
       ascending: true,
@@ -154,7 +155,7 @@ async function getCommunityCategories(): Promise<CategoryLoadResult> {
   if (error) {
     console.error(
       "Community map categories load error:",
-      error,
+      error.message,
     );
 
     return {
@@ -170,15 +171,13 @@ async function getCommunityCategories(): Promise<CategoryLoadResult> {
   }
 
   /*
-   * hidden=true인 카테고리와
-   * 이름이 없는 카테고리는 제외합니다.
+   * show_on_community_map=true인 카테고리 중
+   * 이름이 있는 항목만 사용합니다.
    */
   const categoryList = (
     (data || []) as CommunityCategory[]
-  ).filter(
-    (category) =>
-      category.hidden !== true &&
-      Boolean(category.name?.trim()),
+  ).filter((category) =>
+    Boolean(category.name?.trim()),
   );
 
   return {
