@@ -11,7 +11,6 @@ type Category = {
   id?: number;
   name: string;
   emoji: string | null;
-  hidden?: boolean | null;
 };
 
 function normalizeCategory(value: string | null | undefined) {
@@ -112,17 +111,21 @@ function PhoneIcon() {
 }
 
 export default async function CommunityDirectoryPage() {
+
   /*
-   * hidden이 false이거나 null인 카테고리만 가져옵니다.
-   * 일부 기존 데이터가 hidden=null일 수 있으므로
-   * 조회 후 한 번 더 안전하게 필터링합니다.
+   * B2B Directory에 표시하도록 체크된 카테고리만 가져옵니다.
+   *
+   * 관리자 화면에서 Hidden을 체크하면
+   * show_on_b2b_directory가 false로 저장되어
+   * 이 목록에서 자동으로 제외됩니다.
    */
   const {
     data: categoriesData,
     error: categoriesError,
   } = await supabase
     .from("categories")
-    .select("id, name, emoji, hidden")
+    .select("id, name, emoji")
+    .eq("show_on_b2b_directory", true)
     .order("name", {
       ascending: true,
     });
@@ -137,36 +140,24 @@ export default async function CommunityDirectoryPage() {
     );
   }
 
-  /*
-   * categories.hidden = true인 카테고리는
-   * 디렉토리에서 완전히 제외합니다.
-   */
   const categoryList = (
     (categoriesData || []) as Category[]
-  ).filter(
-    (category) =>
-      category.hidden !== true &&
-      Boolean(category.name?.trim()),
+  ).filter((category) =>
+    Boolean(category.name?.trim()),
   );
 
-  /*
-   * 숨김 처리된 카테고리 이름을 추적합니다.
-   * businesses.category 같은 fallback 문자열에도
-   * 숨김 카테고리가 들어 있을 수 있으므로 사용합니다.
-   */
-  const hiddenCategoryNames = new Set(
-    ((categoriesData || []) as Category[])
-      .filter((category) => category.hidden === true)
+  const allowedCategoryNames = new Set(
+    categoryList
       .map((category) =>
         normalizeCategory(category.name),
       )
       .filter(Boolean),
   );
 
-  function isHiddenCategory(
+  function isAllowedCategory(
     value: string | null | undefined,
   ) {
-    return hiddenCategoryNames.has(
+    return allowedCategoryNames.has(
       normalizeCategory(value),
     );
   }
@@ -286,9 +277,8 @@ export default async function CommunityDirectoryPage() {
           ) || [];
 
         /*
-         * businesses 테이블의 category 문자열을
-         * fallback으로 사용하는 경우에도
-         * hidden 카테고리를 제거합니다.
+         * 문자열 카테고리를 fallback으로 사용할 때도
+         * B2B Directory에 허용된 카테고리만 사용합니다.
          */
         const fallbackCategories = splitCategories(
           business.category ||
@@ -297,17 +287,15 @@ export default async function CommunityDirectoryPage() {
             business.type ||
             business.tags ||
             "",
-        ).filter(
-          (categoryName) =>
-            !isHiddenCategory(categoryName),
+        ).filter((categoryName) =>
+          isAllowedCategory(categoryName),
         );
 
         const linkedCategoryNames =
           linkedCategories
             .map((category) => category.name)
-            .filter(
-              (categoryName) =>
-                !isHiddenCategory(categoryName),
+            .filter((categoryName) =>
+              isAllowedCategory(categoryName),
             );
 
         const rawCategories = [
@@ -322,9 +310,8 @@ export default async function CommunityDirectoryPage() {
                 String(categoryName).trim(),
               )
               .filter(Boolean)
-              .filter(
-                (categoryName) =>
-                  !isHiddenCategory(categoryName),
+              .filter((categoryName) =>
+                isAllowedCategory(categoryName),
               ),
           ),
         );
@@ -335,7 +322,7 @@ export default async function CommunityDirectoryPage() {
         > = {};
 
         linkedCategories.forEach((category) => {
-          if (isHiddenCategory(category.name)) {
+          if (!isAllowedCategory(category.name)) {
             return;
           }
 
@@ -357,13 +344,14 @@ export default async function CommunityDirectoryPage() {
           business.rank,
         );
 
+        if (uniqueCategories.length === 0) {
+          return null;
+        }
+
         return {
           ...business,
 
-          matched_categories:
-            uniqueCategories.length > 0
-              ? uniqueCategories
-              : ["Other"],
+          matched_categories: uniqueCategories,
 
           category_order_map:
             categoryOrderMap,
@@ -382,9 +370,8 @@ export default async function CommunityDirectoryPage() {
       ),
     ),
   )
-    .filter(
-      (categoryName: string) =>
-        !isHiddenCategory(categoryName),
+    .filter((categoryName: string) =>
+      isAllowedCategory(categoryName),
     )
     .sort((a: string, b: string) =>
       a.localeCompare(b, "ko"),
@@ -392,10 +379,6 @@ export default async function CommunityDirectoryPage() {
 
   const groupedByCategory = categoryNames
     .map((categoryName) => {
-      if (isHiddenCategory(categoryName)) {
-        return null;
-      }
-
       const normalizedCategory =
         normalizeCategory(categoryName);
 
@@ -465,7 +448,7 @@ export default async function CommunityDirectoryPage() {
 
   /*
    * 실제 디렉토리에 표시되는 업체 수입니다.
-   * 모든 카테고리가 hidden인 업체는 제외합니다.
+   * B2B Directory에 허용된 카테고리가 없는 업체는 제외합니다.
    */
   const visibleBusinessIds = new Set<number>();
 
