@@ -184,7 +184,7 @@ export default function InstallAppButton() {
       ) : (
         <button
           onClick={openBanner}
-          className="fixed right-0 top-1/2 z-[2000] h-20 w-4 -translate-y-1/2 rounded-l-full bg-[#A8A8A8] shadow-md"
+          className="fixed right-0 top-1/2 z-[2000] h-20 w-10 -translate-y-1/2 rounded-l-full bg-[#A8A8A8] shadow-md"
           aria-label="Open install panel"
         >
           <span className="block text-center text-[10px] text-white">≡</span>
