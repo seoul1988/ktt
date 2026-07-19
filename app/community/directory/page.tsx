@@ -116,7 +116,7 @@ export default async function CommunityDirectoryPage() {
    * B2B Directory에 표시하도록 체크된 카테고리만 가져옵니다.
    *
    * 관리자 화면에서 Hidden을 체크하면
-   * show_on_b2b_directory가 false로 저장되어
+   * show_on_b2b가 false로 저장되어
    * 이 목록에서 자동으로 제외됩니다.
    */
   const {
@@ -125,7 +125,7 @@ export default async function CommunityDirectoryPage() {
   } = await supabase
     .from("categories")
     .select("id, name, emoji")
-    .eq("show_on_b2b_directory", true)
+    .eq("show_on_b2b", true)
     .order("name", {
       ascending: true,
     });
