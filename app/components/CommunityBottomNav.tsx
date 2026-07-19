@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
@@ -18,7 +19,10 @@ type CommunityBottomNavProps = {
 export default function CommunityBottomNav({
   activeNav = "community",
 }: CommunityBottomNavProps) {
+  const router = useRouter();
+
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   const activeClass =
     "text-[#F7B955] scale-110 drop-shadow-[0_0_8px_rgba(247,185,85,0.65)]";
@@ -47,8 +51,38 @@ export default function CommunityBottomNav({
     loadProfile();
   }, []);
 
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    const platform = navigator.platform;
+    const touch = navigator.maxTouchPoints;
+
+    setIsIOS(
+      /iPhone|iPad|iPod/i.test(ua) ||
+        (platform === "MacIntel" && touch > 1)
+    );
+  }, []);
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/community");
+    }
+  }
+
   return (
-    <nav className="fixed bottom-4 left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-2 py-3 text-[8px] font-bold text-white shadow-2xl backdrop-blur-sm">
+    <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-2 py-3 text-[8px] font-bold text-white shadow-2xl backdrop-blur-sm">
+
+      {isIOS && (
+        <button
+          onClick={handleBack}
+          className={`${itemClass} ${normalClass}`}
+        >
+          <span className="text-lg leading-none">⬅️</span>
+          <span>BACK</span>
+        </button>
+      )}
+
       <Link
         href="/"
         className={`${itemClass} ${
