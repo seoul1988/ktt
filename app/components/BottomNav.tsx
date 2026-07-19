@@ -71,7 +71,7 @@ export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
           aria-label="Go back"
           className="flex min-w-0 flex-col items-center justify-center gap-1 text-white active:scale-95"
         >
-          <span className="text-lg leading-none">←</span>
+         
           <span>Back</span>
         </button>
       )}
