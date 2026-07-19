@@ -113,11 +113,8 @@ function PhoneIcon() {
 export default async function CommunityDirectoryPage() {
 
   /*
-   * B2B Directory에 표시하도록 체크된 카테고리만 가져옵니다.
-   *
-   * 관리자 화면에서 Hidden을 체크하면
-   * show_on_b2b가 false로 저장되어
-   * 이 목록에서 자동으로 제외됩니다.
+   * 카테고리는 표시 조건 없이 모두 가져옵니다.
+   * 등록된 비즈니스 업체는 카테고리 설정과 관계없이 전부 표시합니다.
    */
   const {
     data: categoriesData,
@@ -125,7 +122,6 @@ export default async function CommunityDirectoryPage() {
   } = await supabase
     .from("categories")
     .select("id, name, emoji")
-    .eq("show_on_b2b", true)
     .order("name", {
       ascending: true,
     });
@@ -145,22 +141,6 @@ export default async function CommunityDirectoryPage() {
   ).filter((category) =>
     Boolean(category.name?.trim()),
   );
-
-  const allowedCategoryNames = new Set(
-    categoryList
-      .map((category) =>
-        normalizeCategory(category.name),
-      )
-      .filter(Boolean),
-  );
-
-  function isAllowedCategory(
-    value: string | null | undefined,
-  ) {
-    return allowedCategoryNames.has(
-      normalizeCategory(value),
-    );
-  }
 
   const categoryById = new Map(
     categoryList
@@ -232,8 +212,8 @@ export default async function CommunityDirectoryPage() {
     const categoryId = Number(row.category_id);
 
     /*
-     * categoryById에는 hidden=true 카테고리가 없으므로
-     * 숨김 카테고리 연결은 자동으로 제외됩니다.
+     * business_categories 연결 정보를 사용해
+     * 업체를 카테고리별로 분류합니다.
      */
     const category = categoryById.get(categoryId);
 
@@ -287,16 +267,12 @@ export default async function CommunityDirectoryPage() {
             business.type ||
             business.tags ||
             "",
-        ).filter((categoryName) =>
-          isAllowedCategory(categoryName),
         );
 
         const linkedCategoryNames =
-          linkedCategories
-            .map((category) => category.name)
-            .filter((categoryName) =>
-              isAllowedCategory(categoryName),
-            );
+          linkedCategories.map(
+            (category) => category.name,
+          );
 
         const rawCategories = [
           ...linkedCategoryNames,
@@ -309,10 +285,7 @@ export default async function CommunityDirectoryPage() {
               .map((categoryName) =>
                 String(categoryName).trim(),
               )
-              .filter(Boolean)
-              .filter((categoryName) =>
-                isAllowedCategory(categoryName),
-              ),
+              .filter(Boolean),
           ),
         );
 
@@ -322,10 +295,6 @@ export default async function CommunityDirectoryPage() {
         > = {};
 
         linkedCategories.forEach((category) => {
-          if (!isAllowedCategory(category.name)) {
-            return;
-          }
-
           categoryOrderMap[
             normalizeCategory(category.name)
           ] = category.order;
@@ -344,14 +313,13 @@ export default async function CommunityDirectoryPage() {
           business.rank,
         );
 
-        if (uniqueCategories.length === 0) {
-          return null;
-        }
-
         return {
           ...business,
 
-          matched_categories: uniqueCategories,
+          matched_categories:
+            uniqueCategories.length > 0
+              ? uniqueCategories
+              : ["Other"],
 
           category_order_map:
             categoryOrderMap,
@@ -370,9 +338,6 @@ export default async function CommunityDirectoryPage() {
       ),
     ),
   )
-    .filter((categoryName: string) =>
-      isAllowedCategory(categoryName),
-    )
     .sort((a: string, b: string) =>
       a.localeCompare(b, "ko"),
     );
@@ -447,21 +412,10 @@ export default async function CommunityDirectoryPage() {
     );
 
   /*
-   * 실제 디렉토리에 표시되는 업체 수입니다.
-   * B2B Directory에 허용된 카테고리가 없는 업체는 제외합니다.
+   * businesses 테이블에 등록된 전체 업체 수입니다.
    */
-  const visibleBusinessIds = new Set<number>();
-
-  groupedByCategory.forEach((group) => {
-    group.items.forEach((business: any) => {
-      visibleBusinessIds.add(
-        Number(business.id),
-      );
-    });
-  });
-
   const registeredBusinessCount =
-    visibleBusinessIds.size;
+    businesses?.length || 0;
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
