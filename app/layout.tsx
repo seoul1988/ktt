@@ -59,11 +59,11 @@ export const metadata: Metadata = {
     images: ["/og-image.png"],
   },
 
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "KTT",
-  },
+ appleWebApp: {
+  capable: true,
+  statusBarStyle: "default",
+  title: "KTT",
+},
 
   icons: {
     icon: [
