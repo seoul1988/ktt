@@ -20,7 +20,7 @@ export default function NewEventPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [eventDate, setEventDate] = useState("");
+  const [eventDateTime, setEventDateTime] = useState("");
   const [location, setLocation] = useState("");
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
@@ -32,6 +32,7 @@ export default function NewEventPage() {
   const [videoUrl, setVideoUrl] = useState("");
 
   const [saving, setSaving] = useState(false);
+  const [optimizingImage, setOptimizingImage] = useState(false);
 
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -58,10 +59,91 @@ export default function NewEventPage() {
     }
   }
 
-  function handleImage(file: File | null) {
+  async function optimizeImage(file: File) {
+    if (file.type === "image/gif" || file.type === "image/svg+xml") {
+      return file;
+    }
+
+    let bitmap: ImageBitmap | null = null;
+
+    try {
+      bitmap = await createImageBitmap(file);
+
+      const maxWidth = 1000;
+      const maxHeight = 1000;
+      const scale = Math.min(
+        1,
+        maxWidth / bitmap.width,
+        maxHeight / bitmap.height,
+      );
+
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        return file;
+      }
+
+      context.drawImage(bitmap, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", 0.7);
+      });
+
+      if (!blob) {
+        throw new Error("Image conversion failed.");
+      }
+
+      const baseName = file.name.replace(/\.[^/.]+$/, "") || "event-image";
+
+      return new File([blob], `${baseName}.webp`, {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    } finally {
+      bitmap?.close();
+    }
+  }
+
+  async function handleImage(file: File | null) {
     if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+
+    setOptimizingImage(true);
+
+    try {
+      const optimized = await optimizeImage(file);
+
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
+      setImageFile(optimized);
+      setImagePreview(URL.createObjectURL(optimized));
+    } catch (error: any) {
+      alert("Image processing failed: " + (error?.message || "Unknown error"));
+    } finally {
+      setOptimizingImage(false);
+    }
+  }
+
+  function removeImage() {
+    if (imagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setImageFile(null);
+    setImagePreview("");
   }
 
   function handleVideo(file: File | null) {
@@ -181,6 +263,18 @@ export default function NewEventPage() {
       return;
     }
 
+    if (!eventDateTime) {
+      alert("Please enter the event date and time.");
+      return;
+    }
+
+    const eventDateObject = new Date(eventDateTime);
+
+    if (Number.isNaN(eventDateObject.getTime())) {
+      alert("Please enter a valid event date and time.");
+      return;
+    }
+
     const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
     if (finalRaffleEnabled) {
@@ -264,7 +358,7 @@ export default function NewEventPage() {
           video_url: uploadedVideoUrl || null,
           external_video_url: videoUrl.trim() || null,
 
-          event_date: eventDate || null,
+          event_date: eventDateObject.toISOString(),
           location: location.trim(),
 
           latitude,
@@ -354,12 +448,18 @@ export default function NewEventPage() {
             className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
           />
 
-          <input
-            type="date"
-            value={eventDate}
-            onChange={(e) => setEventDate(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          />
+          <div>
+            <label className="mb-1 block text-xs font-black text-[#172033]">
+              Event Date & Time
+            </label>
+
+            <input
+              type="datetime-local"
+              value={eventDateTime}
+              onChange={(e) => setEventDateTime(e.currentTarget.value)}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
 
           {isLoaded ? (
             <Autocomplete
@@ -595,22 +695,42 @@ export default function NewEventPage() {
               </span>
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
-                Upload
+                {imagePreview ? "Replace" : "Upload"}
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleImage(e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    void handleImage(file);
+                  }}
                   className="hidden"
                 />
               </label>
             </div>
 
+            <p className="mt-2 text-xs font-bold text-blue-600">
+              Images are resized to a maximum of 1000px and converted to WebP.
+            </p>
+
             {imagePreview && (
-              <img
-                src={imagePreview}
-                alt="Preview"
-                className="mt-3 h-40 w-full rounded-2xl object-cover"
-              />
+              <div className="mt-3 space-y-2">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-h-[520px] w-full rounded-2xl object-contain"
+                />
+
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
+                >
+                  Delete Image
+                </button>
+              </div>
             )}
           </div>
 
@@ -664,11 +784,11 @@ export default function NewEventPage() {
 
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || optimizingImage}
             onClick={submitEvent}
             className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
           >
-            {saving ? "Submitting..." : "Submit Event"}
+            {optimizingImage ? "Optimizing Image..." : saving ? "Submitting..." : "Submit Event"}
           </button>
 
           <p className="text-center text-xs font-bold text-gray-500">

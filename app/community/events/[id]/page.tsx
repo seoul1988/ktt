@@ -56,6 +56,29 @@ function cleanDescription(
     .slice(0, 160);
 }
 
+
+function formatEasternDateTime(
+  value: string | null | undefined,
+) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
@@ -219,10 +242,19 @@ export default async function CommunityEventDetailPage({
     ? new Date(event.raffle_draw_at).getTime()
     : null;
 
+  const registrationDeadlineAt = event.registration_deadline
+    ? new Date(event.registration_deadline).getTime()
+    : null;
+
   const drawReady =
     raffleEnabled &&
     raffleDrawAt !== null &&
     Date.now() >= raffleDrawAt;
+
+  const registrationClosed =
+    raffleEnabled &&
+    registrationDeadlineAt !== null &&
+    Date.now() >= registrationDeadlineAt;
 
   const collectAttendees =
     event.collect_attendees === true ||
@@ -286,21 +318,17 @@ export default async function CommunityEventDetailPage({
                   🎯 Drawing Time:
                 </span>
                 <br />
-                {new Date(
-                  event.raffle_draw_at,
-                ).toLocaleString()}
+                {formatEasternDateTime(event.raffle_draw_at)}
               </div>
             )}
 
-            {event.raffle_draw_at && (
+            {event.registration_deadline && (
               <div className="mt-2">
                 <span className="font-black">
                   ⏰ Registration Deadline:
                 </span>
                 <br />
-                {new Date(
-                  event.raffle_draw_at,
-                ).toLocaleString()}
+                {formatEasternDateTime(event.registration_deadline)}
               </div>
             )}
 
@@ -322,7 +350,7 @@ export default async function CommunityEventDetailPage({
           </div>
         )}
 
-        {collectAttendees && !drawReady && (
+        {collectAttendees && !registrationClosed && !drawReady && (
           <CommunityAttendeeRegistrationForm
             eventId={event.id}
             eventTitle={
@@ -333,9 +361,9 @@ export default async function CommunityEventDetailPage({
           />
         )}
 
-        {collectAttendees && drawReady && (
+        {collectAttendees && (registrationClosed || drawReady) && (
           <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-[#6B6257] shadow-sm">
-            추첨 등록 시간이 마감되었습니다.
+            참가 신청이 마감되었습니다.
           </div>
         )}
 
@@ -347,9 +375,7 @@ export default async function CommunityEventDetailPage({
 
         <p className="mt-5 text-sm font-bold text-[#6B6257]">
           {event.event_date
-            ? new Date(
-                event.event_date,
-              ).toLocaleString()
+            ? formatEasternDateTime(event.event_date)
             : "Date TBA"}
         </p>
 

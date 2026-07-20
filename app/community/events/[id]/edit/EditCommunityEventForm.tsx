@@ -9,11 +9,6 @@ import CommunityBottomNav from "../../../../components/CommunityBottomNav";
 
 const libraries: "places"[] = ["places"];
 
-function formatDate(value: string | null) {
-  if (!value) return "";
-  return value.slice(0, 10);
-}
-
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
 
@@ -35,13 +30,16 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
   const [title, setTitle] = useState(event.title || "");
   const [description, setDescription] = useState(event.description || "");
-  const [eventDate, setEventDate] = useState(formatDate(event.event_date));
+  const [eventDateTime, setEventDateTime] = useState(
+    formatDateTimeLocal(event.event_date),
+  );
   const [location, setLocation] = useState(event.location || event.address || "");
   const [latitude, setLatitude] = useState<number | null>(event.latitude ?? null);
   const [longitude, setLongitude] = useState<number | null>(event.longitude ?? null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState(event.image_url || "");
+  const [imageRemoved, setImageRemoved] = useState(false);
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState(event.video_url || "");
@@ -84,46 +82,132 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
 
   async function optimizeImage(file: File) {
-    if (file.type === "image/gif" || file.type==="image/svg+xml") return file;
+    if (file.type === "image/gif" || file.type === "image/svg+xml") {
+      return file;
+    }
 
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1,1200/bitmap.width,1200/bitmap.height);
+    let bitmap: ImageBitmap | null = null;
 
-    const w=Math.round(bitmap.width*scale);
-    const h=Math.round(bitmap.height*scale);
+    try {
+      bitmap = await createImageBitmap(file);
 
-    const canvas=document.createElement("canvas");
-    canvas.width=w;
-    canvas.height=h;
+      const maxWidth = 1000;
+      const maxHeight = 1000;
+      const scale = Math.min(
+        1,
+        maxWidth / bitmap.width,
+        maxHeight / bitmap.height,
+      );
 
-    const ctx=canvas.getContext("2d");
-    if(!ctx) return file;
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
 
-    ctx.drawImage(bitmap,0,0,w,h);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
 
-    const blob=await new Promise<Blob|null>(r=>canvas.toBlob(r,"image/webp",0.76));
-    bitmap.close();
+      const context = canvas.getContext("2d");
 
-    if(!blob) return file;
+      if (!context) {
+        return file;
+      }
 
-    return new File([blob],file.name.replace(/\.[^.]+$/,"")+".webp",{
-      type:"image/webp",
-      lastModified:Date.now(),
-    });
+      context.drawImage(bitmap, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", 0.7);
+      });
+
+      if (!blob) {
+        throw new Error("Image conversion failed.");
+      }
+
+      const baseName = file.name.replace(/\.[^/.]+$/, "") || "event-image";
+
+      return new File([blob], `${baseName}.webp`, {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    } finally {
+      bitmap?.close();
+    }
+  }
+
+  function getStoragePathFromPublicUrl(
+    publicUrl: string | null | undefined,
+    bucket: string,
+  ) {
+    if (!publicUrl) return null;
+
+    try {
+      const url = new URL(publicUrl);
+      const marker = `/storage/v1/object/public/${bucket}/`;
+      const markerIndex = url.pathname.indexOf(marker);
+
+      if (markerIndex === -1) {
+        return null;
+      }
+
+      return decodeURIComponent(
+        url.pathname.slice(markerIndex + marker.length),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async function deleteStorageFile(
+    publicUrl: string | null | undefined,
+    bucket: string,
+  ) {
+    const storagePath = getStoragePathFromPublicUrl(publicUrl, bucket);
+
+    if (!storagePath) {
+      return;
+    }
+
+    const { error } = await supabase.storage.from(bucket).remove([storagePath]);
+
+    if (error) {
+      console.error(`${bucket} delete failed:`, error);
+    }
   }
 
   async function handleImage(file: File | null) {
     if (!file) return;
 
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+
     setOptimizingImage(true);
 
     try {
-      const optimized=await optimizeImage(file);
+      const optimized = await optimizeImage(file);
+
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
       setImageFile(optimized);
       setImagePreview(URL.createObjectURL(optimized));
+      setImageRemoved(false);
+    } catch (error: any) {
+      alert("Image processing failed: " + (error?.message || "Unknown error"));
     } finally {
       setOptimizingImage(false);
     }
+  }
+
+  function removeImage() {
+    if (imagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setImageFile(null);
+    setImagePreview("");
+    setImageRemoved(true);
   }
 
   function handleVideo(file: File | null) {
@@ -192,6 +276,11 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
       return;
     }
 
+    if (!eventDateTime) {
+      alert("Please enter the event date and time.");
+      return;
+    }
+
     if (raffleEnabled && !raffleDrawAt) {
       alert("Please enter the raffle drawing date and time.");
       return;
@@ -205,7 +294,8 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
     setSaving(true);
 
     try {
-      let uploadedImageUrl = event.image_url || null;
+      const previousImageUrl = event.image_url || null;
+      let uploadedImageUrl = imageRemoved ? null : previousImageUrl;
       let uploadedVideoUrl = event.video_url || null;
 
       if (imageFile) {
@@ -236,7 +326,7 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
           video_url: uploadedVideoUrl,
           external_video_url: videoUrl.trim() || null,
 
-          event_date: eventDate || null,
+          event_date: new Date(eventDateTime).toISOString(),
           location: location.trim(),
           address: location.trim(),
 
@@ -263,6 +353,13 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
         alert("Update failed: " + error.message);
         setSaving(false);
         return;
+      }
+
+      if (
+        previousImageUrl &&
+        (imageRemoved || (imageFile && uploadedImageUrl !== previousImageUrl))
+      ) {
+        await deleteStorageFile(previousImageUrl, "event-images");
       }
 
       router.push(`/community/events/${event.id}`);
@@ -345,12 +442,17 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
             className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
           />
 
-          <input
-            type="date"
-            value={eventDate}
-            onChange={(e) => setEventDate(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          />
+          <div>
+            <label className="mb-1 block text-xs font-black text-[#172033]">
+              Event Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={eventDateTime}
+              onChange={(e) => setEventDateTime(e.target.value)}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
 
           {isLoaded ? (
             <Autocomplete
@@ -533,24 +635,47 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
               </span>
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
-                Upload
+                {imagePreview ? "Replace" : "Upload"}
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={async (e)=>{await handleImage(e.target.files?.[0]||null); e.currentTarget.value="";}}
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    void handleImage(file);
+                  }}
                   className="hidden"
                 />
               </label>
             </div>
 
-            <p className="mt-2 text-xs font-bold text-blue-600">New images are automatically resized to max 1200px and converted to WebP.</p>
+            <p className="mt-2 text-xs font-bold text-blue-600">
+              New images are resized to a maximum of 1000px and converted to
+              WebP at 70% quality.
+            </p>
 
-            {imagePreview && (
-              <img
-                src={imagePreview}
-                alt="Preview"
-                className="mt-3 h-40 w-full rounded-2xl object-cover"
-              />
+            {imagePreview ? (
+              <div className="mt-3 space-y-2">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-h-[520px] w-full rounded-2xl object-contain"
+                />
+
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
+                >
+                  Delete Current Image
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-400">
+                No event image selected
+              </div>
             )}
           </div>
 
