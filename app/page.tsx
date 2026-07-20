@@ -10,6 +10,7 @@ import InstallAppButton from "./components/InstallAppButton";
 import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
 import InAppBrowserAlert from "./components/InAppBrowserAlert";
 import BusinessSearchBookmark from "./components/BusinessSearchBookmark";
+import ScrollToTopButton from "./components/ScrollToTopButton";
 
 function getYoutubeEmbedUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -928,6 +929,7 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
 </section>
 
         <BottomNav activeNav="home" />
+		<ScrollToTopButton />
       </main>
     </>
   );
