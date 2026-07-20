@@ -288,18 +288,18 @@ export default function BusinessSearchBookmark() {
                         onClick={closeSearch}
                         className="flex w-full items-center gap-4 rounded-2xl bg-white p-3 shadow-sm transition active:scale-[0.97] active:bg-gray-100"
                       >
-                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100">
-                          <img
-                            src={businessImage}
-                            alt={businessName}
-                            loading="lazy"
-                            decoding="async"
-                            className="h-full w-full object-cover"
-                            onError={(event) => {
-                              event.currentTarget.src = "/event.png";
-                            }}
-                          />
-                        </div>
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1">
+						  <img
+							src={businessImage}
+							alt={businessName}
+							loading="lazy"
+							decoding="async"
+							className="h-full w-full object-contain"
+							onError={(event) => {
+							  event.currentTarget.src = "/event.png";
+							}}
+						  />
+						</div>
 
                         <div className="min-w-0 flex-1 text-left">
                           <h3 className="truncate text-base font-black text-[#172033]">
