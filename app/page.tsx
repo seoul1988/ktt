@@ -9,6 +9,7 @@ import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
 import InAppBrowserAlert from "./components/InAppBrowserAlert";
+import BusinessSearchBookmark from "./components/BusinessSearchBookmark";
 
 function getYoutubeEmbedUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -673,7 +674,7 @@ export default async function Home() {
     <>
           <InstallAppButton />
          <InAppBrowserAlert />
-
+<BusinessSearchBookmark />
       <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
         <div className="mx-auto mb-8 flex max-w-xl items-center justify-between gap-4">
           <div>
