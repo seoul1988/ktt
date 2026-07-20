@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import InquiryTab from "./InquiryTab";
 
 type Profile = {
   role: string | null;
@@ -171,6 +172,14 @@ export default function ProfileButton() {
           >
             My Coupons
           </Link>
+<Link
+  href="/community/inquiries"
+  className="block px-4 py-3 hover:bg-[#F8F3EC]"
+  onClick={() => setOpen(false)}
+>
+  💬 Inquiries
+</Link>
+
 
           {canManage && (
             <>

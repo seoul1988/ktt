@@ -2,9 +2,10 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
-import InquiryTab from "../components/InquiryTab";
+
 import AdTab from "../components/AdTab";
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
+import BusinessSearchBookmark from "../components/BusinessSearchBookmark";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -90,6 +91,9 @@ export default async function CommunityPage() {
   const dealCount = deals?.length || 0;
 
   return (
+  <>
+    <BusinessSearchBookmark />
+  
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">
         <div className="mb-6 flex items-start justify-between gap-4">
@@ -433,9 +437,10 @@ export default async function CommunityPage() {
         </section>
 
       </section>
-<InquiryTab />
+
       <AdTab />
       <CommunityBottomNav activeNav="community" />
     </main>
+	 </>
   );
 }
