@@ -1609,8 +1609,8 @@ useEffect(() => {
               type="button"
               onClick={scrollCategoryPanelDown}
               aria-label="아래 카테고리 더 보기"
-           className="absolute bottom-1 left-1/2 z-20 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full border border-[#D9C6B2] bg-white text-[#C97A45] shadow-lg transition-all duration-200 active:scale-90 hover:bg-[#F8F3EC]" >
-              <span className="animate-bounce text-xl font-black leading-none">
+           className="absolute bottom-1 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-2 border-[#E7C7A7] bg-[#F8EFE5] text-white shadow-[0_6px_18px_rgba(232,161,90,0.45)] ring-2 ring-white/80 transition-all duration-200 active:scale-90" >
+              <span className="animate-bounce text-2xl font-black text-gray-500">
                 ↓
               </span>
             </button>
