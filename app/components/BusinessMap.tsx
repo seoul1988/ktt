@@ -659,6 +659,7 @@ export default function BusinessMap({
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [showCategoryDownArrow, setShowCategoryDownArrow] = useState(false);
+  const [showCategoryUpArrow, setShowCategoryUpArrow] = useState(false);
   const restoredRef = useRef(false);
 
   // 마커 클릭으로 카드를 이동하는 동안 onScroll이 다른 카드를
@@ -1408,19 +1409,30 @@ useEffect(() => {
     };
   }, []);
 
-  function updateCategoryDownArrow() {
+  function updateCategoryArrows() {
     const element = categoryScrollRef.current;
 
     if (!element || !categoryPanelOpen) {
       setShowCategoryDownArrow(false);
+      setShowCategoryUpArrow(false);
       return;
     }
 
-    const hasMoreBelow =
-      element.scrollTop + element.clientHeight <
+    const hasOverflow =
+      element.scrollHeight > element.clientHeight + 8;
+
+    if (!hasOverflow) {
+      setShowCategoryDownArrow(false);
+      setShowCategoryUpArrow(false);
+      return;
+    }
+
+    const isAtBottom =
+      element.scrollTop + element.clientHeight >=
       element.scrollHeight - 8;
 
-    setShowCategoryDownArrow(hasMoreBelow);
+    setShowCategoryDownArrow(!isAtBottom);
+    setShowCategoryUpArrow(isAtBottom);
   }
 
   function scrollCategoryPanelDown() {
@@ -1435,6 +1447,13 @@ useEffect(() => {
     });
   }
 
+  function scrollCategoryPanelToTop() {
+    categoryScrollRef.current?.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
   useEffect(() => {
     if (!categoryPanelOpen) {
       setShowCategoryDownArrow(false);
@@ -1442,14 +1461,14 @@ useEffect(() => {
     }
 
     const frame = window.requestAnimationFrame(() => {
-      updateCategoryDownArrow();
+      updateCategoryArrows();
     });
 
-    window.addEventListener("resize", updateCategoryDownArrow);
+    window.addEventListener("resize", updateCategoryArrows);
 
     return () => {
       window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", updateCategoryDownArrow);
+      window.removeEventListener("resize", updateCategoryArrows);
     };
   }, [categoryPanelOpen, displayCategories.length, communityMode]);
 
@@ -1513,7 +1532,7 @@ useEffect(() => {
         <div className="fixed right-2 top-24 z-[1300] w-[72px] overflow-visible rounded-2xl bg-white/95 shadow-2xl landscape:right-2 landscape:top-16 landscape:w-[68px]">
           <div
             ref={categoryScrollRef}
-            onScroll={updateCategoryDownArrow}
+            onScroll={updateCategoryArrows}
             className="max-h-[72vh] overflow-y-auto rounded-2xl p-1.5 pb-14 scrollbar-hide landscape:max-h-[78vh]"
           >
             <p className="mb-2 text-center text-[9px] font-black leading-tight text-gray-500">
@@ -1604,20 +1623,34 @@ useEffect(() => {
             </div>
           </div>
 
+          {(showCategoryDownArrow || showCategoryUpArrow) && (
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-14 rounded-b-2xl bg-gradient-to-t from-white via-white/85 to-transparent" />
+          )}
+
           {showCategoryDownArrow && (
             <button
               type="button"
               onClick={scrollCategoryPanelDown}
               aria-label="아래 카테고리 더 보기"
-           className="absolute bottom-1 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-2 border-[#E7C7A7] bg-[#F8EFE5] text-white shadow-[0_6px_18px_rgba(232,161,90,0.45)] ring-2 ring-white/80 transition-all duration-200 active:scale-90" >
-              <span className="animate-bounce text-2xl font-black text-gray-500">
+              className="absolute bottom-1 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-2 border-[#E7C7A7] bg-[#F8EFE5] shadow-[0_5px_14px_rgba(107,114,128,0.24)] ring-2 ring-white/80 transition-all duration-200 active:scale-90"
+            >
+              <span className="animate-bounce text-2xl font-black leading-none text-gray-500">
                 ↓
               </span>
             </button>
           )}
 
-          {showCategoryDownArrow && (
-            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 rounded-b-2xl bg-gradient-to-t from-white via-white/85 to-transparent" />
+          {showCategoryUpArrow && (
+            <button
+              type="button"
+              onClick={scrollCategoryPanelToTop}
+              aria-label="카테고리 맨 위로 이동"
+              className="absolute bottom-1 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-2 border-[#E7C7A7] bg-[#F8EFE5] shadow-[0_5px_14px_rgba(107,114,128,0.24)] ring-2 ring-white/80 transition-all duration-200 active:scale-90"
+            >
+              <span className="animate-bounce text-2xl font-black leading-none text-gray-500">
+                ↑
+              </span>
+            </button>
           )}
         </div>
       )}
