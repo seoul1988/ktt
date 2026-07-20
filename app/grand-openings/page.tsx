@@ -53,7 +53,7 @@ export default async function GrandOpeningsPage() {
     });
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] px-5 pb-28 pt-6 text-[#172033]">
+    <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+var(--app-safe-bottom))] pt-[calc(var(--app-safe-top)+1.5rem)] text-[#172033]">
       <div className="mx-auto max-w-xl">
         <div className="mb-5 grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <Link
