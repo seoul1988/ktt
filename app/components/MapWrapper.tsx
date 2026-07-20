@@ -32,6 +32,7 @@ type MapWrapperProps = {
   communityMode?: boolean;
   role?: string | null;
   initialCategory?: string;
+  initialSearch?: string;
 };
 
 export default function MapWrapper({
@@ -43,6 +44,7 @@ export default function MapWrapper({
   communityMode = false,
   role = null,
   initialCategory = "",
+  initialSearch = "",
 }: MapWrapperProps) {
   return (
     <BusinessMap
@@ -54,6 +56,7 @@ export default function MapWrapper({
       communityMode={communityMode}
       role={role}
       initialCategory={initialCategory}
+      initialSearch={initialSearch}
     />
   );
 }
