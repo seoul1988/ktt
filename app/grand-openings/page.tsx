@@ -12,14 +12,10 @@ function GrandOpeningMedia({ item }: { item: any }) {
       : item.image_url || "/event.png";
 
   return (
-    <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] text-[#172033]">
+    <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white p-2">
       <img
         src={imageUrl}
-        alt={
-          item.business_name ||
-          item.title ||
-          "Grand Opening"
-        }
+        alt={item.business_name || item.title || "Grand Opening"}
         loading="lazy"
         decoding="async"
         className="block h-full w-full object-contain"
@@ -53,7 +49,7 @@ export default async function GrandOpeningsPage() {
     });
 
   return (
-    <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+var(--app-safe-bottom))] pt-[calc(var(--app-safe-top)+1.5rem)] text-[#172033]">
+    <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+var(--app-safe-bottom))] pt-6 text-[#172033]">
       <div className="mx-auto max-w-xl">
         <div className="mb-5 grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <Link
@@ -102,9 +98,7 @@ export default async function GrandOpeningsPage() {
                 href={`/grand-openings/${item.id}`}
                 className="block overflow-hidden rounded-3xl bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99]"
               >
-                <div className="w-full overflow-hidden bg-white">
-                  <GrandOpeningMedia item={item} />
-                </div>
+                <GrandOpeningMedia item={item} />
 
                 <div className="relative border-t border-gray-100 bg-white p-5">
                   <p className="text-xs font-black uppercase tracking-wide text-[#C4483A]">
