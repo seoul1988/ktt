@@ -5,6 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { usePathname } from "next/navigation";
 
+type Category = {
+  name?: string | null;
+  hidden?: boolean | null;
+};
+
 type Business = {
   id: number | string;
   name?: string | null;
@@ -38,9 +43,27 @@ function getBusinessImage(business: Business) {
   return business.image_url || "/event.png";
 }
 
+function hasHiddenCategory(
+  business: Business,
+  hiddenCategoryNames: Set<string>,
+) {
+  const categoryValues = [business.category, business.category_name]
+    .filter(Boolean)
+    .flatMap((value) =>
+      String(value)
+        .split(/[,|/]/)
+        .map((item) => normalizeSearchText(item))
+        .filter(Boolean),
+    );
+
+  return categoryValues.some((categoryName) =>
+    hiddenCategoryNames.has(categoryName),
+  );
+}
+
 export default function BusinessSearchBookmark() {
   const inputRef = useRef<HTMLInputElement | null>(null);
-const pathname = usePathname();
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -87,25 +110,60 @@ const pathname = usePathname();
       setIsLoading(true);
       setErrorMessage("");
 
-      const { data, error } = await supabase
-        .from("businesses")
-        .select("*")
-        .eq("hidden", false)
-        .order("name", { ascending: true })
-        .limit(1000);
+      const [businessResponse, categoryResponse] = await Promise.all([
+        supabase
+          .from("businesses")
+          .select("*")
+          .eq("hidden", false)
+          .order("name", { ascending: true })
+          .limit(1000),
+        supabase
+          .from("categories")
+          .select("name, hidden")
+          .eq("hidden", true),
+      ]);
 
       if (cancelled) return;
 
-      if (error) {
-        console.error("Business search load error:", error);
+      if (businessResponse.error) {
+        console.error(
+          "Business search load error:",
+          businessResponse.error,
+        );
         setBusinesses([]);
-        setErrorMessage(error.message);
+        setErrorMessage(businessResponse.error.message);
         setHasLoaded(true);
         setIsLoading(false);
         return;
       }
 
-      setBusinesses((data || []) as Business[]);
+      if (categoryResponse.error) {
+        console.error(
+          "Hidden category load error:",
+          categoryResponse.error,
+        );
+        setBusinesses([]);
+        setErrorMessage(categoryResponse.error.message);
+        setHasLoaded(true);
+        setIsLoading(false);
+        return;
+      }
+
+      const hiddenCategoryNames = new Set(
+        ((categoryResponse.data || []) as Category[])
+          .map((category) => normalizeSearchText(category.name))
+          .filter(Boolean),
+      );
+
+      const visibleBusinesses = (
+        (businessResponse.data || []) as Business[]
+      ).filter(
+        (business) =>
+          business.hidden !== true &&
+          !hasHiddenCategory(business, hiddenCategoryNames),
+      );
+
+      setBusinesses(visibleBusinesses);
       setHasLoaded(true);
       setIsLoading(false);
     }
