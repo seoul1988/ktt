@@ -95,6 +95,7 @@ export const viewport: Viewport = {
   themeColor: "#172033",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
 };
 
@@ -111,10 +112,12 @@ export default function RootLayout({
     >
       <body className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
         <AuthProvider>
-          <InAppBrowserNotice />
-          <KakaoOpenBrowserNotice />
-		   <VisitorTracker />
-          {children}
+          <div className="app-safe-area">
+            <InAppBrowserNotice />
+            <KakaoOpenBrowserNotice />
+            <VisitorTracker />
+            {children}
+          </div>
         </AuthProvider>
 
         <Script
