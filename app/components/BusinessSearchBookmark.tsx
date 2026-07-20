@@ -150,35 +150,36 @@ export default function BusinessSearchBookmark() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        aria-label="Search businesses"
-     className="
-fixed
-bottom-[calc(7rem+env(safe-area-inset-bottom,0px))]
-right-0
-z-[900]
-flex
-h-9
-w-7
-items-center
-justify-center
-rounded-l-lg
-border
-border-r-0
-border-white/20
-bg-[#C4483A]
-text-white
-shadow-lg
-transition-all
-duration-150
-hover:w-9
-active:scale-95
-active:bg-[#A83A30]
-" >
-        <span className="text-sm">🔍</span>
-      </button>
+     <button
+  type="button"
+  onClick={() => setIsOpen(true)}
+  aria-label="Search businesses"
+  className="
+    fixed
+    bottom-[calc(7rem+env(safe-area-inset-bottom,0px))]
+    right-0
+    z-[900]
+    flex
+    h-9
+    w-7
+    items-center
+    justify-center
+    rounded-l-lg
+    border
+    border-r-0
+    border-white/20
+    bg-[#C4483A]
+    text-white
+    shadow-lg
+    transition-all
+    duration-150
+    hover:w-9
+    active:scale-95
+    active:bg-[#A83A30]
+  "
+>
+  <span className="text-sm">🔍</span>
+</button>
 
       <div
         onPointerDown={closeSearch}
@@ -197,6 +198,16 @@ active:bg-[#A83A30]
             isOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
+		
+		<div className="px-5 pb-3">
+  <h2 className="text-2xl font-black text-[#172033]">
+    Search
+  </h2>
+
+  <p className="mt-1 text-sm text-gray-500">
+    Find businesses, restaurants, services and more
+  </p>
+</div>
           <div className="flex items-center gap-3 px-4">
             <div className="flex min-w-0 flex-1 items-center rounded-2xl bg-white px-4 shadow-sm">
               <span className="mr-2 text-lg">🔍</span>
