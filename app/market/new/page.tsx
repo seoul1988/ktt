@@ -215,6 +215,54 @@ export default function NewMarketItemPage() {
     };
   }, [router]);
 
+
+async function optimizeImage(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const maxSize = 1280;
+
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width = maxSize;
+      } else if (height > maxSize) {
+        width = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          resolve(
+            new File(
+              [blob!],
+              file.name.replace(/\.\w+$/, ".webp"),
+              {
+                type: "image/webp",
+              }
+            )
+          );
+        },
+        "image/webp",
+        0.8
+      );
+    };
+
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+
   async function uploadMarketImage(
     userId: string,
     itemId: string,
