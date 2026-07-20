@@ -653,6 +653,8 @@ export default function BusinessMap({
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const restoredRef = useRef(false);
 
   // 마커 클릭으로 카드를 이동하는 동안 onScroll이 다른 카드를
@@ -674,6 +676,25 @@ export default function BusinessMap({
       (platform === "MacIntel" && touchPoints > 1);
 
     setIsIOS(isAppleMobile);
+  }, []);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const handleViewportChange = () => {
+      const heightDifference = window.innerHeight - viewport.height;
+      setKeyboardOpen(heightDifference > 140);
+    };
+
+    handleViewportChange();
+    viewport.addEventListener("resize", handleViewportChange);
+    viewport.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      viewport.removeEventListener("resize", handleViewportChange);
+      viewport.removeEventListener("scroll", handleViewportChange);
+    };
   }, []);
 
   function handleBack() {
@@ -1363,8 +1384,12 @@ export default function BusinessMap({
 
 
   return (
-    <div className="relative min-h-screen">
-      <div className="absolute left-4 right-4 top-5 z-[1000] flex items-center gap-3 landscape:left-3 landscape:right-3 landscape:top-3">
+    <div className="relative min-h-[100dvh] overflow-hidden">
+      <div
+        className={`fixed left-4 right-4 z-[1500] flex items-center gap-3 landscape:left-3 landscape:right-3 ${
+          keyboardOpen ? "top-2" : "top-[calc(env(safe-area-inset-top)+12px)]"
+        } landscape:top-3`}
+      >
         {showAllOnLoad && !communityMode && !selectedCategory && !search && (
           <div className="absolute left-4 top-[78px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl landscape:hidden">
             {activeNav === "deals" ? "🔥 DEALS" : "🎉 EVENTS"}
@@ -1372,7 +1397,16 @@ export default function BusinessMap({
         )}
 
         <input
+          ref={searchInputRef}
           value={search}
+          onFocus={() => {
+            setTimeout(() => {
+              searchInputRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+              });
+            }, 180);
+          }}
           onChange={(e) => {
             const value = e.target.value;
 
@@ -1393,7 +1427,7 @@ export default function BusinessMap({
             });
           }}
           placeholder="업체명 또는 태그 검색..."
-          className="flex-1 rounded-2xl border-none bg-white px-5 py-4 text-sm font-semibold shadow-xl outline-none landscape:px-4 landscape:py-3 landscape:text-xs"
+          className="min-w-0 flex-1 rounded-2xl border-none bg-white px-5 py-4 text-base font-semibold shadow-xl outline-none [-webkit-text-size-adjust:100%] landscape:px-4 landscape:py-3 landscape:text-xs"
         />
 
       <div className="shrink-0">
@@ -1459,7 +1493,7 @@ export default function BusinessMap({
   center={INITIAL_MAP_CENTER}
   zoom={INITIAL_MAP_ZOOM}
   zoomControl={false}
-  className="h-screen w-full"
+  className="h-[100dvh] w-full"
 >
         <InitialMapView />
 
