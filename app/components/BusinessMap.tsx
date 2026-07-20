@@ -655,8 +655,10 @@ export default function BusinessMap({
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
+  const categoryScrollRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [showCategoryDownArrow, setShowCategoryDownArrow] = useState(false);
   const restoredRef = useRef(false);
 
   // 마커 클릭으로 카드를 이동하는 동안 onScroll이 다른 카드를
@@ -1406,6 +1408,51 @@ useEffect(() => {
     };
   }, []);
 
+  function updateCategoryDownArrow() {
+    const element = categoryScrollRef.current;
+
+    if (!element || !categoryPanelOpen) {
+      setShowCategoryDownArrow(false);
+      return;
+    }
+
+    const hasMoreBelow =
+      element.scrollTop + element.clientHeight <
+      element.scrollHeight - 8;
+
+    setShowCategoryDownArrow(hasMoreBelow);
+  }
+
+  function scrollCategoryPanelDown() {
+    categoryScrollRef.current?.scrollBy({
+      top: Math.max(
+        180,
+        Math.round(
+          (categoryScrollRef.current?.clientHeight || 240) * 0.7,
+        ),
+      ),
+      behavior: "smooth",
+    });
+  }
+
+  useEffect(() => {
+    if (!categoryPanelOpen) {
+      setShowCategoryDownArrow(false);
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      updateCategoryDownArrow();
+    });
+
+    window.addEventListener("resize", updateCategoryDownArrow);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", updateCategoryDownArrow);
+    };
+  }, [categoryPanelOpen, displayCategories.length, communityMode]);
+
 
 
   return (
@@ -1463,99 +1510,117 @@ useEffect(() => {
       </div>
 
       {categoryPanelOpen && (
-  <div className="fixed right-2 top-24 z-[1300] max-h-[72vh] w-[72px] overflow-y-auto rounded-2xl bg-white/95 p-1.5 shadow-2xl scrollbar-hide landscape:right-2 landscape:top-16 landscape:max-h-[78vh] landscape:w-[68px]">
-    <p className="mb-2 text-center text-[9px] font-black leading-tight text-gray-500">
-      Category
-    </p>
+        <div className="fixed right-2 top-24 z-[1300] w-[72px] overflow-visible rounded-2xl bg-white/95 shadow-2xl landscape:right-2 landscape:top-16 landscape:w-[68px]">
+          <div
+            ref={categoryScrollRef}
+            onScroll={updateCategoryDownArrow}
+            className="max-h-[72vh] overflow-y-auto rounded-2xl p-1.5 pb-14 scrollbar-hide landscape:max-h-[78vh]"
+          >
+            <p className="mb-2 text-center text-[9px] font-black leading-tight text-gray-500">
+              Category
+            </p>
 
-    <div className="space-y-1">
-      {communityMode && (
-        <Link
-          href="/community/directory"
-          className="flex w-full flex-col items-center justify-center rounded-xl bg-[#C4483A] px-1 py-2 text-center text-[9px] font-black text-white shadow-md active:scale-95"
-        >
-          <span className="text-base leading-none">🌐</span>
-          <span className="mt-1 w-full truncate leading-tight">All</span>
-        </Link>
+            <div className="space-y-1">
+              {communityMode && (
+                <Link
+                  href="/community/directory"
+                  className="flex w-full flex-col items-center justify-center rounded-xl bg-[#C4483A] px-1 py-2 text-center text-[9px] font-black text-white shadow-md active:scale-95"
+                >
+                  <span className="text-base leading-none">🌐</span>
+                  <span className="mt-1 w-full truncate leading-tight">All</span>
+                </Link>
+              )}
+
+              {[...displayCategories]
+                .sort((a, b) => {
+                  const aSelected =
+                    selectedCategory !== null &&
+                    normalizeCategory(a.name) ===
+                      normalizeCategory(selectedCategory);
+
+                  const bSelected =
+                    selectedCategory !== null &&
+                    normalizeCategory(b.name) ===
+                      normalizeCategory(selectedCategory);
+
+                  if (aSelected && !bSelected) return -1;
+                  if (!aSelected && bSelected) return 1;
+
+                  return a.name.localeCompare(b.name);
+                })
+                .map((cat) => {
+                  const isSelected =
+                    selectedCategory !== null &&
+                    normalizeCategory(selectedCategory) ===
+                      normalizeCategory(cat.name);
+
+                  return (
+                    <button
+                      key={cat.name}
+                      type="button"
+                      onClick={() => selectCategory(cat.name)}
+                      title={cat.name}
+                      aria-pressed={isSelected}
+                      className={`
+                        flex flex-col items-center justify-center
+                        rounded-xl px-2 py-2
+                        text-center text-[10px] font-black
+                        transition-all duration-200
+                        active:scale-95
+                        ${
+                          isSelected
+                            ? "w-[88px] -translate-x-4 border-[3px] border-red-600 bg-white text-red-600 shadow-[0_4px_12px_rgba(220,38,38,0.25)] landscape:w-[84px]"
+                            : "w-full border-2 border-transparent bg-gray-50 text-[#172033] shadow-sm"
+                        }
+                      `}
+                    >
+                      {!isSelected && (
+                        <span className="text-base leading-none">
+                          {cat.emoji || "🏷️"}
+                        </span>
+                      )}
+
+                      <span
+                        className={`
+                          block w-full text-center leading-tight
+                          ${
+                            isSelected
+                              ? "mt-0 whitespace-normal text-[10px]"
+                              : "mt-1 truncate text-[9px]"
+                          }
+                        `}
+                      >
+                        {cat.name}
+                      </span>
+
+                      {isSelected && (
+                        <span className="mt-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+
+          {showCategoryDownArrow && (
+            <button
+              type="button"
+              onClick={scrollCategoryPanelDown}
+              aria-label="아래 카테고리 더 보기"
+           className="absolute bottom-1 left-1/2 z-20 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-full border border-[#D9C6B2] bg-white text-[#C97A45] shadow-lg transition-all duration-200 active:scale-90 hover:bg-[#F8F3EC]" >
+              <span className="animate-bounce text-xl font-black leading-none">
+                ↓
+              </span>
+            </button>
+          )}
+
+          {showCategoryDownArrow && (
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 rounded-b-2xl bg-gradient-to-t from-white via-white/85 to-transparent" />
+          )}
+        </div>
       )}
-
-      {[...displayCategories]
-  .sort((a, b) => {
-    const aSelected =
-      selectedCategory !== null &&
-      normalizeCategory(a.name) ===
-        normalizeCategory(selectedCategory);
-
-    const bSelected =
-      selectedCategory !== null &&
-      normalizeCategory(b.name) ===
-        normalizeCategory(selectedCategory);
-
-    if (aSelected && !bSelected) return -1;
-    if (!aSelected && bSelected) return 1;
-
-    return a.name.localeCompare(b.name);
-  })
-  .map((cat) => {
-    const isSelected =
-      selectedCategory !== null &&
-      normalizeCategory(selectedCategory) ===
-        normalizeCategory(cat.name);
-
-    return (
-     <button
-  key={cat.name}
-  type="button"
-  onClick={() => selectCategory(cat.name)}
-  title={cat.name}
-  aria-pressed={isSelected}
-  className={`
-    flex flex-col items-center justify-center
-    rounded-xl px-2 py-2
-    text-center text-[10px] font-black
-    transition-all duration-200
-    active:scale-95
-    ${
-      isSelected
-        ? "w-[88px] -translate-x-4 border-[3px] border-red-600 bg-white text-red-600 shadow-[0_4px_12px_rgba(220,38,38,0.25)] landscape:w-[84px]"
-        : "w-full border-2 border-transparent bg-gray-50 text-[#172033] shadow-sm"
-    }
-  `}
->
-  {!isSelected && (
-    <span className="text-base leading-none">
-      {cat.emoji || "🏷️"}
-    </span>
-  )}
-
-  <span
-    className={`
-      block w-full text-center leading-tight
-      ${
-        isSelected
-          ? "mt-0 whitespace-normal text-[10px]"
-          : "mt-1 truncate text-[9px]"
-      }
-    `}
-  >
-    {cat.name}
-  </span>
-
-  {isSelected && (
-    <span className="mt-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
-      ✓
-    </span>
-  )}
-</button>
-    );
-  })}
-		
-		
-		
-		
-    </div>
-  </div>
-)}
 
       {!categoryPanelOpen && (
         <button
