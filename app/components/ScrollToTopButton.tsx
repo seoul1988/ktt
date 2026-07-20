@@ -8,7 +8,7 @@ export default function ScrollToTopButton() {
   useEffect(() => {
     function handleScroll() {
       // 화면이 300px 이상 내려갔을 때 버튼 표시
-      setIsVisible(window.scrollY > 300);
+      setIsVisible(window.scrollY > 1200);
     }
 
     handleScroll();
