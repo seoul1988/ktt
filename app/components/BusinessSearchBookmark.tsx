@@ -150,35 +150,31 @@ export default function BusinessSearchBookmark() {
 
   return (
     <>
-     <button
+<button
   type="button"
   onClick={() => setIsOpen(true)}
   aria-label="Search businesses"
   className="
     fixed
-    bottom-[calc(7rem+env(safe-area-inset-bottom,0px))]
     right-0
+    bottom-[calc(8rem+env(safe-area-inset-bottom,0px))]
     z-[900]
     flex
     h-9
-    w-7
+    w-9
     items-center
     justify-center
-    rounded-l-lg
-    border
-    border-r-0
-    border-white/20
+    rounded-full
     bg-[#C4483A]
     text-white
-    shadow-lg
-    transition-all
-    duration-150
-    hover:w-9
+    shadow-xl
+    transition
+    duration-200
+    hover:scale-105
     active:scale-95
-    active:bg-[#A83A30]
   "
 >
-  <span className="text-sm">🔍</span>
+  <span className="text-lg">🔍</span>
 </button>
 
       <div
