@@ -390,23 +390,24 @@ export default async function CommunityPage() {
                 href={`/business/${biz.id}?from=community`}
                 className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
               >
-                <div className="relative h-44 w-full overflow-hidden bg-white">
-                  {biz.image_url ? (
-                    <img
-                      src={biz.image_url}
-                      alt={biz.name || "Business"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
-                      No Photo
-                    </div>
-                  )}
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#E8DED1]">
+  {biz.image_url ? (
+    <img
+      src={biz.image_url}
+      alt={biz.name || "Business"}
+      className="absolute inset-0 block h-full w-full object-cover"
+      style={{ objectFit: "cover" }}
+    />
+  ) : (
+    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
+      No Photo
+    </div>
+  )}
 
-                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
-                    NEW
-                  </div>
-                </div>
+  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+    NEW
+  </div>
+</div>
 
                 <div className="p-3">
                   <h3 className="line-clamp-1 text-sm font-black">

@@ -7,7 +7,9 @@ import { usePathname } from "next/navigation";
 
 type Category = {
   name?: string | null;
-  hidden?: boolean | null;
+  show_on_main_map?: boolean | null;
+  show_on_community_map?: boolean | null;
+  show_on_b2b?: boolean | null;
 };
 
 type Business = {
@@ -27,7 +29,7 @@ function normalizeSearchText(value: unknown) {
   return String(value || "")
     .normalize("NFKC")
     .toLowerCase()
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -119,8 +121,9 @@ export default function BusinessSearchBookmark() {
           .limit(1000),
         supabase
           .from("categories")
-          .select("name, hidden")
-          .eq("hidden", true),
+          .select(
+            "name, show_on_main_map, show_on_community_map, show_on_b2b",
+          ),
       ]);
 
       if (cancelled) return;
@@ -151,6 +154,12 @@ export default function BusinessSearchBookmark() {
 
       const hiddenCategoryNames = new Set(
         ((categoryResponse.data || []) as Category[])
+          .filter(
+            (category) =>
+              category.show_on_main_map !== true &&
+              category.show_on_community_map !== true &&
+              category.show_on_b2b !== true,
+          )
           .map((category) => normalizeSearchText(category.name))
           .filter(Boolean),
       );
