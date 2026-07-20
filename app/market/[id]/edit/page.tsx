@@ -35,6 +35,75 @@ const [description, setDescription] = useState("");
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreview, setNewVideoPreview] = useState<string | null>(null);
 
+  const MAX_IMAGE_SIZE = 1600;
+  const IMAGE_QUALITY = 0.82;
+
+  async function resizeImage(file: File): Promise<File> {
+    if (!file.type.startsWith("image/")) {
+      return file;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("이미지를 불러올 수 없습니다."));
+        img.src = objectUrl;
+      });
+
+      const originalWidth = image.naturalWidth;
+      const originalHeight = image.naturalHeight;
+
+      if (!originalWidth || !originalHeight) {
+        return file;
+      }
+
+      const scale = Math.min(
+        1,
+        MAX_IMAGE_SIZE / Math.max(originalWidth, originalHeight),
+      );
+
+      const width = Math.max(1, Math.round(originalWidth * scale));
+      const height = Math.max(1, Math.round(originalHeight * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        return file;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", IMAGE_QUALITY);
+      });
+
+      if (!blob) {
+        return file;
+      }
+
+      const originalBaseName =
+        file.name.replace(/\.[^/.]+$/, "").trim() || "market-image";
+
+      return new File([blob], `${originalBaseName}.webp`, {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    } catch (error) {
+      console.warn("이미지 축소 실패, 원본으로 업로드합니다.", error);
+      return file;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
   function getStoragePathFromPublicUrl(url: string) {
     const marker = "/storage/v1/object/public/market/";
     const index = url.indexOf(marker);
@@ -162,13 +231,24 @@ setDescription(data.description || "");
 
     const urls: string[] = [];
 
-    for (const file of Array.from(newImageFiles)) {
-      const ext = file.name.split(".").pop();
+    for (const originalFile of Array.from(newImageFiles)) {
+      const resizedFile = await resizeImage(originalFile);
+      const ext =
+        resizedFile.type === "image/webp"
+          ? "webp"
+          : resizedFile.name.split(".").pop()?.toLowerCase() || "jpg";
+
       const path = `${userId}/images/${Date.now()}-${Math.random()
         .toString(36)
         .slice(2)}.${ext}`;
 
-      const { error } = await supabase.storage.from("market").upload(path, file);
+      const { error } = await supabase.storage
+        .from("market")
+        .upload(path, resizedFile, {
+          contentType: resizedFile.type || undefined,
+          cacheControl: "31536000",
+          upsert: false,
+        });
 
       if (error) throw error;
 
@@ -382,7 +462,10 @@ setDescription(data.description || "");
         </div>
 
         <div className="mb-4">
-          <p className="mb-2 text-sm font-black text-[#172033]">이미지 추가</p>
+          <p className="mb-1 text-sm font-black text-[#172033]">이미지 추가</p>
+          <p className="mb-2 text-xs font-semibold text-gray-500">
+            새 이미지는 최대 1600px WebP로 자동 축소됩니다.
+          </p>
 
           <div className="flex items-center gap-2">
             <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">

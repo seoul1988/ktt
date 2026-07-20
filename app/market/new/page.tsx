@@ -216,51 +216,75 @@ export default function NewMarketItemPage() {
   }, [router]);
 
 
-async function optimizeImage(file: File): Promise<File> {
-  return new Promise((resolve) => {
-    const img = new Image();
+  const MAX_IMAGE_SIZE = 1280;
+  const IMAGE_QUALITY = 0.8;
 
-    img.onload = () => {
-      const maxSize = 1280;
+  async function optimizeImage(file: File): Promise<File> {
+    if (!file.type.startsWith("image/")) {
+      return file;
+    }
 
-      let width = img.width;
-      let height = img.height;
+    const objectUrl = URL.createObjectURL(file);
 
-      if (width > height && width > maxSize) {
-        height = Math.round((height * maxSize) / width);
-        width = maxSize;
-      } else if (height > maxSize) {
-        width = Math.round((width * maxSize) / height);
-        height = maxSize;
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+
+        img.onload = () => resolve(img);
+        img.onerror = () =>
+          reject(new Error(`이미지를 불러올 수 없습니다: ${file.name}`));
+        img.src = objectUrl;
+      });
+
+      const originalWidth = image.naturalWidth;
+      const originalHeight = image.naturalHeight;
+
+      if (!originalWidth || !originalHeight) {
+        return file;
       }
+
+      const scale = Math.min(
+        1,
+        MAX_IMAGE_SIZE / Math.max(originalWidth, originalHeight),
+      );
+
+      const width = Math.max(1, Math.round(originalWidth * scale));
+      const height = Math.max(1, Math.round(originalHeight * scale));
 
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
 
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, width, height);
+      const context = canvas.getContext("2d");
 
-      canvas.toBlob(
-        (blob) => {
-          resolve(
-            new File(
-              [blob!],
-              file.name.replace(/\.\w+$/, ".webp"),
-              {
-                type: "image/webp",
-              }
-            )
-          );
-        },
-        "image/webp",
-        0.8
-      );
-    };
+      if (!context) {
+        return file;
+      }
 
-    img.src = URL.createObjectURL(file);
-  });
-}
+      context.drawImage(image, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", IMAGE_QUALITY);
+      });
+
+      if (!blob) {
+        return file;
+      }
+
+      const baseName =
+        file.name.replace(/\.[^/.]+$/, "").trim() || "market-image";
+
+      return new File([blob], `${baseName}.webp`, {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    } catch (error) {
+      console.warn("이미지 축소 실패, 원본으로 업로드합니다.", error);
+      return file;
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
 
 
   async function uploadMarketImage(
@@ -285,7 +309,7 @@ async function optimizeImage(file: File): Promise<File> {
       await supabase.storage
         .from("market")
         .upload(filePath, file, {
-          cacheControl: "3600",
+          cacheControl: "31536000",
           upsert: false,
           contentType: file.type,
         });
@@ -627,13 +651,21 @@ async function optimizeImage(file: File): Promise<File> {
           item.imageFiles.length;
           imageIndex++
         ) {
+          const originalFile =
+            item.imageFiles[
+              imageIndex
+            ];
+
+          const optimizedFile =
+            await optimizeImage(
+              originalFile,
+            );
+
           const imageUrl =
             await uploadMarketImage(
               userData.user.id,
               item.localId,
-              item.imageFiles[
-                imageIndex
-              ],
+              optimizedFile,
               imageIndex,
             );
 
@@ -1129,6 +1161,8 @@ async function optimizeImage(file: File): Promise<File> {
                             currentMaxImages
                           }
                           장 · 첫 번째 사진이 대표사진입니다.
+                          <br />
+                          업로드 시 최대 1280px WebP로 자동 축소됩니다.
                         </p>
                       </div>
 
