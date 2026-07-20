@@ -62,18 +62,39 @@ export default function BottomNav({ activeNav = "home" }: BottomNavProps) {
     router.push("/");
   }
 
+function haptic() {
+  // Android
+  if ("vibrate" in navigator) {
+    navigator.vibrate(10);
+  }
+}
+
   return (
     <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-[1000] flex w-[94%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-xs font-semibold text-white shadow-2xl">
       {isIOS && (
-        <button
-          type="button"
-          onClick={handleBack}
-          aria-label="Go back"
-          className="flex min-w-0 flex-col items-center justify-center gap-1 text-white active:scale-95"
-        >
-          <span className="text-lg leading-none">←</span>
-          
-        </button>
+       <button
+  type="button"
+  onClick={() => {
+    haptic();
+    handleBack();
+  }}
+  aria-label="Go back"
+  className="
+    group
+    flex min-w-0 flex-col items-center justify-center
+    rounded-xl
+    px-3 py-2
+    text-white
+    transition-all
+    duration-150
+    active:scale-90
+    active:bg-white/15
+  "
+>
+  <span className="text-lg leading-none transition-transform duration-150 group-active:scale-125">
+    ←
+  </span>
+</button>
       )}
 
       <Link
