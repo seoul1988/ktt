@@ -12,7 +12,7 @@ function GrandOpeningMedia({ item }: { item: any }) {
       : item.image_url || "/event.png";
 
   return (
-    <div className="flex aspect-[3/2] w-full items-center justify-center overflow-hidden bg-white p-2">
+    <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] pt-[calc(env(safe-area-inset-top,0px)+1.5rem)] text-[#172033]">
       <img
         src={imageUrl}
         alt={
