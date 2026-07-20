@@ -1,92 +1,130 @@
-@import "tailwindcss";
+/* =========================================================
+   KTown Triangle - Global iPhone / iPad / PWA Safe Area
+   이 내용을 app/globals.css 맨 아래에 추가하세요.
+========================================================= */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --app-header-gap: 12px;
+  --app-bottom-gap: 12px;
 }
 
 html {
   width: 100%;
   min-height: 100%;
-  overflow-x: hidden;
+  background: #f8f3ec;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  scroll-behavior: smooth;
 }
 
 body {
   width: 100%;
-  min-height: 100dvh;
+  min-height: 100%;
   margin: 0;
-  padding: 0;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 15px;
   overflow-x: hidden;
-  word-break: keep-all;
-  overflow-wrap: break-word;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: #f8f3ec;
+  overscroll-behavior-y: none;
 }
 
-*,
-*::before,
-*::after {
+/* 모든 일반 페이지에 공통 적용 */
+.app-safe-area {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
   box-sizing: border-box;
-  min-width: 0;
+
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
 }
 
-img,
-picture,
-video,
-canvas,
-svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
+/* 일반 페이지 컨테이너 */
+.app-page {
+  width: 100%;
+  min-height: 100dvh;
+  box-sizing: border-box;
 }
 
-input,
-textarea,
-select {
-  font: inherit;
+/* 상단 고정 헤더 */
+.safe-fixed-top {
+  top: calc(var(--safe-top) + var(--app-header-gap)) !important;
 }
 
-button {
-  font-family: inherit;
+/* 상단에 정확히 붙는 헤더 */
+.safe-fixed-top-edge {
+  top: var(--safe-top) !important;
 }
 
-.break-anywhere {
-  overflow-wrap: anywhere;
+/* 상단 패딩이 필요한 일반 헤더 */
+.safe-padding-top {
+  padding-top: calc(var(--safe-top) + var(--app-header-gap)) !important;
 }
 
-.break-keep {
-  word-break: keep-all;
-  overflow-wrap: break-word;
+/* 하단 고정 메뉴 */
+.safe-fixed-bottom {
+  bottom: calc(var(--safe-bottom) + var(--app-bottom-gap)) !important;
 }
 
-.safe-top {
-  padding-top: env(safe-area-inset-top);
+/* 하단에 정확히 붙는 메뉴 */
+.safe-fixed-bottom-edge {
+  bottom: var(--safe-bottom) !important;
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
+/* 하단 패딩 */
+.safe-padding-bottom {
+  padding-bottom: calc(var(--safe-bottom) + var(--app-bottom-gap)) !important;
 }
 
-@supports (-webkit-touch-callout: none) {
-  body {
-    min-height: -webkit-fill-available;
+/* 전체 화면 높이 */
+.safe-screen {
+  min-height: 100dvh !important;
+}
+
+.safe-screen-fixed {
+  height: 100dvh !important;
+}
+
+/*
+ * iPhone Safari는 input 폰트가 16px 미만이면
+ * 입력 시 화면을 자동 확대합니다.
+ */
+@media screen and (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 
-  .iphone\:w-\[80vw\] {
-    width: 80vw !important;
+  button,
+  input,
+  textarea,
+  select {
+    touch-action: manipulation;
+  }
+}
+
+/*
+ * PWA standalone 모드에서도 화면 높이를 정확히 유지합니다.
+ */
+@media all and (display-mode: standalone) {
+  html,
+  body,
+  #app-root,
+  .app-safe-area {
+    min-height: 100dvh;
+  }
+}
+
+/*
+ * 가로 모드에서는 좌우 노치 영역을 유지합니다.
+ */
+@media screen and (orientation: landscape) {
+  .app-safe-area {
+    padding-right: var(--safe-right);
+    padding-left: var(--safe-left);
   }
 }
