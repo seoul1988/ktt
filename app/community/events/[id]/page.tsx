@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -13,11 +14,129 @@ import ProfileButton from "../../../components/ProfileButton";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const SITE_URL = "https://www.ktowntriangle.com";
+const DEFAULT_EVENT_IMAGE = `${SITE_URL}/event.png`;
+
+type PageProps = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+function getAbsoluteImageUrl(imageUrl: string | null | undefined) {
+  if (!imageUrl) {
+    return DEFAULT_EVENT_IMAGE;
+  }
+
+  if (
+    imageUrl.startsWith("https://") ||
+    imageUrl.startsWith("http://")
+  ) {
+    return imageUrl;
+  }
+
+  if (imageUrl.startsWith("/")) {
+    return `${SITE_URL}${imageUrl}`;
+  }
+
+  return `${SITE_URL}/${imageUrl}`;
+}
+
+function cleanDescription(
+  description: string | null | undefined,
+) {
+  if (!description) {
+    return "KTownTriangle 커뮤니티 이벤트 안내";
+  }
+
+  return description
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
+}
+
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { id } = await params;
+
+  const { data: event } = await supabase
+    .from("community_events")
+    .select(
+      `
+        id,
+        title,
+        description,
+        image_url,
+        event_date,
+        address
+      `,
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!event) {
+    return {
+      title: "Event Not Found | KTownTriangle",
+      description: "요청하신 이벤트를 찾을 수 없습니다.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  const eventTitle =
+    event.title?.trim() || "Community Event";
+
+  const pageUrl = `${SITE_URL}/community/events/${event.id}`;
+  const imageUrl = getAbsoluteImageUrl(event.image_url);
+  const description = cleanDescription(event.description);
+
+  return {
+    metadataBase: new URL(SITE_URL),
+
+    title: `${eventTitle} | KTownTriangle`,
+    description,
+
+    alternates: {
+      canonical: pageUrl,
+    },
+
+    openGraph: {
+      type: "article",
+      locale: "ko_KR",
+      siteName: "KTownTriangle",
+      url: pageUrl,
+      title: eventTitle,
+      description,
+      images: [
+        {
+          url: imageUrl,
+          width: 1200,
+          height: 630,
+          alt: eventTitle,
+        },
+      ],
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title: eventTitle,
+      description,
+      images: [imageUrl],
+    },
+
+    other: {
+      "og:image:secure_url": imageUrl,
+    },
+  };
+}
+
 export default async function CommunityEventDetailPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+}: PageProps) {
   const { id } = await params;
 
   const { data: event, error } = await supabase
@@ -30,8 +149,13 @@ export default async function CommunityEventDetailPage({
     return (
       <main className="min-h-screen bg-[#F8F3EC] px-5 py-10 text-[#172033]">
         <div className="mx-auto w-full max-w-xl">
-          <h1 className="text-2xl font-black">Event not found</h1>
-          <p className="mt-2 text-sm font-bold text-[#6B6257]">ID: {id}</p>
+          <h1 className="text-2xl font-black">
+            Event not found
+          </h1>
+
+          <p className="mt-2 text-sm font-bold text-[#6B6257]">
+            ID: {id}
+          </p>
 
           <Link
             href="/community"
@@ -42,7 +166,6 @@ export default async function CommunityEventDetailPage({
         </div>
 
         <CommunityBottomNav activeNav="community" />
-
       </main>
     );
   }
@@ -79,7 +202,10 @@ export default async function CommunityEventDetailPage({
       redirect("/community");
     }
 
-    await supabase.from("community_events").delete().eq("id", id);
+    await supabase
+      .from("community_events")
+      .delete()
+      .eq("id", id);
 
     revalidatePath("/community");
     revalidatePath(`/community/events/${id}`);
@@ -94,37 +220,39 @@ export default async function CommunityEventDetailPage({
     : null;
 
   const drawReady =
-    raffleEnabled && raffleDrawAt !== null && Date.now() >= raffleDrawAt;
+    raffleEnabled &&
+    raffleDrawAt !== null &&
+    Date.now() >= raffleDrawAt;
 
   const collectAttendees =
-    event.collect_attendees === true || raffleEnabled === true;
+    event.collect_attendees === true ||
+    raffleEnabled === true;
 
   const allowCompanions = raffleEnabled
     ? false
     : event.allow_companions !== false;
 
-  const winnerCount = Math.max(1, Number(event.raffle_winner_count || 1));
+  const winnerCount = Math.max(
+    1,
+    Number(event.raffle_winner_count || 1),
+  );
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
         <div className="relative mb-4 flex min-h-10 items-center justify-center">
-				  {/* 뒤로가기 */}
-				  <div className="absolute left-0">
-					<BackButton />
-				  </div>
+          <div className="absolute left-0">
+            <BackButton />
+          </div>
 
-				  {/* 가운데 제목 */}
-				  <h2 className="text-xl font-black text-[#172033]">
-					EVENT
-				  </h2>
+          <h2 className="text-xl font-black text-[#172033]">
+            EVENT
+          </h2>
 
-				  {/* 오른쪽 카테고리 */}
-				  <div className="absolute right-0">
-                   <ProfileButton />
-					
-				  </div>
-				</div>
+          <div className="absolute right-0">
+            <ProfileButton />
+          </div>
+        </div>
 
         {event.image_url && (
           <div className="mb-5 overflow-hidden rounded-3xl bg-white shadow-sm">
@@ -140,41 +268,54 @@ export default async function CommunityEventDetailPage({
             {event.title}
           </h1>
 
-  <CommunityEventManageButtons
-  eventId={event.id}
-  ownerId={event.owner_id || null}
-/>
+          <CommunityEventManageButtons
+            eventId={event.id}
+            ownerId={event.owner_id || null}
+          />
         </div>
 
         {raffleEnabled && (
           <div className="mt-4 rounded-2xl bg-yellow-100 px-4 py-4 text-xs font-black text-yellow-900">
-            <div className="text-sm font-black">🎁 Prize Drawing Event</div>
+            <div className="text-sm font-black">
+              🎁 Prize Drawing Event
+            </div>
 
             {event.raffle_draw_at && (
               <div className="mt-2">
-                <span className="font-black">🎯 Drawing Time:</span>
+                <span className="font-black">
+                  🎯 Drawing Time:
+                </span>
                 <br />
-                {new Date(event.raffle_draw_at).toLocaleString()}
+                {new Date(
+                  event.raffle_draw_at,
+                ).toLocaleString()}
               </div>
             )}
 
             {event.raffle_draw_at && (
               <div className="mt-2">
-                <span className="font-black">⏰ Registration Deadline:</span>
+                <span className="font-black">
+                  ⏰ Registration Deadline:
+                </span>
                 <br />
-                {new Date(event.raffle_draw_at).toLocaleString()}
+                {new Date(
+                  event.raffle_draw_at,
+                ).toLocaleString()}
               </div>
             )}
 
             {event.raffle_winner_count ? (
               <div className="mt-2">
-                <span className="font-black">🏆 Winners:</span>{" "}
+                <span className="font-black">
+                  🏆 Winners:
+                </span>{" "}
                 {event.raffle_winner_count}
               </div>
             ) : null}
 
             <div className="mt-3 rounded-xl bg-white/50 p-2 text-[11px] leading-5">
-              추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
+              추첨 이벤트는 본인 직접 등록자만 응모할 수
+              있습니다.
               <br />
               동반인은 추첨 대상에 포함되지 않습니다.
             </div>
@@ -184,7 +325,9 @@ export default async function CommunityEventDetailPage({
         {collectAttendees && !drawReady && (
           <CommunityAttendeeRegistrationForm
             eventId={event.id}
-            eventTitle={event.title || "Community Event"}
+            eventTitle={
+              event.title || "Community Event"
+            }
             raffleEnabled={raffleEnabled}
             allowCompanions={allowCompanions}
           />
@@ -204,7 +347,9 @@ export default async function CommunityEventDetailPage({
 
         <p className="mt-5 text-sm font-bold text-[#6B6257]">
           {event.event_date
-            ? new Date(event.event_date).toLocaleString()
+            ? new Date(
+                event.event_date,
+              ).toLocaleString()
             : "Date TBA"}
         </p>
 
