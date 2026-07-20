@@ -124,6 +124,7 @@ function getTodayHours(hours?: string | null) {
 
 type SearchParams = Promise<{
   from?: string;
+  returnTo?: string;
 }>;
 
 function normalizeCategory(value: string) {
@@ -182,7 +183,7 @@ export default async function BusinessPage({
   searchParams: SearchParams;
 }) {
   const { id } = await params;
-  const { from } = await searchParams;
+const { from, returnTo } = await searchParams;
 
   /*
    * 로그인 사용자 확인용 Supabase 클라이언트
@@ -289,8 +290,17 @@ export default async function BusinessPage({
   /*
    * Back 버튼 경로
    */
-  const backHref =
-    from === "community-map"
+  const safeReturnTo =
+  typeof returnTo === "string" &&
+  returnTo.startsWith("/") &&
+  !returnTo.startsWith("//")
+    ? returnTo
+    : null;
+
+const backHref =
+  from === "search" && safeReturnTo
+    ? safeReturnTo
+    : from === "community-map"
       ? "/community/map"
       : from === "community"
         ? "/community"

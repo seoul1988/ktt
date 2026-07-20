@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { usePathname } from "next/navigation";
 
 type Business = {
   id: number | string;
@@ -39,7 +40,7 @@ function getBusinessImage(business: Business) {
 
 export default function BusinessSearchBookmark() {
   const inputRef = useRef<HTMLInputElement | null>(null);
-
+const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -282,13 +283,15 @@ export default function BusinessSearchBookmark() {
                     const businessImage = getBusinessImage(business);
 
                     return (
-                      <Link
-                        key={business.id}
-                        href={`/business/${business.id}`}
-                        onClick={closeSearch}
-                        className="flex w-full items-center gap-4 rounded-2xl bg-white p-3 shadow-sm transition active:scale-[0.97] active:bg-gray-100"
-                      >
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1">
+                     <Link
+						  key={business.id}
+						  href={`/business/${business.id}?from=search&returnTo=${encodeURIComponent(
+							pathname,
+						  )}`}
+						  onClick={closeSearch}
+						  className="flex w-full items-center gap-4 rounded-2xl bg-white p-3 shadow-sm transition active:scale-[0.97] active:bg-gray-100"
+						>
+											  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1">
 						  <img
 							src={businessImage}
 							alt={businessName}

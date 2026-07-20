@@ -2,17 +2,34 @@
 
 import { useRouter } from "next/navigation";
 
-export default function BackButton() {
+type BackButtonProps = {
+  from?: string;
+};
+
+export default function BackButton({ from }: BackButtonProps) {
   const router = useRouter();
+
+  function handleBack() {
+    if (from === "search") {
+      router.back();
+      return;
+    }
+
+    if (from === "community") {
+      router.push("/community");
+      return;
+    }
+
+    router.push("/map");
+  }
 
   return (
     <button
       type="button"
-      onClick={() => router.back()}
-      className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow hover:bg-gray-100"
-      aria-label="뒤로가기"
+      onClick={handleBack}
+      className="flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-black shadow-sm transition active:scale-95"
     >
-      ←
+      ← Back
     </button>
   );
 }
