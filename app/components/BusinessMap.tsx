@@ -618,6 +618,7 @@ export default function BusinessMap({
   communityMode = false,
   role = null,
   initialCategory = "",
+  initialSearch = "",
 }: {
   spots: Spot[];
   markerSpots?: Spot[];
@@ -627,11 +628,12 @@ export default function BusinessMap({
   communityMode?: boolean;
   role?: string | null;
   initialCategory?: string;
+  initialSearch?: string;
 }) {
   const router = useRouter();
 
   const [isIOS, setIsIOS] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [userLocation, setUserLocation] =
     useState<[number, number] | null>(null);
   const [selectedSpotKey, setSelectedSpotKey] = useState<string | null>(null);
@@ -833,15 +835,15 @@ export default function BusinessMap({
     }
   }, [storageKey, initialCategory]);
 
-  useEffect(() => {
-    if (!initialCategory) return;
+useEffect(() => {
+  if (!initialSearch) return;
 
-    setSelectedCategory(initialCategory);
-    setSearch("");
-    setSelectedSpotKey(null);
-    setCategoryPanelOpen(false);
-    setShowCards(true);
-  }, [initialCategory]);
+  setSearch(initialSearch);
+  setSelectedCategory(null);
+  setSelectedSpotKey(null);
+  setCategoryPanelOpen(false);
+  setShowCards(true);
+}, [initialSearch]);
 
   useEffect(() => {
     async function loadMyRole() {
