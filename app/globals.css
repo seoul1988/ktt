@@ -79,11 +79,31 @@ button {
   overflow-wrap: break-word;
 }
 
+/*
+ * 전체 앱에 공통으로 적용되는 iPhone 안전영역입니다.
+ * layout.tsx에서 children을 app-safe-area로 감싸므로
+ * 일반 페이지는 별도로 safe-area 상단 여백을 넣지 않아도 됩니다.
+ */
+.app-safe-area {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--app-safe-top);
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
+}
+
+/*
+ * 페이지 최소 높이용 클래스입니다.
+ */
 .safe-screen {
   min-height: 100vh;
   min-height: 100dvh;
 }
 
+/*
+ * 특정 컴포넌트에서 안전영역이 별도로 필요한 경우 사용합니다.
+ */
 .safe-top {
   padding-top: var(--app-safe-top);
 }
@@ -92,12 +112,32 @@ button {
   padding-bottom: var(--app-safe-bottom);
 }
 
+.safe-left {
+  padding-left: var(--app-safe-left);
+}
+
+.safe-right {
+  padding-right: var(--app-safe-right);
+}
+
+/*
+ * fixed 상단 헤더에 사용:
+ * className="fixed inset-x-0 top-0 pt-[var(--app-safe-top)]"
+ *
+ * fixed 하단 메뉴에 사용:
+ * className="fixed inset-x-0 bottom-0 pb-[var(--app-safe-bottom)]"
+ */
+
 @supports (-webkit-touch-callout: none) {
   html {
     min-height: -webkit-fill-available;
   }
 
   body {
+    min-height: -webkit-fill-available;
+  }
+
+  .app-safe-area {
     min-height: -webkit-fill-available;
   }
 

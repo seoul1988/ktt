@@ -113,8 +113,9 @@ export default function RootLayout({
         <AuthProvider>
           <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
-		   <VisitorTracker />
-          {children}
+          <VisitorTracker />
+
+          <div className="app-safe-area">{children}</div>
         </AuthProvider>
 
         <Script
