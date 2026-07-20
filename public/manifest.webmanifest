@@ -1,14 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
-
 import { AuthProvider } from "./components/AuthProvider";
 import InAppBrowserNotice from "./components/InAppBrowserNotice";
 import KakaoOpenBrowserNotice from "./components/KakaoOpenBrowserNotice";
 import VisitorTracker from "./components/VisitorTracker";
-import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
-import AppBadgeManager from "./components/AppBadgeManager";
-
 import "./globals.css";
 
 const geistSans = Geist({
@@ -35,8 +31,6 @@ export const metadata: Metadata = {
 
   description:
     "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
-
-  applicationName: "KTown Triangle",
 
   manifest: "/manifest.webmanifest",
 
@@ -89,21 +83,11 @@ export const metadata: Metadata = {
         type: "image/png",
       },
     ],
-
-    apple: [
-      {
-        url: "/apple-touch-icon.png",
-        sizes: "180x180",
-        type: "image/png",
-      },
-    ],
-  },
-
-  other: {
-    "mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "KTT",
+    apple: {
+      url: "/apple-touch-icon.png",
+      sizes: "180x180",
+      type: "image/png",
+    },
   },
 };
 
@@ -111,7 +95,6 @@ export const viewport: Viewport = {
   themeColor: "#172033",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
@@ -128,12 +111,9 @@ export default function RootLayout({
     >
       <body className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
         <AuthProvider>
-          <ServiceWorkerRegister />
-
           <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
           <VisitorTracker />
-          <AppBadgeManager />
 
           <div className="app-safe-area">{children}</div>
         </AuthProvider>
@@ -146,11 +126,7 @@ export default function RootLayout({
         <Script id="google-tag" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
-
-            function gtag() {
-              window.dataLayer.push(arguments);
-            }
-
+            function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
 
             gtag('config', 'G-SDZ3B9B4S6');

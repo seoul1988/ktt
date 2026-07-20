@@ -82,8 +82,8 @@ export default function PushSubscribeButton() {
       }
 
       const registration = await navigator.serviceWorker.register(
-        "/service-worker.js"
-      );
+  "/sw.js"
+);
 
       await navigator.serviceWorker.ready;
 
