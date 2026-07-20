@@ -1426,7 +1426,7 @@ export default function BusinessMap({
               selectedSpotKey: null,
             });
           }}
-          placeholder="업체명 또는 태그 검색..."
+          placeholder="Search..."
           className="min-w-0 flex-1 rounded-2xl border-none bg-white px-5 py-4 text-base font-semibold shadow-xl outline-none [-webkit-text-size-adjust:100%] landscape:px-4 landscape:py-3 landscape:text-xs"
         />
 
