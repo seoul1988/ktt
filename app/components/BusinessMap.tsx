@@ -798,27 +798,50 @@ export default function BusinessMap({
     if (typeof window === "undefined") return;
 
     const saved = sessionStorage.getItem(storageKey);
-    if (!saved) return;
+
+    if (!saved) {
+      if (initialCategory) {
+        setSelectedCategory(initialCategory);
+        setCategoryPanelOpen(false);
+        setShowCards(true);
+      }
+
+      return;
+    }
 
     try {
       const parsed = JSON.parse(saved);
 
-      if (typeof parsed.search === "string") setSearch(parsed.search);
-    if (initialCategory) {
-  setSelectedCategory(initialCategory);
-  setCategoryPanelOpen(false);
-  setShowCards(true);
-} else if (parsed.selectedCategory) {
-  setSelectedCategory(parsed.selectedCategory);
-}
-      if (parsed.selectedSpotKey) setSelectedSpotKey(parsed.selectedSpotKey);
+      if (typeof parsed.search === "string") {
+        setSearch(parsed.search);
+      }
+
+      if (initialCategory) {
+        setSelectedCategory(initialCategory);
+      } else if (parsed.selectedCategory) {
+        setSelectedCategory(parsed.selectedCategory);
+      }
+
+      if (parsed.selectedSpotKey) {
+        setSelectedSpotKey(parsed.selectedSpotKey);
+      }
 
       setCategoryPanelOpen(false);
       setShowCards(true);
     } catch {
       sessionStorage.removeItem(storageKey);
     }
-  }, [storageKey]);
+  }, [storageKey, initialCategory]);
+
+  useEffect(() => {
+    if (!initialCategory) return;
+
+    setSelectedCategory(initialCategory);
+    setSearch("");
+    setSelectedSpotKey(null);
+    setCategoryPanelOpen(false);
+    setShowCards(true);
+  }, [initialCategory]);
 
   useEffect(() => {
     async function loadMyRole() {
@@ -1454,22 +1477,80 @@ export default function BusinessMap({
         </Link>
       )}
 
-      {displayCategories.map((cat) => (
-        <button
-          key={cat.name}
-          onClick={() => selectCategory(cat.name)}
-          title={cat.name}
-          className="flex w-full flex-col items-center justify-center rounded-xl bg-gray-50 px-1 py-2 text-center text-[9px] font-black text-[#172033] shadow-sm active:scale-95"
-        >
-          <span className="text-base leading-none">
-            {cat.emoji || "🏷️"}
-          </span>
+      {[...displayCategories]
+  .sort((a, b) => {
+    const aSelected =
+      selectedCategory !== null &&
+      normalizeCategory(a.name) ===
+        normalizeCategory(selectedCategory);
 
-          <span className="mt-1 block w-full truncate text-[9px] leading-tight">
-            {cat.name}
-          </span>
-        </button>
-      ))}
+    const bSelected =
+      selectedCategory !== null &&
+      normalizeCategory(b.name) ===
+        normalizeCategory(selectedCategory);
+
+    if (aSelected && !bSelected) return -1;
+    if (!aSelected && bSelected) return 1;
+
+    return a.name.localeCompare(b.name);
+  })
+  .map((cat) => {
+    const isSelected =
+      selectedCategory !== null &&
+      normalizeCategory(selectedCategory) ===
+        normalizeCategory(cat.name);
+
+    return (
+     <button
+  key={cat.name}
+  type="button"
+  onClick={() => selectCategory(cat.name)}
+  title={cat.name}
+  aria-pressed={isSelected}
+  className={`
+    flex flex-col items-center justify-center
+    rounded-xl px-2 py-2
+    text-center text-[10px] font-black
+    transition-all duration-200
+    active:scale-95
+    ${
+      isSelected
+        ? "w-[88px] -translate-x-4 border-[3px] border-red-600 bg-white text-red-600 shadow-[0_4px_12px_rgba(220,38,38,0.25)] landscape:w-[84px]"
+        : "w-full border-2 border-transparent bg-gray-50 text-[#172033] shadow-sm"
+    }
+  `}
+>
+  {!isSelected && (
+    <span className="text-base leading-none">
+      {cat.emoji || "🏷️"}
+    </span>
+  )}
+
+  <span
+    className={`
+      block w-full text-center leading-tight
+      ${
+        isSelected
+          ? "mt-0 whitespace-normal text-[10px]"
+          : "mt-1 truncate text-[9px]"
+      }
+    `}
+  >
+    {cat.name}
+  </span>
+
+  {isSelected && (
+    <span className="mt-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[9px] font-black text-white">
+      ✓
+    </span>
+  )}
+</button>
+    );
+  })}
+		
+		
+		
+		
     </div>
   </div>
 )}
@@ -1484,10 +1565,14 @@ export default function BusinessMap({
       )}
 
       {selectedCategory && !categoryPanelOpen && (
-        <div className="fixed left-4 top-[88px] z-[1100] rounded-full bg-white/95 px-4 py-2 text-xs font-extrabold text-[#172033] shadow-xl landscape:left-3 landscape:top-[62px]">
-          {selectedCategory}
-        </div>
-      )}
+  <button
+    type="button"
+    onClick={openCategoryPanel}
+    className="fixed left-4 top-[88px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl landscape:left-3 landscape:top-[62px]"
+  >
+    {selectedCategory}
+  </button>
+)}
 
      <MapContainer
   center={INITIAL_MAP_CENTER}
