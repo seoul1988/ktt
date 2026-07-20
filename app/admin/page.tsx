@@ -1,87 +1,78 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import { supabase } from "../../lib/supabase";
 import ProfileButton from "@/app/components/ProfileButton";
 import BackButton from "@/app/components/BackButton";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export default function AdminPage() {
+  const [ownerRequestCount, setOwnerRequestCount] = useState(0);
+  const [eventRequestCount, setEventRequestCount] = useState(0);
+  const [couponRequestCount, setCouponRequestCount] = useState(0);
+  const [adRequestCount, setAdRequestCount] = useState(0);
 
-export default async function AdminPage() {
-  const {
-    count: ownerRequestCount,
-    error: ownerRequestError,
-  } = await supabase
-    .from("profiles")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_status", "pending");
+  useEffect(() => {
+    loadCounts();
+  }, []);
 
-  const {
-    count: eventRequestCount,
-    error: eventRequestError,
-  } = await supabase
-    .from("event_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
+  async function loadCounts() {
+    const [
+      ownerResult,
+      eventResult,
+      couponResult,
+      adResult,
+    ] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_status", "pending"),
 
-  const {
-    count: couponRequestCount,
-    error: couponRequestError,
-  } = await supabase
-    .from("coupons")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
+      supabase
+        .from("event_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
 
-  const {
-    count: adRequestCount,
-    error: adRequestError,
-  } = await supabase
-    .from("ads")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending");
+      supabase
+        .from("coupons")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
 
-  if (ownerRequestError) {
-    console.error(
-      "Owner request count error:",
-      ownerRequestError,
-    );
-  }
+      supabase
+        .from("ads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
+    ]);
 
-  if (eventRequestError) {
-    console.error(
-      "Event request count error:",
-      eventRequestError,
-    );
-  }
-
-  if (couponRequestError) {
-    console.error(
-      "Coupon request count error:",
-      couponRequestError,
-    );
-  }
-
-  if (adRequestError) {
-    console.error(
-      "Ad request count error:",
-      adRequestError,
-    );
-  }
-
-  const Badge = ({
-    count,
-  }: {
-    count: number | null | undefined;
-  }) => {
-    const safeCount = Number(count || 0);
-
-    if (safeCount <= 0) {
-      return null;
+    if (ownerResult.error) {
+      console.error("Owner count error:", ownerResult.error);
     }
 
+    if (eventResult.error) {
+      console.error("Event count error:", eventResult.error);
+    }
+
+    if (couponResult.error) {
+      console.error("Coupon count error:", couponResult.error);
+    }
+
+    if (adResult.error) {
+      console.error("Ad count error:", adResult.error);
+    }
+
+    setOwnerRequestCount(ownerResult.count ?? 0);
+    setEventRequestCount(eventResult.count ?? 0);
+    setCouponRequestCount(couponResult.count ?? 0);
+    setAdRequestCount(adResult.count ?? 0);
+  }
+
+  const Badge = ({ count }: { count: number }) => {
+    if (count <= 0) return null;
+
     return (
-      <span className="absolute right-2 top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-black leading-none text-white shadow-md">
-        {safeCount > 99 ? "99+" : safeCount}
+      <span className="absolute right-2 top-2 z-20 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-black text-white shadow-md">
+        {count > 99 ? "99+" : count}
       </span>
     );
   };
@@ -105,10 +96,7 @@ export default async function AdminPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Link
-            href="/admin/owner-requests"
-            className={menuClass}
-          >
+          <Link href="/admin/owner-requests" className={menuClass}>
             <span className="text-2xl">👤</span>
             <span className="mt-2">Owner Requests</span>
             <Badge count={ownerRequestCount} />
@@ -122,57 +110,36 @@ export default async function AdminPage() {
             <span className="mt-2">Link Owner</span>
           </Link>
 
-          <Link
-            href="/admin/event-requests"
-            className={menuClass}
-          >
+          <Link href="/admin/event-requests" className={menuClass}>
             <span className="text-2xl">🎉</span>
             <span className="mt-2">Event Requests</span>
-
             <Badge count={eventRequestCount} />
           </Link>
 
-          <Link
-            href="/admin/coupon-requests"
-            className={menuClass}
-          >
+          <Link href="/admin/coupon-requests" className={menuClass}>
             <span className="text-2xl">🎟️</span>
             <span className="mt-2">Coupon Requests</span>
             <Badge count={couponRequestCount} />
           </Link>
 
-          <Link
-            href="/admin/businesses"
-            className={menuClass}
-          >
+          <Link href="/admin/businesses" className={menuClass}>
             <span className="text-2xl">🏪</span>
             <span className="mt-2">Businesses</span>
           </Link>
 
-          <Link
-            href="/admin/categories"
-            className={menuClass}
-          >
+          <Link href="/admin/categories" className={menuClass}>
             <span className="text-2xl">🏷️</span>
             <span className="mt-2">Categories</span>
           </Link>
 
-          <Link
-            href="/admin/users"
-            className={menuClass}
-          >
+          <Link href="/admin/users" className={menuClass}>
             <span className="text-2xl">👥</span>
             <span className="mt-2">Members</span>
           </Link>
 
-          <Link
-            href="/admin/visitors"
-            className={menuClass}
-          >
+          <Link href="/admin/visitors" className={menuClass}>
             <span className="text-2xl">📊</span>
-            <span className="mt-2">
-              Visitor Statistics
-            </span>
+            <span className="mt-2">Visitor Statistics</span>
           </Link>
 
           <Link
