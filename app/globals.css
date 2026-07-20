@@ -1,367 +1,92 @@
-```css
-/* =========================================================
-   KTown Triangle
-   Global iPhone / iPad / PWA Safe Area
-
-   app/globals.css 맨 아래에 추가하거나
-   기존 Safe Area 코드를 이 내용으로 교체하세요.
-========================================================= */
+@import "tailwindcss";
 
 :root {
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-
-  /*
-   * 일반 Safari에서는 실제 Safe Area 값을 사용합니다.
-   * 홈 화면 앱에서는 아래 standalone 미디어 쿼리에서 다시 설정됩니다.
-   */
-  --app-safe-top: var(--safe-top);
-  --app-safe-right: var(--safe-right);
-  --app-safe-bottom: var(--safe-bottom);
-  --app-safe-left: var(--safe-left);
-
-  --app-header-gap: 12px;
-  --app-bottom-gap: 12px;
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
-/* =========================================================
-   기본 문서 설정
-========================================================= */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
 
 html {
   width: 100%;
   min-height: 100%;
-  margin: 0;
-  padding: 0;
-
-  background: #f8f3ec;
-
+  overflow-x: hidden;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-
-  /*
-   * iPhone Safari/PWA에서 전체 화면 높이를 안정적으로 유지합니다.
-   */
-  min-height: 100dvh;
+  scroll-behavior: smooth;
 }
 
 body {
   width: 100%;
-  min-height: 100%;
   min-height: 100dvh;
-
   margin: 0;
   padding: 0;
-
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 15px;
   overflow-x: hidden;
-
-  background: #f8f3ec;
-
-  overscroll-behavior-x: none;
-  overscroll-behavior-y: none;
-
-  box-sizing: border-box;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  min-width: 0;
 }
 
-/* =========================================================
-   전체 앱 공통 Safe Area
-========================================================= */
-
-#app-root,
-.app-safe-area {
-  position: relative;
-
-  width: 100%;
-  min-height: 100dvh;
-
-  padding-top: var(--app-safe-top);
-  padding-right: var(--app-safe-right);
-  padding-bottom: var(--app-safe-bottom);
-  padding-left: var(--app-safe-left);
-
-  box-sizing: border-box;
+img,
+picture,
+video,
+canvas,
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
-/*
- * 일반 페이지 컨테이너
- */
-.app-page {
-  position: relative;
-
-  width: 100%;
-  min-height: 100dvh;
-
-  box-sizing: border-box;
+input,
+textarea,
+select {
+  font: inherit;
 }
 
-/* =========================================================
-   상단 Safe Area 유틸리티
-========================================================= */
-
-/*
- * fixed 또는 absolute 헤더를
- * Dynamic Island 아래에서 시작하게 합니다.
- *
- * 사용:
- * className="fixed safe-fixed-top left-0 right-0"
- */
-.safe-fixed-top {
-  top: calc(
-    var(--app-safe-top) + var(--app-header-gap)
-  ) !important;
+button {
+  font-family: inherit;
 }
 
-/*
- * Safe Area 바로 아래에 붙입니다.
- */
-.safe-fixed-top-edge {
-  top: var(--app-safe-top) !important;
+.break-anywhere {
+  overflow-wrap: anywhere;
 }
 
-/*
- * 일반 요소에 상단 Safe Area 패딩을 추가합니다.
- */
-.safe-padding-top {
-  padding-top: calc(
-    var(--app-safe-top) + var(--app-header-gap)
-  ) !important;
+.break-keep {
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
-/*
- * Safe Area 값만큼 margin-top을 적용합니다.
- */
-.safe-margin-top {
-  margin-top: var(--app-safe-top) !important;
+.safe-top {
+  padding-top: env(safe-area-inset-top);
 }
 
-/*
- * Safe Area와 12px 여백을 포함한 margin-top입니다.
- */
-.safe-margin-top-gap {
-  margin-top: calc(
-    var(--app-safe-top) + var(--app-header-gap)
-  ) !important;
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }
-
-/* =========================================================
-   하단 Safe Area 유틸리티
-========================================================= */
-
-/*
- * fixed 하단 메뉴를 홈 인디케이터 위에 표시합니다.
- */
-.safe-fixed-bottom {
-  bottom: calc(
-    var(--app-safe-bottom) + var(--app-bottom-gap)
-  ) !important;
-}
-
-/*
- * Safe Area 하단에 정확히 붙입니다.
- */
-.safe-fixed-bottom-edge {
-  bottom: var(--app-safe-bottom) !important;
-}
-
-/*
- * 일반 요소에 하단 Safe Area 패딩을 추가합니다.
- */
-.safe-padding-bottom {
-  padding-bottom: calc(
-    var(--app-safe-bottom) + var(--app-bottom-gap)
-  ) !important;
-}
-
-/*
- * Safe Area 값만큼 margin-bottom을 적용합니다.
- */
-.safe-margin-bottom {
-  margin-bottom: var(--app-safe-bottom) !important;
-}
-
-/* =========================================================
-   전체 화면 높이 유틸리티
-========================================================= */
-
-.safe-screen {
-  min-height: 100dvh !important;
-}
-
-.safe-screen-fixed {
-  height: 100dvh !important;
-}
-
-.safe-screen-max {
-  max-height: 100dvh !important;
-}
-
-/* =========================================================
-   iPhone / 모바일 입력창 처리
-========================================================= */
-
-@media screen and (max-width: 767px) {
-  /*
-   * iPhone Safari에서 글자 크기가 16px 미만이면
-   * 입력할 때 화면이 자동 확대되는 현상을 방지합니다.
-   */
-  input,
-  textarea,
-  select {
-    font-size: 16px !important;
-  }
-
-  button,
-  input,
-  textarea,
-  select,
-  a {
-    touch-action: manipulation;
-  }
-}
-
-/* =========================================================
-   iPhone 홈 화면 앱 / PWA Standalone
-========================================================= */
-
-@media all and (display-mode: standalone) {
-  :root {
-    /*
-     * 홈 화면 앱에서 env(safe-area-inset-top)이
-     * 0 또는 너무 작게 반환되는 경우가 있어
-     * Dynamic Island와 카메라 영역을 보호하기 위해
-     * 최소 54px을 확보합니다.
-     */
-    --app-safe-top: max(
-      env(safe-area-inset-top, 0px),
-      54px
-    );
-
-    --app-safe-right: env(
-      safe-area-inset-right,
-      0px
-    );
-
-    --app-safe-bottom: max(
-      env(safe-area-inset-bottom, 0px),
-      12px
-    );
-
-    --app-safe-left: env(
-      safe-area-inset-left,
-      0px
-    );
-  }
-
-  html,
-  body,
-  #app-root,
-  .app-safe-area {
-    width: 100%;
-    min-height: 100dvh;
-  }
-
-  body {
-    /*
-     * 상태바 뒤쪽의 배경색이 흰색이나 투명으로
-     * 보이지 않도록 앱 배경색을 유지합니다.
-     */
-    background: #f8f3ec;
-  }
-
-  #app-root,
-  .app-safe-area {
-    padding-top: var(--app-safe-top);
-    padding-right: var(--app-safe-right);
-    padding-bottom: var(--app-safe-bottom);
-    padding-left: var(--app-safe-left);
-  }
-}
-
-/* =========================================================
-   iOS Safari / iOS 홈 화면 앱 보조 처리
-========================================================= */
 
 @supports (-webkit-touch-callout: none) {
-  html,
   body {
     min-height: -webkit-fill-available;
   }
 
-  #app-root,
-  .app-safe-area,
-  .app-page {
-    min-height: 100dvh;
-    min-height: -webkit-fill-available;
+  .iphone\:w-\[80vw\] {
+    width: 80vw !important;
   }
 }
-
-/* =========================================================
-   가로 모드
-========================================================= */
-
-@media screen and (orientation: landscape) {
-  :root {
-    /*
-     * 가로 모드에서는 상단보다 좌우 노치 영역이 중요합니다.
-     * 지나치게 큰 상단 여백이 생기지 않도록 실제 safe-top을 사용합니다.
-     */
-    --app-safe-top: env(
-      safe-area-inset-top,
-      0px
-    );
-
-    --app-safe-right: max(
-      env(safe-area-inset-right, 0px),
-      12px
-    );
-
-    --app-safe-left: max(
-      env(safe-area-inset-left, 0px),
-      12px
-    );
-  }
-
-  #app-root,
-  .app-safe-area {
-    padding-top: var(--app-safe-top);
-    padding-right: var(--app-safe-right);
-    padding-left: var(--app-safe-left);
-  }
-}
-
-/* =========================================================
-   fixed 또는 absolute 요소 적용 예시
-
-   기존:
-   className="fixed top-4 left-4 right-4"
-
-   수정:
-   className="fixed safe-fixed-top left-4 right-4"
-
-   기존:
-   className="fixed bottom-4 left-4 right-4"
-
-   수정:
-   className="fixed safe-fixed-bottom left-4 right-4"
-
-   기존:
-   className="h-screen"
-
-   수정:
-   className="safe-screen-fixed"
-
-   기존:
-   className="min-h-screen"
-
-   수정:
-   className="safe-screen"
-========================================================= */
-```
