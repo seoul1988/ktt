@@ -640,27 +640,28 @@ export default async function Home() {
 
       return Number(a.id || 0) - Number(b.id || 0);
     });
-
-  const trending = [...spots].sort((a: any, b: any) => {
-    const aOrder =
-      a.display_order === null || a.display_order === undefined
-        ? Number.MAX_SAFE_INTEGER
-        : Number(a.display_order);
-
-    const bOrder =
-      b.display_order === null || b.display_order === undefined
-        ? Number.MAX_SAFE_INTEGER
-        : Number(b.display_order);
-
-    const orderDiff = aOrder - bOrder;
-
-    if (orderDiff !== 0) return orderDiff;
-
-    return (
-      new Date(a.created_at || 0).getTime() -
-      new Date(b.created_at || 0).getTime()
-    );
-  });
+const trending = [...spots].sort(() => Math.random() - 0.5);
+ /* const trending = [...spots].sort((a: any, b: any) => {
+  *  const aOrder =
+  *    a.display_order === null || a.display_order === undefined
+  *      ? Number.MAX_SAFE_INTEGER
+  *      : Number(a.display_order);
+*
+ *   const bOrder =
+ *     b.display_order === null || b.display_order === undefined
+ *       ? Number.MAX_SAFE_INTEGER
+ *       : Number(b.display_order);
+*
+ *   const orderDiff = aOrder - bOrder;
+*
+  *  if (orderDiff !== 0) return orderDiff;
+*
+  *  return (
+ *     new Date(a.created_at || 0).getTime() -
+  *    new Date(b.created_at || 0).getTime()
+*    );
+*  });  
+*/
 
   const mainEvent = businessEvents[0];
   const mainGrandOpening = grandOpenings[0];
