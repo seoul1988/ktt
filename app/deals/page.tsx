@@ -4,6 +4,8 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
 import ProfileButton from "../components/ProfileButton";
+import BusinessSearchBookmark from "../components/BusinessSearchBookmark";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,6 +36,9 @@ export default async function DealsPage() {
     .order("created_at", { ascending: false });
 
   return (
+   <>
+    <BusinessSearchBookmark />
+  
     <main className="min-h-screen bg-[#F8F3EC] px-2 pb-28 text-[#172033]">
       <div className="mx-auto w-full max-w-2xl">
         <div className="relative mb-4 flex items-center justify-center">
@@ -134,5 +139,7 @@ export default async function DealsPage() {
 
       <BottomNav activeNav="deals" />
     </main>
+	</>
+
   );
 }

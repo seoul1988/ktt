@@ -4,6 +4,8 @@ export const revalidate = 0;
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
+import BusinessSearchBookmark from "../components/BusinessSearchBookmark";
+
 
 function GrandOpeningMedia({ item }: { item: any }) {
   const imageUrl =
@@ -49,6 +51,9 @@ export default async function GrandOpeningsPage() {
     });
 
   return (
+  <>
+    <BusinessSearchBookmark />
+  
     <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+var(--app-safe-bottom))] pt-6 text-[#172033]">
       <div className="mx-auto max-w-xl">
         <div className="mb-5 grid grid-cols-[auto_1fr_auto] items-center gap-3">
@@ -138,5 +143,6 @@ export default async function GrandOpeningsPage() {
 
       <BottomNav activeNav="home" />
     </main>
+	 </>
   );
 }
