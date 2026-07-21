@@ -1143,7 +1143,7 @@ export default function CommunitySearchDirectory({
           </div>
 
           <Link
-            href="https://www.ktowntriangle.com/community/directory"
+            href="https://www.ktowntriangle.com/community/directory?back=/community/search"
             className="shrink-0 rounded-full bg-[#F7A928] px-4 py-2 text-sm font-black text-[#172033] shadow-md transition hover:brightness-95 active:scale-95"
           >
             전체보기
