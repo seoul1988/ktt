@@ -61,7 +61,15 @@ export default function AdminPage() {
 
     return (
       <span className="absolute right-2 top-2 z-20 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-black text-white shadow-md">
-        {count > 99 ? "99+" : count}
+        const Badge = ({ count }: { count: number }) => {
+  if (count <= 0) return null;
+
+  return (
+    <span className="absolute right-2 top-2 z-20 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-[10px] font-black text-white shadow-md">
+      {count > 9999 ? "9999+" : count.toLocaleString()}
+    </span>
+  );
+};
       </span>
     );
   };
