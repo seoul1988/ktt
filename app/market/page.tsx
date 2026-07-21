@@ -2,7 +2,6 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
-import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -207,24 +206,16 @@ export default async function MarketPage() {
 
   const items = (data || []) as MarketItem[];
   const entries = buildMarketEntries(items);
-console.log("items", items.length);
-
-console.log(
-  items.map(i => ({
-    id: i.id,
-    title: i.title,
-    bundle: i.bundle_id
-  }))
-);
-
-console.log("entries", entries.length);
-
-console.log(entries);
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex items-center">
-          <BackButton />
+          <Link
+            href="/community"
+            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+          >
+            ← Back
+          </Link>
 
           <h1 className="absolute left-1/2 -translate-x-1/2 text-2xl font-black text-[#172033]">
             벼룩시장
