@@ -144,11 +144,12 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash.png"
-        />
-      </head>
+    <link
+      rel="apple-touch-startup-image"
+      href="/ios-splash-1242x2208.png"
+      media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"
+    />
+  </head>
 
       <body
         className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
