@@ -201,6 +201,7 @@ export default function RootLayout({
           `}
         </Script>
       </body>
+	  
     </html>
   );
 }
