@@ -147,37 +147,6 @@ export default function RootLayout({
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
-          media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
-        />
-
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash.png"
-          media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)"
-        />
-
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash.png"
-          media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)"
-        />
-
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash.png"
-          media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)"
-        />
-
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash.png"
-          media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
-        />
-
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash.png"
-          media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3)"
         />
       </head>
 
