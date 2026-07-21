@@ -1,4 +1,4 @@
-/ app/community/directory/page.tsx
+// app/community/directory/page.tsx
 
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
