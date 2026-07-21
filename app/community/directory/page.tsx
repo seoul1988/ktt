@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import BackButton from "../../components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -473,13 +474,7 @@ export default async function CommunityDirectoryPage() {
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
       <div className="mx-auto max-w-3xl">
         <div className="mb-5 flex items-center justify-between">
-          <button
-  type="button"
-  onClick={() => window.history.back()}
-  className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
->
-  ← Back
-</button>
+          <BackButton fallbackHref="/community/search" />
 
           <h1 className="text-lg font-black tracking-wide">
             한인 비즈니스
@@ -563,7 +558,7 @@ export default async function CommunityDirectoryPage() {
                           className="grid grid-cols-[1fr_82px_42px_70px] items-center gap-2 px-3 py-2 text-xs"
                         >
                           <Link
-                            href={`/business/${business.id}?from=community-directory`}
+                            href={`/business/${business.id}?from=community-directory&returnTo=${encodeURIComponent("/community/directory")}`}
                             className="min-w-0 break-words font-black leading-tight text-[#172033]"
                           >
                             {business.name}
