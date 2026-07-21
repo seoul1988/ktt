@@ -290,7 +290,7 @@ const { from, returnTo } = await searchParams;
   /*
    * Back 버튼 경로
    */
-  const safeReturnTo =
+ const safeReturnTo =
   typeof returnTo === "string" &&
   returnTo.startsWith("/") &&
   !returnTo.startsWith("//")
@@ -298,13 +298,14 @@ const { from, returnTo } = await searchParams;
     : null;
 
 const backHref =
-  from === "search" && safeReturnTo
-    ? safeReturnTo
-    : from === "community-map"
-      ? "/community/map"
-      : from === "community"
-        ? "/community"
-        : "/map";
+  safeReturnTo ??
+  (from === "community-map"
+    ? "/community/map"
+    : from === "community"
+      ? "/community"
+      : from === "search"
+        ? "/search"
+        : "/map");
 
   /*
    * 쿠폰
