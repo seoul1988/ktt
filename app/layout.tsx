@@ -1,3 +1,4 @@
+```tsx
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -143,6 +144,44 @@ export default function RootLayout({
       style={{ backgroundColor: "#F8F3EC" }}
       suppressHydrationWarning
     >
+      <head>
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash.png"
+          media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
+        />
+
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash.png"
+          media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)"
+        />
+
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash.png"
+          media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)"
+        />
+
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash.png"
+          media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)"
+        />
+
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash.png"
+          media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
+        />
+
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash.png"
+          media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3)"
+        />
+      </head>
+
       <body
         className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
         style={{ backgroundColor: "#F8F3EC" }}
@@ -183,3 +222,4 @@ export default function RootLayout({
     </html>
   );
 }
+```
