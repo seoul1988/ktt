@@ -9,6 +9,7 @@ import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
+import AppSplashScreen from "./components/AppSplashScreen";
 
 import "./globals.css";
 
@@ -91,10 +92,23 @@ export const metadata: Metadata = {
       },
     ],
 
+    shortcut: [
+      {
+        url: "/favicon.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+    ],
+
     apple: [
       {
         url: "/apple-touch-icon.png",
         sizes: "180x180",
+        type: "image/png",
+      },
+      {
+        url: "/icon-192.png",
+        sizes: "192x192",
         type: "image/png",
       },
     ],
@@ -105,6 +119,7 @@ export const metadata: Metadata = {
     "apple-mobile-web-app-capable": "yes",
     "apple-mobile-web-app-status-bar-style": "black-translucent",
     "apple-mobile-web-app-title": "KTT",
+    "format-detection": "telephone=no",
   },
 };
 
@@ -129,6 +144,8 @@ export default function RootLayout({
     >
       <body className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
         <AuthProvider>
+          <AppSplashScreen />
+
           <ServiceWorkerRegister />
 
           <InAppBrowserNotice />

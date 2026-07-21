@@ -326,7 +326,7 @@ export default function BottomNav({
               }
               className={`
                 pointer-events-auto
-                absolute left-1/2 -top-2 -translate-x-1/2
+                absolute left-1/2 -top-0 -translate-x-1/2
                 flex h-[60px] w-[60px]
                 items-center justify-center
                 rounded-full
