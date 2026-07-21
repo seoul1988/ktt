@@ -411,7 +411,7 @@ export default function CommunityBottomNav({
               aria-label="Search community directory"
               aria-current={activeNav === "search" ? "page" : undefined}
               className={`
-                pointer-events-auto absolute left-1/2 -top-8 -translate-x-1/2
+                pointer-events-auto absolute left-1/2 -top-5 -translate-x-1/2
                 flex h-[60px] w-[60px]
                 items-center justify-center
                 rounded-full
