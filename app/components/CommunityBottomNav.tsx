@@ -10,6 +10,7 @@ type CommunityBottomNavProps = {
     | "home"
     | "map"
     | "market"
+    | "search"
     | "deals"
     | "ads"
     | "community"
@@ -23,39 +24,70 @@ export default function CommunityBottomNav({
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // touch와 click이 연속으로 실행될 때 진동이 두 번 발생하는 것을 방지
+  // touch와 click이 연속 실행될 때 진동 중복 방지
   const lastHapticTimeRef = useRef(0);
 
-  const activeClass =
-    "text-[#F7B955] scale-110 drop-shadow-[0_0_8px_rgba(247,185,85,0.65)]";
+  const activeClass = "text-[#F7A928]";
+  const normalClass = "text-[#172033]";
 
-  const normalClass = "text-white";
-
-  const itemClass =
-    "group flex min-w-[38px] flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 leading-none transition-all duration-100 active:scale-90 active:bg-white/20 active:shadow-inner active:opacity-80";
+  const navButtonClass =
+    "group flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-all duration-150 active:scale-90 active:opacity-70";
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
     async function loadProfile() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (!user) {
-        setIsAdmin(false);
-        return;
+        if (!mounted) {
+          return;
+        }
+
+        if (!user) {
+          setIsAdmin(false);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) {
+          return;
+        }
+
+        if (error) {
+          console.error("Community navigation role load error:", error);
+          setIsAdmin(false);
+          return;
+        }
+
+        setIsAdmin(data?.role === "admin");
+      } catch (error) {
+        console.error("Community navigation load error:", error);
+
+        if (mounted) {
+          setIsAdmin(false);
+        }
       }
-
-      const { data } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setIsAdmin(data?.role === "admin");
     }
 
     loadProfile();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -77,7 +109,6 @@ export default function CommunityBottomNav({
 
     const now = Date.now();
 
-    // onTouchStart와 onClick이 거의 동시에 발생할 때 중복 진동 방지
     if (now - lastHapticTimeRef.current < 200) {
       return;
     }
@@ -106,129 +137,304 @@ export default function CommunityBottomNav({
     router.push("/community");
   }
 
+  if (!isMounted) {
+    return <div className="h-[78px] shrink-0" />;
+  }
+
   return (
-    <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[9999] flex w-[98%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-2 py-3 text-[8px] font-bold text-white shadow-2xl backdrop-blur-sm">
-      {isIOS && (
-        <button
-          type="button"
-          onTouchStart={triggerHaptic}
-          onClick={handleBack}
-          aria-label="Go back"
-          className={`${itemClass} ${normalClass}`}
+    <>
+      {/* 하단 네비게이션에 페이지 내용이 가리지 않도록 여백 */}
+      <div className="h-[78px] shrink-0" />
+
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-gray-200 bg-white shadow-[0_-3px_14px_rgba(0,0,0,0.08)]">
+        <div
+          className="
+            relative mx-auto flex h-[64px] w-full max-w-md
+            items-center justify-around px-1
+            pb-[env(safe-area-inset-bottom,0px)]
+          "
         >
-          <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-            ⬅️
-          </span>
-          <span>BACK</span>
-        </button>
-      )}
+          {/* iPhone 뒤로가기 */}
+          {isIOS && (
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Go back"
+              className="flex w-9 shrink-0 flex-col items-center justify-center text-[#172033] transition-all duration-150 active:scale-90 active:opacity-70"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-5 w-5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
 
-      <Link
-        href="/"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "home" ? "page" : undefined}
-        className={`${itemClass} ${
-          activeNav === "home" ? activeClass : normalClass
-        }`}
-      >
-        <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-          🏠
-        </span>
-        <span>HOME</span>
-      </Link>
+              <span className="mt-0.5 text-[9px] font-medium leading-none">
+                Back
+              </span>
+            </button>
+          )}
 
-      <Link
-        href="/community/map"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "map" ? "page" : undefined}
-        className={`${itemClass} ${
-          activeNav === "map" ? activeClass : normalClass
-        }`}
-      >
-        <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-          🗺️
-        </span>
-        <span>MAP</span>
-      </Link>
+          {/* Home */}
+          <Link
+            href="/"
+            onClick={triggerHaptic}
+            aria-current={activeNav === "home" ? "page" : undefined}
+            className={`${navButtonClass} ${
+              activeNav === "home" ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 10.5L12 3l9 7.5" />
+              <path d="M5 9.5V21h14V9.5" />
+              <path d="M9.5 21v-7h5v7" />
+            </svg>
 
-      <Link
-        href="/market"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "market" ? "page" : undefined}
-        className={`${itemClass} ${
-          activeNav === "market" ? activeClass : normalClass
-        }`}
-      >
-        <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-          🛍️
-        </span>
-        <span>MARKET</span>
-      </Link>
+            <span className="text-[10px] font-medium leading-none">
+              Home
+            </span>
+          </Link>
 
-      <Link
-        href="/community/deals"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "deals" ? "page" : undefined}
-        className={`${itemClass} ${
-          activeNav === "deals" ? activeClass : normalClass
-        }`}
-      >
-        <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-          🔥
-        </span>
-        <span>DEALS</span>
-      </Link>
+          {/* Map */}
+          <Link
+            href="/community/map"
+            onClick={triggerHaptic}
+            aria-current={activeNav === "map" ? "page" : undefined}
+            className={`${navButtonClass} ${
+              activeNav === "map" ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1116 0z" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
 
-      <Link
-        href="/ads"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "ads" ? "page" : undefined}
-        className={`${itemClass} ${
-          activeNav === "ads" ? activeClass : normalClass
-        }`}
-      >
-        <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-          📢
-        </span>
-        <span>ADS</span>
-      </Link>
+            <span className="text-[10px] font-medium leading-none">
+              Map
+            </span>
+          </Link>
 
-      <Link
-        href="/community"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "community" ? "page" : undefined}
-        className={`${itemClass} ${
-          activeNav === "community" ? activeClass : normalClass
-        }`}
-      >
-        <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-          👥
-        </span>
-        <span>SOCIAL</span>
-      </Link>
+          {/* Market */}
+          <Link
+            href="/market"
+            onClick={triggerHaptic}
+            aria-current={activeNav === "market" ? "page" : undefined}
+            className={`${navButtonClass} ${
+              activeNav === "market" ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 8h12l-1 13H7L6 8z" />
+              <path d="M9 8V6a3 3 0 016 0v2" />
+              <path d="M9 12v1" />
+              <path d="M15 12v1" />
+            </svg>
 
-      {isAdmin && (
-        <Link
-          href="/admin"
-          onTouchStart={triggerHaptic}
-          onClick={triggerHaptic}
-          aria-current={activeNav === "admin" ? "page" : undefined}
-          className={`${itemClass} ${
-            activeNav === "admin" ? activeClass : normalClass
-          }`}
-        >
-          <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-            ⚙️
-          </span>
-          <span>ADMIN</span>
-        </Link>
-      )}
-    </nav>
+            <span className="text-[10px] font-medium leading-none">
+              Market
+            </span>
+          </Link>
+
+          {/* 가운데 검색 버튼 */}
+          <div className="relative flex min-w-0 flex-1 items-center justify-center">
+            <Link
+              href="/community/search"
+              onClick={triggerHaptic}
+              aria-label="Search community directory"
+              aria-current={activeNav === "search" ? "page" : undefined}
+              className={`
+                absolute -top-8
+                flex h-[60px] w-[60px]
+                items-center justify-center
+                rounded-full
+                border-4 border-white
+                bg-[#1B365D]
+                text-white
+                shadow-[0_8px_20px_rgba(23,32,51,0.35)]
+                transition-all duration-150
+                active:scale-90
+                hover:scale-105
+                ${
+                  activeNav === "search"
+                    ? "ring-4 ring-[#F7A928]/30"
+                    : ""
+                }
+              `}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-7 w-7 text-white"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="M16 16l4.5 4.5" />
+              </svg>
+            </Link>
+          </div>
+
+          {/* 일반 사용자만 Deals 표시 */}
+          {!isAdmin && (
+            <Link
+              href="/community/deals"
+              onClick={triggerHaptic}
+              aria-current={activeNav === "deals" ? "page" : undefined}
+              className={`${navButtonClass} ${
+                activeNav === "deals" ? activeClass : normalClass
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-6 w-6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 22c4.4 0 8-3.2 8-7.5 0-3-1.7-5.5-4.4-7.7.1 2.2-.8 3.8-2.2 4.8.1-3.8-1.9-6.6-5.2-9.1.2 3.3-1.3 5.6-2.8 7.5C4.4 11.3 4 12.8 4 14.5 4 18.8 7.6 22 12 22z" />
+                <path d="M9.5 17.5c0 1.4 1.1 2.5 2.5 2.5s2.5-1.1 2.5-2.5c0-1.2-.7-2.2-2.1-3.4 0 1-.4 1.7-1.1 2.1-.1-1.4-.8-2.4-1.8-3.3.1 1.2-.4 2.1-.9 2.8-.4.5-.6 1.1-.6 1.8z" />
+              </svg>
+
+              <span className="text-[10px] font-medium leading-none">
+                Deals
+              </span>
+            </Link>
+          )}
+
+          {/* Ads: 일반 사용자와 관리자 모두 표시 */}
+          <Link
+            href="/ads"
+            onClick={triggerHaptic}
+            aria-current={activeNav === "ads" ? "page" : undefined}
+            className={`${navButtonClass} ${
+              activeNav === "ads" ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 13V9a2 2 0 012-2h3l8-4v16l-8-4H6a2 2 0 01-2-2z" />
+              <path d="M9 15l1.5 5H7l-1-5" />
+              <path d="M20 8a5 5 0 010 6" />
+            </svg>
+
+            <span className="text-[10px] font-medium leading-none">
+              Ads
+            </span>
+          </Link>
+
+          {/* Social */}
+          <Link
+            href="/community"
+            onClick={triggerHaptic}
+            aria-current={
+              activeNav === "community" ? "page" : undefined
+            }
+            className={`${navButtonClass} ${
+              activeNav === "community"
+                ? activeClass
+                : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="3" />
+              <circle cx="17" cy="8" r="3" />
+              <path d="M2.5 20v-1.5A5.5 5.5 0 018 13h1" />
+              <path d="M21.5 20v-1.5A5.5 5.5 0 0016 13h-1" />
+              <path d="M9 20v-1a3 3 0 016 0v1" />
+            </svg>
+
+            <span className="text-[10px] font-medium leading-none">
+              Social
+            </span>
+          </Link>
+
+          {/* 관리자만 Admin 표시 */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              onClick={triggerHaptic}
+              aria-current={activeNav === "admin" ? "page" : undefined}
+              className={`${navButtonClass} ${
+                activeNav === "admin" ? activeClass : normalClass
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-6 w-6"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6v.2h-4V21a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 00.3-1.9A1.7 1.7 0 003 14H2.8v-4H3a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 001.9.3A1.7 1.7 0 0010 3V2.8h4V3a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 00-.3 1.9 1.7 1.7 0 001.6 1h.2v4H21a1.7 1.7 0 00-1.6 1z" />
+              </svg>
+
+              <span className="text-[10px] font-medium leading-none">
+                Admin
+              </span>
+            </Link>
+          )}
+        </div>
+      </nav>
+    </>
   );
 }

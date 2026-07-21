@@ -5,7 +5,7 @@ import ProfileButton from "../components/ProfileButton";
 
 import AdTab from "../components/AdTab";
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
-import BusinessSearchBookmark from "../components/BusinessSearchBookmark";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -42,14 +42,27 @@ export default async function CommunityPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  const { data: categories } = await supabase
+  /*
+   * categories 테이블에는 hidden 컬럼이 없으므로 조회하지 않습니다.
+   * Community Map에 표시되는 카테고리만 가져옵니다.
+   */
+  const { data: categories, error: categoriesError } = await supabase
     .from("categories")
-    .select("name, show_on_community_map");
+    .select("name, show_on_community_map")
+    .eq("show_on_community_map", true);
+
+  if (categoriesError) {
+    console.error(
+      "community categories error:",
+      categoriesError.message,
+      categoriesError.code,
+    );
+  }
 
   const communityCategoryNames = new Set(
-    (categories || [])
-      .filter((cat) => cat.show_on_community_map === true)
-      .map((cat) => String(cat.name).trim().toLowerCase())
+    (categories ?? [])
+      .map((cat) => String(cat.name ?? "").trim().toLowerCase())
+      .filter(Boolean),
   );
 
 
@@ -59,40 +72,66 @@ export default async function CommunityPage() {
 
 
 
-  const newBusinesses =
-    allBusinesses
-      ?.filter((biz) => {
-        const bizCategories = String(biz.category || "")
-          .split(",")
-          .map((cat) => cat.trim().toLowerCase())
-          .filter(Boolean);
+  function getBusinessCategoryNames(biz: any): string[] {
+    const values = [
+      biz.category,
+      biz.category_name,
+      biz.categories,
+    ];
 
-        return bizCategories.some((cat) => communityCategoryNames.has(cat));
+    return values
+      .flatMap((value) => {
+        if (Array.isArray(value)) {
+          return value.map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+
+            if (item && typeof item === "object") {
+              return (
+                item.name ??
+                item.category ??
+                item.category_name ??
+                ""
+              );
+            }
+
+            return "";
+          });
+        }
+
+        return String(value ?? "").split(",");
       })
-      .slice(0, 6) || [];
+      .map((category) => String(category).trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  const newBusinesses =
+    (allBusinesses ?? [])
+      .filter((biz) =>
+        getBusinessCategoryNames(biz).some((category) =>
+          communityCategoryNames.has(category),
+        ),
+      )
+      .slice(0, 6);
 
   const featuredBusinesses =
-    allBusinesses
-      ?.filter((biz) => {
-        const bizCategories = String(biz.category || "")
-          .split(",")
-          .map((cat) => cat.trim().toLowerCase())
-          .filter(Boolean);
-
-        const isCommunityCategory = bizCategories.some((cat) =>
-          communityCategoryNames.has(cat)
+    (allBusinesses ?? [])
+      .filter((biz) => {
+        const isCommunityCategory = getBusinessCategoryNames(biz).some(
+          (category) => communityCategoryNames.has(category),
         );
 
         return isCommunityCategory && biz.featured_sponsor === true;
       })
-      .slice(0, 3) || [];
+      .slice(0, 3);
 
   const eventCount = events?.length || 0;
   const dealCount = deals?.length || 0;
 
   return (
   <>
-    <BusinessSearchBookmark />
+  
   
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto max-w-xl px-5 pb-28 pt-6">

@@ -6,7 +6,14 @@ import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 
 type BottomNavProps = {
-  activeNav?: "home" | "map" | "deals" | "community" | "market" | "admin";
+  activeNav?:
+    | "home"
+    | "map"
+    | "search"
+    | "community"
+    | "market"
+    | "profile"
+    | "admin";
 };
 
 export default function BottomNav({
@@ -17,33 +24,63 @@ export default function BottomNav({
   const [role, setRole] = useState<string | null>(null);
   const [isIOS, setIsIOS] = useState(false);
 
-  const activeClass = "text-[#F7B955]";
-  const normalClass = "text-white";
+  const isAdmin = role === "admin";
+
+  const activeClass = "text-[#F7A928]";
+  const normalClass = "text-[#172033]";
 
   const navButtonClass =
-    "group flex min-w-0 flex-col items-center justify-center rounded-xl px-3 py-2 transition-all duration-100 active:scale-90 active:bg-white/20 active:shadow-inner";
+    "group flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-all duration-150 active:scale-90 active:opacity-70";
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadRole() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (!user) {
-        setRole(null);
-        return;
+        if (!mounted) {
+          return;
+        }
+
+        if (!user) {
+          setRole(null);
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) {
+          return;
+        }
+
+        if (error) {
+          console.error("Profile role load error:", error);
+          setRole(null);
+          return;
+        }
+
+        setRole(data?.role ?? null);
+      } catch (error) {
+        console.error("Bottom navigation role load error:", error);
+
+        if (mounted) {
+          setRole(null);
+        }
       }
-
-      const { data } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setRole(data?.role || null);
     }
 
     loadRole();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -68,7 +105,6 @@ export default function BottomNav({
     }
 
     try {
-      // 10ms는 너무 약할 수 있으므로 35ms로 설정
       window.navigator.vibrate(35);
     } catch {
       // 진동을 지원하지 않는 브라우저에서는 무시
@@ -86,92 +122,216 @@ export default function BottomNav({
     router.push("/");
   }
 
+  const profileIsActive =
+    (isAdmin && activeNav === "admin") ||
+    (!isAdmin && activeNav === "profile");
+
   return (
-    <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[1000] flex w-[94%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-xs font-semibold text-white shadow-2xl">
-      {isIOS && (
-        <button
-          type="button"
-          onClick={handleBack}
-          aria-label="Go back"
-          className={`${navButtonClass} text-white`}
+    <>
+      {/* 네비게이션에 콘텐츠가 가리지 않도록 하단 여백 */}
+      <div className="h-[78px] shrink-0" />
+
+      <nav className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-gray-200 bg-white shadow-[0_-3px_14px_rgba(0,0,0,0.08)]">
+        <div
+          className="
+            relative mx-auto flex h-[64px] w-full max-w-md
+            items-center justify-around px-2
+            pb-[env(safe-area-inset-bottom,0px)]
+          "
         >
-          <span className="text-lg leading-none transition-transform duration-100 group-active:scale-125">
-            ←
-          </span>
-        </button>
-      )}
+          {isIOS && (
+            <button
+              type="button"
+              onClick={handleBack}
+              aria-label="Go back"
+              className="flex w-10 shrink-0 flex-col items-center justify-center text-[#172033] transition-all duration-150 active:scale-90 active:opacity-70"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-5 w-5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
 
-      <Link
-        href="/"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "home" ? "page" : undefined}
-        className={`${navButtonClass} ${
-          activeNav === "home" ? activeClass : normalClass
-        }`}
-      >
-        <span className="transition-transform duration-100 group-active:scale-110">
-          Home
-        </span>
-      </Link>
+              <span className="mt-0.5 text-[10px]">Back</span>
+            </button>
+          )}
 
-      <Link
-        href="/map"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "map" ? "page" : undefined}
-        className={`${navButtonClass} ${
-          activeNav === "map" ? activeClass : normalClass
-        }`}
-      >
-        <span className="transition-transform duration-100 group-active:scale-110">
-          Map
-        </span>
-      </Link>
+          {/* Home */}
+          <Link
+            href="/"
+            onClick={triggerHaptic}
+            aria-current={activeNav === "home" ? "page" : undefined}
+            className={`${navButtonClass} ${
+              activeNav === "home" ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 10.5L12 3l9 7.5" />
+              <path d="M5 9.5V21h14V9.5" />
+              <path d="M9.5 21v-7h5v7" />
+            </svg>
 
-      <Link
-        href="/deals"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "deals" ? "page" : undefined}
-        className={`${navButtonClass} ${
-          activeNav === "deals" ? activeClass : normalClass
-        }`}
-      >
-        <span className="transition-transform duration-100 group-active:scale-110">
-          Deals
-        </span>
-      </Link>
+            <span className="text-[11px] font-medium leading-none">
+              Home
+            </span>
+          </Link>
 
-      <Link
-        href="/community"
-        onTouchStart={triggerHaptic}
-        onClick={triggerHaptic}
-        aria-current={activeNav === "community" ? "page" : undefined}
-        className={`${navButtonClass} ${
-          activeNav === "community" ? activeClass : normalClass
-        }`}
-      >
-        <span className="transition-transform duration-100 group-active:scale-110">
-          Community
-        </span>
-      </Link>
+          {/* Map */}
+          <Link
+            href="/map"
+            onClick={triggerHaptic}
+            aria-current={activeNav === "map" ? "page" : undefined}
+            className={`${navButtonClass} ${
+              activeNav === "map" ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1116 0z" />
+              <circle cx="12" cy="10" r="2.5" />
+            </svg>
 
-      {role === "admin" && (
-        <Link
-          href="/admin"
-          onTouchStart={triggerHaptic}
-          onClick={triggerHaptic}
-          aria-current={activeNav === "admin" ? "page" : undefined}
-          className={`${navButtonClass} ${
-            activeNav === "admin" ? activeClass : normalClass
-          }`}
-        >
-          <span className="transition-transform duration-100 group-active:scale-110">
-            Admin
-          </span>
-        </Link>
-      )}
-    </nav>
+            <span className="text-[11px] font-medium leading-none">
+              Map
+            </span>
+          </Link>
+
+          {/* 가운데 검색 버튼 */}
+          <div className="relative flex flex-1 items-center justify-center">
+            <Link
+              href="/search"
+              onClick={triggerHaptic}
+              aria-label="Search businesses"
+              aria-current={
+                activeNav === "search" ? "page" : undefined
+              }
+              className={`
+                absolute -top-8
+                flex h-[60px] w-[60px]
+                items-center justify-center
+                rounded-full
+                border-4 border-white
+                bg-[#1B365D]
+                text-white
+                shadow-[0_8px_20px_rgba(23,32,51,0.35)]
+                transition-all duration-150
+                active:scale-90
+                hover:scale-105
+                ${
+                  activeNav === "search"
+                    ? "ring-4 ring-[#F7A928]/30"
+                    : ""
+                }
+              `}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-7 w-7 text-white"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="M16 16l4.5 4.5" />
+              </svg>
+            </Link>
+          </div>
+
+          {/* Community */}
+          <Link
+            href="/community"
+            onClick={triggerHaptic}
+            aria-current={
+              activeNav === "community" ? "page" : undefined
+            }
+            className={`${navButtonClass} ${
+              activeNav === "community"
+                ? activeClass
+                : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="8" cy="8" r="3" />
+              <circle cx="17" cy="8" r="3" />
+              <path d="M2.5 20v-1.5A5.5 5.5 0 018 13h1" />
+              <path d="M21.5 20v-1.5A5.5 5.5 0 0016 13h-1" />
+              <path d="M9 20v-1a3 3 0 016 0v1" />
+            </svg>
+
+            <span className="text-[11px] font-medium leading-none">
+              Community
+            </span>
+          </Link>
+
+          {/* 관리자는 Admin, 일반 사용자는 Profile */}
+          <Link
+            href={isAdmin ? "/admin" : "/profile"}
+            onClick={triggerHaptic}
+            aria-current={profileIsActive ? "page" : undefined}
+            className={`${navButtonClass} ${
+              profileIsActive ? activeClass : normalClass
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              className="h-6 w-6"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="7" r="4" />
+              <path d="M4.5 21a7.5 7.5 0 0115 0" />
+
+              {isAdmin && (
+                <path d="M17.5 4.5l.8 1.4 1.6.3-1.1 1.2.2 1.6-1.5-.7-1.5.7.2-1.6-1.1-1.2 1.6-.3.8-1.4z" />
+              )}
+            </svg>
+
+            <span className="text-[11px] font-medium leading-none">
+              {isAdmin ? "Admin" : "Profile"}
+            </span>
+          </Link>
+        </div>
+      </nav>
+    </>
   );
 }

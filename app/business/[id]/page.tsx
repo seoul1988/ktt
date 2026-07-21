@@ -671,11 +671,13 @@ const backHref =
         </section>
       </div>
 
-      {isCommunityBusiness ? (
-        <CommunityBottomNav activeNav="community" />
-      ) : (
-        <BottomNav activeNav="map" />
-      )}
+      {from === "community" || from === "community-map" ? (
+  <CommunityBottomNav activeNav="community" />
+) : from === "search" ? (
+  <BottomNav activeNav="search" />
+) : (
+  <BottomNav activeNav="map" />
+)}
     </main>
   );
 }

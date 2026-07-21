@@ -9,7 +9,7 @@ import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
 import InAppBrowserAlert from "./components/InAppBrowserAlert";
-import BusinessSearchBookmark from "./components/BusinessSearchBookmark";
+
 import ScrollToTopButton from "./components/ScrollToTopButton";
 
 function getYoutubeEmbedUrl(url: string | null | undefined) {
@@ -161,11 +161,12 @@ function SectionTitle({
 
       {moreHref && (
         <Link
-          href={moreHref}
-          className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-2 text-xs font-black text-[#172033] shadow-sm hover:bg-gray-50"
-        >
-          More
-        </Link>
+  href={moreHref}
+  aria-label="More"
+  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-black text-[#172033] shadow-sm transition hover:bg-gray-50 hover:scale-105"
+>
+  →
+</Link>
       )}
     </div>
   );
@@ -218,7 +219,13 @@ function VideoFirstMedia({
     <img
       src={imageUrl || "/event.png"}
       alt={alt}
-      className={`${className} bg-white object-contain`}
+      className={`${className} block h-full w-full object-cover object-center`}
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+        objectPosition: "center",
+      }}
     />
   );
 }
@@ -270,7 +277,19 @@ function BusinessMedia({ spot, className }: { spot: any; className: string }) {
     <img
       src={spot.image_url || "/event.png"}
       alt={spot.name || "Business"}
-      className={`${className} object-cover`}
+      loading="lazy"
+      decoding="async"
+      className={`${className} block !h-full !w-full !max-w-none !object-cover !object-center`}
+      style={{
+        display: "block",
+        width: "100%",
+        height: "100%",
+        minWidth: "100%",
+        minHeight: "100%",
+        maxWidth: "none",
+        objectFit: "cover",
+        objectPosition: "center",
+      }}
     />
   );
 }
@@ -280,7 +299,15 @@ function DealMedia({ deal, className }: { deal: any; className: string }) {
     <img
       src={deal.image_url || deal.businesses?.image_url || "/event.png"}
       alt={deal.title || deal.businesses?.name || "Deal"}
-      className={`${className} object-cover`}
+      className={`${className} block !h-full !w-full !max-w-none !object-cover !object-center`}
+      style={{
+        display: "block",
+        width: "100%",
+        height: "100%",
+        maxWidth: "none",
+        objectFit: "cover",
+        objectPosition: "center",
+      }}
     />
   );
 }
@@ -641,7 +668,9 @@ export default async function Home() {
 
       return Number(a.id || 0) - Number(b.id || 0);
     });
-const trending = [...spots].sort(() => Math.random() - 0.5);
+const trending = [...spots]
+  .sort(() => Math.random() - 0.5)
+  .slice(0, 10);
  /* const trending = [...spots].sort((a: any, b: any) => {
   *  const aOrder =
   *    a.display_order === null || a.display_order === undefined
@@ -676,7 +705,7 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
     <>
           <InstallAppButton />
          <InAppBrowserAlert />
-<BusinessSearchBookmark />
+
       <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
         <div className="mx-auto mb-8 flex max-w-xl items-center justify-between gap-4">
           <div>
@@ -715,7 +744,13 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
                   alt={mainGrandOpening.title || "Grand Opening"}
                   loading="lazy"
                   decoding="async"
-                  className="block h-full w-full object-contain"
+                  className="block h-full w-full object-cover object-center"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: "center",
+                  }}
                 />
               </div>
 
@@ -751,7 +786,7 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
               href={`/business-events/${mainEvent.id}`}
               className="block overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl"
             >
-              <div className="h-64 w-full bg-white">
+              <div className="h-64 w-full overflow-hidden bg-white">
                 <VideoFirstMedia
                   videoUrl={mainEvent.video_url}
                   imageUrl={mainEvent.image_url || "/event.png"}
@@ -792,10 +827,10 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
                 href={`/deals/${deal.id}`}
                 className="flex gap-4 rounded-3xl border border-red-100 bg-white p-4 shadow-sm"
               >
-                <div className="h-24 w-32 shrink-0 overflow-hidden rounded-2xl bg-white">
+                <div className="h-28 w-36 shrink-0 overflow-hidden rounded-2xl bg-white">
                   <DealMedia
                     deal={deal}
-                    className="h-full w-full object-contain"
+                    className="block h-full w-full object-cover object-center"
                   />
                 </div>
 
@@ -867,11 +902,11 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
           <div className="flex items-center gap-4">
             <Link
               href={`/business/${spot.id}`}
-              className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-white"
+              className="h-28 w-40 shrink-0 overflow-hidden rounded-2xl bg-gray-100"
             >
               <BusinessMedia
                 spot={spot}
-                className="h-full w-full object-cover"
+                className="h-full w-full"
               />
             </Link>
 
@@ -934,4 +969,3 @@ const trending = [...spots].sort(() => Math.random() - 0.5);
     </>
   );
 }
-

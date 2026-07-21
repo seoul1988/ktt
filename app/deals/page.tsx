@@ -4,7 +4,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
 import ProfileButton from "../components/ProfileButton";
-import BusinessSearchBookmark from "../components/BusinessSearchBookmark";
+
 
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,7 @@ export default async function DealsPage() {
 
   return (
    <>
-    <BusinessSearchBookmark />
+
   
     <main className="min-h-screen bg-[#F8F3EC] px-2 pb-28 text-[#172033]">
       <div className="mx-auto w-full max-w-2xl">
@@ -137,7 +137,7 @@ export default async function DealsPage() {
         )}
       </div>
 
-      <BottomNav activeNav="deals" />
+      <BottomNav />
     </main>
 	</>
 

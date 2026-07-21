@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthRefreshWrapper from "./AuthRefreshWrapper";
+import BottomNav from "./BottomNav";
 
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -2029,72 +2030,9 @@ useEffect(() => {
       </div>
 
       {!communityMode && (
-        <nav className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-[1000] flex w-[94%] max-w-md -translate-x-1/2 items-center justify-around rounded-3xl bg-[#172033] px-3 py-3 text-[10px] font-semibold text-white shadow-2xl landscape:bottom-3 landscape:w-[74%] landscape:max-w-md landscape:py-2 landscape:text-[10px]">
-          {isIOS && (
-            <button
-              type="button"
-              onClick={handleBack}
-              aria-label="Go back"
-              className="flex min-w-[42px] flex-col items-center justify-center gap-0.5 text-white transition active:scale-90 active:opacity-70"
-            >
-              <span className="text-lg leading-none">←</span>
-              <span>BACK</span>
-            </button>
-          )}
-
-          <Link
-            href="/"
-            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
-              activeNav === "home" ? "text-[#F7B955]" : "text-white"
-            }`}
-          >
-            <span className="text-lg leading-none">🏠</span>
-            <span>HOME</span>
-          </Link>
-
-          <Link
-            href="/map"
-            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
-              activeNav === "map" ? "text-[#F7B955]" : "text-white"
-            }`}
-          >
-            <span className="text-lg leading-none">🗺️</span>
-            <span>MAP</span>
-          </Link>
-
-          <Link
-            href="/deals"
-            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
-              activeNav === "deals" ? "text-[#F7B955]" : "text-white"
-            }`}
-          >
-            <span className="text-lg leading-none">🔥</span>
-            <span>DEALS</span>
-          </Link>
-
-          <Link
-            href="/community"
-            className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
-              activeNav === "community" ? "text-[#F7B955]" : "text-white"
-            }`}
-          >
-            <span className="text-lg leading-none">👥</span>
-            <span>SOCIAL</span>
-          </Link>
-
-          {myRole === "admin" && (
-            <Link
-              href="/admin"
-              className={`flex min-w-[42px] flex-col items-center justify-center gap-0.5 ${
-                activeNav === "admin" ? "text-[#F7B955]" : "text-white"
-              }`}
-            >
-              <span className="text-lg leading-none">⚙️</span>
-              <span>ADMIN</span>
-            </Link>
-          )}
-        </nav>
+        <BottomNav activeNav="home" />
       )}
+
     </div>
   );
 } 

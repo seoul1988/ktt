@@ -4,7 +4,7 @@ export const revalidate = 0;
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
-import BusinessSearchBookmark from "../components/BusinessSearchBookmark";
+
 
 
 function GrandOpeningMedia({ item }: { item: any }) {
@@ -52,7 +52,7 @@ export default async function GrandOpeningsPage() {
 
   return (
   <>
-    <BusinessSearchBookmark />
+    
   
     <main className="safe-screen bg-[#F8F3EC] px-5 pb-[calc(7rem+var(--app-safe-bottom))] pt-6 text-[#172033]">
       <div className="mx-auto max-w-xl">
@@ -61,7 +61,7 @@ export default async function GrandOpeningsPage() {
             href="/"
             className="flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-black shadow-sm transition active:scale-95"
           >
-            ← Back
+            Back
           </Link>
 
           <h1 className="truncate text-center text-lg font-black tracking-wide">

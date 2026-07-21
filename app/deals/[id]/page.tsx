@@ -56,7 +56,9 @@ export default async function DealDetailPage({
           </Link>
 
           <div className="rounded-3xl bg-white p-8 text-center shadow">
-            <p className="font-bold text-gray-500">Deal을 찾을 수 없습니다.</p>
+            <p className="font-bold text-gray-500">
+              Deal을 찾을 수 없습니다.
+            </p>
             <p className="mt-2 text-xs text-gray-400">ID: {id}</p>
           </div>
         </div>
@@ -91,7 +93,10 @@ export default async function DealDetailPage({
       sort_order
     `)
     .eq("deal_id", id)
-    .order("sort_order", { ascending: true, nullsFirst: false });
+    .order("sort_order", {
+      ascending: true,
+      nullsFirst: false,
+    });
 
   if (dealItemsError) {
     console.log("DEAL ITEMS ERROR:", dealItemsError.message);
@@ -160,7 +165,7 @@ export default async function DealDetailPage({
                 {business?.address && (
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      business.address
+                      business.address,
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -252,7 +257,7 @@ export default async function DealDetailPage({
         )}
       </div>
 
-      <BottomNav activeNav="deals" />
+      <BottomNav />
     </main>
   );
 }
