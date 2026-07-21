@@ -10,7 +10,6 @@ import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
 
-
 import "./globals.css";
 
 const geistSans = Geist({
@@ -23,8 +22,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const SITE_URL = "https://www.ktowntriangle.com";
+const OG_IMAGE_URL = `${SITE_URL}/og-image.png`;
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.ktowntriangle.com"),
+  metadataBase: new URL(SITE_URL),
 
   verification: {
     google: "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
@@ -36,35 +38,48 @@ export const metadata: Metadata = {
   },
 
   description:
-    "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
+    "랄리, 더럼, 캐리, 채플힐 및 트라이앵글 지역의 한인 비즈니스, 음식점, 마켓, 이벤트, 할인 혜택과 커뮤니티 정보를 만나보세요.",
 
   applicationName: "KTown Triangle",
 
   manifest: "/manifest.webmanifest",
 
+  alternates: {
+    canonical: SITE_URL,
+  },
+
   openGraph: {
-    title: "KTown Triangle",
+    title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
     description:
-      "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
-    url: "https://www.ktowntriangle.com",
+      "랄리, 더럼, 캐리, 채플힐 및 트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
+    url: SITE_URL,
     siteName: "KTown Triangle",
+    locale: "ko_KR",
+    alternateLocale: ["en_US"],
+    type: "website",
     images: [
       {
-        url: "/og-image.png",
+        url: OG_IMAGE_URL,
+        secureUrl: OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: "KTown Triangle",
+        alt: "랄리지역 한인 비즈니스를 한곳에 - KTown Triangle",
+        type: "image/png",
       },
     ],
-    type: "website",
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "KTown Triangle",
+    title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
     description:
-      "Korean restaurants, markets, events, deals, and local businesses around Raleigh, Durham, Cary, Chapel Hill, and the Triangle area.",
-    images: ["/og-image.png"],
+      "트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
+    images: [
+      {
+        url: OG_IMAGE_URL,
+        alt: "랄리지역 한인 비즈니스를 한곳에 - KTown Triangle",
+      },
+    ],
   },
 
   appleWebApp: {
@@ -138,26 +153,24 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
       style={{ backgroundColor: "#F8F3EC" }}
       suppressHydrationWarning
     >
       <head>
-    <link
-      rel="apple-touch-startup-image"
-      href="/ios-splash-1242x2208.png"
-      media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"
-    />
-  </head>
+        <link
+          rel="apple-touch-startup-image"
+          href="/ios-splash-1242x2208.png"
+          media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"
+        />
+      </head>
 
       <body
         className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
         style={{ backgroundColor: "#F8F3EC" }}
       >
         <AuthProvider>
-        
-
           <ServiceWorkerRegister />
           <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
@@ -181,10 +194,10 @@ export default function RootLayout({
               window.dataLayer.push(arguments);
             }
 
-            gtag('js', new Date());
+            gtag("js", new Date());
 
-            gtag('config', 'G-SDZ3B9B4S6');
-            gtag('config', 'AW-18242391009');
+            gtag("config", "G-SDZ3B9B4S6");
+            gtag("config", "AW-18242391009");
           `}
         </Script>
       </body>
