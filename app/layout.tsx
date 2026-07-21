@@ -8,6 +8,7 @@ import KakaoOpenBrowserNotice from "./components/KakaoOpenBrowserNotice";
 import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
+import AppUpdateNotice from "./components/AppUpdateNotice";
 
 import "./globals.css";
 
@@ -134,6 +135,7 @@ export default function RootLayout({
           <KakaoOpenBrowserNotice />
           <VisitorTracker />
           <AppBadgeManager />
+          <AppUpdateNotice />
 
           <div className="app-safe-area">{children}</div>
         </AuthProvider>
