@@ -69,7 +69,7 @@ export const metadata: Metadata = {
 
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
     title: "KTT",
   },
 
@@ -117,14 +117,14 @@ export const metadata: Metadata = {
   other: {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "black-translucent",
+    "apple-mobile-web-app-status-bar-style": "default",
     "apple-mobile-web-app-title": "KTT",
     "format-detection": "telephone=no",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#172033",
+  themeColor: "#F8F3EC",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -139,15 +139,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
+      style={{ backgroundColor: "#F8F3EC" }}
       suppressHydrationWarning
     >
-      <body className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]">
+      <body
+        className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
+        style={{ backgroundColor: "#F8F3EC" }}
+      >
         <AuthProvider>
           <AppSplashScreen />
 
           <ServiceWorkerRegister />
-
           <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
           <VisitorTracker />
