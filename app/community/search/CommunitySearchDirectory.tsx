@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ScrollToTopButton from "../../components/ScrollToTopButton";
 
 type Category = {
   id: number | string;
@@ -1256,6 +1257,7 @@ export default function CommunitySearchDirectory({
       </section>
 
       <CommunityBottomNav activeNav="search" />
+	    <ScrollToTopButton />
     </main>
   );
 }
