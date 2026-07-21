@@ -33,7 +33,7 @@ export default function CommunityBottomNav({
   const normalClass = "text-[#172033]";
 
   const navButtonClass =
-    "group flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-all duration-150 active:scale-90 active:opacity-70";
+    "group flex min-w-0 flex-col items-center justify-center gap-0.5 py-1 transition-all duration-150 active:scale-90 active:opacity-70";
 
   useEffect(() => {
     setIsMounted(true);
@@ -149,18 +149,23 @@ export default function CommunityBottomNav({
       <nav className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-gray-200 bg-white shadow-[0_-3px_14px_rgba(0,0,0,0.08)]">
         <div
           className="
-            relative mx-auto flex h-[64px] w-full max-w-md
-            items-center justify-around px-1
-            pb-[env(safe-area-inset-bottom,0px)]
+            relative mx-auto h-[64px] w-full max-w-md
+            px-1 pb-[env(safe-area-inset-bottom,0px)]
           "
         >
+          {/*
+           * 돋보기는 전체 네비게이션의 정확한 중앙에 고정합니다.
+           * 왼쪽은 최대 4개, 오른쪽은 3개를 각각 화면 절반 안에 배치합니다.
+           */}
+          <div className="absolute inset-y-0 left-1 right-1 flex">
+            <div className="flex w-1/2 items-center justify-evenly pr-8">
           {/* iPhone 뒤로가기 */}
           {isIOS && (
             <button
               type="button"
               onClick={handleBack}
               aria-label="Go back"
-              className="flex w-9 shrink-0 flex-col items-center justify-center text-[#172033] transition-all duration-150 active:scale-90 active:opacity-70"
+              className="flex w-[42px] shrink-0 flex-col items-center justify-center text-[#172033] transition-all duration-150 active:scale-90 active:opacity-70"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -186,7 +191,7 @@ export default function CommunityBottomNav({
             href="/"
             onClick={triggerHaptic}
             aria-current={activeNav === "home" ? "page" : undefined}
-            className={`${navButtonClass} ${
+            className={`${navButtonClass} w-[42px] ${
               activeNav === "home" ? activeClass : normalClass
             }`}
           >
@@ -215,7 +220,7 @@ export default function CommunityBottomNav({
             href="/community/map"
             onClick={triggerHaptic}
             aria-current={activeNav === "map" ? "page" : undefined}
-            className={`${navButtonClass} ${
+            className={`${navButtonClass} w-[42px] ${
               activeNav === "map" ? activeClass : normalClass
             }`}
           >
@@ -243,7 +248,7 @@ export default function CommunityBottomNav({
             href="/market"
             onClick={triggerHaptic}
             aria-current={activeNav === "market" ? "page" : undefined}
-            className={`${navButtonClass} ${
+            className={`${navButtonClass} w-[42px] ${
               activeNav === "market" ? activeClass : normalClass
             }`}
           >
@@ -268,55 +273,17 @@ export default function CommunityBottomNav({
             </span>
           </Link>
 
-          {/* 가운데 검색 버튼 */}
-          <div className="relative flex min-w-0 flex-1 items-center justify-center">
-            <Link
-              href="/community/search"
-              onClick={triggerHaptic}
-              aria-label="Search community directory"
-              aria-current={activeNav === "search" ? "page" : undefined}
-              className={`
-                absolute -top-8
-                flex h-[60px] w-[60px]
-                items-center justify-center
-                rounded-full
-                border-4 border-white
-                bg-[#1B365D]
-                text-white
-                shadow-[0_8px_20px_rgba(23,32,51,0.35)]
-                transition-all duration-150
-                active:scale-90
-                hover:scale-105
-                ${
-                  activeNav === "search"
-                    ? "ring-4 ring-[#F7A928]/30"
-                    : ""
-                }
-              `}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-7 w-7 text-white"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="6.5" />
-                <path d="M16 16l4.5 4.5" />
-              </svg>
-            </Link>
-          </div>
+            </div>
 
+            {/* 오른쪽 메뉴 영역 */}
+            <div className="flex w-1/2 items-center justify-evenly pl-8">
           {/* 일반 사용자만 Deals 표시 */}
           {!isAdmin && (
             <Link
               href="/community/deals"
               onClick={triggerHaptic}
               aria-current={activeNav === "deals" ? "page" : undefined}
-              className={`${navButtonClass} ${
+              className={`${navButtonClass} flex-1 ${
                 activeNav === "deals" ? activeClass : normalClass
               }`}
             >
@@ -345,7 +312,7 @@ export default function CommunityBottomNav({
             href="/ads"
             onClick={triggerHaptic}
             aria-current={activeNav === "ads" ? "page" : undefined}
-            className={`${navButtonClass} ${
+            className={`${navButtonClass} flex-1 ${
               activeNav === "ads" ? activeClass : normalClass
             }`}
           >
@@ -376,7 +343,7 @@ export default function CommunityBottomNav({
             aria-current={
               activeNav === "community" ? "page" : undefined
             }
-            className={`${navButtonClass} ${
+            className={`${navButtonClass} flex-1 ${
               activeNav === "community"
                 ? activeClass
                 : normalClass
@@ -410,7 +377,7 @@ export default function CommunityBottomNav({
               href="/admin"
               onClick={triggerHaptic}
               aria-current={activeNav === "admin" ? "page" : undefined}
-              className={`${navButtonClass} ${
+              className={`${navButtonClass} flex-1 ${
                 activeNav === "admin" ? activeClass : normalClass
               }`}
             >
@@ -433,6 +400,51 @@ export default function CommunityBottomNav({
               </span>
             </Link>
           )}
+            </div>
+          </div>
+
+          {/* 가운데 검색 버튼: 좌우 버튼 수와 무관하게 정확히 중앙 고정 */}
+          <div className="pointer-events-none absolute left-1/2 top-0 z-20 h-full -translate-x-1/2">
+            <Link
+              href="/community/search"
+              onClick={triggerHaptic}
+              aria-label="Search community directory"
+              aria-current={activeNav === "search" ? "page" : undefined}
+              className={`
+                pointer-events-auto absolute left-1/2 -top-8 -translate-x-1/2
+                flex h-[60px] w-[60px]
+                items-center justify-center
+                rounded-full
+                border-4 border-white
+                bg-[#1B365D]
+                text-white
+                shadow-[0_8px_20px_rgba(23,32,51,0.35)]
+                transition-all duration-150
+                active:scale-90
+                hover:scale-105
+                ${
+                  activeNav === "search"
+                    ? "ring-4 ring-[#F7A928]/30"
+                    : ""
+                }
+              `}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="h-7 w-7 text-white"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="M16 16l4.5 4.5" />
+              </svg>
+            </Link>
+          </div>
+
         </div>
       </nav>
     </>
