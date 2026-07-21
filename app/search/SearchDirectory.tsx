@@ -17,6 +17,7 @@ type Business = {
   category?: string | null;
   category_name?: string | null;
   categories?: unknown;
+  tag?: unknown;
   city?: string | null;
   address?: string | null;
   image_url?: string | null;
@@ -74,6 +75,7 @@ function getBusinessCategoryNames(business: Business): string[] {
     ...splitCategories(business.category),
     ...splitCategories(business.category_name),
     ...splitCategories(business.categories),
+    ...splitCategories(business.tag),
   ];
 }
 
@@ -210,16 +212,7 @@ function getCategorySortRank(categoryName: string) {
     category.includes("치킨") ||
     category.includes("닭")
   ) {
-    return (
-      <svg {...commonProps}>
-        <path d="M15.8 4.6c2.4 2.4 2.4 6.3 0 8.7-1.8 1.8-4.5 2.2-6.7 1.1l-2.6 2.6" />
-        <path d="M8.3 15.2l-1.7-1.7" />
-        <path d="M6.8 16.8l-1.4 1.4" />
-        <path d="M5.5 18.1l-1.2 1.2" />
-        <path d="M4.9 17.5l1.6 1.6" />
-        <path d="M11.1 7.1c1.1-1.1 2.9-1.1 4 0" />
-      </svg>
-    );
+    return 3;
   }
 
   if (
@@ -318,6 +311,28 @@ function CategoryIcon({
     className,
     "aria-hidden": true,
   };
+
+
+  // Chicken
+  if (
+    category.includes("chicken") ||
+    category.includes("fried chicken") ||
+    category.includes("korean chicken") ||
+    category.includes("wing") ||
+    category.includes("치킨") ||
+    category.includes("닭")
+  ) {
+    return (
+      <svg {...commonProps}>
+        <path d="M15.8 4.6c2.4 2.4 2.4 6.3 0 8.7-1.8 1.8-4.5 2.2-6.7 1.1l-2.6 2.6" />
+        <path d="M8.3 15.2l-1.7-1.7" />
+        <path d="M6.8 16.8l-1.4 1.4" />
+        <path d="M5.5 18.1l-1.2 1.2" />
+        <path d="M4.9 17.5l1.6 1.6" />
+        <path d="M11.1 7.1c1.1-1.1 2.9-1.1 4 0" />
+      </svg>
+    );
+  }
 
   if (
     category.includes("noodle") ||
@@ -552,6 +567,8 @@ export default function SearchDirectory({
   const [searchText, setSearchText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showCategories, setShowCategories] = useState(false);
+  const [submittedSearchText, setSubmittedSearchText] = useState("");
+  const [showLiveMatches, setShowLiveMatches] = useState(false);
 
   const mainMapCategories = useMemo(() => {
     const hasMainMapField = categories.some(
@@ -649,7 +666,7 @@ export default function SearchDirectory({
   }, [businesses, searchText]);
 
   const filteredBusinesses = useMemo(() => {
-    const keyword = normalize(searchText);
+    const keyword = normalize(submittedSearchText);
 
     return businesses
       .filter((business) => {
@@ -712,14 +729,25 @@ export default function SearchDirectory({
   }, [
     businesses,
     mainMapCategoryNames,
-    searchText,
+    submittedSearchText,
     selectedCategory,
     selectedCategoryName,
   ]);
 
   function selectCategory(categoryId: string) {
     setSelectedCategory(categoryId);
+    setSearchText("");
+    setSubmittedSearchText("");
+    setShowLiveMatches(false);
     setShowCategories(false);
+  }
+
+  function submitSearch() {
+    const trimmedSearch = searchText.trim();
+    setSubmittedSearchText(trimmedSearch);
+    setSelectedCategory("all");
+    setShowCategories(false);
+    setShowLiveMatches(false);
   }
 
   return (
@@ -746,17 +774,33 @@ export default function SearchDirectory({
                 type="search"
                 value={searchText}
                 onChange={(event) => {
-                  setSearchText(event.target.value);
+                  const nextValue = event.target.value;
+                  setSearchText(nextValue);
+                  setSubmittedSearchText("");
                   setShowCategories(false);
+                  setShowLiveMatches(Boolean(nextValue.trim()));
                 }}
                 onFocus={() => {
                   if (!searchText.trim()) {
                     setShowCategories(true);
+                    setShowLiveMatches(false);
+                  } else if (!submittedSearchText) {
+                    setShowLiveMatches(true);
                   }
                 }}
                 onClick={() => {
                   if (!searchText.trim()) {
                     setShowCategories(true);
+                    setShowLiveMatches(false);
+                  } else if (!submittedSearchText) {
+                    setShowLiveMatches(true);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitSearch();
+                    event.currentTarget.blur();
                   }
                 }}
                 placeholder="Search businesses or categories"
@@ -770,6 +814,8 @@ export default function SearchDirectory({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     setSearchText("");
+                    setSubmittedSearchText("");
+                    setShowLiveMatches(false);
                     setShowCategories(false);
                   }}
                   aria-label="Clear search"
@@ -808,7 +854,7 @@ export default function SearchDirectory({
               </button>
             </div>
 
-            {searchText.trim() && (
+            {showLiveMatches && searchText.trim() && !submittedSearchText && (
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[10000] max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl">
                 {liveMatches.length > 0 ? (
                   <div className="space-y-1">
@@ -821,7 +867,10 @@ export default function SearchDirectory({
                         <Link
                           key={business.id}
                           href={`/business/${business.id}?from=search`}
-                          onClick={() => setShowCategories(false)}
+                          onClick={() => {
+                            setShowLiveMatches(false);
+                            setShowCategories(false);
+                          }}
                           className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-[#F8F3EC] active:scale-[0.99]"
                         >
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
@@ -871,7 +920,10 @@ export default function SearchDirectory({
                 <button
                   type="button"
                   aria-label="Close categories"
-                  onClick={() => setShowCategories(false)}
+                  onClick={() => {
+                            setShowLiveMatches(false);
+                            setShowCategories(false);
+                          }}
                   onTouchStart={() => setShowCategories(false)}
                   className="fixed inset-0 z-[9990] cursor-default bg-transparent"
                 />
@@ -958,14 +1010,14 @@ export default function SearchDirectory({
             </p>
 
             <h1 className="mt-1 truncate text-xl font-black">
-              {searchText
-                ? `"${searchText}" Search Results`
+              {submittedSearchText
+                ? `"${submittedSearchText}" Search Results`
                 : selectedCategory === "all"
                   ? "All Businesses"
                   : selectedCategoryName || "Businesses"}
             </h1>
 
-            {!searchText && selectedCategory === "all" && (
+            {!submittedSearchText && selectedCategory === "all" && (
               <p className="mt-1 text-xs text-gray-500">
                 Restaurant · BBQ · Sushi · Noodles
               </p>
@@ -982,6 +1034,9 @@ export default function SearchDirectory({
             type="button"
             onClick={() => {
               setSelectedCategory("all");
+              setSearchText("");
+              setSubmittedSearchText("");
+              setShowLiveMatches(false);
               setShowCategories(false);
             }}
             className="mb-4 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black shadow-sm"
