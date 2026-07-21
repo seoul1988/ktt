@@ -1,9 +1,8 @@
-// app/community/directory/page.tsx
+/ app/community/directory/page.tsx
 
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
-import BackButton from "../../components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -114,7 +113,27 @@ function PhoneIcon() {
   );
 }
 
-export default async function CommunityDirectoryPage() {
+type SearchParams = Promise<{
+  back?: string;
+}>;
+
+export default async function CommunityDirectoryPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const { back } = await searchParams;
+
+  const safeBackHref =
+    typeof back === "string" &&
+    back.startsWith("/") &&
+    !back.startsWith("//")
+      ? back
+      : "/community/search";
+
+  const directoryReturnHref =
+    `/community/directory?back=${encodeURIComponent(safeBackHref)}`;
+
 
   /*
    * Hidden 상태를 판단하기 위해 카테고리 표시 옵션을 모두 가져옵니다.
@@ -474,7 +493,12 @@ export default async function CommunityDirectoryPage() {
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
       <div className="mx-auto max-w-3xl">
         <div className="mb-5 flex items-center justify-between">
-          <BackButton fallbackHref="/community/search" />
+          <Link
+            href={safeBackHref}
+            className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
+          >
+            ← Back
+          </Link>
 
           <h1 className="text-lg font-black tracking-wide">
             한인 비즈니스
@@ -558,7 +582,9 @@ export default async function CommunityDirectoryPage() {
                           className="grid grid-cols-[1fr_82px_42px_70px] items-center gap-2 px-3 py-2 text-xs"
                         >
                           <Link
-                            href={`/business/${business.id}?from=community-directory&returnTo=${encodeURIComponent("/community/directory")}`}
+                            href={`/business/${business.id}?from=community-directory&returnTo=${encodeURIComponent(
+                              directoryReturnHref,
+                            )}`}
                             className="min-w-0 break-words font-black leading-tight text-[#172033]"
                           >
                             {business.name}
