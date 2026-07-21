@@ -473,12 +473,13 @@ export default async function CommunityDirectoryPage() {
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
       <div className="mx-auto max-w-3xl">
         <div className="mb-5 flex items-center justify-between">
-          <Link
-            href="/community/map"
-            className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
-          >
-            ← Back
-          </Link>
+          <button
+  type="button"
+  onClick={() => window.history.back()}
+  className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
+>
+  ← Back
+</button>
 
           <h1 className="text-lg font-black tracking-wide">
             한인 비즈니스
