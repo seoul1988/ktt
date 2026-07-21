@@ -5,7 +5,6 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "@/app/components/ProfileButton";
-import BackButton from "@/app/components/BackButton";
 
 
 type AdItem = {
@@ -198,14 +197,9 @@ export default function AdsPage() {
 
       const uniqueFilesToDelete = Array.from(new Set(filesToDelete));
 
-      console.log("Files to delete:", uniqueFilesToDelete);
-
       if (uniqueFilesToDelete.length > 0) {
-        const { data: storageData, error: storageError } =
+        const { error: storageError } =
           await supabase.storage.from("ads").remove(uniqueFilesToDelete);
-
-        console.log("Storage delete data:", storageData);
-        console.log("Storage delete error:", storageError);
 
         if (storageError) {
           alert("Storage file delete failed: " + storageError.message);
@@ -256,7 +250,12 @@ export default function AdsPage() {
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex h-10 items-center">
   {/* 왼쪽 */}
-  <BackButton />
+  <Link
+    href="/community"
+    className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+  >
+    ← Back
+  </Link>
 
   {/* 가운데 */}
   <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-2xl font-black text-[#172033]">
