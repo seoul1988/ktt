@@ -1,7 +1,7 @@
+import Link from "next/link";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "@/app/components/ProfileButton";
-import BackButton from "@/app/components/BackButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -140,7 +140,12 @@ export default async function AdminVisitorsPage() {
       <main className="min-h-screen bg-[#F8F3EC] p-5 pb-32 text-[#172033]">
         <div className="mx-auto w-full max-w-xl">
           <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-            <BackButton />
+            <Link
+              href="/admin"
+              className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+            >
+              ← Back
+            </Link>
 
             <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black">
               Visitor Statistics
@@ -181,12 +186,6 @@ export default async function AdminVisitorsPage() {
     return createdAt.getTime() >= new Date(todayIso).getTime();
   });
 
-  /*
-   * 이번 달(미국 동부시간 기준) 방문 로그입니다.
-   *
-   * 예: 7월 1일~31일 동안 동일한 visitor_key가
-   * 500번 방문해도 월 중복 제외 방문자는 1명으로 계산됩니다.
-   */
   const monthlyLogs = logs.filter((row) => {
     if (!row.created_at) return false;
 
@@ -290,7 +289,12 @@ export default async function AdminVisitorsPage() {
     <main className="min-h-screen bg-[#F8F3EC] p-5 pb-32">
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-          <BackButton />
+          <Link
+              href="/admin"
+              className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+            >
+              ← Back
+            </Link>
 
           <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
             Visitor Statistics
