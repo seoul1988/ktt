@@ -16,6 +16,7 @@ type Business = {
   category?: string | null;
   category_name?: string | null;
   categories?: unknown;
+  tag?: unknown;
   city?: string | null;
   address?: string | null;
   image_url?: string | null;
@@ -93,6 +94,7 @@ function getBusinessCategoryNames(business: Business): string[] {
     ...splitCategories(business.category),
     ...splitCategories(business.category_name),
     ...splitCategories(business.categories),
+    ...splitCategories(business.tag),
   ];
 }
 
@@ -382,23 +384,11 @@ const DISPLAY_CATEGORY_GROUPS = [
       "pho",
     ],
   },
- {
-  id: "__chicken_group__",
-  name: "Chicken",
-  keywords: [
-    "chicken",
-    "fried chicken",
-    "korean chicken",
-    "bbq chicken",
-    "wing",
-    "wings",
-    "닭",
-    "치킨",
-    "후라이드",
-    "양념치킨",
-    "닭강정",
-  ],
-},
+  {
+    id: "__chicken_group__",
+    name: "Chicken",
+    keywords: [],
+  },
   {
     id: "__bakery_group__",
     name: "Bakery",
@@ -504,7 +494,15 @@ function textMatchesGroup(value: unknown, groupId: string) {
 }
 
 function businessBelongsToGroup(business: Business, groupId: string) {
-  return getBusinessCategoryNames(business).some((categoryName) =>
+  const businessCategories = getBusinessCategoryNames(business).map(normalize);
+
+  // 비즈니스에 저장된 category, category_name, categories 또는 tag 중
+  // 하나라도 정확히 Chicken이면 Chicken 그룹에 표시합니다.
+  if (groupId === "__chicken_group__") {
+    return businessCategories.includes("chicken");
+  }
+
+  return businessCategories.some((categoryName) =>
     textMatchesGroup(categoryName, groupId),
   );
 }
