@@ -9,7 +9,7 @@ import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
-import AppSplashScreen from "./components/AppSplashScreen";
+
 
 import "./globals.css";
 
@@ -156,7 +156,7 @@ export default function RootLayout({
         style={{ backgroundColor: "#F8F3EC" }}
       >
         <AuthProvider>
-          <AppSplashScreen />
+        
 
           <ServiceWorkerRegister />
           <InAppBrowserNotice />
