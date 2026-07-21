@@ -651,7 +651,7 @@ export default async function CommunityDirectoryPage({
         </div>
       </div>
 
-      <CommunityBottomNav activeNav="map" />
+      <CommunityBottomNav activeNav="search" />
 	   <ScrollToTopButton />
     </main>
   );
