@@ -165,6 +165,17 @@ function getCategorySortRank(categoryName: string) {
   const category = normalize(categoryName);
 
   if (
+    category.includes("chicken") ||
+    category.includes("fried chicken") ||
+    category.includes("korean chicken") ||
+    category.includes("wing") ||
+    category.includes("치킨") ||
+    category.includes("닭")
+  ) {
+    return 2;
+  }
+
+  if (
     category.includes("restaurant") ||
     category.includes("food") ||
     category.includes("식당") ||
@@ -189,6 +200,26 @@ function getCategorySortRank(categoryName: string) {
     category.includes("초밥")
   ) {
     return 3;
+  }
+
+  if (
+    category.includes("chicken") ||
+    category.includes("fried chicken") ||
+    category.includes("korean chicken") ||
+    category.includes("wing") ||
+    category.includes("치킨") ||
+    category.includes("닭")
+  ) {
+    return (
+      <svg {...commonProps}>
+        <path d="M15.8 4.6c2.4 2.4 2.4 6.3 0 8.7-1.8 1.8-4.5 2.2-6.7 1.1l-2.6 2.6" />
+        <path d="M8.3 15.2l-1.7-1.7" />
+        <path d="M6.8 16.8l-1.4 1.4" />
+        <path d="M5.5 18.1l-1.2 1.2" />
+        <path d="M4.9 17.5l1.6 1.6" />
+        <path d="M11.1 7.1c1.1-1.1 2.9-1.1 4 0" />
+      </svg>
+    );
   }
 
   if (
@@ -574,6 +605,49 @@ export default function SearchDirectory({
     );
   }, [mainMapCategories, selectedCategory]);
 
+  const liveMatches = useMemo(() => {
+    const keyword = normalize(searchText);
+
+    if (!keyword) {
+      return [];
+    }
+
+    return businesses
+      .filter((business) => {
+        const businessCategoryNames = getBusinessCategoryNames(business);
+        const searchableText = normalize(
+          [
+            business.name,
+            ...businessCategoryNames,
+            business.city,
+            business.address,
+          ].join(" "),
+        );
+
+        return searchableText.includes(keyword);
+      })
+      .sort((a, b) => {
+        const aName = normalize(a.name);
+        const bName = normalize(b.name);
+        const aStartsWith = aName.startsWith(keyword) ? 0 : 1;
+        const bStartsWith = bName.startsWith(keyword) ? 0 : 1;
+
+        if (aStartsWith !== bStartsWith) {
+          return aStartsWith - bStartsWith;
+        }
+
+        const ratingDifference =
+          Number(b.rating || 0) - Number(a.rating || 0);
+
+        if (ratingDifference !== 0) {
+          return ratingDifference;
+        }
+
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 8);
+  }, [businesses, searchText]);
+
   const filteredBusinesses = useMemo(() => {
     const keyword = normalize(searchText);
 
@@ -671,9 +745,20 @@ export default function SearchDirectory({
               <input
                 type="search"
                 value={searchText}
-                onChange={(event) => setSearchText(event.target.value)}
-                onFocus={() => setShowCategories(true)}
-                onClick={() => setShowCategories(true)}
+                onChange={(event) => {
+                  setSearchText(event.target.value);
+                  setShowCategories(false);
+                }}
+                onFocus={() => {
+                  if (!searchText.trim()) {
+                    setShowCategories(true);
+                  }
+                }}
+                onClick={() => {
+                  if (!searchText.trim()) {
+                    setShowCategories(true);
+                  }
+                }}
                 placeholder="Search businesses or categories"
                 autoFocus={false}
                 className="touch-manipulation h-12 w-full rounded-xl border border-gray-300 bg-white pl-12 pr-20 text-sm font-medium outline-none transition focus:border-[#1B365D] focus:ring-2 focus:ring-[#1B365D]/15"
@@ -683,7 +768,10 @@ export default function SearchDirectory({
                 <button
                   type="button"
                   onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => setSearchText("")}
+                  onClick={() => {
+                    setSearchText("");
+                    setShowCategories(false);
+                  }}
                   aria-label="Clear search"
                   className="absolute right-12 top-1/2 z-10 -translate-y-1/2 text-xl text-gray-400"
                 >
@@ -719,6 +807,64 @@ export default function SearchDirectory({
                 </svg>
               </button>
             </div>
+
+            {searchText.trim() && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[10000] max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl">
+                {liveMatches.length > 0 ? (
+                  <div className="space-y-1">
+                    {liveMatches.map((business) => {
+                      const categoryLabel =
+                        getBusinessCategoryNames(business).join(", ") ||
+                        "Business";
+
+                      return (
+                        <Link
+                          key={business.id}
+                          href={`/business/${business.id}?from=search`}
+                          onClick={() => setShowCategories(false)}
+                          className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-[#F8F3EC] active:scale-[0.99]"
+                        >
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                            <img
+                              src={business.image_url || "/event.png"}
+                              alt={business.name}
+                              loading="lazy"
+                              decoding="async"
+                              className="h-full w-full object-cover"
+                              onError={(event) => {
+                                event.currentTarget.src = "/event.png";
+                              }}
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-black text-[#172033]">
+                              {business.name}
+                            </p>
+                            <p className="mt-0.5 truncate text-xs font-medium text-gray-500">
+                              {categoryLabel}
+                              {business.city ? ` · ${business.city}` : ""}
+                            </p>
+                          </div>
+
+                          <span className="shrink-0 text-lg text-gray-300">›</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-4 py-8 text-center">
+                    <div className="text-2xl">🔍</div>
+                    <p className="mt-2 text-sm font-black text-[#172033]">
+                      No matching businesses
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Try another business name or category.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {showCategories && (
               <>

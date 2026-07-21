@@ -356,6 +356,11 @@ type DisplayCategory = Category & {
 
 const DISPLAY_CATEGORY_GROUPS = [
   {
+    id: "__comingsoon_group__",
+    name: "Coming Soon",
+    keywords: [],
+  },
+  {
     id: "__restaurant_group__",
     name: "Restaurant",
     keywords: [
@@ -497,6 +502,12 @@ function businessBelongsToGroup(business: Business, groupId: string) {
   const businessCategories = getBusinessCategoryNames(business).map(normalize);
 
   // 비즈니스에 저장된 category, category_name, categories 또는 tag 중
+  // 하나라도 정확히 Coming Soon이면 Coming Soon 그룹에 표시합니다.
+  if (groupId === "__comingsoon_group__") {
+    return businessCategories.includes("coming soon");
+  }
+
+  // 비즈니스에 저장된 category, category_name, categories 또는 tag 중
   // 하나라도 정확히 Chicken이면 Chicken 그룹에 표시합니다.
   if (groupId === "__chicken_group__") {
     return businessCategories.includes("chicken");
@@ -533,6 +544,16 @@ function CategoryIcon({
     className,
     "aria-hidden": true,
   };
+
+  // Coming Soon
+  if (category.includes("coming soon")) {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 2" />
+      </svg>
+    );
+  }
 
   // Restaurant
   if (category.includes("restaurant")) {
@@ -1076,7 +1097,7 @@ export default function CommunitySearchDirectory({
 
             {!searchText && selectedCategory === "all" && (
               <p className="mt-1 text-xs text-gray-500">
-                Restaurant · Chicken · Bakery · Cafe
+                Coming Soon · Restaurant · Chicken · Bakery · Cafe
               </p>
             )}
           </div>
