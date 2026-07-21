@@ -714,6 +714,8 @@ export default function CommunitySearchDirectory({
   const [searchText, setSearchText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showCategories, setShowCategories] = useState(false);
+  const [submittedSearchText, setSubmittedSearchText] = useState("");
+  const [showLiveMatches, setShowLiveMatches] = useState(false);
 
   /*
    * 카테고리 버튼은 요청한 8개 그룹만 고정 순서로 표시합니다.
@@ -786,7 +788,7 @@ export default function CommunitySearchDirectory({
   }, [businesses, searchText]);
 
   const filteredBusinesses = useMemo(() => {
-    const keyword = normalize(searchText);
+    const keyword = normalize(submittedSearchText);
 
     return businesses
       .filter((business) => {
@@ -837,14 +839,32 @@ export default function CommunitySearchDirectory({
       });
   }, [
     businesses,
-    searchText,
+    submittedSearchText,
     selectedCategory,
     selectedCategoryName,
   ]);
 
   function selectCategory(categoryId: string) {
     setSelectedCategory(categoryId);
+    setSearchText("");
+    setSubmittedSearchText("");
+    setShowLiveMatches(false);
     setShowCategories(false);
+  }
+
+  function submitSearch() {
+    const trimmedSearch = searchText.trim();
+
+    if (!trimmedSearch) {
+      setSubmittedSearchText("");
+      setShowLiveMatches(false);
+      return;
+    }
+
+    setSubmittedSearchText(trimmedSearch);
+    setSelectedCategory("all");
+    setShowCategories(false);
+    setShowLiveMatches(false);
   }
 
   return (
@@ -871,17 +891,34 @@ export default function CommunitySearchDirectory({
                 type="search"
                 value={searchText}
                 onChange={(event) => {
-                  setSearchText(event.target.value);
+                  const nextValue = event.target.value;
+
+                  setSearchText(nextValue);
+                  setSubmittedSearchText("");
                   setShowCategories(false);
+                  setShowLiveMatches(Boolean(nextValue.trim()));
                 }}
                 onFocus={() => {
                   if (!searchText.trim()) {
                     setShowCategories(true);
+                    setShowLiveMatches(false);
+                  } else if (!submittedSearchText) {
+                    setShowLiveMatches(true);
                   }
                 }}
                 onClick={() => {
                   if (!searchText.trim()) {
                     setShowCategories(true);
+                    setShowLiveMatches(false);
+                  } else if (!submittedSearchText) {
+                    setShowLiveMatches(true);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitSearch();
+                    event.currentTarget.blur();
                   }
                 }}
                 placeholder="Search businesses or categories"
@@ -895,6 +932,8 @@ export default function CommunitySearchDirectory({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     setSearchText("");
+                    setSubmittedSearchText("");
+                    setShowLiveMatches(false);
                     setShowCategories(false);
                   }}
                   aria-label="Clear search"
@@ -933,7 +972,7 @@ export default function CommunitySearchDirectory({
               </button>
             </div>
 
-            {searchText.trim() && (
+            {showLiveMatches && searchText.trim() && !submittedSearchText && (
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[10000] max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl">
                 {liveMatches.length > 0 ? (
                   <div className="space-y-1">
@@ -947,6 +986,7 @@ export default function CommunitySearchDirectory({
                           key={business.id}
                           href={`/business/${business.id}?from=community-search`}
                           onClick={() => {
+                            setShowLiveMatches(false);
                             setShowCategories(false);
                           }}
                           className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-[#F8F3EC] active:scale-[0.99]"
@@ -1095,16 +1135,19 @@ export default function CommunitySearchDirectory({
                   : selectedCategoryName || "Businesses"}
             </h1>
 
-            {!searchText && selectedCategory === "all" && (
+            {!submittedSearchText && selectedCategory === "all" && (
               <p className="mt-1 text-xs text-gray-500">
                 Coming Soon · Restaurant · Chicken · Bakery · Cafe
               </p>
             )}
           </div>
 
-          <span className="shrink-0 rounded-full bg-[#1B365D] px-3 py-1.5 text-xs font-black text-white">
-            {filteredBusinesses.length}
-          </span>
+          <Link
+            href="https://www.ktowntriangle.com/community/directory"
+            className="shrink-0 rounded-full bg-[#F7A928] px-4 py-2 text-sm font-black text-[#172033] shadow-md transition hover:brightness-95 active:scale-95"
+          >
+            전체보기
+          </Link>
         </div>
 
         {selectedCategory !== "all" && (
@@ -1112,6 +1155,9 @@ export default function CommunitySearchDirectory({
             type="button"
             onClick={() => {
               setSelectedCategory("all");
+              setSearchText("");
+              setSubmittedSearchText("");
+              setShowLiveMatches(false);
               setShowCategories(false);
             }}
             className="mb-4 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black shadow-sm"
