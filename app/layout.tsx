@@ -137,44 +137,58 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const htmlClassName = [
+    geistSans.variable,
+    geistMono.variable,
+    "h-full",
+    "bg-[#F8F3EC]",
+    "antialiased",
+  ].join(" ");
+
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
+      className={htmlClassName}
       style={{ backgroundColor: "#F8F3EC" }}
       suppressHydrationWarning
     >
       <head>
+        {/* iPhone 12 / 13 / 14 */}
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
           media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)"
         />
 
+        {/* iPhone 14 Pro / 15 / 15 Pro */}
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
           media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)"
         />
 
+        {/* iPhone 16 Pro */}
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
           media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)"
         />
 
+        {/* iPhone 12 / 13 Pro Max, iPhone 14 Plus */}
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
           media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)"
         />
 
+        {/* iPhone 14 / 15 Pro Max */}
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
           media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)"
         />
 
+        {/* iPhone 16 Pro Max */}
         <link
           rel="apple-touch-startup-image"
           href="/ios-splash.png"
@@ -212,10 +226,10 @@ export default function RootLayout({
               window.dataLayer.push(arguments);
             }
 
-            gtag('js', new Date());
+            gtag("js", new Date());
 
-            gtag('config', 'G-SDZ3B9B4S6');
-            gtag('config', 'AW-18242391009');
+            gtag("config", "G-SDZ3B9B4S6");
+            gtag("config", "AW-18242391009");
           `}
         </Script>
       </body>
