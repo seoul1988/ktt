@@ -28,6 +28,14 @@ function getEasternStartOfTodayIso() {
   return new Date(`${easternDateText}T00:00:00-04:00`).toISOString();
 }
 
+function getEasternYearMonth(date: Date) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+  }).format(date);
+}
+
 function normalizeDeviceLabel(row: VisitorLogRow) {
   const savedOS = String(row.device_os || "")
     .trim()
@@ -111,6 +119,7 @@ function normalizeLanguageLabel(language?: string | null) {
 
 export default async function AdminVisitorsPage() {
   const todayIso = getEasternStartOfTodayIso();
+  const currentEasternYearMonth = getEasternYearMonth(new Date());
 
   /*
    * select("*")를 사용하면 현재 visitor_logs 테이블에
@@ -123,7 +132,8 @@ export default async function AdminVisitorsPage() {
     .select("*")
     .order("created_at", {
       ascending: false,
-    });
+    })
+    .range(0, 9999);
 
   if (error) {
     return (
@@ -171,11 +181,29 @@ export default async function AdminVisitorsPage() {
     return createdAt.getTime() >= new Date(todayIso).getTime();
   });
 
+  /*
+   * 이번 달(미국 동부시간 기준) 방문 로그입니다.
+   *
+   * 예: 7월 1일~31일 동안 동일한 visitor_key가
+   * 500번 방문해도 월 중복 제외 방문자는 1명으로 계산됩니다.
+   */
+  const monthlyLogs = logs.filter((row) => {
+    if (!row.created_at) return false;
+
+    const createdAt = new Date(row.created_at);
+
+    if (Number.isNaN(createdAt.getTime())) {
+      return false;
+    }
+
+    return getEasternYearMonth(createdAt) === currentEasternYearMonth;
+  });
+
   const totalVisits = logs.length;
   const todayVisits = todayLogs.length;
 
-  const allUniqueVisitors = new Set(
-    logs
+  const monthlyUniqueVisitors = new Set(
+    monthlyLogs
       .map((row) => row.visitor_key)
       .filter(Boolean),
   ).size;
@@ -299,8 +327,8 @@ export default async function AdminVisitorsPage() {
 
             <div className="space-y-3">
               <StatRow
-                label="👤 중복 제외 방문자"
-                value={allUniqueVisitors}
+                label="👤 이번 달 중복 제외 방문자"
+                value={monthlyUniqueVisitors}
               />
 
               <StatRow
