@@ -382,13 +382,23 @@ const DISPLAY_CATEGORY_GROUPS = [
       "pho",
     ],
   },
-  {
-    id: "__chicken_group__",
-    name: "Chicken",
-    keywords: [
-      "닭강정",
-    ],
-  },
+ {
+  id: "__chicken_group__",
+  name: "Chicken",
+  keywords: [
+    "chicken",
+    "fried chicken",
+    "korean chicken",
+    "bbq chicken",
+    "wing",
+    "wings",
+    "닭",
+    "치킨",
+    "후라이드",
+    "양념치킨",
+    "닭강정",
+  ],
+},
   {
     id: "__bakery_group__",
     name: "Bakery",
