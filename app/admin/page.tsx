@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import { supabase } from "../../lib/supabase";
 import ProfileButton from "@/app/components/ProfileButton";
-import BackButton from "@/app/components/BackButton";
 
 export default function AdminPage() {
   const [ownerRequestCount, setOwnerRequestCount] = useState(0);
@@ -18,45 +17,35 @@ export default function AdminPage() {
   }, []);
 
   async function loadCounts() {
-    const [
-      ownerResult,
-      eventResult,
-      couponResult,
-      adResult,
-    ] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("owner_status", "pending"),
-
-      supabase
-        .from("event_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
-
-      supabase
-        .from("coupons")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
-
-      supabase
-        .from("ads")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending"),
-    ]);
+    const [ownerResult, eventResult, couponResult, adResult] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .eq("owner_status", "pending"),
+        supabase
+          .from("event_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending"),
+        supabase
+          .from("coupons")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending"),
+        supabase
+          .from("ads")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending"),
+      ]);
 
     if (ownerResult.error) {
       console.error("Owner count error:", ownerResult.error);
     }
-
     if (eventResult.error) {
       console.error("Event count error:", eventResult.error);
     }
-
     if (couponResult.error) {
       console.error("Coupon count error:", couponResult.error);
     }
-
     if (adResult.error) {
       console.error("Ad count error:", adResult.error);
     }
@@ -84,7 +73,12 @@ export default function AdminPage() {
     <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28">
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-          <BackButton />
+          <Link
+            href="/community"
+            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+          >
+            ← Back
+          </Link>
 
           <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
             Admin Dashboard
@@ -102,10 +96,7 @@ export default function AdminPage() {
             <Badge count={ownerRequestCount} />
           </Link>
 
-          <Link
-            href="/admin/owner-business-matching"
-            className={menuClass}
-          >
+          <Link href="/admin/owner-business-matching" className={menuClass}>
             <span className="text-2xl">🔗</span>
             <span className="mt-2">Link Owner</span>
           </Link>
