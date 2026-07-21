@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ScrollToTopButton from "../../components/ScrollToTopButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -651,6 +652,7 @@ export default async function CommunityDirectoryPage({
       </div>
 
       <CommunityBottomNav activeNav="map" />
+	   <ScrollToTopButton />
     </main>
   );
 }
