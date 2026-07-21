@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 });
 
 const SITE_URL = "https://www.ktowntriangle.com";
-const OG_IMAGE_URL = `${SITE_URL}/og-image.png`;
+const OG_IMAGE_URL = `${SITE_URL}/og-image-20260721.png`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
