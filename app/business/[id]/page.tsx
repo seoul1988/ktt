@@ -9,7 +9,6 @@ import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
 
-
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
 
@@ -134,6 +133,37 @@ function normalizeCategory(value: string) {
     .replace(/s$/, "");
 }
 
+function getBackHref(
+  from?: string,
+  returnTo?: string,
+) {
+  const safeReturnTo =
+    typeof returnTo === "string" &&
+    returnTo.startsWith("/") &&
+    !returnTo.startsWith("//")
+      ? returnTo
+      : null;
+
+  if (safeReturnTo) {
+    return safeReturnTo;
+  }
+
+  switch (from) {
+    case "community-search":
+      return "/community/search";
+    case "community-directory":
+      return "/community/directory";
+    case "community-map":
+      return "/community/map";
+    case "community":
+      return "/community";
+    case "search":
+      return "/search";
+    default:
+      return "/map";
+  }
+}
+
 async function createAuthenticatedSupabaseClient() {
   const cookieStore = await cookies();
 
@@ -183,7 +213,8 @@ export default async function BusinessPage({
   searchParams: SearchParams;
 }) {
   const { id } = await params;
-const { from, returnTo } = await searchParams;
+  const { from, returnTo } = await searchParams;
+  const backHref = getBackHref(from, returnTo);
 
   /*
    * 로그인 사용자 확인용 Supabase 클라이언트
@@ -213,7 +244,7 @@ const { from, returnTo } = await searchParams;
           </p>
 
           <Link
-            href="/map"
+            href={backHref}
             className="mt-4 inline-block rounded-full bg-[#172033] px-5 py-2 text-sm font-bold text-white"
           >
             Back to Map
@@ -286,26 +317,6 @@ const { from, returnTo } = await searchParams;
     from === "community" ||
     from === "community-map" ||
     categoryMatchesCommunity;
-
-  /*
-   * Back 버튼 경로
-   */
- const safeReturnTo =
-  typeof returnTo === "string" &&
-  returnTo.startsWith("/") &&
-  !returnTo.startsWith("//")
-    ? returnTo
-    : null;
-
-const backHref =
-  safeReturnTo ??
-  (from === "community-map"
-    ? "/community/map"
-    : from === "community"
-      ? "/community"
-      : from === "search"
-        ? "/search"
-        : "/map");
 
   /*
    * 쿠폰
@@ -672,13 +683,16 @@ const backHref =
         </section>
       </div>
 
-      {from === "community" || from === "community-map" ? (
-  <CommunityBottomNav activeNav="community" />
-) : from === "search" ? (
-  <BottomNav activeNav="search" />
-) : (
-  <BottomNav activeNav="map" />
-)}
+      {from === "community" ||
+      from === "community-map" ||
+      from === "community-search" ||
+      from === "community-directory" ? (
+        <CommunityBottomNav activeNav="community" />
+      ) : from === "search" ? (
+        <BottomNav activeNav="search" />
+      ) : (
+        <BottomNav activeNav="map" />
+      )}
     </main>
   );
 }
