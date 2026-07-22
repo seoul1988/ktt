@@ -18,7 +18,52 @@ type NewsItem = {
   published_at: string;
 };
 
-const categories = ["All", "Local Business News", "Chamber News"];
+const categories = [
+  "All",
+  "Local Business News",
+  "Chamber News",
+  "공연/문화",
+];
+
+function normalizeCategory(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function isCultureCategory(value: unknown) {
+  const category = normalizeCategory(value);
+
+  return [
+    "공연/문화",
+    "공연 문화",
+    "공연",
+    "문화",
+    "문화/공연",
+    "문화 공연",
+    "arts & culture",
+    "arts and culture",
+    "culture",
+    "performance & culture",
+    "performance and culture",
+    "performance",
+    "concert",
+    "show",
+  ].includes(category);
+}
+
+function categoryMatches(itemCategory: string, activeCategory: string) {
+  if (activeCategory === "All") {
+    return true;
+  }
+
+  if (activeCategory === "공연/문화") {
+    return isCultureCategory(itemCategory);
+  }
+
+  return normalizeCategory(itemCategory) === normalizeCategory(activeCategory);
+}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-US", {
@@ -73,8 +118,10 @@ export default function CommunityNewsPage() {
     const keyword = search.trim().toLowerCase();
 
     return newsItems.filter((item) => {
-      const categoryMatch =
-        activeCategory === "All" || item.category === activeCategory;
+      const categoryMatch = categoryMatches(
+        item.category,
+        activeCategory,
+      );
 
       const searchMatch =
         !keyword ||
@@ -94,7 +141,7 @@ export default function CommunityNewsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F7F7] text-[#172033]">
+    <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-md items-center px-3">
           <button
@@ -156,16 +203,16 @@ export default function CommunityNewsPage() {
           />
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-2.5 flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {categories.map((category) => (
               <button
                 key={category}
                 type="button"
                 onClick={() => setActiveCategory(category)}
                 className={`
-                  shrink-0 rounded-full px-4 py-2
-                  text-[12px] font-medium
+                  shrink-0 rounded-full px-2.5 py-1.5
+                  text-[10px] font-semibold leading-none
                   transition-all duration-150 active:scale-95
                   ${
                     activeCategory === category
@@ -197,12 +244,12 @@ export default function CommunityNewsPage() {
               router.push("/admin/news");
             }}
             className="
-              flex h-9 w-9 shrink-0 items-center justify-center
+              flex h-7 w-7 shrink-0 items-center justify-center
               rounded-full bg-[#172033] text-white
               shadow-sm transition active:scale-90
             "
           >
-            <span className="-mt-0.5 text-[24px] font-light leading-none">
+            <span className="-mt-px text-[19px] font-light leading-none">
               +
             </span>
           </button>
@@ -289,6 +336,7 @@ export default function CommunityNewsPage() {
                       <span className="rounded-full bg-[#F8F3EC] px-2 py-0.5 text-[8px] font-medium text-[#8B5A13]">
                         {item.category}
                       </span>
+
                       <span className="text-[9px] font-normal text-gray-400">
                         {formatDate(item.published_at)}
                       </span>
@@ -313,6 +361,7 @@ export default function CommunityNewsPage() {
             <div className="text-4xl" aria-hidden="true">
               📰
             </div>
+
             <h2 className="mt-3 text-[14px] font-semibold">
               등록된 뉴스가 없습니다
             </h2>
