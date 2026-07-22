@@ -10,6 +10,10 @@ import ProfileButton from "@/app/components/ProfileButton";
 type AdItem = {
   id: number;
   user_id: string | null;
+  owner_id?: string | null;
+  author_id?: string | null;
+  created_by?: string | null;
+  seller_id?: string | null;
   title: string;
   description: string | null;
   category: string | null;
@@ -77,6 +81,21 @@ function getStoragePathFromUrl(url: string, bucketName: string) {
   return null;
 }
 
+function getAdOwnerId(ad: AdItem) {
+  return (
+    ad.user_id ||
+    ad.owner_id ||
+    ad.author_id ||
+    ad.created_by ||
+    ad.seller_id ||
+    null
+  );
+}
+
+function isAdminRole(role: string | null | undefined) {
+  return role === "admin" || role === "super_admin";
+}
+
 export default function AdsPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [ads, setAds] = useState<AdItem[]>([]);
@@ -120,11 +139,12 @@ export default function AdsPage() {
         .from("profiles")
         .select("role")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
-      admin = profile?.role === "admin";
-      setIsAdmin(admin);
+      admin = isAdminRole(profile?.role);
     }
+
+    setIsAdmin(admin);
 
     let query = supabase
       .from("ads")
@@ -157,10 +177,19 @@ export default function AdsPage() {
   async function toggleVisibility(id: number, currentStatus: string | null) {
     const nextStatus = currentStatus === "hidden" ? "active" : "hidden";
 
-    const { error } = await supabase
+    let updateQuery = supabase
       .from("ads")
       .update({ status: nextStatus })
       .eq("id", id);
+
+    if (!isAdmin && currentUserId) {
+      updateQuery = updateQuery.eq(
+        "user_id",
+        currentUserId,
+      );
+    }
+
+    const { error } = await updateQuery;
 
     if (error) {
       alert("Failed to update ad: " + error.message);
@@ -208,11 +237,20 @@ export default function AdsPage() {
         }
       }
 
-      const { data, error } = await supabase
+      let deleteQuery = supabase
         .from("ads")
         .delete()
-        .eq("id", id)
-        .select("id");
+        .eq("id", id);
+
+      if (!isAdmin && currentUserId) {
+        deleteQuery = deleteQuery.eq(
+          "user_id",
+          currentUserId,
+        );
+      }
+
+      const { data, error } =
+        await deleteQuery.select("id");
 
       if (error) {
         alert("Failed to delete ad: " + error.message);
@@ -339,9 +377,15 @@ export default function AdsPage() {
               const hasVideo = Boolean(cleanVideoUrl);
               const hasMedia = cleanImages.length > 0 || hasVideo;
 
+              const adOwnerId = getAdOwnerId(ad);
+
               const canManage =
-                Boolean(currentUserId && ad.user_id === currentUserId) ||
-                isAdmin;
+                isAdmin ||
+                Boolean(
+                  currentUserId &&
+                    adOwnerId &&
+                    String(adOwnerId) === String(currentUserId),
+                );
 
               return (
                 <div
