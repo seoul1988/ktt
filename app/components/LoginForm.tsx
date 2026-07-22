@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
@@ -408,11 +409,53 @@ export default function LoginForm() {
           </button>
         </div>
 
-        {/* 약관 */}
-        <p className="mt-4 text-center text-xs leading-4 text-gray-400">
-          By signing in, you agree to our
-          Terms of Service and Privacy Policy.
-        </p>
+        {/* 약관 및 정책 링크 */}
+        <div className="mt-5 border-t border-gray-100 pt-4 text-center">
+          <p className="text-xs leading-5 text-gray-400">
+            By signing in, you agree to our policies.
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold">
+            <Link
+              href="/terms"
+              className="text-gray-500 underline decoration-gray-300 underline-offset-2 transition hover:text-[#172033]"
+            >
+              Terms of Service
+            </Link>
+
+            <span
+              aria-hidden="true"
+              className="text-gray-300"
+            >
+              |
+            </span>
+
+            <Link
+              href="/privacy"
+              className="text-gray-500 underline decoration-gray-300 underline-offset-2 transition hover:text-[#172033]"
+            >
+              Privacy Policy
+            </Link>
+
+            <span
+              aria-hidden="true"
+              className="text-gray-300"
+            >
+              |
+            </span>
+
+            <Link
+              href="/community-guidelines"
+              className="text-gray-500 underline decoration-gray-300 underline-offset-2 transition hover:text-[#172033]"
+            >
+              Community Guidelines
+            </Link>
+          </div>
+
+          <p className="mt-3 text-[11px] text-gray-300">
+            © 2026 KTownTriangle. All rights reserved.
+          </p>
+        </div>
       </div>
     </main>
   );
