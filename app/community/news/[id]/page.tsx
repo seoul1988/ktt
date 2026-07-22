@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ProfileButton from "@/app/components/ProfileButton";
-import CommunityBottomNav from "../../../components/CommunityBottomNav";
-import { supabase } from "../../../../lib/supabase";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
+import { supabase } from "@/lib/supabase";
 
 type NewsItem = {
   id: number;
@@ -115,7 +115,7 @@ export default function BusinessNewsDetailPage() {
 
       const sessionResult = await supabase.auth.getSession();
 
-      let newsResult = await supabase
+      const newsResult = await supabase
         .from("business_news")
         .select(
           "id,title,summary,content,category,image_url,images,source_url,published_at",
@@ -124,11 +124,16 @@ export default function BusinessNewsDetailPage() {
         .eq("published", true)
         .maybeSingle();
 
-      /*
-       * business_news.images 컬럼을 아직 만들지 않은 환경에서도
-       * 상세 페이지가 열리도록 images 없이 한 번 더 조회합니다.
-       */
-      if (newsResult.error) {
+      let newsData: NewsItem | null = null;
+      let newsError = newsResult.error;
+
+      if (!newsResult.error && newsResult.data) {
+        newsData = newsResult.data as NewsItem;
+      } else {
+        /*
+         * business_news.images 컬럼이 없는 환경에서도
+         * 상세 페이지가 열리도록 images 없이 다시 조회합니다.
+         */
         const fallbackResult = await supabase
           .from("business_news")
           .select(
@@ -139,34 +144,31 @@ export default function BusinessNewsDetailPage() {
           .maybeSingle();
 
         if (!fallbackResult.error && fallbackResult.data) {
-          newsResult = {
-            data: {
-              ...fallbackResult.data,
-              images: fallbackResult.data.image_url
-                ? [fallbackResult.data.image_url]
-                : [],
-            },
-            error: null,
-            count: null,
-            status: 200,
-            statusText: "OK",
+          newsData = {
+            ...(fallbackResult.data as Omit<NewsItem, "images">),
+            images: fallbackResult.data.image_url
+              ? [fallbackResult.data.image_url]
+              : [],
           };
+          newsError = null;
+        } else {
+          newsError = fallbackResult.error ?? newsResult.error;
         }
       }
 
       if (!mounted) return;
 
-      if (newsResult.error || !newsResult.data) {
+      if (newsError || !newsData) {
         console.error(
           "Business news detail load error:",
-          newsResult.error?.message || newsResult.error,
+          newsError?.message || newsError,
         );
         setItem(null);
         setLoading(false);
         return;
       }
 
-      setItem(newsResult.data as NewsItem);
+      setItem(newsData);
 
       const user = sessionResult.data.session?.user;
 

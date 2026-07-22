@@ -29,7 +29,10 @@ const BUCKET = "business-images";
 const PAGE_SIZE = 100;
 
 const args = process.argv.slice(2);
-const deleteMode = args.includes("--delete");
+
+const deleteMode =
+  args.includes("--delete");
+
 const confirmed =
   args.includes("--confirm=DELETE-ORIGINALS");
 
@@ -37,6 +40,7 @@ if (deleteMode && !confirmed) {
   console.error(
     "실제 삭제하려면 --delete --confirm=DELETE-ORIGINALS를 같이 사용해야 합니다.",
   );
+
   process.exit(1);
 }
 
@@ -44,10 +48,26 @@ function isOriginalImage(filePath) {
   return /\.(jpg|jpeg|png)$/i.test(filePath);
 }
 
-function isOptimizedFolder(filePath) {
+/*
+ * 절대 삭제하면 안 되는 폴더입니다.
+ *
+ * _optimized:
+ * 현재 businesses 테이블에서 사용하는 WebP 이미지
+ *
+ * flipbook-ads:
+ * 플립북 광고 이미지
+ */
+function isProtectedFolder(filePath) {
+  const normalizedPath =
+    String(filePath ?? "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "");
+
   return (
-    filePath === "_optimized" ||
-    filePath.startsWith("_optimized/")
+    normalizedPath === "_optimized" ||
+    normalizedPath.startsWith("_optimized/") ||
+    normalizedPath === "flipbook-ads" ||
+    normalizedPath.startsWith("flipbook-ads/")
   );
 }
 
@@ -62,12 +82,20 @@ function getStoragePath(value) {
   const trimmed = value.trim();
 
   if (!/^https?:\/\//i.test(trimmed)) {
-    return decodeURIComponent(trimmed)
-      .replace(/^\/+/, "");
+    try {
+      return decodeURIComponent(trimmed)
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "");
+    } catch {
+      return trimmed
+        .replace(/\\/g, "/")
+        .replace(/^\/+/, "");
+    }
   }
 
   try {
     const url = new URL(trimmed);
+
     const pathname =
       decodeURIComponent(url.pathname);
 
@@ -85,6 +113,7 @@ function getStoragePath(value) {
       if (index >= 0) {
         return pathname
           .slice(index + marker.length)
+          .replace(/\\/g, "/")
           .replace(/^\/+/, "");
       }
     }
@@ -97,6 +126,7 @@ function getStoragePath(value) {
 
 async function loadReferencedPaths() {
   const referenced = new Set();
+
   let from = 0;
 
   while (true) {
@@ -174,6 +204,7 @@ async function loadReferencedPaths() {
 
 async function listAllFiles(prefix = "") {
   const files = [];
+
   let offset = 0;
 
   while (true) {
@@ -193,7 +224,7 @@ async function listAllFiles(prefix = "") {
 
     if (error) {
       throw new Error(
-        `Storage 목록 오류: ${error.message}`,
+        `Storage 목록 오류 (${prefix || "/"}): ${error.message}`,
       );
     }
 
@@ -214,7 +245,11 @@ async function listAllFiles(prefix = "") {
 
         files.push(...nested);
       } else {
-        files.push(fullPath);
+        files.push(
+          fullPath
+            .replace(/\\/g, "/")
+            .replace(/^\/+/, ""),
+        );
       }
     }
 
@@ -257,13 +292,17 @@ async function deleteFiles(paths) {
       continue;
     }
 
-    deleted +=
+    const removedCount =
       Array.isArray(data)
         ? data.length
         : batch.length;
 
+    deleted += removedCount;
+
     for (const filePath of batch) {
-      console.log(`DELETED ${filePath}`);
+      console.log(
+        `DELETED ${filePath}`,
+      );
     }
   }
 
@@ -285,7 +324,15 @@ async function main() {
   );
 
   console.log(
-    "_optimized 폴더는 보호됩니다.\n",
+    "보호 폴더:",
+  );
+
+  console.log(
+    "  - _optimized/",
+  );
+
+  console.log(
+    "  - flipbook-ads/\n",
   );
 
   const referencedPaths =
@@ -294,11 +341,22 @@ async function main() {
   const storageFiles =
     await listAllFiles();
 
+  /*
+   * JPG, JPEG, PNG 파일 중에서
+   * 보호 폴더에 들어 있지 않은 파일만 검사합니다.
+   */
   const originalFiles =
     storageFiles.filter(
       (filePath) =>
-        !isOptimizedFolder(filePath) &&
-        isOriginalImage(filePath),
+        isOriginalImage(filePath) &&
+        !isProtectedFolder(filePath),
+    );
+
+  const protectedFiles =
+    storageFiles.filter(
+      (filePath) =>
+        isOriginalImage(filePath) &&
+        isProtectedFolder(filePath),
     );
 
   const stillReferenced = [];
@@ -315,16 +373,30 @@ async function main() {
   }
 
   console.log(
-    "===== STILL REFERENCED - KEEP =====",
+    "===== PROTECTED JPG/PNG - NEVER DELETE =====",
   );
 
-  if (
-    stillReferenced.length === 0
-  ) {
+  if (protectedFiles.length === 0) {
+    console.log("(none)");
+  } else {
+    for (const filePath of protectedFiles) {
+      console.log(
+        `PROTECTED ${filePath}`,
+      );
+    }
+  }
+
+  console.log(
+    "\n===== STILL REFERENCED - KEEP =====",
+  );
+
+  if (stillReferenced.length === 0) {
     console.log("(none)");
   } else {
     for (const filePath of stillReferenced) {
-      console.log(`KEEP ${filePath}`);
+      console.log(
+        `KEEP ${filePath}`,
+      );
     }
   }
 
@@ -332,9 +404,7 @@ async function main() {
     "\n===== SAFE DELETE CANDIDATES =====",
   );
 
-  if (
-    safeDeleteCandidates.length === 0
-  ) {
+  if (safeDeleteCandidates.length === 0) {
     console.log("(none)");
   } else {
     for (
@@ -368,32 +438,40 @@ async function main() {
   );
 
   console.log(
-    `Storage files scanned:   ${storageFiles.length}`,
+    `Storage files scanned:        ${storageFiles.length}`,
   );
 
   console.log(
-    `JPG/PNG originals found: ${originalFiles.length}`,
+    `Protected JPG/PNG kept:        ${protectedFiles.length}`,
   );
 
   console.log(
-    `Still referenced (kept): ${stillReferenced.length}`,
+    `Non-protected JPG/PNG found:   ${originalFiles.length}`,
   );
 
   console.log(
-    `Safe delete candidates:  ${safeDeleteCandidates.length}`,
+    `Still referenced (kept):      ${stillReferenced.length}`,
   );
 
   console.log(
-    `Deleted:                 ${deleted}`,
+    `Safe delete candidates:       ${safeDeleteCandidates.length}`,
   );
 
   console.log(
-    `Delete failures:         ${failed}`,
+    `Deleted:                      ${deleted}`,
+  );
+
+  console.log(
+    `Delete failures:              ${failed}`,
   );
 
   if (!deleteMode) {
     console.log(
       "\n아직 아무 파일도 삭제하지 않았습니다.",
+    );
+
+    console.log(
+      "목록에 flipbook-ads/ 파일이 삭제 대상으로 나오지 않는지 확인하세요.",
     );
   }
 }

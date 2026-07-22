@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { Suspense, ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import RichTextEditor from "@/app/components/RichTextEditor";
 import ProfileButton from "@/app/components/ProfileButton";
@@ -31,7 +31,7 @@ const createEmptyForm = () => ({
   published_at: new Date().toISOString().slice(0, 16),
 });
 
-export default function AdminBusinessNewsPage() {
+function AdminBusinessNewsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -849,5 +849,20 @@ export default function AdminBusinessNewsPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+
+export default function AdminBusinessNewsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center">
+          불러오는 중...
+        </main>
+      }
+    >
+      <AdminBusinessNewsContent />
+    </Suspense>
   );
 }
