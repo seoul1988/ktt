@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import ScrollToTopButton from "../../components/ScrollToTopButton";
 
@@ -712,11 +713,41 @@ export default function CommunitySearchDirectory({
   categories,
   businesses,
 }: CommunitySearchDirectoryProps) {
+  const router = useRouter();
   const [searchText, setSearchText] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showCategories, setShowCategories] = useState(false);
   const [submittedSearchText, setSubmittedSearchText] = useState("");
   const [showLiveMatches, setShowLiveMatches] = useState(false);
+
+  function updateSearchUrl(query: string) {
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      router.replace("/community/search", { scroll: false });
+      return;
+    }
+
+    router.replace(
+      `/community/search?q=${encodeURIComponent(trimmedQuery)}`,
+      { scroll: false },
+    );
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const queryFromUrl = params.get("q")?.trim() ?? "";
+
+    if (!queryFromUrl) {
+      return;
+    }
+
+    setSearchText(queryFromUrl);
+    setSubmittedSearchText(queryFromUrl);
+    setSelectedCategory("all");
+    setShowCategories(false);
+    setShowLiveMatches(false);
+  }, []);
 
   /*
    * 카테고리 버튼은 요청한 8개 그룹만 고정 순서로 표시합니다.
@@ -851,6 +882,7 @@ export default function CommunitySearchDirectory({
     setSubmittedSearchText("");
     setShowLiveMatches(false);
     setShowCategories(false);
+    updateSearchUrl("");
   }
 
   function submitSearch() {
@@ -859,13 +891,16 @@ export default function CommunitySearchDirectory({
     if (!trimmedSearch) {
       setSubmittedSearchText("");
       setShowLiveMatches(false);
+      updateSearchUrl("");
       return;
     }
 
+    setSearchText(trimmedSearch);
     setSubmittedSearchText(trimmedSearch);
     setSelectedCategory("all");
     setShowCategories(false);
     setShowLiveMatches(false);
+    updateSearchUrl(trimmedSearch);
   }
 
   return (
@@ -895,7 +930,12 @@ export default function CommunitySearchDirectory({
                   const nextValue = event.target.value;
 
                   setSearchText(nextValue);
-                  setSubmittedSearchText("");
+
+                  if (submittedSearchText) {
+                    setSubmittedSearchText("");
+                    updateSearchUrl("");
+                  }
+
                   setShowCategories(false);
                   setShowLiveMatches(Boolean(nextValue.trim()));
                 }}
@@ -936,6 +976,7 @@ export default function CommunitySearchDirectory({
                     setSubmittedSearchText("");
                     setShowLiveMatches(false);
                     setShowCategories(false);
+                    updateSearchUrl("");
                   }}
                   aria-label="Clear search"
                   className="absolute right-12 top-1/2 z-10 -translate-y-1/2 text-xl text-gray-400"
@@ -1152,20 +1193,36 @@ export default function CommunitySearchDirectory({
         </div>
 
         {selectedCategory !== "all" && (
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedCategory("all");
-              setSearchText("");
-              setSubmittedSearchText("");
-              setShowLiveMatches(false);
-              setShowCategories(false);
-            }}
-            className="mb-4 rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-black shadow-sm"
-          >
-            View All Businesses
-          </button>
-        )}
+  <div className="mb-4 flex justify-start">
+    <button
+      type="button"
+      onClick={async () => {
+        const url = window.location.href;
+
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title: "KTown Triangle Search",
+              text: "Check out these search results.",
+              url,
+            });
+            return;
+          } catch {}
+        }
+
+        try {
+          await navigator.clipboard.writeText(url);
+          alert("✅ Search link copied!");
+        } catch {
+          prompt("Copy this link:", url);
+        }
+      }}
+      className="rounded-full bg-[#1B365D] px-4 py-2 text-xs font-black text-white shadow-md transition hover:opacity-90 active:scale-95"
+    >
+      🔗 검색 공유
+    </button>
+  </div>
+)}
 
         <div className="space-y-3">
           {filteredBusinesses.map((business) => {
@@ -1257,7 +1314,7 @@ export default function CommunitySearchDirectory({
       </section>
 
       <CommunityBottomNav activeNav="search" />
-	    <ScrollToTopButton />
+      <ScrollToTopButton />
     </main>
   );
 }
