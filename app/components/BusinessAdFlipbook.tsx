@@ -87,6 +87,8 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
 
   const [isMobile, setIsMobile] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isIOSPseudoFullscreen, setIsIOSPseudoFullscreen] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -103,9 +105,17 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
 
     function updatePageSize() {
       const mobile = window.innerWidth < 768;
-      const fullscreenActive = !!document.fullscreenElement;
+      const ios =
+        /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const nativeFullscreenActive = !!document.fullscreenElement;
+      const pseudoFullscreenActive =
+        document.documentElement.dataset.iosFlipbookFullscreen === "true";
+      const fullscreenActive =
+        nativeFullscreenActive || pseudoFullscreenActive;
 
       setIsMobile(mobile);
+      setIsIOS(ios);
       setIsFullscreen(fullscreenActive);
 
       if (fullscreenActive) {
@@ -349,14 +359,39 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
       return;
     }
 
+    /*
+     * iPhone Safari와 iPhone 홈 화면 앱은 일반 HTML 요소의
+     * requestFullscreen()을 지원하지 않습니다.
+     *
+     * 따라서 iPhone에서는 fixed 레이아웃을 사용한 가상 전체화면으로
+     * 전환합니다. 주소창은 Safari 정책상 완전히 강제로 숨길 수 없지만,
+     * 홈 화면에 설치한 PWA에서는 실제 앱 전체화면처럼 표시됩니다.
+     */
+    if (isIOS || typeof player.requestFullscreen !== "function") {
+      document.documentElement.dataset.iosFlipbookFullscreen = "true";
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.inset = "0";
+      document.body.style.width = "100%";
+
+      setIsIOSPseudoFullscreen(true);
+      setIsFullscreen(true);
+
+      window.requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+
+      window.setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+      }, 350);
+
+      return;
+    }
+
     try {
       await player.requestFullscreen();
 
-      /*
-       * Android Chrome 등 지원되는 브라우저에서는
-       * 전체화면 진입 후 가로 방향으로 전환합니다.
-       * iPhone Safari는 화면 방향 잠금을 지원하지 않을 수 있습니다.
-       */
       const orientation = screen.orientation as
         | (ScreenOrientation & {
             lock?: (orientation: string) => Promise<void>;
@@ -367,16 +402,45 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
         try {
           await orientation.lock("landscape");
         } catch {
-          // 방향 잠금이 지원되지 않으면 현재 방향을 유지합니다.
+          // 화면 방향 잠금이 지원되지 않으면 현재 방향을 유지합니다.
         }
       }
     } catch {
-      // 브라우저가 전체화면을 거부하면 아무 작업도 하지 않습니다.
+      /*
+       * 전체화면 API가 거부된 경우에도 CSS 가상 전체화면으로 전환합니다.
+       */
+      document.documentElement.dataset.iosFlipbookFullscreen = "true";
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.inset = "0";
+      document.body.style.width = "100%";
+
+      setIsIOSPseudoFullscreen(true);
+      setIsFullscreen(true);
     }
   };
 
   const exitFullscreen = async () => {
     try {
+      if (isIOSPseudoFullscreen) {
+        delete document.documentElement.dataset.iosFlipbookFullscreen;
+        document.documentElement.style.overflow = "";
+        document.body.style.overflow = "";
+        document.body.style.position = "";
+        document.body.style.inset = "";
+        document.body.style.width = "";
+
+        setIsIOSPseudoFullscreen(false);
+        setIsFullscreen(false);
+
+        window.requestAnimationFrame(() => {
+          window.dispatchEvent(new Event("resize"));
+        });
+
+        return;
+      }
+
       if (document.fullscreenElement) {
         await document.exitFullscreen();
       }
@@ -389,18 +453,29 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
 
       orientation?.unlock?.();
     } catch {
-      // 전체화면 종료 실패 시 현재 화면을 유지합니다.
+      setIsFullscreen(false);
     }
   };
 
   const toggleFullscreen = async () => {
-    if (document.fullscreenElement) {
+    if (isIOSPseudoFullscreen || document.fullscreenElement) {
       await exitFullscreen();
       return;
     }
 
     await enterFullscreen();
   };
+
+  useEffect(() => {
+    return () => {
+      delete document.documentElement.dataset.iosFlipbookFullscreen;
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+      document.body.style.position = "";
+      document.body.style.inset = "";
+      document.body.style.width = "";
+    };
+  }, []);
 
   const clampZoom = (value: number) => Math.min(4, Math.max(1, value));
 
@@ -684,7 +759,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
               ref={playerRef}
               className={
                 isFullscreen
-                  ? "flex h-screen w-screen flex-col overflow-hidden bg-black"
+                  ? "fixed inset-0 z-[9999] flex h-[100dvh] w-screen flex-col overflow-hidden bg-black"
                   : "w-full overflow-hidden rounded-2xl bg-black shadow-2xl"
               }
             >
@@ -773,7 +848,14 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
                 </div>
               </div>
 
-              <div className="flex h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white">
+              <div
+                className="flex min-h-[64px] shrink-0 items-center gap-2 border-t border-white/15 bg-[#1F1F1F] px-3 text-white"
+                style={{
+                  paddingBottom: isFullscreen
+                    ? "max(8px, env(safe-area-inset-bottom))"
+                    : undefined,
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => bookRef.current?.pageFlip()?.flipPrev()}
