@@ -16,18 +16,9 @@ type Category = {
   show_on_community_map: boolean | null;
 };
 
-type BusinessCategoryObject = {
-  name?: unknown;
-  category?: unknown;
-  category_name?: unknown;
-  [key: string]: unknown;
-};
-
 type BusinessRow = {
   id: number | string;
-  category?: unknown;
-  category_name?: unknown;
-  categories?: unknown;
+  category: string | null;
 };
 
 function normalizeCategory(value: unknown) {
@@ -37,152 +28,57 @@ function normalizeCategory(value: unknown) {
     .toLowerCase();
 }
 
-function isSameCategory(value: unknown, categoryName: string) {
-  return (
-    normalizeCategory(value) === normalizeCategory(categoryName)
+function splitCategoryItems(value: unknown) {
+  return String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function hasCategory(value: unknown, categoryName: string) {
+  const normalizedTarget = normalizeCategory(categoryName);
+
+  return splitCategoryItems(value).some(
+    (item) => normalizeCategory(item) === normalizedTarget,
   );
 }
 
-function hasCategory(
-  value: unknown,
-  categoryName: string,
-): boolean {
-  if (Array.isArray(value)) {
-    return value.some((item) => {
-      if (typeof item === "string") {
-        return isSameCategory(item, categoryName);
-      }
-
-      if (item && typeof item === "object") {
-        const categoryObject =
-          item as BusinessCategoryObject;
-
-        return (
-          isSameCategory(
-            categoryObject.name,
-            categoryName,
-          ) ||
-          isSameCategory(
-            categoryObject.category,
-            categoryName,
-          ) ||
-          isSameCategory(
-            categoryObject.category_name,
-            categoryName,
-          )
-        );
-      }
-
-      return false;
-    });
-  }
-
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .some((item) =>
-        isSameCategory(item, categoryName),
-      );
-  }
-
-  return false;
-}
-
-function replaceCategoryValue(
+function replaceCategoryItem(
   value: unknown,
   oldName: string,
   newName: string,
-): unknown {
-  /*
-   * 배열 형식
-   *
-   * ["Chicken", "Noodles", "Sushi", "Restaurant"]
-   *
-   * 또는
-   *
-   * [
-   *   { name: "Chicken" },
-   *   { name: "Sushi" }
-   * ]
-   */
-  if (Array.isArray(value)) {
-    return value.map((item) => {
-      if (typeof item === "string") {
-        return isSameCategory(item, oldName)
-          ? newName
-          : item;
-      }
+) {
+  const normalizedOldName = normalizeCategory(oldName);
 
-      if (item && typeof item === "object") {
-        const categoryObject =
-          item as BusinessCategoryObject;
-
-        const updatedObject: BusinessCategoryObject = {
-          ...categoryObject,
-        };
-
-        if (
-          isSameCategory(
-            categoryObject.name,
-            oldName,
-          )
-        ) {
-          updatedObject.name = newName;
-        }
-
-        if (
-          isSameCategory(
-            categoryObject.category,
-            oldName,
-          )
-        ) {
-          updatedObject.category = newName;
-        }
-
-        if (
-          isSameCategory(
-            categoryObject.category_name,
-            oldName,
-          )
-        ) {
-          updatedObject.category_name = newName;
-        }
-
-        return updatedObject;
-      }
-
-      return item;
-    });
-  }
+  const replacedItems = splitCategoryItems(value).map((item) =>
+    normalizeCategory(item) === normalizedOldName
+      ? newName.trim()
+      : item,
+  );
 
   /*
-   * 쉼표 문자열 형식
+   * 카테고리 변경 후 같은 이름이 중복될 수 있으므로,
+   * 원래 순서를 유지하면서 중복을 제거합니다.
    *
-   * "Chicken, Noodles, Sushi, Restaurant"
-   *
-   * Sushi만 BBQ로 변경:
-   *
-   * "Chicken, Noodles, BBQ, Restaurant"
+   * 예:
+   * "패션, 잡화"에서 "패션"을 "잡화"로 변경
+   * → "잡화, 잡화"
+   * → 최종 "잡화"
    */
-  if (typeof value === "string") {
-    return value
-      .split(",")
-      .map((item) => {
-        const trimmedItem = item.trim();
+  const seen = new Set<string>();
 
-        if (isSameCategory(trimmedItem, oldName)) {
-          return newName;
-        }
+  const uniqueItems = replacedItems.filter((item) => {
+    const key = normalizeCategory(item);
 
-        return trimmedItem;
-      })
-      .filter(Boolean)
-      .join(", ");
-  }
+    if (!key || seen.has(key)) {
+      return false;
+    }
 
-  return value;
+    seen.add(key);
+    return true;
+  });
+
+  return uniqueItems.join(", ");
 }
 
 export default function EditCategoryPage() {
@@ -200,12 +96,9 @@ export default function EditCategoryPage() {
   const [name, setName] = useState("");
   const [originalName, setOriginalName] = useState("");
   const [emoji, setEmoji] = useState("");
-  const [showOnMainMap, setShowOnMainMap] =
-    useState(true);
-  const [
-    showOnCommunityMap,
-    setShowOnCommunityMap,
-  ] = useState(false);
+  const [showOnMainMap, setShowOnMainMap] = useState(true);
+  const [showOnCommunityMap, setShowOnCommunityMap] =
+    useState(false);
 
   useEffect(() => {
     void checkAdminAndLoad();
@@ -234,14 +127,12 @@ export default function EditCategoryPage() {
         return;
       }
 
-      const {
-        data: profile,
-        error: profileError,
-      } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+      const { data: profile, error: profileError } =
+        await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
 
       if (
         profileError ||
@@ -275,7 +166,6 @@ export default function EditCategoryPage() {
     }
 
     const category = data as Category;
-
     const loadedName = category.name || "";
 
     setName(loadedName);
@@ -294,14 +184,11 @@ export default function EditCategoryPage() {
     const pageSize = 500;
 
     let from = 0;
-    let hasMore = true;
 
-    while (hasMore) {
+    while (true) {
       const { data, error } = await supabase
         .from("businesses")
-        .select(
-          "id,category,category_name,categories",
-        )
+        .select("id,category")
         .range(from, from + pageSize - 1);
 
       if (error) {
@@ -315,10 +202,10 @@ export default function EditCategoryPage() {
       allBusinesses.push(...rows);
 
       if (rows.length < pageSize) {
-        hasMore = false;
-      } else {
-        from += pageSize;
+        break;
       }
+
+      from += pageSize;
     }
 
     return allBusinesses;
@@ -330,33 +217,21 @@ export default function EditCategoryPage() {
   ) {
     if (
       !oldCategoryName.trim() ||
-      isSameCategory(
-        oldCategoryName,
-        newCategoryName,
-      )
+      normalizeCategory(oldCategoryName) ===
+        normalizeCategory(newCategoryName)
     ) {
       return 0;
     }
 
     const businesses = await loadAllBusinesses();
 
-    const businessesToUpdate =
-      businesses.filter((business) => {
-        return (
-          hasCategory(
-            business.category,
-            oldCategoryName,
-          ) ||
-          hasCategory(
-            business.category_name,
-            oldCategoryName,
-          ) ||
-          hasCategory(
-            business.categories,
-            oldCategoryName,
-          )
-        );
-      });
+    const businessesToUpdate = businesses.filter(
+      (business) =>
+        hasCategory(
+          business.category,
+          oldCategoryName,
+        ),
+    );
 
     let updatedCount = 0;
     const batchSize = 20;
@@ -373,65 +248,17 @@ export default function EditCategoryPage() {
 
       const results = await Promise.all(
         batch.map(async (business) => {
-          const updateData: Record<
-            string,
-            unknown
-          > = {};
-
-          if (
-            hasCategory(
-              business.category,
-              oldCategoryName,
-            )
-          ) {
-            updateData.category =
-              replaceCategoryValue(
-                business.category,
-                oldCategoryName,
-                newCategoryName,
-              );
-          }
-
-          if (
-            hasCategory(
-              business.category_name,
-              oldCategoryName,
-            )
-          ) {
-            updateData.category_name =
-              replaceCategoryValue(
-                business.category_name,
-                oldCategoryName,
-                newCategoryName,
-              );
-          }
-
-          if (
-            hasCategory(
-              business.categories,
-              oldCategoryName,
-            )
-          ) {
-            updateData.categories =
-              replaceCategoryValue(
-                business.categories,
-                oldCategoryName,
-                newCategoryName,
-              );
-          }
-
-          if (
-            Object.keys(updateData).length === 0
-          ) {
-            return {
-              success: true,
-              updated: false,
-            };
-          }
+          const nextCategory = replaceCategoryItem(
+            business.category,
+            oldCategoryName,
+            newCategoryName,
+          );
 
           const { error } = await supabase
             .from("businesses")
-            .update(updateData)
+            .update({
+              category: nextCategory,
+            })
             .eq("id", business.id);
 
           if (error) {
@@ -442,14 +269,12 @@ export default function EditCategoryPage() {
 
             return {
               success: false,
-              updated: false,
               error: error.message,
             };
           }
 
           return {
             success: true,
-            updated: true,
           };
         }),
       );
@@ -461,16 +286,14 @@ export default function EditCategoryPage() {
       if (failedResults.length > 0) {
         const firstError =
           failedResults[0]?.error ||
-          "Unknown update error.";
+          "Unknown business update error.";
 
         throw new Error(
           `${failedResults.length} business updates failed. ${firstError}`,
         );
       }
 
-      updatedCount += results.filter(
-        (result) => result.updated,
-      ).length;
+      updatedCount += results.length;
     }
 
     return updatedCount;
@@ -478,8 +301,7 @@ export default function EditCategoryPage() {
 
   async function saveCategory() {
     const cleanName = name.trim();
-    const cleanOriginalName =
-      originalName.trim();
+    const cleanOriginalName = originalName.trim();
     const cleanEmoji = emoji.trim();
 
     if (!cleanName) {
@@ -498,7 +320,8 @@ export default function EditCategoryPage() {
     }
 
     const categoryNameChanged =
-      cleanOriginalName !== cleanName;
+      normalizeCategory(cleanOriginalName) !==
+      normalizeCategory(cleanName);
 
     if (categoryNameChanged) {
       const ok = window.confirm(
@@ -514,8 +337,21 @@ export default function EditCategoryPage() {
 
     try {
       /*
-       * 카테고리 이름을 먼저 변경합니다.
+       * 먼저 기존 비즈니스의 category 값을 변경합니다.
+       *
+       * 이렇게 하면 비즈니스 변경이 실패했는데 categories 테이블만
+       * 먼저 바뀌는 불일치를 줄일 수 있습니다.
        */
+      let updatedBusinessCount = 0;
+
+      if (categoryNameChanged) {
+        updatedBusinessCount =
+          await updateBusinessCategories(
+            cleanOriginalName,
+            cleanName,
+          );
+      }
+
       const { error: categoryError } =
         await supabase
           .from("categories")
@@ -530,19 +366,6 @@ export default function EditCategoryPage() {
 
       if (categoryError) {
         throw new Error(categoryError.message);
-      }
-
-      let updatedBusinessCount = 0;
-
-      /*
-       * 이름이 변경됐을 때만 기존 비즈니스를 변경합니다.
-       */
-      if (categoryNameChanged) {
-        updatedBusinessCount =
-          await updateBusinessCategories(
-            cleanOriginalName,
-            cleanName,
-          );
       }
 
       setOriginalName(cleanName);
@@ -568,7 +391,7 @@ export default function EditCategoryPage() {
           : "Unknown error occurred.";
 
       alert(
-        `Update failed.\n\n${message}\n\nThe category may have been updated, but some business records may not have changed. Please check the businesses table and Supabase RLS policies.`,
+        `Update failed.\n\n${message}\n\nPlease check the businesses.category column and Supabase RLS policies.`,
       );
     } finally {
       setSaving(false);
@@ -584,7 +407,8 @@ export default function EditCategoryPage() {
   }
 
   const categoryNameChanged =
-    originalName.trim() !== name.trim();
+    normalizeCategory(originalName) !==
+    normalizeCategory(name);
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-28 text-[#172033]">
@@ -642,8 +466,8 @@ export default function EditCategoryPage() {
           {categoryNameChanged && (
             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-xs font-extrabold text-amber-900">
-                Existing business categories will
-                also be changed.
+                Existing business categories will also
+                be changed.
               </p>
 
               <p className="mt-1 break-words text-xs font-semibold text-amber-700">
@@ -653,8 +477,8 @@ export default function EditCategoryPage() {
 
               <p className="mt-2 text-[11px] leading-5 text-amber-700">
                 Example: Chicken, Noodles,{" "}
-                {originalName || "Sushi"},
-                Restaurant → Chicken, Noodles,{" "}
+                {originalName || "Sushi"}, Restaurant
+                → Chicken, Noodles,{" "}
                 {name.trim() || "BBQ"}, Restaurant
               </p>
             </div>
