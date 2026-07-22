@@ -5,6 +5,7 @@ import Link from "next/link";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import FlipbookAdGridPage from "./FlipbookAdGridPage";
 import type { AdPage } from "./flipbookTypes";
+import CommunityBottomNav from "./CommunityBottomNav";
 
 const HTMLFlipBook = dynamic(() => import("react-pageflip"), {
   ssr: false,
@@ -845,6 +846,9 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
         )}
       </section>
 	  
-    </main>
+          {!isFullscreen && (
+        <CommunityBottomNav activeNav="hub" />
+      )}
+</main>
   );
 }
