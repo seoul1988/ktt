@@ -3,24 +3,23 @@
 import { useRouter } from "next/navigation";
 
 type BackButtonProps = {
-  from?: string;
+  fallback?: string;
 };
 
-export default function BackButton({ from }: BackButtonProps) {
+export default function BackButton({
+  fallback = "/community/hub",
+}: BackButtonProps) {
   const router = useRouter();
 
   function handleBack() {
-    if (from === "search") {
+    // 이전 페이지가 있으면 무조건 이전 페이지
+    if (window.history.length > 1) {
       router.back();
       return;
     }
 
-    if (from === "community") {
-      router.push("/community");
-      return;
-    }
-
-    router.push("/map");
+    // 직접 접속한 경우만 fallback
+    router.replace(fallback);
   }
 
   return (
@@ -29,7 +28,7 @@ export default function BackButton({ from }: BackButtonProps) {
       onClick={handleBack}
       className="flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-black shadow-sm transition active:scale-95"
     >
-       Back
+      ← Back
     </button>
   );
 }

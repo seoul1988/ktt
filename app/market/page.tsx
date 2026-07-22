@@ -210,8 +210,8 @@ export default async function MarketPage() {
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex items-center">
-          <Link
-            href="/community"
+<Link
+            href="/community/hub"
             className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
           >
             ← Back
