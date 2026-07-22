@@ -1,5 +1,6 @@
 "use client";
 
+import type { SVGProps } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
@@ -72,16 +73,16 @@ function HubIcon({
   name: IconName;
   className?: string;
 }) {
- const commonProps = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.0,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  className,
-  "aria-hidden": true,
-};
+  const commonProps: SVGProps<SVGSVGElement> = {
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    className,
+    "aria-hidden": true,
+  };
 
   if (name === "marketplace") {
     return (
@@ -190,7 +191,7 @@ export default function CommunityHubPage() {
               fill="none"
               className="h-5 w-5"
               stroke="currentColor"
-              strokeWidth="2"
+              strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
