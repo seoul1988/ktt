@@ -330,7 +330,7 @@ export default function BottomNav({
                 flex h-[60px] w-[60px]
                 items-center justify-center
                 rounded-full
-                border-4 border-white
+                border-4 border-[#172033]
                 bg-white
                 text-[#172033]
                 shadow-[0_8px_20px_rgba(23,32,51,0.18)]
