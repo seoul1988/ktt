@@ -720,16 +720,24 @@ export default function CommunitySearchDirectory({
   const [submittedSearchText, setSubmittedSearchText] = useState("");
   const [showLiveMatches, setShowLiveMatches] = useState(false);
 
-  function updateSearchUrl(query: string) {
+  function updateSearchUrl(query = "", category = "all") {
+    const params = new URLSearchParams();
     const trimmedQuery = query.trim();
 
-    if (!trimmedQuery) {
-      router.replace("/community/search", { scroll: false });
-      return;
+    if (trimmedQuery) {
+      params.set("q", trimmedQuery);
     }
 
+    if (category !== "all") {
+      params.set("category", category);
+    }
+
+    const queryString = params.toString();
+
     router.replace(
-      `/community/search?q=${encodeURIComponent(trimmedQuery)}`,
+      queryString
+        ? `/community/search?${queryString}`
+        : "/community/search",
       { scroll: false },
     );
   }
@@ -737,14 +745,23 @@ export default function CommunitySearchDirectory({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const queryFromUrl = params.get("q")?.trim() ?? "";
+    const categoryFromUrl = params.get("category") ?? "all";
 
-    if (!queryFromUrl) {
-      return;
+    if (queryFromUrl) {
+      setSearchText(queryFromUrl);
+      setSubmittedSearchText(queryFromUrl);
+      setSelectedCategory("all");
+    } else if (
+      categoryFromUrl !== "all" &&
+      DISPLAY_CATEGORY_GROUPS.some(
+        (group) => group.id === categoryFromUrl,
+      )
+    ) {
+      setSearchText("");
+      setSubmittedSearchText("");
+      setSelectedCategory(categoryFromUrl);
     }
 
-    setSearchText(queryFromUrl);
-    setSubmittedSearchText(queryFromUrl);
-    setSelectedCategory("all");
     setShowCategories(false);
     setShowLiveMatches(false);
   }, []);
@@ -882,7 +899,7 @@ export default function CommunitySearchDirectory({
     setSubmittedSearchText("");
     setShowLiveMatches(false);
     setShowCategories(false);
-    updateSearchUrl("");
+    updateSearchUrl("", categoryId);
   }
 
   function submitSearch() {
@@ -1170,12 +1187,106 @@ export default function CommunitySearchDirectory({
             </p>
 
             <h1 className="mt-1 truncate text-xl font-black">
-              {searchText
-                ? `"${searchText}" Search Results`
+              {submittedSearchText
+                ? `"${submittedSearchText}" Search Results`
                 : selectedCategory === "all"
                   ? "All Businesses"
                   : selectedCategoryName || "Businesses"}
             </h1>
+
+            {filteredBusinesses.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const shareUrl = window.location.href;
+
+                    if (navigator.share) {
+                      try {
+                        const resultTitle = submittedSearchText
+                          ? submittedSearchText
+                          : selectedCategoryName;
+
+                        await navigator.share({
+                          title: `${resultTitle} - KTown Triangle`,
+                          text: `${resultTitle} 검색 결과를 확인해 보세요.`,
+                          url: shareUrl,
+                        });
+                      } catch (error) {
+                        if (
+                          error instanceof DOMException &&
+                          error.name === "AbortError"
+                        ) {
+                          return;
+                        }
+
+                        console.error("Share failed:", error);
+                      }
+
+                      return;
+                    }
+
+                    try {
+                      await navigator.clipboard.writeText(shareUrl);
+                      alert("검색 주소가 복사되었습니다.");
+                    } catch {
+                      window.prompt("아래 주소를 복사하세요.", shareUrl);
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-full bg-[#1B365D] px-4 py-2 text-xs font-black text-white shadow-sm transition hover:opacity-90 active:scale-95"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <circle cx="18" cy="5" r="3" />
+                    <circle cx="6" cy="12" r="3" />
+                    <circle cx="18" cy="19" r="3" />
+                    <path d="m8.6 10.5 6.8-4" />
+                    <path d="m8.6 13.5 6.8 4" />
+                  </svg>
+
+                  공유
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const shareUrl = window.location.href;
+
+                    try {
+                      await navigator.clipboard.writeText(shareUrl);
+                      alert("검색 주소가 복사되었습니다.");
+                    } catch {
+                      window.prompt("아래 주소를 복사하세요.", shareUrl);
+                    }
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-black text-[#172033] shadow-sm transition hover:bg-gray-50 active:scale-95"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-4 w-4"
+                    aria-hidden="true"
+                  >
+                    <rect x="9" y="9" width="11" height="11" rx="2" />
+                    <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+                  </svg>
+
+                  주소 복사
+                </button>
+              </div>
+            )}
 
             {!submittedSearchText && selectedCategory === "all" && (
               <p className="mt-1 text-xs text-gray-500">
@@ -1191,38 +1302,6 @@ export default function CommunitySearchDirectory({
             전체보기
           </Link>
         </div>
-
-        {selectedCategory !== "all" && (
-  <div className="mb-4 flex justify-start">
-    <button
-      type="button"
-      onClick={async () => {
-        const url = window.location.href;
-
-        if (navigator.share) {
-          try {
-            await navigator.share({
-              title: "KTown Triangle Search",
-              text: "Check out these search results.",
-              url,
-            });
-            return;
-          } catch {}
-        }
-
-        try {
-          await navigator.clipboard.writeText(url);
-          alert("✅ Search link copied!");
-        } catch {
-          prompt("Copy this link:", url);
-        }
-      }}
-      className="rounded-full bg-[#1B365D] px-4 py-2 text-xs font-black text-white shadow-md transition hover:opacity-90 active:scale-95"
-    >
-      🔗 검색 공유
-    </button>
-  </div>
-)}
 
         <div className="space-y-3">
           {filteredBusinesses.map((business) => {
