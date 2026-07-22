@@ -554,16 +554,19 @@ function AdminBusinessNewsContent() {
 
             <label>
               <span className="mb-1 block text-xs font-semibold">카테고리</span>
-              <select
-                value={form.category}
-                onChange={(event) =>
-                  setForm({ ...form, category: event.target.value })
-                }
-                className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
-              >
-                <option>Local Business News</option>
-                <option>Chamber News</option>
-              </select>
+            <select
+					  value={form.category}
+					  onChange={(event) =>
+						setForm({ ...form, category: event.target.value })
+					  }
+					  className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
+					>
+					  <option>비즈니스뉴스</option>
+					  <option>상공인뉴스</option>
+					  <option>이벤트</option>
+					  <option>공연/문화</option>
+					 
+					</select>
             </label>
 
             <label>
