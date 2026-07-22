@@ -52,14 +52,11 @@ export default function VisitorTracker() {
           localStorage.setItem("ktt_visitor_id", visitorId);
         }
 
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser();
+       const {
+  data: { session },
+} = await supabase.auth.getSession();
 
-        if (authError) {
-          console.warn("Visitor auth check error:", authError);
-        }
+const user = session?.user ?? null;
 
         const visitorKey = user?.id
           ? `user_${user.id}`

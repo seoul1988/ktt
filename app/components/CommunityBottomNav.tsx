@@ -13,6 +13,7 @@ type CommunityBottomNavProps = {
     | "search"
     | "deals"
     | "ads"
+    | "hub"
     | "community"
     | "admin";
 };
@@ -34,6 +35,16 @@ export default function CommunityBottomNav({
 
   const navButtonClass =
     "group flex min-w-0 flex-col items-center justify-center gap-0.5 py-1 transition-all duration-150 active:scale-90 active:opacity-70";
+
+  /*
+   * 기존 페이지에서 activeNav="market", "ads", "deals"를 사용해도
+   * Hub 버튼이 활성화되도록 호환성을 유지합니다.
+   */
+  const isHubActive =
+    activeNav === "hub" ||
+    activeNav === "market" ||
+    activeNav === "ads" ||
+    activeNav === "deals";
 
   useEffect(() => {
     setIsMounted(true);
@@ -154,8 +165,16 @@ export default function CommunityBottomNav({
           "
         >
           {/*
-           * 돋보기는 전체 네비게이션의 정확한 중앙에 고정합니다.
-           * 왼쪽은 최대 4개, 오른쪽은 3개를 각각 화면 절반 안에 배치합니다.
+           * 가운데 검색 버튼은 화면 중앙에 고정합니다.
+           *
+           * iPhone 일반 사용자:
+           * Back / Home / Map | Search | Hub / Social
+           *
+           * iPhone 관리자:
+           * Back / Home / Map | Search | Hub / Social / Admin
+           *
+           * Android 일반 사용자:
+           * Home / Map | Search | Hub / Social
            */}
           <div className="absolute inset-y-0 left-1 right-1 flex">
             <div className="flex w-1/2 items-center justify-evenly pr-8">
@@ -243,77 +262,18 @@ export default function CommunityBottomNav({
             </span>
           </Link>
 
-          {/* Market */}
-          <Link
-            href="/market"
-            onClick={triggerHaptic}
-            aria-current={activeNav === "market" ? "page" : undefined}
-            className={`${navButtonClass} w-[42px] ${
-              activeNav === "market" ? activeClass : normalClass
-            }`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-6 w-6"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M6 8h12l-1 13H7L6 8z" />
-              <path d="M9 8V6a3 3 0 016 0v2" />
-              <path d="M9 12v1" />
-              <path d="M15 12v1" />
-            </svg>
-
-            <span className="text-[10px] font-medium leading-none">
-              Market
-            </span>
-          </Link>
 
             </div>
 
             {/* 오른쪽 메뉴 영역 */}
             <div className="flex w-1/2 items-center justify-evenly pl-8">
-          {/* 일반 사용자만 Deals 표시 */}
-          {!isAdmin && (
-            <Link
-              href="/community/deals"
-              onClick={triggerHaptic}
-              aria-current={activeNav === "deals" ? "page" : undefined}
-              className={`${navButtonClass} flex-1 ${
-                activeNav === "deals" ? activeClass : normalClass
-              }`}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-6 w-6"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 22c4.4 0 8-3.2 8-7.5 0-3-1.7-5.5-4.4-7.7.1 2.2-.8 3.8-2.2 4.8.1-3.8-1.9-6.6-5.2-9.1.2 3.3-1.3 5.6-2.8 7.5C4.4 11.3 4 12.8 4 14.5 4 18.8 7.6 22 12 22z" />
-                <path d="M9.5 17.5c0 1.4 1.1 2.5 2.5 2.5s2.5-1.1 2.5-2.5c0-1.2-.7-2.2-2.1-3.4 0 1-.4 1.7-1.1 2.1-.1-1.4-.8-2.4-1.8-3.3.1 1.2-.4 2.1-.9 2.8-.4.5-.6 1.1-.6 1.8z" />
-              </svg>
-
-              <span className="text-[10px] font-medium leading-none">
-                Deals
-              </span>
-            </Link>
-          )}
-
-          {/* Ads: 일반 사용자와 관리자 모두 표시 */}
+          {/* Hub: Market, Ads, Deals, Business News 통합 */}
           <Link
-            href="/ads"
+            href="/community/hub"
             onClick={triggerHaptic}
-            aria-current={activeNav === "ads" ? "page" : undefined}
+            aria-current={isHubActive ? "page" : undefined}
             className={`${navButtonClass} flex-1 ${
-              activeNav === "ads" ? activeClass : normalClass
+              isHubActive ? activeClass : normalClass
             }`}
           >
             <svg
@@ -326,13 +286,17 @@ export default function CommunityBottomNav({
               strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M4 13V9a2 2 0 012-2h3l8-4v16l-8-4H6a2 2 0 01-2-2z" />
-              <path d="M9 15l1.5 5H7l-1-5" />
-              <path d="M20 8a5 5 0 010 6" />
+              <path d="M4 9h16v11H4V9z" />
+              <path d="M3 9l2-5h14l2 5" />
+              <path d="M8 20v-6h4v6" />
+              <path d="M15 13h2" />
+              <path d="M4 9c0 1.3 1 2.3 2.3 2.3S8.7 10.3 8.7 9" />
+              <path d="M8.7 9c0 1.3 1 2.3 2.3 2.3s2.3-1 2.3-2.3" />
+              <path d="M13.3 9c0 1.3 1 2.3 2.3 2.3S18 10.3 18 9" />
             </svg>
 
             <span className="text-[10px] font-medium leading-none">
-              Ads
+              Hub
             </span>
           </Link>
 
