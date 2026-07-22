@@ -1,6 +1,13 @@
 "use client";
 
-import { Suspense, ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import RichTextEditor from "@/app/components/RichTextEditor";
 import ProfileButton from "@/app/components/ProfileButton";
@@ -27,7 +34,7 @@ const createEmptyForm = (isAdmin = false) => ({
   image_url: "",
   images: [] as string[],
   source_url: "",
-  published: isAdmin,
+  published: true,
   published_at: new Date().toISOString().slice(0, 16),
 });
 
@@ -146,7 +153,7 @@ function AdminBusinessNewsContent() {
       title: item.title,
       summary: item.summary || "",
       content: item.content || "",
-      category: item.category,
+      category: isAdmin ? item.category : "공연/문화",
       image_url: item.image_url || "",
       images:
         Array.isArray(item.images) && item.images.length > 0
@@ -459,7 +466,7 @@ function AdminBusinessNewsContent() {
       title: form.title.trim(),
       summary: form.summary.trim(),
       content: form.content,
-      category: form.category,
+      category: isAdmin ? form.category : "공연/문화",
       image_url: form.image_url.trim() || form.images[0] || null,
       images: form.images,
       source_url: form.source_url.trim() || null,
@@ -601,7 +608,13 @@ function AdminBusinessNewsContent() {
           className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
         >
           <h2 className="mb-3 text-sm font-semibold">
-            {editingId ? "뉴스 수정" : "새 뉴스 등록"}
+            {editingId
+              ? isAdmin
+                ? "뉴스 수정"
+                : "공연/문화 수정"
+              : isAdmin
+                ? "새 뉴스 등록"
+                : "공연/문화 등록"}
           </h2>
 
           <div className="grid gap-3">
@@ -617,19 +630,30 @@ function AdminBusinessNewsContent() {
             </label>
 
             <label>
-              <span className="mb-1 block text-xs font-semibold">카테고리</span>
-            <select
-					  value={form.category}
-					  onChange={(event) =>
-						setForm({ ...form, category: event.target.value })
-					  }
-					  className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
-					>
-					  <option>비즈니스뉴스</option>
-					  <option>상공인뉴스</option>
-					  <option>공연/문화</option>
-					 
-					</select>
+              <span className="mb-1 block text-xs font-semibold">
+                카테고리
+              </span>
+
+              {isAdmin ? (
+                <select
+                  value={form.category}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      category: event.target.value,
+                    })
+                  }
+                  className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
+                >
+                  <option value="비즈니스뉴스">비즈니스뉴스</option>
+                  <option value="상공인뉴스">상공인뉴스</option>
+                  <option value="공연/문화">공연/문화</option>
+                </select>
+              ) : (
+                <div className="flex h-11 w-full items-center rounded-xl border border-gray-300 bg-gray-100 px-3 text-sm font-semibold text-[#172033]">
+                  🎭 공연/문화
+                </div>
+              )}
             </label>
 
             <label>
