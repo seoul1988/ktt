@@ -331,9 +331,9 @@ export default function BottomNav({
                 items-center justify-center
                 rounded-full
                 border-4 border-white
-                bg-[#1B365D]
-                text-white
-                shadow-[0_8px_20px_rgba(23,32,51,0.35)]
+                bg-white
+                text-[#172033]
+                shadow-[0_8px_20px_rgba(23,32,51,0.18)]
                 transition-all duration-150
                 active:scale-90
                 hover:scale-105
@@ -347,7 +347,7 @@ export default function BottomNav({
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
-                className="h-7 w-7 text-white"
+                className="h-7 w-7 text-[#172033]"
                 stroke="currentColor"
                 strokeWidth="2.2"
                 strokeLinecap="round"
