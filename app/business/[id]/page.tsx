@@ -8,6 +8,7 @@ import CommunityBottomNav from "../../components/CommunityBottomNav";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
+import BusinessCopyButton from "../../components/BusinessCopyButton";
 
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
@@ -450,30 +451,32 @@ export default async function BusinessPage({
             )}
           </div>
 
-          <div className="mt-6 grid grid-cols-4 text-center text-xs font-semibold text-gray-700">
+          <div className="mt-6 grid grid-cols-5 items-start text-center text-[11px] font-semibold text-gray-700">
             <a
-              href={
-                spot.phone
-                  ? `tel:${spot.phone}`
-                  : "#"
-              }
+              href={spot.phone ? `tel:${spot.phone}` : "#"}
+              aria-label={`Call ${spot.name}`}
+              className="flex min-w-0 flex-col items-center justify-start gap-1 active:scale-95"
             >
-              <div className="text-3xl">☎</div>
-              Call
+              <span className="flex h-8 items-center justify-center text-2xl leading-none">
+                ☎
+              </span>
+              <span>Call</span>
             </a>
 
             <a
               href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
                 spot.address ||
-                  `${spot.name} ${
-                    spot.city || ""
-                  } NC`,
+                  `${spot.name} ${spot.city || ""} NC`,
               )}`}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label={`Directions to ${spot.name}`}
+              className="flex min-w-0 flex-col items-center justify-start gap-1 active:scale-95"
             >
-              <div className="text-3xl">↱</div>
-              Directions
+              <span className="flex h-8 items-center justify-center text-2xl leading-none">
+                ↱
+              </span>
+              <span>Directions</span>
             </a>
 
             <a
@@ -484,27 +487,33 @@ export default async function BusinessPage({
                   "Triangle Area"
                 } ${spot.website_url || ""}`,
               )}`}
+              aria-label={`Share ${spot.name}`}
+              className="flex min-w-0 flex-col items-center justify-start gap-1 active:scale-95"
             >
-              <div className="text-3xl">⌲</div>
-              Share
+              <span className="flex h-8 items-center justify-center text-2xl leading-none">
+                ⌲
+              </span>
+              <span>Share</span>
             </a>
 
-            <div className="text-center">
-              <div className="text-3xl">⭐</div>
+            <BusinessCopyButton />
 
-              <div className="font-bold">
+            <div className="flex min-w-0 flex-col items-center justify-start gap-1 text-center">
+              <span className="flex h-8 items-center justify-center text-2xl leading-none">
+                ⭐
+              </span>
+
+              <span className="font-bold leading-none">
                 {spot.rating
-                  ? Number(
-                      spot.rating,
-                    ).toFixed(1)
+                  ? Number(spot.rating).toFixed(1)
                   : "-"}
-              </div>
+              </span>
 
-              <div className="text-[10px] text-gray-500">
+              <span className="text-[9px] leading-none text-gray-500">
                 {spot.review_count
                   ? `(${spot.review_count})`
                   : ""}
-              </div>
+              </span>
             </div>
           </div>
 
