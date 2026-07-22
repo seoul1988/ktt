@@ -250,12 +250,12 @@ export default function AdsPage() {
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex h-10 items-center">
   {/* 왼쪽 */}
-  <Link
-    href="/community"
-    className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
-  >
-    ← Back
-  </Link>
+ <Link
+  href="/community/hub"
+  className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+>
+  ← Back
+</Link>
 
   {/* 가운데 */}
   <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-2xl font-black text-[#172033]">
