@@ -2,11 +2,23 @@
 
 import type { SVGProps } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import ProfileButton from "@/app/components/ProfileButton";
+import { supabase } from "../../../lib/supabase";
 
 type IconName =
+  | "marketplace"
+  | "ads"
+  | "deals"
+  | "inquiries"
+  | "news"
+  | "events"
+  | "adbook";
+
+type BadgeKey =
   | "marketplace"
   | "ads"
   | "deals"
@@ -20,41 +32,63 @@ type HubItem = {
   subtitle: string;
   href: string;
   icon: IconName;
-  badge?: string;
+  badgeKey: BadgeKey;
   wide?: boolean;
 };
 
+type RecentBadgeState = Record<BadgeKey, boolean>;
+
+const initialRecentBadgeState: RecentBadgeState = {
+  marketplace: false,
+  ads: false,
+  deals: false,
+  inquiries: false,
+  news: false,
+  events: false,
+  adbook: false,
+};
+
+/*
+ * 프로젝트마다 실제 테이블 이름이 다를 수 있으므로
+ * 가능한 테이블 이름을 앞에서부터 순서대로 확인합니다.
+ *
+ * 실제 사용하는 테이블 이름을 알고 있다면 해당 이름만 남겨도 됩니다.
+ */
 const hubItems: HubItem[] = [
   {
     title: "사고/팔기",
     subtitle: "Marketplace",
     href: "/market",
     icon: "marketplace",
+    badgeKey: "marketplace",
   },
   {
     title: "광고",
     subtitle: "Ads",
     href: "https://www.ktowntriangle.com/ads",
     icon: "ads",
+    badgeKey: "ads",
   },
   {
     title: "할인 & 쿠폰",
     subtitle: "Deals",
     href: "/community/deals",
     icon: "deals",
+    badgeKey: "deals",
   },
   {
     title: "문의하기",
     subtitle: "Inquiries",
     href: "/community/inquiries",
     icon: "inquiries",
+    badgeKey: "inquiries",
   },
   {
     title: "뉴스/공연/문화",
     subtitle: "News",
     href: "/community/news",
     icon: "news",
-    badge: "NEW",
+    badgeKey: "news",
     wide: true,
   },
   {
@@ -62,9 +96,31 @@ const hubItems: HubItem[] = [
     subtitle: "Events",
     href: "/community/events",
     icon: "events",
+    badgeKey: "events",
     wide: true,
   },
 ];
+
+/*
+ * 테이블마다 날짜 컬럼 이름이 다를 가능성을 고려해
+ * created_at → published_at → inserted_at 순서로 확인합니다.
+ */
+type HubBadgeRow = {
+  menu_key: string;
+  has_new: boolean;
+};
+
+function isBadgeKey(value: string): value is BadgeKey {
+  return [
+    "marketplace",
+    "ads",
+    "deals",
+    "inquiries",
+    "news",
+    "events",
+    "adbook",
+  ].includes(value);
+}
 
 function HubIcon({
   name,
@@ -176,6 +232,69 @@ function HubIcon({
 export default function CommunityHubPage() {
   const router = useRouter();
 
+  const [recentBadges, setRecentBadges] =
+    useState<RecentBadgeState>(
+      initialRecentBadgeState,
+    );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRecentBadges() {
+      const { data, error } = await supabase.rpc(
+        "get_hub_new_badges",
+        {
+          days_back: 3,
+        },
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.error(
+          "Hub NEW badge load error:",
+          error.message,
+        );
+
+        setRecentBadges(
+          initialRecentBadgeState,
+        );
+        return;
+      }
+
+      const nextBadges: RecentBadgeState = {
+        ...initialRecentBadgeState,
+      };
+
+      for (const row of (data || []) as HubBadgeRow[]) {
+        if (isBadgeKey(row.menu_key)) {
+          nextBadges[row.menu_key] =
+            Boolean(row.has_new);
+        }
+      }
+
+      setRecentBadges(nextBadges);
+    }
+
+    loadRecentBadges();
+
+    /*
+     * 브라우저에서는 Supabase RPC 한 번만 호출합니다.
+     * 페이지를 계속 열어둔 경우 10분마다 다시 확인합니다.
+     */
+    const intervalId = window.setInterval(
+      loadRecentBadges,
+      10 * 60 * 1000,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
   const handleBack = () => {
     router.push("/community/hub");
   };
@@ -205,7 +324,9 @@ export default function CommunityHubPage() {
           </button>
 
           <div className="text-center">
-            <h1 className="text-[15px] font-extrabold leading-none">Hub</h1>
+            <h1 className="text-[15px] font-extrabold leading-none">
+              Hub
+            </h1>
 
             <p className="mt-1 text-[9px] font-medium text-gray-500">
               필요한 메뉴를 한곳에서 이용하세요
@@ -221,7 +342,11 @@ export default function CommunityHubPage() {
       <section className="mx-auto w-full max-w-md px-3 pt-3">
         <div className="grid grid-cols-2 gap-2.5">
           {hubItems.map((item) => {
-            const isExternal = item.href.startsWith("http");
+            const isExternal =
+              item.href.startsWith("http");
+
+            const showNewBadge =
+              recentBadges[item.badgeKey];
 
             const cardClassName = `
               relative flex min-h-[112px] items-center justify-center
@@ -237,9 +362,9 @@ export default function CommunityHubPage() {
 
             const cardContent = (
               <>
-                {item.badge && (
+                {showNewBadge && (
                   <span className="absolute right-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-extrabold text-white shadow-sm">
-                    {item.badge}
+                    NEW
                   </span>
                 )}
 
@@ -252,16 +377,28 @@ export default function CommunityHubPage() {
                 >
                   <div
                     className={`flex items-center justify-center text-[#172033] ${
-                      item.wide ? "h-10 w-10" : "h-12 w-12"
+                      item.wide
+                        ? "h-10 w-10"
+                        : "h-12 w-12"
                     }`}
                   >
                     <HubIcon
                       name={item.icon}
-                      className={item.wide ? "h-9 w-9" : "h-11 w-11"}
+                      className={
+                        item.wide
+                          ? "h-9 w-9"
+                          : "h-11 w-11"
+                      }
                     />
                   </div>
 
-                  <div className={item.wide ? "text-left" : "mt-2"}>
+                  <div
+                    className={
+                      item.wide
+                        ? "text-left"
+                        : "mt-2"
+                    }
+                  >
                     <h2 className="text-[13px] font-extrabold leading-tight text-[#172033]">
                       {item.title}
                     </h2>
@@ -301,10 +438,19 @@ export default function CommunityHubPage() {
         <section className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.06)]">
           <Link
             href="/community/ads"
-            className="flex items-center justify-center gap-3 rounded-xl transition hover:opacity-80 active:scale-95"
+            className="relative flex items-center justify-center gap-3 rounded-xl transition hover:opacity-80 active:scale-95"
           >
+            {recentBadges.adbook && (
+              <span className="absolute right-0 top-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-extrabold text-white shadow-sm">
+                NEW
+              </span>
+            )}
+
             <div className="flex h-10 w-10 items-center justify-center text-[#172033]">
-              <HubIcon name="adbook" className="h-9 w-9" />
+              <HubIcon
+                name="adbook"
+                className="h-9 w-9"
+              />
             </div>
 
             <div className="text-left">
