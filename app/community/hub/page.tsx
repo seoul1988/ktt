@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import AdTab from "../../components/AdTab";
 import ProfileButton from "@/app/components/ProfileButton";
 
 type HubItem = {
@@ -30,14 +31,12 @@ const hubItems: HubItem[] = [
   {
     title: "할인 & 쿠폰",
     subtitle: "Deals",
-	
     href: "/deals",
     emoji: "🏷️",
   },
   {
     title: "문의하기",
     subtitle: "Inquiries",
-
     href: "/community/inquiries",
     emoji: "🙋",
   },
@@ -62,7 +61,7 @@ export default function CommunityHubPage() {
   const router = useRouter();
 
   return (
-    <main className="min-h-screen bg-[#F7F7F7] pb-4 text-[#172033]">
+    <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
           <button
@@ -87,6 +86,7 @@ export default function CommunityHubPage() {
 
           <div className="text-center">
             <h1 className="text-[15px] font-extrabold leading-none">Hub</h1>
+
             <p className="mt-1 text-[9px] font-medium text-gray-500">
               필요한 메뉴를 한곳에서 이용하세요
             </p>
@@ -141,6 +141,7 @@ export default function CommunityHubPage() {
                     <h2 className="text-[13px] font-extrabold leading-tight text-[#172033]">
                       {item.title}
                     </h2>
+
                     <p className="mt-1 text-[10px] font-semibold text-gray-500">
                       {item.subtitle}
                     </p>
@@ -172,6 +173,30 @@ export default function CommunityHubPage() {
             );
           })}
         </div>
+
+        {/* 이벤트 아래 광고책 */}
+        <section className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.06)]">
+<Link
+  href="/community/ads"
+  className="mb-3 flex items-center justify-center gap-3 rounded-xl transition hover:opacity-80 active:scale-95"
+>
+  <span className="text-[30px]" aria-hidden="true">
+    📖
+  </span>
+
+  <div className="text-center">
+    <h2 className="text-[14px] font-extrabold text-[#172033]">
+      광고책
+    </h2>
+
+    <p className="mt-0.5 text-[10px] font-semibold text-gray-500">
+      Ad Book
+    </p>
+  </div>
+</Link>
+
+    
+        </section>
       </section>
 
       <CommunityBottomNav activeNav="hub" />

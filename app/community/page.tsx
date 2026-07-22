@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
 
-import AdTab from "../components/AdTab";
+
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
 
 
@@ -478,7 +478,7 @@ export default async function CommunityPage() {
 
       </section>
 
-      <AdTab />
+
       <CommunityBottomNav activeNav="community" />
     </main>
 	 </>
