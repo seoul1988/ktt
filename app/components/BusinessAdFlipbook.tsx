@@ -650,10 +650,10 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
       <header className="sticky top-0 z-50 border-b border-black/10 bg-[#F8F3EC]/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link
-            href="/community"
+            href="/community/hub"
             className="rounded-full bg-white px-4 py-2 text-sm font-black shadow-sm"
           >
-            ← 돌아가기
+            ← 
           </Link>
 
           <div className="min-w-0 text-center">
@@ -844,6 +844,7 @@ export default function BusinessAdFlipbook({ adPages }: { adPages: AdPage[] }) {
           </>
         )}
       </section>
+	  
     </main>
   );
 }
