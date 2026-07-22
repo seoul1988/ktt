@@ -277,23 +277,30 @@ export default function CommunityBottomNav({
             }`}
           >
             <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-6 w-6"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4 9h16v11H4V9z" />
-              <path d="M3 9l2-5h14l2 5" />
-              <path d="M8 20v-6h4v6" />
-              <path d="M15 13h2" />
-              <path d="M4 9c0 1.3 1 2.3 2.3 2.3S8.7 10.3 8.7 9" />
-              <path d="M8.7 9c0 1.3 1 2.3 2.3 2.3s2.3-1 2.3-2.3" />
-              <path d="M13.3 9c0 1.3 1 2.3 2.3 2.3S18 10.3 18 9" />
-            </svg>
+  viewBox="0 0 24 24"
+  fill="none"
+  className="h-6 w-6"
+  stroke="currentColor"
+  strokeWidth="2"
+  strokeLinecap="round"
+  strokeLinejoin="round"
+  aria-hidden="true"
+>
+  {/* 가운데 Hub */}
+  <circle cx="12" cy="12" r="2.5" />
+
+  {/* 연결된 노드 */}
+  <circle cx="5" cy="5" r="1.8" />
+  <circle cx="19" cy="5" r="1.8" />
+  <circle cx="5" cy="19" r="1.8" />
+  <circle cx="19" cy="19" r="1.8" />
+
+  {/* 연결선 */}
+  <path d="M10.2 10.2 6.3 6.3" />
+  <path d="M13.8 10.2 17.7 6.3" />
+  <path d="M10.2 13.8 6.3 17.7" />
+  <path d="M13.8 13.8 17.7 17.7" />
+</svg>
 
             <span className="text-[10px] font-medium leading-none">
               Hub
