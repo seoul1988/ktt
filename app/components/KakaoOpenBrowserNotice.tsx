@@ -54,7 +54,7 @@ export default function KakaoOpenBrowserNotice() {
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl">
         <h2 className="text-xl font-extrabold text-gray-900">
           {isKakao
-            ? "Chrome 브라우저에 최적화되어 있습니다."
+            ? "크롬/사파리 브라우저에 최적화되어 있습니다."
             : "Best viewed in Chrome or Safari"}
         </h2>
 
