@@ -35,63 +35,6 @@ export default function CommunityNewsPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
- const [isAdmin, setIsAdmin] = useState(false);
-const [isLoggedIn, setIsLoggedIn] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function checkAdmin() {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!mounted) return;
-
-        const user = session?.user;
-
-        if (!user) {
-  setIsLoggedIn(false);
-  setIsAdmin(false);
-  return;
-}
-
-setIsLoggedIn(true);
-
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (!mounted) return;
-
-        if (error) {
-          console.error("News admin check error:", error);
-          setIsAdmin(false);
-          return;
-        }
-
-        setIsAdmin(
-  data?.role === "admin" ||
-  data?.role === "super_admin"
-);
-      } catch (error) {
-        console.error("News admin check failed:", error);
-
-        if (mounted) {
-          setIsAdmin(false);
-        }
-      }
-    }
-
-    checkAdmin();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -237,51 +180,32 @@ setIsLoggedIn(true);
           </div>
 
           <button
-  type="button"
-  aria-label="뉴스 등록"
-  title="뉴스 등록"
-  onClick={async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+            type="button"
+            aria-label="뉴스 등록"
+            title="뉴스 등록"
+            onClick={async () => {
+              const {
+                data: { session },
+              } = await supabase.auth.getSession();
 
-    if (!session?.user) {
-      window.alert("로그인 후 글을 등록할 수 있습니다.");
-      router.push("/login");
-      return;
-    }
+              if (!session?.user) {
+                window.alert("로그인 후 글을 등록할 수 있습니다.");
+                router.push("/login");
+                return;
+              }
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Profile role check error:", error);
-    }
-
-    const role = String(profile?.role ?? "")
-      .trim()
-      .toLowerCase();
-
-    if (role === "admin" || role === "super_admin") {
-      router.push("/admin/news");
-      return;
-    }
-
-    router.push("/community/news/new");
-  }}
-  className="
-    flex h-9 w-9 shrink-0 items-center justify-center
-    rounded-full bg-[#172033] text-white
-    shadow-sm transition active:scale-90
-  "
->
-  <span className="-mt-0.5 text-[24px] font-light leading-none">
-    +
-  </span>
-</button>
+              router.push("/admin/news");
+            }}
+            className="
+              flex h-9 w-9 shrink-0 items-center justify-center
+              rounded-full bg-[#172033] text-white
+              shadow-sm transition active:scale-90
+            "
+          >
+            <span className="-mt-0.5 text-[24px] font-light leading-none">
+              +
+            </span>
+          </button>
         </div>
 
         {loading && (

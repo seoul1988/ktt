@@ -16,40 +16,42 @@ type HubItem = {
 
 const hubItems: HubItem[] = [
   {
-    title: "Marketplace",
-    subtitle: "마켓플레이스",
+    title: "사고/팔기",
+    subtitle: "Marketplace",
     href: "/market",
     emoji: "🛍️",
   },
   {
-    title: "Ads",
-    subtitle: "광고",
+    title: "광고",
+    subtitle: "Ads",
     href: "https://www.ktowntriangle.com/ads",
     emoji: "📣",
   },
   {
-    title: "Deals",
-    subtitle: "할인 & 쿠폰",
+    title: "할인 & 쿠폰",
+    subtitle: "Deals",
+	
     href: "/deals",
     emoji: "🏷️",
   },
   {
-    title: "Inquiries",
-    subtitle: "문의하기",
+    title: "문의하기",
+    subtitle: "Inquiries",
+
     href: "/community/inquiries",
     emoji: "🙋",
   },
   {
-    title: "Business News",
-    subtitle: "비즈니스 뉴스",
+    title: "뉴스/공연/문화",
+    subtitle: "News",
     href: "/community/news",
     emoji: "📰",
     badge: "NEW",
     wide: true,
   },
   {
-    title: "Events",
-    subtitle: "이벤트",
+    title: "이벤트",
+    subtitle: "Events",
     href: "/community/events",
     emoji: "🎉",
     wide: true,
