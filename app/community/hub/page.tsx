@@ -40,7 +40,7 @@ const hubItems: HubItem[] = [
   {
     title: "할인 & 쿠폰",
     subtitle: "Deals",
-    href: "/deals",
+    href: "/community/deals",
     icon: "deals",
   },
   {
@@ -176,14 +176,18 @@ function HubIcon({
 export default function CommunityHubPage() {
   const router = useRouter();
 
+  const handleBack = () => {
+    router.push("/community/hub");
+  };
+
   return (
     <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
           <button
             type="button"
-            onClick={() => router.back()}
-            aria-label="Go back"
+            onClick={handleBack}
+            aria-label="Go to Hub"
             className="flex h-9 w-9 items-center justify-center rounded-full text-[#172033] transition active:scale-90 active:bg-gray-100"
           >
             <svg
@@ -225,7 +229,8 @@ export default function CommunityHubPage() {
               bg-white px-3 py-4 text-center
               shadow-[0_2px_10px_rgba(23,32,51,0.06)]
               transition duration-150
-              hover:-translate-y-0.5 hover:shadow-[0_6px_18px_rgba(23,32,51,0.10)]
+              hover:-translate-y-0.5
+              hover:shadow-[0_6px_18px_rgba(23,32,51,0.10)]
               active:scale-[0.97] active:bg-gray-50
               ${item.wide ? "col-span-2 min-h-[82px]" : ""}
             `;
