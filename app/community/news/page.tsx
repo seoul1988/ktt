@@ -236,7 +236,6 @@ setIsLoggedIn(true);
             ))}
           </div>
 
-          {isAdmin && (
           <button
   type="button"
   aria-label="뉴스 등록"
@@ -247,16 +246,20 @@ setIsLoggedIn(true);
     } = await supabase.auth.getSession();
 
     if (!session?.user) {
-      alert("로그인 후 글을 등록할 수 있습니다.");
+      window.alert("로그인 후 글을 등록할 수 있습니다.");
       router.push("/login");
       return;
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", session.user.id)
       .maybeSingle();
+
+    if (error) {
+      console.error("Profile role check error:", error);
+    }
 
     const role = String(profile?.role ?? "")
       .trim()
@@ -264,9 +267,10 @@ setIsLoggedIn(true);
 
     if (role === "admin" || role === "super_admin") {
       router.push("/admin/news");
-    } else {
-      router.push("/community/news/new");
+      return;
     }
+
+    router.push("/community/news/new");
   }}
   className="
     flex h-9 w-9 shrink-0 items-center justify-center
@@ -278,7 +282,6 @@ setIsLoggedIn(true);
     +
   </span>
 </button>
-          )}
         </div>
 
         {loading && (
