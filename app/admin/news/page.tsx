@@ -85,7 +85,7 @@ function AdminBusinessNewsContent() {
       return {
         ...current,
         category: nextCategory,
-        published: adminUser ? current.published : false,
+        published: adminUser ? current.published : true,
       };
     });
 
@@ -463,7 +463,7 @@ function AdminBusinessNewsContent() {
       image_url: form.image_url.trim() || form.images[0] || null,
       images: form.images,
       source_url: form.source_url.trim() || null,
-      published: isAdmin ? form.published : false,
+      published: isAdmin ? form.published : true,
       published_at: new Date(form.published_at).toISOString(),
     };
 
@@ -809,7 +809,7 @@ function AdminBusinessNewsContent() {
               />
             </label>
 
-            {isAdmin ? (
+            {isAdmin && (
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -821,10 +821,6 @@ function AdminBusinessNewsContent() {
                 />
                 <span className="text-sm font-medium">공개</span>
               </label>
-            ) : (
-              <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
-                등록한 글은 관리자 확인 후 공개됩니다.
-              </div>
             )}
           </div>
 
