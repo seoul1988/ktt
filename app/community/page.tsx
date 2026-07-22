@@ -192,7 +192,7 @@ export default async function CommunityPage() {
               href="/community/events"
               className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
             >
-              →
+             →
             </Link>
           </div>
 
