@@ -24,7 +24,7 @@ const hubItems: HubItem[] = [
   {
     title: "Ads",
     subtitle: "광고",
-    href: "https://www.ktowntriangle.com/ad",
+    href: "https://www.ktowntriangle.com/ads",
     emoji: "📣",
   },
   {
