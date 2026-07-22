@@ -192,7 +192,7 @@ export default async function CommunityPage() {
               href="/community/events"
               className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
             >
-              View all
+              →
             </Link>
           </div>
 
@@ -300,7 +300,7 @@ export default async function CommunityPage() {
               href="/community/deals"
               className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B98000] shadow-sm"
             >
-              View all
+              →
             </Link>
           </div>
 
