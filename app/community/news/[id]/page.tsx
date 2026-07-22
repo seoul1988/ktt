@@ -113,83 +113,77 @@ export default function BusinessNewsDetailPage() {
     async function loadPage() {
       setLoading(true);
 
-      const sessionResult = await supabase.auth.getSession();
+      try {
+        const newsId = Number(params.id);
 
-      const newsResult = await supabase
-        .from("business_news")
-        .select(
-          "id,title,summary,content,category,image_url,images,source_url,published_at",
-        )
-        .eq("id", params.id)
-        .eq("published", true)
-        .maybeSingle();
+        if (!Number.isInteger(newsId) || newsId <= 0) {
+          console.error("Invalid business news id:", params.id);
 
-      let newsData: NewsItem | null = null;
-      let newsError = newsResult.error;
+          if (mounted) {
+            setItem(null);
+          }
 
-      if (!newsResult.error && newsResult.data) {
-        newsData = newsResult.data as NewsItem;
-      } else {
-        /*
-         * business_news.images 컬럼이 없는 환경에서도
-         * 상세 페이지가 열리도록 images 없이 다시 조회합니다.
-         */
-        const fallbackResult = await supabase
+          return;
+        }
+
+        const { data: newsData, error: newsError } = await supabase
           .from("business_news")
           .select(
-            "id,title,summary,content,category,image_url,source_url,published_at",
+            `
+              id,
+              title,
+              summary,
+              content,
+              category,
+              image_url,
+              images,
+              source_url,
+              published_at
+            `,
           )
-          .eq("id", params.id)
+          .eq("id", newsId)
           .eq("published", true)
           .maybeSingle();
 
-        if (!fallbackResult.error && fallbackResult.data) {
-          newsData = {
-            ...(fallbackResult.data as Omit<NewsItem, "images">),
-            images: fallbackResult.data.image_url
-              ? [fallbackResult.data.image_url]
-              : [],
-          };
-          newsError = null;
-        } else {
-          newsError = fallbackResult.error ?? newsResult.error;
+        if (!mounted) return;
+
+        if (newsError) {
+          console.error("Business news detail load error:", {
+            message: newsError.message,
+            code: newsError.code,
+            details: newsError.details,
+            hint: newsError.hint,
+            id: newsId,
+          });
+
+          setItem(null);
+          return;
         }
-      }
 
-      if (!mounted) return;
+        if (!newsData) {
+          console.error(
+            "Business news not found or not published:",
+            newsId,
+          );
 
-      if (newsError || !newsData) {
+          setItem(null);
+          return;
+        }
+
+        setItem(newsData as NewsItem);
+      } catch (error) {
         console.error(
-          "Business news detail load error:",
-          newsError?.message || newsError,
+          "Business news detail unexpected error:",
+          error,
         );
-        setItem(null);
-        setLoading(false);
-        return;
-      }
-
-      setItem(newsData);
-
-      const user = sessionResult.data.session?.user;
-
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        const role = String(profile?.role ?? "")
-          .trim()
-          .toLowerCase();
 
         if (mounted) {
-          setIsAdmin(role === "admin" || role === "super_admin");
+          setItem(null);
         }
-      }
-
-      if (mounted) {
-        setLoading(false);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
 
@@ -199,6 +193,62 @@ export default function BusinessNewsDetailPage() {
       mounted = false;
     };
   }, [params.id]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkAdmin() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const user = session?.user;
+
+        if (!user) {
+          if (mounted) {
+            setIsAdmin(false);
+          }
+
+          return;
+        }
+
+        const { data: profile, error } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        if (error) {
+          console.error("Admin role check error:", error);
+          setIsAdmin(false);
+          return;
+        }
+
+        const role = String(profile?.role ?? "")
+          .trim()
+          .toLowerCase();
+
+        setIsAdmin(
+          role === "admin" || role === "super_admin",
+        );
+      } catch (error) {
+        console.error("Admin role check failed:", error);
+
+        if (mounted) {
+          setIsAdmin(false);
+        }
+      }
+    }
+
+    checkAdmin();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!previewImage) {
