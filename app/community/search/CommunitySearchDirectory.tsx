@@ -24,6 +24,7 @@ type Business = {
   image_url?: string | null;
   rating?: number | string | null;
   review_count?: number | null;
+  hours?: string | null;
 };
 
 type CommunitySearchDirectoryProps = {
@@ -35,6 +36,160 @@ function normalize(value: unknown) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+function timeTextToMinutes(timeText?: string | null) {
+  if (!timeText) {
+    return null;
+  }
+
+  const normalized = timeText
+    .trim()
+    .replace(/\s+/g, " ");
+
+  const twelveHourMatch = normalized.match(
+    /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i,
+  );
+
+  if (twelveHourMatch) {
+    let hour = Number(twelveHourMatch[1]);
+    const minute = Number(twelveHourMatch[2]);
+    const period = twelveHourMatch[3].toUpperCase();
+
+    if (period === "PM" && hour !== 12) {
+      hour += 12;
+    }
+
+    if (period === "AM" && hour === 12) {
+      hour = 0;
+    }
+
+    return hour * 60 + minute;
+  }
+
+  const twentyFourHourMatch = normalized.match(
+    /^(\d{1,2}):(\d{2})$/,
+  );
+
+  if (twentyFourHourMatch) {
+    return (
+      Number(twentyFourHourMatch[1]) * 60 +
+      Number(twentyFourHourMatch[2])
+    );
+  }
+
+  return null;
+}
+
+function getOpenStatus(hours?: string | null) {
+  if (!hours?.trim()) {
+    return {
+      open: false,
+      text: "Closed",
+    };
+  }
+
+  const now = new Date();
+
+  const today = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: "America/New_York",
+  }).format(now);
+
+  const currentTimeText = now.toLocaleTimeString(
+    "en-US",
+    {
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "America/New_York",
+    },
+  );
+
+  const [currentHour, currentMinute] =
+    currentTimeText.split(":").map(Number);
+
+  const currentMinutes =
+    currentHour * 60 + currentMinute;
+
+  const todayLine = hours
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) =>
+      line.toLowerCase().startsWith(
+        today.toLowerCase(),
+      ),
+    );
+
+  if (!todayLine) {
+    return {
+      open: false,
+      text: "Closed",
+    };
+  }
+
+  if (
+    todayLine.toLowerCase().includes("closed")
+  ) {
+    return {
+      open: false,
+      text: "Closed",
+    };
+  }
+
+  const hoursOnly = todayLine
+    .replace(
+      new RegExp(`^${today}\\s*:?\\s*`, "i"),
+      "",
+    )
+    .split("/ Break")[0]
+    .trim();
+
+  const ranges = hoursOnly
+    .split(/,\s*|;\s*/)
+    .map((range) => range.trim())
+    .filter(Boolean);
+
+  for (const range of ranges) {
+    const parts = range.split(/\s*-\s*/);
+
+    if (parts.length !== 2) {
+      continue;
+    }
+
+    const openMinutes =
+      timeTextToMinutes(parts[0]);
+    const closeMinutes =
+      timeTextToMinutes(parts[1]);
+
+    if (
+      openMinutes === null ||
+      closeMinutes === null
+    ) {
+      continue;
+    }
+
+    const isOvernight =
+      closeMinutes <= openMinutes;
+
+    const isOpen = isOvernight
+      ? currentMinutes >= openMinutes ||
+        currentMinutes < closeMinutes
+      : currentMinutes >= openMinutes &&
+        currentMinutes < closeMinutes;
+
+    if (isOpen) {
+      return {
+        open: true,
+        text: "Open",
+      };
+    }
+  }
+
+  return {
+    open: false,
+    text: "Closed",
+  };
 }
 
 /**
@@ -1308,6 +1463,9 @@ export default function CommunitySearchDirectory({
             const categoryLabel =
               getBusinessCategoryNames(business).join(", ") || "Business";
 
+            const businessStatus =
+              getOpenStatus(business.hours);
+
             return (
               <Link
                 key={business.id}
@@ -1349,20 +1507,40 @@ export default function CommunitySearchDirectory({
                     {business.city ? ` · ${business.city}` : ""}
                   </p>
 
-                  <div className="mt-2 flex items-center gap-1 text-sm">
-                    <span className="text-yellow-500">★</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
+                    <span className="text-yellow-500">
+                      ★
+                    </span>
 
                     <span className="font-black">
-                      {Number(business.rating || 0).toFixed(1)}
+                      {Number(
+                        business.rating || 0,
+                      ).toFixed(1)}
                     </span>
 
                     {business.review_count ? (
                       <span className="text-xs text-gray-500">
-                        ({Number(business.review_count).toLocaleString()})
+                        (
+                        {Number(
+                          business.review_count,
+                        ).toLocaleString()}
+                        )
                       </span>
                     ) : (
-                      <span className="text-xs text-gray-400">No Reviews</span>
+                      <span className="text-xs text-gray-400">
+                        No Reviews
+                      </span>
                     )}
+
+                    <span
+                      className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-black leading-none ${
+                        businessStatus.open
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {businessStatus.text}
+                    </span>
                   </div>
 
                   {business.address && (
