@@ -1233,8 +1233,8 @@ export default function CommunitySearchDirectory({
                       window.prompt("아래 주소를 복사하세요.", shareUrl);
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 rounded-full bg-[#1B365D] px-4 py-2 text-xs font-black text-white shadow-sm transition hover:opacity-90 active:scale-95"
-                >
+               className="flex h-6 items-center justify-center gap-1 rounded-full bg-[#1B365D] px-2 text-[9px] font-semibold text-white shadow-sm transition active:scale-95"
+			   >
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -1242,7 +1242,7 @@ export default function CommunitySearchDirectory({
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-4 w-4"
+                    className="h-2.5 w-2.5"
                     aria-hidden="true"
                   >
                     <circle cx="18" cy="5" r="3" />
@@ -1267,8 +1267,8 @@ export default function CommunitySearchDirectory({
                       window.prompt("아래 주소를 복사하세요.", shareUrl);
                     }
                   }}
-                  className="flex items-center justify-center gap-1.5 rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-black text-[#172033] shadow-sm transition hover:bg-gray-50 active:scale-95"
-                >
+                  className="flex h-6 items-center justify-center gap-1 rounded-full bg-[#1B365D] px-2 text-[9px] font-semibold text-white shadow-sm transition active:scale-95"
+				  >
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -1276,7 +1276,7 @@ export default function CommunitySearchDirectory({
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="h-4 w-4"
+                    className="h-2.5 w-2.5"
                     aria-hidden="true"
                   >
                     <rect x="9" y="9" width="11" height="11" rx="2" />
