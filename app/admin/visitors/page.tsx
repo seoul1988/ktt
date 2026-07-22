@@ -15,25 +15,65 @@ type VisitorLogRow = {
   created_at?: string | null;
 };
 
-function getEasternStartOfTodayIso() {
-  const now = new Date();
+const PAGE_SIZE = 1000;
 
-  const easternDateText = new Intl.DateTimeFormat("en-CA", {
+async function loadAllVisitorLogs() {
+  const allLogs: VisitorLogRow[] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + PAGE_SIZE - 1;
+
+    const { data, error } = await supabase
+      .from("visitor_logs")
+      .select("*")
+      .order("created_at", {
+        ascending: false,
+      })
+      .range(from, to);
+
+    if (error) {
+      return {
+        data: [] as VisitorLogRow[],
+        error,
+      };
+    }
+
+    const rows = (data || []) as VisitorLogRow[];
+    allLogs.push(...rows);
+
+    if (rows.length < PAGE_SIZE) {
+      break;
+    }
+
+    from += PAGE_SIZE;
+  }
+
+  return {
+    data: allLogs,
+    error: null,
+  };
+}
+
+function getEasternDateParts(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(now);
+  }).formatToParts(date);
 
-  return new Date(`${easternDateText}T00:00:00-04:00`).toISOString();
-}
+  const year = parts.find((part) => part.type === "year")?.value || "";
+  const month = parts.find((part) => part.type === "month")?.value || "";
+  const day = parts.find((part) => part.type === "day")?.value || "";
 
-function getEasternYearMonth(date: Date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-  }).format(date);
+  return {
+    year,
+    month,
+    day,
+    yearMonth: `${year}-${month}`,
+    dateKey: `${year}-${month}-${day}`,
+  };
 }
 
 function normalizeDeviceLabel(row: VisitorLogRow) {
@@ -56,17 +96,11 @@ function normalizeDeviceLabel(row: VisitorLogRow) {
     return "🍎 iPhone / iPad";
   }
 
-  if (
-    source.includes("android") ||
-    savedOS === "android"
-  ) {
+  if (source.includes("android") || savedOS === "android") {
     return "🤖 Android";
   }
 
-  if (
-    source.includes("windows") ||
-    savedOS === "windows"
-  ) {
+  if (source.includes("windows") || savedOS === "windows") {
     return "🪟 Windows";
   }
 
@@ -79,10 +113,7 @@ function normalizeDeviceLabel(row: VisitorLogRow) {
     return "🖥️ Mac";
   }
 
-  if (
-    source.includes("linux") ||
-    savedOS === "linux"
-  ) {
+  if (source.includes("linux") || savedOS === "linux") {
     return "🐧 Linux";
   }
 
@@ -118,22 +149,8 @@ function normalizeLanguageLabel(language?: string | null) {
 }
 
 export default async function AdminVisitorsPage() {
-  const todayIso = getEasternStartOfTodayIso();
-  const currentEasternYearMonth = getEasternYearMonth(new Date());
-
-  /*
-   * select("*")를 사용하면 현재 visitor_logs 테이블에
-   * device_os 또는 user_agent 컬럼이 아직 없어도 페이지가 동작합니다.
-   *
-   * 컬럼이 추가된 후 새 로그부터 자동으로 기기 통계에 반영됩니다.
-   */
-  const { data, error } = await supabase
-    .from("visitor_logs")
-    .select("*")
-    .order("created_at", {
-      ascending: false,
-    })
-    .range(0, 9999);
+  const easternNow = getEasternDateParts(new Date());
+  const { data, error } = await loadAllVisitorLogs();
 
   if (error) {
     return (
@@ -172,7 +189,7 @@ export default async function AdminVisitorsPage() {
     );
   }
 
-  const logs = (data || []) as VisitorLogRow[];
+  const logs = data;
 
   const todayLogs = logs.filter((row) => {
     if (!row.created_at) return false;
@@ -183,7 +200,7 @@ export default async function AdminVisitorsPage() {
       return false;
     }
 
-    return createdAt.getTime() >= new Date(todayIso).getTime();
+    return getEasternDateParts(createdAt).dateKey === easternNow.dateKey;
   });
 
   const monthlyLogs = logs.filter((row) => {
@@ -195,7 +212,7 @@ export default async function AdminVisitorsPage() {
       return false;
     }
 
-    return getEasternYearMonth(createdAt) === currentEasternYearMonth;
+    return getEasternDateParts(createdAt).yearMonth === easternNow.yearMonth;
   });
 
   const totalVisits = logs.length;
@@ -204,83 +221,58 @@ export default async function AdminVisitorsPage() {
   const monthlyUniqueVisitors = new Set(
     monthlyLogs
       .map((row) => row.visitor_key)
-      .filter(Boolean),
+      .filter((value): value is string => Boolean(value)),
   ).size;
 
   const todayUniqueVisitors = new Set(
     todayLogs
       .map((row) => row.visitor_key)
-      .filter(Boolean),
+      .filter((value): value is string => Boolean(value)),
   ).size;
 
   const pageCounts = new Map<string, number>();
 
   logs.forEach((item) => {
     const page = item.page || "/";
-    pageCounts.set(
-      page,
-      (pageCounts.get(page) || 0) + 1,
-    );
+    pageCounts.set(page, (pageCounts.get(page) || 0) + 1);
   });
 
-  const topPages = Array.from(
-    pageCounts.entries(),
-  )
+  const topPages = Array.from(pageCounts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
-  const languageCounts =
-    new Map<string, number>();
+  const languageCounts = new Map<string, number>();
 
   logs.forEach((item) => {
-    const label =
-      normalizeLanguageLabel(
-        item.browser_language,
-      );
-
-    languageCounts.set(
-      label,
-      (languageCounts.get(label) || 0) + 1,
-    );
+    const label = normalizeLanguageLabel(item.browser_language);
+    languageCounts.set(label, (languageCounts.get(label) || 0) + 1);
   });
 
-  const languageStats = Array.from(
-    languageCounts.entries(),
-  ).sort((a, b) => b[1] - a[1]);
+  const languageStats = Array.from(languageCounts.entries()).sort(
+    (a, b) => b[1] - a[1],
+  );
 
-  const deviceCounts =
-    new Map<string, number>();
+  const deviceCounts = new Map<string, number>();
 
   logs.forEach((item) => {
-    const label =
-      normalizeDeviceLabel(item);
-
-    deviceCounts.set(
-      label,
-      (deviceCounts.get(label) || 0) + 1,
-    );
+    const label = normalizeDeviceLabel(item);
+    deviceCounts.set(label, (deviceCounts.get(label) || 0) + 1);
   });
 
-  const deviceStats = Array.from(
-    deviceCounts.entries(),
-  ).sort((a, b) => b[1] - a[1]);
+  const deviceStats = Array.from(deviceCounts.entries()).sort(
+    (a, b) => b[1] - a[1],
+  );
 
-  const todayDeviceCounts =
-    new Map<string, number>();
+  const todayDeviceCounts = new Map<string, number>();
 
   todayLogs.forEach((item) => {
-    const label =
-      normalizeDeviceLabel(item);
-
-    todayDeviceCounts.set(
-      label,
-      (todayDeviceCounts.get(label) || 0) + 1,
-    );
+    const label = normalizeDeviceLabel(item);
+    todayDeviceCounts.set(label, (todayDeviceCounts.get(label) || 0) + 1);
   });
 
-  const todayDeviceStats = Array.from(
-    todayDeviceCounts.entries(),
-  ).sort((a, b) => b[1] - a[1]);
+  const todayDeviceStats = Array.from(todayDeviceCounts.entries()).sort(
+    (a, b) => b[1] - a[1],
+  );
 
   const cardClass =
     "rounded-3xl border border-gray-100 bg-white p-5 shadow-sm";
@@ -290,11 +282,11 @@ export default async function AdminVisitorsPage() {
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
           <Link
-              href="/admin"
-              className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
-            >
-              ← Back
-            </Link>
+            href="/admin"
+            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+          >
+            ← Back
+          </Link>
 
           <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-xl font-black text-[#172033]">
             Visitor Statistics
@@ -317,10 +309,7 @@ export default async function AdminVisitorsPage() {
                 value={todayUniqueVisitors}
               />
 
-              <StatRow
-                label="👣 전체 접속 수"
-                value={todayVisits}
-              />
+              <StatRow label="👣 전체 접속 수" value={todayVisits} />
             </div>
           </div>
 
@@ -335,10 +324,7 @@ export default async function AdminVisitorsPage() {
                 value={monthlyUniqueVisitors}
               />
 
-              <StatRow
-                label="👣 전체 접속 수"
-                value={totalVisits}
-              />
+              <StatRow label="👣 전체 접속 수" value={totalVisits} />
             </div>
           </div>
 
@@ -386,22 +372,20 @@ export default async function AdminVisitorsPage() {
                   No visitor data yet.
                 </p>
               ) : (
-                topPages.map(
-                  ([page, count]) => (
-                    <div
-                      key={page}
-                      className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-b-0"
-                    >
-                      <span className="min-w-0 truncate text-sm font-bold text-gray-700">
-                        {page}
-                      </span>
+                topPages.map(([page, count]) => (
+                  <div
+                    key={page}
+                    className="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-b-0"
+                  >
+                    <span className="min-w-0 truncate text-sm font-bold text-gray-700">
+                      {page}
+                    </span>
 
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-black text-[#172033]">
-                        {count.toLocaleString()}
-                      </span>
-                    </div>
-                  ),
-                )
+                    <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-black text-[#172033]">
+                      {count.toLocaleString()}
+                    </span>
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -421,21 +405,13 @@ function StatsList({
   emptyText: string;
 }) {
   if (stats.length === 0) {
-    return (
-      <p className="text-sm font-bold text-gray-500">
-        {emptyText}
-      </p>
-    );
+    return <p className="text-sm font-bold text-gray-500">{emptyText}</p>;
   }
 
   return (
     <div className="space-y-3">
       {stats.map(([label, count]) => (
-        <StatRow
-          key={label}
-          label={label}
-          value={count}
-        />
+        <StatRow key={label} label={label} value={count} />
       ))}
     </div>
   );
@@ -450,9 +426,7 @@ function StatRow({
 }) {
   return (
     <div className="flex items-center justify-between rounded-2xl bg-[#F8F3EC] px-4 py-3">
-      <span className="font-bold text-gray-700">
-        {label}
-      </span>
+      <span className="font-bold text-gray-700">{label}</span>
 
       <span className="text-xl font-black text-[#172033]">
         {value.toLocaleString()}
