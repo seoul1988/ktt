@@ -28,7 +28,7 @@ export default function BackButton({
       onClick={handleBack}
       className="flex h-10 items-center justify-center rounded-full bg-white px-4 text-sm font-black shadow-sm transition active:scale-95"
     >
-      ← Back
+      ← 
     </button>
   );
 }
