@@ -4,6 +4,7 @@ import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import ScrollToTopButton from "../../components/ScrollToTopButton";
+import ProfileButton from "@/app/components/ProfileButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -494,19 +495,19 @@ export default async function CommunityDirectoryPage({
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
       <div className="mx-auto max-w-3xl">
         <div className="mb-5 flex items-center justify-between">
-          <Link
-            href={safeBackHref}
-            className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
-          >
-            ← Back
-          </Link>
+  <Link
+    href={safeBackHref}
+    className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
+  >
+    ← Back
+  </Link>
 
-          <h1 className="text-lg font-black tracking-wide">
-            한인 비즈니스
-          </h1>
+  <h1 className="text-lg font-black tracking-wide">
+    한인 비즈니스
+  </h1>
 
-          <div className="w-[72px]" />
-        </div>
+  <ProfileButton />
+</div>
 
         <div className="mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
           <div className="flex items-start justify-between gap-3">
