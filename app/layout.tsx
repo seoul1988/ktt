@@ -25,6 +25,9 @@ const geistMono = Geist_Mono({
 const SITE_URL = "https://www.ktowntriangle.com";
 const OG_IMAGE_URL = `${SITE_URL}/og-image-20260721.png`;
 
+const GA_MEASUREMENT_ID = "G-SDZ3B9B4S6";
+const GOOGLE_ADS_ID = "AW-18242391009";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
 
@@ -41,7 +44,6 @@ export const metadata: Metadata = {
     "랄리, 더럼, 캐리, 채플힐 및 트라이앵글 지역의 한인 비즈니스, 음식점, 마켓, 이벤트, 할인 혜택과 커뮤니티 정보를 만나보세요.",
 
   applicationName: "KTown Triangle",
-
   manifest: "/manifest.webmanifest",
 
   alternates: {
@@ -181,12 +183,14 @@ export default function RootLayout({
           <div className="app-safe-area">{children}</div>
         </AuthProvider>
 
+        {/* Google Analytics 4 및 Google Ads 공통 태그 */}
         <Script
-          src="https://www.googletagmanager.com/gtag/js?id=G-SDZ3B9B4S6"
+          id="google-tag-manager"
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"
         />
 
-        <Script id="google-tag" strategy="afterInteractive">
+        <Script id="google-analytics-and-ads" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
 
@@ -194,13 +198,19 @@ export default function RootLayout({
               window.dataLayer.push(arguments);
             }
 
+            window.gtag = gtag;
+
             gtag("js", new Date());
 
-            gtag("config", "G-SDZ3B9B4S6");
-            gtag("config", "AW-18242391009");
+            gtag("config", "${GA_MEASUREMENT_ID}", {
+              send_page_view: true
+            });
+
+            gtag("config", "${GOOGLE_ADS_ID}");
           `}
         </Script>
       </body>
+	  
 	  
     </html>
   );
