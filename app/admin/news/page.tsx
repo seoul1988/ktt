@@ -19,15 +19,15 @@ type NewsItem = {
   published_at: string;
 };
 
-const createEmptyForm = () => ({
+const createEmptyForm = (isAdmin = false) => ({
   title: "",
   summary: "",
   content: "",
-  category: "Local Business News",
+  category: isAdmin ? "비즈니스뉴스" : "공연/문화",
   image_url: "",
   images: [] as string[],
   source_url: "",
-  published: true,
+  published: isAdmin,
   published_at: new Date().toISOString().slice(0, 16),
 });
 
@@ -36,7 +36,9 @@ function AdminBusinessNewsContent() {
   const searchParams = useSearchParams();
 
   const [items, setItems] = useState<NewsItem[]>([]);
-  const [form, setForm] = useState(createEmptyForm());
+  const [form, setForm] = useState(createEmptyForm(false));
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,16 +70,37 @@ function AdminBusinessNewsContent() {
       .trim()
       .toLowerCase();
 
-    if (role !== "admin" && role !== "super_admin") {
-      window.alert("관리자만 이용할 수 있습니다.");
-      router.push("/");
-      return;
-    }
+    const adminUser = role === "admin" || role === "super_admin";
 
-    const { data, error } = await supabase
+    setUserId(user.id);
+    setIsAdmin(adminUser);
+    setForm((current) => {
+      const nextCategory =
+        adminUser && current.category === "공연/문화"
+          ? "비즈니스뉴스"
+          : adminUser
+            ? current.category
+            : "공연/문화";
+
+      return {
+        ...current,
+        category: nextCategory,
+        published: adminUser ? current.published : false,
+      };
+    });
+
+    let query = supabase
       .from("business_news")
       .select("*")
       .order("published_at", { ascending: false });
+
+    if (!adminUser) {
+      query = query
+        .eq("category", "공연/문화")
+        .eq("user_id", user.id);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("News admin load error:", error);
@@ -108,11 +131,16 @@ function AdminBusinessNewsContent() {
 
   function resetForm() {
     setEditingId(null);
-    setForm(createEmptyForm());
+    setForm(createEmptyForm(isAdmin));
     router.replace("/admin/news");
   }
 
   function startEdit(item: NewsItem) {
+    if (!isAdmin && item.category !== "공연/문화") {
+      window.alert("일반 사용자는 공연/문화 글만 수정할 수 있습니다.");
+      return;
+    }
+
     setEditingId(item.id);
     setForm({
       title: item.title,
@@ -403,6 +431,17 @@ function AdminBusinessNewsContent() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
 
+    if (!userId) {
+      window.alert("로그인이 필요합니다.");
+      router.push("/login");
+      return;
+    }
+
+    if (!isAdmin && form.category !== "공연/문화") {
+      window.alert("일반 사용자는 공연/문화 글만 등록할 수 있습니다.");
+      return;
+    }
+
     if (!form.title.trim()) {
       window.alert("제목을 입력하세요.");
       return;
@@ -416,6 +455,7 @@ function AdminBusinessNewsContent() {
     setSaving(true);
 
     const payload = {
+      user_id: userId,
       title: form.title.trim(),
       summary: form.summary.trim(),
       content: form.content,
@@ -423,16 +463,28 @@ function AdminBusinessNewsContent() {
       image_url: form.image_url.trim() || form.images[0] || null,
       images: form.images,
       source_url: form.source_url.trim() || null,
-      published: form.published,
+      published: isAdmin ? form.published : false,
       published_at: new Date(form.published_at).toISOString(),
     };
 
-    const result = editingId
-      ? await supabase
-          .from("business_news")
-          .update(payload)
-          .eq("id", editingId)
-      : await supabase.from("business_news").insert(payload);
+    let result;
+
+    if (editingId) {
+      let updateQuery = supabase
+        .from("business_news")
+        .update(payload)
+        .eq("id", editingId);
+
+      if (!isAdmin) {
+        updateQuery = updateQuery
+          .eq("user_id", userId)
+          .eq("category", "공연/문화");
+      }
+
+      result = await updateQuery;
+    } else {
+      result = await supabase.from("business_news").insert(payload);
+    }
 
     setSaving(false);
 
@@ -475,10 +527,18 @@ function AdminBusinessNewsContent() {
       }
     }
 
-    const { error } = await supabase
+    let deleteQuery = supabase
       .from("business_news")
       .delete()
       .eq("id", id);
+
+    if (!isAdmin && userId) {
+      deleteQuery = deleteQuery
+        .eq("user_id", userId)
+        .eq("category", "공연/문화");
+    }
+
+    const { error } = await deleteQuery;
 
     if (error) {
       window.alert(error.message);
@@ -521,9 +581,13 @@ function AdminBusinessNewsContent() {
           </button>
 
           <div className="min-w-0 flex-1 px-2 text-center">
-            <h1 className="text-lg font-bold">Business News 관리</h1>
+            <h1 className="text-lg font-bold">
+              {isAdmin ? "Business News 관리" : "공연/문화 글쓰기"}
+            </h1>
             <p className="mt-1 text-[11px] leading-4 text-gray-500">
-              가장 최근 게시일의 뉴스가 LATEST로 자동 표시됩니다.
+              {isAdmin
+                ? "관리자는 모든 뉴스 카테고리를 등록하고 관리할 수 있습니다."
+                : "일반 사용자는 공연/문화 글만 등록할 수 있습니다."}
             </p>
           </div>
 
@@ -563,7 +627,6 @@ function AdminBusinessNewsContent() {
 					>
 					  <option>비즈니스뉴스</option>
 					  <option>상공인뉴스</option>
-					  <option>이벤트</option>
 					  <option>공연/문화</option>
 					 
 					</select>
@@ -746,17 +809,23 @@ function AdminBusinessNewsContent() {
               />
             </label>
 
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={form.published}
-                onChange={(event) =>
-                  setForm({ ...form, published: event.target.checked })
-                }
-                className="h-4 w-4"
-              />
-              <span className="text-sm font-medium">공개</span>
-            </label>
+            {isAdmin ? (
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.published}
+                  onChange={(event) =>
+                    setForm({ ...form, published: event.target.checked })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="text-sm font-medium">공개</span>
+              </label>
+            ) : (
+              <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                등록한 글은 관리자 확인 후 공개됩니다.
+              </div>
+            )}
           </div>
 
           <div className="mt-4 flex gap-2">
@@ -765,7 +834,15 @@ function AdminBusinessNewsContent() {
               disabled={saving || uploadingImages}
               className="rounded-xl bg-[#172033] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {saving ? "저장 중..." : uploadingImages ? "업로드 중..." : editingId ? "수정 저장" : "뉴스 등록"}
+              {saving
+                ? "저장 중..."
+                : uploadingImages
+                  ? "업로드 중..."
+                  : editingId
+                    ? "수정 저장"
+                    : isAdmin
+                      ? "뉴스 등록"
+                      : "공연/문화 등록"}
             </button>
 
             {editingId && (
@@ -782,7 +859,9 @@ function AdminBusinessNewsContent() {
 
         <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="border-b px-4 py-3">
-            <h2 className="text-sm font-semibold">등록된 뉴스</h2>
+            <h2 className="text-sm font-semibold">
+              {isAdmin ? "등록된 뉴스" : "내가 등록한 공연/문화"}
+            </h2>
           </div>
 
           {loading ? (
