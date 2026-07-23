@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+
+const LOGIN_REDIRECT_KEY = "ktown_login_redirect";
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
@@ -15,26 +17,71 @@ export default function LoginForm() {
   const [isLoading, setIsLoading] =
     useState(false);
 
-  /*
-    로그인 페이지 주소 예:
-    /login?redirect=/market/new
+  const [redirectPath, setRedirectPath] =
+    useState("/");
 
-    redirect 값이 없거나 외부 주소이면 홈으로 이동합니다.
-  */
-  function getSafeRedirectPath() {
-    const requestedPath =
+  function isSafeInternalPath(
+    value: string | null,
+  ) {
+    return Boolean(
+      value &&
+        value.startsWith("/") &&
+        !value.startsWith("//") &&
+        !value.startsWith("/login"),
+    );
+  }
+
+  useEffect(() => {
+    const queryRedirect =
       searchParams.get("redirect");
 
-    if (
-      requestedPath &&
-      requestedPath.startsWith("/") &&
-      !requestedPath.startsWith("//") &&
-      !requestedPath.startsWith("/login")
-    ) {
-      return requestedPath;
+    /*
+      1순위: /login?redirect=...
+      2순위: sessionStorage에 저장된 이전 페이지
+      3순위: 홈
+    */
+    if (isSafeInternalPath(queryRedirect)) {
+      setRedirectPath(queryRedirect as string);
+
+      sessionStorage.setItem(
+        LOGIN_REDIRECT_KEY,
+        queryRedirect as string,
+      );
+
+      return;
     }
 
-    return "/";
+    const storedRedirect =
+      sessionStorage.getItem(
+        LOGIN_REDIRECT_KEY,
+      );
+
+    if (isSafeInternalPath(storedRedirect)) {
+      setRedirectPath(storedRedirect as string);
+      return;
+    }
+
+    setRedirectPath("/");
+  }, [searchParams]);
+
+  function completeLoginRedirect() {
+    const storedRedirect =
+      sessionStorage.getItem(
+        LOGIN_REDIRECT_KEY,
+      );
+
+    const finalRedirect =
+      isSafeInternalPath(redirectPath)
+        ? redirectPath
+        : isSafeInternalPath(storedRedirect)
+          ? (storedRedirect as string)
+          : "/";
+
+    sessionStorage.removeItem(
+      LOGIN_REDIRECT_KEY,
+    );
+
+    window.location.replace(finalRedirect);
   }
 
   async function login() {
@@ -61,10 +108,7 @@ export default function LoginForm() {
         return;
       }
 
-      const redirectPath =
-        getSafeRedirectPath();
-
-      window.location.replace(redirectPath);
+      completeLoginRedirect();
     } catch (error) {
       console.error(
         "Email login error:",
@@ -79,28 +123,47 @@ export default function LoginForm() {
     }
   }
 
-  async function loginWithGoogle() {
+  async function startOAuthLogin(
+    provider:
+      | "google"
+      | "facebook"
+      | "kakao",
+  ) {
     try {
       setIsLoading(true);
 
-      const redirectPath =
-        getSafeRedirectPath();
+      const finalRedirect =
+        isSafeInternalPath(redirectPath)
+          ? redirectPath
+          : "/";
+
+      sessionStorage.setItem(
+        LOGIN_REDIRECT_KEY,
+        finalRedirect,
+      );
 
       const callbackUrl =
         `${window.location.origin}/auth/callback` +
         `?redirect=${encodeURIComponent(
-          redirectPath,
+          finalRedirect,
         )}`;
+
+      const options =
+        provider === "google"
+          ? {
+              redirectTo: callbackUrl,
+              queryParams: {
+                prompt: "select_account",
+              },
+            }
+          : {
+              redirectTo: callbackUrl,
+            };
 
       const { error } =
         await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: callbackUrl,
-            queryParams: {
-              prompt: "select_account",
-            },
-          },
+          provider,
+          options,
         });
 
       if (error) {
@@ -109,90 +172,17 @@ export default function LoginForm() {
       }
     } catch (error) {
       console.error(
-        "Google login error:",
+        `${provider} login error:`,
         error,
       );
 
       alert(
-        "Google login could not be started.",
-      );
-
-      setIsLoading(false);
-    }
-  }
-
-  async function loginWithFacebook() {
-    try {
-      setIsLoading(true);
-
-      const redirectPath =
-        getSafeRedirectPath();
-
-      const callbackUrl =
-        `${window.location.origin}/auth/callback` +
-        `?redirect=${encodeURIComponent(
-          redirectPath,
-        )}`;
-
-      const { error } =
-        await supabase.auth.signInWithOAuth({
-          provider: "facebook",
-          options: {
-            redirectTo: callbackUrl,
-          },
-        });
-
-      if (error) {
-        alert(error.message);
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error(
-        "Facebook login error:",
-        error,
-      );
-
-      alert(
-        "Facebook login could not be started.",
-      );
-
-      setIsLoading(false);
-    }
-  }
-
-  async function loginWithKakao() {
-    try {
-      setIsLoading(true);
-
-      const redirectPath =
-        getSafeRedirectPath();
-
-      const callbackUrl =
-        `${window.location.origin}/auth/callback` +
-        `?redirect=${encodeURIComponent(
-          redirectPath,
-        )}`;
-
-      const { error } =
-        await supabase.auth.signInWithOAuth({
-          provider: "kakao",
-          options: {
-            redirectTo: callbackUrl,
-          },
-        });
-
-      if (error) {
-        alert(error.message);
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error(
-        "Kakao login error:",
-        error,
-      );
-
-      alert(
-        "Kakao login could not be started.",
+        `${
+          provider
+            .charAt(0)
+            .toUpperCase() +
+          provider.slice(1)
+        } login could not be started.`,
       );
 
       setIsLoading(false);
@@ -209,9 +199,6 @@ export default function LoginForm() {
       login();
     }
   }
-
-  const redirectPath =
-    getSafeRedirectPath();
 
   const signupHref =
     redirectPath === "/"
@@ -230,7 +217,6 @@ export default function LoginForm() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#fdf2f8] via-white to-[#fff7ed] px-4 py-3 text-[#172033]">
       <div className="mx-auto w-full max-w-md rounded-[28px] bg-white px-5 py-4 shadow-2xl">
-        {/* 제목 */}
         <div className="mb-3 text-center">
           <p className="text-xl font-black text-[#172033]">
             Sign in to your account.
@@ -243,7 +229,6 @@ export default function LoginForm() {
           )}
         </div>
 
-        {/* 로그인 입력 */}
         <div className="space-y-3">
           <label className="block">
             <span className="mb-1.5 block text-sm font-medium text-gray-500">
@@ -324,7 +309,6 @@ export default function LoginForm() {
           </button>
         </div>
 
-        {/* 아이디 / 비밀번호 찾기 */}
         <div className="mt-3 text-center text-sm font-semibold text-gray-500">
           <a
             href="/forgot-username"
@@ -345,7 +329,6 @@ export default function LoginForm() {
           </a>
         </div>
 
-        {/* 회원가입 */}
         <a
           href={signupHref}
           className="mt-4 block w-full rounded-[18px] border border-gray-200 bg-gray-50 py-2 text-center text-base font-medium text-[#172033] transition hover:bg-gray-100"
@@ -353,7 +336,6 @@ export default function LoginForm() {
           Create an Account
         </a>
 
-        {/* 구분선 */}
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-gray-200" />
 
@@ -364,11 +346,12 @@ export default function LoginForm() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
 
-        {/* 소셜 로그인 */}
         <div className="flex items-center justify-center gap-4">
           <button
             type="button"
-            onClick={loginWithGoogle}
+            onClick={() =>
+              startOAuthLogin("google")
+            }
             disabled={isLoading}
             aria-label="Continue with Google"
             className="rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
@@ -382,7 +365,9 @@ export default function LoginForm() {
 
           <button
             type="button"
-            onClick={loginWithFacebook}
+            onClick={() =>
+              startOAuthLogin("facebook")
+            }
             disabled={isLoading}
             aria-label="Continue with Facebook"
             className="rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
@@ -396,7 +381,9 @@ export default function LoginForm() {
 
           <button
             type="button"
-            onClick={loginWithKakao}
+            onClick={() =>
+              startOAuthLogin("kakao")
+            }
             disabled={isLoading}
             aria-label="Continue with Kakao"
             className="rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
@@ -409,7 +396,6 @@ export default function LoginForm() {
           </button>
         </div>
 
-        {/* 약관 및 정책 링크 */}
         <div className="mt-5 border-t border-gray-100 pt-4 text-center">
           <p className="text-xs leading-5 text-gray-400">
             By signing in, you agree to our policies.

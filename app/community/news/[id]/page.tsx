@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
 import ProfileButton from "@/app/components/ProfileButton";
 import CommunityBottomNav from "@/app/components/CommunityBottomNav";
 import { supabase } from "@/lib/supabase";
@@ -17,6 +18,7 @@ type NewsItem = {
   images: string[] | null;
   source_url: string | null;
   published_at: string;
+  published: boolean | null;
 };
 
 function formatDate(value: string) {
@@ -32,20 +34,17 @@ function normalizeStoredHtml(value: string) {
 
   let html = String(value ?? "").trim();
 
-  /*
-   * 모바일에서 HTML이 일반 텍스트로 붙여넣어져
-   * &lt;p&gt; 또는 <p> 코드 자체가 보이는 경우를 정리합니다.
-   */
   for (let index = 0; index < 2; index += 1) {
     const textarea = document.createElement("textarea");
     textarea.innerHTML = html;
+
     const decoded = textarea.value;
 
     if (decoded === html) break;
+
     html = decoded;
   }
 
-  // 코드펜스 안에 붙여넣은 HTML도 실제 HTML로 변환합니다.
   html = html
     .replace(/^```html\s*/i, "")
     .replace(/^```\s*/i, "")
@@ -97,15 +96,76 @@ export default function BusinessNewsDetailPage() {
   const router = useRouter();
 
   const [item, setItem] = useState<NewsItem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-  const safeContent = useMemo(
-    () => sanitizeHtml(item?.content ?? ""),
-    [item?.content],
+  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const [showLoginModal, setShowLoginModal] =
+    useState(false);
+
+  const [deleting, setDeleting] = useState(false);
+  const [previewImage, setPreviewImage] =
+    useState<string | null>(null);
+
+  const newsId = Number(params.id);
+
+  const isPrivateNews = item?.published !== true;
+  const isLocked = Boolean(
+    item && isPrivateNews && !isLoggedIn,
   );
+
+  const safeContent = useMemo(() => {
+    if (isLocked) return "";
+
+    return sanitizeHtml(item?.content ?? "");
+  }, [item?.content, isLocked]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadSession() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+
+        setIsLoggedIn(Boolean(session?.user));
+      } catch (error) {
+        console.error("Session load error:", error);
+
+        if (mounted) {
+          setIsLoggedIn(false);
+        }
+      } finally {
+        if (mounted) {
+          setAuthLoading(false);
+        }
+      }
+    }
+
+    loadSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return;
+
+        setIsLoggedIn(Boolean(session?.user));
+        setAuthLoading(false);
+      },
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -114,10 +174,14 @@ export default function BusinessNewsDetailPage() {
       setLoading(true);
 
       try {
-        const newsId = Number(params.id);
-
-        if (!Number.isInteger(newsId) || newsId <= 0) {
-          console.error("Invalid business news id:", params.id);
+        if (
+          !Number.isInteger(newsId) ||
+          newsId <= 0
+        ) {
+          console.error(
+            "Invalid business news id:",
+            params.id,
+          );
 
           if (mounted) {
             setItem(null);
@@ -126,35 +190,39 @@ export default function BusinessNewsDetailPage() {
           return;
         }
 
-        const { data: newsData, error: newsError } = await supabase
-          .from("business_news")
-          .select(
-            `
-              id,
-              title,
-              summary,
-              content,
-              category,
-              image_url,
-              images,
-              source_url,
-              published_at
-            `,
-          )
-          .eq("id", newsId)
-          .eq("published", true)
-          .maybeSingle();
+        const { data: newsData, error: newsError } =
+          await supabase
+            .from("business_news")
+            .select(
+              `
+                id,
+                title,
+                summary,
+                content,
+                category,
+                image_url,
+                images,
+                source_url,
+                published_at,
+                published
+              `,
+            )
+            .eq("id", newsId)
+            .maybeSingle();
 
         if (!mounted) return;
 
         if (newsError) {
-          console.error("Business news detail load error:", {
-            message: newsError.message,
-            code: newsError.code,
-            details: newsError.details,
-            hint: newsError.hint,
-            id: newsId,
-          });
+          console.error(
+            "Business news detail load error:",
+            {
+              message: newsError.message,
+              code: newsError.code,
+              details: newsError.details,
+              hint: newsError.hint,
+              id: newsId,
+            },
+          );
 
           setItem(null);
           return;
@@ -162,7 +230,7 @@ export default function BusinessNewsDetailPage() {
 
         if (!newsData) {
           console.error(
-            "Business news not found or not published:",
+            "Business news not found:",
             newsId,
           );
 
@@ -192,7 +260,30 @@ export default function BusinessNewsDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [params.id]);
+  }, [newsId, params.id]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      authLoading ||
+      !item
+    ) {
+      return;
+    }
+
+    const privateNews = item.published !== true;
+
+    if (privateNews && !isLoggedIn) {
+      setShowLoginModal(true);
+    } else {
+      setShowLoginModal(false);
+    }
+  }, [
+    item,
+    loading,
+    authLoading,
+    isLoggedIn,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -213,16 +304,21 @@ export default function BusinessNewsDetailPage() {
           return;
         }
 
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
+        const { data: profile, error } =
+          await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
 
         if (!mounted) return;
 
         if (error) {
-          console.error("Admin role check error:", error);
+          console.error(
+            "Admin role check error:",
+            error,
+          );
+
           setIsAdmin(false);
           return;
         }
@@ -232,10 +328,14 @@ export default function BusinessNewsDetailPage() {
           .toLowerCase();
 
         setIsAdmin(
-          role === "admin" || role === "super_admin",
+          role === "admin" ||
+            role === "super_admin",
         );
       } catch (error) {
-        console.error("Admin role check failed:", error);
+        console.error(
+          "Admin role check failed:",
+          error,
+        );
 
         if (mounted) {
           setIsAdmin(false);
@@ -248,29 +348,50 @@ export default function BusinessNewsDetailPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!previewImage) {
+    if (!previewImage && !showLoginModal) {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
+    const previousOverflow =
+      document.body.style.overflow;
+
     document.body.style.overflow = "hidden";
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (event.key !== "Escape") return;
+
+      if (previewImage) {
         setPreviewImage(null);
+        return;
+      }
+
+      if (showLoginModal) {
+        router.replace("/community/news");
       }
     }
 
-    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
 
     return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow =
+        previousOverflow;
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
     };
-  }, [previewImage]);
+  }, [
+    previewImage,
+    showLoginModal,
+    router,
+  ]);
 
   async function handleDelete() {
     if (!item || deleting || !isAdmin) return;
@@ -289,7 +410,10 @@ export default function BusinessNewsDetailPage() {
       .eq("id", item.id);
 
     if (error) {
-      window.alert(`삭제하지 못했습니다.\n${error.message}`);
+      window.alert(
+        `삭제하지 못했습니다.\n${error.message}`,
+      );
+
       setDeleting(false);
       return;
     }
@@ -298,7 +422,27 @@ export default function BusinessNewsDetailPage() {
     router.refresh();
   }
 
-  if (loading) {
+  function goToLogin() {
+    const redirectPath =
+      Number.isInteger(newsId) && newsId > 0
+        ? `/community/news/${newsId}`
+        : "/community/news";
+
+    router.push(
+      `/login?redirect=${encodeURIComponent(
+        redirectPath,
+      )}`,
+    );
+  }
+
+  function closeLoginModal() {
+    setShowLoginModal(false);
+    router.replace("/community/news");
+  }
+
+  const pageLoading = loading || authLoading;
+
+  if (pageLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F7F7F7] text-sm font-semibold text-gray-500">
         뉴스 불러오는 중...
@@ -326,14 +470,17 @@ export default function BusinessNewsDetailPage() {
   }
 
   const galleryImages =
-    Array.isArray(item.images) && item.images.length > 0
+    Array.isArray(item.images) &&
+    item.images.length > 0
       ? item.images
       : item.image_url
         ? [item.image_url]
         : [];
 
   const representativeImage =
-    item.image_url || galleryImages[0] || "/event.png";
+    item.image_url ||
+    galleryImages[0] ||
+    "/event.png";
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] text-[#172033]">
@@ -373,173 +520,224 @@ export default function BusinessNewsDetailPage() {
         </div>
       </header>
 
-      <article className="mx-auto w-full max-w-md px-3 py-4">
-        <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-          <button
-            type="button"
-            onClick={() => setPreviewImage(representativeImage)}
-            className="group relative block w-full overflow-hidden"
-            aria-label="대표 이미지 크게 보기"
-          >
-            <img
-              src={representativeImage}
-              alt={item.title}
-              className="aspect-[16/9] w-full object-cover transition duration-200 group-active:scale-[0.99]"
-              onError={(event) => {
-                event.currentTarget.src = "/event.png";
-              }}
-            />
+      {!isLocked && (
+        <article className="mx-auto w-full max-w-md px-3 py-4">
+          <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
+            <button
+              type="button"
+              onClick={() =>
+                setPreviewImage(
+                  representativeImage,
+                )
+              }
+              className="group relative block w-full overflow-hidden"
+              aria-label="대표 이미지 크게 보기"
+            >
+              <img
+                src={representativeImage}
+                alt={item.title}
+                className="aspect-[16/9] w-full object-cover transition duration-200 group-active:scale-[0.99]"
+                onError={(event) => {
+                  event.currentTarget.src =
+                    "/event.png";
+                }}
+              />
 
-            <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow-sm">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-4 w-4"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="6" />
-                <path d="M16 16l4 4" />
-                <path d="M11 8v6" />
-                <path d="M8 11h6" />
-              </svg>
-            </span>
-          </button>
+              <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow-sm">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className="h-4 w-4"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="11"
+                    cy="11"
+                    r="6"
+                  />
 
-          <div className="p-4">
-            <div className="text-[10px] font-medium text-gray-500">
-              {item.category} · {formatDate(item.published_at)}
-            </div>
+                  <path d="M16 16l4 4" />
+                  <path d="M11 8v6" />
+                  <path d="M8 11h6" />
+                </svg>
+              </span>
+            </button>
 
-            <h1 className="mt-2 text-[22px] font-bold leading-tight">
-              {item.title}
-            </h1>
+            <div className="p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-medium text-gray-500">
+                  {item.category} ·{" "}
+                  {formatDate(
+                    item.published_at,
+                  )}
+                </span>
 
-            {item.summary && (
-              <p className="mt-3 text-[13px] font-medium leading-6 text-gray-600">
-                {item.summary}
-              </p>
-            )}
-
-            <div
-              className="
-                mt-5 text-[14px] leading-7
-                [&_a]:text-blue-600 [&_a]:underline
-                [&_blockquote]:my-4 [&_blockquote]:border-l-4
-                [&_blockquote]:border-gray-300 [&_blockquote]:pl-4
-                [&_h1]:mb-3 [&_h1]:mt-6 [&_h1]:text-[24px] [&_h1]:font-bold
-                [&_h2]:mb-3 [&_h2]:mt-6 [&_h2]:text-[20px] [&_h2]:font-bold
-                [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-[17px] [&_h3]:font-semibold
-                [&_img]:my-5 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
-                [&_li]:ml-5 [&_ol]:my-3 [&_ol]:list-decimal
-                [&_p]:my-3 [&_table]:my-4 [&_table]:w-full
-                [&_table]:border-collapse [&_td]:border [&_td]:p-2
-                [&_th]:border [&_th]:bg-gray-50 [&_th]:p-2
-                [&_ul]:my-3 [&_ul]:list-disc
-              "
-              dangerouslySetInnerHTML={{ __html: safeContent }}
-            />
-
-            {galleryImages.length > 1 && (
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                {galleryImages
-                  .filter((imageUrl) => imageUrl !== representativeImage)
-                  .map((imageUrl, index) => (
-                    <button
-                      key={`${imageUrl}-${index}`}
-                      type="button"
-                      onClick={() => setPreviewImage(imageUrl)}
-                      className="group relative overflow-hidden rounded-xl bg-gray-100"
-                      aria-label={`${index + 2}번 이미지 크게 보기`}
-                    >
-                      <img
-                        src={imageUrl}
-                        alt={`${item.title} 이미지 ${index + 2}`}
-                        className="aspect-square w-full object-cover transition duration-200 group-active:scale-[0.98]"
-                        onError={(event) => {
-                          event.currentTarget.src = "/event.png";
-                        }}
-                      />
-
-                      <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          className="h-3.5 w-3.5"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                        >
-                          <circle cx="11" cy="11" r="6" />
-                          <path d="M16 16l4 4" />
-                          <path d="M11 8v6" />
-                          <path d="M8 11h6" />
-                        </svg>
-                      </span>
-                    </button>
-                  ))}
+                {isPrivateNews && (
+                  <span className="rounded-full bg-[#172033] px-2.5 py-1 text-[9px] font-bold text-white">
+                    회원 전용
+                  </span>
+                )}
               </div>
-            )}
 
-            <div className="mt-6 flex flex-wrap gap-2">
-              <Link
-                href="/community/news"
-                className="rounded-xl border border-gray-300 px-4 py-2 text-[12px] font-semibold"
-              >
-                뉴스 목록
-              </Link>
+              <h1 className="mt-2 text-[22px] font-bold leading-tight">
+                {item.title}
+              </h1>
 
-              {item.source_url && (
-                <a
-                  href={item.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded-xl bg-[#172033] px-4 py-2 text-[12px] font-semibold text-white"
-                >
-                  원문 보기
-                </a>
+              {item.summary && (
+                <p className="mt-3 text-[13px] font-medium leading-6 text-gray-600">
+                  {item.summary}
+                </p>
               )}
-            </div>
 
-            {isAdmin && (
-              <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-4">
+              <div
+                className="
+                  mt-5 text-[14px] leading-7
+                  [&_a]:text-blue-600 [&_a]:underline
+                  [&_blockquote]:my-4 [&_blockquote]:border-l-4
+                  [&_blockquote]:border-gray-300 [&_blockquote]:pl-4
+                  [&_h1]:mb-3 [&_h1]:mt-6 [&_h1]:text-[24px] [&_h1]:font-bold
+                  [&_h2]:mb-3 [&_h2]:mt-6 [&_h2]:text-[20px] [&_h2]:font-bold
+                  [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-[17px] [&_h3]:font-semibold
+                  [&_img]:my-5 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
+                  [&_li]:ml-5 [&_ol]:my-3 [&_ol]:list-decimal
+                  [&_p]:my-3 [&_table]:my-4 [&_table]:w-full
+                  [&_table]:border-collapse [&_td]:border [&_td]:p-2
+                  [&_th]:border [&_th]:bg-gray-50 [&_th]:p-2
+                  [&_ul]:my-3 [&_ul]:list-disc
+                "
+                dangerouslySetInnerHTML={{
+                  __html: safeContent,
+                }}
+              />
+
+              {galleryImages.length > 1 && (
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  {galleryImages
+                    .filter(
+                      (imageUrl) =>
+                        imageUrl !==
+                        representativeImage,
+                    )
+                    .map(
+                      (imageUrl, index) => (
+                        <button
+                          key={`${imageUrl}-${index}`}
+                          type="button"
+                          onClick={() =>
+                            setPreviewImage(
+                              imageUrl,
+                            )
+                          }
+                          className="group relative overflow-hidden rounded-xl bg-gray-100"
+                          aria-label={`${index + 2}번 이미지 크게 보기`}
+                        >
+                          <img
+                            src={imageUrl}
+                            alt={`${item.title} 이미지 ${
+                              index + 2
+                            }`}
+                            className="aspect-square w-full object-cover transition duration-200 group-active:scale-[0.98]"
+                            onError={(
+                              event,
+                            ) => {
+                              event.currentTarget.src =
+                                "/event.png";
+                            }}
+                          />
+
+                          <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white">
+                            <svg
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              className="h-3.5 w-3.5"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-hidden="true"
+                            >
+                              <circle
+                                cx="11"
+                                cy="11"
+                                r="6"
+                              />
+
+                              <path d="M16 16l4 4" />
+                              <path d="M11 8v6" />
+                              <path d="M8 11h6" />
+                            </svg>
+                          </span>
+                        </button>
+                      ),
+                    )}
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap gap-2">
                 <Link
-                  href={`/admin/news?edit=${item.id}`}
-                  className="rounded-xl bg-blue-50 px-4 py-2 text-[12px] font-medium text-blue-700"
+                  href="/community/news"
+                  className="rounded-xl border border-gray-300 px-4 py-2 text-[12px] font-semibold"
                 >
-                  수정
+                  뉴스 목록
                 </Link>
 
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-red-600 disabled:opacity-50"
-                >
-                  {deleting ? "삭제 중..." : "삭제"}
-                </button>
+                {item.source_url && (
+                  <a
+                    href={item.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-xl bg-[#172033] px-4 py-2 text-[12px] font-semibold text-white"
+                  >
+                    원문 보기
+                  </a>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      </article>
 
-      {previewImage && (
+              {isAdmin && (
+                <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-4">
+                  <Link
+                    href={`/admin/news?edit=${item.id}`}
+                    className="rounded-xl bg-blue-50 px-4 py-2 text-[12px] font-medium text-blue-700"
+                  >
+                    수정
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-red-600 disabled:opacity-50"
+                  >
+                    {deleting
+                      ? "삭제 중..."
+                      : "삭제"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </article>
+      )}
+
+      {previewImage && !isLocked && (
         <div
           className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-3"
           role="dialog"
           aria-modal="true"
           aria-label="이미지 크게 보기"
-          onClick={() => setPreviewImage(null)}
+          onClick={() =>
+            setPreviewImage(null)
+          }
         >
           <button
             type="button"
-            onClick={() => setPreviewImage(null)}
+            onClick={() =>
+              setPreviewImage(null)
+            }
             aria-label="이미지 닫기"
             className="
               absolute right-4 top-[max(1rem,env(safe-area-inset-top))]
@@ -555,11 +753,64 @@ export default function BusinessNewsDetailPage() {
             src={previewImage}
             alt="확대 이미지"
             className="max-h-[92vh] max-w-full object-contain"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
             onError={(event) => {
-              event.currentTarget.src = "/event.png";
+              event.currentTarget.src =
+                "/event.png";
             }}
           />
+        </div>
+      )}
+
+      {showLoginModal && isLocked && (
+        <div
+          role="presentation"
+          onClick={closeLoginModal}
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 px-5 backdrop-blur-[3px]"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-required-title"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+            className="w-full max-w-[330px] rounded-[24px] bg-white p-5 text-center shadow-2xl"
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F8F3EC] text-[25px]">
+              🔒
+            </div>
+
+            <h2
+              id="login-required-title"
+              className="mt-4 text-[18px] font-extrabold text-[#172033]"
+            >
+              로그인이 필요합니다
+            </h2>
+
+            <p className="mt-2 text-[12px] font-medium leading-relaxed text-gray-500">
+              이 뉴스는 로그인한 회원만
+              볼 수 있습니다.
+              <br />
+              로그인 후 전체 내용을
+              확인해 주세요.
+            </p>
+
+            <button
+              type="button"
+              onClick={goToLogin}
+              className="mt-5 h-12 w-full rounded-xl bg-[#172033] text-[14px] font-bold text-white shadow-sm transition active:scale-[0.98]"
+            >
+              로그인하기
+            </button>
+
+            <p className="mt-3 text-[10px] font-medium text-gray-400">
+              창 바깥을 누르면 뉴스 목록으로
+              돌아갑니다
+            </p>
+          </div>
         </div>
       )}
 
