@@ -78,10 +78,10 @@ function categoryMatches(
       "local business",
       "business news",
       "local news",
-      "지역 비즈니스 뉴스",
-      "지역비즈니스뉴스",
       "비즈니스 뉴스",
       "비즈니스뉴스",
+      "지역 비즈니스 뉴스",
+      "지역비즈니스뉴스",
       "지역 뉴스",
       "지역뉴스",
     ].includes(item);
@@ -210,7 +210,7 @@ export default function CommunityNewsPage() {
             published_at,
             published
           `)
-          .order("published_at", {
+          .order("id", {
             ascending: false,
           });
 
@@ -533,7 +533,7 @@ export default function CommunityNewsPage() {
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
                   isLocked(featuredNews)
-                    ? "scale-[1.01] blur-[0.5px] brightness-95"
+                    ? "scale-[1.005] blur-[0.25px] brightness-[0.98]"
                     : ""
                 }`}
                 onError={(event) => {
@@ -544,7 +544,7 @@ export default function CommunityNewsPage() {
               <div
                 className={`absolute inset-0 bg-gradient-to-t ${
                   isLocked(featuredNews)
-                    ? "from-black/65 via-black/5 to-transparent"
+                    ? "from-black/55 via-black/0 to-transparent"
                     : "from-black/80 via-black/15 to-transparent"
                 }`}
               />
@@ -554,7 +554,7 @@ export default function CommunityNewsPage() {
               </span>
 
               {isPrivateNews(featuredNews) && (
-                <span className="absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur-[1px]">
+                <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur-[1px]">
                   {isLoggedIn
                     ? "회원 전용"
                     : "🔒 로그인 후 보기"}
@@ -621,7 +621,7 @@ export default function CommunityNewsPage() {
                         alt={item.title || "Business News"}
                         className={`h-full w-full object-cover transition duration-300 ${
                           locked
-                            ? "scale-[1.01] blur-[0.5px] brightness-95"
+                            ? "scale-[1.005] blur-[0.25px] brightness-[0.98]"
                             : ""
                         }`}
                         onError={(event) => {
@@ -631,8 +631,8 @@ export default function CommunityNewsPage() {
                       />
 
                       {locked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/5">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-[12px] text-white shadow-sm backdrop-blur-[1px]">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/[0.03]">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-[12px] text-white shadow-sm backdrop-blur-[1px]">
                             🔒
                           </span>
                         </div>

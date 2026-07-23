@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
 import RichTextEditor from "@/app/components/RichTextEditor";
 import ProfileButton from "@/app/components/ProfileButton";
 import { supabase } from "../../../lib/supabase";
@@ -38,20 +39,116 @@ const createEmptyForm = (isAdmin = false) => ({
   published_at: new Date().toISOString().slice(0, 16),
 });
 
+function extractFirstImageUrl(html: string) {
+  if (
+    typeof window === "undefined" ||
+    !html.trim()
+  ) {
+    return "";
+  }
+
+  try {
+    const parser = new DOMParser();
+
+    const parsedDocument = parser.parseFromString(
+      html,
+      "text/html",
+    );
+
+    const imageElements = Array.from(
+      parsedDocument.querySelectorAll("img"),
+    );
+
+    for (const image of imageElements) {
+      const possibleSources = [
+        image.getAttribute("src"),
+        image.getAttribute("data-src"),
+        image.getAttribute("data-original"),
+        image.getAttribute("data-lazy-src"),
+        image.getAttribute("data-url"),
+      ];
+
+      for (const possibleSource of possibleSources) {
+        const source = String(
+          possibleSource ?? "",
+        ).trim();
+
+        if (!source) {
+          continue;
+        }
+
+        if (
+          source.startsWith("blob:") ||
+          source.startsWith("data:")
+        ) {
+          continue;
+        }
+
+        if (
+          source.startsWith("https://") ||
+          source.startsWith("http://") ||
+          source.startsWith("/")
+        ) {
+          return source;
+        }
+      }
+
+      const srcSet = String(
+        image.getAttribute("srcset") ??
+          image.getAttribute("data-srcset") ??
+          "",
+      ).trim();
+
+      if (srcSet) {
+        const firstSrcSetImage = srcSet
+          .split(",")
+          .map((entry) =>
+            entry.trim().split(/\s+/)[0],
+          )
+          .find(
+            (source) =>
+              source.startsWith("https://") ||
+              source.startsWith("http://") ||
+              source.startsWith("/"),
+          );
+
+        if (firstSrcSetImage) {
+          return firstSrcSetImage;
+        }
+      }
+    }
+
+    return "";
+  } catch (error) {
+    console.error(
+      "본문 이미지 추출 오류:",
+      error,
+    );
+
+    return "";
+  }
+}
+
 function AdminBusinessNewsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [items, setItems] = useState<NewsItem[]>([]);
   const [form, setForm] = useState(createEmptyForm(false));
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] =
+    useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] =
+    useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploadingImages, setUploadingImages] = useState(false);
-  const [deletingImageUrl, setDeletingImageUrl] = useState<string | null>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImages, setUploadingImages] =
+    useState(false);
+  const [deletingImageUrl, setDeletingImageUrl] =
+    useState<string | null>(null);
+
+  const imageInputRef =
+    useRef<HTMLInputElement>(null);
 
   async function loadItems() {
     setLoading(true);
@@ -63,7 +160,21 @@ function AdminBusinessNewsContent() {
     const user = session?.user;
 
     if (!user) {
-      router.push("/login");
+      const redirectPath =
+        window.location.pathname +
+        window.location.search;
+
+      sessionStorage.setItem(
+        "ktown_login_redirect",
+        redirectPath,
+      );
+
+      router.push(
+        `/login?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`,
+      );
+
       return;
     }
 
@@ -77,13 +188,17 @@ function AdminBusinessNewsContent() {
       .trim()
       .toLowerCase();
 
-    const adminUser = role === "admin" || role === "super_admin";
+    const adminUser =
+      role === "admin" ||
+      role === "super_admin";
 
     setUserId(user.id);
     setIsAdmin(adminUser);
+
     setForm((current) => {
       const nextCategory =
-        adminUser && current.category === "공연/문화"
+        adminUser &&
+        current.category === "공연/문화"
           ? "비즈니스뉴스"
           : adminUser
             ? current.category
@@ -92,14 +207,18 @@ function AdminBusinessNewsContent() {
       return {
         ...current,
         category: nextCategory,
-        published: adminUser ? current.published : true,
+        published: adminUser
+          ? current.published
+          : true,
       };
     });
 
     let query = supabase
       .from("business_news")
       .select("*")
-      .order("published_at", { ascending: false });
+      .order("published_at", {
+        ascending: false,
+      });
 
     if (!adminUser) {
       query = query
@@ -110,7 +229,11 @@ function AdminBusinessNewsContent() {
     const { data, error } = await query;
 
     if (error) {
-      console.error("News admin load error:", error);
+      console.error(
+        "News admin load error:",
+        error,
+      );
+
       window.alert(error.message);
       setItems([]);
     } else {
@@ -125,11 +248,20 @@ function AdminBusinessNewsContent() {
   }, []);
 
   useEffect(() => {
-    const editId = Number(searchParams.get("edit"));
+    const editId = Number(
+      searchParams.get("edit"),
+    );
 
-    if (!editId || items.length === 0) return;
+    if (
+      !editId ||
+      items.length === 0
+    ) {
+      return;
+    }
 
-    const item = items.find((news) => news.id === editId);
+    const item = items.find(
+      (news) => news.id === editId,
+    );
 
     if (item) {
       startEdit(item);
@@ -143,34 +275,50 @@ function AdminBusinessNewsContent() {
   }
 
   function startEdit(item: NewsItem) {
-    if (!isAdmin && item.category !== "공연/문화") {
-      window.alert("일반 사용자는 공연/문화 글만 수정할 수 있습니다.");
+    if (
+      !isAdmin &&
+      item.category !== "공연/문화"
+    ) {
+      window.alert(
+        "일반 사용자는 공연/문화 글만 수정할 수 있습니다.",
+      );
+
       return;
     }
 
     setEditingId(item.id);
+
     setForm({
       title: item.title,
       summary: item.summary || "",
       content: item.content || "",
-      category: isAdmin ? item.category : "공연/문화",
+      category: isAdmin
+        ? item.category
+        : "공연/문화",
       image_url: item.image_url || "",
       images:
-        Array.isArray(item.images) && item.images.length > 0
+        Array.isArray(item.images) &&
+        item.images.length > 0
           ? item.images
           : item.image_url
             ? [item.image_url]
             : [],
       source_url: item.source_url || "",
       published: item.published,
-      published_at: new Date(item.published_at).toISOString().slice(0, 16),
+      published_at: new Date(
+        item.published_at,
+      )
+        .toISOString()
+        .slice(0, 16),
     });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   }
 
   async function resizeImageFile(file: File) {
-    // GIF는 애니메이션이 사라질 수 있으므로 원본 그대로 업로드합니다.
     if (file.type === "image/gif") {
       return file;
     }
@@ -179,7 +327,8 @@ function AdminBusinessNewsContent() {
     const MAX_HEIGHT = 1600;
     const QUALITY = 0.82;
 
-    const imageBitmap = await createImageBitmap(file);
+    const imageBitmap =
+      await createImageBitmap(file);
 
     const scale = Math.min(
       1,
@@ -187,45 +336,85 @@ function AdminBusinessNewsContent() {
       MAX_HEIGHT / imageBitmap.height,
     );
 
-    const width = Math.max(1, Math.round(imageBitmap.width * scale));
-    const height = Math.max(1, Math.round(imageBitmap.height * scale));
+    const width = Math.max(
+      1,
+      Math.round(
+        imageBitmap.width * scale,
+      ),
+    );
 
-    const canvas = document.createElement("canvas");
+    const height = Math.max(
+      1,
+      Math.round(
+        imageBitmap.height * scale,
+      ),
+    );
+
+    const canvas =
+      document.createElement("canvas");
+
     canvas.width = width;
     canvas.height = height;
 
-    const context = canvas.getContext("2d");
+    const context =
+      canvas.getContext("2d");
 
     if (!context) {
       imageBitmap.close();
-      throw new Error("이미지 크기를 조정할 수 없습니다.");
+
+      throw new Error(
+        "이미지 크기를 조정할 수 없습니다.",
+      );
     }
 
-    context.drawImage(imageBitmap, 0, 0, width, height);
+    context.drawImage(
+      imageBitmap,
+      0,
+      0,
+      width,
+      height,
+    );
+
     imageBitmap.close();
 
     const outputType =
-      file.type === "image/png" ? "image/webp" : "image/jpeg";
+      file.type === "image/png"
+        ? "image/webp"
+        : "image/jpeg";
 
-    const extension = outputType === "image/webp" ? "webp" : "jpg";
+    const extension =
+      outputType === "image/webp"
+        ? "webp"
+        : "jpg";
 
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (result) => {
-          if (result) {
-            resolve(result);
-          } else {
-            reject(new Error("이미지 압축에 실패했습니다."));
-          }
+    const blob =
+      await new Promise<Blob>(
+        (resolve, reject) => {
+          canvas.toBlob(
+            (result) => {
+              if (result) {
+                resolve(result);
+              } else {
+                reject(
+                  new Error(
+                    "이미지 압축에 실패했습니다.",
+                  ),
+                );
+              }
+            },
+            outputType,
+            QUALITY,
+          );
         },
-        outputType,
-        QUALITY,
       );
-    });
 
     const originalBaseName =
-      file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-") ||
-      "news-image";
+      file.name
+        .replace(/\.[^.]+$/, "")
+        .replace(
+          /[^a-zA-Z0-9_-]/g,
+          "-",
+        ) || "news-image";
 
     return new File(
       [blob],
@@ -237,20 +426,27 @@ function AdminBusinessNewsContent() {
     );
   }
 
-  function getStoragePathFromPublicUrl(url: string) {
-    const marker = "/storage/v1/object/public/business-news/";
+  function getStoragePathFromPublicUrl(
+    url: string,
+  ) {
+    const marker =
+      "/storage/v1/object/public/business-news/";
 
     if (!url.includes(marker)) {
       return null;
     }
 
-    return decodeURIComponent(url.split(marker)[1] || "");
+    return decodeURIComponent(
+      url.split(marker)[1] || "",
+    );
   }
 
   async function handleImageUpload(
     event: ChangeEvent<HTMLInputElement>,
   ) {
-    const selectedFiles = Array.from(event.target.files ?? []);
+    const selectedFiles = Array.from(
+      event.target.files ?? [],
+    );
 
     event.target.value = "";
 
@@ -258,36 +454,55 @@ function AdminBusinessNewsContent() {
       return;
     }
 
-    const remainingSlots = 10 - form.images.length;
+    const remainingSlots =
+      10 - form.images.length;
 
     if (remainingSlots <= 0) {
-      window.alert("이미지는 최대 10개까지 등록할 수 있습니다.");
+      window.alert(
+        "이미지는 최대 10개까지 등록할 수 있습니다.",
+      );
+
       return;
     }
 
-    const files = selectedFiles.slice(0, remainingSlots);
+    const files = selectedFiles.slice(
+      0,
+      remainingSlots,
+    );
 
-    if (selectedFiles.length > remainingSlots) {
+    if (
+      selectedFiles.length >
+      remainingSlots
+    ) {
       window.alert(
         `최대 10개까지만 등록됩니다. 선택한 이미지 중 ${remainingSlots}개만 업로드합니다.`,
       );
     }
 
     const invalidFile = files.find(
-      (file) => !file.type.startsWith("image/"),
+      (file) =>
+        !file.type.startsWith("image/"),
     );
 
     if (invalidFile) {
-      window.alert("이미지 파일만 등록할 수 있습니다.");
+      window.alert(
+        "이미지 파일만 등록할 수 있습니다.",
+      );
+
       return;
     }
 
     const oversizedFile = files.find(
-      (file) => file.size > 25 * 1024 * 1024,
+      (file) =>
+        file.size >
+        25 * 1024 * 1024,
     );
 
     if (oversizedFile) {
-      window.alert("원본 이미지 한 장의 크기는 25MB 이하여야 합니다.");
+      window.alert(
+        "원본 이미지 한 장의 크기는 25MB 이하여야 합니다.",
+      );
+
       return;
     }
 
@@ -297,45 +512,75 @@ function AdminBusinessNewsContent() {
 
     try {
       for (const file of files) {
-        const resizedFile = await resizeImageFile(file);
+        const resizedFile =
+          await resizeImageFile(file);
 
         const extension =
-          resizedFile.name.split(".").pop()?.toLowerCase() || "jpg";
+          resizedFile.name
+            .split(".")
+            .pop()
+            ?.toLowerCase() ||
+          "jpg";
 
-        const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "jpg";
+        const safeExtension =
+          extension.replace(
+            /[^a-z0-9]/g,
+            "",
+          ) || "jpg";
 
-        const filePath = `news/${Date.now()}-${crypto.randomUUID()}.${safeExtension}`;
+        const filePath =
+          `news/${Date.now()}-` +
+          `${crypto.randomUUID()}.` +
+          safeExtension;
 
-        const { error: uploadError } = await supabase.storage
-          .from("business-news")
-          .upload(filePath, resizedFile, {
-            cacheControl: "3600",
-            upsert: false,
-            contentType: resizedFile.type,
-          });
+        const { error: uploadError } =
+          await supabase.storage
+            .from("business-news")
+            .upload(
+              filePath,
+              resizedFile,
+              {
+                cacheControl: "3600",
+                upsert: false,
+                contentType:
+                  resizedFile.type,
+              },
+            );
 
         if (uploadError) {
           throw uploadError;
         }
 
-        const { data } = supabase.storage
-          .from("business-news")
-          .getPublicUrl(filePath);
+        const { data } =
+          supabase.storage
+            .from("business-news")
+            .getPublicUrl(filePath);
 
-        uploadedUrls.push(data.publicUrl);
+        uploadedUrls.push(
+          data.publicUrl,
+        );
       }
 
       setForm((current) => {
-        const nextImages = [...current.images, ...uploadedUrls].slice(0, 10);
+        const nextImages = [
+          ...current.images,
+          ...uploadedUrls,
+        ].slice(0, 10);
 
         return {
           ...current,
           images: nextImages,
-          image_url: current.image_url || nextImages[0] || "",
+          image_url:
+            current.image_url ||
+            nextImages[0] ||
+            "",
         };
       });
     } catch (error) {
-      console.error("News image upload error:", error);
+      console.error(
+        "News image upload error:",
+        error,
+      );
 
       window.alert(
         error instanceof Error
@@ -347,14 +592,23 @@ function AdminBusinessNewsContent() {
     }
   }
 
-  async function removeUploadedImage(index: number) {
-    const imageUrl = form.images[index];
+  async function removeUploadedImage(
+    index: number,
+  ) {
+    const imageUrl =
+      form.images[index];
 
-    if (!imageUrl || deletingImageUrl) {
+    if (
+      !imageUrl ||
+      deletingImageUrl
+    ) {
       return;
     }
 
-    const confirmed = window.confirm("이 이미지를 삭제하시겠습니까?");
+    const confirmed =
+      window.confirm(
+        "이 이미지를 삭제하시겠습니까?",
+      );
 
     if (!confirmed) {
       return;
@@ -363,21 +617,27 @@ function AdminBusinessNewsContent() {
     setDeletingImageUrl(imageUrl);
 
     try {
-      const storagePath = getStoragePathFromPublicUrl(imageUrl);
+      const storagePath =
+        getStoragePathFromPublicUrl(
+          imageUrl,
+        );
 
       if (storagePath) {
-        const { error } = await supabase.storage
-          .from("business-news")
-          .remove([storagePath]);
+        const { error } =
+          await supabase.storage
+            .from("business-news")
+            .remove([storagePath]);
 
         if (error) {
           throw error;
         }
       }
 
-      const nextImages = form.images.filter(
-        (_, imageIndex) => imageIndex !== index,
-      );
+      const nextImages =
+        form.images.filter(
+          (_, imageIndex) =>
+            imageIndex !== index,
+        );
 
       const nextRepresentativeImage =
         form.image_url === imageUrl
@@ -387,16 +647,20 @@ function AdminBusinessNewsContent() {
       setForm((current) => ({
         ...current,
         images: nextImages,
-        image_url: nextRepresentativeImage,
+        image_url:
+          nextRepresentativeImage,
       }));
 
-      // 기존 뉴스를 수정 중이면 삭제 내용을 즉시 DB에도 반영합니다.
       if (editingId) {
-        const { error: updateError } = await supabase
+        const {
+          error: updateError,
+        } = await supabase
           .from("business_news")
           .update({
             images: nextImages,
-            image_url: nextRepresentativeImage || null,
+            image_url:
+              nextRepresentativeImage ||
+              null,
           })
           .eq("id", editingId);
 
@@ -404,20 +668,29 @@ function AdminBusinessNewsContent() {
           throw updateError;
         }
 
-        setItems((currentItems) =>
-          currentItems.map((item) =>
-            item.id === editingId
-              ? {
-                  ...item,
-                  images: nextImages,
-                  image_url: nextRepresentativeImage || null,
-                }
-              : item,
-          ),
+        setItems(
+          (currentItems) =>
+            currentItems.map(
+              (item) =>
+                item.id === editingId
+                  ? {
+                      ...item,
+                      images:
+                        nextImages,
+                      image_url:
+                        nextRepresentativeImage ||
+                        null,
+                    }
+                  : item,
+            ),
         );
       }
     } catch (error) {
-      console.error("News image delete error:", error);
+      console.error(
+        "News image delete error:",
+        error,
+      );
+
       window.alert(
         error instanceof Error
           ? `이미지 삭제 실패: ${error.message}`
@@ -428,136 +701,293 @@ function AdminBusinessNewsContent() {
     }
   }
 
-  function setRepresentativeImage(imageUrl: string) {
+  function setRepresentativeImage(
+    imageUrl: string,
+  ) {
     setForm((current) => ({
       ...current,
       image_url: imageUrl,
     }));
   }
 
-  async function handleSubmit(event: FormEvent) {
+  async function handleSubmit(
+    event: FormEvent,
+  ) {
     event.preventDefault();
 
     if (!userId) {
-      window.alert("로그인이 필요합니다.");
-      router.push("/login");
+      window.alert(
+        "로그인이 필요합니다.",
+      );
+
+      const redirectPath =
+        window.location.pathname +
+        window.location.search;
+
+      sessionStorage.setItem(
+        "ktown_login_redirect",
+        redirectPath,
+      );
+
+      router.push(
+        `/login?redirect=${encodeURIComponent(
+          redirectPath,
+        )}`,
+      );
+
       return;
     }
 
-    if (!isAdmin && form.category !== "공연/문화") {
-      window.alert("일반 사용자는 공연/문화 글만 등록할 수 있습니다.");
+    if (
+      !isAdmin &&
+      form.category !== "공연/문화"
+    ) {
+      window.alert(
+        "일반 사용자는 공연/문화 글만 등록할 수 있습니다.",
+      );
+
       return;
     }
 
     if (!form.title.trim()) {
-      window.alert("제목을 입력하세요.");
+      window.alert(
+        "제목을 입력하세요.",
+      );
+
       return;
     }
 
     if (!form.content.trim()) {
-      window.alert("본문을 입력하세요.");
+      window.alert(
+        "본문을 입력하세요.",
+      );
+
       return;
     }
 
     setSaving(true);
 
-    const payload = {
-      user_id: userId,
-      title: form.title.trim(),
-      summary: form.summary.trim(),
-      content: form.content,
-      category: isAdmin ? form.category : "공연/문화",
-      image_url: form.image_url.trim() || form.images[0] || null,
-      images: form.images,
-      source_url: form.source_url.trim() || null,
-      published: isAdmin ? form.published : true,
-      published_at: new Date(form.published_at).toISOString(),
-    };
+    try {
+      const manualImageUrl =
+        form.image_url.trim();
 
-    let result;
+      const selectedUploadedImage =
+        form.images.includes(
+          manualImageUrl,
+        )
+          ? manualImageUrl
+          : "";
 
-    if (editingId) {
-      let updateQuery = supabase
-        .from("business_news")
-        .update(payload)
-        .eq("id", editingId);
+      const firstUploadedImage =
+        form.images[0] || "";
 
-      if (!isAdmin) {
-        updateQuery = updateQuery
-          .eq("user_id", userId)
-          .eq("category", "공연/문화");
+      const firstContentImage =
+        extractFirstImageUrl(
+          form.content,
+        );
+
+      /*
+       * 대표 이미지 적용 순서
+       *
+       * 1. 첨부 이미지 중 사용자가 선택한 대표 이미지
+       * 2. 첨부 이미지의 첫 번째 이미지
+       * 3. 대표 이미지 URL 입력란
+       * 4. 본문 HTML의 첫 번째 이미지
+       */
+      const representativeImageUrl =
+        selectedUploadedImage ||
+        firstUploadedImage ||
+        manualImageUrl ||
+        firstContentImage ||
+        null;
+
+      const payload = {
+        user_id: userId,
+        title: form.title.trim(),
+        summary: form.summary.trim(),
+        content: form.content,
+        category: isAdmin
+          ? form.category
+          : "공연/문화",
+        image_url:
+          representativeImageUrl,
+        images: form.images,
+        source_url:
+          form.source_url.trim() ||
+          null,
+        published: isAdmin
+          ? form.published
+          : true,
+        published_at: new Date(
+          form.published_at,
+        ).toISOString(),
+      };
+
+      let result;
+
+      if (editingId) {
+        let updateQuery = supabase
+          .from("business_news")
+          .update(payload)
+          .eq("id", editingId);
+
+        if (!isAdmin) {
+          updateQuery =
+            updateQuery
+              .eq(
+                "user_id",
+                userId,
+              )
+              .eq(
+                "category",
+                "공연/문화",
+              );
+        }
+
+        result =
+          await updateQuery;
+      } else {
+        result = await supabase
+          .from("business_news")
+          .insert(payload);
       }
 
-      result = await updateQuery;
-    } else {
-      result = await supabase.from("business_news").insert(payload);
+      if (result.error) {
+        console.error(
+          "News save error:",
+          result.error,
+        );
+
+        window.alert(
+          result.error.message,
+        );
+
+        return;
+      }
+
+      resetForm();
+      await loadItems();
+    } catch (error) {
+      console.error(
+        "News save unexpected error:",
+        error,
+      );
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "뉴스를 저장하지 못했습니다.",
+      );
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-
-    if (result.error) {
-      console.error("News save error:", result.error);
-      window.alert(result.error.message);
-      return;
-    }
-
-    resetForm();
-    await loadItems();
   }
 
   async function deleteItem(id: number) {
-    if (!window.confirm("이 뉴스와 등록된 이미지를 모두 삭제하시겠습니까?")) {
+    if (
+      !window.confirm(
+        "이 뉴스와 등록된 이미지를 모두 삭제하시겠습니까?",
+      )
+    ) {
       return;
     }
 
-    const targetItem = items.find((item) => item.id === id);
+    const targetItem =
+      items.find(
+        (item) =>
+          item.id === id,
+      );
 
-    const imageUrls = Array.from(
-      new Set([
-        ...(Array.isArray(targetItem?.images) ? targetItem.images : []),
-        targetItem?.image_url || "",
-      ].filter(Boolean)),
-    );
+    const imageUrls =
+      Array.from(
+        new Set(
+          [
+            ...(Array.isArray(
+              targetItem?.images,
+            )
+              ? targetItem.images
+              : []),
+            targetItem?.image_url ||
+              "",
+          ].filter(Boolean),
+        ),
+      );
 
-    const storagePaths = imageUrls
-      .map(getStoragePathFromPublicUrl)
-      .filter((path): path is string => Boolean(path));
+    const storagePaths =
+      imageUrls
+        .map(
+          getStoragePathFromPublicUrl,
+        )
+        .filter(
+          (
+            path,
+          ): path is string =>
+            Boolean(path),
+        );
 
-    if (storagePaths.length > 0) {
-      const { error: storageError } = await supabase.storage
+    if (
+      storagePaths.length > 0
+    ) {
+      const {
+        error: storageError,
+      } = await supabase.storage
         .from("business-news")
         .remove(storagePaths);
 
       if (storageError) {
-        window.alert(`이미지 삭제 실패: ${storageError.message}`);
+        window.alert(
+          `이미지 삭제 실패: ${storageError.message}`,
+        );
+
         return;
       }
     }
 
-    let deleteQuery = supabase
-      .from("business_news")
-      .delete()
-      .eq("id", id);
+    let deleteQuery =
+      supabase
+        .from("business_news")
+        .delete()
+        .eq("id", id);
 
-    if (!isAdmin && userId) {
-      deleteQuery = deleteQuery
-        .eq("user_id", userId)
-        .eq("category", "공연/문화");
+    if (
+      !isAdmin &&
+      userId
+    ) {
+      deleteQuery =
+        deleteQuery
+          .eq("user_id", userId)
+          .eq(
+            "category",
+            "공연/문화",
+          );
     }
 
-    const { error } = await deleteQuery;
+    const { error } =
+      await deleteQuery;
 
     if (error) {
-      window.alert(error.message);
+      window.alert(
+        error.message,
+      );
+
       return;
     }
 
-    if (editingId === id) {
+    if (
+      editingId === id
+    ) {
       resetForm();
     }
 
     await loadItems();
   }
+
+  const previewRepresentativeImage =
+    form.image_url.trim() ||
+    form.images[0] ||
+    extractFirstImageUrl(
+      form.content,
+    );
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] px-3 py-4 text-[#172033]">
@@ -565,7 +995,9 @@ function AdminBusinessNewsContent() {
         <div className="mb-4 flex items-center">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() =>
+              router.back()
+            }
             aria-label="Go back"
             className="
               flex h-10 w-10 shrink-0 items-center justify-center
@@ -589,8 +1021,11 @@ function AdminBusinessNewsContent() {
 
           <div className="min-w-0 flex-1 px-2 text-center">
             <h1 className="text-lg font-bold">
-              {isAdmin ? "Business News 관리" : "공연/문화 글쓰기"}
+              {isAdmin
+                ? "Business News 관리"
+                : "공연/문화 글쓰기"}
             </h1>
+
             <p className="mt-1 text-[11px] leading-4 text-gray-500">
               {isAdmin
                 ? "관리자는 모든 뉴스 카테고리를 등록하고 관리할 수 있습니다."
@@ -619,11 +1054,19 @@ function AdminBusinessNewsContent() {
 
           <div className="grid gap-3">
             <label>
-              <span className="mb-1 block text-xs font-semibold">제목 *</span>
+              <span className="mb-1 block text-xs font-semibold">
+                제목 *
+              </span>
+
               <input
                 value={form.title}
                 onChange={(event) =>
-                  setForm({ ...form, title: event.target.value })
+                  setForm({
+                    ...form,
+                    title:
+                      event.target
+                        .value,
+                  })
                 }
                 className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none focus:border-[#F7A928]"
               />
@@ -636,18 +1079,32 @@ function AdminBusinessNewsContent() {
 
               {isAdmin ? (
                 <select
-                  value={form.category}
-                  onChange={(event) =>
+                  value={
+                    form.category
+                  }
+                  onChange={(
+                    event,
+                  ) =>
                     setForm({
                       ...form,
-                      category: event.target.value,
+                      category:
+                        event.target
+                          .value,
                     })
                   }
                   className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
                 >
-                  <option value="비즈니스뉴스">비즈니스뉴스</option>
-                  <option value="상공인뉴스">상공인뉴스</option>
-                  <option value="공연/문화">공연/문화</option>
+                  <option value="비즈니스뉴스">
+                    비즈니스뉴스
+                  </option>
+
+                  <option value="상공인뉴스">
+                    상공인뉴스
+                  </option>
+
+                  <option value="공연/문화">
+                    공연/문화
+                  </option>
                 </select>
               ) : (
                 <div className="flex h-11 w-full items-center rounded-xl border border-gray-300 bg-gray-100 px-3 text-sm font-semibold text-[#172033]">
@@ -657,23 +1114,43 @@ function AdminBusinessNewsContent() {
             </label>
 
             <label>
-              <span className="mb-1 block text-xs font-semibold">게시일</span>
+              <span className="mb-1 block text-xs font-semibold">
+                게시일
+              </span>
+
               <input
                 type="datetime-local"
-                value={form.published_at}
-                onChange={(event) =>
-                  setForm({ ...form, published_at: event.target.value })
+                value={
+                  form.published_at
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setForm({
+                    ...form,
+                    published_at:
+                      event.target
+                        .value,
+                  })
                 }
                 className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
               />
             </label>
 
             <label>
-              <span className="mb-1 block text-xs font-semibold">요약</span>
+              <span className="mb-1 block text-xs font-semibold">
+                요약
+              </span>
+
               <textarea
                 value={form.summary}
                 onChange={(event) =>
-                  setForm({ ...form, summary: event.target.value })
+                  setForm({
+                    ...form,
+                    summary:
+                      event.target
+                        .value,
+                  })
                 }
                 rows={3}
                 className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none"
@@ -687,11 +1164,15 @@ function AdminBusinessNewsContent() {
 
               <RichTextEditor
                 value={form.content}
-                onChange={(content) =>
-                  setForm((current) => ({
-                    ...current,
-                    content,
-                  }))
+                onChange={(
+                  content,
+                ) =>
+                  setForm(
+                    (current) => ({
+                      ...current,
+                      content,
+                    }),
+                  )
                 }
               />
             </div>
@@ -703,23 +1184,37 @@ function AdminBusinessNewsContent() {
                 </span>
 
                 <span className="text-[10px] text-gray-500">
-                  {form.images.length}/10
+                  {
+                    form.images
+                      .length
+                  }
+                  /10
                 </span>
               </div>
 
               <input
-                ref={imageInputRef}
+                ref={
+                  imageInputRef
+                }
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={handleImageUpload}
+                onChange={
+                  handleImageUpload
+                }
                 className="hidden"
               />
 
               <button
                 type="button"
-                onClick={() => imageInputRef.current?.click()}
-                disabled={uploadingImages || form.images.length >= 10}
+                onClick={() =>
+                  imageInputRef.current?.click()
+                }
+                disabled={
+                  uploadingImages ||
+                  form.images
+                    .length >= 10
+                }
                 className="
                   flex h-11 w-full items-center justify-center gap-2
                   rounded-xl border border-dashed border-[#F7A928]
@@ -744,65 +1239,92 @@ function AdminBusinessNewsContent() {
 
                 {uploadingImages
                   ? "이미지 업로드 중..."
-                  : form.images.length >= 10
+                  : form.images
+                        .length >=
+                      10
                     ? "이미지 10개 등록 완료"
                     : "이미지 등록"}
               </button>
 
               <p className="mt-1.5 text-[10px] leading-4 text-gray-500">
-                한 번에 여러 장을 선택할 수 있으며 최대 10개까지 등록됩니다.
-                업로드 전에 긴 쪽을 최대 1600px로 줄이고 자동 압축합니다.
-                이미지를 누르면 대표 이미지로 지정됩니다.
+                첨부 이미지가 없고 대표 이미지 URL도 비어 있으면
+                본문에 포함된 첫 번째 이미지가 대표 이미지로 자동
+                저장됩니다.
               </p>
 
-              {form.images.length > 0 && (
+              {form.images.length >
+                0 && (
                 <div className="mt-2 grid grid-cols-3 gap-2">
-                  {form.images.map((imageUrl, index) => {
-                    const isRepresentative =
-                      form.image_url === imageUrl ||
-                      (!form.image_url && index === 0);
+                  {form.images.map(
+                    (
+                      imageUrl,
+                      index,
+                    ) => {
+                      const isRepresentative =
+                        form.image_url ===
+                          imageUrl ||
+                        (!form.image_url &&
+                          index ===
+                            0);
 
-                    return (
-                      <div
-                        key={`${imageUrl}-${index}`}
-                        className="relative aspect-square overflow-hidden rounded-xl bg-gray-100"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setRepresentativeImage(imageUrl)}
-                          className="block h-full w-full"
-                          aria-label={`${index + 1}번 이미지를 대표 이미지로 지정`}
+                      return (
+                        <div
+                          key={`${imageUrl}-${index}`}
+                          className="relative aspect-square overflow-hidden rounded-xl bg-gray-100"
                         >
-                          <img
-                            src={imageUrl}
-                            alt={`뉴스 이미지 ${index + 1}`}
-                            className="h-full w-full object-cover"
-                          />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRepresentativeImage(
+                                imageUrl,
+                              )
+                            }
+                            className="block h-full w-full"
+                            aria-label={`${index + 1}번 이미지를 대표 이미지로 지정`}
+                          >
+                            <img
+                              src={
+                                imageUrl
+                              }
+                              alt={`뉴스 이미지 ${index + 1}`}
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
 
-                        {isRepresentative && (
-                          <span className="absolute bottom-1 left-1 rounded-full bg-[#F7A928] px-1.5 py-0.5 text-[8px] font-semibold text-[#172033]">
-                            대표
-                          </span>
-                        )}
+                          {isRepresentative && (
+                            <span className="absolute bottom-1 left-1 rounded-full bg-[#F7A928] px-1.5 py-0.5 text-[8px] font-semibold text-[#172033]">
+                              대표
+                            </span>
+                          )}
 
-                        <button
-                          type="button"
-                          onClick={() => removeUploadedImage(index)}
-                          disabled={deletingImageUrl === imageUrl}
-                          aria-label={`${index + 1}번 이미지 삭제`}
-                          className="
-                            absolute right-1 top-1 flex h-7 w-7
-                            items-center justify-center rounded-full
-                            bg-black/70 text-sm leading-none text-white
-                            disabled:opacity-50
-                          "
-                        >
-                          {deletingImageUrl === imageUrl ? "…" : "×"}
-                        </button>
-                      </div>
-                    );
-                  })}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeUploadedImage(
+                                index,
+                              )
+                            }
+                            disabled={
+                              deletingImageUrl ===
+                              imageUrl
+                            }
+                            aria-label={`${index + 1}번 이미지 삭제`}
+                            className="
+                              absolute right-1 top-1 flex h-7 w-7
+                              items-center justify-center rounded-full
+                              bg-black/70 text-sm leading-none text-white
+                              disabled:opacity-50
+                            "
+                          >
+                            {deletingImageUrl ===
+                            imageUrl
+                              ? "…"
+                              : "×"}
+                          </button>
+                        </div>
+                      );
+                    },
+                  )}
                 </div>
               )}
             </div>
@@ -811,22 +1333,80 @@ function AdminBusinessNewsContent() {
               <span className="mb-1 block text-xs font-semibold">
                 대표 이미지 URL
               </span>
+
               <input
-                value={form.image_url}
-                onChange={(event) =>
-                  setForm({ ...form, image_url: event.target.value })
+                value={
+                  form.image_url
                 }
-                placeholder="이미지 등록 시 자동 입력됩니다"
+                onChange={(
+                  event,
+                ) =>
+                  setForm({
+                    ...form,
+                    image_url:
+                      event.target
+                        .value,
+                  })
+                }
+                placeholder="비워두면 첨부 이미지 또는 본문 이미지 자동 사용"
                 className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
               />
             </label>
 
+            {previewRepresentativeImage && (
+              <div>
+                <span className="mb-1 block text-xs font-semibold">
+                  대표 이미지 미리보기
+                </span>
+
+                <div className="relative aspect-[16/9] overflow-hidden rounded-xl bg-gray-100">
+                  <img
+                    src={
+                      previewRepresentativeImage
+                    }
+                    alt="대표 이미지 미리보기"
+                    className="h-full w-full object-cover"
+                    onError={(
+                      event,
+                    ) => {
+                      event.currentTarget.style.display =
+                        "none";
+                    }}
+                  />
+                </div>
+
+                {!form.image_url.trim() &&
+                  form.images
+                    .length ===
+                    0 &&
+                  extractFirstImageUrl(
+                    form.content,
+                  ) && (
+                    <p className="mt-1 text-[10px] font-medium text-[#8B5A13]">
+                      본문의 첫 번째 이미지를 대표 이미지로 사용합니다.
+                    </p>
+                  )}
+              </div>
+            )}
+
             <label>
-              <span className="mb-1 block text-xs font-semibold">원문 링크</span>
+              <span className="mb-1 block text-xs font-semibold">
+                원문 링크
+              </span>
+
               <input
-                value={form.source_url}
-                onChange={(event) =>
-                  setForm({ ...form, source_url: event.target.value })
+                value={
+                  form.source_url
+                }
+                onChange={(
+                  event,
+                ) =>
+                  setForm({
+                    ...form,
+                    source_url:
+                      event.target
+                        .value,
+                  })
                 }
                 placeholder="https://..."
                 className="h-11 w-full rounded-xl border border-gray-300 px-3 outline-none"
@@ -837,13 +1417,25 @@ function AdminBusinessNewsContent() {
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={form.published}
-                  onChange={(event) =>
-                    setForm({ ...form, published: event.target.checked })
+                  checked={
+                    form.published
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setForm({
+                      ...form,
+                      published:
+                        event.target
+                          .checked,
+                    })
                   }
                   className="h-4 w-4"
                 />
-                <span className="text-sm font-medium">공개</span>
+
+                <span className="text-sm font-medium">
+                  공개
+                </span>
               </label>
             )}
           </div>
@@ -851,7 +1443,10 @@ function AdminBusinessNewsContent() {
           <div className="mt-4 flex gap-2">
             <button
               type="submit"
-              disabled={saving || uploadingImages}
+              disabled={
+                saving ||
+                uploadingImages
+              }
               className="rounded-xl bg-[#172033] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
             >
               {saving
@@ -868,7 +1463,9 @@ function AdminBusinessNewsContent() {
             {editingId && (
               <button
                 type="button"
-                onClick={resetForm}
+                onClick={
+                  resetForm
+                }
                 className="rounded-xl border px-5 py-2.5 text-sm font-medium"
               >
                 취소
@@ -880,7 +1477,9 @@ function AdminBusinessNewsContent() {
         <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <div className="border-b px-4 py-3">
             <h2 className="text-sm font-semibold">
-              {isAdmin ? "등록된 뉴스" : "내가 등록한 공연/문화"}
+              {isAdmin
+                ? "등록된 뉴스"
+                : "내가 등록한 공연/문화"}
             </h2>
           </div>
 
@@ -890,58 +1489,92 @@ function AdminBusinessNewsContent() {
             </div>
           ) : (
             <div>
-              {items.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="border-t border-gray-100 px-4 py-3 first:border-t-0"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug">
-                          {item.title}
-                        </h3>
+              {items.map(
+                (
+                  item,
+                  index,
+                ) => (
+                  <div
+                    key={
+                      item.id
+                    }
+                    className="border-t border-gray-100 px-4 py-3 first:border-t-0"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug">
+                            {
+                              item.title
+                            }
+                          </h3>
 
-                        {index === 0 && item.published && (
-                          <span className="shrink-0 rounded-full bg-[#F7A928] px-2 py-0.5 text-[8px] font-semibold">
-                            LATEST
+                          {index ===
+                            0 &&
+                            item.published && (
+                              <span className="shrink-0 rounded-full bg-[#F7A928] px-2 py-0.5 text-[8px] font-semibold">
+                                LATEST
+                              </span>
+                            )}
+                        </div>
+
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-gray-500">
+                          <span>
+                            {
+                              item.category
+                            }
                           </span>
-                        )}
+
+                          <span>•</span>
+
+                          <span>
+                            {new Date(
+                              item.published_at,
+                            ).toLocaleString()}
+                          </span>
+
+                          <span>•</span>
+
+                          <span>
+                            {item.published
+                              ? "공개"
+                              : "비공개"}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-gray-500">
-                        <span>{item.category}</span>
-                        <span>•</span>
-                        <span>
-                          {new Date(item.published_at).toLocaleString()}
-                        </span>
-                        <span>•</span>
-                        <span>{item.published ? "공개" : "비공개"}</span>
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startEdit(
+                              item,
+                            )
+                          }
+                          className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[10px] font-medium text-blue-700"
+                        >
+                          수정
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteItem(
+                              item.id,
+                            )
+                          }
+                          className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[10px] font-medium text-red-600"
+                        >
+                          삭제
+                        </button>
                       </div>
-                    </div>
-
-                    <div className="flex shrink-0 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => startEdit(item)}
-                        className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[10px] font-medium text-blue-700"
-                      >
-                        수정
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => deleteItem(item.id)}
-                        className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[10px] font-medium text-red-600"
-                      >
-                        삭제
-                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ),
+              )}
 
-              {items.length === 0 && (
+              {items.length ===
+                0 && (
                 <div className="px-4 py-10 text-center text-sm text-gray-500">
                   등록된 뉴스가 없습니다.
                 </div>
@@ -953,7 +1586,6 @@ function AdminBusinessNewsContent() {
     </main>
   );
 }
-
 
 export default function AdminBusinessNewsPage() {
   return (
