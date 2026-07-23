@@ -12,13 +12,13 @@ const LOGIN_REDIRECT_KEY = "ktown_login_redirect";
 
 type NewsItem = {
   id: number;
-  title: string;
-  summary: string;
-  content: string;
-  category: string;
+  title: string | null;
+  summary: string | null;
+  content: string | null;
+  category: string | null;
   image_url: string | null;
   source_url: string | null;
-  published_at: string;
+  published_at: string | null;
   published: boolean | null;
 };
 
@@ -58,7 +58,7 @@ function isCultureCategory(value: unknown) {
 }
 
 function categoryMatches(
-  itemCategory: string,
+  itemCategory: string | null,
   activeCategory: string,
 ) {
   const item = normalizeCategory(itemCategory);
@@ -77,6 +77,7 @@ function categoryMatches(
       "local business news",
       "local business",
       "business news",
+      "local news",
       "지역 비즈니스 뉴스",
       "지역비즈니스뉴스",
       "비즈니스 뉴스",
@@ -106,8 +107,18 @@ function categoryMatches(
   return item === active;
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-US", {
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Date unavailable";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Date unavailable";
+  }
+
+  return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -118,7 +129,8 @@ function isSafeInternalPath(path: string) {
   return (
     path.startsWith("/") &&
     !path.startsWith("//") &&
-    !path.startsWith("/login")
+    !path.startsWith("/login") &&
+    !path.startsWith("/auth/")
   );
 }
 
@@ -266,9 +278,15 @@ export default function CommunityNewsPage() {
 
       const searchMatch =
         !keyword ||
-        item.title.toLowerCase().includes(keyword) ||
-        item.summary.toLowerCase().includes(keyword) ||
-        item.category.toLowerCase().includes(keyword);
+        String(item.title ?? "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(item.summary ?? "")
+          .toLowerCase()
+          .includes(keyword) ||
+        String(item.category ?? "")
+          .toLowerCase()
+          .includes(keyword);
 
       return categoryMatch && searchMatch;
     });
@@ -351,20 +369,30 @@ export default function CommunityNewsPage() {
   }
 
   async function handleCreateNews() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (!session?.user) {
+      if (!session?.user) {
+        const currentPath =
+          window.location.pathname +
+          window.location.search;
+
+        moveToLogin(currentPath);
+        return;
+      }
+
+      router.push("/admin/news");
+    } catch (error) {
+      console.error("News create auth error:", error);
+
       const currentPath =
         window.location.pathname +
         window.location.search;
 
       moveToLogin(currentPath);
-      return;
     }
-
-    router.push("/admin/news");
   }
 
   const pageLoading = loading || authLoading;
@@ -427,9 +455,7 @@ export default function CommunityNewsPage() {
 
           <input
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
+            onChange={(event) => setSearch(event.target.value)}
             placeholder="뉴스 검색"
             className="h-11 w-full rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-[13px] font-medium outline-none focus:border-[#F7A928] focus:ring-2 focus:ring-[#F7A928]/20"
           />
@@ -441,9 +467,7 @@ export default function CommunityNewsPage() {
               <button
                 key={category}
                 type="button"
-                onClick={() =>
-                  setActiveCategory(category)
-                }
+                onClick={() => setActiveCategory(category)}
                 className={`
                   shrink-0 rounded-full px-2.5 py-1.5
                   text-[10px] font-semibold leading-none
@@ -505,13 +529,11 @@ export default function CommunityNewsPage() {
           >
             <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100">
               <img
-                src={
-                  featuredNews.image_url || "/event.png"
-                }
-                alt={featuredNews.title}
-                className={`h-full w-full object-cover transition ${
+                src={featuredNews.image_url || "/event.png"}
+                alt={featuredNews.title || "Business News"}
+                className={`h-full w-full object-cover transition duration-300 ${
                   isLocked(featuredNews)
-                    ? "scale-110 blur-xl"
+                    ? "scale-[1.01] blur-[0.5px] brightness-95"
                     : ""
                 }`}
                 onError={(event) => {
@@ -519,14 +541,20 @@ export default function CommunityNewsPage() {
                 }}
               />
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
+              <div
+                className={`absolute inset-0 bg-gradient-to-t ${
+                  isLocked(featuredNews)
+                    ? "from-black/65 via-black/5 to-transparent"
+                    : "from-black/80 via-black/15 to-transparent"
+                }`}
+              />
 
               <span className="absolute left-3 top-3 rounded-full bg-[#F7A928] px-2.5 py-1 text-[9px] font-semibold text-[#172033]">
                 LATEST
               </span>
 
               {isPrivateNews(featuredNews) && (
-                <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-[9px] font-bold text-white backdrop-blur-sm">
+                <span className="absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur-[1px]">
                   {isLoggedIn
                     ? "회원 전용"
                     : "🔒 로그인 후 보기"}
@@ -534,17 +562,17 @@ export default function CommunityNewsPage() {
               )}
 
               <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                <p className="text-[10px] font-medium text-white/80">
-                  {featuredNews.category} ·{" "}
+                <p className="text-[10px] font-medium text-white/85">
+                  {featuredNews.category || "News"} ·{" "}
                   {formatDate(featuredNews.published_at)}
                 </p>
 
                 <h2 className="mt-1 text-[18px] font-bold leading-tight">
-                  {featuredNews.title}
+                  {featuredNews.title || "Business News"}
                 </h2>
 
-                <p className="mt-1 line-clamp-2 text-[11px] font-normal leading-relaxed text-white/85">
-                  {featuredNews.summary}
+                <p className="mt-1 line-clamp-2 text-[11px] font-normal leading-relaxed text-white/90">
+                  {featuredNews.summary || ""}
                 </p>
               </div>
             </div>
@@ -589,13 +617,11 @@ export default function CommunityNewsPage() {
                   >
                     <div className="relative h-[82px] w-[104px] shrink-0 overflow-hidden rounded-xl bg-gray-100">
                       <img
-                        src={
-                          item.image_url || "/event.png"
-                        }
-                        alt={item.title}
-                        className={`h-full w-full object-cover transition ${
+                        src={item.image_url || "/event.png"}
+                        alt={item.title || "Business News"}
+                        className={`h-full w-full object-cover transition duration-300 ${
                           locked
-                            ? "scale-110 blur-xl"
+                            ? "scale-[1.01] blur-[0.5px] brightness-95"
                             : ""
                         }`}
                         onError={(event) => {
@@ -605,8 +631,8 @@ export default function CommunityNewsPage() {
                       />
 
                       {locked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-[14px] text-white backdrop-blur-sm">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/5">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/45 text-[12px] text-white shadow-sm backdrop-blur-[1px]">
                             🔒
                           </span>
                         </div>
@@ -616,7 +642,7 @@ export default function CommunityNewsPage() {
                     <div className="min-w-0 flex-1 py-0.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="rounded-full bg-[#F8F3EC] px-2 py-0.5 text-[8px] font-medium text-[#8B5A13]">
-                          {item.category}
+                          {item.category || "News"}
                         </span>
 
                         <span className="text-[9px] font-normal text-gray-400">
@@ -633,11 +659,11 @@ export default function CommunityNewsPage() {
                       </div>
 
                       <h3 className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-snug">
-                        {item.title}
+                        {item.title || "Business News"}
                       </h3>
 
                       <p className="mt-1 line-clamp-2 text-[10px] font-normal leading-relaxed text-gray-500">
-                        {item.summary}
+                        {item.summary || ""}
                       </p>
                     </div>
                   </Link>
@@ -647,21 +673,17 @@ export default function CommunityNewsPage() {
           </>
         )}
 
-        {!pageLoading &&
-          filteredNews.length === 0 && (
-            <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-12 text-center">
-              <div
-                className="text-4xl"
-                aria-hidden="true"
-              >
-                📰
-              </div>
-
-              <h2 className="mt-3 text-[14px] font-semibold">
-                등록된 뉴스가 없습니다
-              </h2>
+        {!pageLoading && filteredNews.length === 0 && (
+          <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-4 py-12 text-center">
+            <div className="text-4xl" aria-hidden="true">
+              📰
             </div>
-          )}
+
+            <h2 className="mt-3 text-[14px] font-semibold">
+              등록된 뉴스가 없습니다
+            </h2>
+          </div>
+        )}
       </section>
 
       <CommunityBottomNav activeNav="hub" />
