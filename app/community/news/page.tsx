@@ -548,7 +548,7 @@ export default function CommunityNewsPage() {
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
                   isLocked(featuredNews)
-                    ? "scale-105 blur-sm brightness-75"
+                    ? "scale-[1.35] blur-[14px] brightness-[0.35] saturate-0 contrast-75"
                     : ""
                 }`}
                 onError={(event) => {
@@ -559,8 +559,8 @@ export default function CommunityNewsPage() {
               <div
                 className={`absolute inset-0 bg-gradient-to-t ${
                   isLocked(featuredNews)
-                    ? "from-black/75 via-black/35 to-black/10 backdrop-blur-sm"
-                    : "from-black/80 via-black/15 to-transparent"
+                    ? "bg-black/65 backdrop-blur-md"
+                    : "bg-gradient-to-t from-black/80 via-black/15 to-transparent"
                 }`}
               />
 
@@ -636,7 +636,7 @@ export default function CommunityNewsPage() {
                         alt={item.title || "Business News"}
                         className={`h-full w-full object-cover transition duration-300 ${
                           locked
-                            ? "scale-105 blur-sm brightness-75"
+                            ? "scale-[1.35] blur-[14px] brightness-[0.35] saturate-0 contrast-75"
                             : ""
                         }`}
                         onError={(event) => {
@@ -646,7 +646,7 @@ export default function CommunityNewsPage() {
                       />
 
                       {locked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-md">
                           <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-[14px] text-white shadow-lg">
                             🔒
                           </span>
