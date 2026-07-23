@@ -1141,8 +1141,8 @@ function AdminBusinessNewsContent() {
         return;
       }
 
-      resetForm();
-      await loadItems();
+      router.push("/community/news");
+      router.refresh();
     } catch (error) {
       console.error(
         "News save unexpected error:",
