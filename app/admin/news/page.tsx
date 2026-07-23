@@ -2033,56 +2033,75 @@ function AdminBusinessNewsContent() {
                     className="border-t border-gray-100 px-4 py-3 first:border-t-0"
                   >
                     <div className="flex items-start justify-between gap-3">
-  <div className="min-w-0 flex-1">
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <h3 className="truncate text-[13px] font-semibold">
-          {item.title}
-        </h3>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug">
+                            {
+                              item.title
+                            }
+                          </h3>
 
-        {index === 0 && item.published && (
-          <span className="shrink-0 rounded-full bg-[#F7A928] px-2 py-0.5 text-[8px] font-semibold">
-            LATEST
-          </span>
-        )}
-      </div>
+                          {index ===
+                            0 &&
+                            item.published && (
+                              <span className="shrink-0 rounded-full bg-[#F7A928] px-2 py-0.5 text-[8px] font-semibold">
+                                LATEST
+                              </span>
+                            )}
+                        </div>
 
-      <div className="flex shrink-0 gap-1">
-        <button
-          type="button"
-          onClick={() => startEdit(item)}
-          className="rounded-lg bg-blue-50 px-2.5 py-1 text-[10px] font-medium text-blue-700"
-        >
-          수정
-        </button>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-gray-500">
+                          <span>
+                            {
+                              item.category
+                            }
+                          </span>
 
-        <button
-          type="button"
-          onClick={() => deleteItem(item.id)}
-          className="rounded-lg bg-red-50 px-2.5 py-1 text-[10px] font-medium text-red-600"
-        >
-          삭제
-        </button>
-      </div>
-    </div>
+                          <span>•</span>
 
-    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-gray-500">
-      <span>{item.category}</span>
+                          <span>
+                            {new Date(
+                              item.published_at,
+                            ).toLocaleString()}
+                          </span>
 
-      <span>•</span>
+                          <span>•</span>
 
-      <span>
-        {new Date(item.published_at).toLocaleString()}
-      </span>
+                          <span>
+                            {item.published
+                              ? "공개"
+                              : "비공개"}
+                          </span>
+                        </div>
+                      </div>
 
-      <span>•</span>
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startEdit(
+                              item,
+                            )
+                          }
+                          className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[10px] font-medium text-blue-700"
+                        >
+                          수정
+                        </button>
 
-      <span>
-        {item.published ? "공개" : "비공개"}
-      </span>
-    </div>
-  </div>
-</div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteItem(
+                              item.id,
+                            )
+                          }
+                          className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[10px] font-medium text-red-600"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 ),
               )}
 
