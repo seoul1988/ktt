@@ -571,30 +571,34 @@ function PanToSelectedSpot({
       window.innerWidth < 768 &&
       !window.matchMedia("(orientation: landscape)").matches;
 
-    /*
-     * 선택한 마커를 화면 중앙에 먼저 놓은 뒤 다시 panBy 하지 않고,
-     * 카드에 가리지 않는 최종 중심 좌표를 미리 계산하여 한 번에 이동합니다.
-     */
-    const offsetY = isMobilePortrait ? 110 : 45;
+    const currentZoom = map.getZoom();
+    // 아래 카드가 지도를 가리므로 마커가 실제 보이는 영역의 중앙에 오도록
+    // 현재 줌과 현재 지도 높이를 기준으로 중심점을 계산합니다.
+    const bottomCardHeight = isMobilePortrait ? 235 : 110;
+    const visibleCenterOffsetY = isMobilePortrait
+      ? Math.min(145, Math.max(95, bottomCardHeight * 0.48))
+      : 45;
 
-    const markerPoint = map.project(
-      [lat, lng],
-      INITIAL_MAP_ZOOM
-    );
-
-    const adjustedCenterPoint = markerPoint.add([0, offsetY]);
-
+    const markerPoint = map.project([lat, lng], currentZoom);
+    const adjustedCenterPoint = markerPoint.add([
+      0,
+      visibleCenterOffsetY,
+    ]);
     const adjustedCenter = map.unproject(
       adjustedCenterPoint,
-      INITIAL_MAP_ZOOM
+      currentZoom,
     );
 
     map.stop();
-
-    map.setView(adjustedCenter, INITIAL_MAP_ZOOM, {
+    map.flyTo(adjustedCenter, currentZoom, {
       animate: true,
-      duration: 0.3,
+      duration: 0.35,
     });
+
+    // iPhone Safari에서 레이아웃 계산이 한 프레임 늦는 경우를 보정합니다.
+    window.setTimeout(() => {
+      map.invalidateSize({ pan: false });
+    }, 120);
   }, [lat, lng, map]);
 
   return null;
@@ -1244,11 +1248,7 @@ useEffect(() => {
     }
 
     setTimeout(() => {
-      cardRefs.current[selectedSpotKey]?.scrollIntoView({
-        behavior: "auto",
-        inline: "center",
-        block: "center",
-      });
+      centerCard(selectedSpotKey, "auto");
 
       programmaticScrollTimerRef.current = setTimeout(() => {
         programmaticScrollRef.current = false;
@@ -1351,6 +1351,39 @@ useEffect(() => {
   function openCategoryPanel() {
     setCategoryPanelOpen(true);
     setShowCards(false);
+  }
+
+  function centerCard(spotKey: string, behavior: ScrollBehavior = "smooth") {
+    const container = cardScrollRef.current;
+    const card = cardRefs.current[spotKey];
+
+    if (!container || !card) return;
+
+    const isLandscape =
+      window.matchMedia("(orientation: landscape)").matches;
+
+    if (isLandscape) {
+      const top =
+        card.offsetTop -
+        container.clientHeight / 2 +
+        card.clientHeight / 2;
+
+      container.scrollTo({
+        top: Math.max(0, top),
+        behavior,
+      });
+      return;
+    }
+
+    const left =
+      card.offsetLeft -
+      container.clientWidth / 2 +
+      card.clientWidth / 2;
+
+    container.scrollTo({
+      left: Math.max(0, left),
+      behavior,
+    });
   }
 
   const handleScroll = () => {
@@ -1804,13 +1837,19 @@ useEffect(() => {
                       selectedSpotKey: baseKey,
                     });
 
+                    programmaticScrollRef.current = true;
+
+                    if (programmaticScrollTimerRef.current) {
+                      clearTimeout(programmaticScrollTimerRef.current);
+                    }
+
                     setTimeout(() => {
-                      cardRefs.current[baseKey]?.scrollIntoView({
-                        behavior: "smooth",
-                        inline: "center",
-                        block: "nearest",
-                      });
-                    }, 50);
+                      centerCard(baseKey, "smooth");
+
+                      programmaticScrollTimerRef.current = setTimeout(() => {
+                        programmaticScrollRef.current = false;
+                      }, 450);
+                    }, 80);
                   },
                 }}
               >
@@ -2035,4 +2074,4 @@ useEffect(() => {
 
     </div>
   );
-} 
+}
