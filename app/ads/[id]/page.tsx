@@ -1,152 +1,283 @@
-"use client";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { supabase } from "../../../lib/supabase";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
+import AdImageGallery from "./AdImageGallery";
+import ProfileButton from "@/app/components/ProfileButton";
+import BackButton from "@/app/components/BackButton";
 
-import { useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-type AdActionButtonsProps = {
+type AdItem = {
+  id: number;
+  title: string;
+  description: string | null;
+  category: string | null;
+  location: string | null;
   phone: string | null;
-  directionUrl: string | null;
-  websiteUrl: string | null;
+  website_url: string | null;
+  images: string[] | null;
+  video_url: string | null;
+  status: string | null;
+  lat: number | null;
+  lng: number | null;
+  user_id: string | null;
 };
+
+function statusLabel(status: string | null) {
+  if (status === "active") return "광고중";
+  if (status === "expired") return "만료";
+  if (status === "hidden") return "숨김";
+  return "광고중";
+}
+
+function statusClass(status: string | null) {
+  if (status === "active") return "bg-green-600";
+  if (status === "expired") return "bg-gray-500";
+  if (status === "hidden") return "bg-red-500";
+  return "bg-green-600";
+}
 
 function cleanPhone(phone: string) {
   return phone.replace(/[^\d+]/g, "");
 }
 
-async function copyText(text: string) {
-  if (
-    navigator.clipboard &&
-    window.isSecureContext
-  ) {
-    await navigator.clipboard.writeText(text);
-    return;
+function normalizeWebsiteUrl(url: string) {
+  const trimmedUrl = url.trim();
+
+  if (/^https?:\/\//i.test(trimmedUrl)) {
+    return trimmedUrl;
   }
 
-  const textarea =
-    document.createElement("textarea");
-
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  textarea.style.top = "0";
-
-  document.body.appendChild(textarea);
-
-  textarea.focus();
-  textarea.select();
-
-  const copied =
-    document.execCommand("copy");
-
-  document.body.removeChild(textarea);
-
-  if (!copied) {
-    throw new Error("링크 복사 실패");
-  }
+  return `https://${trimmedUrl}`;
 }
 
-export default function AdActionButtons({
-  phone,
-  directionUrl,
-  websiteUrl,
-}: AdActionButtonsProps) {
-  const [pageUrl, setPageUrl] = useState("");
-  const [copied, setCopied] = useState(false);
+function getDirectionUrl(ad: AdItem) {
+  if (ad.lat !== null && ad.lng !== null) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${ad.lat},${ad.lng}`;
+  }
 
-  useEffect(() => {
-    setPageUrl(window.location.href);
-  }, []);
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    ad.location || "",
+  )}`;
+}
 
+export default async function AdDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  const { data, error } = await supabase
+    .from("ads")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+        <p className="font-bold text-red-600">
+          광고를 찾을 수 없습니다.
+        </p>
+      </main>
+    );
+  }
+
+  const ad = data as AdItem;
+
+  const cookieStore = await cookies();
+  const adminRole = cookieStore.get("ktt_admin")?.value;
+
+  const isAdmin =
+    adminRole === "admin" || adminRole === "super_admin";
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const isOwner = Boolean(user && ad.user_id === user.id);
+  const canManage = isAdmin || isOwner;
+
+  const cleanImages = Array.isArray(ad.images)
+    ? ad.images.filter(
+        (img) =>
+          typeof img === "string" &&
+          img.trim() !== "",
+      )
+    : [];
+
+  const cleanVideoUrl =
+    typeof ad.video_url === "string" &&
+    ad.video_url.trim() !== ""
+      ? ad.video_url.trim()
+      : null;
+
+  const cleanWebsiteUrl =
+    typeof ad.website_url === "string" &&
+    ad.website_url.trim() !== ""
+      ? normalizeWebsiteUrl(ad.website_url)
+      : null;
+
+  const hasImage = cleanImages.length > 0;
+  const hasVideo = Boolean(cleanVideoUrl);
   const hasPhone = Boolean(
-    phone && phone.trim() !== "",
+    ad.phone && ad.phone.trim() !== "",
   );
-
-  const hasLocation = Boolean(directionUrl);
-  const hasWebsite = Boolean(websiteUrl);
+  const hasWebsite = Boolean(cleanWebsiteUrl);
+  const hasLocation = Boolean(
+    (ad.location && ad.location.trim() !== "") ||
+      (ad.lat !== null && ad.lng !== null),
+  );
 
   const actionCount = [
     hasPhone,
     hasLocation,
     hasWebsite,
-    true,
   ].filter(Boolean).length;
 
-  const gridClass =
+  const actionGridClass =
     actionCount === 1
       ? "grid-cols-1"
       : actionCount === 2
         ? "grid-cols-2"
-        : actionCount === 3
-          ? "grid-cols-3"
-          : "grid-cols-2 sm:grid-cols-4";
-
-  async function handleCopyLink() {
-    const currentPageUrl =
-      pageUrl || window.location.href;
-
-    try {
-      await copyText(currentPageUrl);
-
-      setCopied(true);
-
-      window.setTimeout(() => {
-        setCopied(false);
-      }, 2000);
-    } catch (error) {
-      console.error(
-        "링크주소 복사 실패:",
-        error,
-      );
-
-      alert(
-        "링크주소를 복사하지 못했습니다.",
-      );
-    }
-  }
+        : "grid-cols-3";
 
   return (
-    <div
-      className={`mt-5 grid gap-2 ${gridClass}`}
-    >
-      {hasPhone && phone && (
-        <a
-          href={`tel:${cleanPhone(phone)}`}
-          className="flex min-h-[54px] items-center justify-center rounded-2xl bg-green-600 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
-        >
-          📞 전화하기
-        </a>
-      )}
+    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
+      <div className="mx-auto w-full max-w-xl">
+        <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+          <BackButton />
 
-      {hasLocation && directionUrl && (
-        <a
-          href={directionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex min-h-[54px] items-center justify-center rounded-2xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
-        >
-          🧭 길찾기
-        </a>
-      )}
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
+            AD DETAILS
+          </h1>
 
-      {hasWebsite && websiteUrl && (
-        <a
-          href={websiteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex min-h-[54px] items-center justify-center rounded-2xl bg-blue-600 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
-        >
-          🌐 웹사이트
-        </a>
-      )}
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
+        </div>
 
-      <button
-        type="button"
-        onClick={handleCopyLink}
-        className="flex min-h-[54px] items-center justify-center rounded-2xl bg-purple-600 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
-      >
-        {copied
-          ? "✅ 복사 완료"
-          : "🔗 링크주소 복사"}
-      </button>
-    </div>
+        <div className="overflow-hidden rounded-3xl bg-white shadow">
+          {hasVideo && (
+            <video
+              src={cleanVideoUrl || ""}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full"
+            />
+          )}
+
+          {!hasVideo && hasImage && (
+            <AdImageGallery
+              images={cleanImages}
+              title={ad.title}
+            />
+          )}
+
+          <div className="p-5">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              {ad.category && (
+                <span className="rounded-full bg-[#172033]/10 px-3 py-1 text-xs font-black text-[#172033]">
+                  {ad.category}
+                </span>
+              )}
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black text-white ${statusClass(
+                  ad.status,
+                )}`}
+              >
+                {statusLabel(ad.status)}
+              </span>
+            </div>
+
+            <h1 className="text-2xl font-black">
+              {ad.title}
+            </h1>
+
+            {ad.location && (
+              <p className="mt-2 text-sm font-bold text-gray-500">
+                📍 {ad.location}
+              </p>
+            )}
+
+            {ad.phone && (
+              <p className="mt-2 text-sm font-bold text-gray-500">
+                📞 {ad.phone}
+              </p>
+            )}
+
+            {ad.description && (
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                {ad.description}
+              </p>
+            )}
+
+            {actionCount > 0 && (
+              <div
+                className={`mt-5 grid gap-2 ${actionGridClass}`}
+              >
+                {hasPhone && (
+                  <a
+                    href={`tel:${cleanPhone(
+                      ad.phone || "",
+                    )}`}
+                    className="rounded-2xl bg-green-600 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    📞 전화하기
+                  </a>
+                )}
+
+                {hasLocation && (
+                  <a
+                    href={getDirectionUrl(ad)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    🧭 길찾기
+                  </a>
+                )}
+
+                {hasWebsite && cleanWebsiteUrl && (
+                  <a
+                    href={cleanWebsiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-blue-600 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    🌐 웹사이트 방문
+                  </a>
+                )}
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Link
+                  href={`/ads/${ad.id}/edit`}
+                  className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white"
+                >
+                  ✏️ 수정
+                </Link>
+
+                <Link
+                  href={`/ads/${ad.id}/delete`}
+                  className="rounded-2xl bg-red-600 py-3 text-center text-sm font-black text-white"
+                >
+                  🗑 삭제
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <CommunityBottomNav activeNav="ads" />
+    </main>
   );
 }
