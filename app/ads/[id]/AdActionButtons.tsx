@@ -1,90 +1,119 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type AdActionButtonsProps = {
   title: string;
-  phone?: string | null;
-  location?: string | null;
-  directionUrl?: string | null;
+  phone: string | null;
+  directionUrl: string | null;
+  websiteUrl: string | null;
 };
 
 function cleanPhone(phone: string) {
   return phone.replace(/[^\d+]/g, "");
 }
 
+async function copyText(text: string) {
+  if (
+    navigator.clipboard &&
+    window.isSecureContext
+  ) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea =
+    document.createElement("textarea");
+
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  textarea.style.opacity = "0";
+
+  document.body.appendChild(textarea);
+
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(
+    0,
+    textarea.value.length,
+  );
+
+  const copied =
+    document.execCommand("copy");
+
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error("복사 실패");
+  }
+}
+
 export default function AdActionButtons({
   title,
   phone,
-  location,
   directionUrl,
+  websiteUrl,
 }: AdActionButtonsProps) {
-  const [copied, setCopied] = useState(false);
-  const [shared, setShared] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState("");
+  const [copied, setCopied] =
+    useState(false);
 
-  useEffect(() => {
-    setCurrentUrl(window.location.href);
-  }, []);
+  const [shared, setShared] =
+    useState(false);
 
-  const cleanPhoneNumber =
-    typeof phone === "string" && phone.trim() !== ""
-      ? cleanPhone(phone)
-      : null;
+  const hasPhone = Boolean(
+    phone && phone.trim() !== "",
+  );
 
-  const cleanLocation =
-    typeof location === "string" && location.trim() !== ""
-      ? location.trim()
-      : null;
+  const hasDirection =
+    Boolean(directionUrl);
 
-  const hasPhone = Boolean(cleanPhoneNumber);
-  const hasDirection = Boolean(directionUrl);
-  const hasLocation = Boolean(cleanLocation);
+  const hasWebsite =
+    Boolean(websiteUrl);
 
-  const actionCount = [
+  const primaryActionCount = [
     hasPhone,
     hasDirection,
-    true,
-    hasLocation,
+    hasWebsite,
   ].filter(Boolean).length;
 
-  const gridClass =
-    actionCount === 1
+  const primaryGridClass =
+    primaryActionCount === 1
       ? "grid-cols-1"
-      : actionCount === 2
+      : primaryActionCount === 2
         ? "grid-cols-2"
-        : actionCount === 3
-          ? "grid-cols-3"
-          : "grid-cols-2 sm:grid-cols-4";
+        : "grid-cols-3";
+
+  function showTemporaryState(
+    setter: (value: boolean) => void,
+  ) {
+    setter(true);
+
+    window.setTimeout(() => {
+      setter(false);
+    }, 2000);
+  }
 
   async function handleShare() {
-    const shareData = {
-      title,
-      text: title,
-      url: currentUrl || window.location.href,
-    };
+    const currentPageUrl =
+      window.location.href;
 
     try {
       if (navigator.share) {
-        await navigator.share(shareData);
-        setShared(true);
+        await navigator.share({
+          title,
+          text: title,
+          url: currentPageUrl,
+        });
 
-        window.setTimeout(() => {
-          setShared(false);
-        }, 1800);
-
+        showTemporaryState(setShared);
         return;
       }
 
-      await navigator.clipboard.writeText(
-        currentUrl || window.location.href,
-      );
-
-      setShared(true);
-
-      window.setTimeout(() => {
-        setShared(false);
-      }, 1800);
+      await copyText(currentPageUrl);
+      showTemporaryState(setShared);
     } catch (error) {
       if (
         error instanceof DOMException &&
@@ -94,89 +123,95 @@ export default function AdActionButtons({
       }
 
       console.error("공유 실패:", error);
-      alert("공유하지 못했습니다.");
+
+      alert(
+        "공유하지 못했습니다.",
+      );
     }
   }
 
-  async function handleCopyAddress() {
-    if (!cleanLocation) return;
+  async function handleCopyLink() {
+    const currentPageUrl =
+      window.location.href;
 
     try {
-      await navigator.clipboard.writeText(cleanLocation);
-      setCopied(true);
+      await copyText(currentPageUrl);
 
-      window.setTimeout(() => {
-        setCopied(false);
-      }, 1800);
+      showTemporaryState(setCopied);
     } catch (error) {
-      console.error("주소 복사 실패:", error);
-      alert("주소를 복사하지 못했습니다.");
+      console.error(
+        "링크주소 복사 실패:",
+        error,
+      );
+
+      alert(
+        "링크주소를 복사하지 못했습니다.",
+      );
     }
   }
 
   return (
-    <div className={`mt-5 grid gap-2 ${gridClass}`}>
-      {hasPhone && cleanPhoneNumber && (
-        <a
-          href={`tel:${cleanPhoneNumber}`}
-          className="flex min-h-[76px] flex-col items-center justify-center rounded-2xl border border-green-100 bg-green-50 px-2 py-3 text-center transition active:scale-[0.97]"
+    <div className="mt-5 space-y-2">
+      {primaryActionCount > 0 && (
+        <div
+          className={`grid gap-2 ${primaryGridClass}`}
         >
-          <span className="text-2xl" aria-hidden="true">
-            📞
-          </span>
+          {hasPhone && phone && (
+            <a
+              href={`tel:${cleanPhone(phone)}`}
+              className="flex min-h-[56px] items-center justify-center rounded-2xl bg-green-600 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
+            >
+              📞 전화하기
+            </a>
+          )}
 
-          <span className="mt-1 text-sm font-black text-green-700">
-            전화하기
-          </span>
-        </a>
+          {hasDirection &&
+            directionUrl && (
+              <a
+                href={directionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-[56px] items-center justify-center rounded-2xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
+              >
+                🧭 길찾기
+              </a>
+            )}
+
+          {hasWebsite &&
+            websiteUrl && (
+              <a
+                href={websiteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-[56px] items-center justify-center rounded-2xl bg-blue-600 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
+              >
+                🌐 웹사이트
+              </a>
+            )}
+        </div>
       )}
 
-      {hasDirection && directionUrl && (
-        <a
-          href={directionUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex min-h-[76px] flex-col items-center justify-center rounded-2xl border border-orange-100 bg-orange-50 px-2 py-3 text-center transition active:scale-[0.97]"
-        >
-          <span className="text-2xl" aria-hidden="true">
-            🧭
-          </span>
-
-          <span className="mt-1 text-sm font-black text-orange-700">
-            길찾기
-          </span>
-        </a>
-      )}
-
-      <button
-        type="button"
-        onClick={handleShare}
-        className="flex min-h-[76px] flex-col items-center justify-center rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center transition active:scale-[0.97]"
-      >
-        <span className="text-2xl" aria-hidden="true">
-          📤
-        </span>
-
-        <span className="mt-1 text-sm font-black text-blue-700">
-          {shared ? "공유 완료" : "공유하기"}
-        </span>
-      </button>
-
-      {hasLocation && (
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
-          onClick={handleCopyAddress}
-          className="flex min-h-[76px] flex-col items-center justify-center rounded-2xl border border-purple-100 bg-purple-50 px-2 py-3 text-center transition active:scale-[0.97]"
+          onClick={handleShare}
+          className="flex min-h-[56px] items-center justify-center rounded-2xl bg-[#172033] px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
         >
-          <span className="text-2xl" aria-hidden="true">
-            📋
-          </span>
-
-          <span className="mt-1 text-sm font-black text-purple-700">
-            {copied ? "복사 완료" : "주소복사"}
-          </span>
+          {shared
+            ? "✅ 공유 완료"
+            : "📤 공유하기"}
         </button>
-      )}
+
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className="flex min-h-[56px] items-center justify-center rounded-2xl bg-purple-600 px-2 py-3 text-center text-sm font-black text-white transition active:scale-[0.97]"
+        >
+          {copied
+            ? "✅ 복사 완료"
+            : "🔗 링크주소 복사"}
+        </button>
+      </div>
     </div>
   );
 }
