@@ -6,6 +6,9 @@ import { supabase } from "../../lib/supabase";
 import ProfileButton from "../components/ProfileButton";
 import BottomNav from "../components/BottomNav";
 
+const BUSINESS_OWNER_POPUP_KEY =
+  "ktown_profile_business_owner_popup_dismissed";
+
 type Profile = {
   id: string;
   email: string | null;
@@ -22,6 +25,11 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [submittingOwner, setSubmittingOwner] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [
+    showBusinessOwnerPopup,
+    setShowBusinessOwnerPopup,
+  ] = useState(false);
+
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -98,6 +106,45 @@ export default function ProfilePage() {
 
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !profile ||
+      profile.role !== "user" ||
+      profile.owner_status === "pending"
+    ) {
+      return;
+    }
+
+    const dismissed =
+      localStorage.getItem(
+        BUSINESS_OWNER_POPUP_KEY,
+      );
+
+    if (dismissed === "true") {
+      return;
+    }
+
+    const timer = window.setTimeout(
+      () => {
+        setShowBusinessOwnerPopup(true);
+      },
+      600,
+    );
+
+    return () =>
+      window.clearTimeout(timer);
+  }, [loading, profile]);
+
+  function closeBusinessOwnerPopup() {
+    localStorage.setItem(
+      BUSINESS_OWNER_POPUP_KEY,
+      "true",
+    );
+
+    setShowBusinessOwnerPopup(false);
+  }
 
   function validateProfileSave() {
     if (!fullName.trim()) {
@@ -474,6 +521,67 @@ export default function ProfilePage() {
           {savingProfile ? "Saving Profile..." : "Save Profile"}
         </button>
       </div>
+
+
+      {showBusinessOwnerPopup &&
+        profile?.role === "user" &&
+        !isPendingOwner && (
+          <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-black/35 px-4 pb-[calc(20px+env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:items-center sm:pb-0"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="business-owner-popup-title"
+            onClick={closeBusinessOwnerPopup}
+          >
+            <div
+              className="relative w-full max-w-sm cursor-pointer overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-2xl"
+              onClick={closeBusinessOwnerPopup}
+            >
+              <div className="bg-[#172033] px-5 pb-5 pt-6 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F6C343] text-2xl">
+                    🏪
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#F6C343]">
+                      Business Owner Notice
+                    </p>
+
+                    <h2
+                      id="business-owner-popup-title"
+                      className="mt-1 text-xl font-black"
+                    >
+                      비즈니스 오너이신가요?
+                    </h2>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-5">
+                <p className="text-[14px] font-semibold leading-6 text-gray-600">
+                  저희 랄리한인상공회의소에서
+                  지역 한인 비즈니스 정보를
+                  미리 등록해 두었을 수 있습니다.
+                </p>
+
+                <p className="mt-3 text-[14px] font-semibold leading-6 text-gray-600">
+                  비즈니스 오너라면 이 프로필
+                  페이지에서 언제든 Business
+                  Owner 신청을 하신 후 업체 정보,
+                  사진, 연락처 및 프로모션을 직접
+                  관리할 수 있습니다.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-gray-50 px-4 py-3 text-center">
+                  <p className="text-[11px] font-black text-gray-400">
+                    화면 아무 곳이나 누르면 닫힙니다.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       <nav className="fixed bottom-4 left-0 right-0 z-50 px-4">
        
