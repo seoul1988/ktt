@@ -794,47 +794,49 @@ export default function BusinessNewsDetailPage() {
                 </section>
               )}
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                <Link
-                  href="/community/news"
-                  className="rounded-xl border border-gray-300 px-4 py-2 text-[12px] font-semibold"
-                >
-                  뉴스 목록
-                </Link>
-
-                {item.source_url && (
-                  <a
-                    href={item.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-xl bg-[#172033] px-4 py-2 text-[12px] font-semibold text-white"
-                  >
-                    원문 보기
-                  </a>
-                )}
-              </div>
-
-              {isAdmin && (
-                <div className="mt-5 flex justify-end gap-2 border-t border-gray-100 pt-4">
+              <div className="mt-6 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Link
-                    href={`/admin/news?edit=${item.id}`}
-                    className="rounded-xl bg-blue-50 px-4 py-2 text-[12px] font-medium text-blue-700"
+                    href="/community/news"
+                    className="shrink-0 rounded-xl border border-gray-300 px-4 py-2 text-[12px] font-semibold"
                   >
-                    수정
+                    뉴스 목록
                   </Link>
 
-                  <button
-                    type="button"
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-red-600 disabled:opacity-50"
-                  >
-                    {deleting
-                      ? "삭제 중..."
-                      : "삭제"}
-                  </button>
+                  {item.source_url && (
+                    <a
+                      href={item.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 rounded-xl bg-[#172033] px-4 py-2 text-[12px] font-semibold text-white"
+                    >
+                      원문 보기
+                    </a>
+                  )}
                 </div>
-              )}
+
+                {isAdmin && (
+                  <div className="ml-auto flex shrink-0 items-center gap-2">
+                    <Link
+                      href={`/admin/news?edit=${item.id}`}
+                      className="rounded-xl bg-blue-50 px-4 py-2 text-[12px] font-medium text-blue-700"
+                    >
+                      수정
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="rounded-xl bg-red-50 px-4 py-2 text-[12px] font-medium text-red-600 disabled:opacity-50"
+                    >
+                      {deleting
+                        ? "삭제 중..."
+                        : "삭제"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </article>
