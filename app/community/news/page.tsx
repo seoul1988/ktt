@@ -532,7 +532,7 @@ export default function CommunityNewsPage() {
                 src={featuredNews.image_url || "/event.png"}
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
-  locked
+  isLocked(featuredNews)
     ? "scale-[1.05] blur-[3px] brightness-[0.7]"
     : ""
 }`}
