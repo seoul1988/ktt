@@ -640,23 +640,23 @@ export default function CommunityNewsPage() {
                     </div>
 
                     <div className="min-w-0 flex-1 py-0.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-full bg-[#F8F3EC] px-2 py-0.5 text-[8px] font-medium text-[#8B5A13]">
-                          {item.category || "News"}
-                        </span>
+                      <div className="flex w-full items-center gap-1.5">
+						  <span className="shrink-0 rounded-full bg-[#F8F3EC] px-2 py-0.5 text-[8px] font-medium text-[#8B5A13]">
+							{item.category || "News"}
+						  </span>
 
-                        <span className="text-[9px] font-normal text-gray-400">
-                          {formatDate(item.published_at)}
-                        </span>
+						  <span className="shrink-0 text-[9px] font-normal text-gray-400">
+							{formatDate(item.published_at)}
+						  </span>
 
-                        {privateNews && (
-                          <span className="rounded-full bg-[#172033] px-2 py-0.5 text-[8px] font-bold text-white">
-                            {isLoggedIn
-                              ? "회원 전용"
-                              : "로그인 후 보기"}
-                          </span>
-                        )}
-                      </div>
+						  {privateNews && (
+							<span className="ml-auto shrink-0 rounded-full bg-[#172033] px-2 py-0.5 text-[8px] font-bold text-white">
+							  {isLoggedIn
+								? "회원 전용"
+								: "로그인 후 보기"}
+							</span>
+						  )}
+						</div>
 
                       <h3 className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-snug">
                         {item.title || "Business News"}
