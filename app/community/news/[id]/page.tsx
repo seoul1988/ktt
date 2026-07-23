@@ -8,6 +8,15 @@ import ProfileButton from "@/app/components/ProfileButton";
 import CommunityBottomNav from "@/app/components/CommunityBottomNav";
 import { supabase } from "@/lib/supabase";
 
+type NewsAttachment = {
+  name: string;
+  url: string;
+  path?: string;
+  type?: string;
+  size?: number;
+  external?: boolean;
+};
+
 type NewsItem = {
   id: number;
   title: string;
@@ -16,6 +25,7 @@ type NewsItem = {
   category: string;
   image_url: string | null;
   images: string[] | null;
+  attachments: NewsAttachment[] | null;
   source_url: string | null;
   published_at: string;
   published: boolean | null;
@@ -107,8 +117,10 @@ export default function BusinessNewsDetailPage() {
     useState(false);
 
   const [deleting, setDeleting] = useState(false);
-  const [previewImage, setPreviewImage] =
-    useState<string | null>(null);
+  const [activeImageIndex, setActiveImageIndex] =
+    useState(0);
+  const [previewImageIndex, setPreviewImageIndex] =
+    useState<number | null>(null);
 
   const newsId = Number(params.id);
 
@@ -202,6 +214,7 @@ export default function BusinessNewsDetailPage() {
                 category,
                 image_url,
                 images,
+                attachments,
                 source_url,
                 published_at,
                 published
@@ -351,7 +364,7 @@ export default function BusinessNewsDetailPage() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!previewImage && !showLoginModal) {
+    if (previewImageIndex === null && !showLoginModal) {
       return;
     }
 
@@ -363,8 +376,8 @@ export default function BusinessNewsDetailPage() {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
 
-      if (previewImage) {
-        setPreviewImage(null);
+      if (previewImageIndex !== null) {
+        setPreviewImageIndex(null);
         return;
       }
 
@@ -388,7 +401,7 @@ export default function BusinessNewsDetailPage() {
       );
     };
   }, [
-    previewImage,
+    previewImageIndex,
     showLoginModal,
     router,
   ]);
@@ -469,18 +482,86 @@ export default function BusinessNewsDetailPage() {
     );
   }
 
-  const galleryImages =
-    Array.isArray(item.images) &&
-    item.images.length > 0
-      ? item.images
-      : item.image_url
-        ? [item.image_url]
-        : [];
+  const galleryImages = Array.from(
+    new Set(
+      [
+        item.image_url || "",
+        ...(Array.isArray(item.images)
+          ? item.images
+          : []),
+      ].filter(Boolean),
+    ),
+  );
 
-  const representativeImage =
-    item.image_url ||
-    galleryImages[0] ||
-    "/event.png";
+  const displayImages =
+    galleryImages.length > 0
+      ? galleryImages
+      : ["/event.png"];
+
+  const safeActiveImageIndex =
+    activeImageIndex >= 0 &&
+    activeImageIndex < displayImages.length
+      ? activeImageIndex
+      : 0;
+
+  const activeImage =
+    displayImages[safeActiveImageIndex];
+
+  const attachments = Array.isArray(item.attachments)
+    ? item.attachments.filter(
+        (attachment) =>
+          attachment &&
+          typeof attachment.url === "string" &&
+          attachment.url.trim(),
+      )
+    : [];
+
+  function showPreviousImage() {
+    setActiveImageIndex((current) =>
+      current <= 0
+        ? displayImages.length - 1
+        : current - 1,
+    );
+  }
+
+  function showNextImage() {
+    setActiveImageIndex((current) =>
+      current >= displayImages.length - 1
+        ? 0
+        : current + 1,
+    );
+  }
+
+  function showPreviousPreviewImage() {
+    setPreviewImageIndex((current) => {
+      if (current === null) return null;
+
+      return current <= 0
+        ? displayImages.length - 1
+        : current - 1;
+    });
+  }
+
+  function showNextPreviewImage() {
+    setPreviewImageIndex((current) => {
+      if (current === null) return null;
+
+      return current >= displayImages.length - 1
+        ? 0
+        : current + 1;
+    });
+  }
+
+  function formatFileSize(size?: number) {
+    if (!size || size <= 0) return "";
+
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) {
+      return `${(size / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] text-[#172033]">
@@ -523,49 +604,78 @@ export default function BusinessNewsDetailPage() {
       {!isLocked && (
         <article className="mx-auto w-full max-w-md px-3 py-4">
           <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
-            <button
-              type="button"
-              onClick={() =>
-                setPreviewImage(
-                  representativeImage,
-                )
-              }
-              className="group relative block w-full overflow-hidden"
-              aria-label="대표 이미지 크게 보기"
-            >
-              <img
-                src={representativeImage}
-                alt={item.title}
-                className="aspect-[16/9] w-full object-cover transition duration-200 group-active:scale-[0.99]"
-                onError={(event) => {
-                  event.currentTarget.src =
-                    "/event.png";
-                }}
-              />
+            <div className="relative overflow-hidden bg-gray-100">
+              <button
+                type="button"
+                onClick={() =>
+                  setPreviewImageIndex(
+                    safeActiveImageIndex,
+                  )
+                }
+                className="group relative block w-full overflow-hidden"
+                aria-label="이미지 크게 보기"
+              >
+                <img
+                  src={activeImage}
+                  alt={`${item.title} 이미지 ${safeActiveImageIndex + 1}`}
+                  className="aspect-[16/9] w-full object-cover transition duration-200 group-active:scale-[0.99]"
+                  onError={(event) => {
+                    event.currentTarget.src =
+                      "/event.png";
+                  }}
+                />
 
-              <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow-sm">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="h-4 w-4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle
-                    cx="11"
-                    cy="11"
-                    r="6"
-                  />
+                <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white shadow-sm">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    className="h-4 w-4"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="11" cy="11" r="6" />
+                    <path d="M16 16l4 4" />
+                    <path d="M11 8v6" />
+                    <path d="M8 11h6" />
+                  </svg>
+                </span>
+              </button>
 
-                  <path d="M16 16l4 4" />
-                  <path d="M11 8v6" />
-                  <path d="M8 11h6" />
-                </svg>
-              </span>
-            </button>
+              {displayImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      showPreviousImage();
+                    }}
+                    aria-label="이전 이미지"
+                    className="absolute left-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-2xl text-white shadow-lg backdrop-blur-sm transition active:scale-90"
+                  >
+                    ‹
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      showNextImage();
+                    }}
+                    aria-label="다음 이미지"
+                    className="absolute right-2 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-2xl text-white shadow-lg backdrop-blur-sm transition active:scale-90"
+                  >
+                    ›
+                  </button>
+
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-bold text-white backdrop-blur-sm">
+                    {safeActiveImageIndex + 1} / {displayImages.length}
+                  </div>
+                </>
+              )}
+            </div>
 
             <div className="p-4">
               <div className="flex flex-wrap items-center gap-2">
@@ -614,67 +724,74 @@ export default function BusinessNewsDetailPage() {
                 }}
               />
 
-              {galleryImages.length > 1 && (
-                <div className="mt-5 grid grid-cols-2 gap-2">
-                  {galleryImages
-                    .filter(
-                      (imageUrl) =>
-                        imageUrl !==
-                        representativeImage,
-                    )
-                    .map(
-                      (imageUrl, index) => (
-                        <button
-                          key={`${imageUrl}-${index}`}
-                          type="button"
-                          onClick={() =>
-                            setPreviewImage(
-                              imageUrl,
-                            )
-                          }
-                          className="group relative overflow-hidden rounded-xl bg-gray-100"
-                          aria-label={`${index + 2}번 이미지 크게 보기`}
-                        >
-                          <img
-                            src={imageUrl}
-                            alt={`${item.title} 이미지 ${
-                              index + 2
-                            }`}
-                            className="aspect-square w-full object-cover transition duration-200 group-active:scale-[0.98]"
-                            onError={(
-                              event,
-                            ) => {
-                              event.currentTarget.src =
-                                "/event.png";
-                            }}
-                          />
+              {attachments.length > 0 && (
+                <section className="mt-6 border-t border-gray-100 pt-5">
+                  <h2 className="text-[14px] font-bold">
+                    첨부파일
+                  </h2>
 
-                          <span className="absolute bottom-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white">
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              className="h-3.5 w-3.5"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
+                  <div className="mt-3 space-y-2">
+                    {attachments.map(
+                      (attachment, index) => (
+                        <div
+                          key={`${attachment.url}-${index}`}
+                          className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+                        >
+                          <div className="flex min-w-0 items-start gap-2">
+                            <span
+                              className="text-xl"
                               aria-hidden="true"
                             >
-                              <circle
-                                cx="11"
-                                cy="11"
-                                r="6"
-                              />
+                              📎
+                            </span>
 
-                              <path d="M16 16l4 4" />
-                              <path d="M11 8v6" />
-                              <path d="M8 11h6" />
-                            </svg>
-                          </span>
-                        </button>
+                            <div className="min-w-0 flex-1">
+                              <p className="break-all text-[12px] font-semibold text-[#172033]">
+                                {attachment.name ||
+                                  `첨부파일 ${index + 1}`}
+                              </p>
+
+                              {(attachment.type ||
+                                attachment.size) && (
+                                <p className="mt-0.5 text-[9px] text-gray-500">
+                                  {attachment.type || "File"}
+                                  {attachment.size
+                                    ? ` · ${formatFileSize(
+                                        attachment.size,
+                                      )}`
+                                    : ""}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex gap-2">
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex h-9 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-white text-[11px] font-semibold text-[#172033]"
+                            >
+                              바로 보기
+                            </a>
+
+                            <a
+                              href={attachment.url}
+                              download={
+                                attachment.name || true
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex h-9 flex-1 items-center justify-center rounded-lg bg-[#172033] text-[11px] font-semibold text-white"
+                            >
+                              다운로드
+                            </a>
+                          </div>
+                        </div>
                       ),
                     )}
-                </div>
+                  </div>
+                </section>
               )}
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -723,25 +840,25 @@ export default function BusinessNewsDetailPage() {
         </article>
       )}
 
-      {previewImage && !isLocked && (
+      {previewImageIndex !== null && !isLocked && (
         <div
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-3"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/95 p-3"
           role="dialog"
           aria-modal="true"
           aria-label="이미지 크게 보기"
           onClick={() =>
-            setPreviewImage(null)
+            setPreviewImageIndex(null)
           }
         >
           <button
             type="button"
             onClick={() =>
-              setPreviewImage(null)
+              setPreviewImageIndex(null)
             }
             aria-label="이미지 닫기"
             className="
               absolute right-4 top-[max(1rem,env(safe-area-inset-top))]
-              z-10 flex h-10 w-10 items-center justify-center
+              z-20 flex h-10 w-10 items-center justify-center
               rounded-full bg-white/15 text-2xl text-white
               backdrop-blur transition active:scale-90
             "
@@ -749,8 +866,47 @@ export default function BusinessNewsDetailPage() {
             ×
           </button>
 
+          {displayImages.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showPreviousPreviewImage();
+                }}
+                aria-label="이전 확대 이미지"
+                className="absolute left-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-4xl text-white backdrop-blur transition active:scale-90"
+              >
+                ‹
+              </button>
+
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  showNextPreviewImage();
+                }}
+                aria-label="다음 확대 이미지"
+                className="absolute right-3 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-4xl text-white backdrop-blur transition active:scale-90"
+              >
+                ›
+              </button>
+
+              <div className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1.5 text-[11px] font-bold text-white">
+                {previewImageIndex + 1} / {displayImages.length}
+              </div>
+            </>
+          )}
+
           <img
-            src={previewImage}
+            src={
+              displayImages[
+                Math.min(
+                  Math.max(previewImageIndex, 0),
+                  displayImages.length - 1,
+                )
+              ]
+            }
             alt="확대 이미지"
             className="max-h-[92vh] max-w-full object-contain"
             onClick={(event) =>
