@@ -21,6 +21,8 @@ export default async function CommunityInstagramPage() {
       instagram_post_url,
       caption,
       posted_at,
+      fetched_at,
+      updated_at,
       business:businesses(
         id,
         name
@@ -31,6 +33,10 @@ export default async function CommunityInstagramPage() {
     .not("instagram_post_url", "is", null)
     .not("posted_at", "is", null)
     .gte("posted_at", threeDaysAgo)
+    .order("fetched_at", {
+      ascending: false,
+      nullsFirst: false,
+    })
     .order("posted_at", {
       ascending: false,
       nullsFirst: false,
@@ -74,6 +80,7 @@ export default async function CommunityInstagramPage() {
             <h1 className="whitespace-nowrap text-[16px] font-extrabold leading-tight text-[#172033]">
               Today&apos;s Instagram
             </h1>
+
             <p className="mt-0.5 whitespace-nowrap text-[10px] font-semibold text-gray-500">
               오늘의 인스타그램
             </p>
