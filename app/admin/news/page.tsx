@@ -20,6 +20,7 @@ type NewsAttachment = {
   path: string;
   type: string;
   size: number;
+  external?: boolean;
 };
 
 const PDF_PLACEHOLDER_IMAGE = "/pdf-preview.svg";
@@ -148,6 +149,53 @@ function extractFirstImageUrl(html: string) {
 
     return "";
   }
+}
+
+
+function getFileNameFromUrl(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+    const lastPart = decodeURIComponent(
+      parsedUrl.pathname.split("/").filter(Boolean).pop() || "",
+    );
+
+    return lastPart || "외부 첨부파일";
+  } catch {
+    return "외부 첨부파일";
+  }
+}
+
+function normalizeAttachments(
+  attachments: NewsAttachment[],
+) {
+  const unique = new Map<string, NewsAttachment>();
+
+  attachments.forEach((attachment) => {
+    const url = String(attachment?.url ?? "").trim();
+
+    if (!url) {
+      return;
+    }
+
+    const name =
+      String(attachment?.name ?? "").trim() ||
+      getFileNameFromUrl(url);
+
+    unique.set(url, {
+      name,
+      url,
+      path: String(attachment?.path ?? ""),
+      type:
+        String(attachment?.type ?? "").trim() ||
+        "external/link",
+      size: Number(attachment?.size ?? 0),
+      external:
+        attachment?.external === true ||
+        !String(attachment?.path ?? "").trim(),
+    });
+  });
+
+  return Array.from(unique.values()).slice(0, 10);
 }
 
 function AdminBusinessNewsContent() {
@@ -336,7 +384,7 @@ function AdminBusinessNewsContent() {
         .toISOString()
         .slice(0, 16),
       attachments: Array.isArray(item.attachments)
-        ? item.attachments
+        ? normalizeAttachments(item.attachments)
         : [],
       external_file_name: "",
       external_file_url: "",
@@ -640,6 +688,7 @@ function AdminBusinessNewsContent() {
           path: "",
           type,
           size: 0,
+          external: true,
         },
       ],
       external_file_name: "",
@@ -1056,6 +1105,60 @@ function AdminBusinessNewsContent() {
         );
 
       /*
+       * 외부 파일 입력칸에 값이 남아 있어도 저장 버튼을 누르면
+       * attachments JSON에 자동으로 포함합니다.
+       */
+      const pendingExternalUrl =
+        form.external_file_url.trim();
+
+      const pendingExternalName =
+        form.external_file_name.trim() ||
+        (pendingExternalUrl
+          ? getFileNameFromUrl(pendingExternalUrl)
+          : "");
+
+      if (
+        pendingExternalUrl &&
+        !/^https?:\/\//i.test(pendingExternalUrl)
+      ) {
+        window.alert(
+          "외부 파일 링크는 http:// 또는 https://로 시작해야 합니다.",
+        );
+        return;
+      }
+
+      const pendingExternalAttachment:
+        | NewsAttachment
+        | null = pendingExternalUrl
+        ? {
+            name:
+              pendingExternalName ||
+              "외부 첨부파일",
+            url: pendingExternalUrl,
+            path: "",
+            type:
+              pendingExternalName
+                .toLowerCase()
+                .endsWith(".pdf") ||
+              pendingExternalUrl
+                .toLowerCase()
+                .includes(".pdf")
+                ? "application/pdf"
+                : "external/link",
+            size: 0,
+            external: true,
+          }
+        : null;
+
+      const attachmentsToSave =
+        normalizeAttachments([
+          ...form.attachments,
+          ...(pendingExternalAttachment
+            ? [pendingExternalAttachment]
+            : []),
+        ]);
+
+      /*
        * 대표 이미지 적용 순서
        *
        * 1. 첨부 이미지 중 사용자가 선택한 대표 이미지
@@ -1065,7 +1168,7 @@ function AdminBusinessNewsContent() {
        * 5. 위 이미지가 모두 없고 PDF가 첨부된 경우 PDF 기본 이미지
        */
       const hasPdfAttachment =
-        form.attachments.some(isPdfAttachment);
+        attachmentsToSave.some(isPdfAttachment);
 
       const representativeImageUrl =
         selectedUploadedImage ||
@@ -1096,7 +1199,7 @@ function AdminBusinessNewsContent() {
         published_at: new Date(
           form.published_at,
         ).toISOString(),
-        attachments: form.attachments,
+        attachments: attachmentsToSave,
       };
 
       let result;
@@ -1134,9 +1237,20 @@ function AdminBusinessNewsContent() {
           result.error,
         );
 
-        window.alert(
-          result.error.message,
-        );
+        const errorMessage =
+          String(result.error.message ?? "");
+
+        if (
+          /attachments/i.test(errorMessage) &&
+          /column|schema|cache/i.test(errorMessage)
+        ) {
+          window.alert(
+            "business_news 테이블에 attachments 컬럼이 없거나 Supabase 스키마 캐시가 갱신되지 않았습니다.\n\n" +
+              errorMessage,
+          );
+        } else {
+          window.alert(errorMessage);
+        }
 
         return;
       }
