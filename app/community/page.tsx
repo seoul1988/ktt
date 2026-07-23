@@ -73,17 +73,27 @@ export default async function CommunityPage() {
     console.error("community instagram error:", instagramError);
   }
 
-  const latestInstagramPosts = Array.from(
-    new Map(
-      (instagramPosts ?? []).map((post: any) => {
-        const business = Array.isArray(post.business)
-          ? post.business[0]
-          : post.business;
+ const latestInstagramPosts = Array.from(
+  new Map(
+    (instagramPosts ?? []).map((post: any) => {
+      const business = Array.isArray(post.business)
+        ? post.business[0]
+        : post.business;
 
-        return [business?.id ?? post.id, post];
-      }),
-    ).values(),
-  ).slice(0, 12);
+      return [business?.id ?? post.id, post];
+    }),
+  ).values(),
+);
+
+for (let i = latestInstagramPosts.length - 1; i > 0; i--) {
+  const j = Math.floor(Math.random() * (i + 1));
+  [latestInstagramPosts[i], latestInstagramPosts[j]] = [
+    latestInstagramPosts[j],
+    latestInstagramPosts[i],
+  ];
+}
+
+const displayedInstagramPosts = latestInstagramPosts.slice(0, 12);
 
   const { data: allBusinesses } = await supabase
     .from("businesses")
