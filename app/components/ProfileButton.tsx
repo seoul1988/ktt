@@ -248,27 +248,19 @@ export default function ProfileButton() {
       {open && (
         <div className="absolute right-0 top-10 z-[999999] w-60 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
           {isUser ? (
-            <div className="grid grid-cols-2 divide-x divide-[#EFE5D8]">
-              <Link
-                href="/profile"
-                className="flex items-center justify-center px-3 py-3 text-center hover:bg-[#F8F3EC]"
-                onClick={() =>
-                  setOpen(false)
-                }
-              >
-                Edit Profile
-              </Link>
+            <Link
+				  href="/profile"
+				  className="flex items-center justify-between px-4 py-3 hover:bg-[#F8F3EC]"
+				  onClick={() => setOpen(false)}
+				>
+				  <span>Edit Profile</span>
 
-              <Link
-                href="/profile"
-                className="flex items-center justify-center bg-[#FFF3C9] px-3 py-3 text-center font-black text-[#9F352C] hover:bg-[#FFE59A]"
-                onClick={() =>
-                  setOpen(false)
-                }
-              >
-                🏪 오너 신청
-              </Link>
-            </div>
+				  {isUser && (
+					<span className="rounded-full bg-[#FFF3C9] px-2.5 py-1 text-[11px] font-black text-[#C4483A]">
+					  🏪 오너 신청
+					</span>
+				  )}
+				</Link>
           ) : (
             <Link
               href="/profile"
