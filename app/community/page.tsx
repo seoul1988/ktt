@@ -5,6 +5,7 @@ import ProfileButton from "../components/ProfileButton";
 
 
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
+import InstagramAutoCarousel from "../components/InstagramAutoCarousel";
 
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,16 @@ export const revalidate = 0;
 
 export default async function CommunityPage() {
   const today = new Date().toISOString().slice(0, 10);
+  /**
+   * Instagram 게시물은 최초 저장된 posted_at 기준으로
+   * 최근 72시간 이내의 게시물만 Community에 표시합니다.
+   *
+   * Sync를 다시 실행해도 같은 게시물이라면 posted_at은 유지되고
+   * fetched_at만 갱신되므로, 3일이 지나면 자동으로 숨겨집니다.
+   */
+  const instagramCutoff = new Date(
+    Date.now() - 3 * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
   const { data: events, error: eventsError } = await supabase
     .from("community_events")
@@ -36,6 +47,43 @@ export default async function CommunityPage() {
   if (dealsError) {
     console.error("community deals error:", dealsError);
   }
+
+  const { data: instagramPosts, error: instagramError } = await supabase
+    .from("business_instagram_posts")
+    .select(`
+      id,
+      stored_image_url,
+      instagram_post_url,
+      posted_at,
+      fetched_at,
+      business:businesses(
+        id,
+        name
+      )
+    `)
+    .eq("status", "active")
+    .not("stored_image_url", "is", null)
+    .not("instagram_post_url", "is", null)
+    .not("posted_at", "is", null)
+    .gte("posted_at", instagramCutoff)
+    .order("posted_at", { ascending: false, nullsFirst: false })
+    .limit(100);
+
+  if (instagramError) {
+    console.error("community instagram error:", instagramError);
+  }
+
+  const latestInstagramPosts = Array.from(
+    new Map(
+      (instagramPosts ?? []).map((post: any) => {
+        const business = Array.isArray(post.business)
+          ? post.business[0]
+          : post.business;
+
+        return [business?.id ?? post.id, post];
+      }),
+    ).values(),
+  ).slice(0, 12);
 
   const { data: allBusinesses } = await supabase
     .from("businesses")
@@ -168,6 +216,9 @@ export default async function CommunityPage() {
   <ProfileButton />
 </div>
 </div>
+
+        {/* Today's Instagram */}
+        <InstagramAutoCarousel posts={latestInstagramPosts as any[]} />
 
         {/* Upcoming Events */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">
