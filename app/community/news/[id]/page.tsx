@@ -121,6 +121,7 @@ export default function BusinessNewsDetailPage() {
     useState(0);
   const [previewImageIndex, setPreviewImageIndex] =
     useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const newsId = Number(params.id);
 
@@ -451,6 +452,55 @@ export default function BusinessNewsDetailPage() {
   function closeLoginModal() {
     setShowLoginModal(false);
     router.replace("/community/news");
+  }
+
+  async function handleShare() {
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: item?.title || "Business News",
+      text: item?.summary || item?.title || "Business News",
+      url: shareUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
+
+      console.error("Share failed:", error);
+      window.alert("공유하지 못했습니다.");
+    }
+  }
+
+  async function handleCopyAddress() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch (error) {
+      console.error("Copy address failed:", error);
+
+      const textarea = document.createElement("textarea");
+      textarea.value = window.location.href;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    }
   }
 
   const pageLoading = loading || authLoading;
@@ -798,17 +848,62 @@ export default function BusinessNewsDetailPage() {
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <Link
                     href="/community/news"
-                    className="shrink-0 rounded-xl border border-gray-300 px-4 py-2 text-[12px] font-semibold"
+                    className="shrink-0 rounded-xl border border-gray-300 px-3 py-2 text-[11px] font-semibold"
                   >
                     뉴스 목록
                   </Link>
+
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-2 text-[11px] font-semibold text-[#172033] transition active:scale-95"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-4 w-4"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <path d="M8.6 10.7l6.8-4.4" />
+                      <path d="M8.6 13.3l6.8 4.4" />
+                    </svg>
+                    공유
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyAddress}
+                    className="flex shrink-0 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-2 text-[11px] font-semibold text-[#172033] transition active:scale-95"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      className="h-4 w-4"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    {copied ? "복사됨" : "주소 복사"}
+                  </button>
 
                   {item.source_url && (
                     <a
                       href={item.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="shrink-0 rounded-xl bg-[#172033] px-4 py-2 text-[12px] font-semibold text-white"
+                      className="shrink-0 rounded-xl bg-[#172033] px-3 py-2 text-[11px] font-semibold text-white"
                     >
                       원문 보기
                     </a>
