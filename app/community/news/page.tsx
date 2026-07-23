@@ -61,6 +61,9 @@ function categoryMatches(
   itemCategory: string,
   activeCategory: string,
 ) {
+  const item = normalizeCategory(itemCategory);
+  const active = normalizeCategory(activeCategory);
+
   if (activeCategory === "All") {
     return true;
   }
@@ -69,10 +72,38 @@ function categoryMatches(
     return isCultureCategory(itemCategory);
   }
 
-  return (
-    normalizeCategory(itemCategory) ===
-    normalizeCategory(activeCategory)
-  );
+  if (activeCategory === "Local Business News") {
+    return [
+      "local business news",
+      "local business",
+      "business news",
+      "지역 비즈니스 뉴스",
+      "지역비즈니스뉴스",
+      "비즈니스 뉴스",
+      "비즈니스뉴스",
+      "지역 뉴스",
+      "지역뉴스",
+    ].includes(item);
+  }
+
+  if (activeCategory === "Chamber News") {
+    return [
+      "chamber news",
+      "chamber",
+      "kacc news",
+      "kacc",
+      "상공인뉴스",
+      "상공인 뉴스",
+      "상공회의소뉴스",
+      "상공회의소 뉴스",
+      "상공회뉴스",
+      "상공회 뉴스",
+      "협회뉴스",
+      "협회 뉴스",
+    ].includes(item);
+  }
+
+  return item === active;
 }
 
 function formatDate(value: string) {
