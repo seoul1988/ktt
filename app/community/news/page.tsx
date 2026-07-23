@@ -532,21 +532,21 @@ export default function CommunityNewsPage() {
                 src={featuredNews.image_url || "/event.png"}
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
-  isLocked(featuredNews)
-    ? "scale-[1.05] blur-[3px] brightness-[0.7]"
-    : ""
-}`}
+                  isLocked(featuredNews)
+                    ? "scale-[1.005] blur-[0.25px] brightness-[0.98]"
+                    : ""
+                }`}
                 onError={(event) => {
                   event.currentTarget.src = "/event.png";
                 }}
               />
 
               <div
-               className={`absolute inset-0 bg-gradient-to-t ${
-  isLocked(featuredNews)
-    ? "from-black/75 via-black/35 to-black/10"
-    : "from-black/80 via-black/15 to-transparent"
-}`}
+                className={`absolute inset-0 bg-gradient-to-t ${
+                  isLocked(featuredNews)
+                    ? "from-black/55 via-black/0 to-transparent"
+                    : "from-black/80 via-black/15 to-transparent"
+                }`}
               />
 
               <span className="absolute left-3 top-3 rounded-full bg-[#F7A928] px-2.5 py-1 text-[9px] font-semibold text-[#172033]">
