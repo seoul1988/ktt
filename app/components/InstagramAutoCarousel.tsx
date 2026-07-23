@@ -88,6 +88,9 @@ export default function InstagramAutoCarousel({
     [posts],
   );
 
+  /*
+   * Instagram 자동 스크롤
+   */
   useEffect(() => {
     const container = scrollRef.current;
 
@@ -120,22 +123,50 @@ export default function InstagramAutoCarousel({
       }
     }, AUTO_SCROLL_MS);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+    };
   }, [
     normalizedPosts.length,
     isInteracting,
     selectedPost,
   ]);
 
+  /*
+   * 이미지 확대 시:
+   * 1. 페이지 스크롤 중지
+   * 2. CommunityBottomNav 숨김
+   * 3. ESC 키로 닫기
+   */
   useEffect(() => {
+    const bottomNavWrapper =
+      document.getElementById(
+        "community-bottom-nav-wrapper",
+      );
+
     if (!selectedPost) {
+      if (bottomNavWrapper) {
+        bottomNavWrapper.style.display = "";
+      }
+
       return;
     }
 
-    const previousOverflow =
+    const previousBodyOverflow =
       document.body.style.overflow;
 
+    const previousHtmlOverflow =
+      document.documentElement.style.overflow;
+
+    const previousBottomNavDisplay =
+      bottomNavWrapper?.style.display ?? "";
+
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    if (bottomNavWrapper) {
+      bottomNavWrapper.style.display = "none";
+    }
 
     const handleEscape = (
       event: KeyboardEvent,
@@ -152,7 +183,15 @@ export default function InstagramAutoCarousel({
 
     return () => {
       document.body.style.overflow =
-        previousOverflow;
+        previousBodyOverflow;
+
+      document.documentElement.style.overflow =
+        previousHtmlOverflow;
+
+      if (bottomNavWrapper) {
+        bottomNavWrapper.style.display =
+          previousBottomNavDisplay;
+      }
 
       window.removeEventListener(
         "keydown",
@@ -160,6 +199,10 @@ export default function InstagramAutoCarousel({
       );
     };
   }, [selectedPost]);
+
+  const closePreview = () => {
+    setSelectedPost(null);
+  };
 
   const stopAutoScroll = () => {
     setIsInteracting(true);
@@ -277,156 +320,172 @@ export default function InstagramAutoCarousel({
                   flexWrap: "nowrap",
                 }}
               >
-                {normalizedPosts.map(
-                  (post) => {
-                    const business =
-                      post.business as
-                        | InstagramBusiness
-                        | null;
+                {normalizedPosts.map((post) => {
+                  const business =
+                    post.business as
+                      | InstagramBusiness
+                      | null;
 
-                    return (
-                      <button
-                        key={post.id}
-                        type="button"
-                        onClick={() =>
-                          setSelectedPost(post)
-                        }
+                  return (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedPost(post)
+                      }
+                      style={{
+                        display: "block",
+                        width: `${CARD_SIZE}px`,
+                        minWidth: `${CARD_SIZE}px`,
+                        maxWidth: `${CARD_SIZE}px`,
+                        flex: `0 0 ${CARD_SIZE}px`,
+                        textDecoration: "none",
+                        scrollSnapAlign: "start",
+                        textAlign: "left",
+                        background: "transparent",
+                        border: 0,
+                        padding: 0,
+                      }}
+                      aria-label={`Open ${
+                        business?.name ||
+                        "Instagram"
+                      } image`}
+                    >
+                      <div
                         style={{
-                          display: "block",
                           width: `${CARD_SIZE}px`,
-                          minWidth: `${CARD_SIZE}px`,
-                          maxWidth: `${CARD_SIZE}px`,
-                          flex: `0 0 ${CARD_SIZE}px`,
-                          textDecoration: "none",
-                          scrollSnapAlign: "start",
-                          textAlign: "left",
-                          background: "transparent",
-                          border: 0,
-                          padding: 0,
+                          height: `${CARD_SIZE}px`,
+                          overflow: "hidden",
+                          borderRadius: "22px",
+                          background: "#E8DED1",
+                          boxShadow:
+                            "0 1px 3px rgba(0,0,0,0.12)",
                         }}
-                        aria-label={`Open ${
-                          business?.name ||
-                          "Instagram"
-                        } image`}
                       >
-                        <div
+                        <img
+                          src={post.stored_image_url}
+                          alt={`${
+                            business?.name ||
+                            "KTownTriangle business"
+                          } Instagram post`}
+                          draggable={false}
                           style={{
+                            display: "block",
                             width: `${CARD_SIZE}px`,
                             height: `${CARD_SIZE}px`,
-                            overflow: "hidden",
-                            borderRadius: "22px",
-                            background: "#E8DED1",
-                            boxShadow:
-                              "0 1px 3px rgba(0,0,0,0.12)",
+                            objectFit: "cover",
                           }}
-                        >
-                          <img
-                            src={
-                              post.stored_image_url
-                            }
-                            alt={`${
-                              business?.name ||
-                              "KTownTriangle business"
-                            } Instagram post`}
-                            style={{
-                              display: "block",
-                              width: `${CARD_SIZE}px`,
-                              height: `${CARD_SIZE}px`,
-                              objectFit: "cover",
-                            }}
-                          />
-                        </div>
+                        />
+                      </div>
 
-                        <p
-                          style={{
-                            marginTop: "8px",
-                            overflow: "hidden",
-                            textOverflow:
-                              "ellipsis",
-                            whiteSpace: "nowrap",
-                            fontSize: "14px",
-                            fontWeight: 900,
-                            color: "#172033",
-                          }}
-                        >
-                          {business?.name ||
-                            "Local Business"}
-                        </p>
-                      </button>
-                    );
-                  },
-                )}
+                      <p
+                        style={{
+                          marginTop: "8px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          fontSize: "14px",
+                          fontWeight: 900,
+                          color: "#172033",
+                        }}
+                      >
+                        {business?.name ||
+                          "Local Business"}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
         ) : (
           <div className="rounded-2xl bg-white px-4 py-5 text-center text-sm font-bold text-[#6B6257]">
-            No Instagram posts from the last
-            3 days.
+            No Instagram posts from the last 3 days.
           </div>
         )}
       </section>
 
       {selectedPost && (
         <div
-          className="fixed inset-0 z-[100] bg-black"
+          className="fixed inset-0 z-[99999] flex h-[100dvh] w-screen cursor-pointer items-center justify-center bg-black p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Instagram image preview"
-          onClick={() => setSelectedPost(null)}
+          onClick={closePreview}
+          onPointerUp={closePreview}
         >
+          {/* X 닫기 버튼 */}
           <button
             type="button"
-            onClick={() => setSelectedPost(null)}
-            className="absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl font-black text-white shadow-lg"
+            onClick={(event) => {
+              event.stopPropagation();
+              closePreview();
+            }}
+            onPointerUp={(event) => {
+              event.stopPropagation();
+            }}
+            className="absolute right-4 top-4 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl font-black text-white shadow-lg backdrop-blur-sm"
+            style={{
+              top: "max(1rem, env(safe-area-inset-top))",
+            }}
             aria-label="Close"
           >
             ×
           </button>
 
-          <div className="flex h-full w-full items-center justify-center p-4">
-            <div
-              className="relative inline-block max-h-full max-w-full"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <img
-                src={selectedPost.stored_image_url}
-                alt="Instagram post"
-                className="block max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
-                style={{
-                  width: "auto",
-                  height: "auto",
-                  objectFit: "contain",
+          {/* 확대 이미지 */}
+          <div className="relative inline-block max-h-full max-w-full">
+            <img
+              src={selectedPost.stored_image_url}
+              alt={`${
+                (
+                  selectedPost.business as InstagramBusiness | null
+                )?.name || "Local Business"
+              } Instagram post`}
+              draggable={false}
+              className="block max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] cursor-pointer select-none object-contain"
+              style={{
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                WebkitUserSelect: "none",
+                userSelect: "none",
+              }}
+            />
+
+            {/* 이미지 상단 상호 */}
+            <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 bg-gradient-to-b from-black/75 via-black/35 to-transparent px-4 py-4">
+              <h2 className="pr-14 text-lg font-black tracking-wide text-white drop-shadow">
+                {(
+                  selectedPost.business as InstagramBusiness | null
+                )?.name || "Local Business"}
+              </h2>
+            </div>
+
+            {/* 이미지 하단 상호 및 Instagram 버튼 */}
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-20 flex items-center justify-between gap-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-4 py-4">
+              <span className="min-w-0 truncate text-base font-black text-white drop-shadow">
+                {(
+                  selectedPost.business as InstagramBusiness | null
+                )?.name || "Local Business"}
+              </span>
+
+              <a
+                href={selectedPost.instagram_post_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(event) => {
+                  event.stopPropagation();
                 }}
-              />
-
-              <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 bg-gradient-to-b from-black/70 via-black/35 to-transparent px-4 py-4">
-                <h2 className="pr-14 text-lg font-black tracking-wide text-white drop-shadow">
-                  {(
-                    selectedPost.business as InstagramBusiness | null
-                  )?.name || "Local Business"}
-                </h2>
-              </div>
-
-              <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between gap-3 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 py-4">
-                <span className="min-w-0 truncate text-base font-black text-white drop-shadow">
-                  {(
-                    selectedPost.business as InstagramBusiness | null
-                  )?.name || "Local Business"}
-                </span>
-
-                <a
-                  href={selectedPost.instagram_post_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(event) => event.stopPropagation()}
-                  className="flex shrink-0 items-center gap-2 rounded-full bg-black/35 px-3 py-2 text-sm font-bold text-white backdrop-blur-sm"
-                  aria-label="Open on Instagram"
-                >
-                  <InstagramLogo />
-                  <span>Instagram</span>
-                </a>
-              </div>
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                }}
+                className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-full bg-black/45 px-3 py-2 text-sm font-bold text-white backdrop-blur-sm"
+                aria-label="Open on Instagram"
+              >
+                <InstagramLogo />
+                <span>Instagram</span>
+              </a>
             </div>
           </div>
         </div>

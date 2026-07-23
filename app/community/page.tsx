@@ -540,7 +540,9 @@ const displayedInstagramPosts = latestInstagramPosts.slice(0, 12);
       </section>
 
 
-      <CommunityBottomNav activeNav="community" />
+      <div id="community-bottom-nav-wrapper">
+  <CommunityBottomNav activeNav="community" />
+</div>
     </main>
 	 </>
   );

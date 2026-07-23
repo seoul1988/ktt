@@ -395,14 +395,12 @@ export default function CommunityNewsPage() {
     }
   }
 
-
-
   const pageLoading = loading || authLoading;
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-lg items-center px-3">
+        <div className="mx-auto flex h-14 w-full max-w-md items-center px-3">
           <button
             type="button"
             onClick={() => router.back()}
