@@ -533,7 +533,7 @@ export default function CommunityNewsPage() {
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
                   isLocked(featuredNews)
-                    ? "scale-[1.02] blur-[0.75px] brightness-[0.98]"
+                    ? "scale-[1.02] blur-[1px] brightness-[0.9]"
                     : ""
                 }`}
                 onError={(event) => {
