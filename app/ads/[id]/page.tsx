@@ -36,9 +36,17 @@ function statusLabel(status: string | null) {
 }
 
 function statusClass(status: string | null) {
-  if (status === "active") return "bg-green-600";
-  if (status === "expired") return "bg-gray-500";
-  if (status === "hidden") return "bg-red-500";
+  if (status === "active") {
+    return "bg-green-600";
+  }
+
+  if (status === "expired") {
+    return "bg-gray-500";
+  }
+
+  if (status === "hidden") {
+    return "bg-red-500";
+  }
 
   return "bg-green-600";
 }
@@ -54,7 +62,10 @@ function normalizeWebsiteUrl(url: string) {
 }
 
 function getDirectionUrl(ad: AdItem) {
-  if (ad.lat !== null && ad.lng !== null) {
+  if (
+    ad.lat !== null &&
+    ad.lng !== null
+  ) {
     return `https://www.google.com/maps/dir/?api=1&destination=${ad.lat},${ad.lng}`;
   }
 
@@ -100,7 +111,9 @@ export default async function AdDetailPage({
   const ad = data as AdItem;
 
   const cookieStore = await cookies();
-  const adminRole = cookieStore.get("ktt_admin")?.value;
+
+  const adminRole =
+    cookieStore.get("ktt_admin")?.value;
 
   const isAdmin =
     adminRole === "admin" ||
@@ -116,7 +129,8 @@ export default async function AdDetailPage({
       ad.user_id === user.id,
   );
 
-  const canManage = isAdmin || isOwner;
+  const canManage =
+    isAdmin || isOwner;
 
   const cleanImages = Array.isArray(ad.images)
     ? ad.images.filter(
@@ -135,7 +149,9 @@ export default async function AdDetailPage({
   const cleanWebsiteUrl =
     typeof ad.website_url === "string" &&
     ad.website_url.trim() !== ""
-      ? normalizeWebsiteUrl(ad.website_url)
+      ? normalizeWebsiteUrl(
+          ad.website_url,
+        )
       : null;
 
   const cleanPhone =
@@ -162,10 +178,14 @@ export default async function AdDetailPage({
       ? ad.description.trim()
       : null;
 
-  const directionUrl = getDirectionUrl(ad);
+  const directionUrl =
+    getDirectionUrl(ad);
 
-  const hasImage = cleanImages.length > 0;
-  const hasVideo = Boolean(cleanVideoUrl);
+  const hasImage =
+    cleanImages.length > 0;
+
+  const hasVideo =
+    Boolean(cleanVideoUrl);
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
@@ -247,7 +267,9 @@ export default async function AdDetailPage({
                   📍
                 </span>
 
-                <span>{cleanLocation}</span>
+                <span>
+                  {cleanLocation}
+                </span>
               </p>
             )}
 
@@ -257,7 +279,9 @@ export default async function AdDetailPage({
                   📞
                 </span>
 
-                <span>{cleanPhone}</span>
+                <span>
+                  {cleanPhone}
+                </span>
               </p>
             )}
 
@@ -275,7 +299,9 @@ export default async function AdDetailPage({
                   🌐
                 </span>
 
-                <span>{ad.website_url}</span>
+                <span>
+                  {ad.website_url}
+                </span>
               </a>
             )}
 
@@ -296,14 +322,14 @@ export default async function AdDetailPage({
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <Link
                   href={`/ads/${ad.id}/edit`}
-                  className="flex min-h-[52px] items-center justify-center rounded-2xl bg-[#172033] px-3 py-3 text-center text-sm font-black text-white transition active:scale-[0.98]"
+                  className="flex h-10 items-center justify-center rounded-xl bg-[#172033] px-3 text-center text-sm font-bold text-white transition active:scale-[0.98]"
                 >
                   ✏️ 수정
                 </Link>
 
                 <Link
                   href={`/ads/${ad.id}/delete`}
-                  className="flex min-h-[52px] items-center justify-center rounded-2xl bg-red-600 px-3 py-3 text-center text-sm font-black text-white transition active:scale-[0.98]"
+                  className="flex h-10 items-center justify-center rounded-xl bg-red-600 px-3 text-center text-sm font-bold text-white transition active:scale-[0.98]"
                 >
                   🗑 삭제
                 </Link>
