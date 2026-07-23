@@ -237,6 +237,9 @@ export default function CommunityHubPage() {
       initialRecentBadgeState,
     );
 
+  const [latestNewsTitle, setLatestNewsTitle] =
+    useState("");
+
   useEffect(() => {
     let cancelled = false;
 
@@ -286,6 +289,63 @@ export default function CommunityHubPage() {
      */
     const intervalId = window.setInterval(
       loadRecentBadges,
+      10 * 60 * 1000,
+    );
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadLatestNewsTitle() {
+      /*
+       * business_news 테이블에서 가장 최근에 등록된
+       * 뉴스 제목 1개를 가져옵니다.
+       *
+       * 현재 프로젝트에서 created_at을 사용하지 않는 경우
+       * 아래 order 컬럼을 published_at 또는 id로 변경하면 됩니다.
+       */
+      const { data, error } = await supabase
+        .from("business_news")
+        .select("title")
+        .not("title", "is", null)
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.error(
+          "Latest news title load error:",
+          error.message,
+        );
+
+        setLatestNewsTitle("");
+        return;
+      }
+
+      setLatestNewsTitle(
+        String(data?.title || "").trim(),
+      );
+    }
+
+    loadLatestNewsTitle();
+
+    /*
+     * 페이지를 계속 열어둔 경우 10분마다
+     * 최신 뉴스 제목을 다시 확인합니다.
+     */
+    const intervalId = window.setInterval(
+      loadLatestNewsTitle,
       10 * 60 * 1000,
     );
 
@@ -406,6 +466,16 @@ export default function CommunityHubPage() {
                     <p className="mt-1 text-[10px] font-semibold text-gray-500">
                       {item.subtitle}
                     </p>
+
+                    {item.badgeKey === "news" &&
+                      latestNewsTitle && (
+                        <p
+                          title={latestNewsTitle}
+                          className="mt-1.5 max-w-[250px] truncate text-[10px] font-medium text-gray-400"
+                        >
+                          {latestNewsTitle}
+                        </p>
+                      )}
                   </div>
                 </div>
               </>
