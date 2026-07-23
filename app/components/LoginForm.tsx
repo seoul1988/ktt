@@ -1,51 +1,122 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
+
 import { supabase } from "../../lib/supabase";
 
-const LOGIN_REDIRECT_KEY = "ktown_login_redirect";
+const LOGIN_REDIRECT_KEY =
+  "ktown_login_redirect";
+
+type OAuthProvider =
+  | "google"
+  | "facebook"
+  | "kakao";
+
+function isSafeInternalPath(
+  value: string | null | undefined,
+): value is string {
+  if (!value) {
+    return false;
+  }
+
+  return (
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/login") &&
+    !value.startsWith("/auth/")
+  );
+}
 
 export default function LoginForm() {
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [password, setPassword] =
+    useState("");
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
   const [isLoading, setIsLoading] =
     useState(false);
 
   const [redirectPath, setRedirectPath] =
     useState("/");
 
-  function isSafeInternalPath(
-    value: string | null,
-  ) {
-    return Boolean(
-      value &&
-        value.startsWith("/") &&
-        !value.startsWith("//") &&
-        !value.startsWith("/login"),
-    );
+  const queryRedirect =
+    searchParams.get("redirect");
+
+  const loginError =
+    searchParams.get("error");
+
+  /**
+   * 로그인 버튼을 누르는 순간 돌아갈 주소를 다시 계산합니다.
+   *
+   * 1순위: /login?redirect=...
+   * 2순위: sessionStorage
+   * 3순위: 현재 state
+   * 4순위: 홈
+   */
+  function resolveRedirectPath() {
+    if (
+      isSafeInternalPath(queryRedirect)
+    ) {
+      return queryRedirect;
+    }
+
+    if (
+      typeof window !== "undefined"
+    ) {
+      const storedRedirect =
+        sessionStorage.getItem(
+          LOGIN_REDIRECT_KEY,
+        );
+
+      if (
+        isSafeInternalPath(
+          storedRedirect,
+        )
+      ) {
+        return storedRedirect;
+      }
+    }
+
+    if (
+      isSafeInternalPath(
+        redirectPath,
+      )
+    ) {
+      return redirectPath;
+    }
+
+    return "/";
   }
 
   useEffect(() => {
-    const queryRedirect =
-      searchParams.get("redirect");
+    if (
+      typeof window === "undefined"
+    ) {
+      return;
+    }
 
-    /*
-      1순위: /login?redirect=...
-      2순위: sessionStorage에 저장된 이전 페이지
-      3순위: 홈
-    */
-    if (isSafeInternalPath(queryRedirect)) {
-      setRedirectPath(queryRedirect as string);
+    if (
+      isSafeInternalPath(
+        queryRedirect,
+      )
+    ) {
+      setRedirectPath(
+        queryRedirect,
+      );
 
       sessionStorage.setItem(
         LOGIN_REDIRECT_KEY,
-        queryRedirect as string,
+        queryRedirect,
       );
 
       return;
@@ -56,55 +127,88 @@ export default function LoginForm() {
         LOGIN_REDIRECT_KEY,
       );
 
-    if (isSafeInternalPath(storedRedirect)) {
-      setRedirectPath(storedRedirect as string);
+    if (
+      isSafeInternalPath(
+        storedRedirect,
+      )
+    ) {
+      setRedirectPath(
+        storedRedirect,
+      );
+
       return;
     }
 
     setRedirectPath("/");
-  }, [searchParams]);
+  }, [queryRedirect]);
+
+  useEffect(() => {
+    if (!loginError) {
+      return;
+    }
+
+    console.error(
+      "Login callback error:",
+      loginError,
+    );
+  }, [loginError]);
 
   function completeLoginRedirect() {
-    const storedRedirect =
-      sessionStorage.getItem(
-        LOGIN_REDIRECT_KEY,
-      );
-
     const finalRedirect =
-      isSafeInternalPath(redirectPath)
-        ? redirectPath
-        : isSafeInternalPath(storedRedirect)
-          ? (storedRedirect as string)
-          : "/";
+      resolveRedirectPath();
 
     sessionStorage.removeItem(
       LOGIN_REDIRECT_KEY,
     );
 
-    window.location.replace(finalRedirect);
+    /*
+     * router.push보다 location.replace를 사용하면
+     * 로그인 전 페이지가 로그인 기록으로 남지 않습니다.
+     */
+    window.location.replace(
+      finalRedirect,
+    );
   }
 
   async function login() {
-    const cleanEmail = email.trim();
+    const cleanEmail =
+      email.trim();
 
-    if (!cleanEmail || !password) {
+    if (
+      !cleanEmail ||
+      !password
+    ) {
       alert(
         "Please enter your email and password.",
       );
+
       return;
     }
 
     try {
       setIsLoading(true);
 
-      const { error } =
-        await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
+      const {
+        data,
+        error,
+      } =
+        await supabase.auth.signInWithPassword(
+          {
+            email: cleanEmail,
+            password,
+          },
+        );
 
       if (error) {
         alert(error.message);
+        return;
+      }
+
+      if (!data.session) {
+        alert(
+          "로그인 세션을 생성하지 못했습니다.",
+        );
+
         return;
       }
 
@@ -124,18 +228,23 @@ export default function LoginForm() {
   }
 
   async function startOAuthLogin(
-    provider:
-      | "google"
-      | "facebook"
-      | "kakao",
+    provider: OAuthProvider,
   ) {
+    if (
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
     try {
       setIsLoading(true);
 
+      /*
+       * OAuth 버튼을 누르는 그 순간
+       * query와 sessionStorage를 다시 확인합니다.
+       */
       const finalRedirect =
-        isSafeInternalPath(redirectPath)
-          ? redirectPath
-          : "/";
+        resolveRedirectPath();
 
       sessionStorage.setItem(
         LOGIN_REDIRECT_KEY,
@@ -143,30 +252,45 @@ export default function LoginForm() {
       );
 
       const callbackUrl =
-        `${window.location.origin}/auth/callback` +
-        `?redirect=${encodeURIComponent(
-          finalRedirect,
-        )}`;
+        new URL(
+          "/auth/callback",
+          window.location.origin,
+        );
+
+      callbackUrl.searchParams.set(
+        "redirect",
+        finalRedirect,
+      );
 
       const options =
         provider === "google"
           ? {
-              redirectTo: callbackUrl,
+              redirectTo:
+                callbackUrl.toString(),
               queryParams: {
-                prompt: "select_account",
+                prompt:
+                  "select_account",
               },
             }
           : {
-              redirectTo: callbackUrl,
+              redirectTo:
+                callbackUrl.toString(),
             };
 
       const { error } =
-        await supabase.auth.signInWithOAuth({
-          provider,
-          options,
-        });
+        await supabase.auth.signInWithOAuth(
+          {
+            provider,
+            options,
+          },
+        );
 
       if (error) {
+        console.error(
+          `${provider} OAuth error:`,
+          error,
+        );
+
         alert(error.message);
         setIsLoading(false);
       }
@@ -176,13 +300,14 @@ export default function LoginForm() {
         error,
       );
 
+      const providerName =
+        provider
+          .charAt(0)
+          .toUpperCase() +
+        provider.slice(1);
+
       alert(
-        `${
-          provider
-            .charAt(0)
-            .toUpperCase() +
-          provider.slice(1)
-        } login could not be started.`,
+        `${providerName} login could not be started.`,
       );
 
       setIsLoading(false);
@@ -196,22 +321,47 @@ export default function LoginForm() {
       event.key === "Enter" &&
       !isLoading
     ) {
+      event.preventDefault();
       login();
     }
   }
 
+  const safeRedirectPath =
+    useMemo(() => {
+      if (
+        isSafeInternalPath(
+          queryRedirect,
+        )
+      ) {
+        return queryRedirect;
+      }
+
+      if (
+        isSafeInternalPath(
+          redirectPath,
+        )
+      ) {
+        return redirectPath;
+      }
+
+      return "/";
+    }, [
+      queryRedirect,
+      redirectPath,
+    ]);
+
   const signupHref =
-    redirectPath === "/"
+    safeRedirectPath === "/"
       ? "/signup"
       : `/signup?redirect=${encodeURIComponent(
-          redirectPath,
+          safeRedirectPath,
         )}`;
 
   const forgotPasswordHref =
-    redirectPath === "/"
+    safeRedirectPath === "/"
       ? "/forgot-password"
       : `/forgot-password?redirect=${encodeURIComponent(
-          redirectPath,
+          safeRedirectPath,
         )}`;
 
   return (
@@ -222,12 +372,20 @@ export default function LoginForm() {
             Sign in to your account.
           </p>
 
-          {redirectPath !== "/" && (
+          {safeRedirectPath !==
+            "/" && (
             <p className="mt-1 text-xs font-medium text-gray-500">
-              로그인 후 이전 페이지로 돌아갑니다.
+              로그인 후 이전 페이지로
+              돌아갑니다.
             </p>
           )}
         </div>
+
+        {loginError && (
+          <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-600">
+            {loginError}
+          </div>
+        )}
 
         <div className="space-y-3">
           <label className="block">
@@ -238,8 +396,13 @@ export default function LoginForm() {
             <input
               type="email"
               value={email}
-              onChange={(event) =>
-                setEmail(event.target.value)
+              onChange={(
+                event,
+              ) =>
+                setEmail(
+                  event.target
+                    .value,
+                )
               }
               placeholder="Enter your email"
               autoComplete="email"
@@ -256,9 +419,12 @@ export default function LoginForm() {
             <div className="relative">
               <input
                 value={password}
-                onChange={(event) =>
+                onChange={(
+                  event,
+                ) =>
                   setPassword(
-                    event.target.value,
+                    event.target
+                      .value,
                   )
                 }
                 onKeyDown={
@@ -279,7 +445,8 @@ export default function LoginForm() {
                 type="button"
                 onClick={() =>
                   setShowPassword(
-                    (current) => !current,
+                    (current) =>
+                      !current,
                   )
                 }
                 disabled={isLoading}
@@ -310,31 +477,33 @@ export default function LoginForm() {
         </div>
 
         <div className="mt-3 text-center text-sm font-semibold text-gray-500">
-          <a
+          <Link
             href="/forgot-username"
             className="hover:text-[#172033]"
           >
             Forgot Username
-          </a>
+          </Link>
 
           <span className="mx-2 text-gray-300">
             |
           </span>
 
-          <a
-            href={forgotPasswordHref}
+          <Link
+            href={
+              forgotPasswordHref
+            }
             className="hover:text-[#172033]"
           >
             Forgot Password
-          </a>
+          </Link>
         </div>
 
-        <a
+        <Link
           href={signupHref}
           className="mt-4 block w-full rounded-[18px] border border-gray-200 bg-gray-50 py-2 text-center text-base font-medium text-[#172033] transition hover:bg-gray-100"
         >
           Create an Account
-        </a>
+        </Link>
 
         <div className="my-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-gray-200" />
@@ -350,7 +519,9 @@ export default function LoginForm() {
           <button
             type="button"
             onClick={() =>
-              startOAuthLogin("google")
+              startOAuthLogin(
+                "google",
+              )
             }
             disabled={isLoading}
             aria-label="Continue with Google"
@@ -366,7 +537,9 @@ export default function LoginForm() {
           <button
             type="button"
             onClick={() =>
-              startOAuthLogin("facebook")
+              startOAuthLogin(
+                "facebook",
+              )
             }
             disabled={isLoading}
             aria-label="Continue with Facebook"
@@ -382,7 +555,9 @@ export default function LoginForm() {
           <button
             type="button"
             onClick={() =>
-              startOAuthLogin("kakao")
+              startOAuthLogin(
+                "kakao",
+              )
             }
             disabled={isLoading}
             aria-label="Continue with Kakao"
@@ -398,7 +573,8 @@ export default function LoginForm() {
 
         <div className="mt-5 border-t border-gray-100 pt-4 text-center">
           <p className="text-xs leading-5 text-gray-400">
-            By signing in, you agree to our policies.
+            By signing in, you
+            agree to our policies.
           </p>
 
           <div className="mt-2 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold">
@@ -439,7 +615,9 @@ export default function LoginForm() {
           </div>
 
           <p className="mt-3 text-[11px] text-gray-300">
-            © 2026 KTownTriangle. All rights reserved.
+            © 2026
+            KTownTriangle. All
+            rights reserved.
           </p>
         </div>
       </div>

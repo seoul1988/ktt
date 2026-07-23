@@ -1,7 +1,9 @@
 import Link from "next/link";
+
 import { supabase } from "../../lib/supabase";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
+import MarketAuthButtons from "../components/MarketAuthButtons";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -33,20 +35,36 @@ function statusLabel(status: string | null) {
   if (status === "available") return "판매중";
   if (status === "reserved") return "예약중";
   if (status === "sold") return "판매완료";
+
   return status || "상태없음";
 }
 
 function statusClass(status: string | null) {
-  if (status === "available") return "bg-green-600";
-  if (status === "reserved") return "bg-yellow-500";
-  if (status === "sold") return "bg-gray-500";
+  if (status === "available") {
+    return "bg-green-600";
+  }
+
+  if (status === "reserved") {
+    return "bg-yellow-500";
+  }
+
+  if (status === "sold") {
+    return "bg-gray-500";
+  }
+
   return "bg-gray-400";
 }
 
 function getBundleStatus(items: MarketItem[]) {
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    return null;
+  }
 
-  if (items.every((item) => item.status === "sold")) {
+  if (
+    items.every(
+      (item) => item.status === "sold",
+    )
+  ) {
     return "sold";
   }
 
@@ -62,7 +80,8 @@ function getBundleStatus(items: MarketItem[]) {
 
   if (
     items.some(
-      (item) => item.status === "reserved",
+      (item) =>
+        item.status === "reserved",
     )
   ) {
     return "reserved";
@@ -176,65 +195,62 @@ function buildMarketEntries(
 export default async function MarketPage() {
   const { data, error } = await supabase
     .from("market_items")
-    .select(
-      `
-        id,
-        title,
-        price,
-        status,
-        location,
-        category,
-        condition,
-        description,
-        images,
-        video_url,
-        listing_type,
-        bundle_id,
-        created_at
-      `,
-    )
+    .select(`
+      id,
+      title,
+      price,
+      status,
+      location,
+      category,
+      condition,
+      description,
+      images,
+      video_url,
+      listing_type,
+      bundle_id,
+      created_at
+    `)
     .or("status.is.null,status.neq.hidden")
-    .order("created_at", { ascending: false });
+    .order("created_at", {
+      ascending: false,
+    });
 
   if (error) {
     return (
-      <div className="p-6">
-        상품 불러오기 실패: {error.message}
-      </div>
+      <main className="min-h-screen bg-[#F8F3EC] p-6 text-[#172033]">
+        <div className="mx-auto max-w-xl rounded-2xl bg-white p-5 shadow-sm">
+          상품 불러오기 실패: {error.message}
+        </div>
+
+        <CommunityBottomNav activeNav="market" />
+      </main>
     );
   }
 
   const items = (data || []) as MarketItem[];
   const entries = buildMarketEntries(items);
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
       <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-5 flex items-center">
-<Link
+          <Link
             href="/community/hub"
-            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+            className="
+              rounded-full bg-white px-4 py-2
+              text-sm font-black text-[#172033]
+              shadow transition active:scale-95
+            "
           >
             ← Back
           </Link>
 
-          <h1 className="absolute left-1/2 -translate-x-1/2 text-2xl font-black text-[#172033]">
+          <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
             벼룩시장
           </h1>
 
           <div className="ml-auto flex items-center gap-2">
-            <Link
-              href="/market/my"
-              className="rounded-full border border-[#172033] px-2.5 py-1 text-[11px] font-bold text-[#172033]"
-            >
-              내 물품
-            </Link>
-
-            <Link
-              href="/market/new"
-              className="rounded-full bg-[#172033] px-2.5 py-1 text-[11px] font-bold text-white"
-            >
-              + 등록
-            </Link>
+            <MarketAuthButtons />
 
             <ProfileButton />
           </div>
@@ -249,40 +265,57 @@ export default async function MarketPage() {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {entries.map((entry) => {
-              const item = entry.representative;
+              const item =
+                entry.representative;
 
-              const displayStatus = entry.isBundle
-                ? getBundleStatus(entry.items)
-                : item.status;
+              const displayStatus =
+                entry.isBundle
+                  ? getBundleStatus(
+                      entry.items,
+                    )
+                  : item.status;
 
-              const isSold = displayStatus === "sold";
+              const isSold =
+                displayStatus === "sold";
 
-              const firstImage = Array.isArray(item.images)
-                ? item.images[0]
-                : null;
+              const firstImage =
+                Array.isArray(item.images)
+                  ? item.images[0]
+                  : null;
 
-              const firstItemImageCount = Array.isArray(
-                item.images,
-              )
-                ? item.images.length
-                : 0;
+              const firstItemImageCount =
+                Array.isArray(item.images)
+                  ? item.images.length
+                  : 0;
 
-              const totalBundleImages = entry.items.reduce(
-                (total, bundleItem) =>
-                  total +
-                  (Array.isArray(bundleItem.images)
-                    ? bundleItem.images.length
-                    : 0),
-                0,
-              );
+              const totalBundleImages =
+                entry.items.reduce(
+                  (
+                    total,
+                    bundleItem,
+                  ) =>
+                    total +
+                    (Array.isArray(
+                      bundleItem.images,
+                    )
+                      ? bundleItem.images
+                          .length
+                      : 0),
+                  0,
+                );
 
               const card = (
                 <div
-                  className={`flex h-[380px] flex-col overflow-hidden rounded-2xl bg-white shadow ${
-                    isSold
-                      ? "cursor-not-allowed opacity-70"
-                      : ""
-                  }`}
+                  className={`
+                    flex h-[380px] flex-col
+                    overflow-hidden rounded-2xl
+                    bg-white shadow
+                    ${
+                      isSold
+                        ? "cursor-not-allowed opacity-70"
+                        : ""
+                    }
+                  `}
                 >
                   <div className="relative h-[255px] shrink-0 overflow-hidden bg-gray-200">
                     {firstImage ? (
@@ -303,17 +336,25 @@ export default async function MarketPage() {
 
                     <div className="absolute left-2 top-2 z-20">
                       <span
-                        className={`rounded-full px-2 py-1 text-[10px] font-black text-white ${statusClass(
-                          displayStatus,
-                        )}`}
+                        className={`
+                          rounded-full px-2 py-1
+                          text-[10px] font-black
+                          text-white
+                          ${statusClass(
+                            displayStatus,
+                          )}
+                        `}
                       >
-                        {statusLabel(displayStatus)}
+                        {statusLabel(
+                          displayStatus,
+                        )}
                       </span>
                     </div>
 
                     {entry.isBundle ? (
                       <div className="absolute right-2 top-2 z-20 rounded-full bg-purple-700 px-2 py-1 text-[10px] font-black text-white">
-                        묶음 {entry.items.length}개
+                        묶음{" "}
+                        {entry.items.length}개
                       </div>
                     ) : (
                       item.video_url && (
@@ -324,15 +365,24 @@ export default async function MarketPage() {
                     )}
 
                     {entry.isBundle ? (
-                      totalBundleImages > 1 && (
+                      totalBundleImages >
+                        1 && (
                         <div className="absolute right-2 top-9 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
-                          사진 {totalBundleImages}장
+                          사진{" "}
+                          {
+                            totalBundleImages
+                          }
+                          장
                         </div>
                       )
                     ) : (
-                      firstItemImageCount > 1 && (
+                      firstItemImageCount >
+                        1 && (
                         <div className="absolute right-2 top-9 z-20 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
-                          1/{firstItemImageCount}
+                          1/
+                          {
+                            firstItemImageCount
+                          }
                         </div>
                       )
                     )}
@@ -352,12 +402,19 @@ export default async function MarketPage() {
 
                         {entry.isBundle ? (
                           <span className="line-clamp-1 text-[10px] font-black leading-tight text-purple-200">
-                            상품 {entry.items.length}개 보기
+                            상품{" "}
+                            {
+                              entry.items
+                                .length
+                            }
+                            개 보기
                           </span>
                         ) : (
                           item.location && (
                             <span className="line-clamp-1 text-[10px] font-bold leading-tight text-white/90">
-                              {item.location}
+                              {
+                                item.location
+                              }
                             </span>
                           )
                         )}
@@ -382,7 +439,9 @@ export default async function MarketPage() {
                       ) : (
                         item.category && (
                           <span className="rounded-full bg-[#172033]/10 px-2 py-1 text-[10px] font-black text-[#172033]">
-                            {item.category}
+                            {
+                              item.category
+                            }
                           </span>
                         )
                       )}
@@ -390,19 +449,24 @@ export default async function MarketPage() {
                       <span className="line-clamp-1 text-[11px] font-bold text-gray-500">
                         {entry.isBundle
                           ? `${entry.items.length}개 상품`
-                          : item.condition || ""}
+                          : item.condition ||
+                            ""}
                       </span>
                     </div>
 
                     <div className="mt-2 min-h-[34px]">
                       {entry.isBundle ? (
                         <p className="line-clamp-2 text-xs text-gray-600">
-                          클릭하면 묶음에 포함된 모든 상품을 확인할 수 있습니다.
+                          클릭하면 묶음에
+                          포함된 모든 상품을
+                          확인할 수 있습니다.
                         </p>
                       ) : (
                         item.description && (
                           <p className="line-clamp-2 text-xs text-gray-600">
-                            {item.description}
+                            {
+                              item.description
+                            }
                           </p>
                         )
                       )}

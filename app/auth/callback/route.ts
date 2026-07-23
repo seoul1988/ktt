@@ -2,20 +2,43 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
+function getSafeRedirectPath(value: string | null) {
+  if (
+    value &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !value.startsWith("/login") &&
+    !value.startsWith("/auth/")
+  ) {
+    return value;
+  }
+
+  return "/";
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
+
   const code = requestUrl.searchParams.get("code");
 
-  const redirectPath =
-    requestUrl.searchParams.get("redirect") || "/";
+  const redirectPath = getSafeRedirectPath(
+    requestUrl.searchParams.get("redirect"),
+  );
 
   if (!code) {
-    return NextResponse.redirect(
-      new URL(
-        `/login?error=${encodeURIComponent("인증 코드가 없습니다.")}`,
-        requestUrl.origin
-      )
+    const loginUrl = new URL("/login", requestUrl.origin);
+
+    loginUrl.searchParams.set(
+      "error",
+      "인증 코드가 없습니다.",
     );
+
+    loginUrl.searchParams.set(
+      "redirect",
+      redirectPath,
+    );
+
+    return NextResponse.redirect(loginUrl);
   }
 
   const cookieStore = await cookies();
@@ -30,42 +53,71 @@ export async function GET(request: Request) {
         },
 
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
+          cookiesToSet.forEach(
+            ({ name, value, options }) => {
+              cookieStore.set(
+                name,
+                value,
+                options,
+              );
+            },
+          );
         },
       },
-    }
+    },
   );
 
   const { data, error } =
     await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
-    console.error("OAuth callback error:", error);
-
-    return NextResponse.redirect(
-      new URL(
-        `/login?error=${encodeURIComponent(error.message)}`,
-        requestUrl.origin
-      )
+    console.error(
+      "OAuth callback error:",
+      error,
     );
+
+    const loginUrl = new URL(
+      "/login",
+      requestUrl.origin,
+    );
+
+    loginUrl.searchParams.set(
+      "error",
+      error.message,
+    );
+
+    loginUrl.searchParams.set(
+      "redirect",
+      redirectPath,
+    );
+
+    return NextResponse.redirect(loginUrl);
   }
 
   if (!data.session) {
-    console.error("OAuth callback succeeded but no session was created.");
-
-    return NextResponse.redirect(
-      new URL(
-        `/login?error=${encodeURIComponent(
-          "로그인 세션을 생성하지 못했습니다."
-        )}`,
-        requestUrl.origin
-      )
+    console.error(
+      "OAuth callback succeeded but no session was created.",
     );
+
+    const loginUrl = new URL(
+      "/login",
+      requestUrl.origin,
+    );
+
+    loginUrl.searchParams.set(
+      "error",
+      "로그인 세션을 생성하지 못했습니다.",
+    );
+
+    loginUrl.searchParams.set(
+      "redirect",
+      redirectPath,
+    );
+
+    return NextResponse.redirect(loginUrl);
   }
 
-  const redirectUrl = new URL(redirectPath, requestUrl.origin);
-
-  return NextResponse.redirect(redirectUrl);
+  return NextResponse.redirect(
+    new URL(redirectPath, requestUrl.origin),
+  );
 }
