@@ -14,6 +14,14 @@ import RichTextEditor from "@/app/components/RichTextEditor";
 import ProfileButton from "@/app/components/ProfileButton";
 import { supabase } from "../../../lib/supabase";
 
+type NewsAttachment = {
+  name: string;
+  url: string;
+  path: string;
+  type: string;
+  size: number;
+};
+
 type NewsItem = {
   id: number;
   title: string;
@@ -25,6 +33,7 @@ type NewsItem = {
   source_url: string | null;
   published: boolean;
   published_at: string;
+  attachments: NewsAttachment[] | null;
 };
 
 const createEmptyForm = (isAdmin = false) => ({
@@ -37,6 +46,7 @@ const createEmptyForm = (isAdmin = false) => ({
   source_url: "",
   published: true,
   published_at: new Date().toISOString().slice(0, 16),
+  attachments: [] as NewsAttachment[],
 });
 
 function extractFirstImageUrl(html: string) {
@@ -146,9 +156,13 @@ function AdminBusinessNewsContent() {
     useState(false);
   const [deletingImageUrl, setDeletingImageUrl] =
     useState<string | null>(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [deletingFilePath, setDeletingFilePath] =
+    useState<string | null>(null);
 
   const imageInputRef =
     useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadItems() {
     setLoading(true);
@@ -310,6 +324,9 @@ function AdminBusinessNewsContent() {
       )
         .toISOString()
         .slice(0, 16),
+      attachments: Array.isArray(item.attachments)
+        ? item.attachments
+        : [],
     });
 
     window.scrollTo({
@@ -439,6 +456,182 @@ function AdminBusinessNewsContent() {
     return decodeURIComponent(
       url.split(marker)[1] || "",
     );
+  }
+
+  function sanitizeFileName(fileName: string) {
+    const extension = fileName.includes(".")
+      ? `.${fileName.split(".").pop()}`
+      : "";
+
+    const baseName = fileName
+      .replace(/\.[^.]+$/, "")
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9가-힣_-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "file";
+
+    return `${baseName}${extension.toLowerCase()}`;
+  }
+
+  function formatFileSize(bytes: number) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "0 KB";
+    }
+
+    if (bytes < 1024 * 1024) {
+      return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  async function handleFileUpload(
+    event: ChangeEvent<HTMLInputElement>,
+  ) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.target.value = "";
+
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    const remainingSlots = 10 - form.attachments.length;
+
+    if (remainingSlots <= 0) {
+      window.alert("첨부파일은 최대 10개까지 등록할 수 있습니다.");
+      return;
+    }
+
+    const files = selectedFiles.slice(0, remainingSlots);
+
+    if (selectedFiles.length > remainingSlots) {
+      window.alert(
+        `최대 10개까지만 등록됩니다. 선택한 파일 중 ${remainingSlots}개만 업로드합니다.`,
+      );
+    }
+
+    const oversizedFile = files.find(
+      (file) => file.size > 50 * 1024 * 1024,
+    );
+
+    if (oversizedFile) {
+      window.alert("파일 한 개의 크기는 50MB 이하여야 합니다.");
+      return;
+    }
+
+    setUploadingFiles(true);
+    const uploadedFiles: NewsAttachment[] = [];
+
+    try {
+      for (const file of files) {
+        const safeName = sanitizeFileName(file.name);
+        const filePath =
+          `files/${userId ?? "anonymous"}/${Date.now()}-` +
+          `${crypto.randomUUID()}-${safeName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("business-files")
+          .upload(filePath, file, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: file.type || "application/octet-stream",
+          });
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        const { data } = supabase.storage
+          .from("business-files")
+          .getPublicUrl(filePath);
+
+        uploadedFiles.push({
+          name: file.name,
+          url: data.publicUrl,
+          path: filePath,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+        });
+      }
+
+      setForm((current) => ({
+        ...current,
+        attachments: [
+          ...current.attachments,
+          ...uploadedFiles,
+        ].slice(0, 10),
+      }));
+    } catch (error) {
+      console.error("News file upload error:", error);
+      window.alert(
+        error instanceof Error
+          ? `파일 업로드 실패: ${error.message}`
+          : "파일을 업로드하지 못했습니다.",
+      );
+    } finally {
+      setUploadingFiles(false);
+    }
+  }
+
+  async function removeUploadedFile(index: number) {
+    const attachment = form.attachments[index];
+
+    if (!attachment || deletingFilePath) {
+      return;
+    }
+
+    if (!window.confirm(`“${attachment.name}” 파일을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    setDeletingFilePath(attachment.path);
+
+    try {
+      const { error: storageError } = await supabase.storage
+        .from("business-files")
+        .remove([attachment.path]);
+
+      if (storageError) {
+        throw storageError;
+      }
+
+      const nextAttachments = form.attachments.filter(
+        (_, fileIndex) => fileIndex !== index,
+      );
+
+      setForm((current) => ({
+        ...current,
+        attachments: nextAttachments,
+      }));
+
+      if (editingId) {
+        const { error: updateError } = await supabase
+          .from("business_news")
+          .update({ attachments: nextAttachments })
+          .eq("id", editingId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        setItems((currentItems) =>
+          currentItems.map((item) =>
+            item.id === editingId
+              ? { ...item, attachments: nextAttachments }
+              : item,
+          ),
+        );
+      }
+    } catch (error) {
+      console.error("News file delete error:", error);
+      window.alert(
+        error instanceof Error
+          ? `파일 삭제 실패: ${error.message}`
+          : "파일을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDeletingFilePath(null);
+    }
   }
 
   async function handleImageUpload(
@@ -821,6 +1014,7 @@ function AdminBusinessNewsContent() {
         published_at: new Date(
           form.published_at,
         ).toISOString(),
+        attachments: form.attachments,
       };
 
       let result;
@@ -925,20 +1119,30 @@ function AdminBusinessNewsContent() {
             Boolean(path),
         );
 
-    if (
-      storagePaths.length > 0
-    ) {
-      const {
-        error: storageError,
-      } = await supabase.storage
+    const attachmentPaths = Array.isArray(targetItem?.attachments)
+      ? targetItem.attachments
+          .map((attachment) => attachment.path)
+          .filter(Boolean)
+      : [];
+
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage
         .from("business-news")
         .remove(storagePaths);
 
       if (storageError) {
-        window.alert(
-          `이미지 삭제 실패: ${storageError.message}`,
-        );
+        window.alert(`이미지 삭제 실패: ${storageError.message}`);
+        return;
+      }
+    }
 
+    if (attachmentPaths.length > 0) {
+      const { error: fileStorageError } = await supabase.storage
+        .from("business-files")
+        .remove(attachmentPaths);
+
+      if (fileStorageError) {
+        window.alert(`첨부파일 삭제 실패: ${fileStorageError.message}`);
         return;
       }
     }
@@ -1329,6 +1533,91 @@ function AdminBusinessNewsContent() {
               )}
             </div>
 
+            <div>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold">
+                  일반 첨부파일
+                </span>
+
+                <span className="text-[10px] text-gray-500">
+                  {form.attachments.length}/10
+                </span>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.hwp,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={
+                  uploadingFiles ||
+                  form.attachments.length >= 10
+                }
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#1B365D] bg-[#F4F7FB] text-xs font-semibold text-[#1B365D] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span aria-hidden="true">📎</span>
+                {uploadingFiles
+                  ? "파일 업로드 중..."
+                  : form.attachments.length >= 10
+                    ? "첨부파일 10개 등록 완료"
+                    : "PDF · Word · Excel · 일반 파일 등록"}
+              </button>
+
+              <p className="mt-1.5 text-[10px] leading-4 text-gray-500">
+                파일당 최대 50MB입니다. PDF와 이미지는 브라우저에서 바로
+                볼 수 있고, 나머지 파일은 다운로드할 수 있습니다.
+              </p>
+
+              {form.attachments.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {form.attachments.map((attachment, index) => (
+                    <div
+                      key={`${attachment.path}-${index}`}
+                      className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                    >
+                      <span className="text-xl" aria-hidden="true">
+                        📄
+                      </span>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold">
+                          {attachment.name}
+                        </p>
+                        <p className="mt-0.5 text-[9px] text-gray-500">
+                          {formatFileSize(attachment.size)}
+                        </p>
+                      </div>
+
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg bg-white px-2 py-1.5 text-[10px] font-semibold text-[#1B365D] shadow-sm"
+                      >
+                        보기
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => removeUploadedFile(index)}
+                        disabled={deletingFilePath === attachment.path}
+                        className="rounded-lg bg-red-50 px-2 py-1.5 text-[10px] font-semibold text-red-600 disabled:opacity-50"
+                      >
+                        {deletingFilePath === attachment.path ? "…" : "삭제"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <label>
               <span className="mb-1 block text-xs font-semibold">
                 대표 이미지 URL
@@ -1445,13 +1734,14 @@ function AdminBusinessNewsContent() {
               type="submit"
               disabled={
                 saving ||
-                uploadingImages
+                uploadingImages ||
+                uploadingFiles
               }
               className="rounded-xl bg-[#172033] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
             >
               {saving
                 ? "저장 중..."
-                : uploadingImages
+                : uploadingImages || uploadingFiles
                   ? "업로드 중..."
                   : editingId
                     ? "수정 저장"

@@ -157,7 +157,9 @@ export default function CommunityNewsPage() {
           data: { session },
         } = await supabase.auth.getSession();
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         setIsLoggedIn(Boolean(session?.user));
       } catch (error) {
@@ -178,7 +180,9 @@ export default function CommunityNewsPage() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       setIsLoggedIn(Boolean(session?.user));
       setAuthLoading(false);
@@ -214,7 +218,9 @@ export default function CommunityNewsPage() {
             ascending: false,
           });
 
-        if (!mounted) return;
+        if (!mounted) {
+          return;
+        }
 
         if (error) {
           console.error("Business news load error:", error);
@@ -247,10 +253,16 @@ export default function CommunityNewsPage() {
   }, []);
 
   useEffect(() => {
-    if (!showLoginModal) return;
+    if (!showLoginModal) {
+      return;
+    }
 
-    const previousOverflow = document.body.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow =
+      document.documentElement.style.overflow;
+
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -262,7 +274,10 @@ export default function CommunityNewsPage() {
     window.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow =
+        previousHtmlOverflow;
+
       window.removeEventListener("keydown", handleEscape);
     };
   }, [showLoginModal]);
@@ -533,7 +548,7 @@ export default function CommunityNewsPage() {
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
                   isLocked(featuredNews)
-                    ? "scale-[1.02] blur-[1px] brightness-[0.9]"
+                    ? "scale-105 blur-sm brightness-75"
                     : ""
                 }`}
                 onError={(event) => {
@@ -544,7 +559,7 @@ export default function CommunityNewsPage() {
               <div
                 className={`absolute inset-0 bg-gradient-to-t ${
                   isLocked(featuredNews)
-                    ? "from-black/55 via-black/0 to-transparent"
+                    ? "from-black/75 via-black/35 to-black/10 backdrop-blur-sm"
                     : "from-black/80 via-black/15 to-transparent"
                 }`}
               />
@@ -554,7 +569,7 @@ export default function CommunityNewsPage() {
               </span>
 
               {isPrivateNews(featuredNews) && (
-                <span className="absolute right-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur-[1px]">
+                <span className="absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-[9px] font-bold text-white shadow-sm backdrop-blur-sm">
                   {isLoggedIn
                     ? "회원 전용"
                     : "🔒 로그인 후 보기"}
@@ -621,7 +636,7 @@ export default function CommunityNewsPage() {
                         alt={item.title || "Business News"}
                         className={`h-full w-full object-cover transition duration-300 ${
                           locked
-                            ? "scale-[1.005] blur-[0.25px] brightness-[0.98]"
+                            ? "scale-105 blur-sm brightness-75"
                             : ""
                         }`}
                         onError={(event) => {
@@ -631,8 +646,8 @@ export default function CommunityNewsPage() {
                       />
 
                       {locked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/[0.03]">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-[12px] text-white shadow-sm backdrop-blur-[1px]">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-[14px] text-white shadow-lg">
                             🔒
                           </span>
                         </div>
@@ -686,13 +701,15 @@ export default function CommunityNewsPage() {
         )}
       </section>
 
-      <CommunityBottomNav activeNav="hub" />
+      {!showLoginModal && (
+        <CommunityBottomNav activeNav="hub" />
+      )}
 
       {showLoginModal && (
         <div
           role="presentation"
           onClick={closeLoginModal}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-5 backdrop-blur-[2px]"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-5 backdrop-blur-sm"
         >
           <div
             role="dialog"
