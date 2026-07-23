@@ -28,6 +28,10 @@ const MAP_STATE_KEY = "ktt_map_state_v1";
 const INITIAL_MAP_CENTER: [number, number] = [35.765, -78.625];
 const INITIAL_MAP_ZOOM = 9;
 
+// TomTom 실시간 교통 레이어용 공개 환경변수입니다.
+// .env.local: NEXT_PUBLIC_TOMTOM_API_KEY=발급받은_API_KEY
+const TOMTOM_API_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || "";
+
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -657,6 +661,8 @@ export default function BusinessMap({
   const [kiotiSpot, setKiotiSpot] = useState<Spot | null>(null);
   const [carySpot, setCarySpot] = useState<Spot | null>(null);
   const [business16Spot, setBusiness16Spot] = useState<Spot | null>(null);
+  const [showTrafficFlow, setShowTrafficFlow] = useState(false);
+  const [trafficNotice, setTrafficNotice] = useState<string | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1508,6 +1514,20 @@ useEffect(() => {
 
 
 
+  function toggleTrafficFlow() {
+    if (!TOMTOM_API_KEY) {
+      setTrafficNotice(
+        "TomTom API key is missing. Add NEXT_PUBLIC_TOMTOM_API_KEY to .env.local."
+      );
+      setShowTrafficFlow(false);
+      return;
+    }
+
+    setTrafficNotice(null);
+    setShowTrafficFlow((prev) => !prev);
+  }
+
+
   return (
     <div className="relative min-h-[100dvh] overflow-hidden">
       <div
@@ -1665,7 +1685,7 @@ useEffect(() => {
             <button
               type="button"
               onClick={scrollCategoryPanelDown}
-              aria-label="아래 카테고리 더 보기"
+              aria-label="Show more categories"
               className="absolute bottom-1 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-2 border-[#E7C7A7] bg-[#F8EFE5] shadow-[0_5px_14px_rgba(107,114,128,0.24)] ring-2 ring-white/80 transition-all duration-200 active:scale-90"
             >
               <span className="animate-bounce text-2xl font-black leading-none text-gray-500">
@@ -1678,7 +1698,7 @@ useEffect(() => {
             <button
               type="button"
               onClick={scrollCategoryPanelToTop}
-              aria-label="카테고리 맨 위로 이동"
+              aria-label="Back to top of categories"
               className="absolute bottom-1 left-1/2 z-20 flex h-11 w-11 -translate-x-1/2 items-center justify-center rounded-full border-2 border-[#E7C7A7] bg-[#F8EFE5] shadow-[0_5px_14px_rgba(107,114,128,0.24)] ring-2 ring-white/80 transition-all duration-200 active:scale-90"
             >
               <span className="animate-bounce text-2xl font-black leading-none text-gray-500">
@@ -1696,6 +1716,37 @@ useEffect(() => {
         >
           ☰
         </button>
+      )}
+
+      <button
+        type="button"
+        onClick={toggleTrafficFlow}
+        className={`fixed right-[92px] top-[calc(env(safe-area-inset-top)+76px)] z-[1450] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-[18px] shadow-xl transition active:scale-90 landscape:right-[84px] landscape:top-[64px] ${
+          showTrafficFlow
+            ? "bg-emerald-600 ring-2 ring-emerald-300/70"
+            : "bg-[#172033]/95"
+        }`}
+        aria-label={showTrafficFlow ? "Turn traffic off" : "Turn traffic on"}
+        aria-pressed={showTrafficFlow}
+        title={showTrafficFlow ? "Traffic on" : "Traffic off"}
+      >
+        🚦
+      </button>
+
+      {trafficNotice && (
+        <div className="fixed right-[72px] top-[calc(env(safe-area-inset-top)+122px)] z-[1500] w-[min(320px,calc(100vw-24px))] rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 shadow-xl landscape:top-[110px]">
+          <div className="flex items-start justify-between gap-3">
+            <span>{trafficNotice}</span>
+            <button
+              type="button"
+              onClick={() => setTrafficNotice(null)}
+              className="shrink-0 text-base font-black"
+              aria-label="Close notice"
+            >
+              ×
+            </button>
+          </div>
+        </div>
       )}
 
       {selectedCategory && !categoryPanelOpen && (
@@ -1734,7 +1785,26 @@ useEffect(() => {
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          opacity={showTrafficFlow ? 0.74 : 1}
         />
+
+        {showTrafficFlow && TOMTOM_API_KEY && (
+          <>
+            <TileLayer
+              attribution="Traffic &copy; TomTom"
+              url={`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${TOMTOM_API_KEY}&tileSize=256`}
+              opacity={1}
+              zIndex={500}
+            />
+
+            <TileLayer
+              attribution="Incidents &copy; TomTom"
+              url={`https://api.tomtom.com/traffic/map/4/tile/incidents/s0/{z}/{x}/{y}.png?key=${TOMTOM_API_KEY}&tileSize=256&t=-1`}
+              opacity={1}
+              zIndex={650}
+            />
+          </>
+        )}
 
         <MapEmptyClickHandler
           onToggle={() => {
