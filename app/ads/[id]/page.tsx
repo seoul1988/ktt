@@ -1,10 +1,8 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
-
 import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import AdImageGallery from "./AdImageGallery";
-import AdActionButtons from "./AdActionButtons";
 import ProfileButton from "@/app/components/ProfileButton";
 import BackButton from "@/app/components/BackButton";
 
@@ -31,7 +29,6 @@ function statusLabel(status: string | null) {
   if (status === "active") return "광고중";
   if (status === "expired") return "만료";
   if (status === "hidden") return "숨김";
-
   return "광고중";
 }
 
@@ -39,8 +36,11 @@ function statusClass(status: string | null) {
   if (status === "active") return "bg-green-600";
   if (status === "expired") return "bg-gray-500";
   if (status === "hidden") return "bg-red-500";
-
   return "bg-green-600";
+}
+
+function cleanPhone(phone: string) {
+  return phone.replace(/[^\d+]/g, "");
 }
 
 function normalizeWebsiteUrl(url: string) {
@@ -58,16 +58,9 @@ function getDirectionUrl(ad: AdItem) {
     return `https://www.google.com/maps/dir/?api=1&destination=${ad.lat},${ad.lng}`;
   }
 
-  if (
-    typeof ad.location === "string" &&
-    ad.location.trim() !== ""
-  ) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
-      ad.location.trim(),
-    )}`;
-  }
-
-  return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    ad.location || "",
+  )}`;
 }
 
 export default async function AdDetailPage({
@@ -86,13 +79,9 @@ export default async function AdDetailPage({
   if (error || !data) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
-        <div className="mx-auto w-full max-w-xl">
-          <p className="rounded-2xl bg-white p-5 font-bold text-red-600 shadow-sm">
-            광고를 찾을 수 없습니다.
-          </p>
-        </div>
-
-        <CommunityBottomNav activeNav="ads" />
+        <p className="font-bold text-red-600">
+          광고를 찾을 수 없습니다.
+        </p>
       </main>
     );
   }
@@ -103,26 +92,20 @@ export default async function AdDetailPage({
   const adminRole = cookieStore.get("ktt_admin")?.value;
 
   const isAdmin =
-    adminRole === "admin" ||
-    adminRole === "super_admin";
+    adminRole === "admin" || adminRole === "super_admin";
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isOwner = Boolean(
-    user &&
-      ad.user_id &&
-      ad.user_id === user.id,
-  );
-
+  const isOwner = Boolean(user && ad.user_id === user.id);
   const canManage = isAdmin || isOwner;
 
   const cleanImages = Array.isArray(ad.images)
     ? ad.images.filter(
-        (image): image is string =>
-          typeof image === "string" &&
-          image.trim() !== "",
+        (img) =>
+          typeof img === "string" &&
+          img.trim() !== "",
       )
     : [];
 
@@ -138,23 +121,29 @@ export default async function AdDetailPage({
       ? normalizeWebsiteUrl(ad.website_url)
       : null;
 
-  const cleanPhone =
-    typeof ad.phone === "string" &&
-    ad.phone.trim() !== ""
-      ? ad.phone.trim()
-      : null;
-
-  const cleanLocation =
-    typeof ad.location === "string" &&
-    ad.location.trim() !== ""
-      ? ad.location.trim()
-      : null;
-
-  const directionUrl = getDirectionUrl(ad);
-
   const hasImage = cleanImages.length > 0;
   const hasVideo = Boolean(cleanVideoUrl);
+  const hasPhone = Boolean(
+    ad.phone && ad.phone.trim() !== "",
+  );
   const hasWebsite = Boolean(cleanWebsiteUrl);
+  const hasLocation = Boolean(
+    (ad.location && ad.location.trim() !== "") ||
+      (ad.lat !== null && ad.lng !== null),
+  );
+
+  const actionCount = [
+    hasPhone,
+    hasLocation,
+    hasWebsite,
+  ].filter(Boolean).length;
+
+  const actionGridClass =
+    actionCount === 1
+      ? "grid-cols-1"
+      : actionCount === 2
+        ? "grid-cols-2"
+        : "grid-cols-3";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-24 text-[#172033]">
@@ -178,7 +167,7 @@ export default async function AdDetailPage({
               controls
               playsInline
               preload="metadata"
-              className="aspect-video w-full bg-black object-contain"
+              className="w-full"
             />
           )}
 
@@ -189,23 +178,9 @@ export default async function AdDetailPage({
             />
           )}
 
-          {!hasVideo && !hasImage && (
-            <div className="flex aspect-[4/3] w-full items-center justify-center bg-[#EEE7DE] px-6 text-center">
-              <div>
-                <div className="text-5xl" aria-hidden="true">
-                  📢
-                </div>
-
-                <p className="mt-3 text-sm font-black text-gray-500">
-                  등록된 이미지가 없습니다.
-                </p>
-              </div>
-            </div>
-          )}
-
           <div className="p-5">
             <div className="mb-2 flex flex-wrap items-center gap-2">
-              {ad.category && ad.category.trim() !== "" && (
+              {ad.category && (
                 <span className="rounded-full bg-[#172033]/10 px-3 py-1 text-xs font-black text-[#172033]">
                   {ad.category}
                 </span>
@@ -220,85 +195,79 @@ export default async function AdDetailPage({
               </span>
             </div>
 
-            <h1 className="text-2xl font-black leading-tight">
+            <h1 className="text-2xl font-black">
               {ad.title}
             </h1>
 
-            {cleanLocation && (
-              <p className="mt-3 flex items-start gap-2 text-sm font-bold text-gray-500">
-                <span
-                  className="shrink-0"
-                  aria-hidden="true"
-                >
-                  📍
-                </span>
-
-                <span>{cleanLocation}</span>
+            {ad.location && (
+              <p className="mt-2 text-sm font-bold text-gray-500">
+                📍 {ad.location}
               </p>
             )}
 
-            {cleanPhone && (
-              <p className="mt-2 flex items-center gap-2 text-sm font-bold text-gray-500">
-                <span aria-hidden="true">📞</span>
-                <span>{cleanPhone}</span>
+            {ad.phone && (
+              <p className="mt-2 text-sm font-bold text-gray-500">
+                📞 {ad.phone}
               </p>
             )}
 
-            {hasWebsite && cleanWebsiteUrl && (
-              <a
-                href={cleanWebsiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 flex items-start gap-2 break-all text-sm font-bold text-blue-600"
-              >
-                <span
-                  className="shrink-0"
-                  aria-hidden="true"
-                >
-                  🌐
-                </span>
-
-                <span>{ad.website_url}</span>
-              </a>
+            {ad.description && (
+              <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                {ad.description}
+              </p>
             )}
 
-            {ad.description &&
-              ad.description.trim() !== "" && (
-                <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-gray-700">
-                  {ad.description}
-                </p>
-              )}
-
-            <AdActionButtons
-              title={ad.title}
-              phone={cleanPhone}
-              location={cleanLocation}
-              directionUrl={directionUrl}
-            />
-
-            {hasWebsite && cleanWebsiteUrl && (
-              <a
-                href={cleanWebsiteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 flex min-h-[52px] w-full items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-center text-sm font-black text-white transition active:scale-[0.98]"
+            {actionCount > 0 && (
+              <div
+                className={`mt-5 grid gap-2 ${actionGridClass}`}
               >
-                🌐 웹사이트 방문
-              </a>
+                {hasPhone && (
+                  <a
+                    href={`tel:${cleanPhone(
+                      ad.phone || "",
+                    )}`}
+                    className="rounded-2xl bg-green-600 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    📞 전화하기
+                  </a>
+                )}
+
+                {hasLocation && (
+                  <a
+                    href={getDirectionUrl(ad)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-orange-500 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    🧭 길찾기
+                  </a>
+                )}
+
+                {hasWebsite && cleanWebsiteUrl && (
+                  <a
+                    href={cleanWebsiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-2xl bg-blue-600 px-2 py-3 text-center text-sm font-black text-white"
+                  >
+                    🌐 웹사이트 방문
+                  </a>
+                )}
+              </div>
             )}
 
             {canManage && (
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <Link
                   href={`/ads/${ad.id}/edit`}
-                  className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white transition active:scale-[0.98]"
+                  className="rounded-2xl bg-[#172033] py-3 text-center text-sm font-black text-white"
                 >
                   ✏️ 수정
                 </Link>
 
                 <Link
                   href={`/ads/${ad.id}/delete`}
-                  className="rounded-2xl bg-red-600 py-3 text-center text-sm font-black text-white transition active:scale-[0.98]"
+                  className="rounded-2xl bg-red-600 py-3 text-center text-sm font-black text-white"
                 >
                   🗑 삭제
                 </Link>
