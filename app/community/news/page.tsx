@@ -533,7 +533,7 @@ export default function CommunityNewsPage() {
                 alt={featuredNews.title || "Business News"}
                 className={`h-full w-full object-cover transition duration-300 ${
                   isLocked(featuredNews)
-                    ? "scale-[1.005] blur-[0.25px] brightness-[0.98]"
+                    ? "scale-[1.025] blur-[1.5px] brightness-[0.92]"
                     : ""
                 }`}
                 onError={(event) => {
@@ -544,7 +544,7 @@ export default function CommunityNewsPage() {
               <div
                 className={`absolute inset-0 bg-gradient-to-t ${
                   isLocked(featuredNews)
-                    ? "from-black/55 via-black/0 to-transparent"
+                    ? "from-black/62 via-black/10 to-black/0"
                     : "from-black/80 via-black/15 to-transparent"
                 }`}
               />
@@ -621,7 +621,7 @@ export default function CommunityNewsPage() {
                         alt={item.title || "Business News"}
                         className={`h-full w-full object-cover transition duration-300 ${
                           locked
-                            ? "scale-[1.005] blur-[0.25px] brightness-[0.98]"
+                            ? "scale-[1.025] blur-[1.5px] brightness-[0.92]"
                             : ""
                         }`}
                         onError={(event) => {
@@ -631,8 +631,8 @@ export default function CommunityNewsPage() {
                       />
 
                       {locked && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/[0.03]">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-[12px] text-white shadow-sm backdrop-blur-[1px]">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/[0.10] backdrop-blur-[1px]">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-[12px] text-white shadow-sm backdrop-blur-[1px]">
                             🔒
                           </span>
                         </div>
@@ -640,23 +640,23 @@ export default function CommunityNewsPage() {
                     </div>
 
                     <div className="min-w-0 flex-1 py-0.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="rounded-full bg-[#F8F3EC] px-2 py-0.5 text-[8px] font-medium text-[#8B5A13]">
-                          {item.category || "News"}
-                        </span>
+                      <div className="flex w-full items-center gap-1.5">
+						  <span className="shrink-0 rounded-full bg-[#F8F3EC] px-2 py-0.5 text-[8px] font-medium text-[#8B5A13]">
+							{item.category || "News"}
+						  </span>
 
-                        <span className="text-[9px] font-normal text-gray-400">
-                          {formatDate(item.published_at)}
-                        </span>
+						  <span className="shrink-0 text-[9px] font-normal text-gray-400">
+							{formatDate(item.published_at)}
+						  </span>
 
-                        {privateNews && (
-                          <span className="rounded-full bg-[#172033] px-2 py-0.5 text-[8px] font-bold text-white">
-                            {isLoggedIn
-                              ? "회원 전용"
-                              : "로그인 후 보기"}
-                          </span>
-                        )}
-                      </div>
+						  {privateNews && (
+							<span className="ml-auto shrink-0 rounded-full bg-[#172033] px-2 py-0.5 text-[8px] font-bold text-white">
+							  {isLoggedIn
+								? "회원 전용"
+								: "로그인 후 보기"}
+							</span>
+						  )}
+						</div>
 
                       <h3 className="mt-1.5 line-clamp-2 text-[13px] font-semibold leading-snug">
                         {item.title || "Business News"}
