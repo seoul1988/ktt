@@ -22,6 +22,15 @@ type NewsAttachment = {
   size: number;
 };
 
+const PDF_PLACEHOLDER_IMAGE = "/pdf-preview.svg";
+
+function isPdfAttachment(file: NewsAttachment) {
+  return (
+    file.type === "application/pdf" ||
+    file.name.toLowerCase().endsWith(".pdf")
+  );
+}
+
 type NewsItem = {
   id: number;
   title: string;
@@ -47,6 +56,8 @@ const createEmptyForm = (isAdmin = false) => ({
   published: true,
   published_at: new Date().toISOString().slice(0, 16),
   attachments: [] as NewsAttachment[],
+  external_file_name: "",
+  external_file_url: "",
 });
 
 function extractFirstImageUrl(html: string) {
@@ -327,6 +338,8 @@ function AdminBusinessNewsContent() {
       attachments: Array.isArray(item.attachments)
         ? item.attachments
         : [],
+      external_file_name: "",
+      external_file_url: "",
     });
 
     window.scrollTo({
@@ -510,12 +523,17 @@ function AdminBusinessNewsContent() {
       );
     }
 
+    const MAX_DIRECT_UPLOAD_SIZE = 200 * 1024 * 1024;
+
     const oversizedFile = files.find(
-      (file) => file.size > 50 * 1024 * 1024,
+      (file) => file.size > MAX_DIRECT_UPLOAD_SIZE,
     );
 
     if (oversizedFile) {
-      window.alert("파일 한 개의 크기는 50MB 이하여야 합니다.");
+      window.alert(
+        `“${oversizedFile.name}” 파일이 200MB를 초과합니다. ` +
+          "Google Drive, Dropbox 또는 OneDrive에 올린 뒤 아래 외부 링크 등록을 이용하세요.",
+      );
       return;
     }
 
@@ -538,6 +556,19 @@ function AdminBusinessNewsContent() {
           });
 
         if (uploadError) {
+          const message = String(uploadError.message ?? "");
+          const isSizeLimitError =
+            /size|too large|maximum|limit|payload/i.test(message);
+
+          if (isSizeLimitError) {
+            throw new Error(
+              `Supabase Storage 업로드 한도를 초과했습니다. ` +
+                `business-files 버킷의 File size limit을 ${Math.ceil(
+                  file.size / 1024 / 1024,
+                )}MB 이상으로 변경하거나, 아래 외부 링크 등록을 이용하세요.`,
+            );
+          }
+
           throw uploadError;
         }
 
@@ -573,6 +604,49 @@ function AdminBusinessNewsContent() {
     }
   }
 
+  function addExternalFileLink() {
+    const name = form.external_file_name.trim();
+    const url = form.external_file_url.trim();
+
+    if (!name) {
+      window.alert("외부 파일 이름을 입력하세요.");
+      return;
+    }
+
+    if (!/^https?:\/\//i.test(url)) {
+      window.alert("http:// 또는 https://로 시작하는 외부 파일 링크를 입력하세요.");
+      return;
+    }
+
+    if (form.attachments.length >= 10) {
+      window.alert("첨부파일은 최대 10개까지 등록할 수 있습니다.");
+      return;
+    }
+
+    const lowerName = name.toLowerCase();
+    const lowerUrl = url.toLowerCase();
+    const type =
+      lowerName.endsWith(".pdf") || lowerUrl.includes(".pdf")
+        ? "application/pdf"
+        : "external/link";
+
+    setForm((current) => ({
+      ...current,
+      attachments: [
+        ...current.attachments,
+        {
+          name,
+          url,
+          path: "",
+          type,
+          size: 0,
+        },
+      ],
+      external_file_name: "",
+      external_file_url: "",
+    }));
+  }
+
   async function removeUploadedFile(index: number) {
     const attachment = form.attachments[index];
 
@@ -587,12 +661,14 @@ function AdminBusinessNewsContent() {
     setDeletingFilePath(attachment.path);
 
     try {
-      const { error: storageError } = await supabase.storage
-        .from("business-files")
-        .remove([attachment.path]);
+      if (attachment.path) {
+        const { error: storageError } = await supabase.storage
+          .from("business-files")
+          .remove([attachment.path]);
 
-      if (storageError) {
-        throw storageError;
+        if (storageError) {
+          throw storageError;
+        }
       }
 
       const nextAttachments = form.attachments.filter(
@@ -986,13 +1062,19 @@ function AdminBusinessNewsContent() {
        * 2. 첨부 이미지의 첫 번째 이미지
        * 3. 대표 이미지 URL 입력란
        * 4. 본문 HTML의 첫 번째 이미지
+       * 5. 위 이미지가 모두 없고 PDF가 첨부된 경우 PDF 기본 이미지
        */
+      const hasPdfAttachment =
+        form.attachments.some(isPdfAttachment);
+
       const representativeImageUrl =
         selectedUploadedImage ||
         firstUploadedImage ||
         manualImageUrl ||
         firstContentImage ||
-        null;
+        (hasPdfAttachment
+          ? PDF_PLACEHOLDER_IMAGE
+          : null);
 
       const payload = {
         user_id: userId,
@@ -1122,7 +1204,7 @@ function AdminBusinessNewsContent() {
     const attachmentPaths = Array.isArray(targetItem?.attachments)
       ? targetItem.attachments
           .map((attachment) => attachment.path)
-          .filter(Boolean)
+          .filter((path): path is string => Boolean(path))
       : [];
 
     if (storagePaths.length > 0) {
@@ -1191,7 +1273,10 @@ function AdminBusinessNewsContent() {
     form.images[0] ||
     extractFirstImageUrl(
       form.content,
-    );
+    ) ||
+    (form.attachments.some(isPdfAttachment)
+      ? PDF_PLACEHOLDER_IMAGE
+      : "");
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] px-3 py-4 text-[#172033]">
@@ -1571,9 +1656,50 @@ function AdminBusinessNewsContent() {
               </button>
 
               <p className="mt-1.5 text-[10px] leading-4 text-gray-500">
-                파일당 최대 50MB입니다. PDF와 이미지는 브라우저에서 바로
-                볼 수 있고, 나머지 파일은 다운로드할 수 있습니다.
+                파일당 최대 200MB까지 선택할 수 있습니다. Supabase 버킷 한도보다 큰 PDF는 Google Drive, Dropbox,
+                OneDrive 등에 올린 뒤 아래에 공유 링크를 등록하세요.
               </p>
+
+              <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-2 text-[11px] font-semibold text-[#172033]">
+                  큰 파일 외부 링크 등록
+                </p>
+
+                <div className="grid gap-2">
+                  <input
+                    value={form.external_file_name}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        external_file_name: event.target.value,
+                      }))
+                    }
+                    placeholder="파일 이름 예: 2026 안내서.pdf"
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-xs outline-none focus:border-[#1B365D]"
+                  />
+
+                  <input
+                    value={form.external_file_url}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        external_file_url: event.target.value,
+                      }))
+                    }
+                    placeholder="https://drive.google.com/..."
+                    className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-xs outline-none focus:border-[#1B365D]"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={addExternalFileLink}
+                    disabled={form.attachments.length >= 10}
+                    className="h-10 rounded-lg bg-[#1B365D] px-3 text-xs font-semibold text-white disabled:opacity-50"
+                  >
+                    외부 파일 링크 추가
+                  </button>
+                </div>
+              </div>
 
               {form.attachments.length > 0 && (
                 <div className="mt-2 space-y-2">
@@ -1591,7 +1717,9 @@ function AdminBusinessNewsContent() {
                           {attachment.name}
                         </p>
                         <p className="mt-0.5 text-[9px] text-gray-500">
-                          {formatFileSize(attachment.size)}
+                          {attachment.path
+                            ? formatFileSize(attachment.size)
+                            : "외부 링크"}
                         </p>
                       </div>
 
