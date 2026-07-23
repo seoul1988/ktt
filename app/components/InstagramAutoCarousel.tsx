@@ -384,37 +384,50 @@ export default function InstagramAutoCarousel({
             ×
           </button>
 
-          <a
-            href={
-              selectedPost.instagram_post_url
-            }
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
-            className="absolute bottom-5 right-5 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-[#C44873] text-white shadow-xl"
-            aria-label="Open on Instagram"
-          >
-            <InstagramLogo />
-          </a>
+          <div className="flex h-full w-full items-center justify-center p-4">
+            <div
+              className="relative inline-block max-h-full max-w-full"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <img
+                src={selectedPost.stored_image_url}
+                alt="Instagram post"
+                className="block max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] object-contain"
+                style={{
+                  width: "auto",
+                  height: "auto",
+                  objectFit: "contain",
+                }}
+              />
 
-          <div className="flex h-full w-full items-center justify-center">
-            <img
-              src={
-                selectedPost.stored_image_url
-              }
-              alt="Instagram post"
-              onClick={(event) =>
-                event.stopPropagation()
-              }
-              className="block max-h-screen max-w-full object-contain"
-              style={{
-                width: "auto",
-                height: "auto",
-                objectFit: "contain",
-              }}
-            />
+              <div className="pointer-events-none absolute left-0 right-0 top-0 z-10 bg-gradient-to-b from-black/70 via-black/35 to-transparent px-4 py-4">
+                <h2 className="pr-14 text-lg font-black tracking-wide text-white drop-shadow">
+                  {(
+                    selectedPost.business as InstagramBusiness | null
+                  )?.name || "Local Business"}
+                </h2>
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between gap-3 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 py-4">
+                <span className="min-w-0 truncate text-base font-black text-white drop-shadow">
+                  {(
+                    selectedPost.business as InstagramBusiness | null
+                  )?.name || "Local Business"}
+                </span>
+
+                <a
+                  href={selectedPost.instagram_post_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="flex shrink-0 items-center gap-2 rounded-full bg-black/35 px-3 py-2 text-sm font-bold text-white backdrop-blur-sm"
+                  aria-label="Open on Instagram"
+                >
+                  <InstagramLogo />
+                  <span>Instagram</span>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
       )}
