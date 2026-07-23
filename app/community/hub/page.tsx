@@ -467,15 +467,14 @@ export default function CommunityHubPage() {
                       {item.subtitle}
                     </p>
 
-                    {item.badgeKey === "news" &&
-                      latestNewsTitle && (
-                        <p
-                          title={latestNewsTitle}
-                          className="mt-1.5 max-w-[250px] truncate text-[10px] font-medium text-gray-400"
-                        >
-                          {latestNewsTitle}
-                        </p>
-                      )}
+                    {item.badgeKey === "news" && latestNewsTitle && (
+  <p
+    title={latestNewsTitle}
+    className="mt-2 max-w-[320px] truncate text-[12px] font-semibold leading-5 text-[#374151]"
+  >
+    📰 {latestNewsTitle}
+  </p>
+)}
                   </div>
                 </div>
               </>
