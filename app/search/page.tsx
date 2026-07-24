@@ -183,16 +183,18 @@ export default async function SearchPage() {
 
       {/* safe area + 헤더 높이만큼 본문 내리기 */}
       <div
-        className="
-          pt-[calc(env(safe-area-inset-top)+3.5rem)]
-          [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
-        "
-      >
-        <SearchDirectory
-          categories={categories}
-          businesses={visibleBusinesses}
-        />
-      </div>
+  className="
+    pt-[calc(env(safe-area-inset-top)+3.5rem)]
+    [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
+  "
+>
+  <div className="-mt-3">
+    <SearchDirectory
+      categories={categories}
+      businesses={visibleBusinesses}
+    />
+  </div>
+</div>
     </main>
   );
 }

@@ -164,17 +164,19 @@ export default async function CommunitySearchPage() {
       </header>
 
       {/* safe-area 높이 + 헤더 56px만큼 본문 내리기 */}
-      <div
-        className="
-          pt-[calc(env(safe-area-inset-top)+3.5rem)]
-          [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
-        "
-      >
-        <CommunitySearchDirectory
-          categories={categories}
-          businesses={visibleBusinesses}
-        />
-      </div>
+    <div
+  className="
+    pt-[calc(env(safe-area-inset-top)+3.5rem)]
+    [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
+  "
+>
+  <div className="-mt-3">
+    <SearchDirectory
+      categories={categories}
+      businesses={visibleBusinesses}
+    />
+  </div>
+</div>
     </main>
   );
 }
