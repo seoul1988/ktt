@@ -9,6 +9,7 @@ import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
 import BusinessCopyButton from "../../components/BusinessCopyButton";
+import BusinessDirectionsButton from "../../components/BusinessDirectionsButton";
 
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
@@ -463,21 +464,12 @@ export default async function BusinessPage({
               <span>Call</span>
             </a>
 
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                spot.address ||
-                  `${spot.name} ${spot.city || ""} NC`,
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Directions to ${spot.name}`}
-              className="flex min-w-0 flex-col items-center justify-start gap-1 active:scale-95"
-            >
-              <span className="flex h-8 items-center justify-center text-2xl leading-none">
-                ↱
-              </span>
-              <span>Directions</span>
-            </a>
+            <BusinessDirectionsButton
+              businessName={spot.name}
+              address={spot.address}
+              city={spot.city}
+              isOpen={status.open}
+            />
 
             <a
               href={`sms:?&body=${encodeURIComponent(
@@ -530,7 +522,19 @@ export default async function BusinessPage({
             </p>
 
             <div>
-              <span className="font-semibold">Hours:</span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold">Hours:</span>
+
+                <span
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-extrabold ${
+                    status.open
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-600"
+                  }`}
+                >
+                  {status.open ? "Open" : "Closed"}
+                </span>
+              </div>
 
               <div className="mt-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
                 <p className="font-semibold text-[#172033]">

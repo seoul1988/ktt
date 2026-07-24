@@ -53,35 +53,35 @@ const kiotiMarkerIcon = L.divIcon({
   className: "kioti-map-marker",
   html: `
     <div style="
-      width:44px;
-      height:44px;
+      width:32px;
+      height:32px;
       overflow:hidden;
       border-radius:50%;
-      border:3px solid white;
+      border:2px solid white;
       background:#000;
       box-shadow:0 3px 10px rgba(0,0,0,.45);
     ">
       <img
-        src="/images/kioti-logo.jpg"
+        src="/images/kioti.png"
         alt="KIOTI"
         style="display:block;width:100%;height:100%;object-fit:cover;"
       />
     </div>
   `,
-  iconSize: [44, 44],
-  iconAnchor: [22, 22],
-  popupAnchor: [0, -24],
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -18],
 });
 
 const caryMarkerIcon = L.divIcon({
   className: "cary-map-marker",
   html: `
     <div style="
-      width:44px;
-      height:44px;
+      width:32px;
+      height:32px;
       overflow:hidden;
       border-radius:50%;
-      border:3px solid white;
+      border:2px solid white;
       background:white;
       box-shadow:0 3px 10px rgba(0,0,0,.45);
     ">
@@ -92,10 +92,17 @@ const caryMarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [44, 44],
-  iconAnchor: [22, 22],
-  popupAnchor: [0, -24],
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -18],
 });
+
+
+
+
+
+
+
 
 
 
@@ -103,11 +110,11 @@ const business16MarkerIcon = L.divIcon({
   className: "business16-map-marker",
   html: `
     <div style="
-      width:44px;
-      height:44px;
+      width:32px;
+      height:32px;
       overflow:hidden;
       border-radius:50%;
-      border:3px solid white;
+      border:2px solid white;
       background:white;
       box-shadow:0 3px 10px rgba(0,0,0,.45);
     ">
@@ -119,9 +126,34 @@ const business16MarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [44, 44],
-  iconAnchor: [22, 22],
-  popupAnchor: [0, -24],
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -18],
+});
+
+const business10MarkerIcon = L.divIcon({
+  className: "business10-map-marker",
+  html: `
+    <div style="
+      width:32px;
+      height:32px;
+      overflow:hidden;
+      border-radius:50%;
+      border:2px solid white;
+      background:white;
+      box-shadow:0 3px 10px rgba(0,0,0,.45);
+    ">
+      <img
+        src="/images/h.png"
+        alt="Business 10"
+        onerror="this.onerror=null;this.src='/h.png';"
+        style="display:block;width:100%;height:100%;object-fit:cover;"
+      />
+    </div>
+  `,
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  popupAnchor: [0, -18],
 });
 
 
@@ -679,6 +711,7 @@ export default function BusinessMap({
   const [kiotiSpot, setKiotiSpot] = useState<Spot | null>(null);
   const [carySpot, setCarySpot] = useState<Spot | null>(null);
   const [business16Spot, setBusiness16Spot] = useState<Spot | null>(null);
+  const [business10Spot, setBusiness10Spot] = useState<Spot | null>(null);
   const [showTrafficFlow, setShowTrafficFlow] = useState(false);
   const [trafficNotice, setTrafficNotice] = useState<string | null>(null);
   const [routeInfo, setRouteInfo] = useState<Record<string, RouteInfo>>({});
@@ -759,6 +792,7 @@ export default function BusinessMap({
       kiotiSpot,
       carySpot,
       business16Spot,
+      business10Spot,
     ].filter(Boolean) as Spot[];
 
     permanentSpots.forEach((permanentSpot) => {
@@ -786,7 +820,7 @@ export default function BusinessMap({
     });
 
     return result;
-  }, [markerSpots, spots, kiotiSpot, carySpot, business16Spot]);
+  }, [markerSpots, spots, kiotiSpot, carySpot, business16Spot, business10Spot]);
 
   const displayCategories = useMemo(() => {
     if (mapCategories.length > 0) return mapCategories;
@@ -1107,6 +1141,60 @@ useEffect(() => {
   }, []);
 
   useEffect(() => {
+    async function loadBusiness10Spot() {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("id", 10)
+        .maybeSingle();
+
+      if (error) {
+        console.log("Business 10 load error:", error);
+        return;
+      }
+
+      if (!data) {
+        console.log("Business 10 was not found.");
+        return;
+      }
+
+      const lat = Number(
+        data.lat ??
+          data.latitude ??
+          data.google_lat ??
+          data.location_lat ??
+          data.latitude_value
+      );
+
+      const lng = Number(
+        data.lng ??
+          data.longitude ??
+          data.google_lng ??
+          data.location_lng ??
+          data.longitude_value
+      );
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.log("Business 10 has no valid coordinates:", data);
+        return;
+      }
+
+      setBusiness10Spot({
+        ...data,
+        id: 10,
+        business_id: 10,
+        lat,
+        lng,
+        map_key: "business-10-h",
+        source_type: "business",
+        type: "business",
+      } as Spot);
+    }
+
+    loadBusiness10Spot();
+  }, []);
+
+  useEffect(() => {
     async function loadCategories() {
       if (categories.length > 0) {
         setMapCategories(categories);
@@ -1176,7 +1264,7 @@ useEffect(() => {
       // Business ID 199 is a permanent sponsored marker.
       // Its saved lat/lng coordinates are used, and it stays visible
       // even when no category is selected or a search is active.
-      const isPermanentMarker = [199, 15, 16].includes(
+      const isPermanentMarker = [199, 15, 16, 10].includes(
         getBusinessId(spot)
       );
 
@@ -1964,6 +2052,7 @@ landscape:top-[62px]"
             const isKioti = getBusinessId(spot) === 199;
             const isCary = getBusinessId(spot) === 15;
             const isBusiness16 = getBusinessId(spot) === 16;
+            const isBusiness10 = getBusinessId(spot) === 10;
 
             const lat = Number(spot.lat);
             const lng = Number(spot.lng);
@@ -1997,12 +2086,14 @@ landscape:top-[62px]"
                     ? caryMarkerIcon
                     : isBusiness16
                     ? business16MarkerIcon
+                    : isBusiness10
+                    ? business10MarkerIcon
                     : isSelected
                     ? selectedMarkerIcon
                     : markerIcon
                 }
                 zIndexOffset={
-                  isKioti || isCary || isBusiness16
+                  isKioti || isCary || isBusiness16 || isBusiness10
                     ? 20000
                     : isSelected
                     ? 10000
@@ -2012,7 +2103,7 @@ landscape:top-[62px]"
                   click: (e) => {
                     L.DomEvent.stopPropagation(e.originalEvent);
 
-                    if (isKioti || isCary || isBusiness16) {
+                    if (isKioti || isCary || isBusiness16 || isBusiness10) {
                       window.location.href = getDetailHref(
                         spot,
                         getBusinessId(spot),
