@@ -23,7 +23,6 @@ const geistMono = Geist_Mono({
 });
 
 const SITE_URL = "https://www.ktowntriangle.com";
-const OG_IMAGE_URL = `${SITE_URL}/og-image-20260721.png`;
 
 const GA_MEASUREMENT_ID = "G-SDZ3B9B4S6";
 const GOOGLE_ADS_ID = "AW-18242391009";
@@ -59,29 +58,13 @@ export const metadata: Metadata = {
     locale: "ko_KR",
     alternateLocale: ["en_US"],
     type: "website",
-    images: [
-      {
-        url: OG_IMAGE_URL,
-        secureUrl: OG_IMAGE_URL,
-        width: 1200,
-        height: 630,
-        alt: "랄리지역 한인 비즈니스를 한곳에 - KTown Triangle",
-        type: "image/png",
-      },
-    ],
   },
 
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
     description:
       "트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
-    images: [
-      {
-        url: OG_IMAGE_URL,
-        alt: "랄리지역 한인 비즈니스를 한곳에 - KTown Triangle",
-      },
-    ],
   },
 
   appleWebApp: {
@@ -198,7 +181,6 @@ export default function RootLayout({
           </div>
         </AuthProvider>
 
-        {/* Google Analytics 4 및 Google Ads 공통 태그 */}
         <Script
           id="google-tag-manager"
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
