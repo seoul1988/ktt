@@ -2247,28 +2247,36 @@ landscape:top-[62px]"
                   )}
                 </p>
 
-                <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-[#2453A6] landscape:hidden">
+                <div className="mt-2 flex flex-wrap items-center gap-2 landscape:hidden">
                   {routeInfo[spotKey] ? (
                     <>
-                      <span aria-hidden="true">🚗</span>
-                      <span>
-                        {routeInfo[spotKey].minutes} min ·{" "}
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
+                        <span aria-hidden="true">🚗</span>
+                        <span>{routeInfo[spotKey].minutes} min</span>
+                      </span>
+
+                      <span className="text-[13px] font-bold text-gray-600">
                         {routeInfo[spotKey].miles.toFixed(1)} miles
                       </span>
                     </>
                   ) : userLocation && spot.distance !== undefined ? (
                     <>
-                      <span aria-hidden="true">🚗</span>
-                      <span>
-                        About {estimateDriveMinutes(spot.distance)} min ·{" "}
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
+                        <span aria-hidden="true">🚗</span>
+                        <span>
+                          About {estimateDriveMinutes(spot.distance)} min
+                        </span>
+                      </span>
+
+                      <span className="text-[13px] font-bold text-gray-600">
                         {spot.distance.toFixed(1)} miles
                       </span>
                     </>
                   ) : (
-                    <>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[13px] font-bold text-gray-500 shadow-sm">
                       <span aria-hidden="true">📍</span>
                       <span>Enable location for drive time</span>
-                    </>
+                    </span>
                   )}
                 </div>
               </div>
