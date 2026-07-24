@@ -210,7 +210,7 @@ export default async function SearchPage() {
         [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
       "
     >
-      <CommunitySearchDirectory
+      <SearchDirectory
         categories={categories}
         businesses={visibleBusinesses}
       />

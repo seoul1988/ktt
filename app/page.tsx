@@ -973,7 +973,7 @@ const trending = [...spots]
 </section>
 
         <BottomNav activeNav="home" />
-		<ScrollToTopButton />
+        <ScrollToTopButton />
       </main>
     </>
   );
