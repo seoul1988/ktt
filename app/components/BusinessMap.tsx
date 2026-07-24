@@ -30,7 +30,9 @@ const INITIAL_MAP_ZOOM = 9;
 
 // TomTom 실시간 교통 레이어용 공개 환경변수입니다.
 // .env.local: NEXT_PUBLIC_TOMTOM_API_KEY=발급받은_API_KEY
-const TOMTOM_API_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || "";
+const TOMTOM_API_KEY =
+  process.env.NEXT_PUBLIC_TOMTOM_API_KEY ||
+  "DLSAyKT2rONDvZPY0Cqi9P57h501r33X";
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -1642,8 +1644,8 @@ useEffect(() => {
                         active:scale-95
                         ${
                           isSelected
-                            ? "w-[88px] -translate-x-4 border-[3px] border-red-600 bg-white text-red-600 shadow-[0_4px_12px_rgba(220,38,38,0.25)] landscape:w-[84px]"
-                            : "w-full border-2 border-transparent bg-gray-50 text-[#172033] shadow-sm"
+     ? "w-[88px] -translate-x-4 border-[3px] border-sky-400 bg-sky-50 text-sky-700 shadow-[0_4px_12px_rgba(56,189,248,0.35)] landscape:w-[84px]"
+     : "w-full border-2 border-transparent bg-gray-50 text-[#172033] shadow-sm"
                         }
                       `}
                     >
@@ -1753,7 +1755,16 @@ useEffect(() => {
   <button
     type="button"
     onClick={openCategoryPanel}
-    className="fixed left-4 top-[88px] z-[1100] rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow-xl landscape:left-3 landscape:top-[62px]"
+ className="fixed left-4 top-[88px] z-[1100]
+rounded-full
+bg-sky-500
+px-4 py-2
+text-xs
+font-bold
+text-white
+shadow-lg
+landscape:left-3
+landscape:top-[62px]"
   >
     {selectedCategory}
   </button>
