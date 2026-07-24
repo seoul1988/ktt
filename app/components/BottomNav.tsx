@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import { supabase } from "../../lib/supabase";
 
 type BottomNavProps = {
@@ -68,7 +69,10 @@ export default function BottomNav({
 
         setRole(data?.role ?? null);
       } catch (error) {
-        console.error("Bottom navigation role load error:", error);
+        console.error(
+          "Bottom navigation role load error:",
+          error,
+        );
 
         if (mounted) {
           setRole(null);
@@ -128,22 +132,24 @@ export default function BottomNav({
 
   return (
     <>
-      {/* 네비게이션에 콘텐츠가 가리지 않도록 하단 여백 */}
-      <div className="h-[78px] shrink-0" />
+      {/* 하단 네비게이션에 콘텐츠가 가리지 않도록 여백 확보 */}
+      <div className="h-[calc(76px+env(safe-area-inset-bottom,0px))] shrink-0" />
 
-      <nav className="fixed bottom-0 left-0 right-0 z-[1000] border-t border-gray-200 bg-white shadow-[0_-3px_14px_rgba(0,0,0,0.08)]">
-        <div
-          className="
-            relative mx-auto h-[64px] w-full max-w-md
-            px-2 pb-[env(safe-area-inset-bottom,0px)]
-          "
-        >
+      <nav
+        className="
+          fixed bottom-0 left-0 right-0 z-[1000]
+          border-t border-gray-200
+          bg-white
+          pb-[env(safe-area-inset-bottom,0px)]
+          shadow-[0_-3px_14px_rgba(0,0,0,0.08)]
+        "
+      >
+        <div className="relative mx-auto h-[64px] w-full max-w-md px-2">
           {/*
-           * 왼쪽과 오른쪽 메뉴를 각각 화면 절반 안에 배치합니다.
-           * 돋보기는 별도로 absolute 중앙 고정하므로
-           * 좌우 버튼 개수가 달라도 항상 정확히 가운데에 표시됩니다.
+           * 모든 일반 메뉴를 기존 위치보다 6px 위로 올립니다.
+           * 하단 safe-area는 nav의 padding-bottom으로 별도 유지됩니다.
            */}
-          <div className="absolute inset-y-0 left-2 right-2 flex">
+          <div className="absolute -top-[6px] bottom-[6px] left-2 right-2 flex">
             {/* 왼쪽 메뉴 영역 */}
             <div className="flex w-1/2 items-center justify-evenly pr-8">
               {isIOS && (
@@ -151,7 +157,13 @@ export default function BottomNav({
                   type="button"
                   onClick={handleBack}
                   aria-label="Go back"
-                  className="flex min-w-0 flex-1 flex-col items-center justify-center text-[#172033] transition-all duration-150 active:scale-90 active:opacity-70"
+                  className="
+                    flex min-w-0 flex-1 flex-col
+                    items-center justify-center
+                    text-[#172033]
+                    transition-all duration-150
+                    active:scale-90 active:opacity-70
+                  "
                 >
                   <svg
                     viewBox="0 0 24 24"
@@ -315,8 +327,14 @@ export default function BottomNav({
             </div>
           </div>
 
-          {/* 가운데 검색 버튼: 좌우 버튼 개수와 무관하게 정중앙 고정 */}
-          <div className="pointer-events-none absolute left-1/2 top-0 z-20 h-full -translate-x-1/2">
+          {/* 가운데 검색 버튼도 기존 위치보다 6px 위로 이동 */}
+          <div
+            className="
+              pointer-events-none
+              absolute left-1/2 top-0 z-20
+              h-full -translate-x-1/2
+            "
+          >
             <Link
               href="/search"
               onClick={triggerHaptic}
@@ -326,7 +344,8 @@ export default function BottomNav({
               }
               className={`
                 pointer-events-auto
-                absolute left-1/2 -top-0 -translate-x-1/2
+                absolute left-1/2 -top-[6px]
+                -translate-x-1/2
                 flex h-[60px] w-[60px]
                 items-center justify-center
                 rounded-full
