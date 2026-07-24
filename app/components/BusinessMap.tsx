@@ -189,6 +189,11 @@ type SpotWithDistance = Spot & {
   distance?: number;
 };
 
+type RouteInfo = {
+  minutes: number;
+  miles: number;
+};
+
 function getSpotKey(spot: Spot | null | undefined) {
   if (!spot) return "";
 
@@ -665,6 +670,7 @@ export default function BusinessMap({
   const [business16Spot, setBusiness16Spot] = useState<Spot | null>(null);
   const [showTrafficFlow, setShowTrafficFlow] = useState(false);
   const [trafficNotice, setTrafficNotice] = useState<string | null>(null);
+  const [routeInfo, setRouteInfo] = useState<Record<string, RouteInfo>>({});
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1238,6 +1244,93 @@ useEffect(() => {
       return getBusinessId(a) - getBusinessId(b);
     });
   }, [mapSpots, userLocation]);
+
+  useEffect(() => {
+    if (!userLocation || !TOMTOM_API_KEY || cardSpots.length === 0) {
+      setRouteInfo({});
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadRouteTimes() {
+      const targets = cardSpots
+        .filter((spot) => {
+          const lat = Number(spot.lat);
+          const lng = Number(spot.lng);
+
+          return Number.isFinite(lat) && Number.isFinite(lng);
+        })
+        .slice(0, 15);
+
+      const results = await Promise.allSettled(
+        targets.map(async (spot) => {
+          const spotKey = getSpotKey(spot);
+          const destinationLat = Number(spot.lat);
+          const destinationLng = Number(spot.lng);
+
+          const url =
+            "https://api.tomtom.com/routing/1/calculateRoute/" +
+            `${userLocation[0]},${userLocation[1]}:` +
+            `${destinationLat},${destinationLng}/json` +
+            `?key=${encodeURIComponent(TOMTOM_API_KEY)}` +
+            "&traffic=true" +
+            "&routeType=fastest" +
+            "&travelMode=car" +
+            "&routeRepresentation=summaryOnly";
+
+          const response = await fetch(url, {
+            signal: controller.signal,
+          });
+
+          if (!response.ok) {
+            throw new Error(`TomTom route request failed: ${response.status}`);
+          }
+
+          const data = await response.json();
+          const summary = data?.routes?.[0]?.summary;
+
+          if (!summary) {
+            throw new Error("TomTom route summary is missing");
+          }
+
+          return {
+            spotKey,
+            minutes: Math.max(
+              1,
+              Math.round(Number(summary.travelTimeInSeconds) / 60),
+            ),
+            miles: Number(summary.lengthInMeters) / 1609.344,
+          };
+        }),
+      );
+
+      if (controller.signal.aborted) return;
+
+      const next: Record<string, RouteInfo> = {};
+
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+
+        next[result.value.spotKey] = {
+          minutes: result.value.minutes,
+          miles: result.value.miles,
+        };
+      });
+
+      setRouteInfo(next);
+    }
+
+    loadRouteTimes().catch((error) => {
+      if (error?.name !== "AbortError") {
+        console.log("TomTom route time load error:", error);
+      }
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [userLocation, cardSpots]);
 
   useEffect(() => {
     if (restoredRef.current) return;
@@ -2136,11 +2229,18 @@ landscape:top-[62px]"
                   )}
                 </p>
 
-                <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
-                  {userLocation && spot.distance !== undefined
-                    ? `${spot.distance.toFixed(1)} miles away`
-                    : "Near Triangle"}
-                </p>
+                {routeInfo[spotKey] ? (
+                  <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
+                    🚗 {routeInfo[spotKey].minutes} min ·{" "}
+                    {routeInfo[spotKey].miles.toFixed(1)} miles
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm font-bold text-gray-500 landscape:hidden">
+                    {userLocation
+                      ? "Calculating drive time..."
+                      : "Location unavailable"}
+                  </p>
+                )}
               </div>
             </a>
           );
