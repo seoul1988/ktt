@@ -2239,12 +2239,6 @@ landscape:top-[62px]"
 
                 <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
                   {spot.category} · {spot.city || "Triangle"}
-                  {spot.rating && (
-                    <>
-                      {" · "}⭐ {spot.rating}
-                      {spot.review_count ? ` (${spot.review_count})` : ""}
-                    </>
-                  )}
                 </p>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2 landscape:hidden">
@@ -2258,6 +2252,19 @@ landscape:top-[62px]"
                       <span className="text-[13px] font-bold text-gray-600">
                         {routeInfo[spotKey].miles.toFixed(1)} miles
                       </span>
+
+                      {typeof spot.rating === "number" && spot.rating > 0 && (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
+                          <span aria-hidden="true">⭐</span>
+                          <span>{spot.rating.toFixed(1)}</span>
+                          {typeof spot.review_count === "number" &&
+                            spot.review_count > 0 && (
+                              <span className="text-gray-500">
+                                ({spot.review_count})
+                              </span>
+                            )}
+                        </span>
+                      )}
                     </>
                   ) : userLocation && spot.distance !== undefined ? (
                     <>
@@ -2271,12 +2278,40 @@ landscape:top-[62px]"
                       <span className="text-[13px] font-bold text-gray-600">
                         {spot.distance.toFixed(1)} miles
                       </span>
+
+                      {typeof spot.rating === "number" && spot.rating > 0 && (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
+                          <span aria-hidden="true">⭐</span>
+                          <span>{spot.rating.toFixed(1)}</span>
+                          {typeof spot.review_count === "number" &&
+                            spot.review_count > 0 && (
+                              <span className="text-gray-500">
+                                ({spot.review_count})
+                              </span>
+                            )}
+                        </span>
+                      )}
                     </>
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[13px] font-bold text-gray-500 shadow-sm">
-                      <span aria-hidden="true">📍</span>
-                      <span>Enable location for drive time</span>
-                    </span>
+                    <>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[13px] font-bold text-gray-500 shadow-sm">
+                        <span aria-hidden="true">📍</span>
+                        <span>Enable location for drive time</span>
+                      </span>
+
+                      {typeof spot.rating === "number" && spot.rating > 0 && (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
+                          <span aria-hidden="true">⭐</span>
+                          <span>{spot.rating.toFixed(1)}</span>
+                          {typeof spot.review_count === "number" &&
+                            spot.review_count > 0 && (
+                              <span className="text-gray-500">
+                                ({spot.review_count})
+                              </span>
+                            )}
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
