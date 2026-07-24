@@ -10,6 +10,7 @@ import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
 import BusinessCopyButton from "../../components/BusinessCopyButton";
 import BusinessDirectionsButton from "../../components/BusinessDirectionsButton";
+import DeleteBusinessButton from "../../components/DeleteBusinessButton";
 
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
@@ -442,12 +443,11 @@ export default async function BusinessPage({
                   Edit
                 </Link>
 
-                <button
-                  type="button"
-                  className="rounded bg-red-600 px-3 py-1 text-xs font-bold text-white"
-                >
-                  Delete
-                </button>
+                <DeleteBusinessButton
+                  businessId={String(spot.id)}
+                  businessName={spot.name}
+                  redirectHref={backHref}
+                />
               </div>
             )}
           </div>
