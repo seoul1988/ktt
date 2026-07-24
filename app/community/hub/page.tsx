@@ -478,7 +478,15 @@ export default function CommunityHubPage() {
                     {item.badgeKey === "news" && latestNewsTitle && (
   <p
     title={latestNewsTitle}
-    className="mt-2 max-w-[320px] truncate text-[12px] font-semibold leading-5 text-[#374151]"
+    className="
+      mt-2
+      max-w-[320px]
+      truncate
+      text-[13px]
+      font-extrabold
+      leading-5
+      text-[#1B365D]
+    "
   >
     📰 {latestNewsTitle}
   </p>
