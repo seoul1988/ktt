@@ -53,8 +53,8 @@ const kiotiMarkerIcon = L.divIcon({
   className: "kioti-map-marker",
   html: `
     <div style="
-      width:32px;
-      height:32px;
+      width:24px;
+      height:24px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -68,17 +68,17 @@ const kiotiMarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -18],
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -14],
 });
 
 const caryMarkerIcon = L.divIcon({
   className: "cary-map-marker",
   html: `
     <div style="
-      width:32px;
-      height:32px;
+      width:24px;
+      height:24px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -92,9 +92,9 @@ const caryMarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -18],
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -14],
 });
 
 
@@ -110,8 +110,8 @@ const business16MarkerIcon = L.divIcon({
   className: "business16-map-marker",
   html: `
     <div style="
-      width:32px;
-      height:32px;
+      width:24px;
+      height:24px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -126,17 +126,17 @@ const business16MarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -18],
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -14],
 });
 
 const business10MarkerIcon = L.divIcon({
   className: "business10-map-marker",
   html: `
     <div style="
-      width:32px;
-      height:32px;
+      width:24px;
+      height:24px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -151,9 +151,9 @@ const business10MarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -18],
+  iconSize: [24, 24],
+  iconAnchor: [12, 12],
+  popupAnchor: [0, -14],
 });
 
 
@@ -1268,8 +1268,10 @@ useEffect(() => {
         getBusinessId(spot)
       );
 
-      if (isPermanentMarker && !selectedCategory && !search.trim()) {
-        return true;
+      // Sponsored image markers are shown only on the default map.
+      // When a category or search is active, hide all four consistently.
+      if (isPermanentMarker) {
+        return !selectedCategory && !search.trim();
       }
 
       const spotCategoryList = getSpotCategoryList(spot);
@@ -1716,6 +1718,19 @@ useEffect(() => {
 
 
 
+  function clearMapFilters() {
+    setSearch("");
+    setSelectedCategory(null);
+    setSelectedSpotKey(null);
+    setCategoryPanelOpen(true);
+    setShowCards(false);
+    restoredRef.current = false;
+
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem(storageKey);
+    }
+  }
+
   function toggleTrafficFlow() {
     if (!TOMTOM_API_KEY) {
       setTrafficNotice(
@@ -1743,39 +1758,50 @@ useEffect(() => {
           </div>
         )}
 
-        <input
-          ref={searchInputRef}
-          value={search}
-          onFocus={() => {
-            setTimeout(() => {
-              searchInputRef.current?.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
+        <div className="relative min-w-0 flex-1">
+          <input
+            ref={searchInputRef}
+            value={search}
+            onFocus={() => {
+              setTimeout(() => {
+                searchInputRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              }, 180);
+            }}
+            onChange={(e) => {
+              const value = e.target.value;
+
+              setSearch(value);
+              setSelectedCategory(null);
+              setSelectedSpotKey(null);
+              setCategoryPanelOpen(false);
+              setShowCards(true);
+              restoredRef.current = false;
+
+              saveMapState({
+                search: value,
+                selectedCategory: null,
+                selectedSpotKey: null,
               });
-            }, 180);
-          }}
-          onChange={(e) => {
-            const value = e.target.value;
+            }}
+            placeholder="Search..."
+            className="w-full rounded-2xl border-none bg-white px-5 py-4 pr-12 text-base font-semibold shadow-xl outline-none [-webkit-text-size-adjust:100%] landscape:px-4 landscape:py-3 landscape:pr-11 landscape:text-xs"
+          />
 
-            setSearch(value);
-            setSelectedCategory(null);
-
-            // 이전 검색에서 선택된 카드와 마커를 해제합니다.
-            setSelectedSpotKey(null);
-
-            setCategoryPanelOpen(false);
-            setShowCards(true);
-            restoredRef.current = false;
-
-            saveMapState({
-              search: value,
-              selectedCategory: null,
-              selectedSpotKey: null,
-            });
-          }}
-          placeholder="Search..."
-          className="min-w-0 flex-1 rounded-2xl border-none bg-white px-5 py-4 text-base font-semibold shadow-xl outline-none [-webkit-text-size-adjust:100%] landscape:px-4 landscape:py-3 landscape:text-xs"
-        />
+          {(search.trim() || selectedCategory) && (
+            <button
+              type="button"
+              onClick={clearMapFilters}
+              aria-label="Clear search and category"
+              title="Reset map"
+              className="absolute right-3 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-lg font-black leading-none text-gray-700 shadow-sm transition active:scale-90"
+            >
+              ×
+            </button>
+          )}
+        </div>
 
       <div className="shrink-0">
   <AuthRefreshWrapper>
