@@ -16,41 +16,61 @@ type VisitorLogRow = {
 };
 
 const PAGE_SIZE = 1000;
+const MAX_VISITOR_LOGS = 10000;
 
 async function loadAllVisitorLogs() {
   const allLogs: VisitorLogRow[] = [];
-  let from = 0;
 
-  while (true) {
-    const to = from + PAGE_SIZE - 1;
+  for (
+    let from = 0;
+    from < MAX_VISITOR_LOGS;
+    from += PAGE_SIZE
+  ) {
+    const to = Math.min(
+      from + PAGE_SIZE - 1,
+      MAX_VISITOR_LOGS - 1,
+    );
 
     const { data, error } = await supabase
       .from("visitor_logs")
-      .select("*")
+      .select(
+        `
+          visitor_key,
+          page,
+          browser_language,
+          device_os,
+          user_agent,
+          created_at
+        `,
+      )
       .order("created_at", {
         ascending: false,
       })
       .range(from, to);
 
     if (error) {
+      console.error(
+        `Visitor logs load error (${from}-${to}):`,
+        error.message,
+      );
+
       return {
-        data: [] as VisitorLogRow[],
+        data: allLogs,
         error,
       };
     }
 
     const rows = (data || []) as VisitorLogRow[];
+
     allLogs.push(...rows);
 
     if (rows.length < PAGE_SIZE) {
       break;
     }
-
-    from += PAGE_SIZE;
   }
 
   return {
-    data: allLogs,
+    data: allLogs.slice(0, MAX_VISITOR_LOGS),
     error: null,
   };
 }
