@@ -32,8 +32,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
 
   verification: {
-    google:
-      "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
+    google: "iR2pfx7u3jwkOi6orVonKRlv_dlVaHlzOKpuid79rtw",
   },
 
   title: {
@@ -52,8 +51,7 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title:
-      "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
+    title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
     description:
       "랄리, 더럼, 캐리, 채플힐 및 트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
     url: SITE_URL,
@@ -75,8 +73,7 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title:
-      "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
+    title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
     description:
       "트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
     images: [
@@ -160,9 +157,7 @@ export default function RootLayout({
     <html
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
-      style={{
-        backgroundColor: "#F8F3EC",
-      }}
+      style={{ backgroundColor: "#F8F3EC" }}
       suppressHydrationWarning
     >
       <head>
@@ -174,29 +169,18 @@ export default function RootLayout({
       </head>
 
       <body
-        className="
-          min-h-[100dvh]
-          w-full
-          max-w-[100vw]
-          overflow-x-hidden
-          bg-[#F8F3EC]
-          text-[#172033]
-        "
-        style={{
-          backgroundColor: "#F8F3EC",
-        }}
+        className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
+        style={{ backgroundColor: "#F8F3EC" }}
       >
         <AuthProvider>
           <ServiceWorkerRegister />
-
           <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
-
           <VisitorTracker />
           <AppBadgeManager />
           <AppUpdateNotice />
 
-          {children}
+          <div className="app-safe-area">{children}</div>
         </AuthProvider>
 
         {/* Google Analytics 4 및 Google Ads 공통 태그 */}
@@ -206,10 +190,7 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
 
-        <Script
-          id="google-analytics-and-ads"
-          strategy="afterInteractive"
-        >
+        <Script id="google-analytics-and-ads" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
 
@@ -229,6 +210,8 @@ export default function RootLayout({
           `}
         </Script>
       </body>
+	  
+	  
     </html>
   );
 }
