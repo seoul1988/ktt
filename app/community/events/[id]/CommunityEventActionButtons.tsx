@@ -31,7 +31,7 @@ function PhoneIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-7 w-7"
+      className="h-5 w-5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
@@ -50,7 +50,7 @@ function DirectionsIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-7 w-7"
+      className="h-5 w-5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
@@ -61,6 +61,7 @@ function DirectionsIcon() {
         strokeLinejoin="round"
         d="M12 21s6-5.3 6-11a6 6 0 1 0-12 0c0 5.7 6 11 6 11Z"
       />
+
       <circle cx="12" cy="10" r="2.1" />
     </svg>
   );
@@ -70,7 +71,7 @@ function ShareIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-7 w-7"
+      className="h-5 w-5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
@@ -79,7 +80,11 @@ function ShareIcon() {
       <circle cx="18" cy="5" r="2.2" />
       <circle cx="6" cy="12" r="2.2" />
       <circle cx="18" cy="19" r="2.2" />
-      <path strokeLinecap="round" d="m8 11 7.8-4.6M8 13l7.8 4.6" />
+
+      <path
+        strokeLinecap="round"
+        d="m8 11 7.8-4.6M8 13l7.8 4.6"
+      />
     </svg>
   );
 }
@@ -88,13 +93,20 @@ function CopyIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-7 w-7"
+      className="h-5 w-5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
       aria-hidden="true"
     >
-      <rect x="8" y="8" width="11" height="11" rx="2" />
+      <rect
+        x="8"
+        y="8"
+        width="11"
+        height="11"
+        rx="2"
+      />
+
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -108,13 +120,14 @@ function RegisterIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-7 w-7"
+      className="h-5 w-5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.8"
       aria-hidden="true"
     >
       <circle cx="12" cy="7.5" r="3.2" />
+
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -135,7 +148,8 @@ export default function CommunityEventActionButtons({
   const [copied, setCopied] = useState(false);
 
   const cleanPhone = normalizePhone(phone);
-  const cleanRegistrationUrl = normalizeExternalUrl(registrationUrl);
+  const cleanRegistrationUrl =
+    normalizeExternalUrl(registrationUrl);
   const cleanAddress = String(address || "").trim();
 
   const hasCoordinates =
@@ -161,7 +175,11 @@ export default function CommunityEventActionButtons({
       (directionsUrl ? 1 : 0) +
       (cleanRegistrationUrl ? 1 : 0)
     );
-  }, [cleanPhone, directionsUrl, cleanRegistrationUrl]);
+  }, [
+    cleanPhone,
+    directionsUrl,
+    cleanRegistrationUrl,
+  ]);
 
   const gridClass =
     visibleCount >= 5
@@ -178,9 +196,15 @@ export default function CommunityEventActionButtons({
     try {
       await navigator.clipboard.writeText(pageUrl);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 1800);
     } catch {
-      window.prompt("아래 주소를 복사하세요.", pageUrl);
+      window.prompt(
+        "아래 주소를 복사하세요.",
+        pageUrl,
+      );
     }
   }
 
@@ -194,6 +218,7 @@ export default function CommunityEventActionButtons({
           text: eventTitle,
           url: pageUrl,
         });
+
         return;
       } catch (error) {
         if (
@@ -209,17 +234,23 @@ export default function CommunityEventActionButtons({
   }
 
   const buttonClass =
-    "flex min-w-0 flex-col items-center justify-center gap-2 rounded-2xl border border-[#D9DDE2] bg-white px-1.5 py-3 text-[#667085] shadow-sm transition hover:bg-[#F8F9FA] active:scale-[0.98]";
+    "flex min-w-0 min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl border border-[#D9DDE2] bg-white px-1 py-2 text-[#667085] shadow-sm transition hover:bg-[#F8F9FA] active:scale-[0.97]";
 
   const labelClass =
-    "w-full truncate text-center text-[10px] font-bold leading-tight text-[#344054] sm:text-xs";
+    "w-full truncate text-center text-[9px] font-bold leading-none text-[#344054] sm:text-[10px]";
 
   return (
-    <div className={`mt-4 grid ${gridClass} gap-2`}>
+    <div className={`mt-3 grid ${gridClass} gap-1.5`}>
       {cleanPhone && (
-        <a href={`tel:${cleanPhone}`} className={buttonClass}>
+        <a
+          href={`tel:${cleanPhone}`}
+          className={buttonClass}
+        >
           <PhoneIcon />
-          <span className={labelClass}>전화</span>
+
+          <span className={labelClass}>
+            전화
+          </span>
         </a>
       )}
 
@@ -231,7 +262,10 @@ export default function CommunityEventActionButtons({
           className={buttonClass}
         >
           <DirectionsIcon />
-          <span className={labelClass}>길찾기</span>
+
+          <span className={labelClass}>
+            길찾기
+          </span>
         </a>
       )}
 
@@ -241,7 +275,10 @@ export default function CommunityEventActionButtons({
         className={buttonClass}
       >
         <ShareIcon />
-        <span className={labelClass}>공유</span>
+
+        <span className={labelClass}>
+          공유
+        </span>
       </button>
 
       <button
@@ -250,6 +287,7 @@ export default function CommunityEventActionButtons({
         className={buttonClass}
       >
         <CopyIcon />
+
         <span className={labelClass}>
           {copied ? "복사됨" : "링크복사"}
         </span>
@@ -263,7 +301,10 @@ export default function CommunityEventActionButtons({
           className={buttonClass}
         >
           <RegisterIcon />
-          <span className={labelClass}>참가신청</span>
+
+          <span className={labelClass}>
+            참가신청
+          </span>
         </a>
       )}
     </div>
