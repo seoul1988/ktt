@@ -399,8 +399,8 @@ export default function CommunityNewsPage() {
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-md items-center px-3">
+     <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+  <div className="mx-auto flex h-14 w-full max-w-lg items-center px-4">
           <button
             type="button"
             onClick={() => router.back()}
@@ -437,7 +437,7 @@ export default function CommunityNewsPage() {
         </div>
       </header>
 
-      <section className="mx-auto w-full max-w-md px-3 pt-3">
+      <section className="mx-auto w-full max-w-lg px-4 pt-4">
         <div className="relative">
           <svg
             viewBox="0 0 24 24"
