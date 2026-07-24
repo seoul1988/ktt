@@ -2206,116 +2206,113 @@ landscape:top-[62px]"
               </div>
 
               <div className="border-t border-gray-200 bg-gray-100 px-4 pb-5 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
-                    {spot.name}
-                  </h3>
+  <div className="flex items-start justify-between gap-2">
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
+          {spot.name}
+        </h3>
 
-                  <div className="flex shrink-0 items-center gap-2 landscape:hidden">
-                    <button
-                      onClick={(e) => toggleLike(e, businessId)}
-                      className={`rounded-full border px-2 py-1 text-xs font-bold ${
-                        likedIds[businessId]
-                          ? "border-red-200 bg-red-50 text-red-500"
-                          : "border-pink-100 bg-pink-50 text-pink-500"
-                      }`}
-                    >
-                      {likedIds[businessId] ? "♥" : "♡"}{" "}
-                      {likeCounts[businessId] || 0}
-                    </button>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
+            status.text === "Open"
+              ? "bg-green-100 text-green-700"
+              : status.text === "Break Time"
+              ? "bg-orange-100 text-orange-700"
+              : "bg-red-100 text-red-600"
+          }`}
+        >
+          {status.text}
+        </span>
+      </div>
+    </div>
 
-                    <div
-                      className={`rounded-full px-3 py-1 text-[9px] font-extrabold ${
-                        status.text === "Open"
-                          ? "bg-green-100 text-green-700"
-                          : status.text === "Break Time"
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-white text-gray-600"
-                      }`}
-                    >
-                      {status.text}
-                    </div>
-                  </div>
-                </div>
+    <button
+      onClick={(e) => toggleLike(e, businessId)}
+      className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${
+        likedIds[businessId]
+          ? "border-red-200 bg-red-50 text-red-500"
+          : "border-pink-100 bg-pink-50 text-pink-500"
+      }`}
+    >
+      {likedIds[businessId] ? "♥" : "♡"}{" "}
+      {likeCounts[businessId] || 0}
+    </button>
+  </div>
 
-                <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
-                  {spot.category} · {spot.city || "Triangle"}
-                </p>
+  <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
+    {spot.category} · {spot.city || "Triangle"}
+  </p>
 
-                <div className="mt-2 flex flex-wrap items-center gap-2 landscape:hidden">
-                  {routeInfo[spotKey] ? (
-                    <>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
-                        <span aria-hidden="true">🚗</span>
-                        <span>{routeInfo[spotKey].minutes} min</span>
-                      </span>
+  <div className="mt-2 flex flex-wrap items-center gap-2 landscape:hidden">
+    {routeInfo[spotKey] ? (
+      <>
+        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
+          <span>🚗</span>
+          <span>{routeInfo[spotKey].minutes} min</span>
+        </span>
 
-                      <span className="text-[13px] font-bold text-gray-600">
-                        {routeInfo[spotKey].miles.toFixed(1)} miles
-                      </span>
+        <span className="text-[13px] font-bold text-gray-600">
+          {routeInfo[spotKey].miles.toFixed(1)} miles
+        </span>
 
-                      {typeof spot.rating === "number" && spot.rating > 0 && (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
-                          <span aria-hidden="true">⭐</span>
-                          <span>{spot.rating.toFixed(1)}</span>
-                          {typeof spot.review_count === "number" &&
-                            spot.review_count > 0 && (
-                              <span className="text-gray-500">
-                                ({spot.review_count})
-                              </span>
-                            )}
-                        </span>
-                      )}
-                    </>
-                  ) : userLocation && spot.distance !== undefined ? (
-                    <>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
-                        <span aria-hidden="true">🚗</span>
-                        <span>
-                          About {estimateDriveMinutes(spot.distance)} min
-                        </span>
-                      </span>
+        {typeof spot.rating === "number" && spot.rating > 0 && (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
+            ⭐ {spot.rating.toFixed(1)}
+            {typeof spot.review_count === "number" &&
+              spot.review_count > 0 && (
+                <span className="text-gray-500">
+                  ({spot.review_count})
+                </span>
+              )}
+          </span>
+        )}
+      </>
+    ) : userLocation && spot.distance !== undefined ? (
+      <>
+        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
+          <span>🚗</span>
+          <span>About {estimateDriveMinutes(spot.distance)} min</span>
+        </span>
 
-                      <span className="text-[13px] font-bold text-gray-600">
-                        {spot.distance.toFixed(1)} miles
-                      </span>
+        <span className="text-[13px] font-bold text-gray-600">
+          {spot.distance.toFixed(1)} miles
+        </span>
 
-                      {typeof spot.rating === "number" && spot.rating > 0 && (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
-                          <span aria-hidden="true">⭐</span>
-                          <span>{spot.rating.toFixed(1)}</span>
-                          {typeof spot.review_count === "number" &&
-                            spot.review_count > 0 && (
-                              <span className="text-gray-500">
-                                ({spot.review_count})
-                              </span>
-                            )}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[13px] font-bold text-gray-500 shadow-sm">
-                        <span aria-hidden="true">📍</span>
-                        <span>Enable location for drive time</span>
-                      </span>
+        {typeof spot.rating === "number" && spot.rating > 0 && (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
+            ⭐ {spot.rating.toFixed(1)}
+            {typeof spot.review_count === "number" &&
+              spot.review_count > 0 && (
+                <span className="text-gray-500">
+                  ({spot.review_count})
+                </span>
+              )}
+          </span>
+        )}
+      </>
+    ) : (
+      <>
+        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[13px] font-bold text-gray-500 shadow-sm">
+          📍 Enable location for drive time
+        </span>
 
-                      {typeof spot.rating === "number" && spot.rating > 0 && (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
-                          <span aria-hidden="true">⭐</span>
-                          <span>{spot.rating.toFixed(1)}</span>
-                          {typeof spot.review_count === "number" &&
-                            spot.review_count > 0 && (
-                              <span className="text-gray-500">
-                                ({spot.review_count})
-                              </span>
-                            )}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+        {typeof spot.rating === "number" && spot.rating > 0 && (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
+            ⭐ {spot.rating.toFixed(1)}
+            {typeof spot.review_count === "number" &&
+              spot.review_count > 0 && (
+                <span className="text-gray-500">
+                  ({spot.review_count})
+                </span>
+              )}
+          </span>
+        )}
+      </>
+    )}
+  </div>
+</div>
+
             </a>
           );
         })}
