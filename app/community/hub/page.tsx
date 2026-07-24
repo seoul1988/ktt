@@ -482,6 +482,10 @@ export default function CommunityHubPage() {
       mt-2
       max-w-[320px]
       truncate
+      rounded-lg
+      bg-[#EAF0F7]
+      px-3
+      py-1.5
       text-[13px]
       font-extrabold
       leading-5
