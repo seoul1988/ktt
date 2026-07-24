@@ -161,29 +161,60 @@ export default async function SearchPage() {
   );
 
   return (
-    <main className="min-h-[100dvh] bg-[#F8F3EC]">
-      <header className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-black/5 bg-[#F8F3EC]/95 backdrop-blur-md">
-        <div className="relative mx-auto flex h-full max-w-xl items-center justify-between px-4">
-          <div className="flex w-12 items-center justify-start">
-            <BackButton />
-          </div>
+  <main className="min-h-[100dvh] bg-[#F8F3EC]">
+    {/* 아이폰 상태바 영역 배경 */}
+    <div className="fixed inset-x-0 top-0 z-[99] h-[env(safe-area-inset-top)] bg-[#F8F3EC]" />
 
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-2xl font-black tracking-tight text-[#172033]">
-            Businesses
-          </h1>
-
-          <div className="flex w-12 items-center justify-end">
-            <ProfileButton />
-          </div>
+    {/* 아이폰 상태바 아래에 헤더 배치 */}
+    <header
+      className="
+        fixed inset-x-0
+        top-[env(safe-area-inset-top)]
+        z-[100]
+        h-14
+        border-b border-black/5
+        bg-[#F8F3EC]/95
+        backdrop-blur-md
+      "
+    >
+      <div className="relative mx-auto flex h-full max-w-xl items-center justify-between px-4">
+        <div className="flex w-12 shrink-0 items-center justify-start">
+          <BackButton />
         </div>
-      </header>
 
-      <div className="pt-14 [&_header]:top-14">
-        <SearchDirectory
-          categories={categories}
-          businesses={visibleBusinesses}
-        />
+        <h1
+          className="
+            pointer-events-none
+            absolute left-1/2
+            max-w-[calc(100%-120px)]
+            -translate-x-1/2
+            truncate
+            text-2xl font-black
+            tracking-tight
+            text-[#172033]
+          "
+        >
+          Businesses
+        </h1>
+
+        <div className="flex w-12 shrink-0 items-center justify-end">
+          <ProfileButton />
+        </div>
       </div>
-    </main>
-  );
+    </header>
+
+    {/* 상태바 높이 + 헤더 56px만큼 본문 내리기 */}
+    <div
+      className="
+        pt-[calc(env(safe-area-inset-top)+3.5rem)]
+        [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
+      "
+    >
+      <CommunitySearchDirectory
+        categories={categories}
+        businesses={visibleBusinesses}
+      />
+    </div>
+  </main>
+);
 }
