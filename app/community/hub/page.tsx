@@ -368,10 +368,10 @@ export default function CommunityHubPage() {
        * 헤더를 sticky/fixed로 두지 않고 본문과 같은 흐름에 넣어
        * 스크롤하면 헤더와 카드가 함께 위로 사라지게 합니다.
        */}
-      <section className="mx-auto w-full max-w-md px-3 pt-2">
+      <section className="mx-auto w-full max-w-md px-4 pt-4">
         <header className="border-b border-gray-200 bg-white/95 backdrop-blur">
           <div className="flex h-14 w-full items-center justify-between px-1">
-          <button
+            <button
             type="button"
             onClick={handleBack}
             aria-label="Go to Hub"
@@ -389,9 +389,9 @@ export default function CommunityHubPage() {
             >
               <path d="M15 18l-6-6 6-6" />
             </svg>
-          </button>
+            </button>
 
-          <div className="text-center">
+            <div className="text-center">
             <h1 className="text-[15px] font-extrabold leading-none">
               Hub
             </h1>
@@ -399,15 +399,15 @@ export default function CommunityHubPage() {
             <p className="mt-1 text-[9px] font-medium text-gray-500">
               필요한 메뉴를 한곳에서 이용하세요
             </p>
-          </div>
+            </div>
 
-          <div className="flex h-9 w-9 items-center justify-center">
-            <ProfileButton />
-          </div>
+            <div className="flex h-9 w-9 items-center justify-center">
+              <ProfileButton />
+            </div>
           </div>
         </header>
 
-        <div className="pt-3">
+        <div className="pt-4">
           <div className="grid grid-cols-2 gap-2.5">
           {hubItems.map((item) => {
             const isExternal =
