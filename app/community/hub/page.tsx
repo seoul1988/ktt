@@ -362,7 +362,7 @@ export default function CommunityHubPage() {
   return (
     <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
+        <div className="mx-auto flex h-14 w-full max-w-2xl items-center justify-between px-4 sm:px-6">
           <button
             type="button"
             onClick={handleBack}
@@ -399,8 +399,8 @@ export default function CommunityHubPage() {
         </div>
       </header>
 
-      <section className="mx-auto w-full max-w-md px-3 pt-3">
-        <div className="grid grid-cols-2 gap-2.5">
+      <section className="mx-auto w-full max-w-2xl px-3 pt-3 sm:px-5">
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
           {hubItems.map((item) => {
             const isExternal =
               item.href.startsWith("http");
@@ -409,7 +409,7 @@ export default function CommunityHubPage() {
               recentBadges[item.badgeKey];
 
             const cardClassName = `
-              relative flex min-h-[112px] items-center justify-center
+              relative flex min-h-[112px] items-center justify-center sm:min-h-[124px]
               overflow-hidden rounded-2xl border border-gray-200
               bg-white px-3 py-4 text-center
               shadow-[0_2px_10px_rgba(23,32,51,0.06)]
@@ -417,7 +417,7 @@ export default function CommunityHubPage() {
               hover:-translate-y-0.5
               hover:shadow-[0_6px_18px_rgba(23,32,51,0.10)]
               active:scale-[0.97] active:bg-gray-50
-              ${item.wide ? "col-span-2 min-h-[82px]" : ""}
+              ${item.wide ? "col-span-2 min-h-[92px] sm:min-h-[104px]" : ""}
             `;
 
             const cardContent = (
@@ -431,14 +431,14 @@ export default function CommunityHubPage() {
                 <div
                   className={
                     item.wide
-                      ? "flex w-full items-center justify-center gap-4"
+                      ? "flex w-full items-center justify-center gap-5 sm:gap-7"
                       : "flex flex-col items-center"
                   }
                 >
                   <div
                     className={`flex items-center justify-center text-[#172033] ${
                       item.wide
-                        ? "h-10 w-10"
+                        ? "h-12 w-12"
                         : "h-12 w-12"
                     }`}
                   >
@@ -446,7 +446,7 @@ export default function CommunityHubPage() {
                       name={item.icon}
                       className={
                         item.wide
-                          ? "h-9 w-9"
+                          ? "h-10 w-10"
                           : "h-11 w-11"
                       }
                     />
@@ -459,7 +459,7 @@ export default function CommunityHubPage() {
                         : "mt-2"
                     }
                   >
-                    <h2 className="text-[13px] font-extrabold leading-tight text-[#172033]">
+                    <h2 className="text-[14px] font-extrabold leading-tight text-[#172033] sm:text-[15px]">
                       {item.title}
                     </h2>
 
@@ -468,13 +468,25 @@ export default function CommunityHubPage() {
                     </p>
 
                     {item.badgeKey === "news" && latestNewsTitle && (
-  <p
-    title={latestNewsTitle}
-    className="mt-2 max-w-[320px] truncate text-[12px] font-semibold leading-5 text-[#374151]"
-  >
-    📰 {latestNewsTitle}
-  </p>
-)}
+                      <div className="mt-2 max-w-[520px]">
+                        <p
+                          title={latestNewsTitle}
+                          className="line-clamp-2 animate-pulse text-[15px] font-extrabold leading-6 text-[#B42318] sm:text-[17px]"
+                        >
+                          <span
+                            className="mr-1.5 inline-block"
+                            aria-hidden="true"
+                          >
+                            📰
+                          </span>
+                          {latestNewsTitle}
+                        </p>
+
+                        <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                          Latest News
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
