@@ -140,61 +140,63 @@ export default async function SearchPage() {
     ),
   );
 
-  return (
-    <main className="min-h-[100dvh] bg-[#F8F3EC]">
-      {/* 아이폰 상태바·노치 영역 배경 */}
-      <div className="fixed inset-x-0 top-0 z-[99] h-[env(safe-area-inset-top)] bg-[#F8F3EC]" />
 
-      {/* safe area 아래에 헤더 표시 */}
-      <header
-        className="
-          fixed inset-x-0 top-0 z-[100]
-          border-b border-black/5
-          bg-[#F8F3EC]/95
-          pt-[env(safe-area-inset-top)]
-          backdrop-blur-md
-        "
-      >
-        <div className="relative mx-auto flex h-14 max-w-xl items-center justify-between px-4">
-          <div className="flex w-12 shrink-0 items-center justify-start">
-            <BackButton />
-          </div>
+   return (
+  <main className="min-h-[100dvh] bg-[#F8F3EC]">
+    {/* 아이폰 상태바 영역 배경 */}
+    <div className="fixed inset-x-0 top-0 z-[99] h-[env(safe-area-inset-top)] bg-[#F8F3EC]" />
 
-          <h1
-            className="
-              pointer-events-none
-              absolute left-1/2
-              max-w-[calc(100%-120px)]
-              -translate-x-1/2
-              truncate
-              text-2xl font-black
-              tracking-tight
-              text-[#172033]
-            "
-          >
-            Businesses
-          </h1>
-
-          <div className="flex w-12 shrink-0 items-center justify-end">
-            <ProfileButton />
-          </div>
+    {/* 상단 고정 헤더 */}
+    <header
+      className="
+        fixed inset-x-0 top-0 z-[100]
+        border-b border-black/5
+        bg-[#F8F3EC]/95
+        pt-[env(safe-area-inset-top)]
+        backdrop-blur-md
+      "
+    >
+      <div className="relative mx-auto flex h-14 max-w-xl items-center justify-between px-4">
+        <div className="flex w-12 shrink-0 items-center justify-start">
+          <BackButton />
         </div>
-      </header>
 
-      {/* safe area + 헤더 높이만큼 본문 내리기 */}
-      <div
-  className="
-    pt-[calc(env(safe-area-inset-top)+3.5rem)]
-    [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
-  "
->
-  <div className="-mt-3">
-    <SearchDirectory
-      categories={categories}
-      businesses={visibleBusinesses}
-    />
-  </div>
-</div>
-    </main>
-  );
+        <h1
+          className="
+            pointer-events-none
+            absolute left-1/2
+            max-w-[calc(100%-120px)]
+            -translate-x-1/2
+            truncate
+            text-2xl font-black
+            tracking-tight
+            text-[#172033]
+          "
+        >
+          Businesses
+        </h1>
+
+        <div className="flex w-12 shrink-0 items-center justify-end">
+          <ProfileButton />
+        </div>
+      </div>
+    </header>
+
+    {/* 헤더 아래 본문 */}
+    <div
+      className="
+        pt-[calc(env(safe-area-inset-top)+3.5rem)]
+        [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
+      "
+    >
+      {/* 모바일에서는 검색창을 위로 올리고 큰 화면에서는 조금만 올림 */}
+      <div className="-mt-24 sm:-mt-3">
+        <SearchDirectory
+          categories={categories}
+          businesses={visibleBusinesses}
+        />
+      </div>
+    </div>
+  </main>
+);
 }
