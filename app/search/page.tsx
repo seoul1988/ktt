@@ -46,32 +46,6 @@ function splitCategories(value: unknown): string[] {
     .filter(Boolean);
 }
 
-function categoryNamesMatch(
-  businessCategoryName: string,
-  allowedCategoryName: string,
-) {
-  const businessName = normalizeCategory(
-    businessCategoryName,
-  );
-
-  const allowedName = normalizeCategory(
-    allowedCategoryName,
-  );
-
-  if (!businessName || !allowedName) {
-    return false;
-  }
-
-  /*
-   * 부분 일치를 사용하지 않고 정확히 같은 카테고리만 허용합니다.
-   *
-   * 예:
-   * Beauty !== Beauty Supply
-   * Restaurant !== Korean Restaurant
-   */
-  return businessName === allowedName;
-}
-
 function isMainCategoryBusiness(
   business: any,
   allowedCategoryNames: Set<string>,
@@ -114,7 +88,7 @@ export default async function SearchPage() {
     );
   }
 
-  const categories = mainCategories || [];
+  const categories = mainCategories ?? [];
 
   /*
    * 숨김 처리되지 않은 비즈니스만 가져옵니다.
@@ -152,7 +126,7 @@ export default async function SearchPage() {
    * Main App Map 카테고리 이름과 정확히 일치하는
    * 카테고리에 속한 비즈니스만 표시합니다.
    */
-  const visibleBusinesses = (allBusinesses || []).filter(
+  const visibleBusinesses = (allBusinesses ?? []).filter(
     (business: any) =>
       isMainCategoryBusiness(
         business,
@@ -161,60 +135,76 @@ export default async function SearchPage() {
   );
 
   return (
-  <main className="min-h-[100dvh] bg-[#F8F3EC]">
-    {/* 아이폰 상태바 영역 배경 */}
-    <div className="fixed inset-x-0 top-0 z-[99] h-[env(safe-area-inset-top)] bg-[#F8F3EC]" />
-
-    {/* 아이폰 상태바 아래에 헤더 배치 */}
-    <header
-      className="
-        fixed inset-x-0
-        top-[env(safe-area-inset-top)]
-        z-[100]
-        h-14
-        border-b border-black/5
-        bg-[#F8F3EC]/95
-        backdrop-blur-md
-      "
-    >
-      <div className="relative mx-auto flex h-full max-w-xl items-center justify-between px-4">
-        <div className="flex w-12 shrink-0 items-center justify-start">
-          <BackButton />
-        </div>
-
-        <h1
-          className="
-            pointer-events-none
-            absolute left-1/2
-            max-w-[calc(100%-120px)]
-            -translate-x-1/2
-            truncate
-            text-2xl font-black
-            tracking-tight
-            text-[#172033]
-          "
-        >
-          Businesses
-        </h1>
-
-        <div className="flex w-12 shrink-0 items-center justify-end">
-          <ProfileButton />
-        </div>
-      </div>
-    </header>
-
-    {/* 상태바 높이 + 헤더 56px만큼 본문 내리기 */}
-    <div
-      className="
-        pt-[calc(env(safe-area-inset-top)+3.5rem)]
-        [&_header]:top-[calc(env(safe-area-inset-top)+3.5rem)]
-      "
-    >
-      <SearchDirectory
-        categories={categories}
-        businesses={visibleBusinesses}
+    <main className="min-h-[100dvh] bg-[#F8F3EC]">
+      {/*
+       * 아이폰 상태바와 헤더 위쪽 여백을 같은 배경으로 채웁니다.
+       * safe area + 16px까지 배경이 이어집니다.
+       */}
+      <div
+        className="
+          fixed inset-x-0 top-0 z-[99]
+          h-[calc(env(safe-area-inset-top)+1rem)]
+          bg-[#F8F3EC]
+        "
       />
-    </div>
-  </main>
-);
+
+      {/*
+       * 헤더를 아이폰 safe area 아래에서 16px 더 내립니다.
+       * 헤더 자체 높이는 기존 56px를 유지합니다.
+       */}
+      <header
+        className="
+          fixed inset-x-0
+          top-[calc(env(safe-area-inset-top)+1rem)]
+          z-[100]
+          h-14
+          border-b border-black/5
+          bg-[#F8F3EC]/95
+          backdrop-blur-md
+        "
+      >
+        <div className="relative mx-auto flex h-full max-w-xl items-center justify-between px-4">
+          <div className="flex w-12 shrink-0 items-center justify-start">
+            <BackButton />
+          </div>
+
+          <h1
+            className="
+              pointer-events-none
+              absolute left-1/2
+              max-w-[calc(100%-120px)]
+              -translate-x-1/2
+              truncate
+              text-2xl font-black
+              tracking-tight
+              text-[#172033]
+            "
+          >
+            Businesses
+          </h1>
+
+          <div className="flex w-12 shrink-0 items-center justify-end">
+            <ProfileButton />
+          </div>
+        </div>
+      </header>
+
+      {/*
+       * 헤더가 safe area + 16px 아래에서 시작하므로,
+       * 본문도 safe area + 16px + 헤더 56px만큼 내립니다.
+       * SearchDirectory 내부의 sticky/fixed header도 같은 위치에서 시작합니다.
+       */}
+      <div
+        className="
+          pt-[calc(env(safe-area-inset-top)+4.5rem)]
+          [&_header]:top-[calc(env(safe-area-inset-top)+4.5rem)]
+        "
+      >
+        <SearchDirectory
+          categories={categories}
+          businesses={visibleBusinesses}
+        />
+      </div>
+    </main>
+  );
 }
