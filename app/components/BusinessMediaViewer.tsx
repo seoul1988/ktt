@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 
 type MediaItem = {
   type: "video" | "image";
@@ -13,19 +18,40 @@ function getYoutubeEmbedUrl(url: string) {
     const host = parsed.hostname.toLowerCase();
 
     if (host.includes("youtu.be")) {
-      const id = parsed.pathname.replace("/", "").split("?")[0];
-      return id ? `https://www.youtube.com/embed/${id}` : "";
+      const id = parsed.pathname
+        .replace("/", "")
+        .split("?")[0];
+
+      return id
+        ? `https://www.youtube.com/embed/${id}`
+        : "";
     }
 
     if (host.includes("youtube.com")) {
-      const watchId = parsed.searchParams.get("v");
-      if (watchId) return `https://www.youtube.com/embed/${watchId}`;
+      const watchId =
+        parsed.searchParams.get("v");
 
-      const shortsMatch = parsed.pathname.match(/\/shorts\/([^/?]+)/);
-      if (shortsMatch?.[1]) return `https://www.youtube.com/embed/${shortsMatch[1]}`;
+      if (watchId) {
+        return `https://www.youtube.com/embed/${watchId}`;
+      }
 
-      const embedMatch = parsed.pathname.match(/\/embed\/([^/?]+)/);
-      if (embedMatch?.[1]) return `https://www.youtube.com/embed/${embedMatch[1]}`;
+      const shortsMatch =
+        parsed.pathname.match(
+          /\/shorts\/([^/?]+)/,
+        );
+
+      if (shortsMatch?.[1]) {
+        return `https://www.youtube.com/embed/${shortsMatch[1]}`;
+      }
+
+      const embedMatch =
+        parsed.pathname.match(
+          /\/embed\/([^/?]+)/,
+        );
+
+      if (embedMatch?.[1]) {
+        return `https://www.youtube.com/embed/${embedMatch[1]}`;
+      }
     }
 
     return "";
@@ -37,25 +63,49 @@ function getYoutubeEmbedUrl(url: string) {
 function getVideoKind(url: string) {
   const lower = url.toLowerCase();
 
-  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "youtube";
-  if (lower.includes("instagram.com")) return "instagram";
-  if (lower.includes("facebook.com") || lower.includes("fb.watch")) return "facebook";
+  if (
+    lower.includes("youtube.com") ||
+    lower.includes("youtu.be")
+  ) {
+    return "youtube";
+  }
+
+  if (lower.includes("instagram.com")) {
+    return "instagram";
+  }
+
+  if (
+    lower.includes("facebook.com") ||
+    lower.includes("fb.watch")
+  ) {
+    return "facebook";
+  }
 
   return "upload";
 }
 
-function ExternalVideoButton({ url }: { url: string }) {
+function ExternalVideoButton({
+  url,
+}: {
+  url: string;
+}) {
   const kind = getVideoKind(url);
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
       <div className="text-5xl">▶</div>
+
       <p className="text-lg font-black">
-        {kind === "instagram" ? "Instagram Video" : "Facebook Video"}
+        {kind === "instagram"
+          ? "Instagram Video"
+          : "Facebook Video"}
       </p>
+
       <p className="text-sm font-bold text-white/70">
-        이 영상은 앱 안에서 직접 재생이 제한될 수 있어요.
+        이 영상은 앱 안에서 직접 재생이 제한될 수
+        있어요.
       </p>
+
       <a
         href={url}
         target="_blank"
@@ -85,10 +135,11 @@ function MediaDisplay({
         src={item.url}
         alt={name}
         onClick={onOpen}
+        draggable={false}
         className={
           full
-            ? "max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
-            : "h-full w-full cursor-pointer object-contain"
+            ? "max-h-[calc(100dvh-120px)] max-w-[calc(100vw-24px)] select-none rounded-xl object-contain"
+            : "h-full w-full cursor-pointer select-none object-contain"
         }
       />
     );
@@ -97,7 +148,8 @@ function MediaDisplay({
   const kind = getVideoKind(item.url);
 
   if (kind === "youtube") {
-    const embedUrl = getYoutubeEmbedUrl(item.url);
+    const embedUrl =
+      getYoutubeEmbedUrl(item.url);
 
     if (embedUrl) {
       return (
@@ -108,7 +160,7 @@ function MediaDisplay({
           allowFullScreen
           className={
             full
-              ? "aspect-video w-[90vw] max-w-5xl rounded-xl bg-black"
+              ? "aspect-video w-[calc(100vw-24px)] max-w-5xl rounded-xl bg-black"
               : "h-full w-full bg-black"
           }
         />
@@ -116,8 +168,13 @@ function MediaDisplay({
     }
   }
 
-  if (kind === "instagram" || kind === "facebook") {
-    return <ExternalVideoButton url={item.url} />;
+  if (
+    kind === "instagram" ||
+    kind === "facebook"
+  ) {
+    return (
+      <ExternalVideoButton url={item.url} />
+    );
   }
 
   return (
@@ -130,7 +187,7 @@ function MediaDisplay({
       controls
       className={
         full
-          ? "max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
+          ? "max-h-[calc(100dvh-120px)] max-w-[calc(100vw-24px)] rounded-xl object-contain"
           : "h-full w-full object-contain"
       }
     />
@@ -147,50 +204,323 @@ export default function BusinessMediaViewer({
   name: string;
 }) {
   const media: MediaItem[] = [
-    ...videos.filter(Boolean).map((url) => ({ type: "video" as const, url })),
-    ...images.filter(Boolean).map((url) => ({ type: "image" as const, url })),
+    ...videos
+      .filter(Boolean)
+      .map((url) => ({
+        type: "video" as const,
+        url,
+      })),
+    ...images
+      .filter(Boolean)
+      .map((url) => ({
+        type: "image" as const,
+        url,
+      })),
   ];
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isOpen, setIsOpen] = useState(false);
+  const [currentIndex, setCurrentIndex] =
+    useState(0);
+
+  const [isOpen, setIsOpen] =
+    useState(false);
+
+  const [mounted, setMounted] =
+    useState(false);
+
   const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
 
   useEffect(() => {
-    if (currentIndex > media.length - 1) {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (
+      media.length > 0 &&
+      currentIndex > media.length - 1
+    ) {
       setCurrentIndex(0);
     }
   }, [media.length, currentIndex]);
+
+  /*
+   * 확대 화면이 열리면 배경 페이지 스크롤 방지
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousOverflow =
+      document.body.style.overflow;
+
+    const previousTouchAction =
+      document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow =
+        previousOverflow;
+
+      document.body.style.touchAction =
+        previousTouchAction;
+    };
+  }, [isOpen]);
+
+  /*
+   * ESC 키로 확대 화면 닫기
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleKeyDown(
+      event: KeyboardEvent,
+    ) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+
+      if (event.key === "ArrowLeft") {
+        goPrev();
+      }
+
+      if (event.key === "ArrowRight") {
+        goNext();
+      }
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown,
+      );
+    };
+  }, [isOpen, media.length]);
 
   if (media.length === 0) return null;
 
   const current = media[currentIndex];
 
   function goPrev() {
-    setCurrentIndex((prev) => (prev === 0 ? media.length - 1 : prev - 1));
+    setCurrentIndex((prev) =>
+      prev === 0
+        ? media.length - 1
+        : prev - 1,
+    );
   }
 
   function goNext() {
-    setCurrentIndex((prev) => (prev === media.length - 1 ? 0 : prev + 1));
+    setCurrentIndex((prev) =>
+      prev === media.length - 1
+        ? 0
+        : prev + 1,
+    );
   }
+
+  function handleTouchStart(
+    event: React.TouchEvent,
+  ) {
+    touchStartX.current =
+      event.touches[0].clientX;
+
+    touchStartY.current =
+      event.touches[0].clientY;
+  }
+
+  function handleTouchEnd(
+    event: React.TouchEvent,
+  ) {
+    const diffX =
+      touchStartX.current -
+      event.changedTouches[0].clientX;
+
+    const diffY =
+      touchStartY.current -
+      event.changedTouches[0].clientY;
+
+    /*
+     * 세로 스크롤보다 가로 스와이프가 클 때만 이동
+     */
+    if (
+      Math.abs(diffX) <=
+      Math.abs(diffY)
+    ) {
+      return;
+    }
+
+    if (diffX > 50) {
+      goNext();
+    }
+
+    if (diffX < -50) {
+      goPrev();
+    }
+  }
+
+  const fullScreenModal =
+    mounted && isOpen
+      ? createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${name} media viewer`}
+            onClick={() =>
+              setIsOpen(false)
+            }
+            onTouchStart={
+              handleTouchStart
+            }
+            onTouchEnd={handleTouchEnd}
+            className="
+              fixed inset-0
+              z-[2147483647]
+              overflow-hidden
+              bg-black/95
+            "
+          >
+            <div
+              onClick={(event) =>
+                event.stopPropagation()
+              }
+              className="
+                absolute inset-0
+                flex items-center justify-center
+                px-3
+                pb-[calc(24px+env(safe-area-inset-bottom))]
+                pt-[calc(70px+env(safe-area-inset-top))]
+              "
+            >
+              <MediaDisplay
+                item={current}
+                name={name}
+                full
+              />
+            </div>
+
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsOpen(false);
+              }}
+              className="
+                absolute
+                right-4
+                top-[calc(12px+env(safe-area-inset-top))]
+                z-[2147483647]
+                flex h-11 w-11
+                items-center justify-center
+                rounded-full
+                bg-white/95
+                text-3xl font-black
+                leading-none text-black
+                shadow-xl
+              "
+            >
+              ×
+            </button>
+
+            {media.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Previous media"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    goPrev();
+                  }}
+                  className="
+                    absolute
+                    left-3 top-1/2
+                    z-[2147483647]
+                    flex h-12 w-12
+                    -translate-y-1/2
+                    items-center justify-center
+                    rounded-full
+                    bg-white/95
+                    pb-1
+                    text-4xl font-black
+                    leading-none text-black
+                    shadow-xl
+                  "
+                >
+                  ‹
+                </button>
+
+                <button
+                  type="button"
+                  aria-label="Next media"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    goNext();
+                  }}
+                  className="
+                    absolute
+                    right-3 top-1/2
+                    z-[2147483647]
+                    flex h-12 w-12
+                    -translate-y-1/2
+                    items-center justify-center
+                    rounded-full
+                    bg-white/95
+                    pb-1
+                    text-4xl font-black
+                    leading-none text-black
+                    shadow-xl
+                  "
+                >
+                  ›
+                </button>
+
+                <div
+                  onClick={(event) =>
+                    event.stopPropagation()
+                  }
+                  className="
+                    absolute
+                    bottom-[calc(16px+env(safe-area-inset-bottom))]
+                    left-1/2
+                    z-[2147483647]
+                    -translate-x-1/2
+                    rounded-full
+                    bg-white/95
+                    px-4 py-2
+                    text-xs font-black
+                    text-black shadow-xl
+                  "
+                >
+                  {currentIndex + 1}/
+                  {media.length}
+                </div>
+              </>
+            )}
+          </div>,
+          document.body,
+        )
+      : null;
 
   return (
     <>
       <div
         className="relative h-[320px] w-full overflow-hidden bg-black"
-        onTouchStart={(e) => {
-          touchStartX.current = e.touches[0].clientX;
-        }}
-        onTouchEnd={(e) => {
-          const diff = touchStartX.current - e.changedTouches[0].clientX;
-          if (diff > 50) goNext();
-          if (diff < -50) goPrev();
-        }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
         <MediaDisplay
           item={current}
           name={name}
           onOpen={() => {
-            if (current.type === "image") setIsOpen(true);
+            if (
+              current.type === "image"
+            ) {
+              setIsOpen(true);
+            }
           }}
         />
 
@@ -198,71 +528,31 @@ export default function BusinessMediaViewer({
           <>
             <button
               type="button"
+              aria-label="Previous media"
               onClick={goPrev}
-              className="absolute left-3 top-1/2 z-[999] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-3xl font-black text-black shadow-lg"
+              className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 pb-1 text-3xl font-black leading-none text-black shadow-lg"
             >
               ‹
             </button>
 
             <button
               type="button"
+              aria-label="Next media"
               onClick={goNext}
-              className="absolute right-3 top-1/2 z-[999] flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-3xl font-black text-black shadow-lg"
+              className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 pb-1 text-3xl font-black leading-none text-black shadow-lg"
             >
               ›
             </button>
 
-            <div className="absolute bottom-3 right-3 z-[999] rounded-full bg-black/75 px-3 py-1 text-xs font-bold text-white">
-              {currentIndex + 1}/{media.length}
+            <div className="absolute bottom-3 right-3 z-20 rounded-full bg-black/75 px-3 py-1 text-xs font-bold text-white">
+              {currentIndex + 1}/
+              {media.length}
             </div>
           </>
         )}
       </div>
 
-      {isOpen && (
-        <div
-          onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-[9999] bg-black/90"
-        >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <MediaDisplay item={current} name={name} full />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="absolute right-5 top-5 z-[10000] rounded-full bg-white px-4 py-2 font-black text-black shadow-lg"
-          >
-            ×
-          </button>
-
-          {media.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goPrev();
-                }}
-                className="absolute left-4 top-1/2 z-[10000] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-4xl font-black text-black shadow-lg"
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  goNext();
-                }}
-                className="absolute right-4 top-1/2 z-[10000] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white text-4xl font-black text-black shadow-lg"
-              >
-                ›
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {fullScreenModal}
     </>
   );
 }
