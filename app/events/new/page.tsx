@@ -9,6 +9,27 @@ import BottomNav from "../../components/BottomNav";
 
 const libraries: "places"[] = ["places"];
 
+function normalizeUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) return "";
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export default function NewEventPage() {
   const router = useRouter();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
@@ -30,6 +51,7 @@ export default function NewEventPage() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
+  const [registrationUrl, setRegistrationUrl] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [optimizingImage, setOptimizingImage] = useState(false);
@@ -53,7 +75,7 @@ export default function NewEventPage() {
     const lat = place.geometry?.location?.lat();
     const lng = place.geometry?.location?.lng();
 
-    if (lat && lng) {
+    if (typeof lat === "number" && typeof lng === "number") {
       setLatitude(lat);
       setLongitude(lng);
     }
@@ -74,7 +96,7 @@ export default function NewEventPage() {
       const scale = Math.min(
         1,
         maxWidth / bitmap.width,
-        maxHeight / bitmap.height,
+        maxHeight / bitmap.height
       );
 
       const width = Math.max(1, Math.round(bitmap.width * scale));
@@ -154,8 +176,21 @@ export default function NewEventPage() {
       return;
     }
 
+    if (videoPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(videoPreview);
+    }
+
     setVideoFile(file);
     setVideoPreview(URL.createObjectURL(file));
+  }
+
+  function removeVideo() {
+    if (videoPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(videoPreview);
+    }
+
+    setVideoFile(null);
+    setVideoPreview("");
   }
 
   async function uploadFile(file: File, bucket: string, folder: string) {
@@ -231,8 +266,20 @@ export default function NewEventPage() {
       }
     }
 
-    loadProfile();
+    void loadProfile();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
+      if (videoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(videoPreview);
+      }
+    };
+  }, [imagePreview, videoPreview]);
 
   function setRegistrationMode(value: boolean) {
     setCollectAttendees(value);
@@ -275,6 +322,22 @@ export default function NewEventPage() {
       return;
     }
 
+    const normalizedVideoUrl = normalizeUrl(videoUrl);
+    const normalizedRegistrationUrl = normalizeUrl(registrationUrl);
+
+    if (normalizedVideoUrl && !isValidHttpUrl(normalizedVideoUrl)) {
+      alert("Please enter a valid video link URL.");
+      return;
+    }
+
+    if (
+      normalizedRegistrationUrl &&
+      !isValidHttpUrl(normalizedRegistrationUrl)
+    ) {
+      alert("Please enter a valid registration link URL.");
+      return;
+    }
+
     const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
     if (finalRaffleEnabled) {
@@ -297,7 +360,9 @@ export default function NewEventPage() {
       }
 
       if (drawTime <= deadlineTime) {
-        alert("Drawing Date & Time must be later than the Registration Deadline.");
+        alert(
+          "Drawing Date & Time must be later than the Registration Deadline."
+        );
         setRaffleDrawAt("");
         return;
       }
@@ -338,11 +403,19 @@ export default function NewEventPage() {
       let uploadedVideoUrl = "";
 
       if (imageFile) {
-        uploadedImageUrl = await uploadFile(imageFile, "event-images", "images");
+        uploadedImageUrl = await uploadFile(
+          imageFile,
+          "event-images",
+          "images"
+        );
       }
 
       if (videoFile) {
-        uploadedVideoUrl = await uploadFile(videoFile, "event-videos", "videos");
+        uploadedVideoUrl = await uploadFile(
+          videoFile,
+          "event-videos",
+          "videos"
+        );
       }
 
       const { data: insertedEvent, error } = await supabase
@@ -352,14 +425,15 @@ export default function NewEventPage() {
           business_id: businessId,
 
           title: title.trim(),
-          description: description.trim(),
+          description: description.trim() || null,
 
           image_url: uploadedImageUrl || null,
           video_url: uploadedVideoUrl || null,
-          external_video_url: videoUrl.trim() || null,
+          external_video_url: normalizedVideoUrl || null,
+          registration_url: normalizedRegistrationUrl || null,
 
           event_date: eventDateObject.toISOString(),
-          location: location.trim(),
+          location: location.trim() || null,
 
           latitude,
           longitude,
@@ -369,10 +443,14 @@ export default function NewEventPage() {
           contact_phone: contactPhone.trim() || null,
 
           collect_attendees: collectAttendees,
-          registration_deadline: finalRaffleEnabled ? registrationDeadline : null,
+          registration_deadline: finalRaffleEnabled
+            ? new Date(registrationDeadline).toISOString()
+            : null,
 
           raffle_enabled: finalRaffleEnabled,
-          raffle_draw_at: finalRaffleEnabled ? raffleDrawAt : null,
+          raffle_draw_at: finalRaffleEnabled
+            ? new Date(raffleDrawAt).toISOString()
+            : null,
           raffle_winner_count: finalRaffleEnabled
             ? Number(raffleWinnerCount)
             : null,
@@ -417,17 +495,19 @@ export default function NewEventPage() {
         );
       }
 
-      alert("Your event has been submitted and will appear after admin approval.");
+      alert(
+        "Your event has been submitted and will appear after admin approval."
+      );
       router.push("/");
     } catch (err: any) {
-      alert("Save failed: " + err.message);
+      alert("Save failed: " + (err?.message || "Unknown error"));
       setSaving(false);
     }
   }
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-lg">
         <div className="relative mb-5 flex items-center justify-center">
           <Link
             href="/"
@@ -436,7 +516,9 @@ export default function NewEventPage() {
             ←
           </Link>
 
-          <h1 className="text-2xl font-black text-[#C46A2B]">Create Event</h1>
+          <h1 className="text-2xl font-black text-[#C46A2B]">
+            Create Event
+          </h1>
         </div>
 
         <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
@@ -489,6 +571,7 @@ export default function NewEventPage() {
           <div className="grid grid-cols-2 gap-2">
             <input
               type="number"
+              step="any"
               value={latitude ?? ""}
               onChange={(e) =>
                 setLatitude(e.target.value ? Number(e.target.value) : null)
@@ -499,6 +582,7 @@ export default function NewEventPage() {
 
             <input
               type="number"
+              step="any"
               value={longitude ?? ""}
               onChange={(e) =>
                 setLongitude(e.target.value ? Number(e.target.value) : null)
@@ -651,16 +735,49 @@ export default function NewEventPage() {
                     <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
                       Registration Deadline 이후에는 참가 신청이 마감됩니다.
                       <br />
-                      Drawing Date & Time은 반드시 Registration Deadline 이후여야 합니다.
+                      Drawing Date & Time은 반드시 Registration Deadline
+                      이후여야 합니다.
                       <br />
-                      Drawing Date & Time 이후 관리자/오너가 Draw Winner 버튼으로 추첨할 수 있습니다.
+                      Drawing Date & Time 이후 관리자/오너가 Draw Winner
+                      버튼으로 추첨할 수 있습니다.
                       <br />
-                      추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨 대상에 포함되지 않습니다.
+                      추첨 이벤트는 이름과 전화번호만 수집하며, 동반인은 추첨
+                      대상에 포함되지 않습니다.
                     </div>
                   </div>
                 )}
               </div>
             )}
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <label className="mb-2 block text-sm font-black text-[#172033]">
+              External Registration Link
+            </label>
+
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="Google Form, Eventbrite, SignUpGenius URL"
+              value={registrationUrl}
+              onChange={(e) => setRegistrationUrl(e.target.value)}
+              onBlur={() => {
+                if (registrationUrl.trim()) {
+                  setRegistrationUrl(normalizeUrl(registrationUrl));
+                }
+              }}
+              className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500"
+            />
+
+            <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+              선택사항입니다. Google Form, Eventbrite, SignUpGenius 등 외부
+              참가 신청 링크를 입력할 수 있습니다.
+              <br />
+              예: https://forms.gle/xxxxx
+            </p>
           </div>
 
           <div className="rounded-2xl border bg-gray-50 p-4">
@@ -674,6 +791,7 @@ export default function NewEventPage() {
             />
 
             <input
+              type="email"
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
               placeholder="Email"
@@ -681,6 +799,7 @@ export default function NewEventPage() {
             />
 
             <input
+              type="tel"
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
               placeholder="Phone"
@@ -741,11 +860,17 @@ export default function NewEventPage() {
               </span>
 
               <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
-                Upload
+                {videoFile ? "Replace" : "Upload"}
                 <input
                   type="file"
                   accept="video/*"
-                  onChange={(e) => handleVideo(e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    handleVideo(file);
+                  }}
                   className="hidden"
                 />
               </label>
@@ -758,21 +883,46 @@ export default function NewEventPage() {
             )}
 
             {videoPreview && (
-              <video
-                src={videoPreview}
-                controls
-                className="mt-3 h-48 w-full rounded-2xl object-cover"
-              />
+              <div className="mt-3 space-y-2">
+                <video
+                  src={videoPreview}
+                  controls
+                  className="h-48 w-full rounded-2xl object-cover"
+                />
+
+                <button
+                  type="button"
+                  onClick={removeVideo}
+                  className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
+                >
+                  Delete Video
+                </button>
+              </div>
             )}
           </div>
 
-          <input
-            type="text"
-            placeholder="Video Link URL"
-            value={videoUrl}
-            onChange={(e) => setVideoUrl(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          />
+          <div>
+            <label className="mb-1 block text-xs font-black text-[#172033]">
+              Video Link URL
+            </label>
+
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="YouTube, Vimeo, Instagram video URL"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              onBlur={() => {
+                if (videoUrl.trim()) {
+                  setVideoUrl(normalizeUrl(videoUrl));
+                }
+              }}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
 
           <textarea
             placeholder="Event Description"
@@ -786,13 +936,18 @@ export default function NewEventPage() {
             type="button"
             disabled={saving || optimizingImage}
             onClick={submitEvent}
-            className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
+            className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-gray-400"
           >
-            {optimizingImage ? "Optimizing Image..." : saving ? "Submitting..." : "Submit Event"}
+            {optimizingImage
+              ? "Optimizing Image..."
+              : saving
+                ? "Submitting..."
+                : "Submit Event"}
           </button>
 
           <p className="text-center text-xs font-bold text-gray-500">
-            After submission, an admin will approve it as a Business Event or Community Event.
+            After submission, an admin will approve it as a Business Event or
+            Community Event.
           </p>
         </div>
       </div>
