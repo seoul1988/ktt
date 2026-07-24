@@ -144,7 +144,9 @@ export const viewport: Viewport = {
   themeColor: "#F8F3EC",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  minimumScale: 1,
+  maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
 };
 
@@ -157,7 +159,10 @@ export default function RootLayout({
     <html
       lang="ko"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
-      style={{ backgroundColor: "#F8F3EC" }}
+      style={{
+        backgroundColor: "#F8F3EC",
+        touchAction: "auto",
+      }}
       suppressHydrationWarning
     >
       <head>
@@ -170,7 +175,10 @@ export default function RootLayout({
 
       <body
         className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
-        style={{ backgroundColor: "#F8F3EC" }}
+        style={{
+          backgroundColor: "#F8F3EC",
+          touchAction: "auto",
+        }}
       >
         <AuthProvider>
           <ServiceWorkerRegister />
@@ -180,7 +188,14 @@ export default function RootLayout({
           <AppBadgeManager />
           <AppUpdateNotice />
 
-          <div className="app-safe-area">{children}</div>
+          <div
+            className="app-safe-area"
+            style={{
+              touchAction: "auto",
+            }}
+          >
+            {children}
+          </div>
         </AuthProvider>
 
         {/* Google Analytics 4 및 Google Ads 공통 태그 */}
@@ -210,8 +225,6 @@ export default function RootLayout({
           `}
         </Script>
       </body>
-	  
-	  
     </html>
   );
 }
