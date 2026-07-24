@@ -1153,6 +1153,7 @@ useEffect(() => {
         normalizeCategory(item)
       );
 
+
       const matchesSearch = normalizedSearch
         ? searchText.includes(normalizedSearch)
         : true;
