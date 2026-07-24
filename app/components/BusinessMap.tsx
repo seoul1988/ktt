@@ -248,6 +248,17 @@ function milesBetween(a: [number, number], b: [number, number]) {
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
+function estimateDriveMinutes(distanceMiles?: number) {
+  if (distanceMiles === undefined || !Number.isFinite(distanceMiles)) return null;
+
+  // TomTom 응답 전 또는 Routing API 실패 시 카드가 비어 보이지 않도록
+  // Triangle 지역의 일반적인 평균 주행 속도로 임시 예상 시간을 표시합니다.
+  const averageSpeedMph =
+    distanceMiles < 3 ? 22 : distanceMiles < 10 ? 30 : 42;
+
+  return Math.max(2, Math.round((distanceMiles / averageSpeedMph) * 60));
+}
+
 function normalizeCategory(value: string) {
   return value.trim().toLowerCase().replace(/s$/, "");
 }
@@ -1255,6 +1266,7 @@ useEffect(() => {
 
     setRouteLoadFinished(false);
     const controller = new AbortController();
+    const currentLocation = userLocation;
 
     async function loadRouteTimes() {
       const targets = cardSpots
@@ -1274,7 +1286,7 @@ useEffect(() => {
 
           const url =
             "https://api.tomtom.com/routing/1/calculateRoute/" +
-            `${userLocation[0]},${userLocation[1]}:` +
+            `${currentLocation[0]},${currentLocation[1]}:` +
             `${destinationLat},${destinationLng}/json` +
             `?key=${encodeURIComponent(TOMTOM_API_KEY)}` +
             "&traffic=true" +
@@ -2192,7 +2204,7 @@ landscape:top-[62px]"
                 )}
               </div>
 
-              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-4 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
+              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-5 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
                     {spot.name}
@@ -2235,21 +2247,30 @@ landscape:top-[62px]"
                   )}
                 </p>
 
-                <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
+                <div className="mt-1 flex items-center gap-1.5 text-sm font-bold text-[#2453A6] landscape:hidden">
                   {routeInfo[spotKey] ? (
                     <>
-                      🚗 {routeInfo[spotKey].minutes} min ·{" "}
-                      {routeInfo[spotKey].miles.toFixed(1)} miles
+                      <span aria-hidden="true">🚗</span>
+                      <span>
+                        {routeInfo[spotKey].minutes} min ·{" "}
+                        {routeInfo[spotKey].miles.toFixed(1)} miles
+                      </span>
                     </>
                   ) : userLocation && spot.distance !== undefined ? (
                     <>
-                      🚗 {routeLoadFinished ? "ETA unavailable" : "Calculating..."} ·{" "}
-                      {spot.distance.toFixed(1)} miles away
+                      <span aria-hidden="true">🚗</span>
+                      <span>
+                        About {estimateDriveMinutes(spot.distance)} min ·{" "}
+                        {spot.distance.toFixed(1)} miles
+                      </span>
                     </>
                   ) : (
-                    <>📍 Enable location for drive time</>
+                    <>
+                      <span aria-hidden="true">📍</span>
+                      <span>Enable location for drive time</span>
+                    </>
                   )}
-                </p>
+                </div>
               </div>
             </a>
           );
