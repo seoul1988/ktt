@@ -61,17 +61,21 @@ function isVisibleCategoryBusiness(
   ];
 
   return businessCategoryNames.some((categoryName) =>
-    allowedCategoryNames.has(normalizeCategory(categoryName)),
+    allowedCategoryNames.has(
+      normalizeCategory(categoryName),
+    ),
   );
 }
 
 export default async function CommunitySearchPage() {
-  const { data: visibleCategories, error: categoryError } =
-    await supabase
-      .from("categories")
-      .select("id, name, show_on_community_map")
-      .eq("show_on_community_map", true)
-      .order("name", { ascending: true });
+  const {
+    data: visibleCategories,
+    error: categoryError,
+  } = await supabase
+    .from("categories")
+    .select("id, name, show_on_community_map")
+    .eq("show_on_community_map", true)
+    .order("name", { ascending: true });
 
   if (categoryError) {
     console.warn(
@@ -85,16 +89,19 @@ export default async function CommunitySearchPage() {
     (category: any) => ({
       id: category.id,
       name: category.name,
-      show_on_community_map: category.show_on_community_map,
+      show_on_community_map:
+        category.show_on_community_map,
     }),
   );
 
-  const { data: allBusinesses, error: businessError } =
-    await supabase
-      .from("businesses")
-      .select("*")
-      .or("hidden.is.null,hidden.eq.false")
-      .order("name", { ascending: true });
+  const {
+    data: allBusinesses,
+    error: businessError,
+  } = await supabase
+    .from("businesses")
+    .select("*")
+    .or("hidden.is.null,hidden.eq.false")
+    .order("name", { ascending: true });
 
   if (businessError) {
     console.warn(
@@ -106,7 +113,9 @@ export default async function CommunitySearchPage() {
 
   const allowedCategoryNames = new Set<string>(
     categories
-      .map((category) => normalizeCategory(category.name))
+      .map((category) =>
+        normalizeCategory(category.name),
+      )
       .filter(Boolean),
   );
 
@@ -119,38 +128,46 @@ export default async function CommunitySearchPage() {
   );
 
   return (
-    <main className="min-h-[100dvh] bg-[#F8F3EC]">
+    <main className="min-h-[100dvh] bg-[#F8F3EC] text-[#172033]">
       {/*
-       * layout.tsx의 app-safe-area는 그대로 둡니다.
-       * 이 페이지에서는 헤더 내용만 16px 아래로 내려
-       * 아이폰 카메라/노치 뒤에 숨지 않게 합니다.
+       * 헤더와 검색 본문을 같은 문서 흐름에 둡니다.
+       * 페이지 전체가 아이폰 safe area 아래에서 시작하고,
+       * 위쪽에 16px의 추가 여백을 둡니다.
+       *
+       * fixed/sticky가 아니므로 스크롤하면
+       * 헤더도 검색 본문과 함께 위로 사라집니다.
        */}
-      <header className="fixed inset-x-0 top-0 z-[100] h-[72px] border-b border-black/5 bg-[#F8F3EC]/95 backdrop-blur-md">
-        <div className="relative mx-auto flex h-full max-w-xl items-center justify-between px-4 pt-4">
+      <section className="mx-auto w-full max-w-xl pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <header className="relative flex h-14 items-center justify-between border-b border-black/5 px-4">
           <div className="flex w-12 shrink-0 items-center justify-start">
             <BackButton />
           </div>
 
-          <h1 className="pointer-events-none absolute left-1/2 top-[calc(50%+8px)] max-w-[calc(100%-120px)] -translate-x-1/2 -translate-y-1/2 truncate text-2xl font-black tracking-tight text-[#172033]">
+          <h1
+            className="
+              pointer-events-none
+              absolute left-1/2
+              max-w-[calc(100%-120px)]
+              -translate-x-1/2
+              truncate
+              text-2xl font-black
+              tracking-tight
+              text-[#172033]
+            "
+          >
             Businesses
           </h1>
 
           <div className="flex w-12 shrink-0 items-center justify-end">
             <ProfileButton />
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/*
-       * 헤더가 56px에서 72px로 커졌으므로 본문도 72px 아래에서 시작합니다.
-       * 검색 컴포넌트 내부 구조는 변경하지 않습니다.
-       */}
-      <div className="pt-[72px] [&_header]:top-[72px]">
         <CommunitySearchDirectory
           categories={categories}
           businesses={visibleBusinesses}
         />
-      </div>
+      </section>
     </main>
   );
 }

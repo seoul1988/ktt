@@ -135,35 +135,17 @@ export default async function SearchPage() {
   );
 
   return (
-    <main className="min-h-[100dvh] bg-[#F8F3EC]">
+    <main className="min-h-[100dvh] bg-[#F8F3EC] text-[#172033]">
       {/*
-       * 아이폰 상태바와 헤더 위쪽 여백을 같은 배경으로 채웁니다.
-       * safe area + 16px까지 배경이 이어집니다.
+       * 헤더와 검색 본문을 같은 문서 흐름에 둡니다.
+       * 페이지 전체를 아이폰 safe area 아래에서 시작하도록 하고,
+       * 위쪽에 16px의 추가 여백을 줍니다.
+       *
+       * fixed/sticky 헤더가 아니므로 스크롤하면
+       * 헤더와 본문이 함께 자연스럽게 위로 사라집니다.
        */}
-      <div
-        className="
-          fixed inset-x-0 top-0 z-[99]
-          h-[calc(env(safe-area-inset-top)+1rem)]
-          bg-[#F8F3EC]
-        "
-      />
-
-      {/*
-       * 헤더를 아이폰 safe area 아래에서 16px 더 내립니다.
-       * 헤더 자체 높이는 기존 56px를 유지합니다.
-       */}
-      <header
-        className="
-          fixed inset-x-0
-          top-[calc(env(safe-area-inset-top)+1rem)]
-          z-[100]
-          h-14
-          border-b border-black/5
-          bg-[#F8F3EC]/95
-          backdrop-blur-md
-        "
-      >
-        <div className="relative mx-auto flex h-full max-w-xl items-center justify-between px-4">
+      <section className="mx-auto w-full max-w-xl pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <header className="relative flex h-14 items-center justify-between border-b border-black/5 px-4">
           <div className="flex w-12 shrink-0 items-center justify-start">
             <BackButton />
           </div>
@@ -186,25 +168,13 @@ export default async function SearchPage() {
           <div className="flex w-12 shrink-0 items-center justify-end">
             <ProfileButton />
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/*
-       * 헤더가 safe area + 16px 아래에서 시작하므로,
-       * 본문도 safe area + 16px + 헤더 56px만큼 내립니다.
-       * SearchDirectory 내부의 sticky/fixed header도 같은 위치에서 시작합니다.
-       */}
-      <div
-        className="
-          pt-[calc(env(safe-area-inset-top)+4.5rem)]
-          [&_header]:top-[calc(env(safe-area-inset-top)+4.5rem)]
-        "
-      >
         <SearchDirectory
           categories={categories}
           businesses={visibleBusinesses}
         />
-      </div>
+      </section>
     </main>
   );
 }
