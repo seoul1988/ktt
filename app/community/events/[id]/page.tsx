@@ -10,12 +10,27 @@ import ImageModal from "../../../components/ImageModal";
 import CommunityEventManageButtons from "./CommunityEventManageButtons";
 import BackButton from "@/app/components/BackButton";
 import ProfileButton from "../../../components/ProfileButton";
+import CommunityEventActionButtons from "./CommunityEventActionButtons";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const SITE_URL = "https://www.ktowntriangle.com";
 const DEFAULT_EVENT_IMAGE = `${SITE_URL}/event.png`;
+
+function normalizeExternalUrl(value: string | null | undefined) {
+  const trimmed = String(value || "").trim();
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
 
 type PageProps = {
   params: Promise<{
@@ -269,6 +284,10 @@ export default async function CommunityEventDetailPage({
     Number(event.raffle_winner_count || 1),
   );
 
+  const registrationUrl = normalizeExternalUrl(
+    event.registration_url,
+  );
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
@@ -287,11 +306,13 @@ export default async function CommunityEventDetailPage({
         </div>
 
         {event.image_url && (
-          <div className="mb-5 overflow-hidden rounded-3xl bg-white shadow-sm">
-            <ImageModal
-              src={event.image_url}
-              alt={event.title || "Community Event"}
-            />
+          <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
+            <div className="overflow-hidden rounded-[20px]">
+              <ImageModal
+                src={event.image_url}
+                alt={event.title || "Community Event"}
+              />
+            </div>
           </div>
         )}
 
@@ -373,45 +394,32 @@ export default async function CommunityEventDetailPage({
           </div>
         )}
 
-        <p className="mt-5 text-sm font-bold text-[#6B6257]">
-          {event.event_date
-            ? formatEasternDateTime(event.event_date)
-            : "Date TBA"}
-        </p>
-
-        <p className="mt-2 text-sm font-bold text-[#6B6257]">
-          {event.address || "Location TBA"}
-        </p>
-
-        {event.description && (
-          <p className="mt-6 whitespace-pre-line text-base font-semibold leading-7 text-[#172033]">
-            {event.description}
+        <div className="mt-5 rounded-[24px] border border-[#E2E4E7] bg-[#F1F2F4] px-5 py-5 shadow-sm">
+          <p className="text-sm font-bold text-[#6B6257]">
+            {event.event_date
+              ? formatEasternDateTime(event.event_date)
+              : "Date TBA"}
           </p>
-        )}
 
-        <div className="mt-8 space-y-3">
-          {event.website && (
-            <a
-              href={event.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-2xl bg-[#172033] py-4 text-center text-sm font-black text-white"
-            >
-              Website
-            </a>
-          )}
+          <p className="mt-2 text-sm font-bold text-[#6B6257]">
+            {event.address || event.location || "Location TBA"}
+          </p>
 
-          {event.instagram && (
-            <a
-              href={event.instagram}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-2xl bg-[#C4483A] py-4 text-center text-sm font-black text-white"
-            >
-              Instagram
-            </a>
+          {event.description && (
+            <p className="mt-6 whitespace-pre-line text-base font-semibold leading-7 text-[#172033]">
+              {event.description}
+            </p>
           )}
         </div>
+
+        <CommunityEventActionButtons
+          eventTitle={event.title || "Community Event"}
+          phone={event.contact_phone || null}
+          address={event.address || event.location || null}
+          latitude={event.latitude ?? null}
+          longitude={event.longitude ?? null}
+          registrationUrl={registrationUrl || null}
+        />
 
         {collectAttendees && (
           <CommunityAttendeeList

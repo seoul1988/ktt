@@ -9,6 +9,27 @@ import CommunityBottomNav from "../../../../components/CommunityBottomNav";
 
 const libraries: "places"[] = ["places"];
 
+function normalizeUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) return "";
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function formatDateTimeLocal(value: string | null) {
   if (!value) return "";
 
@@ -44,6 +65,9 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState(event.video_url || "");
   const [videoUrl, setVideoUrl] = useState(event.external_video_url || "");
+  const [registrationUrl, setRegistrationUrl] = useState(
+    event.registration_url || ""
+  );
 
   const [contactName, setContactName] = useState(event.contact_name || "");
   const [contactEmail, setContactEmail] = useState(event.contact_email || "");
@@ -291,6 +315,22 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
       return;
     }
 
+    const normalizedVideoUrl = normalizeUrl(videoUrl);
+    const normalizedRegistrationUrl = normalizeUrl(registrationUrl);
+
+    if (normalizedVideoUrl && !isValidHttpUrl(normalizedVideoUrl)) {
+      alert("Please enter a valid video link URL.");
+      return;
+    }
+
+    if (
+      normalizedRegistrationUrl &&
+      !isValidHttpUrl(normalizedRegistrationUrl)
+    ) {
+      alert("Please enter a valid registration link URL.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -324,7 +364,8 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
           image_url: uploadedImageUrl,
           video_url: uploadedVideoUrl,
-          external_video_url: videoUrl.trim() || null,
+          external_video_url: normalizedVideoUrl || null,
+          registration_url: normalizedRegistrationUrl || null,
 
           event_date: new Date(eventDateTime).toISOString(),
           location: location.trim(),
@@ -711,13 +752,58 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
             )}
           </div>
 
-          <input
-            type="text"
-            placeholder="Video Link URL"
-            value={videoUrl}
-            onChange={(e) => setVideoUrl(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          />
+          <div>
+            <label className="mb-1 block text-xs font-black text-[#172033]">
+              Video Link URL
+            </label>
+
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="YouTube, Vimeo, Instagram video URL"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              onBlur={() => {
+                if (videoUrl.trim()) {
+                  setVideoUrl(normalizeUrl(videoUrl));
+                }
+              }}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <label className="mb-2 block text-sm font-black text-[#172033]">
+              External Registration Link
+            </label>
+
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="Google Form, Eventbrite, SignUpGenius URL"
+              value={registrationUrl}
+              onChange={(e) => setRegistrationUrl(e.target.value)}
+              onBlur={() => {
+                if (registrationUrl.trim()) {
+                  setRegistrationUrl(normalizeUrl(registrationUrl));
+                }
+              }}
+              className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500"
+            />
+
+            <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+              선택사항입니다. Google Form, Eventbrite, SignUpGenius 등 외부
+              참가 신청 링크를 입력하거나 수정할 수 있습니다.
+              <br />
+              예: https://forms.gle/xxxxx
+            </p>
+          </div>
 
           <textarea
             placeholder="Event Description"
