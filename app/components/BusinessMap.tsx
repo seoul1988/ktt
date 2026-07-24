@@ -671,6 +671,7 @@ export default function BusinessMap({
   const [showTrafficFlow, setShowTrafficFlow] = useState(false);
   const [trafficNotice, setTrafficNotice] = useState<string | null>(null);
   const [routeInfo, setRouteInfo] = useState<Record<string, RouteInfo>>({});
+  const [routeLoadFinished, setRouteLoadFinished] = useState(false);
 
   const cardRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
   const cardScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1248,9 +1249,11 @@ useEffect(() => {
   useEffect(() => {
     if (!userLocation || !TOMTOM_API_KEY || cardSpots.length === 0) {
       setRouteInfo({});
+      setRouteLoadFinished(false);
       return;
     }
 
+    setRouteLoadFinished(false);
     const controller = new AbortController();
 
     async function loadRouteTimes() {
@@ -1277,7 +1280,8 @@ useEffect(() => {
             "&traffic=true" +
             "&routeType=fastest" +
             "&travelMode=car" +
-            "&routeRepresentation=summaryOnly";
+            "&routeRepresentation=summaryOnly" +
+            "&computeTravelTimeFor=all";
 
           const response = await fetch(url, {
             signal: controller.signal,
@@ -1319,11 +1323,13 @@ useEffect(() => {
       });
 
       setRouteInfo(next);
+      setRouteLoadFinished(true);
     }
 
     loadRouteTimes().catch((error) => {
       if (error?.name !== "AbortError") {
         console.log("TomTom route time load error:", error);
+        setRouteLoadFinished(true);
       }
     });
 
@@ -2229,18 +2235,21 @@ landscape:top-[62px]"
                   )}
                 </p>
 
-                {routeInfo[spotKey] ? (
-                  <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
-                    🚗 {routeInfo[spotKey].minutes} min ·{" "}
-                    {routeInfo[spotKey].miles.toFixed(1)} miles
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm font-bold text-gray-500 landscape:hidden">
-                    {userLocation
-                      ? "Calculating drive time..."
-                      : "Location unavailable"}
-                  </p>
-                )}
+                <p className="mt-1 text-sm font-bold text-[#2453A6] landscape:hidden">
+                  {routeInfo[spotKey] ? (
+                    <>
+                      🚗 {routeInfo[spotKey].minutes} min ·{" "}
+                      {routeInfo[spotKey].miles.toFixed(1)} miles
+                    </>
+                  ) : userLocation && spot.distance !== undefined ? (
+                    <>
+                      🚗 {routeLoadFinished ? "ETA unavailable" : "Calculating..."} ·{" "}
+                      {spot.distance.toFixed(1)} miles away
+                    </>
+                  ) : (
+                    <>📍 Enable location for drive time</>
+                  )}
+                </p>
               </div>
             </a>
           );
