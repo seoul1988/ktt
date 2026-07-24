@@ -130,14 +130,14 @@ export default async function CommunitySearchPage() {
   return (
     <main className="min-h-[100dvh] bg-[#F8F3EC] text-[#172033]">
       {/*
-       * 헤더와 검색 본문을 같은 문서 흐름에 둡니다.
-       * 페이지 전체가 아이폰 safe area 아래에서 시작하고,
-       * 위쪽에 16px의 추가 여백을 둡니다.
+       * layout.tsx의 app-safe-area가 이미 아이폰 상태바 여백을 처리합니다.
+       * 여기에서 env(safe-area-inset-top)을 다시 더하면 이중 여백이 생기므로
+       * 일반 페이지와 비슷하게 8px만 추가합니다.
        *
-       * fixed/sticky가 아니므로 스크롤하면
-       * 헤더도 검색 본문과 함께 위로 사라집니다.
+       * 헤더와 검색 본문은 같은 흐름에 있으므로
+       * 스크롤하면 함께 위로 사라집니다.
        */}
-      <section className="mx-auto w-full max-w-xl pt-[calc(env(safe-area-inset-top)+1rem)]">
+      <section className="mx-auto w-full max-w-xl pt-2">
         <header className="relative flex h-14 items-center justify-between border-b border-black/5 px-4">
           <div className="flex w-12 shrink-0 items-center justify-start">
             <BackButton />

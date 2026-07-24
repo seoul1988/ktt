@@ -360,9 +360,17 @@ export default function CommunityHubPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#F7F7F7] pb-24 text-[#172033]">
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-md items-center justify-between px-4">
+    <main className="min-h-[100dvh] bg-[#F7F7F7] pb-24 text-[#172033]">
+      {/*
+       * layout.tsx의 app-safe-area가 아이폰 상태바 여백을 처리하므로
+       * 이 페이지에서는 위쪽에 8px만 추가합니다.
+       *
+       * 헤더를 sticky/fixed로 두지 않고 본문과 같은 흐름에 넣어
+       * 스크롤하면 헤더와 카드가 함께 위로 사라지게 합니다.
+       */}
+      <section className="mx-auto w-full max-w-md px-3 pt-2">
+        <header className="border-b border-gray-200 bg-white/95 backdrop-blur">
+          <div className="flex h-14 w-full items-center justify-between px-1">
           <button
             type="button"
             onClick={handleBack}
@@ -396,11 +404,11 @@ export default function CommunityHubPage() {
           <div className="flex h-9 w-9 items-center justify-center">
             <ProfileButton />
           </div>
-        </div>
-      </header>
+          </div>
+        </header>
 
-      <section className="mx-auto w-full max-w-md px-3 pt-3">
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="pt-3">
+          <div className="grid grid-cols-2 gap-2.5">
           {hubItems.map((item) => {
             const isExternal =
               item.href.startsWith("http");
@@ -504,35 +512,36 @@ export default function CommunityHubPage() {
           })}
         </div>
 
-        <section className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.06)]">
-          <Link
-            href="/community/ads"
-            className="relative flex items-center justify-center gap-3 rounded-xl transition hover:opacity-80 active:scale-95"
-          >
-            {recentBadges.adbook && (
-              <span className="absolute right-0 top-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-extrabold text-white shadow-sm">
-                NEW
-              </span>
-            )}
+          <section className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.06)]">
+            <Link
+              href="/community/ads"
+              className="relative flex items-center justify-center gap-3 rounded-xl transition hover:opacity-80 active:scale-95"
+            >
+              {recentBadges.adbook && (
+                <span className="absolute right-0 top-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-extrabold text-white shadow-sm">
+                  NEW
+                </span>
+              )}
 
-            <div className="flex h-10 w-10 items-center justify-center text-[#172033]">
-              <HubIcon
-                name="adbook"
-                className="h-9 w-9"
-              />
-            </div>
+              <div className="flex h-10 w-10 items-center justify-center text-[#172033]">
+                <HubIcon
+                  name="adbook"
+                  className="h-9 w-9"
+                />
+              </div>
 
-            <div className="text-left">
-              <h2 className="text-[14px] font-extrabold text-[#172033]">
-                광고북
-              </h2>
+              <div className="text-left">
+                <h2 className="text-[14px] font-extrabold text-[#172033]">
+                  광고북
+                </h2>
 
-              <p className="mt-0.5 text-[10px] font-semibold text-gray-500">
-                Ad Book
-              </p>
-            </div>
-          </Link>
-        </section>
+                <p className="mt-0.5 text-[10px] font-semibold text-gray-500">
+                  Ad Book
+                </p>
+              </div>
+            </Link>
+          </section>
+        </div>
       </section>
 
       <CommunityBottomNav activeNav="hub" />

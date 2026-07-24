@@ -123,8 +123,7 @@ export default async function SearchPage() {
   );
 
   /*
-   * Main App Map 카테고리 이름과 정확히 일치하는
-   * 카테고리에 속한 비즈니스만 표시합니다.
+   * Main App Map 카테고리에 속한 비즈니스만 표시합니다.
    */
   const visibleBusinesses = (allBusinesses ?? []).filter(
     (business: any) =>
@@ -137,14 +136,13 @@ export default async function SearchPage() {
   return (
     <main className="min-h-[100dvh] bg-[#F8F3EC] text-[#172033]">
       {/*
-       * 헤더와 검색 본문을 같은 문서 흐름에 둡니다.
-       * 페이지 전체를 아이폰 safe area 아래에서 시작하도록 하고,
-       * 위쪽에 16px의 추가 여백을 줍니다.
+       * layout.tsx의 app-safe-area가 아이폰 상태바 여백을
+       * 이미 처리하므로 여기서는 safe-area를 다시 더하지 않습니다.
        *
-       * fixed/sticky 헤더가 아니므로 스크롤하면
-       * 헤더와 본문이 함께 자연스럽게 위로 사라집니다.
+       * 헤더와 검색 본문을 같은 흐름에 두고 위쪽에 8px만 추가합니다.
+       * 스크롤하면 헤더와 본문이 함께 위로 사라집니다.
        */}
-      <section className="mx-auto w-full max-w-xl pt-[calc(env(safe-area-inset-top)+1rem)]">
+      <section className="mx-auto w-full max-w-xl pt-2">
         <header className="relative flex h-14 items-center justify-between border-b border-black/5 px-4">
           <div className="flex w-12 shrink-0 items-center justify-start">
             <BackButton />
