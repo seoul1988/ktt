@@ -1631,7 +1631,7 @@ export default function EditBusinessPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-32 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-lg">
         <div className="mb-5 flex items-center justify-between gap-3">
           <button
             onClick={() => {
