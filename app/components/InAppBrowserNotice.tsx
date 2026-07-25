@@ -2,10 +2,41 @@
 
 import { useEffect, useState } from "react";
 
-const NOTICE_SESSION_KEY = "ktown_english_browser_notice_shown";
+const NOTICE_SESSION_KEY = "ktown_in_app_browser_notice_v3";
+
+type InAppBrowserType =
+  | "instagram"
+  | "facebook"
+  | "threads"
+  | "kakao"
+  | null;
+
+function detectInAppBrowser(userAgent: string): InAppBrowserType {
+  const ua = userAgent.toLowerCase();
+
+  // 카카오톡을 먼저 확인
+  if (ua.includes("kakaotalk")) {
+    return "kakao";
+  }
+
+  if (ua.includes("instagram")) {
+    return "instagram";
+  }
+
+  if (ua.includes("fban") || ua.includes("fbav")) {
+    return "facebook";
+  }
+
+  if (ua.includes("threads") || ua.includes("barcelona")) {
+    return "threads";
+  }
+
+  return null;
+}
 
 export default function InAppBrowserNotice() {
-  const [show, setShow] = useState(false);
+  const [browserType, setBrowserType] =
+    useState<InAppBrowserType>(null);
 
   useEffect(() => {
     try {
@@ -16,61 +47,69 @@ export default function InAppBrowserNotice() {
         return;
       }
 
-      const ua = navigator.userAgent || "";
+      const detectedType = detectInAppBrowser(
+        window.navigator.userAgent || "",
+      );
 
-      const isInstagram = /Instagram/i.test(ua);
-      const isFacebook = /FBAN|FBAV/i.test(ua);
-      const isThreads = /Threads|Barcelona/i.test(ua);
-
-      // Instagram, Facebook, Threads에서만 영어 안내창 표시
-      if (!(isInstagram || isFacebook || isThreads)) {
+      if (!detectedType) {
         return;
       }
 
-      setShow(true);
-      window.sessionStorage.setItem(NOTICE_SESSION_KEY, "true");
+      setBrowserType(detectedType);
     } catch (error) {
       console.error("InAppBrowserNotice error:", error);
-      setShow(false);
+      setBrowserType(null);
     }
   }, []);
 
   function closeNotice() {
-    setShow(false);
+    try {
+      window.sessionStorage.setItem(NOTICE_SESSION_KEY, "true");
+    } catch (error) {
+      console.error("Unable to save browser notice state:", error);
+    }
+
+    setBrowserType(null);
   }
 
-  if (!show) {
+  if (!browserType) {
     return null;
   }
 
+  const isKakao = browserType === "kakao";
+
+  const message = isKakao
+    ? "Chrome 또는 Safari에서 앱을 설치하여 이용하시면 더욱 편리합니다."
+    : "Install the app from Chrome or Safari for the best experience.";
+
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-5"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/45 px-5"
       role="presentation"
       onClick={closeNotice}
     >
       <div
-        className="relative w-full max-w-sm rounded-2xl bg-gray-50 px-7 pb-7 pt-12 text-center shadow-xl"
+        className="relative w-full max-w-sm rounded-2xl bg-[#F5F5F5] px-7 pb-7 pt-12 text-center shadow-xl"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="english-browser-notice-title"
+        aria-labelledby="in-app-browser-notice-title"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
           onClick={closeNotice}
-          className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-2xl font-light text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 active:scale-95"
-          aria-label="Close"
+          className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-2xl font-light text-gray-400 transition hover:bg-gray-200 hover:text-gray-700 active:scale-95"
+          aria-label={isKakao ? "닫기" : "Close"}
         >
           ×
         </button>
 
-        <h2
-          id="english-browser-notice-title"
-          className="text-[17px] font-bold leading-7 text-gray-900"
+        <p
+          id="in-app-browser-notice-title"
+          className="text-[17px] font-semibold leading-7 text-gray-900"
         >
-          Install the app from Chrome or Safari for the best experience.
-        </h2>
+          {message}
+        </p>
       </div>
     </div>
   );
