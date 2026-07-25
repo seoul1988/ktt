@@ -308,10 +308,9 @@ export default function CommunityNewsPage() {
       return "#";
     }
 
-    return (
-      item.source_url?.trim() ||
-      `/community/news/${item.id}`
-    );
+    // 목록 카드와 이미지는 항상 내부 뉴스 상세 페이지로 이동합니다.
+    // 외부 원문 링크는 상세 페이지 안의 "원문 보기" 버튼에서만 엽니다.
+    return `/community/news/${item.id}`;
   }
 
   function saveLoginRedirect(path: string) {
@@ -521,18 +520,6 @@ export default function CommunityNewsPage() {
             onClick={(event) =>
               handleNewsClick(event, featuredNews)
             }
-            target={
-              featuredNews.source_url &&
-              !isLocked(featuredNews)
-                ? "_blank"
-                : undefined
-            }
-            rel={
-              featuredNews.source_url &&
-              !isLocked(featuredNews)
-                ? "noopener noreferrer"
-                : undefined
-            }
             className="mt-3 block overflow-hidden rounded-2xl bg-white shadow-[0_3px_14px_rgba(23,32,51,0.09)] transition active:scale-[0.98]"
           >
             <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100">
@@ -610,16 +597,6 @@ export default function CommunityNewsPage() {
                     href={getNewsHref(item)}
                     onClick={(event) =>
                       handleNewsClick(event, item)
-                    }
-                    target={
-                      item.source_url && !locked
-                        ? "_blank"
-                        : undefined
-                    }
-                    rel={
-                      item.source_url && !locked
-                        ? "noopener noreferrer"
-                        : undefined
                     }
                     className="relative flex gap-3 overflow-hidden rounded-2xl border border-gray-200 bg-white p-2.5 shadow-[0_2px_8px_rgba(23,32,51,0.05)] transition active:scale-[0.98]"
                   >
