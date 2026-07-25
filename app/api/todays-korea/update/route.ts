@@ -243,6 +243,84 @@ async function fetchArticleImage(sourceUrl: string) {
 }
 
 /**
+ * 이미지 주소가 실제로 브라우저에서 표시 가능한 이미지인지 확인합니다.
+ *
+ * HEAD 요청을 막는 서버가 많기 때문에 GET 요청을 사용합니다.
+ * 전체 파일을 내려받지 않도록 Range 헤더로 앞부분만 요청합니다.
+ */
+async function isValidRemoteImage(imageUrl: string) {
+  const normalizedImageUrl = normalizeUrl(imageUrl);
+
+  if (!normalizedImageUrl) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(normalizedImageUrl);
+
+    /*
+     * 로컬 기본 이미지나 HTML 페이지가 DB에 들어가는 것을 방지합니다.
+     */
+    if (
+      parsedUrl.pathname.toLowerCase().endsWith("/event.png") ||
+      parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1"
+    ) {
+      return false;
+    }
+
+    const response = await fetch(normalizedImageUrl, {
+      method: "GET",
+      headers: {
+        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        Range: "bytes=0-65535",
+        Referer: parsedUrl.origin,
+        "User-Agent":
+          "Mozilla/5.0 (compatible; KTownTriangle/1.0; +https://www.ktowntriangle.com)",
+      },
+      cache: "no-store",
+      redirect: "follow",
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok && response.status !== 206) {
+      return false;
+    }
+
+    const contentType = (
+      response.headers.get("content-type") || ""
+    )
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+
+    if (!contentType.startsWith("image/")) {
+      return false;
+    }
+
+    /*
+     * 일부 서버가 잘못된 Content-Type을 반환할 수 있으므로
+     * 실제 응답 데이터가 비어 있는지도 확인합니다.
+     */
+    const imageBytes = await response.arrayBuffer();
+
+    if (imageBytes.byteLength === 0) {
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Today’s Korea image validation failed:",
+      imageUrl,
+      error,
+    );
+
+    return false;
+  }
+}
+
+/**
  * Koreaboo 기사 제목과 설명을 바탕으로
  * K-Drama와 K-POP을 간단히 구분합니다.
  */
@@ -748,6 +826,34 @@ async function runTodayKoreaUpdate() {
           "Today’s Korea article skipped because no image was found:",
           article.title,
         );
+
+        failedPosts.push({
+          title: article.title,
+          reason: "No image URL was found",
+        });
+
+        continue;
+      }
+
+      /*
+       * 이미지 URL이 존재해도 실제 요청이 실패하거나
+       * 응답이 이미지 형식이 아니면 DB에 저장하지 않습니다.
+       */
+      const imageIsValid = await isValidRemoteImage(
+        imageUrl,
+      );
+
+      if (!imageIsValid) {
+        console.log(
+          "Today’s Korea article skipped because the image could not be loaded:",
+          article.title,
+          imageUrl,
+        );
+
+        failedPosts.push({
+          title: article.title,
+          reason: `Image could not be loaded: ${imageUrl}`,
+        });
 
         continue;
       }

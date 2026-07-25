@@ -794,19 +794,21 @@ const kdramaNews = (todaysKoreaPosts || [])
         )}
 
         {mainGrandOpening && (
-          <section className="mx-auto mb-4 max-w-xl">
-            <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-100 px-4 py-3">
+          <section className="mx-auto mb-6 max-w-xl">
+            <div className="rounded-[26px] border border-amber-200 bg-[#FFF4D8] p-3 shadow-sm sm:p-4">
+              <div className="flex items-center justify-between gap-3 px-1 pb-4 pt-1">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-10 w-1 shrink-0 rounded-full bg-amber-500" />
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-xl shadow-sm">
+                    🎉
+                  </div>
 
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
                       Featured
                     </p>
 
-                    <h2 className="mt-0.5 break-keep text-[22px] font-black leading-tight text-[#172033]">
-                      🎉 Grand Opening
+                    <h2 className="mt-0.5 truncate text-[22px] font-black leading-tight text-[#071A3D]">
+                      Grand Opening
                     </h2>
                   </div>
                 </div>
@@ -814,7 +816,7 @@ const kdramaNews = (todaysKoreaPosts || [])
                 <Link
                   href="/grand-openings"
                   aria-label="More grand openings"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-black text-[#172033] shadow-sm transition hover:scale-105 hover:bg-gray-50"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-base font-black text-amber-700 shadow-sm transition hover:scale-105 hover:bg-amber-50 active:scale-95"
                 >
                   →
                 </Link>
@@ -822,9 +824,9 @@ const kdramaNews = (todaysKoreaPosts || [])
 
               <Link
                 href={`/grand-openings/${mainGrandOpening.id}`}
-                className="block transition hover:bg-amber-50/30 active:bg-amber-50/50"
+                className="block overflow-hidden rounded-[24px] border border-amber-100 bg-white shadow-sm transition hover:shadow-md active:scale-[0.995]"
               >
-                <div className="aspect-video w-full overflow-hidden bg-white">
+                <div className="relative aspect-[16/8.8] w-full overflow-hidden bg-[#F8F3EC]">
                   <img
                     src={grandOpeningImage}
                     alt={mainGrandOpening.title || "Grand Opening"}
@@ -838,23 +840,30 @@ const kdramaNews = (todaysKoreaPosts || [])
                       objectPosition: "center",
                     }}
                   />
+
+                  <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#071A3D] shadow-sm">
+                    Grand Opening
+                  </span>
                 </div>
 
-                <div
-                  className="border-t border-gray-200 p-5"
-                  style={{ backgroundColor: "#f1f3f5" }}
-                >
-                  <p className="text-xs font-black uppercase tracking-wider text-amber-600">
-                    Grand Opening · {mainGrandOpening.opening_date || "Coming Soon"}
-                  </p>
+                <div className="border-t border-gray-100 bg-white px-4 py-4 sm:px-5">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="line-clamp-1 text-[18px] font-black uppercase leading-tight text-[#071A3D]">
+                        {mainGrandOpening.business_name || "Grand Opening"}
+                      </h3>
 
-                  <h3 className="mt-1 text-xl font-black text-[#172033]">
-                    {mainGrandOpening.business_name || "Grand Opening"}
-                  </h3>
+                      <p className="mt-2 line-clamp-1 text-[13px] font-bold uppercase text-[#6B5848]">
+                        {mainGrandOpening.title || "Now Open"}
+                      </p>
+                    </div>
 
-                  <p className="mt-1 text-sm font-bold text-gray-600">
-                    {mainGrandOpening.title}
-                  </p>
+                    <p className="shrink-0 text-right text-[11px] font-black text-amber-700">
+                      {mainGrandOpening.opening_date
+                        ? `Opens ${mainGrandOpening.opening_date}`
+                        : "Coming Soon"}
+                    </p>
+                  </div>
                 </div>
               </Link>
             </div>
