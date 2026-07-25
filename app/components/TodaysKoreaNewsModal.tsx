@@ -190,7 +190,7 @@ export default function TodaysKoreaNewsModal({
                       type="button"
                       data-news-card
                       onClick={() => setSelectedId(post.id)}
-                      className="w-[150px] min-w-[150px] shrink-0 snap-start text-left sm:w-[165px] sm:min-w-[165px]"
+                      className="w-[calc((100%_-_12px)/2)] min-w-[calc((100%_-_12px)/2)] shrink-0 snap-start text-left sm:w-[calc((100%_-_24px)/3)] sm:min-w-[calc((100%_-_24px)/3)]"
                     >
                       <div className="relative h-[120px] w-full overflow-hidden rounded-xl bg-gray-100">
                         <img
