@@ -9,6 +9,8 @@ import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
 import InAppBrowserAlert from "./components/InAppBrowserAlert";
+import TodaysKoreaNewsModal from "./components/TodaysKoreaNewsModal";
+
 
 import ScrollToTopButton from "./components/ScrollToTopButton";
 
@@ -143,7 +145,7 @@ function SectionTitle({
 }) {
   return (
     <div
-      className={`mb-4 flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 shadow-sm ${bgColor}`}
+      className={`mb-1 flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 shadow-sm ${bgColor}`}
     >
       <div className="flex min-w-0 items-center gap-2">
         <div className={`h-9 w-1 shrink-0 rounded-full ${color}`} />
@@ -312,6 +314,23 @@ function DealMedia({ deal, className }: { deal: any; className: string }) {
   );
 }
 
+
+
+function formatNewsDate(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  }).format(date);
+}
 
 function normalizeCategory(value: unknown) {
   return String(value ?? "")
@@ -693,6 +712,45 @@ const trending = [...spots]
 *  });  
 */
 
+
+  /*
+   * Today’s Korea:
+   * RSS에서 자동 수집된 활성 기사만 가져옵니다.
+   * 카테고리별 최신 3개가 is_active = true로 유지됩니다.
+   */
+  const { data: todaysKoreaPosts, error: todaysKoreaError } =
+    await supabase
+      .from("todays_korea_posts")
+      .select(
+        `
+          id,
+          category,
+          title,
+          summary,
+          source_name,
+          source_url,
+          image_url,
+          published_at
+        `
+      )
+      .eq("is_active", true)
+      .order("published_at", {
+        ascending: false,
+        nullsFirst: false,
+      });
+
+  if (todaysKoreaError) {
+    console.error("Today’s Korea load error:", todaysKoreaError);
+  }
+
+  const kpopNews = (todaysKoreaPosts || [])
+    .filter((post: any) => post.category === "kpop")
+    .slice(0, 3);
+
+  const kdramaNews = (todaysKoreaPosts || [])
+    .filter((post: any) => post.category === "kdrama")
+    .slice(0, 3);
+
   const mainEvent = businessEvents[0];
   const mainGrandOpening = grandOpenings[0];
 
@@ -707,7 +765,7 @@ const trending = [...spots]
          <InAppBrowserAlert />
 
       <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
-        <div className="mx-auto mb-8 flex max-w-xl items-center justify-between gap-4">
+       <div className="mx-auto mb-1 flex max-w-xl items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#C4483A]">KTT</p>
             <h1 className="text-[30px] font-black leading-tight">KTown Triangle</h1>
@@ -723,51 +781,83 @@ const trending = [...spots]
           </div>
         </div>
 
-        {mainGrandOpening && (
-          <section className="mx-auto mb-10 max-w-xl">
-            <SectionTitle
-              label="Featured"
-              title="Grand Opening"
-              emoji="🎉"
-              color="bg-amber-500"
-              bgColor="border-amber-200 bg-amber-50"
-              moreHref="/grand-openings"
-            />
 
-            <Link
-              href={`/grand-openings/${mainGrandOpening.id}`}
-              className="block overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-xl"
-            >
-              <div className="aspect-video w-full overflow-hidden bg-white">
-                <img
-                  src={grandOpeningImage}
-                  alt={mainGrandOpening.title || "Grand Opening"}
-                  loading="lazy"
-                  decoding="async"
-                  className="block h-full w-full object-cover object-center"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "center",
-                  }}
-                />
+        {(kpopNews.length > 0 || kdramaNews.length > 0) && (
+          <section className="mx-auto mb-2 max-w-xl">
+            
+
+            <TodaysKoreaNewsModal
+              kpopNews={kpopNews}
+              kdramaNews={kdramaNews}
+            />
+          </section>
+        )}
+
+        {mainGrandOpening && (
+          <section className="mx-auto mb-4 max-w-xl">
+            <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-100 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-10 w-1 shrink-0 rounded-full bg-amber-500" />
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">
+                      Featured
+                    </p>
+
+                    <h2 className="mt-0.5 break-keep text-[22px] font-black leading-tight text-[#172033]">
+                      🎉 Grand Opening
+                    </h2>
+                  </div>
+                </div>
+
+                <Link
+                  href="/grand-openings"
+                  aria-label="More grand openings"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-black text-[#172033] shadow-sm transition hover:scale-105 hover:bg-gray-50"
+                >
+                  →
+                </Link>
               </div>
 
-              <div className="p-5">
-			  <p className="text-xs font-black uppercase tracking-wider text-amber-600">
-				Grand Opening · {mainGrandOpening.opening_date || "Coming Soon"}
-			  </p>
+              <Link
+                href={`/grand-openings/${mainGrandOpening.id}`}
+                className="block transition hover:bg-amber-50/30 active:bg-amber-50/50"
+              >
+                <div className="aspect-video w-full overflow-hidden bg-white">
+                  <img
+                    src={grandOpeningImage}
+                    alt={mainGrandOpening.title || "Grand Opening"}
+                    loading="lazy"
+                    decoding="async"
+                    className="block h-full w-full object-cover object-center"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center",
+                    }}
+                  />
+                </div>
 
-			  <h3 className="mt-1 text-xl font-black">
-				{mainGrandOpening.business_name || "Grand Opening"}
-			  </h3>
+                <div
+                  className="border-t border-gray-200 p-5"
+                  style={{ backgroundColor: "#f1f3f5" }}
+                >
+                  <p className="text-xs font-black uppercase tracking-wider text-amber-600">
+                    Grand Opening · {mainGrandOpening.opening_date || "Coming Soon"}
+                  </p>
 
-			  <p className="mt-1 text-sm font-bold text-gray-600">
-				{mainGrandOpening.title}
-			  </p>
-			</div>
-            </Link>
+                  <h3 className="mt-1 text-xl font-black text-[#172033]">
+                    {mainGrandOpening.business_name || "Grand Opening"}
+                  </h3>
+
+                  <p className="mt-1 text-sm font-bold text-gray-600">
+                    {mainGrandOpening.title}
+                  </p>
+                </div>
+              </Link>
+            </div>
           </section>
         )}
 
@@ -795,7 +885,7 @@ const trending = [...spots]
                 />
               </div>
 
-              <div className="p-5">
+              <div className="bg-slate-50 p-5">
                 <p className="text-xs font-black uppercase tracking-wider text-blue-600">
                   Event · {mainEvent.event_date || "Coming Soon"}
                 </p>
@@ -811,62 +901,92 @@ const trending = [...spots]
         )}
 
         <section className="mx-auto mb-10 max-w-xl">
-          <SectionTitle
-            label="Limited Time"
-            title="Deals Near You"
-            emoji="🔥"
-            color="bg-red-500"
-            bgColor="border-red-200 bg-red-50"
-            moreHref="/deals"
-          />
+          <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-red-100 bg-red-50 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="h-10 w-1 shrink-0 rounded-full bg-red-500" />
 
-          <div className="space-y-4">
-            {deals.map((deal) => (
-              <Link
-                key={deal.id}
-                href={`/deals/${deal.id}`}
-                className="flex gap-4 rounded-3xl border border-red-100 bg-white p-4 shadow-sm"
-              >
-                <div className="h-28 w-36 shrink-0 overflow-hidden rounded-2xl bg-white">
-                  <DealMedia
-                    deal={deal}
-                    className="block h-full w-full object-cover object-center"
-                  />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black uppercase tracking-wider text-red-500">
-                    Special Deal
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">
+                    Limited Time
                   </p>
 
-                <h4 className="mt-1 line-clamp-1 font-black">
-				  {deal.title || deal.businesses?.name || "Deal"}
-				</h4>
-
-				{(deal.businesses?.rating || deal.businesses?.review_count) && (
-				  <div className="mt-1 flex items-center gap-1 text-sm">
-					<span className="text-yellow-500">⭐</span>
-
-					<span className="font-bold text-gray-900">
-					  {Number(deal.businesses?.rating || 0).toFixed(1)}
-					</span>
-
-					{deal.businesses?.review_count ? (
-					  <span className="text-gray-500">
-						({Number(deal.businesses.review_count).toLocaleString()} Reviews)
-					  </span>
-					) : (
-					  <span className="text-gray-400">No Reviews</span>
-					)}
-				  </div>
-				)}
-
-				<p className="mt-2 line-clamp-2 text-xs font-bold text-gray-500">
-				  {deal.description || "Tap to view deal details"}
-				</p>
+                  <h2 className="mt-0.5 break-keep text-[22px] font-black leading-tight text-[#172033]">
+                    🔥 Deals Near You
+                  </h2>
                 </div>
+              </div>
+
+              <Link
+                href="/deals"
+                aria-label="More deals"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-black text-[#172033] shadow-sm transition hover:scale-105 hover:bg-gray-50"
+              >
+                →
               </Link>
-            ))}
+            </div>
+
+            <div className="divide-y divide-red-100">
+              {deals.map((deal) => (
+                <Link
+                  key={deal.id}
+                  href={`/deals/${deal.id}`}
+                  className="flex gap-4 p-4 transition hover:bg-red-50/40 active:bg-red-50"
+                >
+                  <div className="h-28 w-36 shrink-0 overflow-hidden rounded-2xl bg-white">
+                    <DealMedia
+                      deal={deal}
+                      className="block h-full w-full object-cover object-center"
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black uppercase tracking-wider text-red-500">
+                      Special Deal
+                    </p>
+
+                    <h4 className="mt-1 line-clamp-1 font-black">
+                      {deal.title || deal.businesses?.name || "Deal"}
+                    </h4>
+
+                    {(deal.businesses?.rating ||
+                      deal.businesses?.review_count) && (
+                      <div className="mt-1 flex items-center gap-1 text-sm">
+                        <span className="text-yellow-500">⭐</span>
+
+                        <span className="font-bold text-gray-900">
+                          {Number(deal.businesses?.rating || 0).toFixed(1)}
+                        </span>
+
+                        {deal.businesses?.review_count ? (
+                          <span className="text-gray-500">
+                            (
+                            {Number(
+                              deal.businesses.review_count,
+                            ).toLocaleString()}{" "}
+                            Reviews)
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">
+                            No Reviews
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    <p className="mt-2 line-clamp-2 text-xs font-bold text-gray-500">
+                      {deal.description || "Tap to view deal details"}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+
+              {deals.length === 0 && (
+                <div className="px-5 py-10 text-center text-sm font-bold text-gray-400">
+                  New deals are coming soon.
+                </div>
+              )}
+            </div>
           </div>
         </section>
 

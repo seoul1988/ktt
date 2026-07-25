@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 
 type Category = {
@@ -191,6 +191,39 @@ function normalize(value: unknown) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+
+function compareBusinessNames(a: Business, b: Business) {
+  const aName = normalize(a.name);
+  const bName = normalize(b.name);
+
+  if (aName < bName) return -1;
+  if (aName > bName) return 1;
+
+  const aId = String(a.id);
+  const bId = String(b.id);
+
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
+
+  return 0;
+}
+
+function compareCategories(a: Category, b: Category) {
+  const aName = normalize(a.name);
+  const bName = normalize(b.name);
+
+  if (aName < bName) return -1;
+  if (aName > bName) return 1;
+
+  const aId = String(a.id);
+  const bId = String(b.id);
+
+  if (aId < bId) return -1;
+  if (aId > bId) return 1;
+
+  return 0;
 }
 
 function splitCategories(value: unknown): string[] {
@@ -726,6 +759,11 @@ export default function SearchDirectory({
   const [showCategories, setShowCategories] = useState(false);
   const [submittedSearchText, setSubmittedSearchText] = useState("");
   const [showLiveMatches, setShowLiveMatches] = useState(false);
+  const [isClientMounted, setIsClientMounted] = useState(false);
+
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
 
   const mainMapCategories = useMemo(() => {
     const hasMainMapField = categories.some(
@@ -763,7 +801,7 @@ export default function SearchDirectory({
         return rankDifference;
       }
 
-      return a.name.localeCompare(b.name);
+      return compareCategories(a, b);
     });
   }, [mainMapCategories]);
 
@@ -817,7 +855,7 @@ export default function SearchDirectory({
           return ratingDifference;
         }
 
-        return a.name.localeCompare(b.name);
+        return compareBusinessNames(a, b);
       })
       .slice(0, 8);
   }, [businesses, searchText]);
@@ -881,7 +919,7 @@ export default function SearchDirectory({
           return ratingDifference;
         }
 
-        return a.name.localeCompare(b.name);
+        return compareBusinessNames(a, b);
       });
   }, [
     businesses,
@@ -1025,9 +1063,9 @@ export default function SearchDirectory({
                           key={business.id}
                           href={`/business/${business.id}?from=search`}
                           onClick={() => {
-                            setShowLiveMatches(false);
-                            setShowCategories(false);
-                          }}
+                    setShowLiveMatches(false);
+                    setShowCategories(false);
+                  }}
                           className="flex items-center gap-3 rounded-xl p-2 transition hover:bg-[#F8F3EC] active:scale-[0.99]"
                         >
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
@@ -1078,9 +1116,9 @@ export default function SearchDirectory({
                   type="button"
                   aria-label="Close categories"
                   onClick={() => {
-                            setShowLiveMatches(false);
-                            setShowCategories(false);
-                          }}
+                    setShowLiveMatches(false);
+                    setShowCategories(false);
+                  }}
                   onTouchStart={() => setShowCategories(false)}
                   className="fixed inset-0 z-[9990] cursor-default bg-transparent"
                 />
@@ -1096,10 +1134,10 @@ export default function SearchDirectory({
                     >
                       <span
                         className={`flex h-14 w-14 items-center justify-center rounded-full transition-all duration-200 ${
-  selectedCategory === "all"
-    ? "bg-[#1B365D] text-white shadow-lg scale-105"
-    : "bg-[#F5F1EA] text-[#172033] hover:bg-[#ECE6DB] active:scale-95"
-}`}
+                          selectedCategory === "all"
+                            ? "scale-105 bg-[#1B365D] text-white shadow-lg"
+                            : "bg-[#F5F1EA] text-[#172033] hover:bg-[#ECE6DB] active:scale-95"
+                        }`}
                       >
                         <svg
                           viewBox="0 0 24 24"
@@ -1207,14 +1245,15 @@ export default function SearchDirectory({
             const categoryLabel =
               getBusinessCategoryNames(business).join(", ") || "Business";
 
-            const businessStatus =
-              getOpenStatus(business.hours);
+            const businessStatus = isClientMounted
+              ? getOpenStatus(business.hours)
+              : null;
 
             return (
               <Link
                 key={business.id}
-  href={`/business/${business.id}?from=search`}
-  className="
+                href={`/business/${business.id}?from=search`}
+                className="
                   flex items-center gap-4 overflow-hidden rounded-2xl
                   border border-gray-100 bg-white p-3
                   shadow-sm transition
@@ -1269,12 +1308,14 @@ export default function SearchDirectory({
 
                     <span
                       className={`ml-1 rounded-full px-2 py-0.5 text-[10px] font-black leading-none ${
-                        businessStatus.open
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-600"
+                        businessStatus === null
+                          ? "bg-gray-100 text-gray-500"
+                          : businessStatus.open
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-600"
                       }`}
                     >
-                      {businessStatus.text}
+                      {businessStatus?.text ?? "Checking"}
                     </span>
                   </div>
 
