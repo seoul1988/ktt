@@ -148,7 +148,6 @@ export default function OwnerBusinessMatchingPage() {
 
       if (authError) {
         alert(authError.message);
-        setLoading(false);
         return;
       }
 
@@ -165,7 +164,6 @@ export default function OwnerBusinessMatchingPage() {
 
       if (profileCheckError) {
         alert(profileCheckError.message);
-        setLoading(false);
         return;
       }
 
@@ -174,11 +172,6 @@ export default function OwnerBusinessMatchingPage() {
         return;
       }
 
-      /*
-       * owner_status 조건을 사용하지 않습니다.
-       * 일반 회원, 오너 신청자, 기존 오너, 관리자 등
-       * profiles에 있는 모든 회원을 불러옵니다.
-       */
       const { data: userData, error: userError } = await supabase
         .from("profiles")
         .select(
@@ -199,7 +192,6 @@ export default function OwnerBusinessMatchingPage() {
 
       if (userError) {
         alert(userError.message);
-        setLoading(false);
         return;
       }
 
@@ -221,7 +213,6 @@ export default function OwnerBusinessMatchingPage() {
 
       if (businessError) {
         alert(businessError.message);
-        setLoading(false);
         return;
       }
 
@@ -241,6 +232,7 @@ export default function OwnerBusinessMatchingPage() {
 
   function clearSelectedUser() {
     setSelectedUserId("");
+    setOwnerSearch("");
   }
 
   function selectBusiness(business: Business) {
@@ -249,6 +241,7 @@ export default function OwnerBusinessMatchingPage() {
 
   function clearSelectedBusiness() {
     setSelectedBusinessId("");
+    setBusinessSearch("");
   }
 
   async function approveAndLink() {
@@ -362,9 +355,13 @@ export default function OwnerBusinessMatchingPage() {
         </p>
 
         <div className="space-y-6">
-          {/* Owner selection */}
+          {/* Member selection */}
           <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
-            <div className="border-b border-gray-100 p-4 sm:p-5">
+            <div
+              className={`p-4 sm:p-5 ${
+                selectedUser ? "" : "border-b border-gray-100"
+              }`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-base font-black text-[#172033]">
@@ -376,193 +373,230 @@ export default function OwnerBusinessMatchingPage() {
                   </p>
                 </div>
 
-                <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-xs font-extrabold text-[#172033]">
-                  {filteredUsers.length} results
-                </span>
-              </div>
-
-              <div className="relative mt-4">
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-
-                <input
-                  type="search"
-                  value={ownerSearch}
-                  onChange={(event) => {
-                    setOwnerSearch(event.target.value);
-                  }}
-                  placeholder="Search name, email, phone, business..."
-                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3.5 pl-12 pr-11 text-sm font-semibold outline-none transition focus:border-[#172033] focus:bg-white"
-                />
-
-                {ownerSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setOwnerSearch("")}
-                    aria-label="Clear member search"
-                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-sm font-black text-gray-600 hover:bg-gray-300"
-                  >
-                    ×
-                  </button>
+                {!selectedUser && (
+                  <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-xs font-extrabold text-[#172033]">
+                    {filteredUsers.length} results
+                  </span>
                 )}
               </div>
+
+              {!selectedUser && (
+                <div className="relative mt-4">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+
+                  <input
+                    type="search"
+                    value={ownerSearch}
+                    onChange={(event) => {
+                      setOwnerSearch(event.target.value);
+                      setSelectedUserId("");
+                    }}
+                    placeholder="Search name, email, phone, business..."
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3.5 pl-12 pr-11 text-sm font-semibold outline-none transition focus:border-[#172033] focus:bg-white"
+                  />
+
+                  {ownerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOwnerSearch("");
+                        setSelectedUserId("");
+                      }}
+                      aria-label="Clear member search"
+                      className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-sm font-black text-gray-600 hover:bg-gray-300"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {selectedUser && (
-              <div className="border-b border-green-200 bg-green-50 px-4 py-3 sm:px-5">
+            {selectedUser ? (
+              <div className="border-t border-green-200 bg-green-50 px-4 py-4 sm:px-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-extrabold uppercase tracking-wide text-green-700">
-                      Selected member
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-extrabold uppercase tracking-wide text-green-700">
+                        Selected member
+                      </p>
 
-                    <p className="mt-1 truncate text-sm font-black text-[#172033]">
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold ${
+                          getUserStatus(selectedUser).className
+                        }`}
+                      >
+                        {getUserStatus(selectedUser).label}
+                      </span>
+                    </div>
+
+                    <p className="mt-2 truncate text-base font-black text-[#172033]">
                       {selectedUser.full_name || "No Name"}
                     </p>
 
-                    <p className="mt-0.5 break-all text-xs font-medium text-gray-600">
+                    <p className="mt-1 break-all text-sm font-medium text-gray-600">
                       {selectedUser.email || "No email"}
                     </p>
+
+                    <div className="mt-3 grid grid-cols-[90px_1fr] gap-x-2 gap-y-1.5 text-xs">
+                      <span className="font-bold text-gray-400">Business</span>
+                      <span className="break-words font-semibold text-gray-700">
+                        {selectedUser.requested_business_name || "—"}
+                      </span>
+
+                      <span className="font-bold text-gray-400">Phone</span>
+                      <span className="font-semibold text-gray-700">
+                        {selectedUser.phone || "—"}
+                      </span>
+
+                      <span className="font-bold text-gray-400">Role</span>
+                      <span className="font-semibold capitalize text-gray-700">
+                        {selectedUser.role || "member"}
+                      </span>
+                    </div>
                   </div>
 
                   <button
                     type="button"
                     onClick={clearSelectedUser}
-                    className="shrink-0 rounded-full border border-green-300 bg-white px-3 py-1.5 text-xs font-extrabold text-green-700"
+                    className="shrink-0 rounded-full border border-green-300 bg-white px-3 py-1.5 text-xs font-extrabold text-green-700 transition hover:bg-green-100"
                   >
                     Clear
                   </button>
                 </div>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="hidden grid-cols-[minmax(150px,1fr)_minmax(220px,1.4fr)_minmax(170px,1fr)_100px] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-black uppercase tracking-wide text-gray-500 md:grid">
+                  <div>Name</div>
+                  <div>Email</div>
+                  <div>Requested business</div>
+                  <div className="text-center">Status</div>
+                </div>
 
-            {/* Desktop header */}
-            <div className="hidden grid-cols-[minmax(150px,1fr)_minmax(220px,1.4fr)_minmax(170px,1fr)_100px] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-black uppercase tracking-wide text-gray-500 md:grid">
-              <div>Name</div>
-              <div>Email</div>
-              <div>Requested business</div>
-              <div className="text-center">Status</div>
-            </div>
+                <div className="max-h-[430px] overflow-y-auto">
+                  {filteredUsers.length > 0 ? (
+                    filteredUsers.map((user) => {
+                      const status = getUserStatus(user);
 
-            <div className="max-h-[430px] overflow-y-auto">
-              {filteredUsers.length > 0 ? (
-                filteredUsers.map((user) => {
-                  const status = getUserStatus(user);
-                  const isSelected = selectedUserId === user.id;
+                      return (
+                        <button
+                          type="button"
+                          key={user.id}
+                          onClick={() => selectUser(user)}
+                          className="block w-full border-b border-gray-100 bg-white px-4 py-4 text-left transition last:border-b-0 hover:bg-gray-50 sm:px-5"
+                        >
+                          <div className="hidden grid-cols-[minmax(150px,1fr)_minmax(220px,1.4fr)_minmax(170px,1fr)_100px] items-center gap-4 md:grid">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-extrabold text-[#172033]">
+                                {user.full_name || "No Name"}
+                              </p>
 
-                  return (
-                    <button
-                      type="button"
-                      key={user.id}
-                      onClick={() => selectUser(user)}
-                      className={`block w-full border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 sm:px-5 ${
-                        isSelected
-                          ? "bg-[#EAF7EF] ring-2 ring-inset ring-green-500"
-                          : "bg-white hover:bg-gray-50"
-                      }`}
-                    >
-                      {/* Desktop row */}
-                      <div className="hidden grid-cols-[minmax(150px,1fr)_minmax(220px,1.4fr)_minmax(170px,1fr)_100px] items-center gap-4 md:grid">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-extrabold text-[#172033]">
-                            {user.full_name || "No Name"}
-                          </p>
+                              {user.phone && (
+                                <p className="mt-1 truncate text-xs font-medium text-gray-500">
+                                  {user.phone}
+                                </p>
+                              )}
+                            </div>
 
-                          {user.phone && (
-                            <p className="mt-1 truncate text-xs font-medium text-gray-500">
-                              {user.phone}
-                            </p>
-                          )}
-                        </div>
-
-                        <p className="min-w-0 break-all text-sm font-semibold text-gray-700">
-                          {user.email || "No email"}
-                        </p>
-
-                        <p className="min-w-0 break-words text-sm font-semibold text-gray-700">
-                          {user.requested_business_name || "—"}
-                        </p>
-
-                        <div className="text-center">
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${status.className}`}
-                          >
-                            {status.label}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Mobile row */}
-                      <div className="md:hidden">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-black text-[#172033]">
-                              {user.full_name || "No Name"}
-                            </p>
-
-                            <p className="mt-1 break-all text-[13px] font-semibold text-gray-700">
+                            <p className="min-w-0 break-all text-sm font-semibold text-gray-700">
                               {user.email || "No email"}
                             </p>
+
+                            <p className="min-w-0 break-words text-sm font-semibold text-gray-700">
+                              {user.requested_business_name || "—"}
+                            </p>
+
+                            <div className="text-center">
+                              <span
+                                className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${status.className}`}
+                              >
+                                {status.label}
+                              </span>
+                            </div>
                           </div>
 
-                          <span
-                            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${status.className}`}
-                          >
-                            {status.label}
-                          </span>
-                        </div>
+                          <div className="md:hidden">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-black text-[#172033]">
+                                  {user.full_name || "No Name"}
+                                </p>
 
-                        <div className="mt-3 grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-xs">
-                          <span className="font-bold text-gray-400">
-                            Business
-                          </span>
+                                <p className="mt-1 break-all text-[13px] font-semibold text-gray-700">
+                                  {user.email || "No email"}
+                                </p>
+                              </div>
 
-                          <span className="min-w-0 break-words font-semibold text-gray-700">
-                            {user.requested_business_name || "—"}
-                          </span>
+                              <span
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${status.className}`}
+                              >
+                                {status.label}
+                              </span>
+                            </div>
 
-                          <span className="font-bold text-gray-400">Phone</span>
+                            <div className="mt-3 grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-xs">
+                              <span className="font-bold text-gray-400">
+                                Business
+                              </span>
 
-                          <span className="font-semibold text-gray-700">
-                            {user.phone || "—"}
-                          </span>
+                              <span className="min-w-0 break-words font-semibold text-gray-700">
+                                {user.requested_business_name || "—"}
+                              </span>
 
-                          <span className="font-bold text-gray-400">Role</span>
+                              <span className="font-bold text-gray-400">
+                                Phone
+                              </span>
 
-                          <span className="font-semibold capitalize text-gray-700">
-                            {user.role || "member"}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="px-5 py-10 text-center">
-                  <p className="text-sm font-extrabold text-red-500">
-                    No matching member found.
-                  </p>
+                              <span className="font-semibold text-gray-700">
+                                {user.phone || "—"}
+                              </span>
 
-                  <p className="mt-1 text-xs font-medium text-gray-400">
-                    Try searching with part of the name or email address.
-                  </p>
+                              <span className="font-bold text-gray-400">
+                                Role
+                              </span>
+
+                              <span className="font-semibold capitalize text-gray-700">
+                                {user.role || "member"}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-5 py-10 text-center">
+                      <p className="text-sm font-extrabold text-red-500">
+                        No matching member found.
+                      </p>
+
+                      <p className="mt-1 text-xs font-medium text-gray-400">
+                        Try searching with part of the name or email address.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </section>
 
           {/* Business selection */}
           <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
-            <div className="border-b border-gray-100 p-4 sm:p-5">
+            <div
+              className={`p-4 sm:p-5 ${
+                selectedBusiness ? "" : "border-b border-gray-100"
+              }`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-base font-black text-[#172033]">
@@ -574,163 +608,179 @@ export default function OwnerBusinessMatchingPage() {
                   </p>
                 </div>
 
-                <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-xs font-extrabold text-[#172033]">
-                  {filteredBusinesses.length} results
-                </span>
-              </div>
-
-              <div className="relative mt-4">
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-
-                <input
-                  type="search"
-                  value={businessSearch}
-                  onChange={(event) => {
-                    setBusinessSearch(event.target.value);
-                  }}
-                  placeholder="Search business name, ID, address..."
-                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3.5 pl-12 pr-11 text-sm font-semibold outline-none transition focus:border-[#172033] focus:bg-white"
-                />
-
-                {businessSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setBusinessSearch("")}
-                    aria-label="Clear business search"
-                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-sm font-black text-gray-600 hover:bg-gray-300"
-                  >
-                    ×
-                  </button>
+                {!selectedBusiness && (
+                  <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-xs font-extrabold text-[#172033]">
+                    {filteredBusinesses.length} results
+                  </span>
                 )}
               </div>
+
+              {!selectedBusiness && (
+                <div className="relative mt-4">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path d="m20 20-3.5-3.5" />
+                  </svg>
+
+                  <input
+                    type="search"
+                    value={businessSearch}
+                    onChange={(event) => {
+                      setBusinessSearch(event.target.value);
+                      setSelectedBusinessId("");
+                    }}
+                    placeholder="Search business name, ID, address..."
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3.5 pl-12 pr-11 text-sm font-semibold outline-none transition focus:border-[#172033] focus:bg-white"
+                  />
+
+                  {businessSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBusinessSearch("");
+                        setSelectedBusinessId("");
+                      }}
+                      aria-label="Clear business search"
+                      className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-sm font-black text-gray-600 hover:bg-gray-300"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {selectedBusiness && (
-              <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 sm:px-5">
+            {selectedBusiness ? (
+              <div className="border-t border-blue-200 bg-blue-50 px-4 py-4 sm:px-5">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-extrabold uppercase tracking-wide text-blue-700">
                       Selected business
                     </p>
 
-                    <p className="mt-1 truncate text-sm font-black text-[#172033]">
+                    <p className="mt-2 text-base font-black text-[#172033]">
                       #{selectedBusiness.id} ·{" "}
                       {selectedBusiness.name || "No Name"}
                     </p>
 
-                    <p className="mt-0.5 truncate text-xs font-medium text-gray-600">
-                      {selectedBusiness.address || "No address"}
-                    </p>
+                    <div className="mt-3 grid grid-cols-[90px_1fr] gap-x-2 gap-y-1.5 text-xs">
+                      <span className="font-bold text-gray-400">
+                        Category
+                      </span>
+
+                      <span className="font-semibold text-gray-700">
+                        {selectedBusiness.category || "—"}
+                      </span>
+
+                      <span className="font-bold text-gray-400">Address</span>
+
+                      <span className="break-words font-semibold text-gray-700">
+                        {selectedBusiness.address || "—"}
+                      </span>
+
+                      <span className="font-bold text-gray-400">Phone</span>
+
+                      <span className="font-semibold text-gray-700">
+                        {selectedBusiness.phone || "—"}
+                      </span>
+                    </div>
                   </div>
 
                   <button
                     type="button"
                     onClick={clearSelectedBusiness}
-                    className="shrink-0 rounded-full border border-blue-300 bg-white px-3 py-1.5 text-xs font-extrabold text-blue-700"
+                    className="shrink-0 rounded-full border border-blue-300 bg-white px-3 py-1.5 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100"
                   >
                     Clear
                   </button>
                 </div>
               </div>
-            )}
+            ) : (
+              <>
+                <div className="hidden grid-cols-[80px_minmax(180px,1fr)_140px_minmax(220px,1.5fr)] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-black uppercase tracking-wide text-gray-500 md:grid">
+                  <div>ID</div>
+                  <div>Business name</div>
+                  <div>Category</div>
+                  <div>Address</div>
+                </div>
 
-            {/* Desktop header */}
-            <div className="hidden grid-cols-[80px_minmax(180px,1fr)_140px_minmax(220px,1.5fr)] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-black uppercase tracking-wide text-gray-500 md:grid">
-              <div>ID</div>
-              <div>Business name</div>
-              <div>Category</div>
-              <div>Address</div>
-            </div>
-
-            <div className="max-h-[430px] overflow-y-auto">
-              {filteredBusinesses.length > 0 ? (
-                filteredBusinesses.map((business) => {
-                  const isSelected =
-                    selectedBusinessId === String(business.id);
-
-                  return (
-                    <button
-                      type="button"
-                      key={business.id}
-                      onClick={() => selectBusiness(business)}
-                      className={`block w-full border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 sm:px-5 ${
-                        isSelected
-                          ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
-                          : "bg-white hover:bg-gray-50"
-                      }`}
-                    >
-                      {/* Desktop row */}
-                      <div className="hidden grid-cols-[80px_minmax(180px,1fr)_140px_minmax(220px,1.5fr)] items-center gap-4 md:grid">
-                        <p className="text-sm font-black text-[#172033]">
-                          #{business.id}
-                        </p>
-
-                        <p className="min-w-0 truncate text-sm font-extrabold text-[#172033]">
-                          {business.name || "No Name"}
-                        </p>
-
-                        <p className="min-w-0 truncate text-sm font-semibold text-gray-600">
-                          {business.category || "—"}
-                        </p>
-
-                        <p className="min-w-0 text-sm font-medium text-gray-600">
-                          {business.address || "—"}
-                        </p>
-                      </div>
-
-                      {/* Mobile row */}
-                      <div className="md:hidden">
-                        <div className="flex items-start gap-3">
-                          <span className="shrink-0 rounded-lg bg-[#172033] px-2 py-1 text-[11px] font-black text-white">
+                <div className="max-h-[430px] overflow-y-auto">
+                  {filteredBusinesses.length > 0 ? (
+                    filteredBusinesses.map((business) => (
+                      <button
+                        type="button"
+                        key={business.id}
+                        onClick={() => selectBusiness(business)}
+                        className="block w-full border-b border-gray-100 bg-white px-4 py-4 text-left transition last:border-b-0 hover:bg-gray-50 sm:px-5"
+                      >
+                        <div className="hidden grid-cols-[80px_minmax(180px,1fr)_140px_minmax(220px,1.5fr)] items-center gap-4 md:grid">
+                          <p className="text-sm font-black text-[#172033]">
                             #{business.id}
-                          </span>
+                          </p>
 
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-black text-[#172033]">
-                              {business.name || "No Name"}
-                            </p>
+                          <p className="min-w-0 truncate text-sm font-extrabold text-[#172033]">
+                            {business.name || "No Name"}
+                          </p>
 
-                            <p className="mt-1 text-xs font-bold text-gray-500">
-                              {business.category || "No category"}
-                            </p>
+                          <p className="min-w-0 truncate text-sm font-semibold text-gray-600">
+                            {business.category || "—"}
+                          </p>
 
-                            <p className="mt-2 text-xs font-medium leading-5 text-gray-600">
-                              {business.address || "No address"}
-                            </p>
+                          <p className="min-w-0 text-sm font-medium text-gray-600">
+                            {business.address || "—"}
+                          </p>
+                        </div>
 
-                            {business.phone && (
-                              <p className="mt-1 text-xs font-semibold text-gray-500">
-                                {business.phone}
+                        <div className="md:hidden">
+                          <div className="flex items-start gap-3">
+                            <span className="shrink-0 rounded-lg bg-[#172033] px-2 py-1 text-[11px] font-black text-white">
+                              #{business.id}
+                            </span>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-black text-[#172033]">
+                                {business.name || "No Name"}
                               </p>
-                            )}
+
+                              <p className="mt-1 text-xs font-bold text-gray-500">
+                                {business.category || "No category"}
+                              </p>
+
+                              <p className="mt-2 text-xs font-medium leading-5 text-gray-600">
+                                {business.address || "No address"}
+                              </p>
+
+                              {business.phone && (
+                                <p className="mt-1 text-xs font-semibold text-gray-500">
+                                  {business.phone}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="px-5 py-10 text-center">
-                  <p className="text-sm font-extrabold text-red-500">
-                    No matching business found.
-                  </p>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-5 py-10 text-center">
+                      <p className="text-sm font-extrabold text-red-500">
+                        No matching business found.
+                      </p>
 
-                  <p className="mt-1 text-xs font-medium text-gray-400">
-                    Try searching with part of the business name or ID.
-                  </p>
+                      <p className="mt-1 text-xs font-medium text-gray-400">
+                        Try searching with part of the business name or ID.
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </section>
 
           {/* Summary and action */}
