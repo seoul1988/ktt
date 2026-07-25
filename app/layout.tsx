@@ -3,7 +3,7 @@ import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { AuthProvider } from "./components/AuthProvider";
-// import InAppBrowserNotice from "./components/InAppBrowserNotice";
+import InAppBrowserNotice from "./components/InAppBrowserNotice";
 import KakaoOpenBrowserNotice from "./components/KakaoOpenBrowserNotice";
 import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
@@ -182,7 +182,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ServiceWorkerRegister />
-        //  <InAppBrowserNotice />
+          <InAppBrowserNotice />
           <KakaoOpenBrowserNotice />
           <VisitorTracker />
           <AppBadgeManager />

@@ -40,27 +40,16 @@ export default function InAppBrowserNotice() {
 
   if (!show) return null;
 
-  return (
-    <div className="fixed inset-x-0 top-0 z-[9999] bg-[#172033] px-4 py-4 text-white shadow-lg">
-      <div className="mx-auto max-w-md text-center">
-        <div className="text-lg font-extrabold">
-          📱 Install the KTown Triangle App
-        </div>
-
-        <p className="mt-2 text-sm leading-relaxed">
-          For the best experience, install the KTown Triangle app.
-          <br />
-          Open your browser menu and select <b>Add to Home Screen</b> or{" "}
-          <b>Install App</b>.
-        </p>
-
-        <button
-          onClick={() => setShow(false)}
-          className="mt-3 rounded-full bg-white px-5 py-2 text-sm font-bold text-[#172033]"
-        >
-          Got it
-        </button>
-      </div>
+ return (
+  <div
+    onClick={() => setShow(false)}
+    className="fixed inset-x-0 top-0 z-[9999] cursor-pointer bg-[#172033] px-4 py-3 text-white shadow-lg"
+  >
+    <div className="mx-auto max-w-md text-center">
+      <p className="text-sm leading-relaxed">
+        Install the app from Chrome or Safari for the best experience.
+      </p>
     </div>
-  );
+  </div>
+);
 }
