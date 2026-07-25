@@ -2323,38 +2323,28 @@ landscape:top-[62px]"
               </div>
 
               <div className="border-t border-gray-200 bg-gray-100 px-4 pb-5 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
-  <div className="flex items-start justify-between gap-2">
+<div className="flex items-start">
     <div className="min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="line-clamp-2 text-xl font-black text-[#172033] landscape:text-[12px] landscape:leading-tight">
+        <h3
+  className="
+    line-clamp-1
+    text-[19px]
+    iphone:text-[18px]
+    font-black
+    text-[#172033]
+    leading-tight
+    landscape:text-[12px]
+    landscape:leading-tight
+  "
+>
           {spot.name}
         </h3>
 
-        <span
-          className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
-            status.text === "Open"
-              ? "bg-green-100 text-green-700"
-              : status.text === "Break Time"
-              ? "bg-orange-100 text-orange-700"
-              : "bg-red-100 text-red-600"
-          }`}
-        >
-          {status.text}
-        </span>
+        
       </div>
     </div>
 
-    <button
-      onClick={(e) => toggleLike(e, businessId)}
-      className={`shrink-0 rounded-full border px-2 py-1 text-xs font-bold ${
-        likedIds[businessId]
-          ? "border-red-200 bg-red-50 text-red-500"
-          : "border-pink-100 bg-pink-50 text-pink-500"
-      }`}
-    >
-      {likedIds[businessId] ? "♥" : "♡"}{" "}
-      {likeCounts[businessId] || 0}
-    </button>
   </div>
 
   <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
@@ -2389,7 +2379,7 @@ landscape:top-[62px]"
       <>
         <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
           <span>🚗</span>
-          <span>About {estimateDriveMinutes(spot.distance)} min</span>
+          <span> {estimateDriveMinutes(spot.distance)} min</span>
         </span>
 
         <span className="text-[13px] font-bold text-gray-600">
