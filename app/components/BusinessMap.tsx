@@ -53,8 +53,8 @@ const kiotiMarkerIcon = L.divIcon({
   className: "kioti-map-marker",
   html: `
     <div style="
-      width:24px;
-      height:24px;
+      width:30px;
+      height:30px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -68,17 +68,17 @@ const kiotiMarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -14],
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -18],
 });
 
 const caryMarkerIcon = L.divIcon({
   className: "cary-map-marker",
   html: `
     <div style="
-      width:24px;
-      height:24px;
+      width:30px;
+      height:30px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -92,9 +92,9 @@ const caryMarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -14],
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -18],
 });
 
 
@@ -110,8 +110,8 @@ const business16MarkerIcon = L.divIcon({
   className: "business16-map-marker",
   html: `
     <div style="
-      width:24px;
-      height:24px;
+      width:30px;
+      height:30px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -126,17 +126,17 @@ const business16MarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -14],
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -18],
 });
 
 const business10MarkerIcon = L.divIcon({
   className: "business10-map-marker",
   html: `
     <div style="
-      width:24px;
-      height:24px;
+      width:30px;
+      height:30px;
       overflow:hidden;
       border-radius:50%;
       border:2px solid white;
@@ -151,9 +151,9 @@ const business10MarkerIcon = L.divIcon({
       />
     </div>
   `,
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-  popupAnchor: [0, -14],
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -18],
 });
 
 
