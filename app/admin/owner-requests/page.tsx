@@ -6,12 +6,7 @@ import ProfileButton from "../../components/ProfileButton";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import BackButton from "@/app/components/BackButton";
 
-
-
-
 export const dynamic = "force-dynamic";
-
-
 
 type OwnerRequestRow = {
   id: string;
@@ -24,6 +19,7 @@ type OwnerRequestRow = {
   phone: string | null;
   business_id: number | null;
   approved_at: string | null;
+  created_at: string | null;
 };
 
 export default function OwnerRequestsPage() {
@@ -42,22 +38,56 @@ export default function OwnerRequestsPage() {
         owner_status,
         requested_business_name,
         business_name,
-		full_name,
+        full_name,
         phone,
         business_id,
-        approved_at
+        approved_at,
+        created_at
       `)
       .not("owner_status", "is", null)
-      .order("owner_status", { ascending: false });
+      .order("created_at", {
+        ascending: false,
+        nullsFirst: false,
+      });
 
     if (error) {
-      console.log("Owner requests error:", error);
+      console.error("Owner requests error:", error);
       setRows([]);
       setLoading(false);
       return;
     }
 
-    setRows((data || []) as OwnerRequestRow[]);
+    const sortedRows = ((data || []) as OwnerRequestRow[]).sort((a, b) => {
+      const statusA = (a.owner_status || "").toLowerCase();
+      const statusB = (b.owner_status || "").toLowerCase();
+
+      const priority: Record<string, number> = {
+        pending: 0,
+        approved: 1,
+        rejected: 2,
+      };
+
+      const priorityA = priority[statusA] ?? 3;
+      const priorityB = priority[statusB] ?? 3;
+
+      // Pending을 가장 위로 표시
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      // 같은 상태에서는 최신 등록 순
+      const dateA = a.created_at
+        ? new Date(a.created_at).getTime()
+        : 0;
+
+      const dateB = b.created_at
+        ? new Date(b.created_at).getTime()
+        : 0;
+
+      return dateB - dateA;
+    });
+
+    setRows(sortedRows);
     setLoading(false);
   }
 
@@ -66,78 +96,115 @@ export default function OwnerRequestsPage() {
   }, []);
 
   async function approve(row: OwnerRequestRow) {
-  const ok = window.confirm("Approve this owner request?");
-  if (!ok) return;
+    const ok = window.confirm("Approve this owner request?");
 
-  const { error } = await supabase.rpc("approve_owner_request", {
-    target_user_id: row.id,
-  });
+    if (!ok) {
+      return;
+    }
 
-  if (error) {
-    alert(error.message);
-    return;
+    const { error } = await supabase.rpc(
+      "approve_owner_request",
+      {
+        target_user_id: row.id,
+      },
+    );
+
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+
+    await load();
   }
-
-  await load();
-}
 
   async function reject(id: string) {
-  const ok = window.confirm("Reject this owner request?");
-  if (!ok) return;
+    const ok = window.confirm("Reject this owner request?");
 
-  const { error } = await supabase.rpc("reject_owner_request", {
-    target_user_id: id,
-  });
+    if (!ok) {
+      return;
+    }
 
-  if (error) {
-    alert(error.message);
-    return;
+    const { error } = await supabase.rpc(
+      "reject_owner_request",
+      {
+        target_user_id: id,
+      },
+    );
+
+    if (error) {
+      window.alert(error.message);
+      return;
+    }
+
+    await load();
   }
 
-  await load();
-}
-
   function statusLabel(status: string | null) {
-    const s = (status || "").toLowerCase();
+    const normalizedStatus = (status || "").toLowerCase();
 
-    if (s === "approved") return "Approved";
-    if (s === "rejected") return "Rejected";
-    if (s === "pending") return "Pending";
+    if (normalizedStatus === "approved") {
+      return "Approved";
+    }
+
+    if (normalizedStatus === "rejected") {
+      return "Rejected";
+    }
+
+    if (normalizedStatus === "pending") {
+      return "Pending";
+    }
 
     return "Unknown";
   }
 
   function statusClass(status: string | null) {
-    const s = (status || "").toLowerCase();
+    const normalizedStatus = (status || "").toLowerCase();
 
-    if (s === "approved") {
+    if (normalizedStatus === "approved") {
       return "bg-green-100 text-green-700";
     }
 
-    if (s === "rejected") {
+    if (normalizedStatus === "rejected") {
       return "bg-red-100 text-red-700";
     }
 
     return "bg-yellow-100 text-yellow-700";
   }
 
+  function formatDate(value: string | null) {
+    if (!value) {
+      return "Date unavailable";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Date unavailable";
+    }
+
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date);
+  }
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
-     <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
-			  {/* 왼쪽 */}
-			  <BackButton />
+          <BackButton />
 
-			  {/* 가운데 */}
-			  <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
-				Owner Requests
-			  </h1>
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
+            Owner Requests
+          </h1>
 
-			  {/* 오른쪽 */}
-			  <div className="ml-auto">
-				<ProfileButton />
-			  </div>
-			</div>
+          <div className="ml-auto">
+            <ProfileButton />
+          </div>
+        </div>
 
         {loading ? (
           <p className="rounded-3xl bg-white p-5 font-bold shadow">
@@ -151,69 +218,91 @@ export default function OwnerRequestsPage() {
               </p>
             )}
 
-            {rows.map((r) => {
-              const status = (r.owner_status || "").toLowerCase();
+            {rows.map((row) => {
+              const status = (
+                row.owner_status || ""
+              ).toLowerCase();
+
               const isPending = status === "pending";
 
               return (
-                <div key={r.id} className="rounded-3xl bg-white p-5 shadow">
+                <div
+                  key={row.id}
+                  className={`rounded-3xl bg-white p-5 shadow ${
+                    isPending
+                      ? "border-2 border-yellow-300"
+                      : ""
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-bold">{r.email || "No email"}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="break-all font-bold">
+                        {row.email || "No email"}
+                      </p>
 
                       <p className="mt-1 text-sm text-gray-600">
                         Business:{" "}
-                        {r.requested_business_name ||
-                          r.business_name ||
+                        {row.requested_business_name ||
+                          row.business_name ||
                           "Not entered"}
                       </p>
                     </div>
 
                     <span
-                      className={`rounded-full px-3 py-1 text-xs font-black ${statusClass(
-                        r.owner_status
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${statusClass(
+                        row.owner_status,
                       )}`}
                     >
-                      {statusLabel(r.owner_status)}
+                      {statusLabel(row.owner_status)}
                     </span>
                   </div>
 
-               {r.full_name && (
-				  <p className="mt-2 text-sm text-gray-600">
-					Name: {r.full_name}
-				  </p>
-				)}
+                  {row.full_name && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Name: {row.full_name}
+                    </p>
+                  )}
 
-				{r.phone && (
-				  <p className="mt-1 text-sm text-gray-600">
-					Phone: {r.phone}
-				  </p>
-				)}
-								  <p className="mt-2 text-xs text-gray-400">
-                    Business ID: {r.business_id || "Not connected"}
+                  {row.phone && (
+                    <p className="mt-1 text-sm text-gray-600">
+                      Phone: {row.phone}
+                    </p>
+                  )}
+
+                  <p className="mt-2 text-xs font-medium text-gray-500">
+                    Requested: {formatDate(row.created_at)}
                   </p>
 
-                  <p className="mt-1 text-xs text-gray-400">User ID: {r.id}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Business ID:{" "}
+                    {row.business_id || "Not connected"}
+                  </p>
+
+                  <p className="mt-1 break-all text-xs text-gray-400">
+                    User ID: {row.id}
+                  </p>
 
                   {isPending ? (
                     <div className="mt-4 flex gap-3">
                       <button
-                        onClick={() => approve(r)}
-                        className="rounded-xl bg-green-600 px-4 py-2 font-bold text-white"
+                        type="button"
+                        onClick={() => approve(row)}
+                        className="flex-1 rounded-xl bg-green-600 px-4 py-3 font-bold text-white transition active:scale-[0.97]"
                       >
                         Approve
                       </button>
 
                       <button
-                        onClick={() => reject(r.id)}
-                        className="rounded-xl bg-red-500 px-4 py-2 font-bold text-white"
+                        type="button"
+                        onClick={() => reject(row.id)}
+                        className="flex-1 rounded-xl bg-red-500 px-4 py-3 font-bold text-white transition active:scale-[0.97]"
                       >
                         Reject
                       </button>
                     </div>
                   ) : (
                     <p className="mt-4 rounded-xl bg-gray-100 px-4 py-3 text-sm font-bold text-gray-700">
-                      Status: {statusLabel(r.owner_status)}
+                      Status: {statusLabel(row.owner_status)}
                     </p>
                   )}
                 </div>
@@ -222,8 +311,8 @@ export default function OwnerRequestsPage() {
           </div>
         )}
       </div>
-	  <CommunityBottomNav activeNav="admin" />
+
+      <CommunityBottomNav activeNav="admin" />
     </main>
-	
   );
 }
