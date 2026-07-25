@@ -621,71 +621,88 @@ export default async function BusinessPage({
             )}
           </div>
 
-          <hr className="my-5 border-gray-200" />
+          <div className="my-6 h-px bg-[#E5DED5]" />
 
-          <section>
-            <h2 className="mb-3 text-xl font-extrabold">
-              Menu
-            </h2>
-
-            <div className="space-y-1 text-[15px] leading-6">
-              {spot.menu_item_1 && (
-                <p>
-                  {spot.menu_item_1} -{" "}
-                  {spot.menu_price_1 ||
-                    "Price not listed"}
-                </p>
-              )}
-
-              {spot.menu_item_2 && (
-                <p>
-                  {spot.menu_item_2} -{" "}
-                  {spot.menu_price_2 ||
-                    "Price not listed"}
-                </p>
-              )}
-
-              {spot.menu_item_3 && (
-                <p>
-                  {spot.menu_item_3} -{" "}
-                  {spot.menu_price_3 ||
-                    "Price not listed"}
-                </p>
-              )}
-
-              {!spot.menu_item_1 &&
-                !spot.menu_item_2 &&
-                !spot.menu_item_3 && (
-                  <p className="text-gray-600">
-                    Menu information is not
-                    available yet.
-                  </p>
-                )}
+          <section className="overflow-hidden rounded-2xl border border-[#E2DDD5] bg-white/75 shadow-[0_1px_2px_rgba(23,32,51,0.04)]">
+            <div className="border-b border-[#E8E3DC] bg-[#F5F3F0] px-4 py-3">
+              <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-[#172033]">
+                Menu
+              </h2>
             </div>
 
-            {spot.menu_url && (
-              <a
-                href={spot.menu_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-block font-bold text-[#C4483A] underline"
-              >
-                View Full Menu
-              </a>
-            )}
+            <div className="px-4 py-4">
+              <div className="divide-y divide-[#ECE8E2] text-[14px] leading-6">
+                {spot.menu_item_1 && (
+                  <div className="flex items-start justify-between gap-4 py-2 first:pt-0">
+                    <span className="min-w-0 flex-1 font-medium text-gray-800">
+                      {spot.menu_item_1}
+                    </span>
+                    <span className="shrink-0 font-semibold text-[#172033]">
+                      {spot.menu_price_1 ||
+                        "Price not listed"}
+                    </span>
+                  </div>
+                )}
+
+                {spot.menu_item_2 && (
+                  <div className="flex items-start justify-between gap-4 py-2">
+                    <span className="min-w-0 flex-1 font-medium text-gray-800">
+                      {spot.menu_item_2}
+                    </span>
+                    <span className="shrink-0 font-semibold text-[#172033]">
+                      {spot.menu_price_2 ||
+                        "Price not listed"}
+                    </span>
+                  </div>
+                )}
+
+                {spot.menu_item_3 && (
+                  <div className="flex items-start justify-between gap-4 py-2 last:pb-0">
+                    <span className="min-w-0 flex-1 font-medium text-gray-800">
+                      {spot.menu_item_3}
+                    </span>
+                    <span className="shrink-0 font-semibold text-[#172033]">
+                      {spot.menu_price_3 ||
+                        "Price not listed"}
+                    </span>
+                  </div>
+                )}
+
+                {!spot.menu_item_1 &&
+                  !spot.menu_item_2 &&
+                  !spot.menu_item_3 && (
+                    <p className="py-1 text-gray-500">
+                      Menu information is not available yet.
+                    </p>
+                  )}
+              </div>
+
+              {spot.menu_url && (
+                <a
+                  href={spot.menu_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-4 inline-flex min-h-10 touch-manipulation items-center justify-center rounded-xl border border-[#D8D2CA] bg-white px-4 text-[13px] font-bold text-[#39465E] transition-colors hover:bg-[#F7F5F2] active:bg-[#EEEAE5]"
+                >
+                  View Full Menu
+                </a>
+              )}
+            </div>
           </section>
 
-          <hr className="my-5 border-gray-200" />
+          <section className="mt-4 overflow-hidden rounded-2xl border border-[#E2DDD5] bg-white/75 shadow-[0_1px_2px_rgba(23,32,51,0.04)]">
+            <div className="border-b border-[#E8E3DC] bg-[#F5F3F0] px-4 py-3">
+              <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-[#172033]">
+                About
+              </h2>
+            </div>
 
-          <section>
-            <h2 className="mb-3 text-xl font-extrabold">
-              About
-            </h2>
-
-            <p className="leading-7 text-gray-700">
-              {spot.description ||
-                "No description yet."}
-            </p>
+            <div className="px-4 py-4">
+              <p className="whitespace-pre-line text-[14px] leading-7 text-gray-700">
+                {spot.description ||
+                  "No description yet."}
+              </p>
+            </div>
           </section>
 
           {availableCoupons.length > 0 && (
