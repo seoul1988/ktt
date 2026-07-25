@@ -13,10 +13,13 @@ const STORAGE_BUCKET = "business-instagram";
 /**
  * 한 번 실행할 때 처리할 최대 업체 수입니다.
  *
- * 로컬 테스트:
+ * 특정 업체 한 곳 테스트:
+ *   /api/instagram-sync?businessId=83&secret=YOUR_SECRET
+ *
+ * 로컬 배치 테스트:
  *   /api/instagram-sync?limit=1
  *
- * 실제 실행:
+ * 실제 배치 실행:
  *   /api/instagram-sync?limit=44
  */
 const DEFAULT_LIMIT = 44;
@@ -48,6 +51,9 @@ type SyncResult = {
   status: "success" | "skipped" | "failed";
   message: string;
   postUrl?: string;
+  detectedImageUrl?: string;
+  detectedPostedAt?: string | null;
+  imageCompareKey?: string;
 };
 
 function sleep(milliseconds: number) {
@@ -257,6 +263,74 @@ function normalizePostUrl(href: string) {
   }
 }
 
+
+/**
+ * Instagram CDN URL은 같은 이미지라도 만료시간과 서명 파라미터가
+ * 계속 바뀔 수 있습니다.
+ *
+ * 비교할 때는 query string을 제거하고 실제 이미지 파일 경로만 사용합니다.
+ */
+function normalizeImageUrlForCompare(
+  value: string | null | undefined,
+) {
+  const url = String(value || "").trim();
+
+  if (!url) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url);
+
+    return `${parsed.hostname.toLowerCase()}${parsed.pathname}`;
+  } catch {
+    return url.split("?")[0].trim().toLowerCase();
+  }
+}
+
+
+
+/**
+ * Supabase Storage public URL에서 bucket 내부 파일 경로만 추출합니다.
+ *
+ * 예:
+ * https://.../storage/v1/object/public/business-instagram/korea_t0wn/file.jpg
+ * → korea_t0wn/file.jpg
+ */
+function getStorageObjectPath(
+  publicUrl: string | null | undefined,
+) {
+  const value = String(publicUrl || "").trim();
+
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(value);
+
+    const marker =
+      `/storage/v1/object/public/${STORAGE_BUCKET}/`;
+
+    const markerIndex =
+      parsed.pathname.indexOf(marker);
+
+    if (markerIndex < 0) {
+      return null;
+    }
+
+    const objectPath =
+      parsed.pathname.slice(
+        markerIndex + marker.length,
+      );
+
+    return decodeURIComponent(objectPath) || null;
+  } catch {
+    return null;
+  }
+}
+
+
 async function dismissInstagramDialogs(page: Page) {
   const possibleButtons = [
     "Allow all cookies",
@@ -327,61 +401,113 @@ async function extractFirstVisiblePostTile(
     throw new Error("비공개 Instagram 계정입니다.");
   }
 
-  const firstTile = page
-    .locator(
-      'main a[href*="/p/"]:has(img), main a[href*="/reel/"]:has(img)',
-    )
-    .first();
+  const postTiles = page.locator(
+    'main a[href*="/p/"]:has(img), ' +
+      'main a[href*="/reel/"]:has(img), ' +
+      'main a[href*="/reels/"]:has(img)',
+  );
 
-  await firstTile.waitFor({
+  await postTiles.first().waitFor({
     state: "visible",
     timeout: 20000,
   });
 
-  const tileData = await firstTile.evaluate((element) => {
-    const anchor = element as HTMLAnchorElement;
-    const image = anchor.querySelector("img");
+  /**
+   * locator.first()는 화면에서 맨 위에 보이는 게시물이 아니라
+   * Instagram DOM에 먼저 들어 있는 링크를 선택할 수 있습니다.
+   *
+   * 따라서 현재 화면에 실제로 보이는 게시물 타일들을 모두 읽고,
+   * 화면 좌표(top → left) 기준으로 가장 위·왼쪽 타일을 선택합니다.
+   * 고정 게시물이 없는 일반 프로필에서는 이 타일이 최신 게시물입니다.
+   */
+  const tileData = await postTiles.evaluateAll((elements) => {
+    const candidates = elements
+      .map((element) => {
+        const anchor = element as HTMLAnchorElement;
+        const image = anchor.querySelector("img");
 
-    if (!image) {
-      return null;
-    }
+        if (!image) {
+          return null;
+        }
 
-    const srcset = image.getAttribute("srcset") || "";
+        const rect = anchor.getBoundingClientRect();
 
-    const srcsetCandidates = srcset
-      .split(",")
-      .map((entry) => {
-        const parts = entry.trim().split(/\s+/);
-        const url = parts[0] || "";
-        const widthText = parts[1] || "0w";
-        const width = Number(widthText.replace("w", "")) || 0;
+        if (
+          rect.width <= 0 ||
+          rect.height <= 0 ||
+          rect.bottom <= 0 ||
+          rect.right <= 0
+        ) {
+          return null;
+        }
 
-        return { url, width };
+        const srcset = image.getAttribute("srcset") || "";
+
+        const srcsetCandidates = srcset
+          .split(",")
+          .map((entry) => {
+            const parts = entry.trim().split(/\s+/);
+            const url = parts[0] || "";
+            const widthText = parts[1] || "0w";
+            const width =
+              Number(widthText.replace(/[wx]/g, "")) || 0;
+
+            return { url, width };
+          })
+          .filter((entry) => Boolean(entry.url))
+          .sort((left, right) => right.width - left.width);
+
+        return {
+          href:
+            anchor.href ||
+            anchor.getAttribute("href"),
+          imageUrl:
+            srcsetCandidates[0]?.url ||
+            image.currentSrc ||
+            image.getAttribute("src"),
+          alt: image.getAttribute("alt"),
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+        };
       })
-      .filter((entry) => Boolean(entry.url))
-      .sort((left, right) => right.width - left.width);
+      .filter(
+        (
+          candidate,
+        ): candidate is {
+          href: string | null;
+          imageUrl: string | null;
+          alt: string | null;
+          top: number;
+          left: number;
+          width: number;
+          height: number;
+        } => Boolean(candidate?.href),
+      )
+      .sort((left, right) => {
+        const rowDifference = left.top - right.top;
 
-    return {
-      href:
-        anchor.href ||
-        anchor.getAttribute("href"),
-      imageUrl:
-        srcsetCandidates[0]?.url ||
-        image.currentSrc ||
-        image.getAttribute("src"),
-      alt: image.getAttribute("alt"),
-    };
+        // 같은 줄에서 약간의 좌표 오차가 있어도 왼쪽 순서를 사용합니다.
+        if (Math.abs(rowDifference) <= 12) {
+          return left.left - right.left;
+        }
+
+        return rowDifference;
+      });
+
+    return candidates[0] || null;
   });
 
   if (!tileData?.href) {
     throw new Error(
-      "Instagram 첫 번째 게시물 링크를 찾지 못했습니다.",
+      "Instagram 화면의 최신 게시물 링크를 찾지 못했습니다.",
     );
   }
 
   if (!tileData.imageUrl) {
     throw new Error(
-      "Instagram 첫 번째 게시물 이미지를 찾지 못했습니다.",
+      "Instagram 화면의 최신 게시물 이미지를 찾지 못했습니다.",
     );
   }
 
@@ -425,7 +551,7 @@ async function extractFirstVisiblePostTile(
 
   if (!postUrl) {
     throw new Error(
-      `Instagram 첫 번째 게시물 URL을 해석하지 못했습니다: ${tileData.href}`,
+      `Instagram 최신 게시물 URL을 해석하지 못했습니다: ${tileData.href}`,
     );
   }
 
@@ -685,18 +811,24 @@ async function syncBusiness(
     const latestPostUrl = post.postUrl;
 
     /**
-     * 이미 저장된 첫 번째 게시물이면 이미지 다운로드 없이
-     * 수집 시각과 상태만 갱신합니다.
+     * URL만으로 같은 게시물인지 판단하면 Instagram DOM이 이전 링크를
+     * 재사용하는 경우 최신 이미지가 저장되지 않을 수 있습니다.
+     *
+     * 따라서 해당 업체의 최근 저장 기록을 가져온 뒤 게시물 URL과
+     * 원본 이미지 파일 경로를 함께 비교합니다.
      */
-    const { data: existingPost, error: existingError } =
+    const { data: existingPosts, error: existingError } =
       await supabase
         .from("business_instagram_posts")
         .select(
-          "id, instagram_post_url, posted_at, fetched_at, stored_image_url",
+          "id, instagram_post_url, original_image_url, posted_at, fetched_at, stored_image_url",
         )
         .eq("business_id", business.id)
-        .eq("instagram_post_url", latestPostUrl)
-        .maybeSingle();
+        .order("fetched_at", {
+          ascending: false,
+          nullsFirst: false,
+        })
+        .limit(20);
 
     if (existingError) {
       throw new Error(
@@ -704,28 +836,106 @@ async function syncBusiness(
       );
     }
 
+    const detectedImageKey =
+      normalizeImageUrlForCompare(post.imageUrl);
+
+    const exactExistingPost =
+      (existingPosts || []).find((item) => {
+        const samePostUrl =
+          item.instagram_post_url === latestPostUrl;
+
+        const sameImage =
+          normalizeImageUrlForCompare(
+            item.original_image_url,
+          ) === detectedImageKey;
+
+        return samePostUrl && sameImage;
+      });
+
     /**
-     * 첫 번째 게시물 URL이 이전 수집과 같으면 새 게시물이 아닙니다.
-     *
-     * fetched_at만 현재 시각으로 갱신하고 posted_at은 절대 바꾸지 않습니다.
-     * Community는 posted_at 기준 최근 3일만 표시하므로 같은 게시물이
-     * 계속 확인되더라도 최초 저장 후 3일이 지나면 자동으로 숨겨집니다.
+     * 게시물 URL과 이미지 파일 경로가 모두 같을 때만 같은 게시물입니다.
+     * 이때는 이미지 다운로드 없이 확인 시각만 갱신합니다.
      */
-    if (existingPost) {
+    if (exactExistingPost) {
+      const now = new Date().toISOString();
+
       const { error: touchError } = await supabase
         .from("business_instagram_posts")
         .update({
-          fetched_at: new Date().toISOString(),
+          fetched_at: now,
           status: "active",
           error_message: null,
-          updated_at: new Date().toISOString(),
+          updated_at: now,
         })
-        .eq("id", existingPost.id);
+        .eq("id", exactExistingPost.id);
 
       if (touchError) {
         throw new Error(
           `기존 게시물 확인 시각 업데이트 실패: ${touchError.message}`,
         );
+      }
+
+      /**
+       * 최신 행이 이미 저장돼 있더라도 이전 행이 남아 있다면
+       * 최신 행을 제외한 나머지를 즉시 삭제합니다.
+       */
+      const oldRows =
+        (existingPosts || []).filter(
+          (item) =>
+            item.id !== exactExistingPost.id,
+        );
+
+      if (oldRows.length > 0) {
+        const oldRowIds = oldRows.map(
+          (item) => item.id,
+        );
+
+        const { error: deleteOldRowsError } =
+          await supabase
+            .from("business_instagram_posts")
+            .delete()
+            .in("id", oldRowIds);
+
+        if (deleteOldRowsError) {
+          throw new Error(
+            `이전 게시물 DB 삭제 실패: ${deleteOldRowsError.message}`,
+          );
+        }
+
+        const currentStoragePath =
+          getStorageObjectPath(
+            exactExistingPost.stored_image_url,
+          );
+
+        const oldStoragePaths = Array.from(
+          new Set(
+            oldRows
+              .map((item) =>
+                getStorageObjectPath(
+                  item.stored_image_url,
+                ),
+              )
+              .filter(
+                (storagePath): storagePath is string =>
+                  Boolean(storagePath) &&
+                  storagePath !== currentStoragePath,
+              ),
+          ),
+        );
+
+        if (oldStoragePaths.length > 0) {
+          const { error: storageDeleteError } =
+            await supabase.storage
+              .from(STORAGE_BUCKET)
+              .remove(oldStoragePaths);
+
+          if (storageDeleteError) {
+            console.error(
+              `[Instagram sync] 이전 Storage 이미지 삭제 실패 (${businessName}):`,
+              storageDeleteError,
+            );
+          }
+        }
       }
 
       return {
@@ -734,10 +944,20 @@ async function syncBusiness(
         username: instagram.username,
         status: "success",
         message:
-          "같은 게시물입니다. 게시 날짜는 유지하고 확인 날짜만 갱신했습니다.",
+          oldRows.length > 0
+            ? `최신 게시물을 유지하고 이전 게시물 ${oldRows.length}개를 삭제했습니다.`
+            : "게시물 URL과 이미지가 모두 같습니다. 확인 날짜만 갱신했습니다.",
         postUrl: latestPostUrl,
+        detectedImageUrl: post.imageUrl,
+        detectedPostedAt: post.postedAt,
+        imageCompareKey: detectedImageKey,
       };
     }
+
+    /**
+     * URL이 같아도 이미지 파일 경로가 다르면 최신 이미지로 판단합니다.
+     * 아래 저장 과정에서 Storage와 DB 내용을 새 이미지로 덮어씁니다.
+     */
 
     /**
      * 새로운 게시물일 때만 이미지를 다운로드하고 저장합니다.
@@ -752,8 +972,30 @@ async function syncBusiness(
       sanitizePathPart(instagram.username) ||
       `business-${business.id}`;
 
+    const imageFileName = (() => {
+      try {
+        const parsedImageUrl = new URL(post.imageUrl);
+        const fileName =
+          parsedImageUrl.pathname
+            .split("/")
+            .filter(Boolean)
+            .pop() || "";
+
+        return sanitizePathPart(
+          fileName.replace(/\.[a-z0-9]+$/i, ""),
+        );
+      } catch {
+        return "";
+      }
+    })();
+
+    const storageFileKey =
+      imageFileName
+        ? `${post.postCode}-${imageFileName}`
+        : post.postCode;
+
     const storagePath =
-      `${usernamePath}/${post.postCode}.${extension}`;
+      `${usernamePath}/${storageFileKey}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
@@ -777,7 +1019,10 @@ async function syncBusiness(
 
     const now = new Date().toISOString();
 
-    const { error: insertError } = await supabase
+    const {
+      data: savedPost,
+      error: insertError,
+    } = await supabase
       .from("business_instagram_posts")
       .upsert(
         {
@@ -798,12 +1043,100 @@ async function syncBusiness(
           onConflict: "instagram_post_url",
           ignoreDuplicates: false,
         },
+      )
+      .select("id, stored_image_url")
+      .single();
+
+    if (insertError || !savedPost) {
+      throw new Error(
+        `게시물 DB 저장 실패: ${
+          insertError?.message ||
+          "저장된 게시물 정보를 받지 못했습니다."
+        }`,
+      );
+    }
+
+    /**
+     * 각 업체는 최신 Instagram 게시물 한 개만 유지합니다.
+     *
+     * 새 게시물 저장이 성공한 뒤 같은 business_id의 이전 행을 모두
+     * 삭제합니다. 이렇게 하면 화면 쿼리의 정렬 방식과 관계없이
+     * 항상 최신 게시물 한 개만 표시됩니다.
+     */
+    const { data: oldPosts, error: oldPostsError } =
+      await supabase
+        .from("business_instagram_posts")
+        .select("id, stored_image_url")
+        .eq("business_id", business.id)
+        .neq("id", savedPost.id);
+
+    if (oldPostsError) {
+      throw new Error(
+        `이전 게시물 조회 실패: ${oldPostsError.message}`,
+      );
+    }
+
+    const oldPostRows = oldPosts || [];
+
+    if (oldPostRows.length > 0) {
+      const oldPostIds = oldPostRows.map(
+        (item) => item.id,
       );
 
-    if (insertError) {
-      throw new Error(
-        `게시물 DB 저장 실패: ${insertError.message}`,
+      const { error: deleteRowsError } =
+        await supabase
+          .from("business_instagram_posts")
+          .delete()
+          .in("id", oldPostIds);
+
+      if (deleteRowsError) {
+        throw new Error(
+          `이전 게시물 DB 삭제 실패: ${deleteRowsError.message}`,
+        );
+      }
+
+      /**
+       * 이전 DB 행이 삭제된 뒤 사용하지 않는 Storage 이미지도
+       * 정리합니다. 현재 저장한 이미지 경로는 절대 삭제하지 않습니다.
+       */
+      const currentStoragePath =
+        getStorageObjectPath(
+          savedPost.stored_image_url,
+        );
+
+      const oldStoragePaths = Array.from(
+        new Set(
+          oldPostRows
+            .map((item) =>
+              getStorageObjectPath(
+                item.stored_image_url,
+              ),
+            )
+            .filter(
+              (storagePath): storagePath is string =>
+                Boolean(storagePath) &&
+                storagePath !== currentStoragePath,
+            ),
+        ),
       );
+
+      if (oldStoragePaths.length > 0) {
+        const { error: storageDeleteError } =
+          await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove(oldStoragePaths);
+
+        if (storageDeleteError) {
+          /**
+           * 최신 DB 행 저장은 이미 성공했으므로 Storage 정리 실패는
+           * 전체 동기화를 실패 처리하지 않고 로그만 남깁니다.
+           */
+          console.error(
+            `[Instagram sync] 이전 Storage 이미지 삭제 실패 (${businessName}):`,
+            storageDeleteError,
+          );
+        }
+      }
     }
 
     return {
@@ -811,8 +1144,14 @@ async function syncBusiness(
       businessName,
       username: instagram.username,
       status: "success",
-      message: "새 게시물을 저장했습니다.",
+      message:
+        oldPostRows.length > 0
+          ? `새 게시물을 저장하고 이전 게시물 ${oldPostRows.length}개를 삭제했습니다.`
+          : "새 게시물을 저장했습니다.",
       postUrl: post.postUrl,
+      detectedImageUrl: post.imageUrl,
+      detectedPostedAt: post.postedAt,
+      imageCompareKey: detectedImageKey,
     };
   } catch (error) {
     const message =
@@ -915,6 +1254,47 @@ async function runSync(request: NextRequest) {
     0,
   );
 
+  /**
+   * 특정 업체 하나만 동기화할 때 사용합니다.
+   *
+   * 예:
+   *   /api/instagram-sync?businessId=83&secret=YOUR_SECRET
+   *
+   * businessId가 있으면 limit과 offset은 무시됩니다.
+   */
+  const businessIdParam =
+    request.nextUrl.searchParams.get("businessId");
+
+  const requestedBusinessId =
+    businessIdParam !== null && businessIdParam.trim() !== ""
+      ? Number(businessIdParam)
+      : null;
+
+  if (
+    requestedBusinessId !== null &&
+    (
+      !Number.isFinite(requestedBusinessId) ||
+      !Number.isInteger(requestedBusinessId) ||
+      requestedBusinessId <= 0
+    )
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "businessId는 1 이상의 올바른 정수여야 합니다.",
+      },
+      {
+        status: 400,
+      },
+    );
+  }
+
+  const businessId =
+    requestedBusinessId !== null
+      ? requestedBusinessId
+      : null;
+
   const startedAt = new Date().toISOString();
 
   const { data: logRow, error: logInsertError } =
@@ -944,14 +1324,35 @@ async function runSync(request: NextRequest) {
    * 업체명 컬럼이 business_name이라면 아래 select와
    * BusinessRecord의 name 부분만 바꿔야 합니다.
    */
-  const { data: businesses, error: businessesError } =
-    await supabase
-      .from("businesses")
-      .select("id, name, instagram_url")
-      .not("instagram_url", "is", null)
-      .neq("instagram_url", "")
+  let businessesQuery = supabase
+    .from("businesses")
+    .select("id, name, instagram_url")
+    .not("instagram_url", "is", null)
+    .neq("instagram_url", "");
+
+  if (businessId !== null) {
+    /**
+     * businessId가 전달되면 해당 업체 한 곳만 가져옵니다.
+     * 이 경우 limit과 offset은 사용하지 않습니다.
+     */
+    businessesQuery = businessesQuery.eq(
+      "id",
+      businessId,
+    );
+  } else {
+    /**
+     * businessId가 없을 때만 기존의 limit/offset 방식으로
+     * 여러 업체를 순차 처리합니다.
+     */
+    businessesQuery = businessesQuery
       .order("id", { ascending: true })
       .range(offset, offset + limit - 1);
+  }
+
+  const {
+    data: businesses,
+    error: businessesError,
+  } = await businessesQuery;
 
   if (businessesError) {
     if (logRow?.id) {
@@ -978,6 +1379,40 @@ async function runSync(request: NextRequest) {
 
   const businessRows =
     (businesses || []) as BusinessRecord[];
+
+  if (
+    businessId !== null &&
+    businessRows.length === 0
+  ) {
+    const message =
+      `Instagram URL이 등록된 Business ${businessId}를 찾지 못했습니다.`;
+
+    if (logRow?.id) {
+      await supabase
+        .from("instagram_sync_logs")
+        .update({
+          completed_at: new Date().toISOString(),
+          total_businesses: 0,
+          successful_businesses: 0,
+          failed_businesses: 0,
+          new_posts: 0,
+          status: "failed",
+          error_message: message,
+        })
+        .eq("id", logRow.id);
+    }
+
+    return NextResponse.json(
+      {
+        ok: false,
+        businessId,
+        error: message,
+      },
+      {
+        status: 404,
+      },
+    );
+  }
 
   let browser: Browser | null = null;
   const results: SyncResult[] = [];
@@ -1040,7 +1475,7 @@ async function runSync(request: NextRequest) {
             ).length,
           new_posts: results.filter(
             (result) =>
-              result.message === "새 게시물을 저장했습니다.",
+              result.message.startsWith("새 게시물을 저장"),
           ).length,
           status: "failed",
           error_message: message,
@@ -1079,7 +1514,7 @@ async function runSync(request: NextRequest) {
 
   const newPosts = results.filter(
     (result) =>
-      result.message === "새 게시물을 저장했습니다.",
+      result.message.startsWith("새 게시물을 저장"),
   ).length;
 
   const finalStatus =
@@ -1118,8 +1553,19 @@ async function runSync(request: NextRequest) {
     ok: failedBusinesses === 0,
     startedAt,
     completedAt: new Date().toISOString(),
-    offset,
-    requestedLimit: limit,
+    mode:
+      businessId !== null
+        ? "single-business"
+        : "batch",
+    businessId,
+    offset:
+      businessId !== null
+        ? null
+        : offset,
+    requestedLimit:
+      businessId !== null
+        ? 1
+        : limit,
     totalProcessed: businessRows.length,
     successfulBusinesses,
     skippedBusinesses,

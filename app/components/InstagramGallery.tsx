@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Business = {
   id?: string | number;
@@ -58,15 +59,11 @@ function isVideoPost(url: string) {
 }
 
 function isWithinLastThreeDays(postedAt?: string | null) {
-  if (!postedAt) {
-    return false;
-  }
+  if (!postedAt) return false;
 
   const postedTime = new Date(postedAt).getTime();
 
-  if (Number.isNaN(postedTime)) {
-    return false;
-  }
+  if (Number.isNaN(postedTime)) return false;
 
   return postedTime >= Date.now() - THREE_DAYS_MS;
 }
@@ -74,17 +71,12 @@ function isWithinLastThreeDays(postedAt?: string | null) {
 export default function InstagramGallery({ posts }: Props) {
   const [selectedPost, setSelectedPost] =
     useState<InstagramPost | null>(null);
+  const [mounted, setMounted] = useState(false);
 
-  /**
-   * 서버에서 최근 3일 자료만 보내더라도 클라이언트에서 한 번 더
-   * posted_at 기준으로 검사합니다.
-   *
-   * fetched_at은 수집 확인 날짜이므로 표시 판단에 사용하지 않습니다.
-   * 같은 게시물이 다시 확인되어 fetched_at이 갱신되어도 posted_at이
-   * 3일보다 오래되면 자동으로 숨겨집니다.
-   *
-   * 또한 가게별 최신 게시물 하나만 남깁니다.
-   */
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const normalizedPosts = useMemo(() => {
     const recentPosts = (posts ?? [])
       .filter((post) => {
@@ -98,7 +90,6 @@ export default function InstagramGallery({ posts }: Props) {
         const leftTime = left.posted_at
           ? new Date(left.posted_at).getTime()
           : 0;
-
         const rightTime = right.posted_at
           ? new Date(right.posted_at).getTime()
           : 0;
@@ -113,9 +104,7 @@ export default function InstagramGallery({ posts }: Props) {
 
     for (const post of recentPosts) {
       const businessKey =
-        post.business?.id ??
-        post.business?.name ??
-        post.id;
+        post.business?.id ?? post.business?.name ?? post.id;
 
       if (!uniqueByBusiness.has(businessKey)) {
         uniqueByBusiness.set(businessKey, post);
@@ -126,12 +115,17 @@ export default function InstagramGallery({ posts }: Props) {
   }, [posts]);
 
   useEffect(() => {
-    if (!selectedPost) {
-      return;
-    }
+    if (!selectedPost) return;
 
-    const previousOverflow = document.body.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow =
+      document.documentElement.style.overflow;
+    const previousBodyTouchAction =
+      document.body.style.touchAction;
+
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -142,19 +136,15 @@ export default function InstagramGallery({ posts }: Props) {
     window.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.touchAction = previousBodyTouchAction;
       window.removeEventListener("keydown", handleEscape);
     };
   }, [selectedPost]);
 
-  /**
-   * 게시물이 3일을 지나 목록에서 제거된 상태에서 모달이 열려 있다면
-   * 모달도 자동으로 닫습니다.
-   */
   useEffect(() => {
-    if (!selectedPost) {
-      return;
-    }
+    if (!selectedPost) return;
 
     const stillVisible = normalizedPosts.some(
       (post) => post.id === selectedPost.id,
@@ -165,6 +155,61 @@ export default function InstagramGallery({ posts }: Props) {
     }
   }, [normalizedPosts, selectedPost]);
 
+  const modal =
+    mounted && selectedPost
+      ? createPortal(
+          <div
+            className="fixed inset-0 z-[99999] flex min-h-[100dvh] w-screen items-center justify-center overflow-hidden bg-black px-3 pb-[max(88px,calc(env(safe-area-inset-bottom)+72px))] pt-[max(68px,calc(env(safe-area-inset-top)+56px))]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Instagram post preview"
+            onClick={() => setSelectedPost(null)}
+          >
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setSelectedPost(null);
+              }}
+              className="fixed right-4 top-[max(14px,env(safe-area-inset-top))] z-[100001] flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/75 text-2xl font-black text-white shadow-xl backdrop-blur transition active:scale-95"
+              aria-label="Close"
+            >
+              ×
+            </button>
+
+            <a
+              href={selectedPost.instagram_post_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              className="fixed bottom-[max(18px,calc(env(safe-area-inset-bottom)+12px))] right-4 z-[100001] flex h-12 items-center justify-center gap-2 rounded-full bg-[#C44873] px-4 text-sm font-black text-white shadow-xl transition active:scale-95"
+              aria-label="Open on Instagram"
+            >
+              <InstagramLogo />
+              <span>Instagram</span>
+            </a>
+
+            <div
+              className="flex h-full max-h-[calc(100dvh-156px)] w-full items-center justify-center"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <img
+                src={selectedPost.stored_image_url}
+                alt={
+                  selectedPost.caption ||
+                  `${
+                    selectedPost.business?.name || "Local Business"
+                  } Instagram post`
+                }
+                className="block max-h-[calc(100dvh-156px)] max-w-full select-none object-contain"
+                draggable={false}
+              />
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <>
       <div className="mb-5 flex items-center justify-between gap-3">
@@ -172,7 +217,6 @@ export default function InstagramGallery({ posts }: Props) {
           <p className="text-xs font-black uppercase tracking-wide text-[#C44873]">
             Social
           </p>
-
           <h1 className="text-2xl font-black tracking-tight">
             Today&apos;s Instagram
           </h1>
@@ -189,9 +233,7 @@ export default function InstagramGallery({ posts }: Props) {
       {normalizedPosts.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
           {normalizedPosts.map((post) => {
-            const video = isVideoPost(
-              post.instagram_post_url,
-            );
+            const video = isVideoPost(post.instagram_post_url);
 
             return (
               <article
@@ -211,8 +253,7 @@ export default function InstagramGallery({ posts }: Props) {
                     alt={
                       post.caption ||
                       `${
-                        post.business?.name ||
-                        "Local Business"
+                        post.business?.name || "Local Business"
                       } Instagram post`
                     }
                     className="h-full w-full object-cover"
@@ -233,8 +274,7 @@ export default function InstagramGallery({ posts }: Props) {
                     onClick={() => setSelectedPost(post)}
                     className="min-w-0 flex-1 truncate text-left text-sm font-black text-[#172033]"
                   >
-                    {post.business?.name ||
-                      "Local Business"}
+                    {post.business?.name || "Local Business"}
                   </button>
 
                   <a
@@ -258,55 +298,7 @@ export default function InstagramGallery({ posts }: Props) {
         </div>
       )}
 
-      {selectedPost && (
-        <div
-          className="fixed inset-0 z-[100] bg-black"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Instagram post preview"
-          onClick={() => setSelectedPost(null)}
-        >
-          <button
-            type="button"
-            onClick={() => setSelectedPost(null)}
-            className="absolute right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl font-black text-white shadow-lg"
-            aria-label="Close"
-          >
-            ×
-          </button>
-
-          <a
-            href={selectedPost.instagram_post_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => event.stopPropagation()}
-            className="absolute bottom-5 right-5 z-20 flex h-12 w-12 items-center justify-center rounded-full bg-[#C44873] text-white shadow-xl"
-            aria-label="Open on Instagram"
-          >
-            <InstagramLogo />
-          </a>
-
-          <div className="flex h-full w-full items-center justify-center">
-            <img
-              src={selectedPost.stored_image_url}
-              alt={
-                selectedPost.caption ||
-                `${
-                  selectedPost.business?.name ||
-                  "Local Business"
-                } Instagram post`
-              }
-              onClick={(event) => event.stopPropagation()}
-              className="block max-h-screen max-w-full object-contain"
-              style={{
-                width: "auto",
-                height: "auto",
-                objectFit: "contain",
-              }}
-            />
-          </div>
-        </div>
-      )}
+      {modal}
     </>
   );
 }
