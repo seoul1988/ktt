@@ -66,7 +66,10 @@ export default function InAppBrowserNotice() {
     try {
       window.sessionStorage.setItem(NOTICE_SESSION_KEY, "true");
     } catch (error) {
-      console.error("Unable to save browser notice state:", error);
+      console.error(
+        "Unable to save browser notice state:",
+        error,
+      );
     }
 
     setBrowserType(null);
@@ -89,7 +92,7 @@ export default function InAppBrowserNotice() {
       onClick={closeNotice}
     >
       <div
-        className="relative w-full max-w-sm rounded-2xl bg-[#F5F5F5] px-7 pb-7 pt-12 text-center shadow-xl"
+        className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-[#F1F3F5] px-7 pb-7 pt-12 text-center shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="in-app-browser-notice-title"
