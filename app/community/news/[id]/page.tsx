@@ -755,19 +755,69 @@ export default function BusinessNewsDetailPage() {
 
               <div
                 className="
-                  mt-5 text-[14px] leading-7
-                  [&_a]:text-blue-600 [&_a]:underline
-                  [&_blockquote]:my-4 [&_blockquote]:border-l-4
-                  [&_blockquote]:border-gray-300 [&_blockquote]:pl-4
-                  [&_h1]:mb-3 [&_h1]:mt-6 [&_h1]:text-[24px] [&_h1]:font-bold
-                  [&_h2]:mb-3 [&_h2]:mt-6 [&_h2]:text-[20px] [&_h2]:font-bold
-                  [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:text-[17px] [&_h3]:font-semibold
-                  [&_img]:my-5 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-xl
-                  [&_li]:ml-5 [&_ol]:my-3 [&_ol]:list-decimal
-                  [&_p]:my-3 [&_table]:my-4 [&_table]:w-full
-                  [&_table]:border-collapse [&_td]:border [&_td]:p-2
-                  [&_th]:border [&_th]:bg-gray-50 [&_th]:p-2
-                  [&_ul]:my-3 [&_ul]:list-disc
+                  mt-6 rounded-2xl border border-gray-200
+                  bg-[#F3F5F7] px-5 py-5
+                  text-[14px] leading-7
+                  shadow-[0_1px_2px_rgba(0,0,0,0.03)]
+
+                  [&_a]:text-blue-600
+                  [&_a]:underline
+
+                  [&_blockquote]:my-4
+                  [&_blockquote]:rounded-xl
+                  [&_blockquote]:border-l-4
+                  [&_blockquote]:border-gray-300
+                  [&_blockquote]:bg-white/80
+                  [&_blockquote]:px-4
+                  [&_blockquote]:py-3
+
+                  [&_h1]:mb-3
+                  [&_h1]:mt-6
+                  [&_h1]:text-[24px]
+                  [&_h1]:font-bold
+
+                  [&_h2]:mb-3
+                  [&_h2]:mt-6
+                  [&_h2]:text-[20px]
+                  [&_h2]:font-bold
+
+                  [&_h3]:mb-2
+                  [&_h3]:mt-5
+                  [&_h3]:text-[17px]
+                  [&_h3]:font-semibold
+
+                  [&_img]:my-5
+                  [&_img]:h-auto
+                  [&_img]:max-w-full
+                  [&_img]:rounded-xl
+
+                  [&_li]:ml-5
+
+                  [&_ol]:my-3
+                  [&_ol]:list-decimal
+
+                  [&_p:first-child]:mt-0
+                  [&_p:last-child]:mb-0
+                  [&_p]:my-3
+
+                  [&_table]:my-4
+                  [&_table]:w-full
+                  [&_table]:border-collapse
+                  [&_table]:overflow-hidden
+                  [&_table]:rounded-xl
+
+                  [&_td]:border
+                  [&_td]:border-gray-300
+                  [&_td]:bg-white/80
+                  [&_td]:p-2
+
+                  [&_th]:border
+                  [&_th]:border-gray-300
+                  [&_th]:bg-gray-200
+                  [&_th]:p-2
+
+                  [&_ul]:my-3
+                  [&_ul]:list-disc
                 "
                 dangerouslySetInnerHTML={{
                   __html: safeContent,
