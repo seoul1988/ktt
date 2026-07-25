@@ -34,7 +34,7 @@ export default function CommunityBottomNav({
   const normalClass = "text-[#172033]";
 
   const navButtonClass =
-    "group flex min-w-0 flex-col items-center justify-center gap-0.5 py-1 transition-all duration-150 active:scale-90 active:opacity-70";
+    "group flex h-full min-h-[68px] min-w-0 flex-1 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] flex-col items-center justify-center gap-1 px-1 py-2 transition-all duration-150 active:scale-[0.96] active:bg-gray-100 active:opacity-75";
 
   /*
    * 기존 페이지에서 activeNav="market", "ads", "deals"를 사용해도
@@ -149,19 +149,31 @@ export default function CommunityBottomNav({
   }
 
   if (!isMounted) {
-    return <div className="h-[78px] shrink-0" />;
+    return (
+      <div
+        className="h-[calc(72px+env(safe-area-inset-bottom,0px))] shrink-0"
+        aria-hidden="true"
+      />
+    );
   }
 
   return (
     <>
       {/* 하단 네비게이션에 페이지 내용이 가리지 않도록 여백 */}
-      <div className="h-[78px] shrink-0" />
+      <div
+        className="h-[calc(72px+env(safe-area-inset-bottom,0px))] shrink-0"
+        aria-hidden="true"
+      />
 
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] border-t border-gray-200 bg-white shadow-[0_-3px_14px_rgba(0,0,0,0.08)]">
+      <nav
+        aria-label="Community bottom navigation"
+        className="fixed inset-x-0 bottom-0 z-[9999] border-t border-gray-200 bg-white shadow-[0_-3px_14px_rgba(0,0,0,0.08)]"
+      >
         <div
           className="
-            relative mx-auto h-[64px] w-full max-w-md
-            px-1 pb-[env(safe-area-inset-bottom,0px)]
+            relative mx-auto h-[calc(72px+env(safe-area-inset-bottom,0px))]
+            w-full max-w-md
+            pb-[env(safe-area-inset-bottom,0px)]
           "
         >
           {/*
@@ -176,15 +188,15 @@ export default function CommunityBottomNav({
            * Android 일반 사용자:
            * Home / Map | Search | Hub / Social
            */}
-          <div className="absolute inset-y-0 left-1 right-1 flex">
-            <div className="flex w-1/2 items-center justify-evenly pr-8">
+          <div className="absolute inset-x-0 top-0 flex h-[72px]">
+            <div className="flex w-1/2 items-stretch pr-9">
           {/* iPhone 뒤로가기 */}
           {isIOS && (
             <button
               type="button"
               onClick={handleBack}
               aria-label="Go back"
-              className="flex w-[42px] shrink-0 flex-col items-center justify-center text-[#172033] transition-all duration-150 active:scale-90 active:opacity-70"
+              className="flex h-full min-h-[68px] flex-1 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] flex-col items-center justify-center gap-1 px-1 py-2 text-[#172033] transition-all duration-150 active:scale-[0.96] active:bg-gray-100 active:opacity-75"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -210,7 +222,7 @@ export default function CommunityBottomNav({
             href="/"
             onClick={triggerHaptic}
             aria-current={activeNav === "home" ? "page" : undefined}
-            className={`${navButtonClass} w-[42px] ${
+            className={`${navButtonClass} ${
               activeNav === "home" ? activeClass : normalClass
             }`}
           >
@@ -239,7 +251,7 @@ export default function CommunityBottomNav({
             href="/community/map"
             onClick={triggerHaptic}
             aria-current={activeNav === "map" ? "page" : undefined}
-            className={`${navButtonClass} w-[42px] ${
+            className={`${navButtonClass} ${
               activeNav === "map" ? activeClass : normalClass
             }`}
           >
@@ -266,7 +278,7 @@ export default function CommunityBottomNav({
             </div>
 
             {/* 오른쪽 메뉴 영역 */}
-            <div className="flex w-1/2 items-center justify-evenly pl-8">
+            <div className="flex w-1/2 items-stretch pl-9">
           {/* Hub: Market, Ads, Deals, Business News 통합 */}
           <Link
             href="/community/hub"
@@ -375,15 +387,16 @@ export default function CommunityBottomNav({
           </div>
 
           {/* 가운데 검색 버튼: 좌우 버튼 수와 무관하게 정확히 중앙 고정 */}
-          <div className="pointer-events-none absolute left-1/2 top-0 z-20 h-full -translate-x-1/2">
+          <div className="pointer-events-none absolute left-1/2 top-0 z-20 h-[72px] w-[84px] -translate-x-1/2">
             <Link
               href="/community/search"
               onClick={triggerHaptic}
               aria-label="Search community directory"
               aria-current={activeNav === "search" ? "page" : undefined}
               className={`
-                pointer-events-auto absolute left-1/2 -top-0 -translate-x-1/2
-                flex h-[60px] w-[60px]
+                pointer-events-auto absolute left-1/2 top-0 -translate-x-1/2
+                flex h-[68px] w-[68px]
+                touch-manipulation select-none [-webkit-tap-highlight-color:transparent]
                 items-center justify-center
                 rounded-full
                 border-4 border-white
@@ -391,7 +404,7 @@ export default function CommunityBottomNav({
                 text-white
                 shadow-[0_8px_20px_rgba(23,32,51,0.35)]
                 transition-all duration-150
-                active:scale-90
+                active:scale-[0.94]
                 hover:scale-105
                 ${
                   activeNav === "search"
