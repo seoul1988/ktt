@@ -123,15 +123,21 @@ function RegisterIcon() {
       className="h-5 w-5"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       aria-hidden="true"
     >
-      <circle cx="12" cy="7.5" r="3.2" />
+      <circle cx="9" cy="8" r="3" />
 
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M5.5 20c.5-4 2.7-6.2 6.5-6.2s6 2.2 6.5 6.2"
+        d="M3.8 20c.5-4 2.3-6 5.2-6 1.4 0 2.6.5 3.5 1.4"
+      />
+
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M17 13v6M14 16h6"
       />
     </svg>
   );
@@ -234,16 +240,23 @@ export default function CommunityEventActionButtons({
   }
 
   const buttonClass =
-    "flex min-w-0 min-h-[58px] flex-col items-center justify-center gap-1 rounded-xl border border-[#D9DDE2] bg-white px-1 py-2 text-[#667085] shadow-sm transition hover:bg-[#F8F9FA] active:scale-[0.97]";
+    "flex min-h-[58px] min-w-0 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl border border-[#D9DDE2] bg-white px-1 py-2 text-[#667085] shadow-sm outline-none transition-[transform,background-color,border-color,box-shadow] duration-200 [-webkit-tap-highlight-color:transparent] hover:bg-[#F8F9FA] focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 active:scale-[0.97] active:bg-[#F1F3F5]";
+
+  const registerButtonClass =
+    "flex min-h-[58px] min-w-0 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl border border-[#174EA6] bg-[#2563EB] px-1 py-2 text-white shadow-[0_3px_8px_rgba(37,99,235,0.22)] outline-none transition-[transform,background-color,box-shadow] duration-200 [-webkit-tap-highlight-color:transparent] hover:bg-[#1D4ED8] focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 active:scale-[0.97] active:bg-[#1E40AF] active:shadow-sm";
 
   const labelClass =
     "w-full truncate text-center text-[9px] font-bold leading-none text-[#344054] sm:text-[10px]";
+
+  const registerLabelClass =
+    "w-full truncate text-center text-[9px] font-black leading-none text-white sm:text-[10px]";
 
   return (
     <div className={`mt-3 grid ${gridClass} gap-1.5`}>
       {cleanPhone && (
         <a
           href={`tel:${cleanPhone}`}
+          aria-label={`${eventTitle} 전화`}
           className={buttonClass}
         >
           <PhoneIcon />
@@ -259,6 +272,7 @@ export default function CommunityEventActionButtons({
           href={directionsUrl}
           target="_blank"
           rel="noopener noreferrer"
+          aria-label={`${eventTitle} 길찾기`}
           className={buttonClass}
         >
           <DirectionsIcon />
@@ -272,6 +286,7 @@ export default function CommunityEventActionButtons({
       <button
         type="button"
         onClick={sharePage}
+        aria-label={`${eventTitle} 공유`}
         className={buttonClass}
       >
         <ShareIcon />
@@ -284,6 +299,7 @@ export default function CommunityEventActionButtons({
       <button
         type="button"
         onClick={copyPageUrl}
+        aria-label={`${eventTitle} 링크 복사`}
         className={buttonClass}
       >
         <CopyIcon />
@@ -298,11 +314,12 @@ export default function CommunityEventActionButtons({
           href={cleanRegistrationUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className={buttonClass}
+          aria-label={`${eventTitle} 참가신청`}
+          className={registerButtonClass}
         >
           <RegisterIcon />
 
-          <span className={labelClass}>
+          <span className={registerLabelClass}>
             참가신청
           </span>
         </a>
