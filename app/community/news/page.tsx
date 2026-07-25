@@ -407,7 +407,7 @@ export default function CommunityNewsPage() {
           backdrop-blur
         "
       >
-        <div className="mx-auto flex h-16 w-full max-w-lg items-center px-4">
+        <div className="mx-auto flex h-16 w-full max-w-xl items-center px-4">
           <button
             type="button"
             onClick={() => router.back()}
@@ -444,7 +444,7 @@ export default function CommunityNewsPage() {
         </div>
       </header>
 
-      <section className="mx-auto w-full max-w-lg px-4 pt-5">
+      <section className="mx-auto w-full max-w-xl px-4 pt-5">
         <div className="relative">
           <svg
             viewBox="0 0 24 24"
