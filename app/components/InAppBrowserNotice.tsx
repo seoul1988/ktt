@@ -101,8 +101,8 @@ export default function InAppBrowserNotice() {
         <button
           type="button"
           onClick={closeNotice}
-          className="absolute right-4 top-3 flex h-9 w-9 items-center justify-center rounded-full text-2xl font-light text-gray-400 transition hover:bg-gray-200 hover:text-gray-700 active:scale-95"
-          aria-label={isKakao ? "닫기" : "Close"}
+          className="absolute right-3 top-2 flex h-8 w-8 items-center justify-center rounded-full text-2xl font-light text-gray-500 transition hover:bg-gray-300 hover:text-gray-800 active:scale-95"
+		  aria-label={isKakao ? "닫기" : "Close"}
         >
           ×
         </button>
