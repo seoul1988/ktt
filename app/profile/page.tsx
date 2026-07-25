@@ -6,9 +6,6 @@ import { supabase } from "../../lib/supabase";
 import ProfileButton from "../components/ProfileButton";
 import BottomNav from "../components/BottomNav";
 
-const BUSINESS_OWNER_POPUP_KEY =
-  "ktown_profile_business_owner_popup_dismissed";
-
 type Profile = {
   id: string;
   email: string | null;
@@ -25,11 +22,9 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [submittingOwner, setSubmittingOwner] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [
-    showBusinessOwnerPopup,
-    setShowBusinessOwnerPopup,
-  ] = useState(false);
 
+  const [showBusinessOwnerPopup, setShowBusinessOwnerPopup] =
+    useState(false);
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -39,7 +34,14 @@ export default function ProfilePage() {
     async function loadProfile() {
       const {
         data: { user },
+        error: authError,
       } = await supabase.auth.getUser();
+
+      if (authError) {
+        alert(authError.message);
+        setLoading(false);
+        return;
+      }
 
       if (!user) {
         window.location.href = "/login";
@@ -58,7 +60,7 @@ export default function ProfilePage() {
           full_name,
           phone,
           business_name
-        `
+        `,
         )
         .eq("id", user.id)
         .maybeSingle();
@@ -83,7 +85,9 @@ export default function ProfilePage() {
 
         const { error: createError } = await supabase
           .from("profiles")
-          .upsert(newProfile);
+          .upsert(newProfile, {
+            onConflict: "id",
+          });
 
         if (createError) {
           alert(createError.message);
@@ -92,12 +96,19 @@ export default function ProfilePage() {
         }
 
         setProfile(newProfile);
+        setFullName("");
+        setPhone("");
+        setBusinessName("");
       } else {
-        setProfile(data);
-        setFullName(data.full_name || "");
-        setPhone(data.phone || "");
+        const loadedProfile = data as Profile;
+
+        setProfile(loadedProfile);
+        setFullName(loadedProfile.full_name || "");
+        setPhone(loadedProfile.phone || "");
         setBusinessName(
-          data.business_name || data.requested_business_name || ""
+          loadedProfile.business_name ||
+            loadedProfile.requested_business_name ||
+            "",
         );
       }
 
@@ -107,6 +118,18 @@ export default function ProfilePage() {
     loadProfile();
   }, []);
 
+  /*
+   * 일반 회원이 프로필 페이지에 들어올 때마다 모달을 표시합니다.
+   *
+   * 표시 대상:
+   * - role === "user"
+   * - owner_status !== "pending"
+   *
+   * 표시하지 않는 대상:
+   * - 기존 오너
+   * - 관리자
+   * - 오너 승인 대기 중인 회원
+   */
   useEffect(() => {
     if (
       loading ||
@@ -114,35 +137,20 @@ export default function ProfilePage() {
       profile.role !== "user" ||
       profile.owner_status === "pending"
     ) {
+      setShowBusinessOwnerPopup(false);
       return;
     }
 
-    const dismissed =
-      localStorage.getItem(
-        BUSINESS_OWNER_POPUP_KEY,
-      );
+    const timer = window.setTimeout(() => {
+      setShowBusinessOwnerPopup(true);
+    }, 600);
 
-    if (dismissed === "true") {
-      return;
-    }
-
-    const timer = window.setTimeout(
-      () => {
-        setShowBusinessOwnerPopup(true);
-      },
-      600,
-    );
-
-    return () =>
+    return () => {
       window.clearTimeout(timer);
+    };
   }, [loading, profile]);
 
   function closeBusinessOwnerPopup() {
-    localStorage.setItem(
-      BUSINESS_OWNER_POPUP_KEY,
-      "true",
-    );
-
     setShowBusinessOwnerPopup(false);
   }
 
@@ -177,7 +185,7 @@ export default function ProfilePage() {
   async function sendOwnerRequestEmail() {
     if (!profile?.email) return;
 
-    const res = await fetch("/api/send-owner-request", {
+    const response = await fetch("/api/send-owner-request", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -190,10 +198,11 @@ export default function ProfilePage() {
       }),
     });
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+
       throw new Error(
-        data?.error || "Failed to send owner request email."
+        data?.error || "Failed to send owner request email.",
       );
     }
   }
@@ -204,80 +213,102 @@ export default function ProfilePage() {
 
     setSubmittingOwner(true);
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: fullName.trim(),
+          phone: phone.trim(),
+          owner_status: "pending",
+          requested_business_name: businessName.trim(),
+          business_name: businessName.trim(),
+        })
+        .eq("id", profile.id);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      try {
+        await sendOwnerRequestEmail();
+      } catch (emailError) {
+        const message =
+          emailError instanceof Error
+            ? emailError.message
+            : "Unknown email error.";
+
+        alert(
+          "Owner request was submitted, but the admin email failed to send: " +
+            message,
+        );
+
+        return;
+      }
+
+      setProfile({
+        ...profile,
         full_name: fullName.trim(),
         phone: phone.trim(),
         owner_status: "pending",
         requested_business_name: businessName.trim(),
         business_name: businessName.trim(),
-      })
-      .eq("id", profile.id);
+      });
 
-    if (error) {
+      setShowBusinessOwnerPopup(false);
+
+      alert("Owner request submitted.");
+      window.location.href = "/map";
+    } finally {
       setSubmittingOwner(false);
-      alert(error.message);
-      return;
     }
-
-    try {
-      await sendOwnerRequestEmail();
-    } catch (emailError: any) {
-      setSubmittingOwner(false);
-      alert(
-        "Owner request was submitted, but the admin email failed to send: " +
-          emailError.message
-      );
-      return;
-    }
-
-    setSubmittingOwner(false);
-    alert("Owner request submitted.");
-    window.location.href = "/map";
   }
 
   async function saveProfile() {
     if (!profile) return;
 
-    // Save Profile에서는 이름만 필수 검사합니다.
-    // 전화번호와 비즈니스 이름은 비어 있어도 저장됩니다.
+    /*
+     * Save Profile에서는 이름만 필수입니다.
+     * 전화번호와 비즈니스 이름은 비어 있어도 저장됩니다.
+     */
     if (!validateProfileSave()) return;
 
     setSavingProfile(true);
 
-    const { error } = await supabase.from("profiles").upsert(
-      {
-        id: profile.id,
-        email: profile.email,
-        role: profile.role || "user",
-        owner_status: profile.owner_status || "none",
-        requested_business_name:
-          profile.requested_business_name || "",
+    try {
+      const { error } = await supabase.from("profiles").upsert(
+        {
+          id: profile.id,
+          email: profile.email,
+          role: profile.role || "user",
+          owner_status: profile.owner_status || "none",
+          requested_business_name:
+            profile.requested_business_name || "",
+          full_name: fullName.trim(),
+          phone: phone.trim(),
+          business_name: businessName.trim(),
+        },
+        {
+          onConflict: "id",
+        },
+      );
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      setProfile({
+        ...profile,
         full_name: fullName.trim(),
         phone: phone.trim(),
         business_name: businessName.trim(),
-      },
-      {
-        onConflict: "id",
-      }
-    );
+      });
 
-    setSavingProfile(false);
-
-    if (error) {
-      alert(error.message);
-      return;
+      alert("Profile saved.");
+    } finally {
+      setSavingProfile(false);
     }
-
-    setProfile({
-      ...profile,
-      full_name: fullName.trim(),
-      phone: phone.trim(),
-      business_name: businessName.trim(),
-    });
-
-    alert("Profile saved.");
   }
 
   if (loading) {
@@ -337,9 +368,11 @@ export default function ProfilePage() {
                 <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F6C343]">
                   My Profile
                 </p>
+
                 <h1 className="mt-1 truncate text-[23px] font-black leading-tight">
                   {fullName || "Complete your profile"}
                 </h1>
+
                 <p className="mt-1 truncate text-sm text-white/55">
                   {profile?.email}
                 </p>
@@ -362,7 +395,10 @@ export default function ProfilePage() {
                 <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
                   Account type
                 </p>
-                <p className="mt-1 truncate font-black">{roleLabel}</p>
+
+                <p className="mt-1 truncate font-black">
+                  {roleLabel}
+                </p>
               </div>
 
               <span className="ml-3 shrink-0 rounded-full bg-[#F6C343] px-4 py-1.5 text-xs font-black text-[#172033]">
@@ -374,7 +410,10 @@ export default function ProfilePage() {
 
         <section className="mt-5 rounded-[32px] border border-white bg-white/90 p-5 shadow-xl backdrop-blur">
           <div className="mb-5">
-            <h2 className="text-xl font-black">Account Information</h2>
+            <h2 className="text-xl font-black">
+              Account Information
+            </h2>
+
             <p className="mt-1 text-sm leading-6 text-gray-500">
               Save your basic profile anytime. Phone and business name
               are only required when applying as a business owner.
@@ -386,8 +425,10 @@ export default function ProfilePage() {
               <span className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-500">
                 Email
               </span>
+
               <div className="flex items-center rounded-2xl border border-gray-100 bg-gray-100 px-4">
                 <span className="mr-3 text-lg">✉️</span>
+
                 <input
                   value={profile?.email || ""}
                   disabled
@@ -400,9 +441,12 @@ export default function ProfilePage() {
               <span className="mb-2 block text-xs font-black uppercase tracking-wider text-gray-500">
                 Full Name <span className="text-red-500">*</span>
               </span>
+
               <input
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(event) =>
+                  setFullName(event.target.value)
+                }
                 placeholder="Enter your full name"
                 disabled={isPendingOwner}
                 className="w-full rounded-2xl border-2 border-gray-100 bg-[#FCFAF7] px-4 py-4 font-bold outline-none transition placeholder:font-medium placeholder:text-gray-300 focus:border-[#F6C343] focus:bg-white disabled:bg-gray-100 disabled:text-gray-400"
@@ -412,14 +456,18 @@ export default function ProfilePage() {
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wider text-gray-500">
                 <span>Phone</span>
+
                 <span className="rounded-full bg-gray-100 px-2 py-1 text-[9px] text-gray-400">
                   Optional
                 </span>
               </span>
+
               <input
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(event) =>
+                  setPhone(event.target.value)
+                }
                 placeholder="Phone number"
                 disabled={isPendingOwner}
                 className="w-full rounded-2xl border-2 border-gray-100 bg-[#FCFAF7] px-4 py-4 font-bold outline-none transition placeholder:font-medium placeholder:text-gray-300 focus:border-[#F6C343] focus:bg-white disabled:bg-gray-100 disabled:text-gray-400"
@@ -429,13 +477,17 @@ export default function ProfilePage() {
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wider text-gray-500">
                 <span>Business Name</span>
+
                 <span className="rounded-full bg-gray-100 px-2 py-1 text-[9px] text-gray-400">
                   Optional
                 </span>
               </span>
+
               <input
                 value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
+                onChange={(event) =>
+                  setBusinessName(event.target.value)
+                }
                 placeholder="Business name"
                 disabled={isPendingOwner}
                 className="w-full rounded-2xl border-2 border-gray-100 bg-[#FCFAF7] px-4 py-4 font-bold outline-none transition placeholder:font-medium placeholder:text-gray-300 focus:border-[#F6C343] focus:bg-white disabled:bg-gray-100 disabled:text-gray-400"
@@ -450,8 +502,12 @@ export default function ProfilePage() {
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#172033] text-xl">
                 🏪
               </div>
+
               <div>
-                <h2 className="font-black">Own a local business?</h2>
+                <h2 className="font-black">
+                  Own a local business?
+                </h2>
+
                 <p className="mt-1 text-sm leading-5 text-[#5A4A18]">
                   Apply for a business owner account to manage your
                   business listing and promotions.
@@ -471,7 +527,8 @@ export default function ProfilePage() {
             </button>
 
             <p className="mt-3 text-center text-xs font-bold text-[#75622D]">
-              Phone and business name are required for this application.
+              Phone and business name are required for this
+              application.
             </p>
           </section>
         )}
@@ -479,15 +536,18 @@ export default function ProfilePage() {
         {isPendingOwner && (
           <section className="mt-5 rounded-[28px] border border-yellow-200 bg-yellow-50 p-5 shadow-md">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-yellow-400 text-xl">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xl">
                 ⏳
               </div>
+
               <div>
                 <p className="font-black text-yellow-800">
                   Application under review
                 </p>
+
                 <p className="mt-1 text-sm text-yellow-700">
-                  Your business owner application is pending approval.
+                  Your business owner application is pending
+                  approval.
                 </p>
               </div>
             </div>
@@ -522,7 +582,6 @@ export default function ProfilePage() {
         </button>
       </div>
 
-
       {showBusinessOwnerPopup &&
         profile?.role === "user" &&
         !isPendingOwner && (
@@ -534,11 +593,22 @@ export default function ProfilePage() {
             onClick={closeBusinessOwnerPopup}
           >
             <div
-              className="relative w-full max-w-sm cursor-pointer overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-2xl"
-              onClick={closeBusinessOwnerPopup}
+              className="relative w-full max-w-sm overflow-hidden rounded-[26px] border border-white/80 bg-white shadow-2xl"
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
             >
+              <button
+                type="button"
+                onClick={closeBusinessOwnerPopup}
+                aria-label="Close business owner notice"
+                className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-xl font-bold text-white transition hover:bg-white/25"
+              >
+                ×
+              </button>
+
               <div className="bg-[#172033] px-5 pb-5 pt-6 text-white">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 pr-8">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F6C343] text-2xl">
                     🏪
                   </div>
@@ -560,32 +630,34 @@ export default function ProfilePage() {
 
               <div className="px-5 py-5">
                 <p className="text-[14px] font-semibold leading-6 text-gray-600">
-                  저희 랄리한인상공회의소에서
-                  지역 한인 비즈니스 정보를
-                  미리 등록해 두었을 수 있습니다.
+                  저희 랄리한인상공회의소에서 지역 한인 비즈니스
+                  정보를 미리 등록해 두었을 수 있습니다.
                 </p>
 
                 <p className="mt-3 text-[14px] font-semibold leading-6 text-gray-600">
-                  비즈니스 오너라면 이 프로필
-                  페이지에서 언제든 Business
-                  Owner 신청을 하신 후 업체 정보,
-                  사진, 연락처 및 프로모션을 직접
-                  관리할 수 있습니다.
+                  비즈니스 오너라면 이 프로필 페이지에서 언제든
+                  Business Owner 신청을 하신 후 업체 정보, 사진,
+                  연락처 및 프로모션을 직접 관리할 수 있습니다.
                 </p>
 
-                <div className="mt-5 rounded-2xl bg-gray-50 px-4 py-3 text-center">
-                  <p className="text-[11px] font-black text-gray-400">
-                    화면 아무 곳이나 누르면 닫힙니다.
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={closeBusinessOwnerPopup}
+                  className="mt-5 w-full rounded-2xl bg-[#172033] py-3.5 text-sm font-black text-white shadow-md transition active:scale-[0.98]"
+                >
+                  확인
+                </button>
+
+                <p className="mt-3 text-center text-[11px] font-bold text-gray-400">
+                  바깥 화면을 눌러도 닫힙니다.
+                </p>
               </div>
             </div>
           </div>
         )}
 
       <nav className="fixed bottom-4 left-0 right-0 z-50 px-4">
-       
-		<BottomNav activeNav="home" />
+        <BottomNav activeNav="home" />
       </nav>
     </main>
   );
