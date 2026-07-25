@@ -743,13 +743,13 @@ const trending = [...spots]
     console.error("Today’s Korea load error:", todaysKoreaError);
   }
 
-  const kpopNews = (todaysKoreaPosts || [])
-    .filter((post: any) => post.category === "kpop")
-    .slice(0, 3);
+const kpopNews = (todaysKoreaPosts || [])
+  .filter((post: any) => post.category === "kpop")
+  .slice(0, 6);
 
-  const kdramaNews = (todaysKoreaPosts || [])
-    .filter((post: any) => post.category === "kdrama")
-    .slice(0, 3);
+const kdramaNews = (todaysKoreaPosts || [])
+  .filter((post: any) => post.category === "kdrama")
+  .slice(0, 6);
 
   const mainEvent = businessEvents[0];
   const mainGrandOpening = grandOpenings[0];
