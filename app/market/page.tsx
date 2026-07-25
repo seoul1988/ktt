@@ -233,7 +233,7 @@ export default async function MarketPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
       <div className="mx-auto w-full max-w-xl">
-        <div className="relative mb-5 flex items-center">
+        <div className="relative mb-5 flex items-center justify-between">
           <Link
             href="/community/hub"
             className="
@@ -245,7 +245,18 @@ export default async function MarketPage() {
             ← Back
           </Link>
 
-          <h1 className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-2xl font-black text-[#172033]">
+          <h1
+  className="
+    absolute left-1/2 -translate-x-1/2
+    max-w-[42vw]
+    truncate
+    text-xl
+    font-black
+    text-[#172033]
+    md:max-w-none
+    md:text-2xl
+  "
+>
             벼룩시장
           </h1>
 
