@@ -1419,7 +1419,7 @@ export default function CommunitySearchDirectory({
 
               {!submittedSearchText && selectedCategory === "all" && (
                 <p className="shrink-0 whitespace-nowrap pb-[2px] text-[10px] font-semibold tracking-wide text-[#8A8176] sm:text-[11px]">
-                  Since 07/12/26
+                  Since 07/14/26
                   <span className="mx-1 text-[#B8AEA2]">•</span>
                   <span className="font-black text-[#172033]">
                     {visitStatsError
