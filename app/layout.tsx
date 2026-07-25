@@ -23,7 +23,7 @@ const geistMono = Geist_Mono({
 });
 
 const SITE_URL = "https://www.ktowntriangle.com";
-const OG_IMAGE_URL = `${SITE_URL}/og-image-20260721.png`;
+const OG_IMAGE_URL = `${SITE_URL}/og-image-korean-town.png`;
 
 const GA_MEASUREMENT_ID = "G-SDZ3B9B4S6";
 const GOOGLE_ADS_ID = "AW-18242391009";
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   },
 
   description:
-    "랄리, 더럼, 캐리, 채플힐 및 트라이앵글 지역의 한인 비즈니스, 음식점, 마켓, 이벤트, 할인 혜택과 커뮤니티 정보를 만나보세요.",
+    "Discover Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, deals, and everything Korean across Raleigh, Cary, Durham, Chapel Hill, and the Triangle.",
 
   applicationName: "KTown Triangle",
   manifest: "/manifest.webmanifest",
@@ -51,13 +51,13 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
+    title: "Discover Korean Town in the Triangle | KTown Triangle",
     description:
-      "랄리, 더럼, 캐리, 채플힐 및 트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
+      "Find Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, deals, and everything Korean across Raleigh, Cary, Durham, Chapel Hill, and the Triangle.",
     url: SITE_URL,
     siteName: "KTown Triangle",
-    locale: "ko_KR",
-    alternateLocale: ["en_US"],
+    locale: "en_US",
+    alternateLocale: ["ko_KR"],
     type: "website",
     images: [
       {
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
         secureUrl: OG_IMAGE_URL,
         width: 1200,
         height: 630,
-        alt: "랄리지역 한인 비즈니스를 한곳에 - KTown Triangle",
+        alt: "Discover Korean BBQ, K-POP, Events and More with KTown Triangle",
         type: "image/png",
       },
     ],
@@ -73,13 +73,13 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-    title: "랄리지역 한인 비즈니스를 한곳에! | KTown Triangle",
+    title: "Discover Korean Town in the Triangle | KTown Triangle",
     description:
-      "트라이앵글 지역의 한인 비즈니스, 이벤트, 할인 혜택과 커뮤니티 정보를 확인하세요.",
+      "Explore Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, local deals, and everything Korean in one place.",
     images: [
       {
         url: OG_IMAGE_URL,
-        alt: "랄리지역 한인 비즈니스를 한곳에 - KTown Triangle",
+        alt: "Discover Korean BBQ, K-POP, Events and More with KTown Triangle",
       },
     ],
   },
@@ -157,7 +157,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="ko"
+      lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
       style={{
         backgroundColor: "#F8F3EC",
@@ -198,14 +198,17 @@ export default function RootLayout({
           </div>
         </AuthProvider>
 
-        {/* Google Analytics 4 및 Google Ads 공통 태그 */}
+        {/* Google Analytics 4 and Google Ads */}
         <Script
           id="google-tag-manager"
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"
         />
 
-        <Script id="google-analytics-and-ads" strategy="afterInteractive">
+        <Script
+          id="google-analytics-and-ads"
+          strategy="afterInteractive"
+        >
           {`
             window.dataLayer = window.dataLayer || [];
 
