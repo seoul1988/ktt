@@ -45,13 +45,13 @@ export default function KakaoOpenBrowserNotice() {
       role="presentation"
       onClick={closeNotice}
     >
-      <div
-        className="relative w-full max-w-sm rounded-2xl bg-gray-50 px-7 pb-7 pt-12 text-center shadow-xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="kakao-browser-notice-title"
-        onClick={(event) => event.stopPropagation()}
-      >
+     <div
+  className="relative w-full max-w-sm rounded-2xl bg-[#F5F5F5] px-7 pb-7 pt-12 text-center shadow-xl"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="kakao-browser-notice-title"
+  onClick={(event) => event.stopPropagation()}
+>
         <button
           type="button"
           onClick={closeNotice}
