@@ -92,7 +92,7 @@ export default function InAppBrowserNotice() {
       onClick={closeNotice}
     >
       <div
-        className="relative w-full max-w-sm rounded-2xl border border-gray-200 bg-[#F1F3F5] px-7 pb-7 pt-12 text-center shadow-xl"
+        className="relative w-full max-w-sm rounded-2xl border border-gray-300 bg-[#E5E7EB] px-6 pb-5 pt-8 text-center shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="in-app-browser-notice-title"
