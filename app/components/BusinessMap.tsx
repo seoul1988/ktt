@@ -2322,7 +2322,7 @@ landscape:top-[62px]"
                 )}
               </div>
 
-              <div className="border-t border-gray-200 bg-gray-100 px-4 pb-5 pt-3 landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
+              <div className="border-t border-gray-200 bg-gray-100 px-4 py-2  landscape:min-w-0 landscape:flex-1 landscape:border-0 landscape:bg-transparent landscape:p-0">
 <div className="flex items-start">
     <div className="min-w-0 flex-1">
       <div className="flex flex-wrap items-center gap-2">
@@ -2347,77 +2347,87 @@ landscape:top-[62px]"
 
   </div>
 
-  <p className="mt-1 text-sm font-semibold text-gray-700 landscape:hidden">
-    {spot.category} · {spot.city || "Triangle"}
-  </p>
 
-  <div className="mt-2 flex flex-wrap items-center gap-2 landscape:hidden">
-    {routeInfo[spotKey] ? (
-      <>
-        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
-          <span>🚗</span>
-          <span>{routeInfo[spotKey].minutes} min</span>
+ <div className="mt-1 flex min-h-[24px] items-center gap-1.5 overflow-hidden landscape:hidden">
+  {routeInfo[spotKey] ? (
+    <>
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[12px] font-black leading-tight text-red-600 shadow-sm">
+        <span className="text-[11px] leading-none">🚗</span>
+        <span className="whitespace-nowrap">
+          {routeInfo[spotKey].minutes} min
         </span>
+      </span>
 
-        <span className="text-[13px] font-bold text-gray-600">
-          {routeInfo[spotKey].miles.toFixed(1)} miles
+      <span className="shrink-0 whitespace-nowrap text-[12px] font-bold leading-tight text-gray-600">
+        {routeInfo[spotKey].miles.toFixed(1)} miles
+      </span>
+
+      {typeof spot.rating === "number" && spot.rating > 0 && (
+        <span className="inline-flex min-w-0 items-center gap-0.5 whitespace-nowrap text-[12px] font-bold leading-tight text-amber-600">
+          <span>⭐</span>
+          <span>{spot.rating.toFixed(1)}</span>
+
+          {typeof spot.review_count === "number" &&
+            spot.review_count > 0 && (
+              <span className="text-[11px] text-gray-500">
+                ({spot.review_count})
+              </span>
+            )}
         </span>
-
-        {typeof spot.rating === "number" && spot.rating > 0 && (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
-            ⭐ {spot.rating.toFixed(1)}
-            {typeof spot.review_count === "number" &&
-              spot.review_count > 0 && (
-                <span className="text-gray-500">
-                  ({spot.review_count})
-                </span>
-              )}
-          </span>
-        )}
-      </>
-    ) : userLocation && spot.distance !== undefined ? (
-      <>
-        <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[14px] font-black text-red-600 shadow-sm">
-          <span>🚗</span>
-          <span> {estimateDriveMinutes(spot.distance)} min</span>
+      )}
+    </>
+  ) : userLocation && spot.distance !== undefined ? (
+    <>
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[12px] font-black leading-tight text-red-600 shadow-sm">
+        <span className="text-[11px] leading-none">🚗</span>
+        <span className="whitespace-nowrap">
+          {estimateDriveMinutes(spot.distance)} min
         </span>
+      </span>
 
-        <span className="text-[13px] font-bold text-gray-600">
-          {spot.distance.toFixed(1)} miles
+      <span className="shrink-0 whitespace-nowrap text-[12px] font-bold leading-tight text-gray-600">
+        {spot.distance.toFixed(1)} miles
+      </span>
+
+      {typeof spot.rating === "number" && spot.rating > 0 && (
+        <span className="inline-flex min-w-0 items-center gap-0.5 whitespace-nowrap text-[12px] font-bold leading-tight text-amber-600">
+          <span>⭐</span>
+          <span>{spot.rating.toFixed(1)}</span>
+
+          {typeof spot.review_count === "number" &&
+            spot.review_count > 0 && (
+              <span className="text-[11px] text-gray-500">
+                ({spot.review_count})
+              </span>
+            )}
         </span>
-
-        {typeof spot.rating === "number" && spot.rating > 0 && (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
-            ⭐ {spot.rating.toFixed(1)}
-            {typeof spot.review_count === "number" &&
-              spot.review_count > 0 && (
-                <span className="text-gray-500">
-                  ({spot.review_count})
-                </span>
-              )}
-          </span>
-        )}
-      </>
-    ) : (
-      <>
-        <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[13px] font-bold text-gray-500 shadow-sm">
-          📍 Enable location for drive time
+      )}
+    </>
+  ) : (
+    <>
+      <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-bold leading-tight text-gray-500 shadow-sm">
+        <span className="shrink-0 text-[11px] leading-none">📍</span>
+        <span className="truncate">
+          Enable location
         </span>
+      </span>
 
-        {typeof spot.rating === "number" && spot.rating > 0 && (
-          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-bold text-amber-600">
-            ⭐ {spot.rating.toFixed(1)}
-            {typeof spot.review_count === "number" &&
-              spot.review_count > 0 && (
-                <span className="text-gray-500">
-                  ({spot.review_count})
-                </span>
-              )}
-          </span>
-        )}
-      </>
-    )}
-  </div>
+      {typeof spot.rating === "number" && spot.rating > 0 && (
+        <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[12px] font-bold leading-tight text-amber-600">
+          <span>⭐</span>
+          <span>{spot.rating.toFixed(1)}</span>
+
+          {typeof spot.review_count === "number" &&
+            spot.review_count > 0 && (
+              <span className="text-[11px] text-gray-500">
+                ({spot.review_count})
+              </span>
+            )}
+        </span>
+      )}
+    </>
+  )}
+</div>
 </div>
 
             </a>
