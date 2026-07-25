@@ -874,6 +874,8 @@ export default function CommunitySearchDirectory({
   const [showCategories, setShowCategories] = useState(false);
   const [submittedSearchText, setSubmittedSearchText] = useState("");
   const [showLiveMatches, setShowLiveMatches] = useState(false);
+  const [totalVisits, setTotalVisits] = useState<number | null>(null);
+  const [visitStatsError, setVisitStatsError] = useState(false);
 
   function updateSearchUrl(query = "", category = "all") {
     const params = new URLSearchParams();
@@ -919,6 +921,71 @@ export default function CommunitySearchDirectory({
 
     setShowCategories(false);
     setShowLiveMatches(false);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadTotalVisits() {
+      try {
+        const response = await fetch("/api/visitor-stats", {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        const data = (await response.json()) as {
+          totalVisits?: number;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || `Visitor stats request failed: ${response.status}`,
+          );
+        }
+
+        const nextTotalVisits = Number(data.totalVisits);
+
+        if (!Number.isFinite(nextTotalVisits) || nextTotalVisits < 0) {
+          throw new Error("Invalid total visitor count returned by API.");
+        }
+
+        if (!cancelled) {
+          setTotalVisits(nextTotalVisits);
+          setVisitStatsError(false);
+        }
+      } catch (error) {
+        console.error("Failed to load total visits:", error);
+
+        if (!cancelled) {
+          setTotalVisits(null);
+          setVisitStatsError(true);
+        }
+      }
+    }
+
+    void loadTotalVisits();
+
+    const refreshTimer = window.setInterval(() => {
+      void loadTotalVisits();
+    }, 60_000);
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void loadTotalVisits();
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   /*
@@ -1341,13 +1408,29 @@ export default function CommunitySearchDirectory({
               Business Directory
             </p>
 
-            <h1 className="mt-1 truncate text-xl font-black">
-              {submittedSearchText
-                ? `"${submittedSearchText}" Search Results`
-                : selectedCategory === "all"
-                  ? "All Businesses"
-                  : selectedCategoryName || "Businesses"}
-            </h1>
+            <div className="mt-1 flex min-w-0 items-end justify-between gap-3">
+              <h1 className="min-w-0 truncate text-xl font-black">
+                {submittedSearchText
+                  ? `"${submittedSearchText}" Search Results`
+                  : selectedCategory === "all"
+                    ? "All Businesses"
+                    : selectedCategoryName || "Businesses"}
+              </h1>
+
+              {!submittedSearchText && selectedCategory === "all" && (
+                <p className="shrink-0 whitespace-nowrap pb-[2px] text-[10px] font-semibold tracking-wide text-[#8A8176] sm:text-[11px]">
+                  Since 07/12/26
+                  <span className="mx-1 text-[#B8AEA2]">•</span>
+                  <span className="font-black text-[#172033]">
+                    {visitStatsError
+                      ? "Visits unavailable"
+                      : totalVisits === null
+                        ? "Loading..."
+                        : `${totalVisits.toLocaleString("en-US")} Visits`}
+                  </span>
+                </p>
+              )}
+            </div>
 
             {filteredBusinesses.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
