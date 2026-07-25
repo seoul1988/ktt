@@ -60,12 +60,12 @@ export default function KakaoOpenBrowserNotice() {
     onClick={closeNotice}
   >
     <div
-      className="relative w-full max-w-sm rounded-2xl bg-white px-7 pb-7 pt-12 text-center shadow-xl"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="open-browser-notice-title"
-      onClick={(event) => event.stopPropagation()}
-    >
+  className="relative w-full max-w-sm rounded-2xl bg-gray-50 px-7 pb-7 pt-12 text-center shadow-xl"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="open-browser-notice-title"
+  onClick={(event) => event.stopPropagation()}
+>
       <button
         type="button"
         onClick={closeNotice}
