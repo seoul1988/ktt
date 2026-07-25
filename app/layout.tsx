@@ -4,7 +4,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { AuthProvider } from "./components/AuthProvider";
 import InAppBrowserNotice from "./components/InAppBrowserNotice";
-import KakaoOpenBrowserNotice from "./components/KakaoOpenBrowserNotice";
 import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
@@ -182,8 +181,12 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ServiceWorkerRegister />
+
+          {/* Instagram, Facebook, Threads는 영어 안내
+              KakaoTalk은 한글 안내
+              Chrome/Safari는 안내 없음 */}
           <InAppBrowserNotice />
-          <KakaoOpenBrowserNotice />
+
           <VisitorTracker />
           <AppBadgeManager />
           <AppUpdateNotice />
@@ -205,10 +208,7 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
 
-        <Script
-          id="google-analytics-and-ads"
-          strategy="afterInteractive"
-        >
+        <Script id="google-analytics-and-ads" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
 
