@@ -34,7 +34,7 @@ export default function CommunityBottomNav({
   const normalClass = "text-[#172033]";
 
   const navButtonClass =
-    "group flex h-full min-h-[68px] min-w-0 flex-1 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] flex-col items-center justify-center gap-1 px-1 py-2 transition-all duration-150 active:scale-[0.96] active:bg-gray-100 active:opacity-75";
+    "group flex h-full min-h-[68px] min-w-0 flex-1 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] flex-col items-center justify-center gap-1 px-1 py-2 transition-colors duration-150 active:bg-gray-100 active:opacity-90";
 
   /*
    * 기존 페이지에서 activeNav="market", "ads", "deals"를 사용해도
@@ -196,12 +196,12 @@ export default function CommunityBottomNav({
               type="button"
               onClick={handleBack}
               aria-label="Go back"
-              className="flex h-full min-h-[68px] flex-1 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] flex-col items-center justify-center gap-1 px-1 py-2 text-[#172033] transition-all duration-150 active:scale-[0.96] active:bg-gray-100 active:opacity-75"
+              className="group flex h-full min-h-[68px] flex-1 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] flex-col items-center justify-center gap-1 px-1 py-2 text-[#172033] transition-colors duration-150 active:bg-gray-100 active:opacity-90"
             >
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
-                className="h-5 w-5"
+                className="h-5 w-5 transition-transform duration-150 ease-out group-active:-translate-y-0.5 group-active:scale-[1.15]"
                 stroke="currentColor"
                 strokeWidth="1.8"
                 strokeLinecap="round"
@@ -211,7 +211,7 @@ export default function CommunityBottomNav({
                 <path d="M15 18l-6-6 6-6" />
               </svg>
 
-              <span className="mt-0.5 text-[9px] font-medium leading-none">
+              <span className="mt-0.5 text-[9px] font-medium leading-none transition-transform duration-150 ease-out group-active:scale-[1.04]">
                 Back
               </span>
             </button>
@@ -229,7 +229,7 @@ export default function CommunityBottomNav({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              className="h-6 w-6"
+              className="h-6 w-6 transition-transform duration-150 ease-out group-active:-translate-y-0.5 group-active:scale-[1.15]"
               stroke="currentColor"
               strokeWidth="1.8"
               strokeLinecap="round"
@@ -241,7 +241,7 @@ export default function CommunityBottomNav({
               <path d="M9.5 21v-7h5v7" />
             </svg>
 
-            <span className="text-[10px] font-medium leading-none">
+            <span className="text-[10px] font-medium leading-none transition-transform duration-150 ease-out group-active:scale-[1.04]">
               Home
             </span>
           </Link>
@@ -258,7 +258,7 @@ export default function CommunityBottomNav({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              className="h-6 w-6"
+              className="h-6 w-6 transition-transform duration-150 ease-out group-active:-translate-y-0.5 group-active:scale-[1.15]"
               stroke="currentColor"
               strokeWidth="1.8"
               strokeLinecap="round"
@@ -269,7 +269,7 @@ export default function CommunityBottomNav({
               <circle cx="12" cy="10" r="2.5" />
             </svg>
 
-            <span className="text-[10px] font-medium leading-none">
+            <span className="text-[10px] font-medium leading-none transition-transform duration-150 ease-out group-active:scale-[1.04]">
               Map
             </span>
           </Link>
@@ -291,7 +291,7 @@ export default function CommunityBottomNav({
             <svg
   viewBox="0 0 24 24"
   fill="none"
-  className="h-6 w-6"
+  className="h-6 w-6 transition-transform duration-150 ease-out group-active:-translate-y-0.5 group-active:scale-[1.15]"
   stroke="currentColor"
   strokeWidth="2"
   strokeLinecap="round"
@@ -314,7 +314,7 @@ export default function CommunityBottomNav({
   <path d="M13.8 13.8 17.7 17.7" />
 </svg>
 
-            <span className="text-[10px] font-medium leading-none">
+            <span className="text-[10px] font-medium leading-none transition-transform duration-150 ease-out group-active:scale-[1.04]">
               Hub
             </span>
           </Link>
@@ -335,7 +335,7 @@ export default function CommunityBottomNav({
             <svg
               viewBox="0 0 24 24"
               fill="none"
-              className="h-6 w-6"
+              className="h-6 w-6 transition-transform duration-150 ease-out group-active:-translate-y-0.5 group-active:scale-[1.15]"
               stroke="currentColor"
               strokeWidth="1.8"
               strokeLinecap="round"
@@ -349,7 +349,7 @@ export default function CommunityBottomNav({
               <path d="M9 20v-1a3 3 0 016 0v1" />
             </svg>
 
-            <span className="text-[10px] font-medium leading-none">
+            <span className="text-[10px] font-medium leading-none transition-transform duration-150 ease-out group-active:scale-[1.04]">
               Social
             </span>
           </Link>
@@ -367,7 +367,7 @@ export default function CommunityBottomNav({
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
-                className="h-6 w-6"
+                className="h-6 w-6 transition-transform duration-150 ease-out group-active:-translate-y-0.5 group-active:scale-[1.15]"
                 stroke="currentColor"
                 strokeWidth="1.8"
                 strokeLinecap="round"
@@ -378,7 +378,7 @@ export default function CommunityBottomNav({
                 <path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6v.2h-4V21a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 00.3-1.9A1.7 1.7 0 003 14H2.8v-4H3a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 001.9.3A1.7 1.7 0 0010 3V2.8h4V3a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 00-.3 1.9 1.7 1.7 0 001.6 1h.2v4H21a1.7 1.7 0 00-1.6 1z" />
               </svg>
 
-              <span className="text-[10px] font-medium leading-none">
+              <span className="text-[10px] font-medium leading-none transition-transform duration-150 ease-out group-active:scale-[1.04]">
                 Admin
               </span>
             </Link>
@@ -394,7 +394,7 @@ export default function CommunityBottomNav({
               aria-label="Search community directory"
               aria-current={activeNav === "search" ? "page" : undefined}
               className={`
-                pointer-events-auto absolute left-1/2 top-0 -translate-x-1/2
+                group pointer-events-auto absolute left-1/2 top-0 -translate-x-1/2
                 flex h-[68px] w-[68px]
                 touch-manipulation select-none [-webkit-tap-highlight-color:transparent]
                 items-center justify-center
@@ -403,8 +403,8 @@ export default function CommunityBottomNav({
                 bg-[#1B365D]
                 text-white
                 shadow-[0_8px_20px_rgba(23,32,51,0.35)]
-                transition-all duration-150
-                active:scale-[0.94]
+                transition-all duration-150 ease-out
+                active:-translate-y-1 active:scale-[1.10]
                 hover:scale-105
                 ${
                   activeNav === "search"
@@ -416,7 +416,7 @@ export default function CommunityBottomNav({
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
-                className="h-7 w-7 text-white"
+                className="h-7 w-7 text-white transition-transform duration-150 ease-out group-active:scale-[1.12]"
                 stroke="currentColor"
                 strokeWidth="2.2"
                 strokeLinecap="round"
