@@ -490,8 +490,16 @@ async function findExistingSourceUrls(
 }
 
 /**
- * Soompi 최신 6개와 Koreaboo 최신 6개만 DB에 유지합니다.
- * 새 기사가 들어오면 각 출처에서 가장 오래된 기사부터 실제 삭제합니다.
+ * 출처와 카테고리별로 최신 6개만 DB에 유지합니다.
+ *
+ * 최종 유지 개수:
+ * - Soompi K-POP 6개
+ * - Koreaboo K-POP 6개
+ * - Soompi K-Drama 6개
+ * - Koreaboo K-Drama 6개
+ *
+ * 따라서 K-POP 최대 12개, K-Drama 최대 12개,
+ * 전체 최대 24개만 DB에 남습니다.
  */
 async function refreshActivePosts() {
   const supabase = createSupabaseAdminClient();
@@ -499,76 +507,85 @@ async function refreshActivePosts() {
   const sourceGroups = [
     {
       name: "Soompi",
-      applyFilter: (query: any) =>
+      applySourceFilter: (query: any) =>
         query.like("source_name", "Soompi%"),
     },
     {
       name: "Koreaboo",
-      applyFilter: (query: any) =>
+      applySourceFilter: (query: any) =>
         query.eq("source_name", "Koreaboo"),
     },
   ];
 
-  const keepCountPerSource = 6;
+  const categories: NewsCategory[] = [
+    "kpop",
+    "kdrama",
+  ];
+
+  const keepCountPerSourceAndCategory = 6;
 
   for (const sourceGroup of sourceGroups) {
-    let loadQuery = supabase
-      .from("todays_korea_posts")
-      .select("id")
-      .order("published_at", {
-        ascending: false,
-        nullsFirst: false,
-      })
-      .order("created_at", {
-        ascending: false,
-      });
-
-    loadQuery = sourceGroup.applyFilter(loadQuery);
-
-    const { data: sourcePosts, error: loadError } =
-      await loadQuery;
-
-    if (loadError) {
-      throw new Error(
-        `Post load failed for ${sourceGroup.name}: ${loadError.message}`,
-      );
-    }
-
-    const posts = sourcePosts || [];
-
-    const keepIds = posts
-      .slice(0, keepCountPerSource)
-      .map((post: any) => post.id);
-
-    const deleteIds = posts
-      .slice(keepCountPerSource)
-      .map((post: any) => post.id);
-
-    if (deleteIds.length > 0) {
-      const { error: deleteError } = await supabase
+    for (const category of categories) {
+      let loadQuery = supabase
         .from("todays_korea_posts")
-        .delete()
-        .in("id", deleteIds);
+        .select("id")
+        .eq("category", category)
+        .order("published_at", {
+          ascending: false,
+          nullsFirst: false,
+        })
+        .order("created_at", {
+          ascending: false,
+        });
 
-      if (deleteError) {
+      loadQuery =
+        sourceGroup.applySourceFilter(loadQuery);
+
+      const { data: sourcePosts, error: loadError } =
+        await loadQuery;
+
+      if (loadError) {
         throw new Error(
-          `Old post delete failed for ${sourceGroup.name}: ${deleteError.message}`,
+          `Post load failed for ${sourceGroup.name} ${category}: ${loadError.message}`,
         );
       }
-    }
 
-    if (keepIds.length > 0) {
-      const { error: activateError } = await supabase
-        .from("todays_korea_posts")
-        .update({
-          is_active: true,
-        })
-        .in("id", keepIds);
+      const posts = sourcePosts || [];
 
-      if (activateError) {
-        throw new Error(
-          `Activate failed for ${sourceGroup.name}: ${activateError.message}`,
-        );
+      const keepIds = posts
+        .slice(0, keepCountPerSourceAndCategory)
+        .map((post: any) => post.id);
+
+      const deleteIds = posts
+        .slice(keepCountPerSourceAndCategory)
+        .map((post: any) => post.id);
+
+      if (deleteIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("todays_korea_posts")
+          .delete()
+          .in("id", deleteIds);
+
+        if (deleteError) {
+          throw new Error(
+            `Old post delete failed for ${sourceGroup.name} ${category}: ${deleteError.message}`,
+          );
+        }
+      }
+
+      if (keepIds.length > 0) {
+        const { error: activateError } = await supabase
+          .from("todays_korea_posts")
+          .update({
+            is_active: true,
+          })
+          .in("id", keepIds);
+
+        if (activateError) {
+          throw new Error(
+            `Activate failed for ${sourceGroup.name} ${category}: ${activateError.message}`,
+          );
+        }
       }
     }
   }
@@ -589,8 +606,7 @@ async function runTodayKoreaUpdate() {
   const collectedArticles = feedResults.flat();
 
   /*
-   * Soompi는 TV & Film 피드와 전체 피드를 합쳐 중복을 제거한 뒤
-   * K-POP 3개 + K-Drama 3개를 우선 선택하여 총 6개를 구성합니다.
+   * Soompi TV & Film에 포함된 URL은 K-Drama로 우선 분류합니다.
    */
   const soompiArticles = collectedArticles.filter(
     (article) =>
@@ -614,56 +630,60 @@ async function runTodayKoreaUpdate() {
       !soompiDramaUrlSet.has(article.sourceUrl),
   );
 
+  /*
+   * 출처와 카테고리별로 최신 6개씩 선택합니다.
+   *
+   * - Soompi K-POP 6개
+   * - Soompi K-Drama 6개
+   * - Koreaboo K-POP 6개
+   * - Koreaboo K-Drama 6개
+   */
   const soompiKpopCandidates =
     selectLatestUniqueArticles(
       soompiKpopArticles,
-      8,
+      6,
     );
 
   const soompiDramaCandidates =
     selectLatestUniqueArticles(
       soompiDramaArticles,
-      8,
-    );
-
-  const preferredSoompiCandidates = [
-    ...soompiKpopCandidates.slice(0, 3),
-    ...soompiDramaCandidates.slice(0, 3),
-  ];
-
-  const soompiFallbackCandidates =
-    selectLatestUniqueArticles(
-      [
-        ...soompiKpopCandidates.slice(3),
-        ...soompiDramaCandidates.slice(3),
-      ],
-      12,
-    );
-
-  const soompiCandidates =
-    selectLatestUniqueArticles(
-      [
-        ...preferredSoompiCandidates,
-        ...soompiFallbackCandidates,
-      ],
       6,
     );
 
-  /*
-   * Koreaboo에서는 최신 고유 기사 6개를 선택합니다.
-   */
-  const koreabooCandidates =
+  const koreabooArticles = collectedArticles.filter(
+    (article) =>
+      article.sourceName === "Koreaboo",
+  );
+
+  const koreabooKpopCandidates =
     selectLatestUniqueArticles(
-      collectedArticles.filter(
-        (article) =>
-          article.sourceName === "Koreaboo",
+      koreabooArticles.filter(
+        (article) => article.category === "kpop",
       ),
       6,
     );
 
+  const koreabooDramaCandidates =
+    selectLatestUniqueArticles(
+      koreabooArticles.filter(
+        (article) => article.category === "kdrama",
+      ),
+      6,
+    );
+
+  const kpopCandidates = [
+    ...soompiKpopCandidates,
+    ...koreabooKpopCandidates,
+  ];
+
+  const kdramaCandidates = [
+    ...soompiDramaCandidates,
+    ...koreabooDramaCandidates,
+  ];
+
   const candidates = [
-    ...soompiCandidates,
-    ...koreabooCandidates,
+    ...kpopCandidates,
+    ...kdramaCandidates,
   ];
 
   const existingSourceUrls =
@@ -671,24 +691,35 @@ async function runTodayKoreaUpdate() {
       candidates.map((article) => article.sourceUrl),
     );
 
-  /*
-   * 출처별로 새 기사 최대 6개를 저장합니다.
-   * 저장 후 refreshActivePosts()가 각 출처의 최신 6개만 남깁니다.
-   */
-  const newSoompiArticles = soompiCandidates.filter(
-    (article) =>
-      !existingSourceUrls.has(article.sourceUrl),
-  );
+  const newSoompiKpopArticles =
+    soompiKpopCandidates.filter(
+      (article) =>
+        !existingSourceUrls.has(article.sourceUrl),
+    );
 
-  const newKoreabooArticles =
-    koreabooCandidates.filter(
+  const newSoompiDramaArticles =
+    soompiDramaCandidates.filter(
+      (article) =>
+        !existingSourceUrls.has(article.sourceUrl),
+    );
+
+  const newKoreabooKpopArticles =
+    koreabooKpopCandidates.filter(
+      (article) =>
+        !existingSourceUrls.has(article.sourceUrl),
+    );
+
+  const newKoreabooDramaArticles =
+    koreabooDramaCandidates.filter(
       (article) =>
         !existingSourceUrls.has(article.sourceUrl),
     );
 
   const newArticles = [
-    ...newSoompiArticles,
-    ...newKoreabooArticles,
+    ...newSoompiKpopArticles,
+    ...newSoompiDramaArticles,
+    ...newKoreabooKpopArticles,
+    ...newKoreabooDramaArticles,
   ];
 
   const savedPosts: any[] = [];
@@ -706,6 +737,19 @@ async function runTodayKoreaUpdate() {
         imageUrl = await fetchArticleImage(
           article.sourceUrl,
         );
+      }
+
+      /*
+       * RSS와 원본 기사 페이지 어디에서도 이미지를 찾지 못하면
+       * DB에 저장하지 않고 건너뜁니다.
+       */
+      if (!imageUrl) {
+        console.log(
+          "Today’s Korea article skipped because no image was found:",
+          article.title,
+        );
+
+        continue;
       }
 
       const { data, error } = await supabase
@@ -825,10 +869,26 @@ async function runTodayKoreaUpdate() {
     failed: failedPosts.length,
     failedPosts,
     sources: {
-      soompiCandidates: soompiCandidates.length,
-      koreabooCandidates: koreabooCandidates.length,
-      newSoompi: newSoompiArticles.length,
-      newKoreaboo: newKoreabooArticles.length,
+      soompiKpopCandidates:
+        soompiKpopCandidates.length,
+      soompiDramaCandidates:
+        soompiDramaCandidates.length,
+      koreabooKpopCandidates:
+        koreabooKpopCandidates.length,
+      koreabooDramaCandidates:
+        koreabooDramaCandidates.length,
+      totalKpopCandidates:
+        kpopCandidates.length,
+      totalDramaCandidates:
+        kdramaCandidates.length,
+      newSoompiKpop:
+        newSoompiKpopArticles.length,
+      newSoompiDrama:
+        newSoompiDramaArticles.length,
+      newKoreabooKpop:
+        newKoreabooKpopArticles.length,
+      newKoreabooDrama:
+        newKoreabooDramaArticles.length,
     },
     activePosts: activePosts || [],
   };
@@ -857,7 +917,7 @@ export async function GET(request: NextRequest) {
       {
         ok: true,
         message:
-          "Today’s Korea RSS update completed. Soompi 6 and Koreaboo 6 are retained.",
+          "Today’s Korea RSS update completed. K-POP 12 and K-Drama 12 are retained.",
         ...result,
       },
       {
