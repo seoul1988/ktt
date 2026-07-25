@@ -240,6 +240,12 @@ export default function CommunityHubPage() {
   const [latestNewsTitle, setLatestNewsTitle] =
     useState("");
 
+  const [latestNewsThumbnail, setLatestNewsThumbnail] =
+    useState("");
+
+  const [latestNewsPublished, setLatestNewsPublished] =
+    useState(true);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -311,7 +317,9 @@ export default function CommunityHubPage() {
        */
       const { data, error } = await supabase
         .from("business_news")
-        .select("title")
+        .select(
+          "title, thumbnail_url, image_url, images, published",
+        )
         .not("title", "is", null)
         .order("created_at", {
           ascending: false,
@@ -330,11 +338,32 @@ export default function CommunityHubPage() {
         );
 
         setLatestNewsTitle("");
+        setLatestNewsThumbnail("");
+        setLatestNewsPublished(true);
         return;
       }
 
       setLatestNewsTitle(
         String(data?.title || "").trim(),
+      );
+
+      setLatestNewsPublished(
+        data?.published !== false,
+      );
+
+      const firstOriginalImage =
+        Array.isArray(data?.images) &&
+        data.images.length > 0
+          ? String(data.images[0] || "").trim()
+          : "";
+
+      setLatestNewsThumbnail(
+        String(
+          data?.thumbnail_url ||
+            data?.image_url ||
+            firstOriginalImage ||
+            "",
+        ).trim(),
       );
     }
 
@@ -425,78 +454,115 @@ export default function CommunityHubPage() {
               hover:-translate-y-0.5
               hover:shadow-[0_6px_18px_rgba(23,32,51,0.10)]
               active:scale-[0.97] active:bg-gray-50
-              ${item.wide ? "col-span-2 min-h-[82px]" : ""}
+              ${item.wide ? "col-span-2 min-h-[96px]" : ""}
             `;
 
             const cardContent = (
               <>
                 {showNewBadge && (
-                  <span className="absolute right-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-extrabold text-white shadow-sm">
+                  <span className="absolute right-2 top-2 z-10 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-extrabold text-white shadow-sm">
                     NEW
                   </span>
                 )}
 
-                <div
-                  className={
-                    item.wide
-                      ? "flex w-full items-center justify-center gap-4"
-                      : "flex flex-col items-center"
-                  }
-                >
-                  <div
-                    className={`flex items-center justify-center text-[#172033] ${
-                      item.wide
-                        ? "h-10 w-10"
-                        : "h-12 w-12"
-                    }`}
-                  >
-                    <HubIcon
-                      name={item.icon}
-                      className={
-                        item.wide
-                          ? "h-9 w-9"
-                          : "h-11 w-11"
-                      }
-                    />
-                  </div>
+                {item.badgeKey === "news" && latestNewsTitle ? (
+                  <div className="grid w-full grid-cols-[44px_minmax(0,1fr)_64px] items-center gap-3 text-left">
+                    <div className="flex h-11 w-11 items-center justify-center text-[#172033]">
+                      <HubIcon
+                        name="news"
+                        className="h-9 w-9"
+                      />
+                    </div>
 
+                    <div className="min-w-0">
+                      <h2 className="text-[13px] font-extrabold leading-tight text-[#172033]">
+                        {item.title}
+                      </h2>
+
+                      <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                        {item.subtitle}
+                      </p>
+
+                      <p
+                        title={latestNewsTitle}
+                        className="mt-2 line-clamp-2 text-[13px] font-extrabold leading-[18px] text-[#1B365D]"
+                      >
+                        📰 {latestNewsTitle}
+                      </p>
+                    </div>
+
+                    <div className="flex h-16 w-16 items-center justify-end">
+                      {latestNewsThumbnail ? (
+                        <div className="relative h-16 w-16 overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-sm">
+                          <img
+                            src={latestNewsThumbnail}
+                            alt={latestNewsTitle}
+                            loading="lazy"
+                            className={`h-full w-full object-cover transition duration-300 ${
+                              latestNewsPublished
+                                ? ""
+                                : "scale-[1.08] blur-[3px] brightness-[0.72]"
+                            }`}
+                            onError={(event) => {
+                              event.currentTarget.style.display =
+                                "none";
+                            }}
+                          />
+
+                          {!latestNewsPublished && (
+                            <div
+                              className="pointer-events-none absolute inset-0 bg-black/10"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="h-16 w-16" />
+                      )}
+                    </div>
+                  </div>
+                ) : (
                   <div
                     className={
                       item.wide
-                        ? "text-left"
-                        : "mt-2"
+                        ? "flex w-full items-center justify-center gap-4"
+                        : "flex flex-col items-center"
                     }
                   >
-                    <h2 className="text-[13px] font-extrabold leading-tight text-[#172033]">
-                      {item.title}
-                    </h2>
+                    <div
+                      className={`flex items-center justify-center text-[#172033] ${
+                        item.wide
+                          ? "h-10 w-10"
+                          : "h-12 w-12"
+                      }`}
+                    >
+                      <HubIcon
+                        name={item.icon}
+                        className={
+                          item.wide
+                            ? "h-9 w-9"
+                            : "h-11 w-11"
+                        }
+                      />
+                    </div>
 
-                    <p className="mt-1 text-[10px] font-semibold text-gray-500">
-                      {item.subtitle}
-                    </p>
+                    <div
+                      className={
+                        item.wide
+                          ? "text-left"
+                          : "mt-2"
+                      }
+                    >
+                      <h2 className="text-[13px] font-extrabold leading-tight text-[#172033]">
+                        {item.title}
+                      </h2>
 
-                    {item.badgeKey === "news" && latestNewsTitle && (
-  <p
-    title={latestNewsTitle}
-    className="
-      mt-2
-      max-w-[320px]
-      truncate
-      rounded-lg
-      bg-[#EAF0F7]
-      px-3
-      py-1.5
-      text-[13px]
-      font-extrabold
-      leading-5
-      text-[#1B365D]
-    "
-  >
-    📰 {latestNewsTitle}
-  </p>
-)}
+                      <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                        {item.subtitle}
+                      </p>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             );
 

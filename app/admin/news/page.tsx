@@ -39,6 +39,7 @@ type NewsItem = {
   content: string;
   category: string;
   image_url: string | null;
+  thumbnail_url: string | null;
   images: string[] | null;
   source_url: string | null;
   published: boolean;
@@ -52,6 +53,7 @@ const createEmptyForm = (isAdmin = false) => ({
   content: "",
   category: isAdmin ? "비즈니스뉴스" : "공연/문화",
   image_url: "",
+  thumbnail_url: "",
   images: [] as string[],
   source_url: "",
   published: true,
@@ -369,6 +371,7 @@ function AdminBusinessNewsContent() {
         ? item.category
         : "공연/문화",
       image_url: item.image_url || "",
+      thumbnail_url: item.thumbnail_url || "",
       images:
         Array.isArray(item.images) &&
         item.images.length > 0
@@ -502,6 +505,172 @@ function AdminBusinessNewsContent() {
         lastModified: Date.now(),
       },
     );
+  }
+
+  async function createThumbnailBlobFromUrl(
+    imageUrl: string,
+  ) {
+    const response = await fetch(imageUrl, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `대표 이미지를 불러오지 못했습니다. (${response.status})`,
+      );
+    }
+
+    const sourceBlob = await response.blob();
+
+    if (!sourceBlob.type.startsWith("image/")) {
+      throw new Error(
+        "대표 이미지 주소가 이미지 파일이 아닙니다.",
+      );
+    }
+
+    const imageBitmap =
+      await createImageBitmap(sourceBlob);
+
+    const THUMBNAIL_SIZE = 480;
+    const sourceWidth = imageBitmap.width;
+    const sourceHeight = imageBitmap.height;
+    const sourceRatio = sourceWidth / sourceHeight;
+
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceRatio > 1) {
+      cropWidth = sourceHeight;
+      cropX = Math.round(
+        (sourceWidth - cropWidth) / 2,
+      );
+    } else if (sourceRatio < 1) {
+      cropHeight = sourceWidth;
+      cropY = Math.round(
+        (sourceHeight - cropHeight) / 2,
+      );
+    }
+
+    const canvas =
+      document.createElement("canvas");
+
+    canvas.width = THUMBNAIL_SIZE;
+    canvas.height = THUMBNAIL_SIZE;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      imageBitmap.close();
+      throw new Error(
+        "썸네일 캔버스를 만들 수 없습니다.",
+      );
+    }
+
+    context.drawImage(
+      imageBitmap,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      THUMBNAIL_SIZE,
+      THUMBNAIL_SIZE,
+    );
+
+    imageBitmap.close();
+
+    return await new Promise<Blob>(
+      (resolve, reject) => {
+        canvas.toBlob(
+          (result) => {
+            if (result) {
+              resolve(result);
+            } else {
+              reject(
+                new Error(
+                  "썸네일 생성에 실패했습니다.",
+                ),
+              );
+            }
+          },
+          "image/webp",
+          0.8,
+        );
+      },
+    );
+  }
+
+  async function uploadNewsThumbnail(
+    imageUrl: string,
+  ) {
+    if (!imageUrl) {
+      return "";
+    }
+
+    if (imageUrl === PDF_PLACEHOLDER_IMAGE) {
+      return PDF_PLACEHOLDER_IMAGE;
+    }
+
+    const thumbnailBlob =
+      await createThumbnailBlobFromUrl(imageUrl);
+
+    const thumbnailPath =
+      `thumbnails/${userId ?? "anonymous"}/` +
+      `${Date.now()}-${crypto.randomUUID()}.webp`;
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from("business-news")
+        .upload(
+          thumbnailPath,
+          thumbnailBlob,
+          {
+            cacheControl: "31536000",
+            upsert: false,
+            contentType: "image/webp",
+          },
+        );
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("business-news")
+      .getPublicUrl(thumbnailPath);
+
+    return data.publicUrl;
+  }
+
+  async function removeStoredThumbnail(
+    thumbnailUrl: string | null | undefined,
+  ) {
+    const url = String(thumbnailUrl ?? "").trim();
+
+    if (!url || url === PDF_PLACEHOLDER_IMAGE) {
+      return;
+    }
+
+    const storagePath =
+      getStoragePathFromPublicUrl(url);
+
+    if (!storagePath?.startsWith("thumbnails/")) {
+      return;
+    }
+
+    const { error } = await supabase.storage
+      .from("business-news")
+      .remove([storagePath]);
+
+    if (error) {
+      console.error(
+        "Old thumbnail delete error:",
+        error,
+      );
+    }
   }
 
   function getStoragePathFromPublicUrl(
@@ -892,6 +1061,7 @@ function AdminBusinessNewsContent() {
             current.image_url ||
             nextImages[0] ||
             "",
+          thumbnail_url: "",
         };
       });
     } catch (error) {
@@ -967,9 +1137,32 @@ function AdminBusinessNewsContent() {
         images: nextImages,
         image_url:
           nextRepresentativeImage,
+        thumbnail_url: "",
       }));
 
       if (editingId) {
+        const currentItem = items.find(
+          (item) => item.id === editingId,
+        );
+
+        let nextThumbnailUrl = "";
+
+        if (nextRepresentativeImage) {
+          try {
+            nextThumbnailUrl =
+              await uploadNewsThumbnail(
+                nextRepresentativeImage,
+              );
+          } catch (thumbnailError) {
+            console.error(
+              "Thumbnail refresh error:",
+              thumbnailError,
+            );
+            nextThumbnailUrl =
+              nextRepresentativeImage;
+          }
+        }
+
         const {
           error: updateError,
         } = await supabase
@@ -979,11 +1172,22 @@ function AdminBusinessNewsContent() {
             image_url:
               nextRepresentativeImage ||
               null,
+            thumbnail_url:
+              nextThumbnailUrl || null,
           })
           .eq("id", editingId);
 
         if (updateError) {
           throw updateError;
+        }
+
+        if (
+          currentItem?.thumbnail_url &&
+          currentItem.thumbnail_url !== nextThumbnailUrl
+        ) {
+          await removeStoredThumbnail(
+            currentItem.thumbnail_url,
+          );
         }
 
         setItems(
@@ -997,6 +1201,9 @@ function AdminBusinessNewsContent() {
                         nextImages,
                       image_url:
                         nextRepresentativeImage ||
+                        null,
+                      thumbnail_url:
+                        nextThumbnailUrl ||
                         null,
                     }
                   : item,
@@ -1025,6 +1232,7 @@ function AdminBusinessNewsContent() {
     setForm((current) => ({
       ...current,
       image_url: imageUrl,
+      thumbnail_url: "",
     }));
   }
 
@@ -1179,6 +1387,36 @@ function AdminBusinessNewsContent() {
           ? PDF_PLACEHOLDER_IMAGE
           : null);
 
+      let nextThumbnailUrl = "";
+
+      if (representativeImageUrl) {
+        try {
+          nextThumbnailUrl =
+            await uploadNewsThumbnail(
+              representativeImageUrl,
+            );
+        } catch (thumbnailError) {
+          console.error(
+            "News thumbnail creation error:",
+            thumbnailError,
+          );
+
+          /*
+           * 외부 이미지가 CORS로 차단되는 경우에는
+           * 원본 주소를 임시 썸네일로 사용합니다.
+           */
+          nextThumbnailUrl =
+            representativeImageUrl;
+        }
+      }
+
+      const previousThumbnailUrl =
+        editingId
+          ? items.find(
+              (item) => item.id === editingId,
+            )?.thumbnail_url || ""
+          : "";
+
       const payload = {
         user_id: userId,
         title: form.title.trim(),
@@ -1189,6 +1427,8 @@ function AdminBusinessNewsContent() {
           : "공연/문화",
         image_url:
           representativeImageUrl,
+        thumbnail_url:
+          nextThumbnailUrl || null,
         images: form.images,
         source_url:
           form.source_url.trim() ||
@@ -1255,6 +1495,16 @@ function AdminBusinessNewsContent() {
         return;
       }
 
+      if (
+        editingId &&
+        previousThumbnailUrl &&
+        previousThumbnailUrl !== nextThumbnailUrl
+      ) {
+        await removeStoredThumbnail(
+          previousThumbnailUrl,
+        );
+      }
+
       router.push("/community/news");
       router.refresh();
     } catch (error) {
@@ -1298,6 +1548,8 @@ function AdminBusinessNewsContent() {
               ? targetItem.images
               : []),
             targetItem?.image_url ||
+              "",
+            targetItem?.thumbnail_url ||
               "",
           ].filter(Boolean),
         ),
@@ -1877,6 +2129,7 @@ function AdminBusinessNewsContent() {
                     image_url:
                       event.target
                         .value,
+                    thumbnail_url: "",
                   })
                 }
                 placeholder="비워두면 첨부 이미지 또는 본문 이미지 자동 사용"
