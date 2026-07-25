@@ -40,12 +40,15 @@ export default function AdminPage() {
     if (ownerResult.error) {
       console.error("Owner count error:", ownerResult.error);
     }
+
     if (eventResult.error) {
       console.error("Event count error:", eventResult.error);
     }
+
     if (couponResult.error) {
       console.error("Coupon count error:", couponResult.error);
     }
+
     if (adResult.error) {
       console.error("Ad count error:", adResult.error);
     }
@@ -67,7 +70,13 @@ export default function AdminPage() {
   };
 
   const menuClass =
-    "relative flex min-h-[92px] flex-col items-center justify-center overflow-visible rounded-2xl bg-[#3C465A] px-3 py-4 text-center text-sm font-bold text-white shadow-sm transition hover:bg-[#30394B]";
+    "group relative flex min-h-[92px] touch-manipulation flex-col items-center justify-center overflow-visible rounded-2xl bg-[#3C465A] px-3 py-4 text-center text-sm font-bold text-white shadow-sm outline-none transition-[transform,background-color,box-shadow] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] [-webkit-tap-highlight-color:transparent] hover:bg-[#30394B] focus-visible:ring-2 focus-visible:ring-[#172033] focus-visible:ring-offset-2 active:-translate-y-0.5 active:scale-[1.03] active:bg-[#30394B] active:shadow-md";
+
+  const iconClass =
+    "text-2xl will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-active:-translate-y-0.5 group-active:scale-[1.16]";
+
+  const labelClass =
+    "mt-2 will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-active:scale-[1.04]";
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28">
@@ -75,7 +84,7 @@ export default function AdminPage() {
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
           <Link
             href="/community"
-            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow"
+            className="touch-manipulation rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] [-webkit-tap-highlight-color:transparent] active:scale-[1.05]"
           >
             ← Back
           </Link>
@@ -90,55 +99,97 @@ export default function AdminPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Link href="/admin/owner-requests" className={menuClass}>
-            <span className="text-2xl">👤</span>
-            <span className="mt-2">Owner Requests</span>
+          <Link
+            href="/admin/owner-requests"
+            className={menuClass}
+          >
+            <span className={iconClass}>👤</span>
+            <span className={labelClass}>
+              Owner Requests
+            </span>
             <Badge count={ownerRequestCount} />
           </Link>
 
-          <Link href="/admin/owner-business-matching" className={menuClass}>
-            <span className="text-2xl">🔗</span>
-            <span className="mt-2">Link Owner</span>
+          <Link
+            href="/admin/owner-business-matching"
+            className={menuClass}
+          >
+            <span className={iconClass}>🔗</span>
+            <span className={labelClass}>
+              Link Owner
+            </span>
           </Link>
 
-          <Link href="/admin/event-requests" className={menuClass}>
-            <span className="text-2xl">🎉</span>
-            <span className="mt-2">Event Requests</span>
+          <Link
+            href="/admin/event-requests"
+            className={menuClass}
+          >
+            <span className={iconClass}>🎉</span>
+            <span className={labelClass}>
+              Event Requests
+            </span>
             <Badge count={eventRequestCount} />
           </Link>
 
-          <Link href="/admin/coupon-requests" className={menuClass}>
-            <span className="text-2xl">🎟️</span>
-            <span className="mt-2">Coupon Requests</span>
+          <Link
+            href="/admin/coupon-requests"
+            className={menuClass}
+          >
+            <span className={iconClass}>🎟️</span>
+            <span className={labelClass}>
+              Coupon Requests
+            </span>
             <Badge count={couponRequestCount} />
           </Link>
 
-          <Link href="/admin/businesses" className={menuClass}>
-            <span className="text-2xl">🏪</span>
-            <span className="mt-2">Businesses</span>
+          <Link
+            href="/admin/businesses"
+            className={menuClass}
+          >
+            <span className={iconClass}>🏪</span>
+            <span className={labelClass}>
+              Businesses
+            </span>
           </Link>
 
-          <Link href="/admin/categories" className={menuClass}>
-            <span className="text-2xl">🏷️</span>
-            <span className="mt-2">Categories</span>
+          <Link
+            href="/admin/categories"
+            className={menuClass}
+          >
+            <span className={iconClass}>🏷️</span>
+            <span className={labelClass}>
+              Categories
+            </span>
           </Link>
 
-          <Link href="/admin/users" className={menuClass}>
-            <span className="text-2xl">👥</span>
-            <span className="mt-2">Members</span>
+          <Link
+            href="/admin/users"
+            className={menuClass}
+          >
+            <span className={iconClass}>👥</span>
+            <span className={labelClass}>
+              Members
+            </span>
           </Link>
 
-          <Link href="/admin/visitors" className={menuClass}>
-            <span className="text-2xl">📊</span>
-            <span className="mt-2">Visitor Statistics</span>
+          <Link
+            href="/admin/visitors"
+            className={menuClass}
+          >
+            <span className={iconClass}>📊</span>
+            <span className={labelClass}>
+              Visitor Statistics
+            </span>
           </Link>
 
           <Link
             href="/admin/community/ads/magazines"
-            className={`${menuClass} col-span-2 bg-[#B83A2F] hover:bg-[#9E3027]`}
+            className={`${menuClass} col-span-2 bg-[#B83A2F] hover:bg-[#9E3027] active:bg-[#9E3027]`}
           >
-            <span className="text-2xl">📢</span>
-            <span className="mt-2">광고 관리</span>
+            <span className={iconClass}>📢</span>
+            <span className={labelClass}>
+              광고 관리
+            </span>
             <Badge count={adRequestCount} />
           </Link>
         </div>
