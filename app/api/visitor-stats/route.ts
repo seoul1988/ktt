@@ -14,6 +14,7 @@ function noStoreHeaders() {
 
 export async function GET() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
@@ -23,7 +24,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          "Supabase environment variables are missing. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (recommended) or NEXT_PUBLIC_SUPABASE_ANON_KEY.",
+          "Supabase environment variables are missing. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
       },
       {
         status: 500,
@@ -33,28 +34,33 @@ export async function GET() {
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-      global: {
-        headers: {
-          "X-Client-Info": "ktowntriangle-visitor-stats",
+    const supabase = createClient(
+      supabaseUrl,
+      supabaseKey,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+        global: {
+          headers: {
+            "X-Client-Info":
+              "ktowntriangle-visitor-stats",
+          },
         },
       },
-    });
+    );
 
-    const { count, error } = await supabase
-      .from("visitor_logs")
-      .select("id", {
-        count: "exact",
-        head: true,
-      });
+    const { data, error } = await supabase.rpc(
+      "get_all_time_hourly_visits",
+    );
 
     if (error) {
-      console.error("visitor_logs count query failed:", error);
+      console.error(
+        "get_all_time_hourly_visits RPC failed:",
+        error,
+      );
 
       return NextResponse.json(
         {
@@ -67,10 +73,16 @@ export async function GET() {
       );
     }
 
-    if (typeof count !== "number") {
+    const totalVisits = Number(data);
+
+    if (
+      !Number.isFinite(totalVisits) ||
+      totalVisits < 0
+    ) {
       return NextResponse.json(
         {
-          error: "Supabase did not return an exact visitor count.",
+          error:
+            "Supabase returned an invalid visitor count.",
         },
         {
           status: 500,
@@ -81,7 +93,9 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        totalVisits: count,
+        totalVisits,
+        countingMethod:
+          "One visit per visitor_key per one-hour inactivity session",
       },
       {
         status: 200,
@@ -89,7 +103,10 @@ export async function GET() {
       },
     );
   } catch (error) {
-    console.error("Failed to load visitor statistics:", error);
+    console.error(
+      "Failed to load visitor statistics:",
+      error,
+    );
 
     return NextResponse.json(
       {
