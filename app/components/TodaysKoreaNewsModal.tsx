@@ -190,15 +190,24 @@ export default function TodaysKoreaNewsModal({
                       type="button"
                       data-news-card
                       onClick={() => setSelectedId(post.id)}
-                      className="w-[calc((100%-12px)/2)] min-w-[calc((100%-12px)/2)] shrink-0 snap-start text-left sm:w-[145px] sm:min-w-[145px]"
+                      className="w-[150px] min-w-[150px] shrink-0 snap-start text-left sm:w-[165px] sm:min-w-[165px]"
                     >
-                      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-gray-100">
+                      <div className="relative h-[120px] w-full overflow-hidden rounded-xl bg-gray-100">
                         <img
                           src={post.image_url || "/event.png"}
                           alt={post.title}
                           loading="lazy"
                           decoding="async"
-                          className="h-full w-full object-cover object-center transition duration-300 hover:scale-105"
+                          className="absolute inset-0 block h-full w-full max-w-none object-cover object-center transition duration-300 hover:scale-105"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            minWidth: "100%",
+                            minHeight: "100%",
+                            maxWidth: "none",
+                            objectFit: "cover",
+                            objectPosition: "center",
+                          }}
                           onError={(event) => {
                             event.currentTarget.src = "/event.png";
                           }}
