@@ -12,20 +12,25 @@ export default function InAppBrowserNotice() {
       const alreadyShown =
         window.sessionStorage.getItem(NOTICE_SESSION_KEY) === "true";
 
-      if (alreadyShown) return;
+      if (alreadyShown) {
+        return;
+      }
 
       const ua = navigator.userAgent || "";
 
       const isInstagram = /Instagram/i.test(ua);
       const isFacebook = /FBAN|FBAV/i.test(ua);
+      const isThreads = /Threads|Barcelona/i.test(ua);
 
-      if (!isInstagram && !isFacebook) {
+      // Instagram, Facebook, Threads에서만 영어 안내창 표시
+      if (!(isInstagram || isFacebook || isThreads)) {
         return;
       }
 
       setShow(true);
       window.sessionStorage.setItem(NOTICE_SESSION_KEY, "true");
-    } catch {
+    } catch (error) {
+      console.error("InAppBrowserNotice error:", error);
       setShow(false);
     }
   }, []);
@@ -34,7 +39,9 @@ export default function InAppBrowserNotice() {
     setShow(false);
   }
 
-  if (!show) return null;
+  if (!show) {
+    return null;
+  }
 
   return (
     <div

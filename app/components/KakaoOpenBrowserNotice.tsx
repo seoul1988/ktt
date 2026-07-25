@@ -12,7 +12,9 @@ export default function KakaoOpenBrowserNotice() {
       const alreadyShown =
         window.sessionStorage.getItem(NOTICE_SESSION_KEY) === "true";
 
-      if (alreadyShown) return;
+      if (alreadyShown) {
+        return;
+      }
 
       const ua = navigator.userAgent || "";
       const isKakaoTalk = /KAKAOTALK/i.test(ua);
@@ -23,7 +25,8 @@ export default function KakaoOpenBrowserNotice() {
 
       setShow(true);
       window.sessionStorage.setItem(NOTICE_SESSION_KEY, "true");
-    } catch {
+    } catch (error) {
+      console.error("KakaoOpenBrowserNotice error:", error);
       setShow(false);
     }
   }, []);
@@ -32,7 +35,9 @@ export default function KakaoOpenBrowserNotice() {
     setShow(false);
   }
 
-  if (!show) return null;
+  if (!show) {
+    return null;
+  }
 
   return (
     <div
