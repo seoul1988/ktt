@@ -28,6 +28,41 @@ function normalizeSearch(value: string | number | null | undefined) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+function getUserStatus(user: UserProfile) {
+  if (user.owner_status === "pending") {
+    return {
+      label: "Pending",
+      className: "bg-amber-100 text-amber-700",
+    };
+  }
+
+  if (user.owner_status === "approved" || user.role === "owner") {
+    return {
+      label: "Owner",
+      className: "bg-green-100 text-green-700",
+    };
+  }
+
+  if (user.owner_status === "rejected") {
+    return {
+      label: "Rejected",
+      className: "bg-red-100 text-red-700",
+    };
+  }
+
+  if (user.role === "admin") {
+    return {
+      label: "Admin",
+      className: "bg-purple-100 text-purple-700",
+    };
+  }
+
+  return {
+    label: "Member",
+    className: "bg-gray-100 text-gray-600",
+  };
+}
+
 export default function OwnerBusinessMatchingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,14 +80,24 @@ export default function OwnerBusinessMatchingPage() {
     loadData();
   }, []);
 
-  const filteredUsers = useMemo(() => {
-    if (selectedUserId) {
-      return users.filter((user) => user.id === selectedUserId);
-    }
+  const selectedUser = useMemo(() => {
+    return users.find((user) => user.id === selectedUserId) || null;
+  }, [users, selectedUserId]);
 
+  const selectedBusiness = useMemo(() => {
+    return (
+      businesses.find(
+        (business) => String(business.id) === selectedBusinessId,
+      ) || null
+    );
+  }, [businesses, selectedBusinessId]);
+
+  const filteredUsers = useMemo(() => {
     const keyword = normalizeSearch(ownerSearch);
 
-    if (!keyword) return users;
+    if (!keyword) {
+      return users;
+    }
 
     return users.filter((user) => {
       const searchableText = [
@@ -61,24 +106,21 @@ export default function OwnerBusinessMatchingPage() {
         user.phone,
         user.requested_business_name,
         user.owner_status,
+        user.role,
       ]
         .map(normalizeSearch)
         .join(" ");
 
       return searchableText.includes(keyword);
     });
-  }, [users, ownerSearch, selectedUserId]);
+  }, [users, ownerSearch]);
 
   const filteredBusinesses = useMemo(() => {
-    if (selectedBusinessId) {
-      return businesses.filter(
-        (business) => String(business.id) === selectedBusinessId
-      );
-    }
-
     const keyword = normalizeSearch(businessSearch);
 
-    if (!keyword) return businesses;
+    if (!keyword) {
+      return businesses;
+    }
 
     return businesses.filter((business) => {
       const searchableText = [
@@ -93,75 +135,120 @@ export default function OwnerBusinessMatchingPage() {
 
       return searchableText.includes(keyword);
     });
-  }, [businesses, businessSearch, selectedBusinessId]);
+  }, [businesses, businessSearch]);
 
   async function loadData() {
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
+      if (authError) {
+        alert(authError.message);
+        setLoading(false);
+        return;
+      }
 
-    const { data: myProfile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
 
-    if (myProfile?.role !== "admin") {
-      window.location.href = "/";
-      return;
-    }
+      const { data: myProfile, error: profileCheckError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
 
-    const { data: userData, error: userError } = await supabase
-      .from("profiles")
-      .select(
-        `
-        id,
-        email,
-        full_name,
-        phone,
-        role,
-        owner_status,
-        requested_business_name
-      `
-      )
-      .in("owner_status", ["pending", "approved"])
-      .order("full_name", { ascending: true });
+      if (profileCheckError) {
+        alert(profileCheckError.message);
+        setLoading(false);
+        return;
+      }
 
-    if (userError) {
-      alert(userError.message);
+      if (myProfile?.role !== "admin") {
+        window.location.href = "/";
+        return;
+      }
+
+      /*
+       * owner_status 조건을 사용하지 않습니다.
+       * 일반 회원, 오너 신청자, 기존 오너, 관리자 등
+       * profiles에 있는 모든 회원을 불러옵니다.
+       */
+      const { data: userData, error: userError } = await supabase
+        .from("profiles")
+        .select(
+          `
+          id,
+          email,
+          full_name,
+          phone,
+          role,
+          owner_status,
+          requested_business_name
+        `,
+        )
+        .order("full_name", {
+          ascending: true,
+          nullsFirst: false,
+        });
+
+      if (userError) {
+        alert(userError.message);
+        setLoading(false);
+        return;
+      }
+
+      const { data: businessData, error: businessError } = await supabase
+        .from("businesses")
+        .select(
+          `
+          id,
+          name,
+          address,
+          phone,
+          category
+        `,
+        )
+        .order("name", {
+          ascending: true,
+          nullsFirst: false,
+        });
+
+      if (businessError) {
+        alert(businessError.message);
+        setLoading(false);
+        return;
+      }
+
+      setUsers((userData || []) as UserProfile[]);
+      setBusinesses((businessData || []) as Business[]);
+    } catch (error) {
+      console.error("Failed to load owner matching data:", error);
+      alert("Failed to load data.");
+    } finally {
       setLoading(false);
-      return;
     }
+  }
 
-    const { data: businessData, error: businessError } = await supabase
-      .from("businesses")
-      .select(
-        `
-        id,
-        name,
-        address,
-        phone,
-        category
-      `
-      )
-      .order("name", { ascending: true });
+  function selectUser(user: UserProfile) {
+    setSelectedUserId(user.id);
+  }
 
-    if (businessError) {
-      alert(businessError.message);
-      setLoading(false);
-      return;
-    }
+  function clearSelectedUser() {
+    setSelectedUserId("");
+  }
 
-    setUsers((userData || []) as UserProfile[]);
-    setBusinesses((businessData || []) as Business[]);
-    setLoading(false);
+  function selectBusiness(business: Business) {
+    setSelectedBusinessId(String(business.id));
+  }
+
+  function clearSelectedBusiness() {
+    setSelectedBusinessId("");
   }
 
   async function approveAndLink() {
@@ -177,55 +264,73 @@ export default function OwnerBusinessMatchingPage() {
 
     const businessId = Number(selectedBusinessId);
 
-    if (!businessId) {
+    if (!Number.isInteger(businessId) || businessId <= 0) {
       alert("Invalid business ID.");
       return;
     }
 
-    const ok = confirm("Approve this owner and link to this business?");
+    const userName =
+      selectedUser?.full_name ||
+      selectedUser?.email ||
+      "the selected member";
+
+    const businessName =
+      selectedBusiness?.name || `Business #${selectedBusinessId}`;
+
+    const ok = window.confirm(
+      `Approve ${userName} as an owner and link them to ${businessName}?`,
+    );
+
     if (!ok) return;
 
     setSaving(true);
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        role: "owner",
-        owner_status: "approved",
-      })
-      .eq("id", selectedUserId);
+    try {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({
+          role: "owner",
+          owner_status: "approved",
+        })
+        .eq("id", selectedUserId);
 
-    if (profileError) {
-      setSaving(false);
-      alert(profileError.message);
-      return;
-    }
-
-    const { error: linkError } = await supabase.from("business_owners").upsert(
-      {
-        user_id: selectedUserId,
-        business_id: businessId,
-        status: "approved",
-      },
-      {
-        onConflict: "user_id,business_id",
+      if (profileError) {
+        alert(profileError.message);
+        return;
       }
-    );
 
-    setSaving(false);
+      const { error: linkError } = await supabase
+        .from("business_owners")
+        .upsert(
+          {
+            user_id: selectedUserId,
+            business_id: businessId,
+            status: "approved",
+          },
+          {
+            onConflict: "user_id,business_id",
+          },
+        );
 
-    if (linkError) {
-      alert(linkError.message);
-      return;
+      if (linkError) {
+        alert(linkError.message);
+        return;
+      }
+
+      alert("Owner approved and business linked.");
+
+      setSelectedUserId("");
+      setSelectedBusinessId("");
+      setOwnerSearch("");
+      setBusinessSearch("");
+
+      await loadData();
+    } catch (error) {
+      console.error("Failed to link owner:", error);
+      alert("Failed to link this owner to the business.");
+    } finally {
+      setSaving(false);
     }
-
-    alert("Owner approved and business linked.");
-
-    setSelectedUserId("");
-    setSelectedBusinessId("");
-    setOwnerSearch("");
-    setBusinessSearch("");
-    loadData();
   }
 
   if (loading) {
@@ -237,12 +342,12 @@ export default function OwnerBusinessMatchingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-28 text-[#172033]">
-      <div className="mx-auto max-w-2xl">
-        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+    <main className="min-h-screen bg-[#F8F3EC] px-3 py-6 pb-28 text-[#172033] sm:px-5 sm:py-8">
+      <div className="mx-auto max-w-5xl">
+        <div className="relative mb-5 flex h-11 items-center border-b border-[#E8DED1] pb-3">
           <BackButton />
 
-          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-[#172033]">
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[17px] font-black text-[#172033] sm:text-lg">
             Link Owner to Business
           </h1>
 
@@ -251,151 +356,446 @@ export default function OwnerBusinessMatchingPage() {
           </div>
         </div>
 
-        <p className="mb-6 text-sm font-bold text-gray-500">
-          Type a name, email, phone number, business name, address, category, or
-          business ID to quickly narrow the list.
+        <p className="mb-5 text-sm font-medium leading-6 text-gray-500">
+          Search any registered member by name, email, phone number, role, or
+          requested business. Owner application is not required.
         </p>
 
-        <div className="rounded-3xl bg-white p-5 shadow">
-          <label className="block">
-            <span className="mb-2 block text-sm font-black text-gray-700">
-              Search Owner
-            </span>
+        <div className="space-y-6">
+          {/* Owner selection */}
+          <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
+            <div className="border-b border-gray-100 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-black text-[#172033]">
+                    1. Select Member
+                  </h2>
 
-            <input
-              type="text"
-              value={ownerSearch}
-              onChange={(e) => {
-                setOwnerSearch(e.target.value);
-                setSelectedUserId("");
-              }}
-              placeholder="Name, email, phone, requested business..."
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 font-bold outline-none focus:border-[#172033]"
-            />
-          </label>
+                  <p className="mt-1 text-xs font-medium text-gray-500">
+                    All registered members are searchable.
+                  </p>
+                </div>
 
-          <label className="mt-3 block">
-            <span className="mb-2 block text-sm font-black text-gray-700">
-              Select Owner ({filteredUsers.length})
-            </span>
+                <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-xs font-extrabold text-[#172033]">
+                  {filteredUsers.length} results
+                </span>
+              </div>
 
-            <select
-              value={selectedUserId}
-              onChange={(e) => {
-                const userId = e.target.value;
-                setSelectedUserId(userId);
+              <div className="relative mt-4">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
 
-                if (!userId) return;
+                <input
+                  type="search"
+                  value={ownerSearch}
+                  onChange={(event) => {
+                    setOwnerSearch(event.target.value);
+                  }}
+                  placeholder="Search name, email, phone, business..."
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3.5 pl-12 pr-11 text-sm font-semibold outline-none transition focus:border-[#172033] focus:bg-white"
+                />
 
-                const selectedUser = users.find((user) => user.id === userId);
-                if (!selectedUser) return;
+                {ownerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setOwnerSearch("")}
+                    aria-label="Clear member search"
+                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-sm font-black text-gray-600 hover:bg-gray-300"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
 
-                setOwnerSearch(
-                  [
-                    selectedUser.full_name || "No Name",
-                    selectedUser.email,
-                    selectedUser.requested_business_name,
-                  ]
-                    .filter(Boolean)
-                    .join(" | ")
-                );
-              }}
-              size={Math.min(Math.max(filteredUsers.length + 1, 2), 6)}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 font-bold outline-none"
-            >
-              <option value="">Choose owner</option>
+            {selectedUser && (
+              <div className="border-b border-green-200 bg-green-50 px-4 py-3 sm:px-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold uppercase tracking-wide text-green-700">
+                      Selected member
+                    </p>
 
-              {filteredUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.full_name || "No Name"}
-                  {user.email ? ` | ${user.email}` : ""}
-                  {user.requested_business_name
-                    ? ` | ${user.requested_business_name}`
-                    : ""}
-                </option>
-              ))}
-            </select>
+                    <p className="mt-1 truncate text-sm font-black text-[#172033]">
+                      {selectedUser.full_name || "No Name"}
+                    </p>
 
-            {ownerSearch && !selectedUserId && filteredUsers.length === 0 && (
-              <p className="mt-2 text-sm font-bold text-red-500">
-                No matching owner found.
-              </p>
+                    <p className="mt-0.5 break-all text-xs font-medium text-gray-600">
+                      {selectedUser.email || "No email"}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={clearSelectedUser}
+                    className="shrink-0 rounded-full border border-green-300 bg-white px-3 py-1.5 text-xs font-extrabold text-green-700"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             )}
-          </label>
 
-          <div className="my-6 border-t border-gray-200" />
+            {/* Desktop header */}
+            <div className="hidden grid-cols-[minmax(150px,1fr)_minmax(220px,1.4fr)_minmax(170px,1fr)_100px] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-black uppercase tracking-wide text-gray-500 md:grid">
+              <div>Name</div>
+              <div>Email</div>
+              <div>Requested business</div>
+              <div className="text-center">Status</div>
+            </div>
 
-          <label className="block">
-            <span className="mb-2 block text-sm font-black text-gray-700">
-              Search Business
-            </span>
+            <div className="max-h-[430px] overflow-y-auto">
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((user) => {
+                  const status = getUserStatus(user);
+                  const isSelected = selectedUserId === user.id;
 
-            <input
-              type="text"
-              value={businessSearch}
-              onChange={(e) => {
-                setBusinessSearch(e.target.value);
-                setSelectedBusinessId("");
-              }}
-              placeholder="Business name, ID, address, phone, category..."
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 font-bold outline-none focus:border-[#172033]"
-            />
-          </label>
+                  return (
+                    <button
+                      type="button"
+                      key={user.id}
+                      onClick={() => selectUser(user)}
+                      className={`block w-full border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 sm:px-5 ${
+                        isSelected
+                          ? "bg-[#EAF7EF] ring-2 ring-inset ring-green-500"
+                          : "bg-white hover:bg-gray-50"
+                      }`}
+                    >
+                      {/* Desktop row */}
+                      <div className="hidden grid-cols-[minmax(150px,1fr)_minmax(220px,1.4fr)_minmax(170px,1fr)_100px] items-center gap-4 md:grid">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-extrabold text-[#172033]">
+                            {user.full_name || "No Name"}
+                          </p>
 
-          <label className="mt-3 block">
-            <span className="mb-2 block text-sm font-black text-gray-700">
-              Select Business ({filteredBusinesses.length})
-            </span>
+                          {user.phone && (
+                            <p className="mt-1 truncate text-xs font-medium text-gray-500">
+                              {user.phone}
+                            </p>
+                          )}
+                        </div>
 
-            <select
-              value={selectedBusinessId}
-              onChange={(e) => {
-                const businessId = e.target.value;
-                setSelectedBusinessId(businessId);
+                        <p className="min-w-0 break-all text-sm font-semibold text-gray-700">
+                          {user.email || "No email"}
+                        </p>
 
-                if (!businessId) return;
+                        <p className="min-w-0 break-words text-sm font-semibold text-gray-700">
+                          {user.requested_business_name || "—"}
+                        </p>
 
-                const selectedBusiness = businesses.find(
-                  (business) => String(business.id) === businessId
-                );
-                if (!selectedBusiness) return;
+                        <div className="text-center">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-extrabold ${status.className}`}
+                          >
+                            {status.label}
+                          </span>
+                        </div>
+                      </div>
 
-                setBusinessSearch(
-                  `#${selectedBusiness.id} | ${
-                    selectedBusiness.name || "No Name"
-                  }`
-                );
-              }}
-              size={Math.min(Math.max(filteredBusinesses.length + 1, 2), 7)}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 font-bold outline-none"
-            >
-              <option value="">Choose business</option>
+                      {/* Mobile row */}
+                      <div className="md:hidden">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-black text-[#172033]">
+                              {user.full_name || "No Name"}
+                            </p>
 
-              {filteredBusinesses.map((business) => (
-                <option key={business.id} value={business.id}>
-                  #{business.id} | {business.name || "No Name"}
-                  {business.category ? ` | ${business.category}` : ""}
-                  {business.address ? ` | ${business.address}` : ""}
-                </option>
-              ))}
-            </select>
+                            <p className="mt-1 break-all text-[13px] font-semibold text-gray-700">
+                              {user.email || "No email"}
+                            </p>
+                          </div>
 
-            {businessSearch &&
-              !selectedBusinessId &&
-              filteredBusinesses.length === 0 && (
-              <p className="mt-2 text-sm font-bold text-red-500">
-                No matching business found.
-              </p>
+                          <span
+                            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold ${status.className}`}
+                          >
+                            {status.label}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-[88px_1fr] gap-x-2 gap-y-1 text-xs">
+                          <span className="font-bold text-gray-400">
+                            Business
+                          </span>
+
+                          <span className="min-w-0 break-words font-semibold text-gray-700">
+                            {user.requested_business_name || "—"}
+                          </span>
+
+                          <span className="font-bold text-gray-400">Phone</span>
+
+                          <span className="font-semibold text-gray-700">
+                            {user.phone || "—"}
+                          </span>
+
+                          <span className="font-bold text-gray-400">Role</span>
+
+                          <span className="font-semibold capitalize text-gray-700">
+                            {user.role || "member"}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm font-extrabold text-red-500">
+                    No matching member found.
+                  </p>
+
+                  <p className="mt-1 text-xs font-medium text-gray-400">
+                    Try searching with part of the name or email address.
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Business selection */}
+          <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-black/5">
+            <div className="border-b border-gray-100 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-base font-black text-[#172033]">
+                    2. Select Business
+                  </h2>
+
+                  <p className="mt-1 text-xs font-medium text-gray-500">
+                    Search by business name, ID, address, phone, or category.
+                  </p>
+                </div>
+
+                <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-xs font-extrabold text-[#172033]">
+                  {filteredBusinesses.length} results
+                </span>
+              </div>
+
+              <div className="relative mt-4">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+
+                <input
+                  type="search"
+                  value={businessSearch}
+                  onChange={(event) => {
+                    setBusinessSearch(event.target.value);
+                  }}
+                  placeholder="Search business name, ID, address..."
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3.5 pl-12 pr-11 text-sm font-semibold outline-none transition focus:border-[#172033] focus:bg-white"
+                />
+
+                {businessSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setBusinessSearch("")}
+                    aria-label="Clear business search"
+                    className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-gray-200 text-sm font-black text-gray-600 hover:bg-gray-300"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {selectedBusiness && (
+              <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 sm:px-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold uppercase tracking-wide text-blue-700">
+                      Selected business
+                    </p>
+
+                    <p className="mt-1 truncate text-sm font-black text-[#172033]">
+                      #{selectedBusiness.id} ·{" "}
+                      {selectedBusiness.name || "No Name"}
+                    </p>
+
+                    <p className="mt-0.5 truncate text-xs font-medium text-gray-600">
+                      {selectedBusiness.address || "No address"}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={clearSelectedBusiness}
+                    className="shrink-0 rounded-full border border-blue-300 bg-white px-3 py-1.5 text-xs font-extrabold text-blue-700"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
             )}
-          </label>
 
-          <button
-            onClick={approveAndLink}
-            disabled={saving || !selectedUserId || !selectedBusinessId}
-            className="mt-6 w-full rounded-2xl bg-[#172033] py-4 text-lg font-extrabold text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Linking..." : "Approve & Link Business"}
-          </button>
+            {/* Desktop header */}
+            <div className="hidden grid-cols-[80px_minmax(180px,1fr)_140px_minmax(220px,1.5fr)] gap-4 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-black uppercase tracking-wide text-gray-500 md:grid">
+              <div>ID</div>
+              <div>Business name</div>
+              <div>Category</div>
+              <div>Address</div>
+            </div>
+
+            <div className="max-h-[430px] overflow-y-auto">
+              {filteredBusinesses.length > 0 ? (
+                filteredBusinesses.map((business) => {
+                  const isSelected =
+                    selectedBusinessId === String(business.id);
+
+                  return (
+                    <button
+                      type="button"
+                      key={business.id}
+                      onClick={() => selectBusiness(business)}
+                      className={`block w-full border-b border-gray-100 px-4 py-4 text-left transition last:border-b-0 sm:px-5 ${
+                        isSelected
+                          ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
+                          : "bg-white hover:bg-gray-50"
+                      }`}
+                    >
+                      {/* Desktop row */}
+                      <div className="hidden grid-cols-[80px_minmax(180px,1fr)_140px_minmax(220px,1.5fr)] items-center gap-4 md:grid">
+                        <p className="text-sm font-black text-[#172033]">
+                          #{business.id}
+                        </p>
+
+                        <p className="min-w-0 truncate text-sm font-extrabold text-[#172033]">
+                          {business.name || "No Name"}
+                        </p>
+
+                        <p className="min-w-0 truncate text-sm font-semibold text-gray-600">
+                          {business.category || "—"}
+                        </p>
+
+                        <p className="min-w-0 text-sm font-medium text-gray-600">
+                          {business.address || "—"}
+                        </p>
+                      </div>
+
+                      {/* Mobile row */}
+                      <div className="md:hidden">
+                        <div className="flex items-start gap-3">
+                          <span className="shrink-0 rounded-lg bg-[#172033] px-2 py-1 text-[11px] font-black text-white">
+                            #{business.id}
+                          </span>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-black text-[#172033]">
+                              {business.name || "No Name"}
+                            </p>
+
+                            <p className="mt-1 text-xs font-bold text-gray-500">
+                              {business.category || "No category"}
+                            </p>
+
+                            <p className="mt-2 text-xs font-medium leading-5 text-gray-600">
+                              {business.address || "No address"}
+                            </p>
+
+                            {business.phone && (
+                              <p className="mt-1 text-xs font-semibold text-gray-500">
+                                {business.phone}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm font-extrabold text-red-500">
+                    No matching business found.
+                  </p>
+
+                  <p className="mt-1 text-xs font-medium text-gray-400">
+                    Try searching with part of the business name or ID.
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Summary and action */}
+          <section className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:p-5">
+            <h2 className="text-base font-black text-[#172033]">
+              3. Confirm & Link
+            </h2>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div
+                className={`rounded-2xl border p-4 ${
+                  selectedUser
+                    ? "border-green-200 bg-green-50"
+                    : "border-gray-200 bg-gray-50"
+                }`}
+              >
+                <p className="text-xs font-black uppercase tracking-wide text-gray-500">
+                  Member
+                </p>
+
+                <p className="mt-2 text-sm font-black text-[#172033]">
+                  {selectedUser?.full_name || "Not selected"}
+                </p>
+
+                <p className="mt-1 break-all text-xs font-medium text-gray-600">
+                  {selectedUser?.email ||
+                    "Select a member from the list above."}
+                </p>
+              </div>
+
+              <div
+                className={`rounded-2xl border p-4 ${
+                  selectedBusiness
+                    ? "border-blue-200 bg-blue-50"
+                    : "border-gray-200 bg-gray-50"
+                }`}
+              >
+                <p className="text-xs font-black uppercase tracking-wide text-gray-500">
+                  Business
+                </p>
+
+                <p className="mt-2 text-sm font-black text-[#172033]">
+                  {selectedBusiness
+                    ? `#${selectedBusiness.id} · ${
+                        selectedBusiness.name || "No Name"
+                      }`
+                    : "Not selected"}
+                </p>
+
+                <p className="mt-1 text-xs font-medium text-gray-600">
+                  {selectedBusiness?.address ||
+                    "Select a business from the list above."}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={approveAndLink}
+              disabled={saving || !selectedUserId || !selectedBusinessId}
+              className="mt-5 w-full rounded-2xl bg-[#172033] py-4 text-base font-extrabold text-white shadow-lg transition hover:bg-[#253652] disabled:cursor-not-allowed disabled:opacity-40 sm:text-lg"
+            >
+              {saving ? "Linking..." : "Approve & Link Business"}
+            </button>
+          </section>
         </div>
       </div>
 
