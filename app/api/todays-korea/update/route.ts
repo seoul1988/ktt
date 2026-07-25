@@ -17,6 +17,8 @@ type FeedSource = {
   feedUrl: string;
 };
 
+type MediaType = "image" | "video" | "none";
+
 type CollectedArticle = {
   category: NewsCategory;
   sourceName: string;
@@ -24,6 +26,8 @@ type CollectedArticle = {
   description: string;
   sourceUrl: string;
   imageUrl: string | null;
+  videoUrl: string | null;
+  mediaType: MediaType;
   publishedAt: string;
 };
 
@@ -164,44 +168,76 @@ function extractImageFromHtml(html: string) {
 }
 
 /**
- * RSS 항목에서 이미지 추출
+ * RSS 항목에서 이미지와 동영상을 각각 추출합니다.
+ *
+ * media:content 또는 enclosure가 동영상일 수 있으므로
+ * URL만 보고 image_url에 넣지 않습니다.
  */
-function extractFeedItemImage(
+function extractFeedItemMedia(
   $: cheerio.CheerioAPI,
   element: any,
   descriptionHtml: string,
 ) {
   const item = $(element);
 
-  const mediaContent =
-    item.find("media\\:content").first().attr("url") ||
-    item.find("content").first().attr("url") ||
-    "";
-
   const mediaThumbnail =
-    item.find("media\\:thumbnail").first().attr("url") ||
-    item.find("thumbnail").first().attr("url") ||
-    "";
+    normalizeUrl(
+      item.find("media\\:thumbnail").first().attr("url"),
+    ) ||
+    normalizeUrl(
+      item.find("thumbnail").first().attr("url"),
+    ) ||
+    extractImageFromHtml(descriptionHtml);
 
-  const enclosure =
-    item.find("enclosure").first().attr("url") || "";
+  let imageUrl = mediaThumbnail || null;
+  let videoUrl: string | null = null;
 
-  const directImage =
-    normalizeUrl(mediaContent) ||
-    normalizeUrl(mediaThumbnail) ||
-    normalizeUrl(enclosure);
+  const mediaCandidates = [
+    ...item.find("media\\:content").toArray(),
+    ...item.find("content").toArray(),
+    ...item.find("enclosure").toArray(),
+  ];
 
-  if (directImage) {
-    return directImage;
+  for (const candidate of mediaCandidates) {
+    const node = $(candidate);
+    const url = normalizeUrl(node.attr("url"));
+    const type = String(node.attr("type") || "")
+      .trim()
+      .toLowerCase();
+    const medium = String(node.attr("medium") || "")
+      .trim()
+      .toLowerCase();
+
+    if (!url) continue;
+
+    if (
+      !videoUrl &&
+      (type.startsWith("video/") ||
+        medium === "video")
+    ) {
+      videoUrl = url;
+      continue;
+    }
+
+    if (
+      !imageUrl &&
+      (type.startsWith("image/") ||
+        medium === "image")
+    ) {
+      imageUrl = url;
+    }
   }
 
-  return extractImageFromHtml(descriptionHtml);
+  return {
+    imageUrl,
+    videoUrl,
+  };
 }
 
 /**
- * 원본 기사 페이지에서 og:image 추출
+ * 원본 기사 페이지에서 대표 이미지와 동영상을 추출합니다.
  */
-async function fetchArticleImage(sourceUrl: string) {
+async function fetchArticleMedia(sourceUrl: string) {
   try {
     const response = await fetch(sourceUrl, {
       method: "GET",
@@ -215,30 +251,50 @@ async function fetchArticleImage(sourceUrl: string) {
     });
 
     if (!response.ok) {
-      return null;
+      return {
+        imageUrl: null,
+        videoUrl: null,
+      };
     }
 
     const html = await response.text();
     const $ = cheerio.load(html);
 
     const imageUrl =
-      $('meta[property="og:image"]').attr("content") ||
       $('meta[property="og:image:secure_url"]').attr(
         "content",
       ) ||
-      $('meta[name="twitter:image"]').attr("content") ||
+      $('meta[property="og:image"]').attr("content") ||
       $('meta[name="twitter:image:src"]').attr("content") ||
+      $('meta[name="twitter:image"]').attr("content") ||
       "";
 
-    return normalizeUrl(imageUrl) || null;
+    const videoUrl =
+      $('meta[property="og:video:secure_url"]').attr(
+        "content",
+      ) ||
+      $('meta[property="og:video:url"]').attr("content") ||
+      $('meta[property="og:video"]').attr("content") ||
+      $('meta[name="twitter:player:stream"]').attr(
+        "content",
+      ) ||
+      "";
+
+    return {
+      imageUrl: normalizeUrl(imageUrl) || null,
+      videoUrl: normalizeUrl(videoUrl) || null,
+    };
   } catch (error) {
     console.error(
-      "Today’s Korea article image load failed:",
+      "Today’s Korea article media load failed:",
       sourceUrl,
       error,
     );
 
-    return null;
+    return {
+      imageUrl: null,
+      videoUrl: null,
+    };
   }
 }
 
@@ -313,6 +369,54 @@ async function isValidRemoteImage(imageUrl: string) {
     console.error(
       "Today’s Korea image validation failed:",
       imageUrl,
+      error,
+    );
+
+    return false;
+  }
+}
+
+
+/**
+ * 원격 주소가 실제 동영상인지 확인합니다.
+ */
+async function isValidRemoteVideo(videoUrl: string) {
+  const normalizedVideoUrl = normalizeUrl(videoUrl);
+
+  if (!normalizedVideoUrl) {
+    return false;
+  }
+
+  try {
+    const response = await fetch(normalizedVideoUrl, {
+      method: "GET",
+      headers: {
+        Accept: "video/*,*/*;q=0.8",
+        Range: "bytes=0-65535",
+        "User-Agent":
+          "Mozilla/5.0 (compatible; KTownTriangle/1.0; +https://www.ktowntriangle.com)",
+      },
+      cache: "no-store",
+      redirect: "follow",
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok && response.status !== 206) {
+      return false;
+    }
+
+    const contentType = (
+      response.headers.get("content-type") || ""
+    )
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+
+    return contentType.startsWith("video/");
+  } catch (error) {
+    console.error(
+      "Today’s Korea video validation failed:",
+      videoUrl,
       error,
     );
 
@@ -398,17 +502,25 @@ function parseFeedXml(
         ? classifyKoreabooCategory(title, description)
         : source.category;
 
+    const feedMedia = extractFeedItemMedia(
+      $,
+      element,
+      rawDescription,
+    );
+
     articles.push({
       category,
       sourceName: source.sourceName,
       title,
       description,
       sourceUrl,
-      imageUrl: extractFeedItemImage(
-        $,
-        element,
-        rawDescription,
-      ),
+      imageUrl: feedMedia.imageUrl,
+      videoUrl: feedMedia.videoUrl,
+      mediaType: feedMedia.videoUrl
+        ? "video"
+        : feedMedia.imageUrl
+          ? "image"
+          : "none",
       publishedAt: normalizePublishedDate(rawPublishedAt),
     });
   });
@@ -810,53 +922,77 @@ async function runTodayKoreaUpdate() {
   for (const article of newArticles) {
     try {
       let imageUrl = article.imageUrl;
+      let videoUrl = article.videoUrl;
 
-      if (!imageUrl) {
-        imageUrl = await fetchArticleImage(
-          article.sourceUrl,
-        );
+      /*
+       * RSS의 media:content가 동영상인데 type 정보가 없는 경우가 있으므로
+       * image_url 후보를 실제 이미지인지 먼저 검사합니다.
+       */
+      if (imageUrl) {
+        const imageIsValid =
+          await isValidRemoteImage(imageUrl);
+
+        if (!imageIsValid) {
+          const mistakenVideo =
+            await isValidRemoteVideo(imageUrl);
+
+          if (mistakenVideo && !videoUrl) {
+            videoUrl = imageUrl;
+          }
+
+          imageUrl = null;
+        }
+      }
+
+      if (videoUrl) {
+        const videoIsValid =
+          await isValidRemoteVideo(videoUrl);
+
+        if (!videoIsValid) {
+          videoUrl = null;
+        }
       }
 
       /*
-       * RSS와 원본 기사 페이지 어디에서도 이미지를 찾지 못하면
-       * DB에 저장하지 않고 건너뜁니다.
+       * RSS에 올바른 대표 이미지가 없으면 원문 페이지에서
+       * og:image와 og:video를 다시 확인합니다.
        */
-      if (!imageUrl) {
-        console.log(
-          "Today’s Korea article skipped because no image was found:",
-          article.title,
-        );
+      if (!imageUrl || !videoUrl) {
+        const articleMedia =
+          await fetchArticleMedia(article.sourceUrl);
 
-        failedPosts.push({
-          title: article.title,
-          reason: "No image URL was found",
-        });
+        if (!imageUrl && articleMedia.imageUrl) {
+          const articleImageIsValid =
+            await isValidRemoteImage(
+              articleMedia.imageUrl,
+            );
 
-        continue;
+          if (articleImageIsValid) {
+            imageUrl = articleMedia.imageUrl;
+          }
+        }
+
+        if (!videoUrl && articleMedia.videoUrl) {
+          const articleVideoIsValid =
+            await isValidRemoteVideo(
+              articleMedia.videoUrl,
+            );
+
+          if (articleVideoIsValid) {
+            videoUrl = articleMedia.videoUrl;
+          }
+        }
       }
 
       /*
-       * 이미지 URL이 존재해도 실제 요청이 실패하거나
-       * 응답이 이미지 형식이 아니면 DB에 저장하지 않습니다.
+       * 동영상만 있고 대표 이미지가 없는 경우에도 글은 저장합니다.
+       * 목록에서는 /event.png 위에 재생 아이콘을 표시할 수 있습니다.
        */
-      const imageIsValid = await isValidRemoteImage(
-        imageUrl,
-      );
-
-      if (!imageIsValid) {
-        console.log(
-          "Today’s Korea article skipped because the image could not be loaded:",
-          article.title,
-          imageUrl,
-        );
-
-        failedPosts.push({
-          title: article.title,
-          reason: `Image could not be loaded: ${imageUrl}`,
-        });
-
-        continue;
-      }
+      const mediaType: MediaType = videoUrl
+        ? "video"
+        : imageUrl
+          ? "image"
+          : "none";
 
       const { data, error } = await supabase
         .from("todays_korea_posts")
@@ -870,6 +1006,8 @@ async function runTodayKoreaUpdate() {
             source_name: article.sourceName,
             source_url: article.sourceUrl,
             image_url: imageUrl,
+            video_url: videoUrl,
+            media_type: mediaType,
             original_title: article.title,
             original_description:
               article.description.slice(0, 2000),
@@ -891,6 +1029,8 @@ async function runTodayKoreaUpdate() {
             source_name,
             source_url,
             image_url,
+            video_url,
+            media_type,
             published_at,
             is_active
           `,
