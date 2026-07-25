@@ -107,12 +107,25 @@ export default function InAppBrowserNotice() {
           ×
         </button>
 
-        <p
-          id="in-app-browser-notice-title"
-          className="text-[17px] font-semibold leading-7 text-gray-900"
-        >
-          {message}
-        </p>
+       <p
+  id="in-app-browser-notice-title"
+  className="text-[16px] font-normal leading-6 text-gray-900"
+>
+  {isKakao ? (
+    <>
+      <strong className="font-bold">Chrome</strong> 또는{" "}
+      <strong className="font-bold">Safari</strong>에서 앱을 설치하여
+      이용하시면 더욱 편리합니다.
+    </>
+  ) : (
+    <>
+      Install the app from{" "}
+      <strong className="font-bold">Chrome</strong> or{" "}
+      <strong className="font-bold">Safari</strong> for the best
+      experience.
+    </>
+  )}
+</p>
       </div>
     </div>
   );
