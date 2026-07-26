@@ -627,23 +627,24 @@ function selectLatestUniqueArticles(
  * 비밀키 검사
  */
 function isAuthorized(request: NextRequest) {
-  const configuredSecret =
-    process.env.TODAYS_KOREA_SECRET?.trim();
+  const cronSecret =
+    process.env.CRON_SECRET?.trim();
 
-  if (!configuredSecret) {
-    return process.env.NODE_ENV !== "production";
+  if (!cronSecret) {
+    console.error(
+      "CRON_SECRET environment variable is missing.",
+    );
+
+    return false;
   }
 
-  const querySecret =
-    request.nextUrl.searchParams.get("secret")?.trim() || "";
-
-  const authorizationHeader =
-    request.headers.get("authorization")?.trim() || "";
+  const authorization =
+    request.headers
+      .get("authorization")
+      ?.trim() || "";
 
   return (
-    querySecret === configuredSecret ||
-    authorizationHeader ===
-      `Bearer ${configuredSecret}`
+    authorization === `Bearer ${cronSecret}`
   );
 }
 

@@ -1,0 +1,102 @@
+name: KTown Triangle Auto Update
+
+on:
+  schedule:
+    # 매시간 실행
+    # GitHub Actions의 cron 시간은 UTC 기준
+    - cron: "0 * * * *"
+
+  # GitHub Actions 화면에서 수동 실행 가능
+  workflow_dispatch:
+
+concurrency:
+  group: ktown-triangle-auto-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Run scheduled updates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Set current UTC hour
+        id: time
+        shell: bash
+        run: |
+          UTC_HOUR=$(date -u +%-H)
+          echo "hour=$UTC_HOUR" >> "$GITHUB_OUTPUT"
+          echo "Current UTC hour: $UTC_HOUR"
+
+      # 매시간 실행
+      - name: Update Today's Korea
+        shell: bash
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "Updating Today's Korea..."
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --retry 3 \
+            --retry-delay 10 \
+            --max-time 300 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
+            "https://www.ktowntriangle.com/api/todays-korea/update"
+
+          echo ""
+          echo "Today's Korea update completed."
+
+      # UTC 0, 4, 8, 12, 16, 20시에 실행
+      # 4시간마다
+      - name: Update Instagram
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.time.outputs.hour == '0' || steps.time.outputs.hour == '4' || steps.time.outputs.hour == '8' || steps.time.outputs.hour == '12' || steps.time.outputs.hour == '16' || steps.time.outputs.hour == '20' }}
+        shell: bash
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "Updating Instagram posts..."
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --retry 3 \
+            --retry-delay 10 \
+            --max-time 900 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
+            "https://www.ktowntriangle.com/api/instagram-sync?limit=44"
+
+          echo ""
+          echo "Instagram update completed."
+
+      # UTC 0시와 12시에 실행
+      # 12시간마다, 하루 2회
+      - name: Update Google Ratings
+        if: ${{ github.event_name == 'workflow_dispatch' || steps.time.outputs.hour == '0' || steps.time.outputs.hour == '12' }}
+        shell: bash
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "Updating Google ratings..."
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --retry 3 \
+            --retry-delay 10 \
+            --max-time 900 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
+            "https://www.ktowntriangle.com/api/update-google-ratings"
+
+          echo ""
+          echo "Google ratings update completed."

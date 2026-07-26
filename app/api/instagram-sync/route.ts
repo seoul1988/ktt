@@ -1177,39 +1177,24 @@ async function syncBusiness(
 }
 
 function isAuthorized(request: NextRequest) {
-  const configuredSecret =
-    process.env.INSTAGRAM_SYNC_SECRET;
+  const cronSecret =
+    process.env.CRON_SECRET?.trim();
 
-  /**
-   * 개발 환경에서는 브라우저에서 간단하게 테스트할 수 있게
-   * secret이 설정되지 않은 경우 허용합니다.
-   *
-   * 배포 환경에서는 반드시 secret을 설정해야 합니다.
-   */
-  if (
-    process.env.NODE_ENV !== "production" &&
-    !configuredSecret
-  ) {
-    return true;
-  }
+  if (!cronSecret) {
+    console.error(
+      "CRON_SECRET environment variable is missing.",
+    );
 
-  if (!configuredSecret) {
     return false;
   }
 
   const authorization =
-    request.headers.get("authorization");
-
-  const headerSecret =
-    request.headers.get("x-cron-secret");
-
-  const querySecret =
-    request.nextUrl.searchParams.get("secret");
+    request.headers
+      .get("authorization")
+      ?.trim() || "";
 
   return (
-    authorization === `Bearer ${configuredSecret}` ||
-    headerSecret === configuredSecret ||
-    querySecret === configuredSecret
+    authorization === `Bearer ${cronSecret}`
   );
 }
 

@@ -1,8 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/update-google-ratings",
-      "schedule": "0 16 * * *"
-    }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  
 }
