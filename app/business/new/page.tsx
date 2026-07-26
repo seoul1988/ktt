@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../lib/supabase";
 import ProfileButton from "../../components/ProfileButton";
+import BottomNav from "../../components/BottomNav";
 
 type Category = {
   id: number;
@@ -296,6 +297,91 @@ async function optimizeImage(
     if (objectUrl) URL.revokeObjectURL(objectUrl);
 
     if (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap) {
+      source.close();
+    }
+  }
+}
+
+
+async function createBusinessThumbnail(file: File): Promise<Blob> {
+  const targetWidth = 480;
+  const targetHeight = 360;
+
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file);
+    } else {
+      objectUrl = URL.createObjectURL(file);
+
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () =>
+          reject(new Error("Could not read the thumbnail source image."));
+        image.src = objectUrl;
+      });
+    }
+
+    if (!source) {
+      throw new Error("Thumbnail source image is unavailable.");
+    }
+
+    const sourceWidth = source.width;
+    const sourceHeight = source.height;
+
+    /*
+     * 480 × 360 영역을 빈 공간 없이 채우는 cover 방식입니다.
+     * 중앙을 기준으로 필요한 부분만 잘라 썸네일을 만듭니다.
+     */
+    const scale = Math.max(
+      targetWidth / sourceWidth,
+      targetHeight / sourceHeight,
+    );
+
+    const drawWidth = sourceWidth * scale;
+    const drawHeight = sourceHeight * scale;
+    const offsetX = (targetWidth - drawWidth) / 2;
+    const offsetY = (targetHeight - drawHeight) / 2;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("Could not create the thumbnail canvas.");
+    }
+
+    context.drawImage(
+      source,
+      offsetX,
+      offsetY,
+      drawWidth,
+      drawHeight,
+    );
+
+    const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", 0.76);
+    });
+
+    if (!thumbnailBlob) {
+      throw new Error("Thumbnail WebP conversion failed.");
+    }
+
+    return thumbnailBlob;
+  } finally {
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+    }
+
+    if (
+      typeof ImageBitmap !== "undefined" &&
+      source instanceof ImageBitmap
+    ) {
       source.close();
     }
   }
@@ -1237,6 +1323,49 @@ export default function NewBusinessPage() {
     return uploadedUrls;
   }
 
+
+  async function uploadBusinessThumbnail(businessId: number) {
+    const firstPhoto = photoFiles[0];
+
+    if (!firstPhoto) {
+      return "";
+    }
+
+    const thumbnailBlob = await createBusinessThumbnail(firstPhoto);
+    const thumbnailPath = `business-${businessId}/thumbnail.webp`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("business-thumbnails")
+      .upload(thumbnailPath, thumbnailBlob, {
+        contentType: "image/webp",
+        cacheControl: "31536000",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("business-thumbnails")
+      .getPublicUrl(thumbnailPath);
+
+    const thumbnailUrl = data.publicUrl;
+
+    const { error: updateError } = await supabase
+      .from("businesses")
+      .update({
+        thumbnail_url: thumbnailUrl,
+      })
+      .eq("id", businessId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return thumbnailUrl;
+  }
+
   async function uploadFlipbookAdImages() {
     if (role !== "admin") {
       return [] as {
@@ -1435,6 +1564,23 @@ export default function NewBusinessPage() {
         return;
       }
 
+
+      /*
+       * 등록 완료 후 첫 번째 비즈니스 사진으로 480 × 360 WebP
+       * 썸네일을 생성합니다. 썸네일 실패 때문에 업체 등록 전체가
+       * 취소되지 않도록 별도로 처리합니다.
+       */
+      if (photoFiles.length > 0) {
+        try {
+          await uploadBusinessThumbnail(Number(business.id));
+        } catch (thumbnailError) {
+          console.error(
+            "Business thumbnail generation failed:",
+            thumbnailError,
+          );
+        }
+      }
+
       if (role === "admin" && uploadedFlipbookAds.length > 0) {
         const adRows: Array<{
           business_id: number;
@@ -1481,7 +1627,7 @@ export default function NewBusinessPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-40 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-xl">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -2226,34 +2372,8 @@ export default function NewBusinessPage() {
         </div>
       </div>
 
-      <div className="fixed bottom-4 left-0 right-0 z-50 px-5">
-        <div className="mx-auto flex max-w-md overflow-hidden rounded-full bg-[#172033] text-xs font-black text-white shadow-2xl">
-          <a href="/" className="flex-1 py-4 text-center">
-            Home
-          </a>
+      <BottomNav />
 
-          <a href="/map" className="flex-1 py-4 text-center">
-            Map
-          </a>
-
-          <a
-            href="/business/new"
-            className="flex-1 py-4 text-center text-[#F6C343]"
-          >
-            Business
-          </a>
-
-          <a href="/community" className="flex-1 py-4 text-center">
-            Community
-          </a>
-
-          {role === "admin" && (
-            <a href="/admin" className="flex-1 py-4 text-center">
-              Admin
-            </a>
-          )}
-        </div>
-      </div>
-    </main>
+      </main>
   );
 }

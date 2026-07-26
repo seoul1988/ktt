@@ -69,6 +69,7 @@ type Business = {
   hours: string | null;
   description: string | null;
   image_url: string | null;
+  thumbnail_url?: string | null;
   image_urls?: string[] | null;
   lat?: number | null;
   lng?: number | null;
@@ -345,6 +346,117 @@ async function optimizeImage(
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
 
+    if (
+      typeof ImageBitmap !== "undefined" &&
+      source instanceof ImageBitmap
+    ) {
+      source.close();
+    }
+  }
+}
+
+
+async function loadThumbnailSource(
+  source: File | string,
+): Promise<ImageBitmap | HTMLImageElement> {
+  if (source instanceof File) {
+    if ("createImageBitmap" in window) {
+      return await createImageBitmap(source);
+    }
+
+    const objectUrl = URL.createObjectURL(source);
+
+    try {
+      return await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () =>
+          reject(new Error("썸네일 원본 이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  const response = await fetch(source, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`썸네일 원본 이미지 요청 실패: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+
+  if ("createImageBitmap" in window) {
+    return await createImageBitmap(blob);
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () =>
+        reject(new Error("썸네일 원본 이미지를 읽을 수 없습니다."));
+      image.src = objectUrl;
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function createBusinessThumbnail(
+  sourceValue: File | string,
+): Promise<Blob> {
+  const targetWidth = 480;
+  const targetHeight = 360;
+  const source = await loadThumbnailSource(sourceValue);
+
+  try {
+    const sourceWidth = source.width;
+    const sourceHeight = source.height;
+
+    const scale = Math.max(
+      targetWidth / sourceWidth,
+      targetHeight / sourceHeight,
+    );
+
+    const drawWidth = sourceWidth * scale;
+    const drawHeight = sourceHeight * scale;
+    const offsetX = (targetWidth - drawWidth) / 2;
+    const offsetY = (targetHeight - drawHeight) / 2;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("썸네일 Canvas를 만들 수 없습니다.");
+    }
+
+    context.drawImage(
+      source,
+      offsetX,
+      offsetY,
+      drawWidth,
+      drawHeight,
+    );
+
+    const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", 0.76);
+    });
+
+    if (!thumbnailBlob) {
+      throw new Error("썸네일 WebP 변환에 실패했습니다.");
+    }
+
+    return thumbnailBlob;
+  } finally {
     if (
       typeof ImageBitmap !== "undefined" &&
       source instanceof ImageBitmap
@@ -822,6 +934,15 @@ export default function EditBusinessPage() {
         image_urls: updatedBusiness.image_urls || [],
         image_url: updatedBusiness.image_url || null,
       });
+
+      try {
+        await uploadBusinessThumbnail(nextItems[0]);
+      } catch (thumbnailError) {
+        console.error(
+          "Business thumbnail refresh after photo deletion failed:",
+          thumbnailError,
+        );
+      }
     } catch (err: any) {
       console.error("business image delete error:", err);
       alert(err?.message || "이미지 삭제 오류");
@@ -1450,6 +1571,65 @@ export default function EditBusinessPage() {
     return uploadedById;
   }
 
+
+  async function uploadBusinessThumbnail(
+    firstPhoto: BusinessPhotoItem | undefined,
+  ) {
+    if (!firstPhoto) {
+      const { error: clearError } = await supabase
+        .from("businesses")
+        .update({
+          thumbnail_url: null,
+        })
+        .eq("id", businessId);
+
+      if (clearError) {
+        throw clearError;
+      }
+
+      return "";
+    }
+
+    const sourceValue =
+      firstPhoto.kind === "new"
+        ? firstPhoto.file
+        : firstPhoto.url;
+
+    const thumbnailBlob = await createBusinessThumbnail(sourceValue);
+    const thumbnailPath = `business-${businessId}/thumbnail.webp`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("business-thumbnails")
+      .upload(thumbnailPath, thumbnailBlob, {
+        contentType: "image/webp",
+        cacheControl: "31536000",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("business-thumbnails")
+      .getPublicUrl(thumbnailPath);
+
+    const thumbnailUrl = `${data.publicUrl}?v=${Date.now()}`;
+
+    const { error: updateError } = await supabase
+      .from("businesses")
+      .update({
+        thumbnail_url: thumbnailUrl,
+      })
+      .eq("id", businessId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return thumbnailUrl;
+  }
+
   async function saveBusiness() {
     if (!business) return;
 
@@ -1556,6 +1736,21 @@ export default function EditBusinessPage() {
       return;
     }
 
+
+    /*
+     * 저장된 사진 순서의 첫 번째 이미지를 기준으로 480 × 360 WebP
+     * 썸네일을 다시 만듭니다. 사진 교체 및 순서 변경도 반영됩니다.
+     * 썸네일 실패가 업체 정보 저장 전체를 취소하지 않도록 별도 처리합니다.
+     */
+    try {
+      await uploadBusinessThumbnail(photoItems[0]);
+    } catch (thumbnailError) {
+      console.error(
+        "Business thumbnail update failed:",
+        thumbnailError,
+      );
+    }
+
     if (isAdmin) {
       for (const size of removedFlipbookAdSizes) {
         const { error: deleteError } = await supabase
@@ -1631,7 +1826,7 @@ export default function EditBusinessPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-32 text-[#172033]">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-xl">
         <div className="mb-5 flex items-center justify-between gap-3">
           <button
             onClick={() => {
