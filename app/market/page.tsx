@@ -18,6 +18,7 @@ type MarketItem = {
   condition: string | null;
   description: string | null;
   images: string[] | null;
+  thumbnail_url?: string | null;
   video_url?: string | null;
   listing_type?: "individual" | "bundle" | null;
   bundle_id?: string | null;
@@ -205,6 +206,7 @@ export default async function MarketPage() {
       condition,
       description,
       images,
+      thumbnail_url,
       video_url,
       listing_type,
       bundle_id,
@@ -289,10 +291,16 @@ export default async function MarketPage() {
               const isSold =
                 displayStatus === "sold";
 
-              const firstImage =
-                Array.isArray(item.images)
+              const originalFirstImage =
+                Array.isArray(item.images) &&
+                item.images.length > 0
                   ? item.images[0]
                   : null;
+
+              const firstImage =
+                item.thumbnail_url ||
+                originalFirstImage ||
+                "/event.png";
 
               const firstItemImageCount =
                 Array.isArray(item.images)

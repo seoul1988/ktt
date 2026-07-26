@@ -219,6 +219,10 @@ export default function NewMarketItemPage() {
   const MAX_IMAGE_SIZE = 1280;
   const IMAGE_QUALITY = 0.8;
 
+  const THUMBNAIL_WIDTH = 480;
+  const THUMBNAIL_HEIGHT = 360;
+  const THUMBNAIL_QUALITY = 0.76;
+
   async function optimizeImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) {
       return file;
@@ -286,6 +290,206 @@ export default function NewMarketItemPage() {
     }
   }
 
+
+  async function createMarketThumbnail(
+    file: File,
+  ): Promise<Blob> {
+    const objectUrl =
+      URL.createObjectURL(file);
+
+    try {
+      const image =
+        await new Promise<HTMLImageElement>(
+          (resolve, reject) => {
+            const img = new Image();
+
+            img.onload = () =>
+              resolve(img);
+
+            img.onerror = () =>
+              reject(
+                new Error(
+                  `대표 이미지를 불러올 수 없습니다: ${file.name}`,
+                ),
+              );
+
+            img.src = objectUrl;
+          },
+        );
+
+      const sourceWidth =
+        image.naturalWidth;
+
+      const sourceHeight =
+        image.naturalHeight;
+
+      if (
+        !sourceWidth ||
+        !sourceHeight
+      ) {
+        throw new Error(
+          "대표 이미지 크기를 확인할 수 없습니다.",
+        );
+      }
+
+      const sourceRatio =
+        sourceWidth /
+        sourceHeight;
+
+      const targetRatio =
+        THUMBNAIL_WIDTH /
+        THUMBNAIL_HEIGHT;
+
+      let sourceX = 0;
+      let sourceY = 0;
+      let cropWidth =
+        sourceWidth;
+      let cropHeight =
+        sourceHeight;
+
+      if (
+        sourceRatio >
+        targetRatio
+      ) {
+        cropWidth =
+          sourceHeight *
+          targetRatio;
+
+        sourceX =
+          (sourceWidth -
+            cropWidth) /
+          2;
+      } else {
+        cropHeight =
+          sourceWidth /
+          targetRatio;
+
+        sourceY =
+          (sourceHeight -
+            cropHeight) /
+          2;
+      }
+
+      const canvas =
+        document.createElement(
+          "canvas",
+        );
+
+      canvas.width =
+        THUMBNAIL_WIDTH;
+
+      canvas.height =
+        THUMBNAIL_HEIGHT;
+
+      const context =
+        canvas.getContext("2d");
+
+      if (!context) {
+        throw new Error(
+          "썸네일 Canvas를 만들 수 없습니다.",
+        );
+      }
+
+      context.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        THUMBNAIL_WIDTH,
+        THUMBNAIL_HEIGHT,
+      );
+
+      const blob =
+        await new Promise<Blob | null>(
+          (resolve) => {
+            canvas.toBlob(
+              resolve,
+              "image/webp",
+              THUMBNAIL_QUALITY,
+            );
+          },
+        );
+
+      if (!blob) {
+        throw new Error(
+          "썸네일 파일 생성에 실패했습니다.",
+        );
+      }
+
+      return blob;
+    } finally {
+      URL.revokeObjectURL(
+        objectUrl,
+      );
+    }
+  }
+
+  async function uploadMarketThumbnail(
+    marketItemId: number,
+    sourceFile: File,
+  ) {
+    const thumbnailBlob =
+      await createMarketThumbnail(
+        sourceFile,
+      );
+
+    const filePath =
+      `market-${marketItemId}/thumbnail.webp`;
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from(
+          "market-thumbnails",
+        )
+        .upload(
+          filePath,
+          thumbnailBlob,
+          {
+            cacheControl:
+              "31536000",
+            contentType:
+              "image/webp",
+            upsert: true,
+          },
+        );
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } =
+      supabase.storage
+        .from(
+          "market-thumbnails",
+        )
+        .getPublicUrl(
+          filePath,
+        );
+
+    const thumbnailUrl =
+      `${data.publicUrl}?v=${Date.now()}`;
+
+    const { error: updateError } =
+      await supabase
+        .from("market_items")
+        .update({
+          thumbnail_url:
+            thumbnailUrl,
+        })
+        .eq(
+          "id",
+          marketItemId,
+        );
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    return thumbnailUrl;
+  }
 
   async function uploadMarketImage(
     userId: string,
@@ -627,6 +831,11 @@ export default function NewMarketItemPage() {
     try {
       const rowsToInsert = [];
 
+      const thumbnailSources: Array<{
+        firstImageUrl: string;
+        sourceFile: File;
+      }> = [];
+
       // 묶음 등록을 선택한 경우 이번 등록에 포함된 모든 상품에
       // 동일한 bundle_id를 저장합니다.
       const bundleId =
@@ -672,6 +881,18 @@ export default function NewMarketItemPage() {
           uploadedImageUrls.push(
             imageUrl,
           );
+        }
+
+        if (
+          uploadedImageUrls[0] &&
+          item.imageFiles[0]
+        ) {
+          thumbnailSources.push({
+            firstImageUrl:
+              uploadedImageUrls[0],
+            sourceFile:
+              item.imageFiles[0],
+          });
         }
 
         rowsToInsert.push({
@@ -726,13 +947,71 @@ export default function NewMarketItemPage() {
         });
       }
 
-      const { error: insertError } =
-        await supabase
-          .from("market_items")
-          .insert(rowsToInsert);
+      const {
+        data: insertedItems,
+        error: insertError,
+      } = await supabase
+        .from("market_items")
+        .insert(rowsToInsert)
+        .select(
+          "id, images",
+        );
 
       if (insertError) {
         throw insertError;
+      }
+
+      const thumbnailSourceMap =
+        new Map(
+          thumbnailSources.map(
+            (source) => [
+              source.firstImageUrl,
+              source.sourceFile,
+            ],
+          ),
+        );
+
+      for (
+        const insertedItem of
+          insertedItems || []
+      ) {
+        const insertedImages =
+          Array.isArray(
+            insertedItem.images,
+          )
+            ? insertedItem.images
+            : [];
+
+        const firstImageUrl =
+          typeof insertedImages[0] ===
+          "string"
+            ? insertedImages[0]
+            : "";
+
+        const sourceFile =
+          thumbnailSourceMap.get(
+            firstImageUrl,
+          );
+
+        if (!sourceFile) {
+          continue;
+        }
+
+        try {
+          await uploadMarketThumbnail(
+            Number(
+              insertedItem.id,
+            ),
+            sourceFile,
+          );
+        } catch (
+          thumbnailError
+        ) {
+          console.error(
+            `마켓 상품 ${insertedItem.id} 썸네일 생성 실패:`,
+            thumbnailError,
+          );
+        }
       }
 
       alert(

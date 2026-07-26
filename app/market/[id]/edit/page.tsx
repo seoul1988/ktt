@@ -29,6 +29,7 @@ const [description, setDescription] = useState("");
 
   const [images, setImages] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
   const [newImageFiles, setNewImageFiles] = useState<FileList | null>(null);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
@@ -37,6 +38,10 @@ const [description, setDescription] = useState("");
 
   const MAX_IMAGE_SIZE = 1600;
   const IMAGE_QUALITY = 0.82;
+
+  const THUMBNAIL_WIDTH = 480;
+  const THUMBNAIL_HEIGHT = 360;
+  const THUMBNAIL_QUALITY = 0.76;
 
   async function resizeImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) {
@@ -101,6 +106,164 @@ const [description, setDescription] = useState("");
       return file;
     } finally {
       URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  async function createThumbnailBlobFromFile(
+    file: File,
+  ): Promise<Blob> {
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+
+        img.onload = () => resolve(img);
+        img.onerror = () =>
+          reject(new Error(`이미지를 불러올 수 없습니다: ${file.name}`));
+        img.src = objectUrl;
+      });
+
+      return createThumbnailBlobFromImage(image);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  async function createThumbnailBlobFromUrl(
+    imageUrl: string,
+  ): Promise<Blob> {
+    const response = await fetch(imageUrl, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `대표 이미지를 불러오지 못했습니다. (${response.status})`,
+      );
+    }
+
+    const imageBlob = await response.blob();
+    const objectUrl = URL.createObjectURL(imageBlob);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+
+        img.onload = () => resolve(img);
+        img.onerror = () =>
+          reject(new Error("대표 이미지를 불러올 수 없습니다."));
+        img.src = objectUrl;
+      });
+
+      return createThumbnailBlobFromImage(image);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  async function createThumbnailBlobFromImage(
+    image: HTMLImageElement,
+  ): Promise<Blob> {
+    const sourceWidth = image.naturalWidth;
+    const sourceHeight = image.naturalHeight;
+
+    if (!sourceWidth || !sourceHeight) {
+      throw new Error("대표 이미지 크기를 확인할 수 없습니다.");
+    }
+
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT;
+
+    let sourceX = 0;
+    let sourceY = 0;
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+
+    if (sourceRatio > targetRatio) {
+      cropWidth = sourceHeight * targetRatio;
+      sourceX = (sourceWidth - cropWidth) / 2;
+    } else {
+      cropHeight = sourceWidth / targetRatio;
+      sourceY = (sourceHeight - cropHeight) / 2;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = THUMBNAIL_WIDTH;
+    canvas.height = THUMBNAIL_HEIGHT;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      throw new Error("썸네일 Canvas를 만들 수 없습니다.");
+    }
+
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      THUMBNAIL_WIDTH,
+      THUMBNAIL_HEIGHT,
+    );
+
+    const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(
+        resolve,
+        "image/webp",
+        THUMBNAIL_QUALITY,
+      );
+    });
+
+    if (!thumbnailBlob) {
+      throw new Error("썸네일 생성에 실패했습니다.");
+    }
+
+    return thumbnailBlob;
+  }
+
+  async function uploadMarketThumbnail(
+    marketItemId: string,
+    source: File | string,
+  ) {
+    const thumbnailBlob =
+      typeof source === "string"
+        ? await createThumbnailBlobFromUrl(source)
+        : await createThumbnailBlobFromFile(source);
+
+    const filePath = `market-${marketItemId}/thumbnail.webp`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("market-thumbnails")
+      .upload(filePath, thumbnailBlob, {
+        cacheControl: "31536000",
+        contentType: "image/webp",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage
+      .from("market-thumbnails")
+      .getPublicUrl(filePath);
+
+    return `${data.publicUrl}?v=${Date.now()}`;
+  }
+
+  async function deleteMarketThumbnail(marketItemId: string) {
+    const filePath = `market-${marketItemId}/thumbnail.webp`;
+
+    const { error } = await supabase.storage
+      .from("market-thumbnails")
+      .remove([filePath]);
+
+    if (error) {
+      console.warn("기존 마켓 썸네일 삭제 실패:", error.message);
     }
   }
 
@@ -171,6 +334,7 @@ setDescription(data.description || "");
 	
     setImages(Array.isArray(data.images) ? data.images : []);
     setVideoUrl(data.video_url || null);
+    setThumbnailUrl(data.thumbnail_url || null);
     setStatus(data.status || "available");
     setLoading(false);
   }
@@ -311,21 +475,49 @@ setDescription(data.description || "");
       const finalImages = [...images, ...addedImages];
       const finalVideoUrl = uploadedVideoUrl || videoUrl;
 
+      let finalThumbnailUrl: string | null = thumbnailUrl;
+
+      if (finalImages.length === 0) {
+        await deleteMarketThumbnail(id);
+        finalThumbnailUrl = null;
+      } else {
+        const firstExistingImageStillUsed =
+          images.length > 0 &&
+          finalImages[0] === images[0];
+
+        const shouldRebuildThumbnail =
+          !thumbnailUrl ||
+          !firstExistingImageStillUsed;
+
+        if (shouldRebuildThumbnail) {
+          const firstImageSource =
+            images.length > 0
+              ? finalImages[0]
+              : newImageFiles?.[0] || finalImages[0];
+
+          finalThumbnailUrl = await uploadMarketThumbnail(
+            id,
+            firstImageSource,
+          );
+        }
+      }
+
       const { error } = await supabase
         .from("market_items")
         .update({
-  title: title.trim(),
-  price: Number(price || 0),
-  category,
-  condition,
-  location: location.trim(),
-  phone: phone.trim(),
-  email: email.trim().toLowerCase(),
-  description: description.trim(),
-  images: finalImages,
-  video_url: finalVideoUrl,
-  status,
-})
+          title: title.trim(),
+          price: Number(price || 0),
+          category,
+          condition,
+          location: location.trim(),
+          phone: phone.trim() || null,
+          email: email.trim().toLowerCase() || null,
+          description: description.trim() || null,
+          images: finalImages,
+          thumbnail_url: finalThumbnailUrl,
+          video_url: finalVideoUrl,
+          status,
+        })
         .eq("id", id)
         .eq("seller_id", user.id);
 
