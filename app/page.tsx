@@ -275,10 +275,16 @@ function OfferBadges({
 }
 
 function BusinessMedia({ spot, className }: { spot: any; className: string }) {
+  const thumbnailUrl =
+    typeof spot?.thumbnail_url === "string" &&
+    spot.thumbnail_url.trim() !== ""
+      ? spot.thumbnail_url
+      : null;
+
   return (
     <img
-      src={spot.image_url || "/event.png"}
-      alt={spot.name || "Business"}
+      src={thumbnailUrl || spot?.image_url || "/event.png"}
+      alt={spot?.name || "Business"}
       loading="lazy"
       decoding="async"
       className={`${className} block !h-full !w-full !max-w-none !object-cover !object-center`}
@@ -297,10 +303,28 @@ function BusinessMedia({ spot, className }: { spot: any; className: string }) {
 }
 
 function DealMedia({ deal, className }: { deal: any; className: string }) {
+  const business = Array.isArray(deal?.businesses)
+    ? deal.businesses[0]
+    : deal?.businesses;
+
+  const businessThumbnailUrl =
+    typeof business?.thumbnail_url === "string" &&
+    business.thumbnail_url.trim() !== ""
+      ? business.thumbnail_url
+      : null;
+
+  const imageUrl =
+    deal?.image_url ||
+    businessThumbnailUrl ||
+    business?.image_url ||
+    "/event.png";
+
   return (
     <img
-      src={deal.image_url || deal.businesses?.image_url || "/event.png"}
-      alt={deal.title || deal.businesses?.name || "Deal"}
+      src={imageUrl}
+      alt={deal?.title || business?.name || "Deal"}
+      loading="lazy"
+      decoding="async"
       className={`${className} block !h-full !w-full !max-w-none !object-cover !object-center`}
       style={{
         display: "block",
@@ -573,6 +597,7 @@ export default async function Home() {
         name,
         category,
         city,
+        thumbnail_url,
         image_url,
         rating,
         review_count
