@@ -543,7 +543,7 @@ const displayedInstagramPosts = latestInstagramPosts.slice(0, 12);
       href="community/search"
       className="flex w-full items-center justify-center rounded-2xl border border-[#172033] bg-[#172033] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#24314d] active:scale-[0.98]"
     >
-      🔍 View All Businesses →
+      🔍 Business Search →
     </Link>
   </div>
       </section>
