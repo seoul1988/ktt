@@ -83,7 +83,7 @@ jobs:
         if: steps.time.outputs.should_run == 'true'
         shell: bash
         run: |
-          npm install --no-audit --no-fund
+          npm ci
 
       - name: Install Playwright Chromium
         if: steps.time.outputs.should_run == 'true'
@@ -129,12 +129,6 @@ jobs:
                 );
               }
 
-              if (state.cookies.length === 0) {
-                throw new Error(
-                  '저장된 Instagram 로그인 쿠키가 없습니다.'
-                );
-              }
-
               console.log(
                 'Instagram login file created. Cookies:',
                 state.cookies.length
@@ -152,8 +146,10 @@ jobs:
         if: steps.time.outputs.should_run == 'true'
         shell: bash
         env:
+          env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           NODE_ENV: development
@@ -260,18 +256,6 @@ jobs:
 
           echo "Instagram update completed successfully."
 
-      - name: Show Next.js log after failure
-        if: failure() && steps.time.outputs.should_run == 'true'
-        shell: bash
-        run: |
-          echo "========== Next.js server log =========="
-
-          if [ -f "next-server.log" ]; then
-            cat next-server.log
-          else
-            echo "next-server.log was not created."
-          fi
-
       - name: Stop Next.js server
         if: always() && steps.time.outputs.should_run == 'true'
         shell: bash
@@ -283,6 +267,18 @@ jobs:
               echo "Stopping Next.js server PID $NEXT_SERVER_PID..."
               kill "$NEXT_SERVER_PID" || true
             fi
+          fi
+
+      - name: Show Next.js log after failure
+        if: failure() && steps.time.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          echo "========== Next.js server log =========="
+
+          if [ -f "next-server.log" ]; then
+            cat next-server.log
+          else
+            echo "next-server.log was not created."
           fi
 
       - name: Instagram skipped
