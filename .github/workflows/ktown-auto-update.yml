@@ -26,6 +26,11 @@ jobs:
         run: |
           set -e
 
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
+            exit 1
+          fi
+
           echo "Updating Today's Korea..."
 
           curl \
@@ -45,11 +50,11 @@ jobs:
   instagram:
     name: Update Instagram
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Check Instagram schedule
-        id: time
+        id: instagram-time
         shell: bash
         run: |
           UTC_HOUR=$(date -u +%-H)
@@ -69,30 +74,37 @@ jobs:
           fi
 
       - name: Checkout project
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.instagram-time.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.instagram-time.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
-      - name: Install project dependencies
-        if: steps.time.outputs.should_run == 'true'
+      - name: Show Node and npm versions
+        if: steps.instagram-time.outputs.should_run == 'true'
         shell: bash
         run: |
-          npm ci
+          node --version
+          npm --version
+
+      - name: Install project dependencies
+        if: steps.instagram-time.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
 
       - name: Install Playwright Chromium
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.instagram-time.outputs.should_run == 'true'
         shell: bash
         run: |
           npx playwright install --with-deps chromium
 
       - name: Create Instagram login file
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.instagram-time.outputs.should_run == 'true'
         shell: bash
         env:
           INSTAGRAM_STORAGE_STATE: ${{ secrets.INSTAGRAM_STORAGE_STATE }}
@@ -114,36 +126,98 @@ jobs:
             exit 1
           fi
 
-          node -e "
-            const fs = require('fs');
-            const file = 'playwright/.auth/instagram.json';
+          node <<'NODE'
+          const fs = require("fs");
 
-            try {
-              const state = JSON.parse(
-                fs.readFileSync(file, 'utf8')
-              );
+          const file = "playwright/.auth/instagram.json";
 
-              if (!Array.isArray(state.cookies)) {
-                throw new Error(
-                  'cookies 배열이 없습니다.'
-                );
-              }
+          try {
+            const state = JSON.parse(
+              fs.readFileSync(file, "utf8"),
+            );
 
-              console.log(
-                'Instagram login file created. Cookies:',
-                state.cookies.length
-              );
-            } catch (error) {
-              console.error(
-                'Invalid Instagram storage state:',
-                error.message
-              );
-              process.exit(1);
+            if (!Array.isArray(state.cookies)) {
+              throw new Error("cookies 배열이 없습니다.");
             }
-          "
+
+            if (state.cookies.length === 0) {
+              throw new Error(
+                "저장된 Instagram 로그인 쿠키가 없습니다.",
+              );
+            }
+
+            const instagramCookies = state.cookies.filter(
+              (cookie) =>
+                typeof cookie.domain === "string" &&
+                cookie.domain.includes("instagram.com"),
+            );
+
+            if (instagramCookies.length === 0) {
+              throw new Error(
+                "Instagram 도메인의 로그인 쿠키가 없습니다.",
+              );
+            }
+
+            console.log(
+              "Instagram login file created.",
+            );
+
+            console.log(
+              "Total cookies:",
+              state.cookies.length,
+            );
+
+            console.log(
+              "Instagram cookies:",
+              instagramCookies.length,
+            );
+          } catch (error) {
+            console.error(
+              "Invalid Instagram storage state:",
+              error instanceof Error
+                ? error.message
+                : String(error),
+            );
+
+            process.exit(1);
+          }
+          NODE
+
+      - name: Validate required GitHub Secrets
+        if: steps.instagram-time.outputs.should_run == 'true'
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -e
+
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::SUPABASE_URL GitHub Secret이 비어 있습니다."
+            exit 1
+          fi
+
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_ANON_KEY GitHub Secret이 비어 있습니다."
+            exit 1
+          fi
+
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY GitHub Secret이 비어 있습니다."
+            exit 1
+          fi
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
+            exit 1
+          fi
+
+          echo "All required GitHub Secrets are available."
 
       - name: Start Next.js server
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.instagram-time.outputs.should_run == 'true'
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -151,6 +225,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          NEXT_TELEMETRY_DISABLED: "1"
           NODE_ENV: development
         run: |
           set -e
@@ -169,7 +244,11 @@ jobs:
           for i in {1..90}; do
             if ! kill -0 "$NEXT_SERVER_PID" 2>/dev/null; then
               echo "::error::Next.js server stopped unexpectedly."
-              cat next-server.log
+
+              if [ -f "next-server.log" ]; then
+                cat next-server.log
+              fi
+
               exit 1
             fi
 
@@ -178,11 +257,12 @@ jobs:
               --output /dev/null \
               --write-out "%{http_code}" \
               --connect-timeout 5 \
-              "http://127.0.0.1:3000" || true)
+              "http://127.0.0.1:3000/api/instagram-sync?limit=1" \
+              || true)
 
             if [ "$HTTP_STATUS" != "000" ]; then
               echo "Next.js server is ready."
-              echo "Root HTTP status: $HTTP_STATUS"
+              echo "Instagram API probe status: $HTTP_STATUS"
               exit 0
             fi
 
@@ -191,11 +271,15 @@ jobs:
           done
 
           echo "::error::Next.js server did not become ready."
-          cat next-server.log
+
+          if [ -f "next-server.log" ]; then
+            cat next-server.log
+          fi
+
           exit 1
 
       - name: Run Instagram sync locally
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.instagram-time.outputs.should_run == 'true'
         shell: bash
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
@@ -213,7 +297,7 @@ jobs:
             --silent \
             --location \
             --connect-timeout 30 \
-            --max-time 2100 \
+            --max-time 2400 \
             --output "$RESPONSE_FILE" \
             --write-out "%{http_code}" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
@@ -229,15 +313,23 @@ jobs:
           echo "HTTP status: $HTTP_STATUS"
           echo ""
           echo "API response:"
-          cat "$RESPONSE_FILE"
+
+          if [ -s "$RESPONSE_FILE" ]; then
+            cat "$RESPONSE_FILE"
+          else
+            echo "(empty response)"
+          fi
+
           echo ""
 
           if [ "$CURL_EXIT" -ne 0 ]; then
             echo "::error::Instagram curl failed with exit code $CURL_EXIT"
 
-            echo ""
-            echo "Next.js server log:"
-            cat next-server.log
+            if [ -f "next-server.log" ]; then
+              echo ""
+              echo "Next.js server log:"
+              cat next-server.log
+            fi
 
             exit 1
           fi
@@ -246,17 +338,31 @@ jobs:
              [ "$HTTP_STATUS" -ge 300 ]; then
             echo "::error::Instagram API returned HTTP $HTTP_STATUS"
 
-            echo ""
-            echo "Next.js server log:"
-            cat next-server.log
+            if [ -f "next-server.log" ]; then
+              echo ""
+              echo "Next.js server log:"
+              cat next-server.log
+            fi
 
             exit 1
           fi
 
           echo "Instagram update completed successfully."
 
+      - name: Show Next.js log after failure
+        if: failure() && steps.instagram-time.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          echo "========== Next.js server log =========="
+
+          if [ -f "next-server.log" ]; then
+            cat next-server.log
+          else
+            echo "next-server.log was not created."
+          fi
+
       - name: Stop Next.js server
-        if: always() && steps.time.outputs.should_run == 'true'
+        if: always() && steps.instagram-time.outputs.should_run == 'true'
         shell: bash
         run: |
           if [ -f "next-server.pid" ]; then
@@ -268,23 +374,12 @@ jobs:
             fi
           fi
 
-      - name: Show Next.js log after failure
-        if: failure() && steps.time.outputs.should_run == 'true'
-        shell: bash
-        run: |
-          echo "========== Next.js server log =========="
-
-          if [ -f "next-server.log" ]; then
-            cat next-server.log
-          else
-            echo "next-server.log was not created."
-          fi
-
       - name: Instagram skipped
-        if: steps.time.outputs.should_run != 'true'
+        if: steps.instagram-time.outputs.should_run != 'true'
         shell: bash
         run: |
-          echo "Instagram runs only at UTC 0, 4, 8, 12, 16 and 20."
+          echo "Instagram runs automatically only at:"
+          echo "UTC 0, 4, 8, 12, 16 and 20."
           echo "Manual workflow runs always execute Instagram."
 
   google-ratings:
@@ -294,7 +389,7 @@ jobs:
 
     steps:
       - name: Check Google Ratings schedule
-        id: time
+        id: ratings-time
         shell: bash
         run: |
           UTC_HOUR=$(date -u +%-H)
@@ -304,20 +399,28 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: Google Ratings update will run."
           elif [ "$UTC_HOUR" = "0" ] || \
                [ "$UTC_HOUR" = "12" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Scheduled Google Ratings update will run."
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Google Ratings update will be skipped this hour."
           fi
 
       - name: Call Google Ratings API
-        if: steps.time.outputs.should_run == 'true'
+        if: steps.ratings-time.outputs.should_run == 'true'
         shell: bash
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -e
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
+            exit 1
+          fi
 
           echo "Updating Google ratings..."
 
@@ -336,8 +439,8 @@ jobs:
           echo "Google ratings update completed."
 
       - name: Google Ratings skipped
-        if: steps.time.outputs.should_run != 'true'
+        if: steps.ratings-time.outputs.should_run != 'true'
         shell: bash
         run: |
-          echo "Google Ratings runs only at UTC 0 and 12."
+          echo "Google Ratings runs automatically only at UTC 0 and 12."
           echo "Manual workflow runs always execute Google Ratings."
