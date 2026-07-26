@@ -1,344 +1,145 @@
-name: KTown Triangle Auto Update
-
-on:
-  schedule:
-    # 매시간 정각 실행, UTC 기준
-    - cron: "0 * * * *"
-
-  # GitHub Actions 화면에서 수동 실행
-  workflow_dispatch:
-
-concurrency:
-  group: ktown-triangle-auto-update
-  cancel-in-progress: false
-
-jobs:
-  todays-korea:
-    name: Update Today's Korea
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Call Today's Korea API
-        shell: bash
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          set -e
-
-          echo "Updating Today's Korea..."
-
-          curl \
-            --fail-with-body \
-            --show-error \
-            --silent \
-            --location \
-            --connect-timeout 30 \
-            --max-time 300 \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/todays-korea/update"
-
-          echo ""
-          echo "Today's Korea update completed."
-
-  instagram:
-    name: Update Instagram
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-
-    steps:
-      - name: Check Instagram schedule
-        id: time
-        shell: bash
-        run: |
-          UTC_HOUR=$(date -u +%-H)
-
-          echo "hour=$UTC_HOUR" >> "$GITHUB_OUTPUT"
-          echo "Current UTC hour: $UTC_HOUR"
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: Instagram sync will run."
-          elif [ $((UTC_HOUR % 4)) -eq 0 ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Scheduled Instagram sync will run."
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Instagram sync will be skipped this hour."
-          fi
-
-      - name: Checkout project
-        if: steps.time.outputs.should_run == 'true'
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        if: steps.time.outputs.should_run == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install project dependencies
-        if: steps.time.outputs.should_run == 'true'
-        shell: bash
-        run: |
-          npm ci
-
-      - name: Install Playwright Chromium
-        if: steps.time.outputs.should_run == 'true'
-        shell: bash
-        run: |
-          npx playwright install --with-deps chromium
-
-      - name: Create Instagram login file
-        if: steps.time.outputs.should_run == 'true'
-        shell: bash
-        env:
-          INSTAGRAM_STORAGE_STATE: ${{ secrets.INSTAGRAM_STORAGE_STATE }}
-        run: |
-          set -e
-
-          if [ -z "$INSTAGRAM_STORAGE_STATE" ]; then
-            echo "::error::INSTAGRAM_STORAGE_STATE GitHub Secret이 비어 있습니다."
-            exit 1
-          fi
-
-          mkdir -p playwright/.auth
-
-          printf '%s' "$INSTAGRAM_STORAGE_STATE" \
-            > playwright/.auth/instagram.json
-
-          if [ ! -s "playwright/.auth/instagram.json" ]; then
-            echo "::error::Instagram 로그인 파일 생성에 실패했습니다."
-            exit 1
-          fi
-
-          node -e "
-            const fs = require('fs');
-            const file = 'playwright/.auth/instagram.json';
-
-            try {
-              const state = JSON.parse(
-                fs.readFileSync(file, 'utf8')
-              );
-
-              if (!Array.isArray(state.cookies)) {
-                throw new Error(
-                  'cookies 배열이 없습니다.'
-                );
-              }
-
-              console.log(
-                'Instagram login file created. Cookies:',
-                state.cookies.length
-              );
-            } catch (error) {
-              console.error(
-                'Invalid Instagram storage state:',
-                error.message
-              );
-              process.exit(1);
-            }
-          "
-
-      - name: Start Next.js server
-        if: steps.time.outputs.should_run == 'true'
-        shell: bash
-        env:
-          env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          NODE_ENV: development
-        run: |
-          set -e
-
-          echo "Starting local Next.js server..."
-
-          npm run dev -- --hostname 127.0.0.1 \
-            > next-server.log 2>&1 &
-
-          NEXT_SERVER_PID=$!
-
-          echo "$NEXT_SERVER_PID" > next-server.pid
-          echo "Next.js PID: $NEXT_SERVER_PID"
-          echo "Waiting for Next.js server..."
-
-          for i in {1..90}; do
-            if ! kill -0 "$NEXT_SERVER_PID" 2>/dev/null; then
-              echo "::error::Next.js server stopped unexpectedly."
-              cat next-server.log
-              exit 1
-            fi
-
-            HTTP_STATUS=$(curl \
-              --silent \
-              --output /dev/null \
-              --write-out "%{http_code}" \
-              --connect-timeout 5 \
-              "http://127.0.0.1:3000" || true)
-
-            if [ "$HTTP_STATUS" != "000" ]; then
-              echo "Next.js server is ready."
-              echo "Root HTTP status: $HTTP_STATUS"
-              exit 0
-            fi
-
-            echo "Waiting... attempt $i/90"
-            sleep 2
-          done
-
-          echo "::error::Next.js server did not become ready."
-          cat next-server.log
-          exit 1
-
-      - name: Run Instagram sync locally
-        if: steps.time.outputs.should_run == 'true'
-        shell: bash
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          set -e
-
-          echo "Running Instagram Playwright sync on GitHub Actions..."
-
-          RESPONSE_FILE=$(mktemp)
-
-          set +e
-
-          HTTP_STATUS=$(curl \
-            --show-error \
-            --silent \
-            --location \
-            --connect-timeout 30 \
-            --max-time 2100 \
-            --output "$RESPONSE_FILE" \
-            --write-out "%{http_code}" \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "http://127.0.0.1:3000/api/instagram-sync?limit=44")
-
-          CURL_EXIT=$?
-
-          set -e
-
-          echo ""
-          echo "Curl exit code: $CURL_EXIT"
-          echo "HTTP status: $HTTP_STATUS"
-          echo ""
-          echo "API response:"
-          cat "$RESPONSE_FILE"
-          echo ""
-
-          if [ "$CURL_EXIT" -ne 0 ]; then
-            echo "::error::Instagram curl failed with exit code $CURL_EXIT"
-
-            echo ""
-            echo "Next.js server log:"
-            cat next-server.log
-
-            exit 1
-          fi
-
-          if [ "$HTTP_STATUS" -lt 200 ] || \
-             [ "$HTTP_STATUS" -ge 300 ]; then
-            echo "::error::Instagram API returned HTTP $HTTP_STATUS"
-
-            echo ""
-            echo "Next.js server log:"
-            cat next-server.log
-
-            exit 1
-          fi
-
-          echo "Instagram update completed successfully."
-
-      - name: Stop Next.js server
-        if: always() && steps.time.outputs.should_run == 'true'
-        shell: bash
-        run: |
-          if [ -f "next-server.pid" ]; then
-            NEXT_SERVER_PID=$(cat next-server.pid)
-
-            if kill -0 "$NEXT_SERVER_PID" 2>/dev/null; then
-              echo "Stopping Next.js server PID $NEXT_SERVER_PID..."
-              kill "$NEXT_SERVER_PID" || true
-            fi
-          fi
-
-      - name: Show Next.js log after failure
-        if: failure() && steps.time.outputs.should_run == 'true'
-        shell: bash
-        run: |
-          echo "========== Next.js server log =========="
-
-          if [ -f "next-server.log" ]; then
-            cat next-server.log
-          else
-            echo "next-server.log was not created."
-          fi
-
-      - name: Instagram skipped
-        if: steps.time.outputs.should_run != 'true'
-        shell: bash
-        run: |
-          echo "Instagram runs only at UTC 0, 4, 8, 12, 16 and 20."
-          echo "Manual workflow runs always execute Instagram."
-
-  google-ratings:
-    name: Update Google Ratings
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Check Google Ratings schedule
-        id: time
-        shell: bash
-        run: |
-          UTC_HOUR=$(date -u +%-H)
-
-          echo "hour=$UTC_HOUR" >> "$GITHUB_OUTPUT"
-          echo "Current UTC hour: $UTC_HOUR"
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$UTC_HOUR" = "0" ] || \
-               [ "$UTC_HOUR" = "12" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Call Google Ratings API
-        if: steps.time.outputs.should_run == 'true'
-        shell: bash
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          set -e
-
-          echo "Updating Google ratings..."
-
-          curl \
-            --fail-with-body \
-            --show-error \
-            --silent \
-            --location \
-            --connect-timeout 30 \
-            --max-time 900 \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/update-google-ratings"
-
-          echo ""
-          echo "Google ratings update completed."
-
-      - name: Google Ratings skipped
-        if: steps.time.outputs.should_run != 'true'
-        shell: bash
-        run: |
-          echo "Google Ratings runs only at UTC 0 and 12."
-          echo "Manual workflow runs always execute Google Ratings."
+"use client";
+
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+
+type FeaturedBusiness = {
+  id: number | string;
+  name?: string | null;
+  category?: string | null;
+  thumbnail_url?: string | null;
+  image_url?: string | null;
+  city?: string | null;
+  rating?: number | string | null;
+  review_count?: number | null;
+  description?: string | null;
+};
+
+export default function CommunityFeaturedBusinessSlider({
+  businesses,
+}: {
+  businesses: FeaturedBusiness[];
+}) {
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const goToSlide = (index: number) => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+
+    slider.scrollTo({
+      left: slider.clientWidth * index,
+      behavior: "smooth",
+    });
+
+    setActiveIndex(index);
+  };
+
+  useEffect(() => {
+    if (businesses.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => {
+        const next = (current + 1) % businesses.length;
+        const slider = sliderRef.current;
+
+        slider?.scrollTo({
+          left: slider.clientWidth * next,
+          behavior: "smooth",
+        });
+
+        return next;
+      });
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [businesses.length]);
+
+  const handleScroll = () => {
+    const slider = sliderRef.current;
+    if (!slider || slider.clientWidth === 0) return;
+
+    const index = Math.round(slider.scrollLeft / slider.clientWidth);
+
+    setActiveIndex(
+      Math.max(0, Math.min(index, businesses.length - 1)),
+    );
+  };
+
+  if (!businesses.length) return null;
+
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-center gap-2 px-1">
+        <span className="text-2xl">⭐</span>
+
+        <h2 className="text-xl font-black text-[#172033]">
+          Featured Sponsor
+        </h2>
+      </div>
+
+      <div
+        ref={sliderRef}
+        onScroll={handleScroll}
+        className="flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {businesses.map((business) => {
+          const imageUrl =
+            business.thumbnail_url ||
+            business.image_url ||
+            null;
+
+          return (
+            <div
+              key={business.id}
+              className="w-full min-w-full shrink-0 snap-start px-0.5"
+            >
+              <Link
+                href={`/business/${business.id}?from=community`}
+                className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+              >
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#E8DED1]">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={business.name || "Featured Sponsor"}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-black text-[#6B6257]">
+                      No Photo
+                    </div>
+                  )}
+
+                  <div className="absolute right-4 top-4 rounded-full bg-yellow-400 px-4 py-1.5 text-[11px] font-black text-[#172033] shadow-lg">
+                    SPONSOR
+                  </div>
+                </div>
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+
+      {businesses.length > 1 && (
+        <div className="mt-3 flex justify-center gap-2">
+          {businesses.map((business, index) => (
+            <button
+              key={business.id}
+              type="button"
+              aria-label={`Featured sponsor ${index + 1}`}
+              onClick={() => goToSlide(index)}
+              className={`h-2 rounded-full transition-all ${
+                activeIndex === index
+                  ? "w-6 bg-[#C4483A]"
+                  : "w-2 bg-[#CBD2DE]"
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
