@@ -491,23 +491,25 @@ const displayedInstagramPosts = latestInstagramPosts.slice(0, 12);
                 className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#E8DED1]">
-  {biz.image_url ? (
-    <img
-      src={biz.image_url}
-      alt={biz.name || "Business"}
-      className="absolute inset-0 block h-full w-full object-cover"
-      style={{ objectFit: "cover" }}
-    />
-  ) : (
-    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
-      No Photo
-    </div>
-  )}
+                  {biz.thumbnail_url || biz.image_url ? (
+                    <img
+                      src={biz.thumbnail_url || biz.image_url}
+                      alt={biz.name || "Business"}
+                      loading="lazy"
+                      decoding="async"
+                      className="absolute inset-0 block h-full w-full object-cover"
+                      style={{ objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
+                      No Photo
+                    </div>
+                  )}
 
-  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
-    NEW
-  </div>
-</div>
+                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                    NEW
+                  </div>
+                </div>
 
                 <div className="p-3">
                   <h3 className="line-clamp-1 text-sm font-black">
