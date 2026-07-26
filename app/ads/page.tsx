@@ -20,6 +20,7 @@ type AdItem = {
   location: string | null;
   phone: string | null;
   images: string[] | null;
+  thumbnail_url: string | null;
   video_url: string | null;
   status: string | null;
   created_at: string | null;
@@ -223,6 +224,10 @@ export default function AdsPage() {
         if (videoPath) filesToDelete.push(videoPath);
       }
 
+      const thumbnailPath = targetAd?.thumbnail_url
+        ? getStoragePathFromUrl(targetAd.thumbnail_url, "ads-thumbnails")
+        : null;
+
       const uniqueFilesToDelete = Array.from(new Set(filesToDelete));
 
       if (uniqueFilesToDelete.length > 0) {
@@ -231,6 +236,20 @@ export default function AdsPage() {
 
         if (storageError) {
           alert("Storage file delete failed: " + storageError.message);
+          setDeletingId(null);
+          return;
+        }
+      }
+
+      if (thumbnailPath) {
+        const { error: thumbnailDeleteError } = await supabase.storage
+          .from("ads-thumbnails")
+          .remove([thumbnailPath]);
+
+        if (thumbnailDeleteError) {
+          alert(
+            "Thumbnail delete failed: " + thumbnailDeleteError.message,
+          );
           setDeletingId(null);
           return;
         }
@@ -373,8 +392,16 @@ export default function AdsPage() {
                   ? ad.video_url
                   : null;
 
+              const cleanThumbnailUrl =
+                typeof ad.thumbnail_url === "string" &&
+                ad.thumbnail_url.trim() !== ""
+                  ? ad.thumbnail_url
+                  : null;
+
+              const cardImageUrl = cleanThumbnailUrl;
+
               const hasVideo = Boolean(cleanVideoUrl);
-              const hasMedia = cleanImages.length > 0 || hasVideo;
+              const hasMedia = Boolean(cardImageUrl || hasVideo);
 
               const adOwnerId = getAdOwnerId(ad);
 
@@ -398,19 +425,20 @@ export default function AdsPage() {
                   <Link href={`/ads/${ad.id}`} className="flex min-h-0 flex-1 flex-col">
                     {hasMedia && (
                       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-gray-100">
-                        {hasVideo ? (
+                        {cardImageUrl ? (
+                          <img
+                            src={cardImageUrl}
+                            alt={ad.title}
+                            loading="lazy"
+                            decoding="async"
+                            className="absolute inset-0 h-full w-full object-cover"
+                          />
+                        ) : (
                           <video
                             src={cleanVideoUrl || ""}
                             muted
                             playsInline
                             preload="metadata"
-                            className="absolute inset-0 h-full w-full object-cover"
-                          />
-                        ) : (
-                          <img
-                            src={cleanImages[0]}
-                            alt={ad.title}
-                            loading="lazy"
                             className="absolute inset-0 h-full w-full object-cover"
                           />
                         )}
@@ -421,7 +449,7 @@ export default function AdsPage() {
                           </div>
                         )}
 
-                        {!hasVideo && cleanImages.length > 1 && (
+                        {cleanImages.length > 1 && (
                           <div className="absolute bottom-2 right-2 rounded-full bg-black/80 px-2 py-1 text-[10px] font-black text-white">
                             1/{cleanImages.length}
                           </div>

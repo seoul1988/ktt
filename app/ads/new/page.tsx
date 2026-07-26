@@ -85,6 +85,95 @@ async function optimizeImage(
   }
 }
 
+
+async function createThumbnailFile(
+  file: File,
+  width = 480,
+  height = 360,
+  quality = 0.76,
+): Promise<File> {
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(file, {
+        imageOrientation: "from-image",
+      });
+    } else {
+      objectUrl = URL.createObjectURL(file);
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () =>
+          reject(new Error("썸네일용 이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    }
+
+    const sourceWidth = source.width;
+    const sourceHeight = source.height;
+
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = width / height;
+
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceRatio > targetRatio) {
+      cropWidth = Math.round(sourceHeight * targetRatio);
+      cropX = Math.round((sourceWidth - cropWidth) / 2);
+    } else if (sourceRatio < targetRatio) {
+      cropHeight = Math.round(sourceWidth / targetRatio);
+      cropY = Math.round((sourceHeight - cropHeight) / 2);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("썸네일 변환을 시작할 수 없습니다.");
+    }
+
+    context.drawImage(
+      source,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      width,
+      height,
+    );
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!blob) {
+      throw new Error("썸네일 WebP 변환에 실패했습니다.");
+    }
+
+    const baseName = file.name.replace(/\.[^/.]+$/, "") || "ad-thumbnail";
+
+    return new File([blob], `${baseName}-thumbnail.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+    if (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap) {
+      source.close();
+    }
+  }
+}
+
 export default function NewAdPage() {
   const router = useRouter();
   const addressRef = useRef<HTMLInputElement | null>(null);
@@ -216,6 +305,39 @@ export default function NewAdPage() {
     return urls;
   }
 
+
+  async function uploadThumbnail(userId: string) {
+    const firstImage = imageFiles[0];
+    if (!firstImage) return null;
+
+    const thumbnailFile = await createThumbnailFile(
+      firstImage,
+      480,
+      360,
+      0.76,
+    );
+
+    const path = `${userId}/thumbnails/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.webp`;
+
+    const { error } = await supabase.storage
+      .from("ads-thumbnails")
+      .upload(path, thumbnailFile, {
+        contentType: "image/webp",
+        cacheControl: "31536000",
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("ads-thumbnails")
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  }
+
   async function uploadVideo(userId: string) {
     if (!videoFile) return null;
 
@@ -252,8 +374,11 @@ export default function NewAdPage() {
         return;
       }
 
-      const imageUrls = await uploadImages(user.id);
-      const videoUrl = await uploadVideo(user.id);
+      const [imageUrls, thumbnailUrl, videoUrl] = await Promise.all([
+        uploadImages(user.id),
+        uploadThumbnail(user.id),
+        uploadVideo(user.id),
+      ]);
 
       const { error } = await supabase.from("ads").insert({
         user_id: user.id,
@@ -266,6 +391,7 @@ export default function NewAdPage() {
         lat,
         lng,
         images: imageUrls,
+        thumbnail_url: thumbnailUrl,
         video_url: videoUrl,
         status: "active",
         display_order: 999,

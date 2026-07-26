@@ -17,6 +17,7 @@ type AdItem = {
   phone: string | null;
   website_url: string | null;
   images: string[] | null;
+  thumbnail_url: string | null;
   video_url: string | null;
   status: string | null;
   lat: number | null;
@@ -25,6 +26,7 @@ type AdItem = {
 
 const IMAGE_BUCKET = "ads";
 const VIDEO_BUCKET = "ads";
+const THUMBNAIL_BUCKET = "ads-thumbnails";
 
 async function optimizeImage(
   file: File,
@@ -107,6 +109,103 @@ async function optimizeImage(
   }
 }
 
+
+async function createThumbnailFileFromBlob(
+  blob: Blob,
+  fileName = "ad-thumbnail",
+  width = 480,
+  height = 360,
+  quality = 0.76,
+): Promise<File> {
+  let source: ImageBitmap | HTMLImageElement | null = null;
+  let objectUrl = "";
+
+  try {
+    if ("createImageBitmap" in window) {
+      source = await createImageBitmap(blob);
+    } else {
+      objectUrl = URL.createObjectURL(blob);
+      source = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () =>
+          reject(new Error("썸네일 이미지를 읽을 수 없습니다."));
+        image.src = objectUrl;
+      });
+    }
+
+    const sourceWidth = source.width;
+    const sourceHeight = source.height;
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = width / height;
+
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceRatio > targetRatio) {
+      cropWidth = Math.round(sourceHeight * targetRatio);
+      cropX = Math.round((sourceWidth - cropWidth) / 2);
+    } else if (sourceRatio < targetRatio) {
+      cropHeight = Math.round(sourceWidth / targetRatio);
+      cropY = Math.round((sourceHeight - cropHeight) / 2);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("썸네일 변환 기능을 사용할 수 없습니다.");
+    }
+
+    context.drawImage(
+      source,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      width,
+      height,
+    );
+
+    const thumbnailBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", quality);
+    });
+
+    if (!thumbnailBlob) {
+      throw new Error("썸네일 WebP 변환에 실패했습니다.");
+    }
+
+    const baseName = fileName.replace(/\.[^/.]+$/, "") || "ad-thumbnail";
+
+    return new File([thumbnailBlob], `${baseName}-thumbnail.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+
+    if (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap) {
+      source.close();
+    }
+  }
+}
+
+async function fetchImageBlob(imageUrl: string): Promise<Blob> {
+  const response = await fetch(imageUrl, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(`대표 이미지를 불러오지 못했습니다. (${response.status})`);
+  }
+
+  return response.blob();
+}
+
 export default function EditAdPage() {
   const newImageInputRef = useRef<HTMLInputElement | null>(null);
   const previewUrlsRef = useRef<string[]>([]);
@@ -132,6 +231,7 @@ export default function EditAdPage() {
   const [lng, setLng] = useState("");
 
   const [images, setImages] = useState<string[]>([]);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
   const [newImages, setNewImages] = useState<File[]>([]);
@@ -182,6 +282,7 @@ export default function EditAdPage() {
     setLat(item.lat !== null ? String(item.lat) : "");
     setLng(item.lng !== null ? String(item.lng) : "");
     setImages(Array.isArray(item.images) ? item.images : []);
+    setThumbnailUrl(item.thumbnail_url || null);
     setVideoUrl(item.video_url || null);
 
     setLoading(false);
@@ -304,6 +405,55 @@ export default function EditAdPage() {
     return uploadedUrls;
   }
 
+
+  async function uploadThumbnail(
+    finalImages: string[],
+    uploadedImages: string[],
+  ) {
+    if (finalImages.length === 0) return null;
+
+    const firstImageUrl = finalImages[0];
+    const firstNewImageIndex = uploadedImages.indexOf(firstImageUrl);
+
+    let sourceBlob: Blob;
+    let sourceName = "ad-image";
+
+    if (firstNewImageIndex !== -1 && newImages[firstNewImageIndex]) {
+      sourceBlob = newImages[firstNewImageIndex];
+      sourceName = newImages[firstNewImageIndex].name;
+    } else {
+      sourceBlob = await fetchImageBlob(firstImageUrl);
+      sourceName = firstImageUrl.split("/").pop()?.split("?")[0] || "ad-image";
+    }
+
+    const thumbnailFile = await createThumbnailFileFromBlob(
+      sourceBlob,
+      sourceName,
+      480,
+      360,
+      0.76,
+    );
+
+    const folder = getUploadFolder();
+    const fileName = `${folder}/thumbnails/${Date.now()}-${crypto.randomUUID()}.webp`;
+
+    const { error } = await supabase.storage
+      .from(THUMBNAIL_BUCKET)
+      .upload(fileName, thumbnailFile, {
+        cacheControl: "31536000",
+        contentType: "image/webp",
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from(THUMBNAIL_BUCKET)
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
+  }
+
   async function uploadVideo() {
     if (!newVideo) return videoUrl;
 
@@ -395,6 +545,10 @@ export default function EditAdPage() {
       const uploadedImages = await uploadImages();
       const finalImages = [...images, ...uploadedImages];
       const finalVideoUrl = await uploadVideo();
+      const finalThumbnailUrl = await uploadThumbnail(
+        finalImages,
+        uploadedImages,
+      );
 
       const { error } = await supabase
         .from("ads")
@@ -409,6 +563,7 @@ export default function EditAdPage() {
           lat: lat ? Number(lat) : null,
           lng: lng ? Number(lng) : null,
           images: finalImages,
+          thumbnail_url: finalThumbnailUrl,
           video_url: finalVideoUrl,
         })
         .eq("id", adId);
@@ -418,6 +573,10 @@ export default function EditAdPage() {
       }
 
       await deleteStorageFiles(IMAGE_BUCKET, deletedImages);
+
+      if (thumbnailUrl && thumbnailUrl !== finalThumbnailUrl) {
+        await deleteStorageFiles(THUMBNAIL_BUCKET, [thumbnailUrl]);
+      }
 
       if (deletedVideoUrl && deletedVideoUrl !== finalVideoUrl) {
         await deleteStorageFiles(VIDEO_BUCKET, [deletedVideoUrl]);
