@@ -7,6 +7,7 @@ type FeaturedBusiness = {
   id: number | string;
   name?: string | null;
   category?: string | null;
+  thumbnail_url?: string | null;
   image_url?: string | null;
   city?: string | null;
   rating?: number | string | null;
@@ -59,7 +60,10 @@ export default function CommunityFeaturedBusinessSlider({
     if (!slider || slider.clientWidth === 0) return;
 
     const index = Math.round(slider.scrollLeft / slider.clientWidth);
-    setActiveIndex(Math.max(0, Math.min(index, businesses.length - 1)));
+
+    setActiveIndex(
+      Math.max(0, Math.min(index, businesses.length - 1)),
+    );
   };
 
   if (!businesses.length) return null;
@@ -68,6 +72,7 @@ export default function CommunityFeaturedBusinessSlider({
     <section className="mb-8">
       <div className="mb-3 flex items-center gap-2 px-1">
         <span className="text-2xl">⭐</span>
+
         <h2 className="text-xl font-black text-[#172033]">
           Featured Sponsor
         </h2>
@@ -78,37 +83,44 @@ export default function CommunityFeaturedBusinessSlider({
         onScroll={handleScroll}
         className="flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        {businesses.map((business) => (
-          <div
-            key={business.id}
-            className="w-full min-w-full shrink-0 snap-start px-0.5"
-          >
-            <Link
-              href={`/business/${business.id}?from=community`}
-              className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+        {businesses.map((business) => {
+          const imageUrl =
+            business.thumbnail_url ||
+            business.image_url ||
+            null;
+
+          return (
+            <div
+              key={business.id}
+              className="w-full min-w-full shrink-0 snap-start px-0.5"
             >
-              <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#E8DED1]">
-                {business.image_url ? (
-                  <img
-                    src={business.image_url}
-                    alt={business.name || "Featured Sponsor"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-sm font-black text-[#6B6257]">
-                    No Photo
+              <Link
+                href={`/business/${business.id}?from=community`}
+                className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+              >
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#E8DED1]">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt={business.name || "Featured Sponsor"}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-black text-[#6B6257]">
+                      No Photo
+                    </div>
+                  )}
+
+                  <div className="absolute right-4 top-4 rounded-full bg-yellow-400 px-4 py-1.5 text-[11px] font-black text-[#172033] shadow-lg">
+                    SPONSOR
                   </div>
-                )}
-
-               <div className="absolute right-4 top-4 rounded-full bg-yellow-400 px-4 py-1.5 text-[11px] font-black text-[#172033] shadow-lg">
-  SPONSOR
-</div>
-              </div>
-
-
-            </Link>
-          </div>
-        ))}
+                </div>
+              </Link>
+            </div>
+          );
+        })}
       </div>
 
       {businesses.length > 1 && (

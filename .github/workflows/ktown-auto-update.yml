@@ -2,8 +2,7 @@ name: KTown Triangle Auto Update
 
 on:
   schedule:
-    # 매시간 실행
-    # GitHub Actions의 cron 시간은 UTC 기준
+    # 매시간 정각, UTC 기준
     - cron: "0 * * * *"
 
   # GitHub Actions 화면에서 수동 실행 가능
@@ -14,89 +13,199 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update:
-    name: Run scheduled updates
+  todays-korea:
+    name: Update Today's Korea
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
 
     steps:
-      - name: Set current UTC hour
+      - name: Call Today's Korea API
+        shell: bash
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set +e
+
+          RESPONSE_FILE=$(mktemp)
+
+          HTTP_STATUS=$(curl \
+            --show-error \
+            --silent \
+            --location \
+            --connect-timeout 30 \
+            --max-time 300 \
+            --retry 1 \
+            --retry-delay 10 \
+            --output "$RESPONSE_FILE" \
+            --write-out "%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
+            "https://www.ktowntriangle.com/api/todays-korea/update")
+
+          CURL_EXIT=$?
+
+          echo "Curl exit code: $CURL_EXIT"
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response:"
+          cat "$RESPONSE_FILE"
+          echo ""
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::Today's Korea request failed with curl exit code $CURL_EXIT"
+            exit 1
+          fi
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Today's Korea API returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Today's Korea update completed successfully."
+
+  instagram:
+    name: Update Instagram
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    # 수동 실행 또는 UTC 0, 4, 8, 12, 16, 20시
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        github.event.schedule == '0 * * * *'
+      }}
+
+    steps:
+      - name: Check whether Instagram should run
         id: time
         shell: bash
         run: |
           UTC_HOUR=$(date -u +%-H)
           echo "hour=$UTC_HOUR" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [ $((UTC_HOUR % 4)) -eq 0 ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
           echo "Current UTC hour: $UTC_HOUR"
 
-      # 매시간 실행
-      - name: Update Today's Korea
+      - name: Call Instagram API
+        if: steps.time.outputs.should_run == 'true'
         shell: bash
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          echo "Updating Today's Korea..."
+          set +e
 
-          curl \
-            --fail \
+          RESPONSE_FILE=$(mktemp)
+
+          HTTP_STATUS=$(curl \
             --show-error \
             --silent \
             --location \
-            --retry 3 \
-            --retry-delay 10 \
-            --max-time 300 \
+            --connect-timeout 30 \
+            --max-time 1500 \
+            --retry 0 \
+            --output "$RESPONSE_FILE" \
+            --write-out "%{http_code}" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/todays-korea/update"
+            "https://www.ktowntriangle.com/api/instagram-sync?limit=44")
 
+          CURL_EXIT=$?
+
+          echo "Curl exit code: $CURL_EXIT"
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response:"
+          cat "$RESPONSE_FILE"
           echo ""
-          echo "Today's Korea update completed."
 
-      # UTC 0, 4, 8, 12, 16, 20시에 실행
-      # 4시간마다
-      - name: Update Instagram
-        if: ${{ github.event_name == 'workflow_dispatch' || steps.time.outputs.hour == '0' || steps.time.outputs.hour == '4' || steps.time.outputs.hour == '8' || steps.time.outputs.hour == '12' || steps.time.outputs.hour == '16' || steps.time.outputs.hour == '20' }}
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::Instagram request failed with curl exit code $CURL_EXIT"
+            exit 1
+          fi
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Instagram API returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Instagram update completed successfully."
+
+      - name: Instagram skipped
+        if: steps.time.outputs.should_run != 'true'
+        run: echo "Instagram update is not scheduled for this UTC hour."
+
+  google-ratings:
+    name: Update Google Ratings
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check whether Google Ratings should run
+        id: time
+        shell: bash
+        run: |
+          UTC_HOUR=$(date -u +%-H)
+          echo "hour=$UTC_HOUR" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$UTC_HOUR" = "0" ] || [ "$UTC_HOUR" = "12" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Current UTC hour: $UTC_HOUR"
+
+      - name: Call Google Ratings API
+        if: steps.time.outputs.should_run == 'true'
         shell: bash
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          echo "Updating Instagram posts..."
+          set +e
 
-          curl \
-            --fail \
+          RESPONSE_FILE=$(mktemp)
+
+          HTTP_STATUS=$(curl \
             --show-error \
             --silent \
             --location \
-            --retry 3 \
-            --retry-delay 10 \
+            --connect-timeout 30 \
             --max-time 900 \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/instagram-sync?limit=44"
-
-          echo ""
-          echo "Instagram update completed."
-
-      # UTC 0시와 12시에 실행
-      # 12시간마다, 하루 2회
-      - name: Update Google Ratings
-        if: ${{ github.event_name == 'workflow_dispatch' || steps.time.outputs.hour == '0' || steps.time.outputs.hour == '12' }}
-        shell: bash
-        env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          echo "Updating Google ratings..."
-
-          curl \
-            --fail \
-            --show-error \
-            --silent \
-            --location \
-            --retry 3 \
+            --retry 1 \
             --retry-delay 10 \
-            --max-time 900 \
+            --output "$RESPONSE_FILE" \
+            --write-out "%{http_code}" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/update-google-ratings"
+            "https://www.ktowntriangle.com/api/update-google-ratings")
 
+          CURL_EXIT=$?
+
+          echo "Curl exit code: $CURL_EXIT"
+          echo "HTTP status: $HTTP_STATUS"
+          echo "Response:"
+          cat "$RESPONSE_FILE"
           echo ""
-          echo "Google ratings update completed."
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "::error::Google Ratings request failed with curl exit code $CURL_EXIT"
+            exit 1
+          fi
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::error::Google Ratings API returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+          echo "Google Ratings update completed successfully."
+
+      - name: Google Ratings skipped
+        if: steps.time.outputs.should_run != 'true'
+        run: echo "Google Ratings update is not scheduled for this UTC hour."
