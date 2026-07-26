@@ -21,6 +21,7 @@ type Business = {
   city?: string | null;
   address?: string | null;
   image_url?: string | null;
+  thumbnail_url?: string | null;
   rating?: number | string | null;
   review_count?: number | null;
   hours?: string | null;
@@ -1070,13 +1071,30 @@ export default function SearchDirectory({
                         >
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
                             <img
-                              src={business.image_url || "/event.png"}
+                              src={
+                                business.thumbnail_url ||
+                                business.image_url ||
+                                "/event.png"
+                              }
                               alt={business.name}
                               loading="lazy"
                               decoding="async"
                               className="h-full w-full object-cover"
                               onError={(event) => {
-                                event.currentTarget.src = "/event.png";
+                                const image = event.currentTarget;
+
+                                if (
+                                  business.image_url &&
+                                  image.src !== business.image_url &&
+                                  image.dataset.originalTried !== "true"
+                                ) {
+                                  image.dataset.originalTried = "true";
+                                  image.src = business.image_url;
+                                  return;
+                                }
+
+                                image.onerror = null;
+                                image.src = "/event.png";
                               }}
                             />
                           </div>
@@ -1262,7 +1280,11 @@ export default function SearchDirectory({
               >
                 <div className="h-28 w-36 shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-28 sm:w-36">
                   <img
-                    src={business.image_url || "/event.png"}
+                    src={
+                      business.thumbnail_url ||
+                      business.image_url ||
+                      "/event.png"
+                    }
                     alt={business.name}
                     loading="lazy"
                     decoding="async"
@@ -1276,7 +1298,20 @@ export default function SearchDirectory({
                       objectPosition: "center",
                     }}
                     onError={(event) => {
-                      event.currentTarget.src = "/event.png";
+                      const image = event.currentTarget;
+
+                      if (
+                        business.image_url &&
+                        image.src !== business.image_url &&
+                        image.dataset.originalTried !== "true"
+                      ) {
+                        image.dataset.originalTried = "true";
+                        image.src = business.image_url;
+                        return;
+                      }
+
+                      image.onerror = null;
+                      image.src = "/event.png";
                     }}
                   />
                 </div>

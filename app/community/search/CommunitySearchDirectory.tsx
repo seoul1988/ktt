@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
 import { useRouter } from "next/navigation";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import ScrollToTopButton from "../../components/ScrollToTopButton";
@@ -22,6 +22,7 @@ type Business = {
   city?: string | null;
   address?: string | null;
   image_url?: string | null;
+  thumbnail_url?: string | null;
   rating?: number | string | null;
   review_count?: number | null;
   hours?: string | null;
@@ -36,6 +37,35 @@ function normalize(value: unknown) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
+}
+
+function getBusinessThumbnailUrl(business: Business) {
+  return (
+    String(business.thumbnail_url ?? "").trim() ||
+    String(business.image_url ?? "").trim() ||
+    "/event.png"
+  );
+}
+
+function handleBusinessImageError(
+  event: SyntheticEvent<HTMLImageElement>,
+  originalImageUrl?: string | null,
+) {
+  const image = event.currentTarget;
+  const originalUrl = String(originalImageUrl ?? "").trim();
+
+  if (
+    originalUrl &&
+    image.dataset.originalFallbackUsed !== "true" &&
+    image.src !== originalUrl
+  ) {
+    image.dataset.originalFallbackUsed = "true";
+    image.src = originalUrl;
+    return;
+  }
+
+  image.onerror = null;
+  image.src = "/event.png";
 }
 
 function timeTextToMinutes(timeText?: string | null) {
@@ -1274,14 +1304,17 @@ export default function CommunitySearchDirectory({
                         >
                           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
                             <img
-                              src={business.image_url || "/event.png"}
+                              src={getBusinessThumbnailUrl(business)}
                               alt={business.name}
                               loading="lazy"
                               decoding="async"
                               className="h-full w-full object-cover"
-                              onError={(event) => {
-                                event.currentTarget.src = "/event.png";
-                              }}
+                              onError={(event) =>
+                                handleBusinessImageError(
+                                  event,
+                                  business.image_url,
+                                )
+                              }
                             />
                           </div>
 
@@ -1561,7 +1594,7 @@ export default function CommunitySearchDirectory({
               >
                 <div className="h-28 w-36 shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-28 sm:w-36">
                   <img
-                    src={business.image_url || "/event.png"}
+                    src={getBusinessThumbnailUrl(business)}
                     alt={business.name}
                     loading="lazy"
                     decoding="async"
@@ -1574,9 +1607,12 @@ export default function CommunitySearchDirectory({
                       objectFit: "cover",
                       objectPosition: "center",
                     }}
-                    onError={(event) => {
-                      event.currentTarget.src = "/event.png";
-                    }}
+                    onError={(event) =>
+                      handleBusinessImageError(
+                        event,
+                        business.image_url,
+                      )
+                    }
                   />
                 </div>
 

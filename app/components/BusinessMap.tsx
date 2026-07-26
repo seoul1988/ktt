@@ -183,6 +183,7 @@ type Spot = {
   matched_categories?: string[] | null;
   city: string | null;
   image_url: string | null;
+  thumbnail_url?: string | null;
   image_urls?: string[] | null;
   image_url_2?: string | null;
   image_url_3?: string | null;
@@ -2185,10 +2186,23 @@ landscape:top-[62px]"
           const cardKey = `${spotKey}-${index}`;
           const businessId = getBusinessId(spot);
 
-          const images =
+          const originalImages =
             spot.image_urls && spot.image_urls.length > 0
               ? spot.image_urls
               : [spot.image_url, spot.image_url_2, spot.image_url_3].filter(Boolean);
+
+          /*
+           * 지도 카드의 첫 이미지는 가벼운 thumbnail_url을 우선 사용합니다.
+           * 추가 이미지들은 기존 원본을 유지하여 좌우 슬라이드가 그대로 작동합니다.
+           */
+          const images = Array.from(
+            new Set(
+              [
+                spot.thumbnail_url,
+                ...originalImages,
+              ].filter(Boolean) as string[],
+            ),
+          );
 
           const current = imageIndexes[spotKey] || 0;
           const status = getOpenStatus(spot);
@@ -2250,9 +2264,32 @@ landscape:top-[62px]"
                         src={image as string}
                         alt={spot.name}
                         draggable={false}
+                        loading="lazy"
+                        decoding="async"
                         className={`h-full w-full shrink-0 snap-center ${
                           communityMode ? "object-contain" : "object-cover"
                         } landscape:object-cover`}
+                        onError={(event) => {
+                          const imageElement = event.currentTarget;
+
+                          /*
+                           * thumbnail_url이 실패하면 기존 원본 image_url로
+                           * 한 번 재시도한 뒤, 원본도 실패하면 event.png를 표시합니다.
+                           */
+                          if (
+                            imageIndex === 0 &&
+                            spot.image_url &&
+                            imageElement.src !== spot.image_url &&
+                            imageElement.dataset.originalTried !== "true"
+                          ) {
+                            imageElement.dataset.originalTried = "true";
+                            imageElement.src = spot.image_url;
+                            return;
+                          }
+
+                          imageElement.onerror = null;
+                          imageElement.src = "/event.png";
+                        }}
                       />
                     ))}
                   </div>
