@@ -24,6 +24,8 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          set -e
+
           echo "Updating Today's Korea..."
 
           curl \
@@ -43,17 +45,10 @@ jobs:
   instagram:
     name: Update Instagram
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-
-    # 수동 실행 또는 UTC 0, 4, 8, 12, 16, 20시만 실행
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch' ||
-        github.event.schedule == '0 * * * *'
-      }}
+    timeout-minutes: 40
 
     steps:
-      - name: Set current UTC hour
+      - name: Check Instagram schedule
         id: time
         shell: bash
         run: |
@@ -64,10 +59,13 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run: Instagram sync will run."
           elif [ $((UTC_HOUR % 4)) -eq 0 ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Scheduled Instagram sync will run."
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "Instagram sync will be skipped this hour."
           fi
 
       - name: Checkout project
@@ -83,23 +81,66 @@ jobs:
 
       - name: Install project dependencies
         if: steps.time.outputs.should_run == 'true'
-        run: npm ci
+        shell: bash
+        run: |
+          npm ci
 
       - name: Install Playwright Chromium
         if: steps.time.outputs.should_run == 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Check Instagram login file
-        if: steps.time.outputs.should_run == 'true'
         shell: bash
         run: |
-          if [ ! -f "playwright/.auth/instagram.json" ]; then
-            echo "::error::playwright/.auth/instagram.json 파일이 없습니다."
-            echo "::error::Instagram 로그인 상태 파일을 GitHub Actions에서 사용할 수 있도록 준비해야 합니다."
+          npx playwright install --with-deps chromium
+
+      - name: Create Instagram login file
+        if: steps.time.outputs.should_run == 'true'
+        shell: bash
+        env:
+          INSTAGRAM_STORAGE_STATE: ${{ secrets.INSTAGRAM_STORAGE_STATE }}
+        run: |
+          set -e
+
+          if [ -z "$INSTAGRAM_STORAGE_STATE" ]; then
+            echo "::error::INSTAGRAM_STORAGE_STATE GitHub Secret이 비어 있습니다."
             exit 1
           fi
 
-          echo "Instagram login file found."
+          mkdir -p playwright/.auth
+
+          printf '%s' "$INSTAGRAM_STORAGE_STATE" \
+            > playwright/.auth/instagram.json
+
+          if [ ! -s "playwright/.auth/instagram.json" ]; then
+            echo "::error::Instagram 로그인 파일 생성에 실패했습니다."
+            exit 1
+          fi
+
+          node -e "
+            const fs = require('fs');
+            const file = 'playwright/.auth/instagram.json';
+
+            try {
+              const state = JSON.parse(
+                fs.readFileSync(file, 'utf8')
+              );
+
+              if (!Array.isArray(state.cookies)) {
+                throw new Error(
+                  'cookies 배열이 없습니다.'
+                );
+              }
+
+              console.log(
+                'Instagram login file created. Cookies:',
+                state.cookies.length
+              );
+            } catch (error) {
+              console.error(
+                'Invalid Instagram storage state:',
+                error.message
+              );
+              process.exit(1);
+            }
+          "
 
       - name: Start Next.js server
         if: steps.time.outputs.should_run == 'true'
@@ -108,29 +149,47 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
-          # 기존 API가 INSTAGRAM_SYNC_SECRET을 확인하므로
-          # CRON_SECRET과 같은 값을 사용합니다.
-          INSTAGRAM_SYNC_SECRET: ${{ secrets.CRON_SECRET }}
-
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
           NODE_ENV: development
         run: |
-          npm run dev -- --hostname 127.0.0.1 > next-server.log 2>&1 &
+          set -e
 
-          echo $! > next-server.pid
+          echo "Starting local Next.js server..."
+
+          npm run dev -- --hostname 127.0.0.1 \
+            > next-server.log 2>&1 &
+
+          NEXT_SERVER_PID=$!
+
+          echo "$NEXT_SERVER_PID" > next-server.pid
+          echo "Next.js PID: $NEXT_SERVER_PID"
           echo "Waiting for Next.js server..."
 
-          for i in {1..60}; do
-            if curl --silent --output /dev/null \
-              "http://127.0.0.1:3000"; then
+          for i in {1..90}; do
+            if ! kill -0 "$NEXT_SERVER_PID" 2>/dev/null; then
+              echo "::error::Next.js server stopped unexpectedly."
+              cat next-server.log
+              exit 1
+            fi
+
+            HTTP_STATUS=$(curl \
+              --silent \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              --connect-timeout 5 \
+              "http://127.0.0.1:3000" || true)
+
+            if [ "$HTTP_STATUS" != "000" ]; then
               echo "Next.js server is ready."
+              echo "Root HTTP status: $HTTP_STATUS"
               exit 0
             fi
 
+            echo "Waiting... attempt $i/90"
             sleep 2
           done
 
-          echo "::error::Next.js server did not start."
+          echo "::error::Next.js server did not become ready."
           cat next-server.log
           exit 1
 
@@ -140,6 +199,8 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          set -e
+
           echo "Running Instagram Playwright sync on GitHub Actions..."
 
           RESPONSE_FILE=$(mktemp)
@@ -151,7 +212,7 @@ jobs:
             --silent \
             --location \
             --connect-timeout 30 \
-            --max-time 1800 \
+            --max-time 2100 \
             --output "$RESPONSE_FILE" \
             --write-out "%{http_code}" \
             -H "Authorization: Bearer ${CRON_SECRET}" \
@@ -180,7 +241,8 @@ jobs:
             exit 1
           fi
 
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+          if [ "$HTTP_STATUS" -lt 200 ] || \
+             [ "$HTTP_STATUS" -ge 300 ]; then
             echo "::error::Instagram API returned HTTP $HTTP_STATUS"
 
             echo ""
@@ -191,6 +253,19 @@ jobs:
           fi
 
           echo "Instagram update completed successfully."
+
+      - name: Stop Next.js server
+        if: always() && steps.time.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          if [ -f "next-server.pid" ]; then
+            NEXT_SERVER_PID=$(cat next-server.pid)
+
+            if kill -0 "$NEXT_SERVER_PID" 2>/dev/null; then
+              echo "Stopping Next.js server PID $NEXT_SERVER_PID..."
+              kill "$NEXT_SERVER_PID" || true
+            fi
+          fi
 
       - name: Show Next.js log after failure
         if: failure() && steps.time.outputs.should_run == 'true'
@@ -206,8 +281,10 @@ jobs:
 
       - name: Instagram skipped
         if: steps.time.outputs.should_run != 'true'
+        shell: bash
         run: |
-          echo "Instagram is scheduled only at UTC 0, 4, 8, 12, 16 and 20."
+          echo "Instagram runs only at UTC 0, 4, 8, 12, 16 and 20."
+          echo "Manual workflow runs always execute Instagram."
 
   google-ratings:
     name: Update Google Ratings
@@ -215,7 +292,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Set current UTC hour
+      - name: Check Google Ratings schedule
         id: time
         shell: bash
         run: |
@@ -226,7 +303,8 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif [ "$UTC_HOUR" = "0" ] || [ "$UTC_HOUR" = "12" ]; then
+          elif [ "$UTC_HOUR" = "0" ] || \
+               [ "$UTC_HOUR" = "12" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
@@ -238,6 +316,8 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          set -e
+
           echo "Updating Google ratings..."
 
           curl \
@@ -256,5 +336,7 @@ jobs:
 
       - name: Google Ratings skipped
         if: steps.time.outputs.should_run != 'true'
+        shell: bash
         run: |
           echo "Google Ratings runs only at UTC 0 and 12."
+          echo "Manual workflow runs always execute Google Ratings."
