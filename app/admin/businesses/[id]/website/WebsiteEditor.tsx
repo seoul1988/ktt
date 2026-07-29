@@ -6802,7 +6802,7 @@ function ReadOnlyGrid({
           imageOnlyHero || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        aspectRatio: imageOnlyHero ? "3 / 2" : undefined,
+        aspectRatio: undefined,
         gridTemplateColumns: widths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -12164,13 +12164,25 @@ function HorizontalImageScroll({
 }
 
 function AutoImageSlider({ images }: { images: string[] }) {
-  const safeImages = Array.from(
-    new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
-  ).slice(0, 10);
+  const safeImages = useMemo(
+    () =>
+      Array.from(
+        new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
+      ).slice(0, 10),
+    [images],
+  );
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [sliderAspectRatio, setSliderAspectRatio] = useState("16 / 9");
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef(0);
+
+  // 이미지 목록이 바뀌면 첫 번째 새 이미지의 실제 비율을 다시 읽습니다.
+  // 따라서 이전 이미지의 높이가 남아 아래쪽에 빈 공간이 생기지 않습니다.
+  useEffect(() => {
+    setActiveIndex(0);
+    setSliderAspectRatio("16 / 9");
+  }, [safeImages.join("|")]);
 
   useEffect(() => {
     if (safeImages.length <= 1) return;
@@ -12195,10 +12207,28 @@ function AutoImageSlider({ images }: { images: string[] }) {
     setActiveIndex(((index % total) + total) % total);
   }
 
+  function applyNaturalImageRatio(
+    event: React.SyntheticEvent<HTMLImageElement>,
+    index: number,
+  ) {
+    // 슬라이더 전체 높이는 첫 번째 이미지 비율을 기준으로 고정합니다.
+    // 다른 비율의 사진은 object-cover로 꽉 채워 페이지가 위아래로 흔들리지 않습니다.
+    if (index !== 0) return;
+
+    const image = event.currentTarget;
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      setSliderAspectRatio(`${image.naturalWidth} / ${image.naturalHeight}`);
+    }
+  }
+
   return (
     <div
-      className="group/slider relative h-full min-h-[220px] w-full overflow-hidden bg-transparent"
-      style={{ borderRadius: "inherit" }}
+      className="group/slider relative block w-full overflow-hidden bg-transparent"
+      style={{
+        borderRadius: "inherit",
+        aspectRatio: sliderAspectRatio,
+        minHeight: 0,
+      }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -12232,7 +12262,8 @@ function AutoImageSlider({ images }: { images: string[] }) {
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            className="absolute inset-0 h-full w-full select-none object-cover"
+            onLoad={(event) => applyNaturalImageRatio(event, index)}
+            className="block h-full w-full select-none object-cover"
           />
         </div>
       ))}
