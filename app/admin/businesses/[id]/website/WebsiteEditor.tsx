@@ -1,0 +1,14525 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+type CellType =
+  | "empty"
+  | "logo"
+  | "title"
+  | "text"
+  | "image"
+  | "button"
+  | "phone"
+  | "menu"
+  | "sns"
+  | "map"
+  | "hours";
+
+type TextAlign = "left" | "center" | "right";
+type VerticalAlign = "top" | "center" | "bottom";
+
+type OverlayButton = {
+  id: string;
+  text: string;
+  url: string;
+  style: "rounded" | "pill" | "square" | "outline";
+  background_color: string;
+  text_color: string;
+  font_size: number;
+  height: number;
+  full_width?: boolean;
+};
+
+type SnsPlatform =
+  | "facebook"
+  | "instagram"
+  | "youtube"
+  | "tiktok"
+  | "x"
+  | "linkedin"
+  | "kakao"
+  | "custom";
+
+type SnsItem = {
+  id: string;
+  platform: SnsPlatform;
+  url: string;
+  label?: string;
+};
+
+type GridCell = {
+  id: string;
+  type: CellType;
+  span: number;
+  width_percent?: number;
+  text?: string;
+  rich_text_html?: string;
+  mobile_text?: string;
+  url?: string;
+  image_url?: string;
+  logo_size_px?: number;
+  display_mode?:
+    | "text"
+    | "image"
+    | "background-image"
+    | "auto-slider"
+    | "gallery"
+    | "map-section"
+    | "image-scroll"
+    | "service-card"
+    | "business-hours"
+    | "restaurant-menu";
+  gallery_images?: string[];
+  image_scroll_speed?: number;
+  image_scroll_direction?: "left" | "right";
+  image_scroll_width?: number;
+  image_scroll_gap?: number;
+  card_description?: string;
+  business_hours_file_name?: string;
+  business_hours_title?: string;
+  business_hours_note?: string;
+  business_hours_business_name?: string;
+  business_hours_data?: Array<{
+    day: string;
+    open: string;
+    close: string;
+    note?: string;
+    closed?: boolean;
+  }>;
+  background_overlay_type?: "none" | "text" | "button";
+  overlay_text?: string;
+  overlay_font_family?: "sans" | "serif" | "rounded" | "mono";
+  overlay_button_style?: "rounded" | "pill" | "square" | "outline";
+  overlay_button_color?: string;
+  overlay_button_text_color?: string;
+  overlay_buttons?: OverlayButton[];
+  overlay_button_gap?: number;
+  background_image_blur?: number;
+  background_image_effect?: "original" | "blur" | "out-focus" | "in-focus";
+  background_image_focus_x?: number;
+  background_image_focus_y?: number;
+  overlay_text_horizontal?: "left" | "center" | "right";
+  overlay_text_vertical?: "top" | "middle" | "bottom";
+  overlay_button_horizontal?: "left" | "center" | "right";
+  overlay_button_vertical?: "top" | "middle" | "bottom";
+  overlay_button_direction?: "row" | "column";
+  overlay_button_width?: number;
+  overlay_button_height?: number;
+  overlay_button_font_size?: number;
+  overlay_button_group_style?: "rounded" | "pill" | "square" | "outline";
+  overlay_button_group_color?: string;
+  overlay_button_group_text_color?: string;
+  overlay_buttons_visible?: boolean;
+  menu_mode?: "text" | "image";
+  menu_items?: Array<{
+    id: string;
+    label: string;
+    url?: string;
+    link_type?: "section" | "page";
+    link_value?: string;
+    image_url?: string;
+  }>;
+  color?: string;
+  background_color?: string;
+  font_size?: number;
+  font_family?: "sans" | "serif" | "rounded" | "mono";
+  font_weight?: "normal" | "semibold" | "bold" | "black" | "600";
+  font_style?: "normal" | "italic";
+  text_decoration?: "none" | "underline";
+  button_width_px?: number;
+  button_height_px?: number;
+  button_no_wrap?: boolean;
+  phone_number?: string;
+  sns_items?: SnsItem[];
+  sns_icon_size_px?: number;
+  sns_icon_gap_px?: number;
+  text_align?: TextAlign;
+  vertical_align?: VerticalAlign;
+  child_cells?: GridCell[];
+};
+
+type GridData = {
+  id?: string;
+  cells: GridCell[];
+  height?: "small" | "medium" | "large";
+  height_px?: number;
+
+  // 긴 약관·Privacy Policy처럼 내용 길이에 따라 자동으로 늘어나는 레이어
+  auto_height?: boolean;
+};
+
+type WebsiteSettings = {
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
+  font_style?: string;
+  button_style?: string;
+  layout_width?: string;
+  outer_background_color?: string;
+  header_background_color?: string;
+  header_grid?: GridData;
+  header_submenu_enabled?: boolean;
+  header_submenu_background_color?: string;
+  header_submenu_text_color?: string;
+  header_submenu_items?: Array<{
+    id: string;
+    label: string;
+    url: string;
+    target_type?: "section" | "page";
+    target_value?: string;
+  }>;
+  header_height_px?: number;
+  header_logo_size_px?: number;
+  header_title_font_size_px?: number;
+  header_button_height_px?: number;
+  header_vertical_padding_px?: number;
+  header_submenu_height_px?: number;
+  header_submenu_font_size_px?: number;
+  [key: string]: unknown;
+};
+
+type Business = {
+  id: number;
+  name?: string | null;
+  image_url?: string | null;
+  logo_url?: string | null;
+  address?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  street_address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  zipcode?: string | null;
+  postal_code?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
+  website_enabled?: boolean | null;
+  website_slug?: string | null;
+  website_status?: string | null;
+  website_settings?: WebsiteSettings | null;
+  hours?: unknown;
+  [key: string]: unknown;
+};
+
+type SectionContent = {
+  headline?: string;
+  subheadline?: string;
+  description?: string;
+  button_text?: string;
+  button_url?: string;
+  booking_url?: string;
+  image_url?: string;
+  background_type?: "image" | "color" | "gradient" | "video";
+  background_color?: string;
+  gradient_from?: string;
+  gradient_to?: string;
+  video_url?: string;
+  grid?: GridData;
+  layouts?: GridData[];
+  page_type?: "home-section" | "link-page";
+  page_slug?: string;
+  link_page_kind?: "blank" | "restaurant-menu";
+  restaurant_menu_background_color?: string;
+  restaurant_menu_text_color?: string;
+  restaurant_menu_scroll_top_enabled?: boolean;
+  restaurant_menu_scroll_top_button_color?: string;
+  restaurant_menu_scroll_top_icon_color?: string;
+  restaurant_menu_scroll_top_position?: "right" | "left";
+  link_page_html?: string;
+  link_page_html_font_size?: number;
+  link_page_html_font_family?: string;
+  link_page_html_color?: string;
+  link_page_html_text_align?: TextAlign;
+  link_page_html_font_weight?: "normal" | "bold";
+  link_page_html_font_style?: "normal" | "italic";
+  link_page_html_text_decoration?: "none" | "underline";
+  link_page_html_line_height?: number;
+  link_page_images?: Array<{
+    id: string;
+    url: string;
+    alt?: string;
+    caption?: string;
+    caption_font_size?: number;
+    caption_font_family?: string;
+    caption_color?: string;
+    caption_background_color?: string;
+    caption_text_align?: TextAlign;
+    caption_font_weight?: "normal" | "bold";
+    caption_font_style?: "normal" | "italic";
+    caption_text_decoration?: "none" | "underline";
+  }>;
+  link_page_pdf_url?: string;
+  link_page_pdf_name?: string;
+  link_page_pdfs?: Array<{
+    id: string;
+    url: string;
+    name?: string;
+    caption?: string;
+    caption_font_size?: number;
+    caption_font_family?: string;
+    caption_color?: string;
+    caption_background_color?: string;
+    caption_text_align?: TextAlign;
+    caption_font_weight?: "normal" | "bold";
+    caption_font_style?: "normal" | "italic";
+    caption_text_decoration?: "none" | "underline";
+  }>;
+  link_page_background_color?: string;
+  link_page_html_background_color?: string;
+  link_page_width?: "normal" | "wide" | "full";
+  link_page_image_mode?: "stack" | "flipbook" | "scroll";
+
+  // 클릭했을 때 펼쳐지는 숨김 레이어 설정
+  collapsible?: boolean;
+  initially_hidden?: boolean;
+  close_button_enabled?: boolean;
+  scroll_on_open?: boolean;
+
+  [key: string]: unknown;
+};
+
+type SectionSettings = {
+  text_align?: TextAlign;
+  overlay?: boolean;
+  overlay_opacity?: number;
+  height?: "small" | "medium" | "large";
+  [key: string]: unknown;
+};
+
+type BusinessSection = {
+  id: number;
+  business_id: number;
+  section_type: string;
+  title: string | null;
+  content: SectionContent;
+  settings: SectionSettings;
+  sort_order: number;
+  is_visible: boolean;
+};
+
+type RestaurantMenuCategory = {
+  id: number;
+  name: string;
+  display_order?: number | null;
+};
+
+type RestaurantMenuItem = {
+  id: number;
+  category_id: number;
+  name: string;
+  description?: string | null;
+  price?: number | null;
+  thumbnail_url?: string | null;
+  image_url?: string | null;
+  display_order?: number | null;
+};
+
+type RestaurantMenuPayload = {
+  categories: RestaurantMenuCategory[];
+  items: RestaurantMenuItem[];
+};
+
+type ApiPayload = {
+  business: Business;
+  sections: BusinessSection[];
+};
+
+type EditorArea = "header" | "hero" | "section";
+
+type Selection = {
+  area: EditorArea;
+  cellId?: string;
+  sectionId?: number;
+  layoutId?: string;
+};
+
+const CELL_TYPES: Array<{ value: CellType; label: string; icon: string }> = [
+  { value: "empty", label: "빈칸", icon: "＋" },
+  { value: "logo", label: "로고", icon: "◎" },
+  { value: "title", label: "제목", icon: "T" },
+  { value: "text", label: "글", icon: "¶" },
+  { value: "image", label: "이미지", icon: "▧" },
+  { value: "button", label: "버튼", icon: "▰" },
+  { value: "phone", label: "전화", icon: "☎" },
+  { value: "menu", label: "메뉴", icon: "☰" },
+  { value: "sns", label: "SNS", icon: "♡" },
+  { value: "map", label: "지도", icon: "⌖" },
+  { value: "hours", label: "영업시간", icon: "◷" },
+];
+
+const SECTION_LABELS: Record<string, string> = {
+  hero: "Main",
+  about: "About",
+  services: "Services",
+  staff: "Stylists",
+  gallery: "Gallery",
+  booking: "Booking",
+  reviews: "Reviews",
+  hours: "Business Hours",
+  map: "Map",
+  contact: "Contact",
+};
+
+function createId(prefix = "cell") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function defaultCell(
+  type: CellType = "empty",
+  text = "",
+  span = 1,
+): GridCell {
+  return {
+    id: createId(),
+    type,
+    span,
+    text,
+    color: "#111827",
+    background_color: "transparent",
+    font_size: type === "title" ? 24 : 16,
+    font_family: "sans",
+    font_weight: type === "title" ? "black" : "semibold",
+    text_align: "center",
+    vertical_align: "center",
+  };
+}
+
+function findCellRecursive(cells: GridCell[], cellId: string): GridCell | null {
+  for (const cell of cells) {
+    if (cell.id === cellId) return cell;
+    const nested = findCellRecursive(cell.child_cells || [], cellId);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function mapCellRecursive(
+  cells: GridCell[],
+  cellId: string,
+  updater: (cell: GridCell) => GridCell,
+): GridCell[] {
+  return cells.map((cell) => {
+    if (cell.id === cellId) return updater(cell);
+    if (cell.child_cells?.length) {
+      return {
+        ...cell,
+        child_cells: mapCellRecursive(cell.child_cells, cellId, updater),
+      };
+    }
+    return cell;
+  });
+}
+
+function createDefaultHeader(businessName: string): GridData {
+  return {
+    height: "small",
+    cells: [
+      defaultCell("logo", "", 1),
+      defaultCell("title", businessName || "Business Name", 1),
+      {
+        ...defaultCell("menu", "Home, About, Services", 1),
+        menu_mode: "text",
+        menu_items: [
+          createMenuItem("Home"),
+          createMenuItem("About"),
+          createMenuItem("Services"),
+        ],
+      },
+      defaultCell("button", "예약", 1),
+    ],
+  };
+}
+
+function createDefaultHero(): GridData {
+  return {
+    id: createId("layout"),
+    height: "large",
+    cells: [
+      {
+        ...defaultCell("title", "당신의 아름다움을 디자인합니다", 4),
+        width_percent: 100,
+        color: "#ffffff",
+        font_size: 42,
+        text_align: "left",
+        vertical_align: "bottom",
+      },
+    ],
+  };
+}
+
+function normalizeGrid(value: unknown, fallback: GridData): GridData {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback;
+  }
+
+  const raw = value as Partial<GridData>;
+  const rawCells = Array.isArray(raw.cells) ? raw.cells : [];
+  const cells: GridCell[] = [];
+  let used = 0;
+
+  for (const item of rawCells) {
+    if (!item || typeof item !== "object" || Array.isArray(item) || used >= 4) {
+      continue;
+    }
+
+    const cell = item as Partial<GridCell>;
+    const span = Math.max(1, Math.min(4 - used, Number(cell.span) || 1));
+
+    const normalizedType = CELL_TYPES.some((entry) => entry.value === cell.type)
+      ? (cell.type as CellType)
+      : "empty";
+
+    const normalizedCell: GridCell = {
+      ...defaultCell(),
+      ...cell,
+      id: typeof cell.id === "string" && cell.id ? cell.id : createId(),
+      type: normalizedType,
+      span,
+    };
+
+    if (normalizedType === "menu") {
+      normalizedCell.menu_mode =
+        cell.menu_mode === "image" ? "image" : "text";
+      normalizedCell.menu_items = normalizeMenuItems(normalizedCell);
+    }
+
+    cells.push(normalizedCell);
+
+    used += span;
+  }
+
+  while (used < 4) {
+    cells.push(defaultCell("empty", "", 1));
+    used += 1;
+  }
+
+  const rawWidths = cells.map((cell) => Number(cell.width_percent));
+  const hasSavedWidths = rawWidths.every(
+    (width) => Number.isFinite(width) && width >= 5,
+  );
+  const widthTotal = hasSavedWidths
+    ? rawWidths.reduce((sum, width) => sum + width, 0)
+    : 0;
+
+  const normalizedCells = cells.map((cell, index) => ({
+    ...cell,
+    width_percent:
+      hasSavedWidths && widthTotal > 0
+        ? (rawWidths[index] / widthTotal) * 100
+        : (cell.span / 4) * 100,
+  }));
+
+  const savedHeightPx = Number(raw.height_px);
+
+  return {
+    id:
+      typeof raw.id === "string" && raw.id
+        ? raw.id
+        : fallback.id || createId("layout"),
+    height:
+      raw.height === "small" || raw.height === "medium" || raw.height === "large"
+        ? raw.height
+        : fallback.height,
+    height_px:
+      Number.isFinite(savedHeightPx) && savedHeightPx > 0
+        ? savedHeightPx
+        : fallback.height_px,
+    auto_height:
+      typeof raw.auto_height === "boolean"
+        ? raw.auto_height
+        : Boolean(fallback.auto_height),
+    cells: normalizedCells,
+  };
+}
+
+function normalizeHeroLayouts(content: SectionContent | null | undefined) {
+  const fallback = createDefaultHero();
+  const rawLayouts = Array.isArray(content?.layouts) ? content.layouts : [];
+
+  if (rawLayouts.length > 0) {
+    return rawLayouts.map((layout) => normalizeGrid(layout, fallback));
+  }
+
+  return [normalizeGrid(content?.grid, fallback)];
+}
+
+function createEmptyHeroLayout(): GridData {
+  return {
+    id: createId("layout"),
+    height: "medium",
+    cells: [
+      {
+        ...defaultCell("title", "새 제목을 입력하세요", 4),
+        width_percent: 100,
+        color: "#111827",
+        background_color: "#ffffff",
+        font_size: 42,
+        font_weight: "600",
+        text_align: "left",
+        vertical_align: "center",
+      },
+    ],
+  };
+}
+
+function normalizeSettings(
+  settings: WebsiteSettings | null | undefined,
+  businessName = "",
+): WebsiteSettings {
+  const source = settings && typeof settings === "object" ? settings : {};
+
+  return {
+    ...source,
+    primary_color:
+      typeof source.primary_color === "string" ? source.primary_color : "#111827",
+    secondary_color:
+      typeof source.secondary_color === "string"
+        ? source.secondary_color
+        : "#f3f4f6",
+    accent_color:
+      typeof source.accent_color === "string" ? source.accent_color : "#d97706",
+    font_style: typeof source.font_style === "string" ? source.font_style : "modern",
+    button_style:
+      typeof source.button_style === "string" ? source.button_style : "rounded",
+    layout_width:
+      typeof source.layout_width === "string" ? source.layout_width : "wide",
+    outer_background_color:
+      typeof source.outer_background_color === "string"
+        ? source.outer_background_color
+        : "#e5e7eb",
+    header_background_color:
+      typeof source.header_background_color === "string"
+        ? source.header_background_color
+        : "#ffffff",
+    header_grid: normalizeGrid(
+      source.header_grid,
+      createDefaultHeader(businessName),
+    ),
+    header_submenu_enabled:
+      typeof source.header_submenu_enabled === "boolean"
+        ? source.header_submenu_enabled
+        : false,
+    header_submenu_background_color:
+      typeof source.header_submenu_background_color === "string"
+        ? source.header_submenu_background_color
+        : typeof source.header_background_color === "string"
+          ? source.header_background_color
+          : "#000000",
+    header_submenu_text_color:
+      typeof source.header_submenu_text_color === "string"
+        ? source.header_submenu_text_color
+        : "#ffffff",
+    header_submenu_items:
+      Array.isArray(source.header_submenu_items) &&
+      source.header_submenu_items.length > 0
+        ? source.header_submenu_items.map((item, index) => ({
+            id:
+              item && typeof item === "object" && typeof item.id === "string"
+                ? item.id
+                : createId("submenu"),
+            label:
+              item && typeof item === "object" && typeof item.label === "string"
+                ? item.label
+                : `Menu ${index + 1}`,
+            url:
+              item && typeof item === "object" && typeof item.url === "string"
+                ? item.url
+                : "#",
+            target_type:
+              item &&
+              typeof item === "object" &&
+              (item.target_type === "page" || item.target_type === "section")
+                ? item.target_type
+                : getLegacyMenuTarget(
+                    item && typeof item === "object" && typeof item.url === "string"
+                      ? item.url
+                      : "#",
+                  ).type,
+            target_value:
+              item &&
+              typeof item === "object" &&
+              typeof item.target_value === "string" &&
+              item.target_value.trim()
+                ? slugifyMenuValue(item.target_value)
+                : getLegacyMenuTarget(
+                    item && typeof item === "object" && typeof item.url === "string"
+                      ? item.url
+                      : "",
+                  ).value,
+          }))
+        : [
+            {
+              id: createId("submenu"),
+              label: "Home",
+              url: "#home",
+              target_type: "section",
+              target_value: "home",
+            },
+            {
+              id: createId("submenu"),
+              label: "About",
+              url: "#about",
+              target_type: "section",
+              target_value: "about",
+            },
+            {
+              id: createId("submenu"),
+              label: "Menu",
+              url: "#menu",
+              target_type: "section",
+              target_value: "menu",
+            },
+            {
+              id: createId("submenu"),
+              label: "Online Order",
+              url: "#order",
+              target_type: "section",
+              target_value: "order",
+            },
+            {
+              id: createId("submenu"),
+              label: "Log In",
+              url: "#login",
+              target_type: "section",
+              target_value: "login",
+            },
+          ],
+    header_height_px:
+      Number.isFinite(Number(source.header_height_px))
+        ? Math.max(96, Math.min(240, Number(source.header_height_px)))
+        : 104,
+    header_logo_size_px:
+      Number.isFinite(Number(source.header_logo_size_px))
+        ? Math.max(24, Math.min(400, Number(source.header_logo_size_px)))
+        : 56,
+    header_title_font_size_px:
+      Number.isFinite(Number(source.header_title_font_size_px))
+        ? Math.max(14, Math.min(64, Number(source.header_title_font_size_px)))
+        : 24,
+    header_button_height_px:
+      Number.isFinite(Number(source.header_button_height_px))
+        ? Math.max(32, Math.min(90, Number(source.header_button_height_px)))
+        : 46,
+    header_vertical_padding_px:
+      Number.isFinite(Number(source.header_vertical_padding_px))
+        ? Math.max(0, Math.min(48, Number(source.header_vertical_padding_px)))
+        : 8,
+    header_submenu_height_px:
+      Number.isFinite(Number(source.header_submenu_height_px))
+        ? Math.max(40, Math.min(120, Number(source.header_submenu_height_px)))
+        : 56,
+    header_submenu_font_size_px:
+      Number.isFinite(Number(source.header_submenu_font_size_px))
+        ? Math.max(11, Math.min(30, Number(source.header_submenu_font_size_px)))
+        : 14,
+  };
+}
+
+function getStoredAdminKey() {
+  if (typeof window === "undefined") return "";
+  return window.sessionStorage.getItem("website-builder-admin-key") ?? "";
+}
+
+function saveStoredAdminKey(value: string) {
+  window.sessionStorage.setItem("website-builder-admin-key", value);
+}
+
+type LocalWebsiteDraft = {
+  business: Business;
+  sections: BusinessSection[];
+  savedAt: string;
+};
+
+function getWebsiteDraftKey(businessId: string) {
+  return `website-builder-draft-${businessId}`;
+}
+
+function getWebsiteDraftHistoryKey(businessId: string) {
+  return `website-builder-draft-history-${businessId}`;
+}
+
+function backupWebsiteDraft(
+  businessId: string,
+  draft: LocalWebsiteDraft | null,
+  reason: string,
+) {
+  if (typeof window === "undefined" || !draft) return;
+
+  try {
+    const historyKey = getWebsiteDraftHistoryKey(businessId);
+    const raw = window.localStorage.getItem(historyKey);
+    const currentHistory = raw ? JSON.parse(raw) : [];
+    const history = Array.isArray(currentHistory) ? currentHistory : [];
+
+    history.unshift({
+      ...draft,
+      backupReason: reason,
+      backedUpAt: new Date().toISOString(),
+    });
+
+    window.localStorage.setItem(
+      historyKey,
+      JSON.stringify(history.slice(0, 10)),
+    );
+  } catch {
+    // 백업 실패가 본 작업을 막지 않도록 조용히 무시합니다.
+  }
+}
+
+function loadWebsiteDraft(businessId: string): LocalWebsiteDraft | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.localStorage.getItem(getWebsiteDraftKey(businessId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<LocalWebsiteDraft>;
+    if (!parsed.business || !Array.isArray(parsed.sections)) return null;
+
+    return {
+      business: parsed.business as Business,
+      sections: parsed.sections as BusinessSection[],
+      savedAt:
+        typeof parsed.savedAt === "string"
+          ? parsed.savedAt
+          : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveWebsiteDraft(
+  businessId: string,
+  business: Business,
+  sections: BusinessSection[],
+) {
+  if (typeof window === "undefined") return "";
+
+  const savedAt = new Date().toISOString();
+  const draft: LocalWebsiteDraft = {
+    business,
+    sections,
+    savedAt,
+  };
+
+  window.localStorage.setItem(
+    getWebsiteDraftKey(businessId),
+    JSON.stringify(draft),
+  );
+
+  return savedAt;
+}
+
+function formatDraftTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getCellLabel(type: CellType) {
+  return CELL_TYPES.find((entry) => entry.value === type)?.label ?? "빈칸";
+}
+
+function slugifyMenuValue(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function buildMenuUrl(
+  linkType: "section" | "page",
+  label: string,
+  linkValue = "",
+) {
+  const slug = slugifyMenuValue(linkValue || label);
+
+  if (linkType === "page") {
+    return slug ? `/${slug}` : "/";
+  }
+
+  return slug ? `#${slug}` : "#";
+}
+
+function getLegacyMenuTarget(url: string) {
+  const raw = String(url || "").trim();
+
+  if (!raw) {
+    return { type: "section" as const, value: "" };
+  }
+
+  // 이전 공개주소: /site/bora-hair#menu
+  // 새 페이지주소: /business/6/website/menu
+  if (raw.startsWith("/site/") && raw.includes("#")) {
+    const hashValue = raw.split("#")[1] || "";
+    return { type: "page" as const, value: slugifyMenuValue(hashValue) };
+  }
+
+  const businessPageMatch = raw.match(
+    /^\/business\/\d+\/website(?:\/([^?#]+))?/i,
+  );
+
+  if (businessPageMatch) {
+    return {
+      type: "page" as const,
+      value: slugifyMenuValue(businessPageMatch[1] || ""),
+    };
+  }
+
+  if (raw.startsWith("#")) {
+    return {
+      type: "section" as const,
+      value: slugifyMenuValue(raw.slice(1)),
+    };
+  }
+
+  if (raw.startsWith("/")) {
+    return {
+      type: "page" as const,
+      value: slugifyMenuValue(raw.replace(/^\//, "")),
+    };
+  }
+
+  return { type: "section" as const, value: slugifyMenuValue(raw) };
+}
+
+function detectMenuLink(url: string) {
+  return getLegacyMenuTarget(url).type;
+}
+
+function getHeaderMenuHref(
+  item: {
+    label?: string;
+    url?: string;
+    target_type?: "section" | "page";
+    target_value?: string;
+  },
+  businessId?: string | number,
+) {
+  const legacyTarget = getLegacyMenuTarget(item.url || "");
+
+  const targetType =
+    item.target_type === "page" || item.target_type === "section"
+      ? item.target_type
+      : legacyTarget.type;
+
+  const targetValue =
+    slugifyMenuValue(
+      item.target_value || legacyTarget.value || item.label || "",
+    ) || (targetType === "section" ? "home" : "");
+
+  if (targetType === "page") {
+    if (!businessId || !targetValue) return "#";
+    return `/business/${businessId}/website/${encodeURIComponent(targetValue)}`;
+  }
+
+  // HOME은 #home 위치로 이동하지 않고 홈페이지 최상단으로 이동해야
+  // 헤더부터 보입니다.
+  if (targetValue === "home") {
+    return businessId ? `/business/${businessId}/website` : "#";
+  }
+
+  if (!businessId) return targetValue ? `#${targetValue}` : "#";
+
+  return targetValue
+    ? `/business/${businessId}/website#${targetValue}`
+    : `/business/${businessId}/website`;
+}
+
+
+function getGridMenuHref(
+  item: NonNullable<GridCell["menu_items"]>[number],
+  businessId?: string | number,
+) {
+  const legacyTarget = getLegacyMenuTarget(item.url || "");
+  const linkType =
+    item.link_type === "page" || item.link_type === "section"
+      ? item.link_type
+      : legacyTarget.type;
+  const linkValue = slugifyMenuValue(
+    item.link_value || legacyTarget.value || item.label || "",
+  );
+
+  if (linkType === "page") {
+    if (!businessId || !linkValue) return "#";
+    return `/business/${businessId}/website/${encodeURIComponent(linkValue)}`;
+  }
+
+  // HOME은 홈페이지 최상단으로 이동시켜 헤더가 보이게 합니다.
+  if (linkValue === "home") {
+    return businessId ? `/business/${businessId}/website` : "#";
+  }
+
+  if (!businessId) return linkValue ? `#${linkValue}` : "#";
+
+  return linkValue
+    ? `/business/${businessId}/website#${linkValue}`
+    : `/business/${businessId}/website`;
+}
+
+function createMenuItem(label = "새 메뉴") {
+  return {
+    id: createId("menu"),
+    label,
+    url: buildMenuUrl("section", label),
+    link_type: "section" as const,
+    link_value: "",
+    image_url: "",
+  };
+}
+
+function normalizeMenuItems(cell: GridCell) {
+  if (Array.isArray(cell.menu_items) && cell.menu_items.length > 0) {
+    return cell.menu_items.map((item) => {
+      const linkType =
+        item.link_type === "page" || item.link_type === "section"
+          ? item.link_type
+          : detectMenuLink(item.url || "");
+
+      const label = item.label || "메뉴";
+
+      const legacyTarget = getLegacyMenuTarget(item.url || "");
+      const savedLinkValue = slugifyMenuValue(
+        typeof item.link_value === "string"
+          ? item.link_value
+          : legacyTarget.value || label,
+      );
+
+      return {
+        id: item.id || createId("menu"),
+        label,
+        url: buildMenuUrl(linkType, label, savedLinkValue),
+        link_type: linkType,
+        link_value: savedLinkValue,
+        image_url: item.image_url || "",
+      };
+    });
+  }
+
+  return String(cell.text || "Home, About, Services")
+    .split(",")
+    .map((label) => label.trim())
+    .filter(Boolean)
+    .map((label) => createMenuItem(label));
+}
+
+function overlayPositionClasses(
+  horizontal: "left" | "center" | "right" = "center",
+  vertical: "top" | "middle" | "bottom" = "middle",
+) {
+  const horizontalClass =
+    horizontal === "left"
+      ? "items-start"
+      : horizontal === "right"
+        ? "items-end"
+        : "items-center";
+
+  const verticalClass =
+    vertical === "top"
+      ? "justify-start"
+      : vertical === "bottom"
+        ? "justify-end"
+        : "justify-center";
+
+  return `${horizontalClass} ${verticalClass}`;
+}
+
+function createOverlayButton(index = 0): OverlayButton {
+  return {
+    id: createId("overlay-button"),
+    text: index === 0 ? "예약하기" : `버튼 ${index + 1}`,
+    url: "",
+    style: "rounded",
+    background_color: "#111827",
+    text_color: "#ffffff",
+    font_size: 16,
+    height: 46,
+    full_width: false,
+  };
+}
+
+function normalizeOverlayButtons(cell: GridCell): OverlayButton[] {
+  if (Array.isArray(cell.overlay_buttons) && cell.overlay_buttons.length > 0) {
+    return cell.overlay_buttons.map((button, index) => ({
+      ...createOverlayButton(index),
+      ...button,
+      id: button.id || createId("overlay-button"),
+      text: button.text || `버튼 ${index + 1}`,
+      url: button.url || "",
+      height: Math.max(30, Math.min(90, Number(button.height) || 46)),
+      font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
+    }));
+  }
+
+  return [createOverlayButton(0)];
+}
+
+function getBackgroundImageFilter(cell: GridCell) {
+  const effect = cell.background_image_effect ?? "original";
+  const blur = Math.max(0, Math.min(30, cell.background_image_blur ?? 0));
+
+  if (effect === "blur") {
+    return `blur(${Math.max(1, blur)}px)`;
+  }
+
+  if (effect === "out-focus") {
+    return `blur(${Math.max(6, blur)}px) brightness(0.88) saturate(0.9)`;
+  }
+
+  if (effect === "in-focus") {
+    return "contrast(1.14) saturate(1.12) brightness(1.03)";
+  }
+
+  return "none";
+}
+
+function getBackgroundImageScale(cell: GridCell) {
+  const effect = cell.background_image_effect ?? "original";
+  const blur = Math.max(0, Math.min(30, cell.background_image_blur ?? 0));
+
+  if (effect === "out-focus") {
+    return 1.12 + blur / 300;
+  }
+
+  if (effect === "blur") {
+    return 1.04 + blur / 400;
+  }
+
+  if (effect === "in-focus") {
+    return 1.02;
+  }
+
+  return 1;
+}
+
+
+function getBusinessAddress(business: Business) {
+  const directAddress = String(
+    business.address ||
+      business.street_address ||
+      business.address1 ||
+      "",
+  ).trim();
+
+  const address2 = String(business.address2 || "").trim();
+  const city = String(business.city || "").trim();
+  const state = String(business.state || "").trim();
+  const postalCode = String(
+    business.zip || business.zipcode || business.postal_code || "",
+  ).trim();
+
+  const cityLine = [city, state, postalCode].filter(Boolean).join(
+    city && state ? ", " : " ",
+  );
+
+  return [directAddress, address2, cityLine].filter(Boolean).join(", ");
+}
+
+function getBusinessMapQuery(business: Business) {
+  const latitude = Number(business.latitude ?? business.lat);
+  const longitude = Number(business.longitude ?? business.lng);
+
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return `${latitude},${longitude}`;
+  }
+
+  const address = getBusinessAddress(business);
+  const businessName = String(business.name || "").trim();
+
+  return [businessName, address].filter(Boolean).join(", ");
+}
+
+function BusinessLocationMap({
+  business,
+  compact = false,
+}: {
+  business: Business;
+  compact?: boolean;
+}) {
+  const address = getBusinessAddress(business);
+  const query = getBusinessMapQuery(business);
+
+  if (!query) {
+    return (
+      <div className="flex min-h-[220px] w-full items-center justify-center rounded-xl bg-gray-100 px-5 text-center text-gray-600">
+        <div>
+          <div className="text-3xl">📍</div>
+          <p className="mt-2 text-sm font-black">업체 주소가 없습니다.</p>
+          <p className="mt-1 text-xs">
+            비즈니스 정보에 주소를 먼저 등록해주세요.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const encodedQuery = encodeURIComponent(query);
+  const mapUrl = `https://www.google.com/maps?q=${encodedQuery}&output=embed`;
+  const directionsUrl =
+    `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}`;
+
+  return (
+    <div className="relative h-full min-h-[240px] w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-sm">
+      <iframe
+        title={`${business.name || "Business"} location map`}
+        src={mapUrl}
+        className="absolute inset-0 h-full w-full border-0"
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        allowFullScreen
+      />
+
+      <div
+        className={`absolute left-3 top-3 z-10 max-w-[calc(100%-24px)] rounded-xl bg-white/95 shadow-lg backdrop-blur ${
+          compact ? "px-3 py-2" : "px-4 py-3"
+        }`}
+      >
+        <p className="truncate text-sm font-black text-gray-950">
+          {business.name || "Business Location"}
+        </p>
+
+        {address ? (
+          <p className="mt-1 max-w-[280px] text-xs font-semibold leading-5 text-gray-600">
+            {address}
+          </p>
+        ) : null}
+
+        <a
+          href={directionsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex rounded-full bg-blue-600 px-3 py-1.5 text-xs font-black text-white no-underline hover:bg-blue-700"
+        >
+          Directions
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function backgroundStyle(section: BusinessSection) {
+  const content = section.content ?? {};
+  const type = content.background_type || (content.image_url ? "image" : "gradient");
+
+  if (type === "image" && content.image_url) {
+    return {
+      backgroundImage: `linear-gradient(rgba(0,0,0,0.38), rgba(0,0,0,0.38)), url(${content.image_url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+
+  if (type === "color") {
+    return { background: content.background_color || "#111827" };
+  }
+
+  if (type === "gradient") {
+    return {
+      background: `linear-gradient(135deg, ${content.gradient_from || "#111827"}, ${content.gradient_to || "#d97706"})`,
+    };
+  }
+
+  return { background: "#111827" };
+}
+
+
+function sanitizeLinkPageHtml(value: string) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/\son\w+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/javascript\s*:/gi, "");
+}
+
+function sanitizeCellRichTextHtml(value: string) {
+  return String(value || "")
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
+    .replace(/\son\w+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/javascript\s*:/gi, "");
+}
+
+function escapeCellText(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+    .replace(/\n/g, "<br>");
+}
+
+function richTextToPlainText(value: string) {
+  if (typeof document === "undefined") {
+    return String(value || "").replace(/<[^>]*>/g, "");
+  }
+  const element = document.createElement("div");
+  element.innerHTML = sanitizeCellRichTextHtml(value);
+  return element.innerText.replace(/\u00a0/g, " ").trimEnd();
+}
+
+function cellRichTextStyle(cell: GridCell) {
+  return {
+    fontSize: `${cell.font_size || 16}px`,
+    fontWeight:
+      cell.font_weight === "black"
+        ? 900
+        : cell.font_weight === "bold"
+          ? 700
+          : cell.font_weight === "semibold"
+            ? 600
+            : 400,
+    fontFamily:
+      cell.font_family === "serif"
+        ? "Georgia, 'Times New Roman', serif"
+        : cell.font_family === "rounded"
+          ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
+          : cell.font_family === "mono"
+            ? "'Courier New', monospace"
+            : "Arial, Helvetica, sans-serif",
+    fontStyle: cell.font_style || "normal",
+    textDecoration: cell.text_decoration || "none",
+  };
+}
+
+
+
+const BUSINESS_HOUR_DAY_NAMES = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
+function normalizeBusinessHourDayName(value: unknown) {
+  const raw = String(value ?? "").trim().toLowerCase().replace(/[.:]$/, "");
+  const aliases: Record<string, string> = {
+    mon: "Monday", monday: "Monday", 월: "Monday", 월요일: "Monday",
+    tue: "Tuesday", tues: "Tuesday", tuesday: "Tuesday", 화: "Tuesday", 화요일: "Tuesday",
+    wed: "Wednesday", wednesday: "Wednesday", 수: "Wednesday", 수요일: "Wednesday",
+    thu: "Thursday", thur: "Thursday", thurs: "Thursday", thursday: "Thursday", 목: "Thursday", 목요일: "Thursday",
+    fri: "Friday", friday: "Friday", 금: "Friday", 금요일: "Friday",
+    sat: "Saturday", saturday: "Saturday", 토: "Saturday", 토요일: "Saturday",
+    sun: "Sunday", sunday: "Sunday", 일: "Sunday", 일요일: "Sunday",
+  };
+  return aliases[raw] || "";
+}
+
+function businessHoursTextIsClosed(value: unknown) {
+  const text = String(value ?? "").trim().toLowerCase();
+  return !text || ["closed", "close", "휴무", "휴점", "off", "영업 안 함"].some((word) => text.includes(word));
+}
+
+function normalizeBusinessHoursPeriods(value: unknown) {
+  let text = String(value ?? "").trim();
+  if (!text || businessHoursTextIsClosed(text)) return "";
+  if (/24\s*(hours?|hrs?)|24\/7|open\s*24/i.test(text)) return "00:00-24:00";
+
+  text = text
+    .replace(/[–—~]/g, "-")
+    .replace(/\s+to\s+/gi, "-")
+    .replace(/\s*,\s*/g, ",")
+    .trim();
+
+  // 예: 11:30 AM - 9:30 PM / Break 2:00 PM - 5:00 PM
+  const breakMatch = text.match(/(?:\/|\|)?\s*(?:break(?:\s*time)?|브레이크(?:\s*타임)?|휴게시간)\s*[:：]?\s*([^/|,]+?)\s*-\s*([^/|,]+)\s*$/i);
+  if (breakMatch) {
+    const withoutBreak = text.slice(0, breakMatch.index).replace(/[\/|,\s]+$/, "").trim();
+    const mainMatch = withoutBreak.match(/(.+?)\s*-\s*(.+)$/);
+    if (mainMatch) {
+      return `${mainMatch[1].trim()}-${breakMatch[1].trim()},${breakMatch[2].trim()}-${mainMatch[2].trim()}`;
+    }
+  }
+
+  return text;
+}
+
+function parseBusinessTableHours(value: unknown): NonNullable<GridCell["business_hours_data"]> {
+  const result = new Map<string, NonNullable<GridCell["business_hours_data"]>[number]>();
+
+  const save = (dayValue: unknown, hoursValue: unknown, noteValue: unknown = "") => {
+    const day = normalizeBusinessHourDayName(dayValue);
+    if (!day) return;
+    const rawHours = String(hoursValue ?? "").trim();
+    const closed = businessHoursTextIsClosed(rawHours);
+    result.set(day, {
+      day,
+      open: closed ? "" : normalizeBusinessHoursPeriods(rawHours),
+      close: "",
+      note: String(noteValue ?? "").trim(),
+      closed,
+    });
+  };
+
+  const consumeObject = (source: Record<string, unknown>) => {
+    for (const [key, item] of Object.entries(source)) {
+      const day = normalizeBusinessHourDayName(key);
+      if (!day) continue;
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const row = item as Record<string, unknown>;
+        const combined = row.hours ?? row.time ?? row.value ??
+          [row.open ?? row.open_time, row.close ?? row.close_time].filter(Boolean).join("-");
+        save(day, row.closed ? "Closed" : combined, row.note);
+      } else {
+        save(day, item);
+      }
+    }
+  };
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      const row = item as Record<string, unknown>;
+      const day = row.day ?? row.weekday ?? row.day_of_week ?? row.name;
+      const combined = row.hours ?? row.time ?? row.value ??
+        [row.open ?? row.open_time, row.close ?? row.close_time].filter(Boolean).join("-");
+      save(day, row.closed || row.is_closed ? "Closed" : combined, row.note);
+    }
+  } else if (value && typeof value === "object") {
+    consumeObject(value as Record<string, unknown>);
+  } else {
+    let text = String(value ?? "").trim();
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object") return parseBusinessTableHours(parsed);
+      } catch {}
+
+      for (const rawLine of text.split(/\r?\n|\s*;\s*(?=(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|월|화|수|목|금|토|일))/i)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const match = line.match(/^\s*(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tues?|Wed|Thu|Thur|Thurs|Fri|Sat|Sun|월요일?|화요일?|수요일?|목요일?|금요일?|토요일?|일요일?)\s*[:：-]?\s*(.*)$/i);
+        if (!match) continue;
+        save(match[1], match[2]);
+      }
+    }
+  }
+
+  return BUSINESS_HOUR_DAY_NAMES.map((day) =>
+    result.get(day) || { day, open: "", close: "", note: "", closed: true },
+  );
+}
+
+function normalizeBusinessHoursDisplayItem(item: {
+  day?: string;
+  open?: string;
+  close?: string;
+  note?: string;
+  closed?: boolean;
+}) {
+  const rawDay = String(item.day || "").trim();
+  const rawOpen = String(item.open || "").trim();
+  const rawClose = String(item.close || "").trim();
+  const rawNote = String(item.note || "").trim();
+
+  const isNumericStoreNumber = /^#?\d+(?:\.0+)?$/.test(rawDay);
+
+  // 예전에 저장된 데이터가
+  // day=상점번호, open=업체명, close=영업시간 형태여도
+  // 화면에서는 상점번호를 버리고 업체명/영업시간만 표시합니다.
+  if (isNumericStoreNumber) {
+    const businessName = rawOpen;
+    const hoursText = rawClose || rawNote;
+    const extraNote = rawClose && rawNote && rawClose !== rawNote ? rawNote : "";
+    const closedText = `${hoursText} ${extraNote}`.toLowerCase();
+    const closed = ["closed", "휴무", "휴점", "off"].some((keyword) =>
+      closedText.includes(keyword),
+    );
+
+    return {
+      day: businessName,
+      open: hoursText,
+      close: "",
+      note: extraNote,
+      closed,
+    };
+  }
+
+  return {
+    day: rawDay,
+    open: rawOpen,
+    close: rawClose,
+    note: rawNote,
+    closed: Boolean(item.closed),
+  };
+}
+
+
+type BusinessHourInterval = { start: number; end: number; startText: string; endText: string };
+
+function parseBusinessHourTime(value: string) {
+  const text = String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+  const match = text.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const meridiem = match[3];
+  if (minute < 0 || minute > 59) return null;
+
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    if (hour === 12) hour = 0;
+    if (meridiem === "PM") hour += 12;
+  } else if (hour < 0 || hour > 23) {
+    return null;
+  }
+
+  return hour * 60 + minute;
+}
+
+function formatBusinessHourMinutes(value: number) {
+  const normalized = ((value % 1440) + 1440) % 1440;
+  const hour24 = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const suffix = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+function parseBusinessHourIntervals(item: { open?: string; close?: string }) {
+  const combined = [item.open, item.close].filter(Boolean).join(" – ");
+  const pieces = combined
+    .split(/[,;\n]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const intervals: BusinessHourInterval[] = [];
+
+  for (const piece of pieces) {
+    const match = piece.match(/^(.+?)\s*(?:-|–|—|~|to)\s*(.+)$/i);
+    if (!match) continue;
+    const start = parseBusinessHourTime(match[1]);
+    const parsedEnd = parseBusinessHourTime(match[2]);
+    if (start == null || parsedEnd == null) continue;
+    const end = parsedEnd <= start ? parsedEnd + 1440 : parsedEnd;
+    intervals.push({
+      start,
+      end,
+      startText: formatBusinessHourMinutes(start),
+      endText: formatBusinessHourMinutes(parsedEnd),
+    });
+  }
+
+  return intervals.sort((a, b) => a.start - b.start);
+}
+
+function getBusinessHoursNow(timeZone = "America/New_York") {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const value = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  return {
+    weekday: value("weekday"),
+    minutes: Number(value("hour")) * 60 + Number(value("minute")),
+  };
+}
+
+function getBusinessOpenStatus(
+  hours: NonNullable<GridCell["business_hours_data"]>,
+  timeZone = "America/New_York",
+) {
+  const now = getBusinessHoursNow(timeZone);
+  const todayRaw = hours.find(
+    (item) =>
+      String(item.day || "").trim().toLowerCase() ===
+      now.weekday.toLowerCase(),
+  );
+
+  if (!todayRaw) {
+    return {
+      label: "CLOSED",
+      detail: "No hours available for today",
+      tone: "closed" as const,
+    };
+  }
+
+  const today = normalizeBusinessHoursDisplayItem(todayRaw);
+
+  if (today.closed) {
+    return {
+      label: "CLOSED",
+      detail: "Closed today",
+      tone: "closed" as const,
+    };
+  }
+
+  const intervals = parseBusinessHourIntervals(today);
+
+  if (!intervals.length) {
+    return {
+      label: "CLOSED",
+      detail: "Business hours unavailable",
+      tone: "closed" as const,
+    };
+  }
+
+  const current = now.minutes;
+
+  for (let index = 0; index < intervals.length; index += 1) {
+    const interval = intervals[index];
+
+    if (current >= interval.start && current < interval.end) {
+      return {
+        label: "OPEN",
+        detail: `Closes at ${interval.endText}`,
+        tone: "open" as const,
+      };
+    }
+
+    const next = intervals[index + 1];
+
+    if (next && current >= interval.end && current < next.start) {
+      return {
+        label: "BREAK",
+        detail: `Reopens at ${next.startText}`,
+        tone: "break" as const,
+      };
+    }
+  }
+
+  if (current < intervals[0].start) {
+    return {
+      label: "CLOSED",
+      detail: `Opens at ${intervals[0].startText}`,
+      tone: "closed" as const,
+    };
+  }
+
+  return {
+    label: "CLOSED",
+    detail: "Closed for today",
+    tone: "closed" as const,
+  };
+}
+function BusinessHoursDisplay({
+  cell,
+  compact = false,
+  mobilePreview = false,
+}: {
+  cell: GridCell;
+  compact?: boolean;
+  mobilePreview?: boolean;
+}) {
+  const [, setClockTick] = useState(0);
+  const hours = Array.isArray(cell.business_hours_data) ? cell.business_hours_data : [];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick((value) => value + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const status = getBusinessOpenStatus(hours);
+  const currentWeekday = getBusinessHoursNow().weekday;
+  const badgeClass =
+    status.tone === "open"
+      ? "bg-emerald-400 text-emerald-950"
+      : status.tone === "break"
+        ? "bg-amber-300 text-amber-950"
+        : "bg-red-400 text-red-950";
+
+  return (
+    <div
+      className={`mx-auto w-full overflow-hidden border border-gray-200 bg-white shadow-xl ${
+        mobilePreview
+          ? "max-w-none rounded-xl"
+          : "max-w-none rounded-xl sm:max-w-3xl sm:rounded-3xl"
+      }`}
+    >
+      <div
+        className={`${
+          compact
+            ? "px-3 py-2"
+            : mobilePreview
+              ? "px-3 py-3"
+              : "px-3 py-3 sm:px-5 sm:py-4"
+        } bg-gray-950 text-white`}
+      >
+        <div
+          className={`flex items-start justify-between ${
+            mobilePreview ? "gap-2" : "flex-wrap gap-3"
+          }`}
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/55 sm:text-xs sm:tracking-[0.22em]">
+              Open · Close
+            </p>
+            <h3
+              className={`mt-1 whitespace-nowrap font-black leading-tight ${
+                compact
+                  ? "text-base"
+                  : mobilePreview
+                    ? "text-[18px]"
+                    : "text-[18px] sm:text-2xl"
+              }`}
+            >
+              {cell.business_hours_title || "Business Hours"}
+            </h3>
+          </div>
+          {hours.length ? (
+            <div className={`shrink-0 text-right ${mobilePreview ? "max-w-[112px]" : ""}`}>
+              <span
+                className={`inline-flex rounded-full font-black tracking-wide ${badgeClass} ${
+                  mobilePreview
+                    ? "px-2.5 py-1 text-[10px]"
+                    : "px-3 py-1 text-xs"
+                }`}
+              >
+                {status.label}
+              </span>
+              <p
+                className={`mt-1 whitespace-nowrap font-bold text-white/70 ${
+                  mobilePreview ? "text-[9px]" : "text-xs"
+                }`}
+              >
+                {status.detail}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {hours.length ? (
+        <div className="divide-y divide-gray-100">
+          {hours.map((rawItem, index) => {
+            const item = normalizeBusinessHoursDisplayItem(rawItem);
+            const normalizedItemDay = normalizeBusinessHourDayName(item.day);
+            const isToday =
+              Boolean(normalizedItemDay) &&
+              normalizedItemDay.toLowerCase() === currentWeekday.toLowerCase();
+            const intervals = parseBusinessHourIntervals(item);
+            const breaks = intervals.slice(0, -1).map((interval, intervalIndex) => ({
+              start: interval.endText,
+              end: intervals[intervalIndex + 1].startText,
+            }));
+            return (
+              <div
+                key={`${item.day}-${index}`}
+                className={`grid items-center transition-colors ${
+                  isToday ? "bg-gray-100" : "bg-white"
+                } ${
+                  compact
+                    ? "grid-cols-[minmax(82px,0.8fr)_minmax(0,1.7fr)] gap-3 px-3 py-3"
+                    : mobilePreview
+                      ? "grid-cols-[minmax(82px,0.75fr)_minmax(0,1.8fr)] gap-3 px-3 py-4"
+                      : "grid-cols-[minmax(82px,0.75fr)_minmax(0,1.8fr)] gap-3 px-3 py-4 sm:grid-cols-[minmax(130px,0.95fr)_minmax(0,1.65fr)] sm:gap-5 sm:px-7"
+                }`}
+              >
+                <span className="min-w-0 whitespace-normal break-words font-black leading-snug text-gray-950">
+                  {item.day}
+                </span>
+                <div className="min-w-0 text-right">
+                  {item.closed ? (
+                    <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-black tracking-wide text-red-600">CLOSED</span>
+                  ) : (
+                    <>
+                      <span className="block whitespace-normal break-words font-black leading-relaxed text-gray-700">
+                        {[item.open, item.close].filter(Boolean).join(" – ")}
+                      </span>
+                      {breaks.map((breakTime, breakIndex) => (
+                        <p key={breakIndex} className="mt-1 text-xs font-black text-amber-600">
+                          BREAK {breakTime.start} – {breakTime.end}
+                        </p>
+                      ))}
+                    </>
+                  )}
+                  {item.note ? <p className="mt-1 whitespace-normal break-words text-xs font-semibold leading-relaxed text-gray-400">{item.note}</p> : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="px-6 py-12 text-center text-sm font-bold text-gray-400">영업시간 엑셀 파일을 첨부해주세요.</div>
+      )}
+
+      {cell.business_hours_note ? (
+        <div className="border-t border-gray-100 bg-amber-50 px-5 py-4 text-sm font-bold leading-relaxed text-amber-900 sm:px-7">
+          {cell.business_hours_note}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function getUploadedUrl(result: Record<string, any>) {
+  return String(
+    result.url || result.publicUrl || result.public_url || result.fileUrl ||
+      result.file_url || result.data?.url || result.data?.publicUrl || "",
+  ).trim();
+}
+
+function LinkPageContent({
+  section,
+  editable = false,
+  previewDevice = "desktop",
+}: {
+  section: BusinessSection;
+  editable?: boolean;
+  previewDevice?: "desktop" | "mobile";
+}) {
+  if (section.content?.link_page_kind === "restaurant-menu") {
+    const menuBackgroundColor = String(
+      section.content?.restaurant_menu_background_color || "#ffffff",
+    );
+    const menuTextColor = String(
+      section.content?.restaurant_menu_text_color || "#111827",
+    );
+    const scrollTopEnabled = section.content?.restaurant_menu_scroll_top_enabled !== false;
+    const scrollTopButtonColor = String(
+      section.content?.restaurant_menu_scroll_top_button_color || "#111827",
+    );
+    const scrollTopIconColor = String(
+      section.content?.restaurant_menu_scroll_top_icon_color || "#ffffff",
+    );
+    const scrollTopPosition =
+      section.content?.restaurant_menu_scroll_top_position === "left" ? "left" : "right";
+
+    return (
+      <div
+        className="min-h-[60vh] w-full"
+        style={{ backgroundColor: menuBackgroundColor, color: menuTextColor }}
+      >
+        <RestaurantMenuDisplay
+          businessId={section.business_id}
+          compact={previewDevice === "mobile"}
+          backgroundColor={menuBackgroundColor}
+          textColor={menuTextColor}
+          scrollTopEnabled={scrollTopEnabled}
+          scrollTopButtonColor={scrollTopButtonColor}
+          scrollTopIconColor={scrollTopIconColor}
+          scrollTopPosition={scrollTopPosition}
+        />
+      </div>
+    );
+  }
+
+  const html = sanitizeLinkPageHtml(String(section.content?.link_page_html || ""));
+  const images = Array.isArray(section.content?.link_page_images)
+    ? section.content.link_page_images.filter((item) => item && item.url).slice(0, 8)
+    : [];
+  const legacyPdfUrl = String(section.content?.link_page_pdf_url || "").trim();
+  const pdfs = Array.isArray(section.content?.link_page_pdfs) && section.content.link_page_pdfs.length
+    ? section.content.link_page_pdfs.filter((item) => item && item.url).slice(0, 2)
+    : legacyPdfUrl
+      ? [{
+          id: "legacy-pdf-1",
+          url: legacyPdfUrl,
+          name: String(section.content?.link_page_pdf_name || section.title || "PDF"),
+          caption: "",
+        }]
+      : [];
+  const backgroundColor = String(section.content?.link_page_background_color || "#ffffff");
+  const widthMode = String(section.content?.link_page_width || "normal") as "normal" | "wide" | "full";
+  const imageMode = String(section.content?.link_page_image_mode || "stack") as "stack" | "flipbook" | "scroll";
+  const htmlFontSize = Math.max(10, Math.min(72, Number(section.content?.link_page_html_font_size || 16)));
+  const htmlFontFamily = String(section.content?.link_page_html_font_family || "Arial, sans-serif");
+  const htmlColor = String(section.content?.link_page_html_color || "#111827");
+  const htmlBackgroundColor = String(section.content?.link_page_html_background_color || "#ffffff");
+  const htmlTextAlign = String(section.content?.link_page_html_text_align || "left") as TextAlign;
+  const htmlFontWeight = section.content?.link_page_html_font_weight === "bold" ? "bold" : "normal";
+  const htmlFontStyle = section.content?.link_page_html_font_style === "italic" ? "italic" : "normal";
+  const htmlTextDecoration = section.content?.link_page_html_text_decoration === "underline" ? "underline" : "none";
+  const htmlLineHeight = Math.max(1, Math.min(3, Number(section.content?.link_page_html_line_height || 1.65)));
+  const maxWidthClass = widthMode === "full" ? "max-w-none" : widthMode === "wide" ? "max-w-7xl" : "max-w-5xl";
+
+  return (
+    <div className="min-h-[50vh] w-full" style={{ backgroundColor }}>
+      <div
+        className={`mx-auto w-full ${maxWidthClass} space-y-6 px-4 py-6 sm:px-8 sm:py-10 ${
+          previewDevice === "mobile" ? "link-page-mobile-preview" : ""
+        }`}
+      >
+        <style>{`
+          .link-page-rich-html {
+            color: #111827;
+            line-height: 1.65;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+          }
+
+          .link-page-rich-html *,
+          .link-page-rich-html *::before,
+          .link-page-rich-html *::after {
+            box-sizing: border-box;
+            max-width: 100%;
+          }
+
+          /* 다른 웹사이트에서 복사한 고정 폭/최소 폭을 현재 페이지 폭에 맞게 강제로 정리 */
+          .link-page-rich-html [style*="min-width"] {
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+
+          .link-page-rich-html img[width],
+          .link-page-rich-html table[width] {
+            max-width: 100% !important;
+          }
+
+          .link-page-rich-html > div,
+          .link-page-rich-html > section,
+          .link-page-rich-html > article,
+          .link-page-rich-html > main {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+          }
+
+          /* 복사된 flex/grid 메뉴가 칸 밖으로 밀리지 않게 자동 줄바꿈 */
+          .link-page-rich-html [style*="display: flex"],
+          .link-page-rich-html [style*="display:flex"],
+          .link-page-rich-html [style*="display: grid"],
+          .link-page-rich-html [style*="display:grid"] {
+            min-width: 0 !important;
+            max-width: 100% !important;
+            gap: 1rem !important;
+          }
+
+          .link-page-rich-html [style*="display: flex"],
+          .link-page-rich-html [style*="display:flex"] {
+            flex-wrap: wrap !important;
+          }
+
+          .link-page-rich-html [style*="grid-template-columns"] {
+            grid-template-columns: repeat(
+              auto-fit,
+              minmax(min(100%, 260px), 1fr)
+            ) !important;
+          }
+
+          .link-page-rich-html h1 { font-size: 2rem; line-height: 1.2; font-weight: 900; margin: 0 0 1rem; }
+          .link-page-rich-html h2 { font-size: 1.55rem; line-height: 1.3; font-weight: 900; margin: 2rem 0 .75rem; padding-bottom: .45rem; border-bottom: 2px solid #111827; }
+          .link-page-rich-html h3 { font-size: 1.15rem; line-height: 1.35; font-weight: 800; margin: 1.25rem 0 .35rem; }
+          .link-page-rich-html h4, .link-page-rich-html h5, .link-page-rich-html h6 { font-weight: 800; margin: 1rem 0 .3rem; }
+          .link-page-rich-html p { margin: .3rem 0 .75rem; white-space: normal; }
+          .link-page-rich-html div,
+          .link-page-rich-html span,
+          .link-page-rich-html p,
+          .link-page-rich-html a,
+          .link-page-rich-html li,
+          .link-page-rich-html td,
+          .link-page-rich-html th {
+            min-width: 0;
+            overflow-wrap: break-word;
+            word-break: normal;
+          }
+          .link-page-rich-html ul, .link-page-rich-html ol { margin: .75rem 0 .9rem 1.35rem; padding: 0; }
+          .link-page-rich-html li { margin: .25rem 0; }
+          .link-page-rich-html img { display: block; width: auto; height: auto; margin: 1rem auto; border-radius: .75rem; }
+          .link-page-rich-html table {
+            width: 100%;
+            max-width: 100%;
+            table-layout: auto;
+            border-collapse: collapse;
+            margin: 1rem 0;
+          }
+          .link-page-rich-html th, .link-page-rich-html td { border: 1px solid #e5e7eb; padding: .65rem; vertical-align: top; }
+          .link-page-rich-html a { color: #2563eb; text-decoration: underline; overflow-wrap: break-word; }
+          .link-page-rich-html section, .link-page-rich-html article { margin: 1rem 0; }
+          .link-page-rich-html [style*="display: grid"], .link-page-rich-html [style*="display:grid"] { gap: 1rem; }
+          .link-page-rich-html table[data-responsive-menu-table="true"] td,
+          .link-page-rich-html table[data-responsive-menu-table="true"] th {
+            width: auto !important;
+            min-width: 0 !important;
+            white-space: normal !important;
+            overflow-wrap: break-word !important;
+            word-break: normal !important;
+          }
+
+          .link-page-rich-html table[data-responsive-menu-table="true"] {
+            table-layout: auto !important;
+          }
+
+          .link-page-mobile-preview {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+          }
+          .link-page-mobile-preview .link-page-rich-html {
+            font-size: 14px;
+            overflow-x: hidden;
+          }
+          .link-page-mobile-preview .link-page-rich-html h1 { font-size: 1.65rem; }
+          .link-page-mobile-preview .link-page-rich-html h2 { font-size: 1.3rem; }
+          .link-page-mobile-preview .link-page-rich-html [style*="grid-template-columns"],
+          .link-page-mobile-preview .link-page-rich-html [style*="display: grid"],
+          .link-page-mobile-preview .link-page-rich-html [style*="display:grid"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+          .link-page-mobile-preview .link-page-rich-html [style*="display: flex"],
+          .link-page-mobile-preview .link-page-rich-html [style*="display:flex"] {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .link-page-mobile-preview .link-page-rich-html table,
+          .link-page-mobile-preview .link-page-rich-html tbody,
+          .link-page-mobile-preview .link-page-rich-html tr,
+          .link-page-mobile-preview .link-page-rich-html td,
+          .link-page-mobile-preview .link-page-rich-html th {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+
+          @media (max-width: 640px) {
+            .link-page-rich-html {
+              font-size: 14px;
+              overflow-x: hidden;
+            }
+
+            .link-page-rich-html h1 { font-size: 1.65rem; }
+            .link-page-rich-html h2 { font-size: 1.3rem; }
+
+            /* 모바일에서는 복사된 2열·3열 구성을 한 줄씩 세로로 표시 */
+            .link-page-rich-html [style*="grid-template-columns"],
+            .link-page-rich-html [style*="display: grid"],
+            .link-page-rich-html [style*="display:grid"] {
+              grid-template-columns: minmax(0, 1fr) !important;
+            }
+
+            .link-page-rich-html [style*="display: flex"],
+            .link-page-rich-html [style*="display:flex"] {
+              flex-direction: column !important;
+              align-items: stretch !important;
+            }
+
+            .link-page-rich-html table,
+            .link-page-rich-html tbody,
+            .link-page-rich-html tr,
+            .link-page-rich-html td,
+            .link-page-rich-html th {
+              width: 100% !important;
+              max-width: 100% !important;
+            }
+
+            .link-page-rich-html table {
+              display: table;
+              table-layout: auto;
+              overflow: visible;
+              white-space: normal;
+            }
+
+            .link-page-rich-html th,
+            .link-page-rich-html td {
+              white-space: normal !important;
+              overflow-wrap: break-word;
+              word-break: normal;
+            }
+          }
+        `}</style>
+
+        {html ? (
+          <div
+            className="link-page-rich-html max-w-none overflow-hidden rounded-2xl"
+            style={{
+              fontSize: `${htmlFontSize}px`,
+              fontFamily: htmlFontFamily,
+              color: htmlColor,
+              backgroundColor: htmlBackgroundColor,
+              textAlign: htmlTextAlign,
+              fontWeight: htmlFontWeight,
+              fontStyle: htmlFontStyle,
+              textDecoration: htmlTextDecoration,
+              lineHeight: htmlLineHeight,
+            }}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        ) : null}
+
+        {images.length ? <LinkPageImages images={images} title={section.title || "페이지"} mode={imageMode} /> : null}
+
+        {pdfs.map((pdf, index) => (
+          <div key={pdf.id || `${pdf.url}-${index}`} className="space-y-3">
+            <PdfFlipbook url={pdf.url} title={String(pdf.name || section.title || `PDF ${index + 1}`)} />
+            <LinkPagePdfCaption pdf={pdf} />
+          </div>
+        ))}
+
+        {!html && !images.length && !pdfs.length ? (
+          <div className="rounded-3xl border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-16 text-center">
+            <p className="text-lg font-black text-gray-800">빈 링크 페이지</p>
+            <p className="mt-2 text-sm leading-6 text-gray-500">{editable ? "오른쪽에서 HTML, 사진 또는 PDF를 추가하세요." : "아직 등록된 내용이 없습니다."}</p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function LinkPagePdfCaption({ pdf }: { pdf: NonNullable<SectionContent["link_page_pdfs"]>[number] }) {
+  const caption = String(pdf.caption || "").trim();
+  if (!caption) return null;
+
+  return (
+    <div
+      className="whitespace-pre-wrap rounded-2xl px-4 py-4"
+      style={{
+        fontSize: `${Math.max(10, Math.min(48, Number(pdf.caption_font_size || 16)))}px`,
+        fontFamily: String(pdf.caption_font_family || "Arial, sans-serif"),
+        color: String(pdf.caption_color || "#111827"),
+        backgroundColor: String(pdf.caption_background_color || "transparent"),
+        textAlign: (pdf.caption_text_align || "left") as TextAlign,
+        fontWeight: pdf.caption_font_weight === "bold" ? "bold" : "normal",
+        fontStyle: pdf.caption_font_style === "italic" ? "italic" : "normal",
+        textDecoration: pdf.caption_text_decoration === "underline" ? "underline" : "none",
+        lineHeight: 1.6,
+      }}
+    >
+      {caption}
+    </div>
+  );
+}
+
+function LinkPageImageCaption({ image }: { image: NonNullable<SectionContent["link_page_images"]>[number] }) {
+  const caption = String(image.caption || "").trim();
+  if (!caption) return null;
+
+  return (
+    <div
+      className="whitespace-pre-wrap px-4 py-3"
+      style={{
+        fontSize: `${Math.max(10, Math.min(48, Number(image.caption_font_size || 16)))}px`,
+        fontFamily: String(image.caption_font_family || "Arial, sans-serif"),
+        color: String(image.caption_color || "#111827"),
+        backgroundColor: String(image.caption_background_color || "transparent"),
+        textAlign: (image.caption_text_align || "left") as TextAlign,
+        fontWeight: image.caption_font_weight === "bold" ? "bold" : "normal",
+        fontStyle: image.caption_font_style === "italic" ? "italic" : "normal",
+        textDecoration: image.caption_text_decoration === "underline" ? "underline" : "none",
+        lineHeight: 1.6,
+      }}
+    >
+      {caption}
+    </div>
+  );
+}
+
+function LinkPageImages({
+  images,
+  title,
+  mode,
+}: {
+  images: NonNullable<SectionContent["link_page_images"]>;
+  title: string;
+  mode: "stack" | "flipbook" | "scroll";
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (activeIndex >= images.length) setActiveIndex(0);
+  }, [activeIndex, images.length]);
+
+  if (mode === "flipbook") {
+    const current = images[activeIndex];
+    return (
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex min-h-[300px] items-center justify-center bg-gray-100 p-2 sm:p-4">
+          <img src={current.url} alt={current.alt || `${title} ${activeIndex + 1}`} className="max-h-[82vh] w-auto max-w-full object-contain" />
+        </div>
+        <LinkPageImageCaption image={current} />
+        <div className="flex items-center justify-between gap-3 border-t border-gray-200 p-3">
+          <button type="button" onClick={() => setActiveIndex((activeIndex - 1 + images.length) % images.length)} className="rounded-xl bg-gray-950 px-4 py-2 text-sm font-black text-white">← 이전</button>
+          <span className="text-sm font-black text-gray-700">{activeIndex + 1} / {images.length}</span>
+          <button type="button" onClick={() => setActiveIndex((activeIndex + 1) % images.length)} className="rounded-xl bg-gray-950 px-4 py-2 text-sm font-black text-white">다음 →</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "scroll") {
+    return (
+      <div className="overflow-x-auto pb-3 [scrollbar-width:thin]">
+        <div className="flex w-max snap-x snap-mandatory gap-4">
+          {images.map((image, index) => (
+            <div key={image.id || `${image.url}-${index}`} className="w-[82vw] max-w-[720px] shrink-0 snap-center overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <img src={image.url} alt={image.alt || `${title} 이미지 ${index + 1}`} className="h-auto w-full object-contain" />
+              <LinkPageImageCaption image={image} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {images.map((image, index) => (
+        <div key={image.id || `${image.url}-${index}`} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <img src={image.url} alt={image.alt || `${title} 이미지 ${index + 1}`} className="h-auto w-full object-contain" />
+          <LinkPageImageCaption image={image} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PdfFlipbook({ url, title }: { url: string; title: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [pdf, setPdf] = useState<any>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageCount, setPageCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [renderError, setRenderError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    let task: any;
+    setLoading(true);
+    setRenderError("");
+    setPageNumber(1);
+
+    (async () => {
+      try {
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          "pdfjs-dist/legacy/build/pdf.worker.mjs",
+          import.meta.url,
+        ).toString();
+        task = pdfjs.getDocument({ url });
+        const loaded = await task.promise;
+        if (cancelled) return;
+        setPdf(loaded);
+        setPageCount(loaded.numPages || 0);
+      } catch (error) {
+        if (!cancelled) {
+          setRenderError(error instanceof Error ? error.message : "PDF를 열 수 없습니다.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try { task?.destroy?.(); } catch {}
+    };
+  }, [url]);
+
+  useEffect(() => {
+    if (!pdf || !canvasRef.current) return;
+    let cancelled = false;
+    let renderTask: any;
+
+    (async () => {
+      try {
+        const page = await pdf.getPage(pageNumber);
+        if (cancelled || !canvasRef.current) return;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const maxWidth = Math.min(980, Math.max(280, window.innerWidth - 48));
+        const scale = Math.max(0.5, Math.min(2.2, maxWidth / baseViewport.width));
+        const viewport = page.getViewport({ scale });
+        const canvas = canvasRef.current;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch (error: any) {
+        if (!cancelled && error?.name !== "RenderingCancelledException") {
+          setRenderError(error instanceof Error ? error.message : "PDF 페이지 표시 오류");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      try { renderTask?.cancel?.(); } catch {}
+    };
+  }, [pdf, pageNumber]);
+
+  return (
+    <section className="overflow-hidden rounded-3xl border border-gray-200 bg-gray-950 shadow-xl">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3 text-white">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black">{title}</p>
+          <p className="text-xs text-white/60">{pageCount ? `${pageNumber} / ${pageCount}` : "PDF"}</p>
+        </div>
+        <a href={url} target="_blank" rel="noreferrer" className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black hover:bg-white/20">원본 열기</a>
+      </div>
+      <div className="relative flex min-h-[420px] items-center justify-center overflow-auto bg-gray-800 p-3 sm:p-6">
+        {pageCount > 0 && !loading && !renderError ? (
+          <>
+            <button
+              type="button"
+              aria-label="이전 PDF 페이지"
+              title="이전 페이지"
+              disabled={pageNumber <= 1}
+              onClick={() => setPageNumber((n) => Math.max(1, n - 1))}
+              className="sticky left-2 z-20 mr-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/30 bg-black/65 text-3xl font-black leading-none text-white shadow-xl backdrop-blur transition hover:scale-105 hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-25 sm:absolute sm:left-4 sm:top-1/2 sm:mr-0 sm:-translate-y-1/2"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              aria-label="다음 PDF 페이지"
+              title="다음 페이지"
+              disabled={pageNumber >= pageCount}
+              onClick={() => setPageNumber((n) => Math.min(pageCount, n + 1))}
+              className="sticky right-2 z-20 order-last ml-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/30 bg-black/65 text-3xl font-black leading-none text-white shadow-xl backdrop-blur transition hover:scale-105 hover:bg-black/85 disabled:cursor-not-allowed disabled:opacity-25 sm:absolute sm:right-4 sm:top-1/2 sm:ml-0 sm:-translate-y-1/2"
+            >
+              ›
+            </button>
+          </>
+        ) : null}
+        {loading ? <p className="font-bold text-white">PDF 스캔 중...</p> : null}
+        {renderError ? (
+          <div className="max-w-lg rounded-2xl bg-white p-5 text-center">
+            <p className="font-black text-red-700">PDF를 플립북으로 표시하지 못했습니다.</p>
+            <p className="mt-2 break-words text-xs text-gray-500">{renderError}</p>
+            <a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-full bg-gray-950 px-4 py-2 text-xs font-black text-white">PDF 열기</a>
+          </div>
+        ) : null}
+        {!loading && !renderError ? <canvas ref={canvasRef} className="max-w-full rounded-lg bg-white shadow-2xl" /> : null}
+      </div>
+      {pageCount > 0 ? (
+        <div className="flex items-center justify-center border-t border-white/10 px-4 py-3">
+          <span className="min-w-[84px] rounded-full bg-white/10 px-4 py-2 text-center text-sm font-black text-white">{pageNumber} / {pageCount}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+
+async function readApiResponse(
+  response: Response,
+): Promise<Record<string, any>> {
+  const rawText = await response.text();
+
+  if (!rawText.trim()) {
+    if (response.ok) return {};
+
+    throw new Error(
+      `서버가 빈 응답을 반환했습니다. HTTP ${response.status} ${response.statusText}`,
+    );
+  }
+
+  try {
+    return JSON.parse(rawText) as Record<string, any>;
+  } catch {
+    const preview = rawText.replace(/\s+/g, " ").trim().slice(0, 180);
+
+    throw new Error(
+      `서버 응답이 JSON 형식이 아닙니다. HTTP ${response.status}${
+        preview ? ` · ${preview}` : ""
+      }`,
+    );
+  }
+}
+
+
+
+type MenuImportRow = {
+  category: string;
+  name: string;
+  description: string;
+  price: number | null;
+  imageFileName: string;
+  displayOrder: number;
+};
+
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let quoted = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === "," && !quoted) {
+      values.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+  values.push(current.trim());
+  return values;
+}
+
+function parseMenuCsv(text: string): MenuImportRow[] {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvLine(lines[0]).map((header) =>
+    header.trim().toLowerCase().replace(/[\s_-]+/g, ""),
+  );
+  const findIndex = (...names: string[]) =>
+    headers.findIndex((header) => names.includes(header));
+
+  const categoryIndex = findIndex("category", "categoryname", "menucategory", "section", "카테고리");
+  const nameIndex = findIndex("name", "item", "itemname", "menuname", "title", "상품명", "메뉴명");
+  const descriptionIndex = findIndex("description", "desc", "details", "설명");
+  const priceIndex = findIndex("price", "itemprice", "가격");
+  const imageIndex = findIndex(
+    "imagefile",
+    "imagefilename",
+    "localimage",
+    "localimagepath",
+    "imagepath",
+    "downloadedfile",
+    "filename",
+    "이미지",
+  );
+
+  if (nameIndex < 0) {
+    throw new Error("CSV에서 메뉴 이름 컬럼을 찾지 못했습니다. name 또는 item_name 컬럼이 필요합니다.");
+  }
+
+  return lines.slice(1).map((line, index) => {
+    const columns = parseCsvLine(line);
+    const rawPrice = priceIndex >= 0 ? columns[priceIndex] || "" : "";
+    const numericPrice = Number(rawPrice.replace(/[^0-9.-]/g, ""));
+    return {
+      category: (categoryIndex >= 0 ? columns[categoryIndex] : "Menu")?.trim() || "Menu",
+      name: (columns[nameIndex] || "").trim(),
+      description: (descriptionIndex >= 0 ? columns[descriptionIndex] : "")?.trim() || "",
+      price: Number.isFinite(numericPrice) ? numericPrice : null,
+      imageFileName: (imageIndex >= 0 ? columns[imageIndex] : "")?.trim().replace(/\\/g, "/") || "",
+      displayOrder: index,
+    };
+  }).filter((row) => row.name);
+}
+
+function normalizeMenuFileKey(value: string) {
+  return decodeURIComponent(String(value || ""))
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop()!
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]/g, "");
+}
+
+async function imageFileToWebp(
+  file: File,
+  options: { width: number; height: number; quality: number; crop: boolean },
+) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = options.width;
+  canvas.height = options.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("이미지 변환을 시작할 수 없습니다.");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const scale = options.crop
+    ? Math.max(options.width / bitmap.width, options.height / bitmap.height)
+    : Math.min(options.width / bitmap.width, options.height / bitmap.height, 1);
+  const drawWidth = bitmap.width * scale;
+  const drawHeight = bitmap.height * scale;
+  const drawX = (options.width - drawWidth) / 2;
+  const drawY = (options.height - drawHeight) / 2;
+  context.drawImage(bitmap, drawX, drawY, drawWidth, drawHeight);
+  bitmap.close();
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => result ? resolve(result) : reject(new Error("WebP 변환에 실패했습니다.")),
+      "image/webp",
+      options.quality,
+    );
+  });
+  return blob;
+}
+
+function MenuImportModal({
+  businessId,
+  adminKey,
+  onClose,
+}: {
+  businessId: string;
+  adminKey: string;
+  onClose: () => void;
+}) {
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [replaceExisting, setReplaceExisting] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [result, setResult] = useState("");
+  const [importError, setImportError] = useState("");
+
+  async function startImport() {
+    if (!csvFile) {
+      setImportError("CSV 파일을 선택해주세요.");
+      return;
+    }
+
+    setImporting(true);
+    setImportError("");
+    setResult("");
+
+    try {
+      const rows = parseMenuCsv(await csvFile.text());
+      if (!rows.length) throw new Error("가져올 메뉴가 없습니다.");
+
+      const fileMap = new Map<string, File>();
+      for (const file of imageFiles) {
+        const relativePath = String((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name);
+        fileMap.set(relativePath.replace(/\\/g, "/").toLowerCase(), file);
+        fileMap.set(file.name.toLowerCase(), file);
+        fileMap.set(normalizeMenuFileKey(file.name), file);
+      }
+
+      setProgress({ current: 0, total: rows.length });
+      let imageCount = 0;
+      let missingImageCount = 0;
+      const categoryNames = new Set<string>();
+
+      for (let index = 0; index < rows.length; index += 1) {
+        const row = rows[index];
+        categoryNames.add(row.category);
+        const requested = row.imageFileName.toLowerCase();
+        const requestedBase = requested.split("/").pop() || requested;
+        const imageFile =
+          fileMap.get(requested) ||
+          fileMap.get(requestedBase) ||
+          fileMap.get(normalizeMenuFileKey(requestedBase)) ||
+          fileMap.get(normalizeMenuFileKey(row.name));
+
+        const formData = new FormData();
+        formData.append("category", row.category);
+        formData.append("name", row.name);
+        formData.append("description", row.description);
+        formData.append("price", row.price == null ? "" : String(row.price));
+        formData.append("displayOrder", String(row.displayOrder));
+        formData.append("replaceExisting", replaceExisting && index === 0 ? "true" : "false");
+
+        if (imageFile) {
+          const thumbnail = await imageFileToWebp(imageFile, {
+            width: 96,
+            height: 96,
+            quality: 0.74,
+            crop: true,
+          });
+          const display = await imageFileToWebp(imageFile, {
+            width: 800,
+            height: 800,
+            quality: 0.82,
+            crop: false,
+          });
+          const safeName = normalizeMenuFileKey(row.name) || `menu-${index + 1}`;
+          formData.append("thumbnail", thumbnail, `${safeName}.webp`);
+          formData.append("displayImage", display, `${safeName}.webp`);
+          imageCount += 1;
+        } else {
+          missingImageCount += 1;
+        }
+
+        const response = await fetch(
+          `/api/admin/businesses/${encodeURIComponent(businessId)}/menu/import`,
+          {
+            method: "POST",
+            headers: { "x-admin-key": adminKey },
+            body: formData,
+          },
+        );
+        const payload = await readApiResponse(response);
+        if (!response.ok) {
+          throw new Error(String(payload.error || payload.message || `${row.name} 저장 실패`));
+        }
+        setProgress({ current: index + 1, total: rows.length });
+      }
+
+      setResult(
+        `완료: 카테고리 ${categoryNames.size}개 · 메뉴 ${rows.length}개 · 이미지 ${imageCount}개 · 이미지 없음 ${missingImageCount}개 · 원본 업로드 0개`,
+      );
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "메뉴 가져오기에 실패했습니다.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-3">
+      <div className="max-h-[92vh] w-full max-w-[480px] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Restaurant Menu</p>
+            <h2 className="mt-0.5 text-xl font-black text-gray-950">메뉴 가져오기</h2>
+          </div>
+          <button
+            type="button"
+            disabled={importing}
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-700 disabled:opacity-50"
+            aria-label="메뉴 가져오기 닫기"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-3 p-5">
+          <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <span className="block text-sm font-black text-gray-900">1. 메뉴 CSV</span>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={importing}
+              onChange={(event) => setCsvFile(event.target.files?.[0] || null)}
+              className="mt-2 block w-full text-xs"
+            />
+            {csvFile ? (
+              <span className="mt-1.5 block truncate text-xs font-bold text-emerald-700">{csvFile.name}</span>
+            ) : null}
+          </label>
+
+          <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <span className="block text-sm font-black text-gray-900">2. images 폴더</span>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={importing}
+              {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+              onChange={(event) => setImageFiles(Array.from(event.target.files || []))}
+              className="mt-2 block w-full text-xs"
+            />
+            {imageFiles.length ? (
+              <span className="mt-1.5 block text-xs font-bold text-emerald-700">이미지 {imageFiles.length}개 선택됨</span>
+            ) : null}
+          </label>
+
+          <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold leading-5 text-blue-950">
+            96×96 썸네일과 최대 800×800 WebP만 업로드하며 원본은 업로드하지 않습니다.
+          </p>
+
+          <label className="flex items-center gap-2.5 rounded-xl border border-gray-200 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={replaceExisting}
+              disabled={importing}
+              onChange={(event) => setReplaceExisting(event.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-xs font-black text-gray-800">기존 메뉴를 지우고 새 메뉴로 교체</span>
+          </label>
+
+          {progress.total > 0 ? (
+            <div className="rounded-xl bg-gray-50 p-3">
+              <div className="mb-1.5 flex justify-between text-xs font-black text-gray-600">
+                <span>{importing ? "가져오는 중" : "진행 결과"}</span>
+                <span>{progress.current} / {progress.total}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full bg-gray-950 transition-all"
+                  style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {result ? <div className="rounded-xl bg-emerald-50 p-3 text-xs font-black leading-5 text-emerald-800">{result}</div> : null}
+          {importError ? <div className="rounded-xl bg-red-50 p-3 text-xs font-bold leading-5 text-red-700">{importError}</div> : null}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 border-t border-gray-200 bg-gray-50 px-5 py-3.5">
+          <button
+            type="button"
+            disabled={importing}
+            onClick={onClose}
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-black text-gray-800 disabled:opacity-50"
+          >
+            닫기
+          </button>
+          <button
+            type="button"
+            disabled={importing || !csvFile}
+            onClick={() => void startImport()}
+            className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"
+          >
+            {importing ? `${progress.current}/${progress.total} 가져오는 중` : "메뉴 가져오기"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export default function WebsiteEditor({ businessId }: { businessId: string }) {
+  const [adminKey, setAdminKey] = useState("");
+  const [keyInput, setKeyInput] = useState("");
+  const [business, setBusiness] = useState<Business | null>(null);
+  const [sections, setSections] = useState<BusinessSection[]>([]);
+  const [selection, setSelection] = useState<Selection>({ area: "header" });
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [menuImportOpen, setMenuImportOpen] = useState(false);
+
+  // 미리보기는 사용자가 상단의 "작업 미리보기" 버튼을 직접 눌렀을 때만 엽니다.
+  // 색상 선택, 텍스트 수정, 링크 해시 변경 등 편집 작업으로는 자동 전환하지 않습니다.
+  const [draftMessage, setDraftMessage] = useState("");
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
+  const [deletedLayer, setDeletedLayer] = useState<{
+    section: BusinessSection;
+    index: number;
+  } | null>(null);
+  const [layerAddOpen, setLayerAddOpen] = useState(false);
+  const [newLayerName, setNewLayerName] = useState("");
+  const [newLayerVisibility, setNewLayerVisibility] = useState<
+    "normal" | "collapsible"
+  >("normal");
+  const [linkPageOpen, setLinkPageOpen] = useState(false);
+  const [newLinkPageName, setNewLinkPageName] = useState("");
+  const [newLinkPageKind, setNewLinkPageKind] = useState<"blank" | "restaurant-menu">("blank");
+  const draftReadyRef = useRef(false);
+  const suppressNextAutoSaveRef = useRef(false);
+
+  /*
+   * 서버에서 처음 불러온 레이어 ID를 보관합니다.
+   * 왼쪽 레이어 목록에서 사라진 기존 ID는 서버 저장 시 삭제 대상으로 보냅니다.
+   */
+  const serverSectionIdsRef = useRef<number[]>([]);
+
+  const [restoringServerData, setRestoringServerData] = useState(false);
+  const [imageGuide, setImageGuide] = useState<{
+    area: "header" | "hero";
+    cellId: string;
+    title: string;
+  } | null>(null);
+
+  const sortedSections = useMemo(
+    () => [...sections].sort((a, b) => a.sort_order - b.sort_order),
+    [sections],
+  );
+
+  const homeSections = useMemo(
+    () =>
+      sortedSections.filter(
+        (section) => section.content?.page_type !== "link-page",
+      ),
+    [sortedSections],
+  );
+
+  const linkPageSections = useMemo(
+    () =>
+      sortedSections.filter(
+        (section) => section.content?.page_type === "link-page",
+      ),
+    [sortedSections],
+  );
+
+  const heroSection = useMemo(() => {
+    if (selection.area === "hero" && selection.sectionId) {
+      return (
+        sections.find((section) => section.id === selection.sectionId) ?? null
+      );
+    }
+
+    return (
+      sections.find((section) => section.section_type === "hero") ?? null
+    );
+  }, [sections, selection.area, selection.sectionId]);
+
+  const websiteSettings = useMemo(
+    () => normalizeSettings(business?.website_settings, business?.name || ""),
+    [business],
+  );
+
+  const headerGrid = normalizeGrid(
+    websiteSettings.header_grid,
+    createDefaultHeader(business?.name || ""),
+  );
+
+  const heroLayouts = useMemo(
+    () => normalizeHeroLayouts(heroSection?.content),
+    [heroSection],
+  );
+
+  const selectedCell = useMemo(() => {
+    if (!selection.cellId) return null;
+
+    if (selection.area === "header") {
+      return findCellRecursive(headerGrid.cells, selection.cellId);
+    }
+
+    if (selection.area === "section") {
+      const section = selection.sectionId
+        ? sections.find((item) => item.id === selection.sectionId)
+        : null;
+      if (!section) return null;
+
+      const sectionGrid = normalizeGrid(
+        section.content?.grid,
+        createEmptyHeroLayout(),
+      );
+
+      return (
+        findCellRecursive(sectionGrid.cells, selection.cellId)
+      );
+    }
+
+    const layout =
+      heroLayouts.find((item) => item.id === selection.layoutId) ||
+      heroLayouts[0];
+
+    return layout ? findCellRecursive(layout.cells, selection.cellId) : null;
+  }, [selection, headerGrid, heroLayouts, sections]);
+
+  const selectedSection = useMemo(
+    () =>
+      selection.sectionId
+        ? sections.find((section) => section.id === selection.sectionId) ?? null
+        : null,
+    [selection.sectionId, sections],
+  );
+
+  const loadWebsite = useCallback(
+    async (
+      key: string,
+      options?: {
+        ignoreLocalDraft?: boolean;
+        recoveryMode?: boolean;
+      },
+    ) => {
+      if (!key) return;
+
+      if (options?.recoveryMode) {
+        setRestoringServerData(true);
+      } else {
+        setLoading(true);
+      }
+      setError("");
+      setMessage("");
+
+      try {
+        const response = await fetch(`/api/admin/businesses/${businessId}/website`, {
+          method: "GET",
+          headers: { "x-admin-key": key },
+          cache: "no-store",
+        });
+
+        const result = await readApiResponse(response);
+        if (!response.ok) {
+          throw new Error(
+            String(
+              result.error ||
+                result.message ||
+                `웹사이트를 불러오지 못했습니다. HTTP ${response.status}`,
+            ),
+          );
+        }
+
+        const payload = result as unknown as ApiPayload;
+
+        if (!payload.business) {
+          throw new Error(
+            "웹사이트 API 응답에 business 데이터가 없습니다. API route를 확인해주세요.",
+          );
+        }
+
+        const normalizedBusiness = {
+          ...payload.business,
+          website_settings: normalizeSettings(
+            payload.business.website_settings,
+            payload.business.name || "",
+          ),
+        };
+
+        const normalizedSections = (payload.sections ?? []).map((section) =>
+          section.section_type === "hero"
+            ? {
+                ...section,
+                content: {
+                  ...(section.content ?? {}),
+                  background_type:
+                    section.content?.background_type ||
+                    (section.content?.image_url ? "image" : "gradient"),
+                  grid: normalizeGrid(section.content?.grid, createDefaultHero()),
+                  layouts: normalizeHeroLayouts(section.content),
+                },
+              }
+            : section,
+        );
+
+        serverSectionIdsRef.current = normalizedSections
+          .map((section) => Number(section.id))
+          .filter((id) => Number.isInteger(id) && id > 0);
+
+        const localDraft = loadWebsiteDraft(businessId);
+        const useServerData = options?.ignoreLocalDraft === true;
+
+        draftReadyRef.current = false;
+        suppressNextAutoSaveRef.current = true;
+
+        if (useServerData) {
+          backupWebsiteDraft(
+            businessId,
+            localDraft,
+            "서버 저장 데이터 복구 전 자동 백업",
+          );
+          window.localStorage.removeItem(getWebsiteDraftKey(businessId));
+
+          setBusiness(normalizedBusiness);
+          setSections(normalizedSections);
+          setDraftMessage(
+            "서버에 저장된 사이트 데이터를 복구했습니다. 내용을 확인한 뒤 서버 저장을 눌러주세요.",
+          );
+          setLastDraftSavedAt("");
+        } else if (localDraft) {
+          setBusiness({
+            ...localDraft.business,
+            website_settings: normalizeSettings(
+              localDraft.business.website_settings,
+              localDraft.business.name || "",
+            ),
+          });
+          setSections(localDraft.sections);
+          setLastDraftSavedAt(localDraft.savedAt);
+          setDraftMessage(
+            `이전에 중간 저장한 작업을 불러왔습니다. ${formatDraftTime(
+              localDraft.savedAt,
+            )}`,
+          );
+        } else {
+          setBusiness(normalizedBusiness);
+          setSections(normalizedSections);
+          setDraftMessage("");
+          setLastDraftSavedAt("");
+        }
+
+        setSelection({ area: "header" });
+        saveStoredAdminKey(key);
+        setAdminKey(key);
+
+        window.setTimeout(() => {
+          draftReadyRef.current = true;
+        }, 0);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Failed to load website.");
+      } finally {
+        setLoading(false);
+        setRestoringServerData(false);
+      }
+    },
+    [businessId],
+  );
+
+  useEffect(() => {
+    const storedKey = getStoredAdminKey();
+    if (storedKey) {
+      setKeyInput(storedKey);
+      void loadWebsite(storedKey);
+    }
+  }, [loadWebsite]);
+
+  useEffect(() => {
+    if (!draftReadyRef.current || !business || !adminKey) return;
+
+    if (suppressNextAutoSaveRef.current) {
+      suppressNextAutoSaveRef.current = false;
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      try {
+        const previousDraft = loadWebsiteDraft(businessId);
+        backupWebsiteDraft(businessId, previousDraft, "자동 저장 전 백업");
+
+        const savedAt = saveWebsiteDraft(businessId, business, sections);
+        setLastDraftSavedAt(savedAt);
+        setDraftMessage(`자동 중간 저장됨 · ${formatDraftTime(savedAt)}`);
+      } catch {
+        setDraftMessage(
+          "자동 중간 저장에 실패했습니다. 브라우저 저장 공간을 확인해주세요.",
+        );
+      }
+    }, 1800);
+
+    return () => window.clearTimeout(timer);
+  }, [adminKey, business, businessId, sections]);
+
+  function saveDraftNow() {
+    if (!business) return;
+
+    try {
+      const previousDraft = loadWebsiteDraft(businessId);
+      backupWebsiteDraft(businessId, previousDraft, "수동 중간 저장 전 백업");
+
+      const savedAt = saveWebsiteDraft(businessId, business, sections);
+      setLastDraftSavedAt(savedAt);
+      setDraftMessage(`중간 저장 완료 · ${formatDraftTime(savedAt)}`);
+      setMessage("");
+      setError("");
+    } catch {
+      setError("중간 저장에 실패했습니다. 브라우저 저장 공간을 확인해주세요.");
+    }
+  }
+
+  async function restoreFromServer() {
+    if (!adminKey || restoringServerData) return;
+
+    const confirmed = window.confirm(
+      "현재 브라우저의 편집 초안을 백업하고, 공개 사이트에 사용 중인 서버 저장 데이터를 다시 불러올까요?\n\n복구 후 내용을 확인하기 전에는 서버 저장을 누르지 마세요.",
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+    setMessage("");
+    draftReadyRef.current = false;
+    suppressNextAutoSaveRef.current = true;
+
+    await loadWebsite(adminKey, {
+      ignoreLocalDraft: true,
+      recoveryMode: true,
+    });
+
+    setMessage(
+      "서버 저장 데이터 복구가 완료되었습니다. 공개 사이트와 같은 내용인지 확인해주세요.",
+    );
+  }
+
+  function updateBusiness(patch: Partial<Business>) {
+    setBusiness((current) => (current ? { ...current, ...patch } : current));
+  }
+
+  function updateWebsiteSettings(patch: Partial<WebsiteSettings>) {
+    setBusiness((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        website_settings: {
+          ...normalizeSettings(current.website_settings, current.name || ""),
+          ...patch,
+        },
+      };
+    });
+  }
+
+  function updateSection(sectionId: number, patch: Partial<BusinessSection>) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId ? { ...section, ...patch } : section,
+      ),
+    );
+  }
+
+  function updateSectionContent(sectionId: number, patch: Partial<SectionContent>) {
+    setSections((current) =>
+      current.map((section) =>
+        section.id === sectionId
+          ? { ...section, content: { ...(section.content ?? {}), ...patch } }
+          : section,
+      ),
+    );
+  }
+
+  function updateGrid(
+    area: "header" | "hero",
+    updater: (grid: GridData) => GridData,
+    layoutId?: string,
+  ) {
+    if (area === "header") {
+      updateWebsiteSettings({ header_grid: updater(headerGrid) });
+      return;
+    }
+
+    if (!heroSection) return;
+
+    const targetId = layoutId || heroLayouts[0]?.id;
+    const nextLayouts = heroLayouts.map((layout) =>
+      layout.id === targetId ? updater(layout) : layout,
+    );
+
+    updateSectionContent(heroSection.id, {
+      layouts: nextLayouts,
+      grid: nextLayouts[0],
+    });
+  }
+
+  function addHeroLayout() {
+    if (!heroSection) return;
+
+    const newLayout = createEmptyHeroLayout();
+    const nextLayouts = [...heroLayouts, newLayout];
+    updateSectionContent(heroSection.id, {
+      layouts: nextLayouts,
+      grid: nextLayouts[0],
+    });
+    setSelection({
+      area: "hero",
+      sectionId: heroSection.id,
+      layoutId: newLayout.id,
+      cellId: newLayout.cells[0].id,
+    });
+  }
+
+  function deleteHeroLayout(layoutId: string) {
+    if (!heroSection) return;
+
+    if (heroLayouts.length <= 1) {
+      setError("레이어에는 최소 1개의 레이아웃이 필요합니다.");
+      return;
+    }
+
+    const targetIndex = heroLayouts.findIndex(
+      (layout) => layout.id === layoutId,
+    );
+    if (targetIndex < 0) return;
+
+    const confirmed = window.confirm(
+      `레이아웃 ${targetIndex + 1}을 삭제할까요?`,
+    );
+    if (!confirmed) return;
+
+    const nextLayouts = heroLayouts.filter(
+      (layout) => layout.id !== layoutId,
+    );
+
+    updateSectionContent(heroSection.id, {
+      layouts: nextLayouts,
+      grid: nextLayouts[0],
+    });
+
+    if (selection.layoutId === layoutId) {
+      const nextLayout =
+        nextLayouts[Math.min(targetIndex, nextLayouts.length - 1)] ||
+        nextLayouts[0];
+
+      setSelection({
+        area: "hero",
+        sectionId: heroSection.id,
+        layoutId: nextLayout?.id,
+        cellId: nextLayout?.cells[0]?.id,
+      });
+    }
+
+    setMessage(`레이아웃 ${targetIndex + 1}을 삭제했습니다.`);
+    setError("");
+  }
+
+  function selectHeroCell(layout: GridData, cellId: string) {
+    if (!heroSection) return;
+
+    const targetCell = findCellRecursive(layout.cells, cellId);
+    if (!targetCell) return;
+
+    setSelection({
+      area: "hero",
+      sectionId: heroSection.id,
+      layoutId: layout.id,
+      cellId,
+    });
+  }
+
+  function updateCell(
+    area: "header" | "hero",
+    cellId: string,
+    patch: Partial<GridCell>,
+    layoutId?: string,
+  ) {
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: mapCellRecursive(grid.cells, cellId, (cell) => ({
+          ...cell,
+          ...patch,
+        })),
+      }),
+      layoutId,
+    );
+  }
+
+  function setSelectedCellRowCount(
+    area: "header" | "hero",
+    cellId: string,
+    rowCount: number,
+    layoutId?: string,
+  ) {
+    const safeCount = Math.max(1, Math.min(4, Math.round(rowCount)));
+
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: mapCellRecursive(grid.cells, cellId, (cell) => {
+          const existing = cell.child_cells || [];
+
+          if (safeCount === 1) {
+            if (!existing.length) return cell;
+            const hasExtraContent = existing.slice(1).some(
+              (item) => item.type !== "empty" || Boolean(String(item.text || "").trim()) || Boolean(item.image_url),
+            );
+            if (hasExtraContent && !window.confirm("1칸으로 합치면 아래 칸의 내용이 삭제됩니다. 계속할까요?")) {
+              return cell;
+            }
+            const first = existing[0];
+            return first ? { ...first, id: cell.id, width_percent: cell.width_percent, span: cell.span } : { ...cell, child_cells: undefined };
+          }
+
+          // 첫 번째 안쪽 칸이 부모 칸과 같은 id를 가지면
+          // mapCellRecursive가 부모를 먼저 찾아서 위 칸을 수정할 수 없습니다.
+          // 안쪽 칸은 반드시 부모와 다른 고유 id를 사용하도록 만듭니다.
+          const base = existing.length
+            ? existing
+            : [
+                {
+                  ...cell,
+                  id: createId("cell"),
+                  span: 1,
+                  width_percent: undefined,
+                  child_cells: undefined,
+                },
+              ];
+
+          const usedChildIds = new Set<string>();
+          const nextChildren = Array.from({ length: safeCount }, (_, index) => {
+            const source = base[index] || defaultCell("empty", "", 1);
+            const sourceId = String(source.id || "");
+            const needsNewId =
+              !sourceId || sourceId === cell.id || usedChildIds.has(sourceId);
+            const childId = needsNewId ? createId("cell") : sourceId;
+
+            usedChildIds.add(childId);
+
+            return {
+              ...source,
+              id: childId,
+              span: 1,
+              width_percent: undefined,
+            };
+          });
+
+          return {
+            ...cell,
+            type: "empty",
+            text: "",
+            image_url: undefined,
+            child_cells: nextChildren,
+          };
+        }),
+      }),
+      layoutId,
+    );
+  }
+
+  function updateGridWidths(
+    area: "header" | "hero",
+    widths: Record<string, number>,
+    layoutId?: string,
+  ) {
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: grid.cells.map((cell) => ({
+          ...cell,
+          width_percent:
+            typeof widths[cell.id] === "number"
+              ? widths[cell.id]
+              : cell.width_percent,
+        })),
+      }),
+      layoutId,
+    );
+  }
+
+  function updateGridHeight(
+    area: "header" | "hero",
+    heightPx: number,
+    layoutId?: string,
+  ) {
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        height_px: Math.max(area === "header" ? 84 : 180, Math.min(3000, heightPx)),
+      }),
+      layoutId,
+    );
+  }
+
+  function mergeCell(area: "header" | "hero", cellId: string, layoutId?: string) {
+    updateGrid(area, (grid) => {
+      const index = grid.cells.findIndex((cell) => cell.id === cellId);
+      if (index < 0 || index >= grid.cells.length - 1) return grid;
+
+      const current = grid.cells[index];
+      const next = grid.cells[index + 1];
+      if (current.span + next.span > 4) return grid;
+
+      const cells = [...grid.cells];
+      cells.splice(index, 2, {
+        ...current,
+        span: current.span + next.span,
+        width_percent:
+          Number(current.width_percent || 0) +
+          Number(next.width_percent || 0),
+      });
+      return { ...grid, cells };
+    }, layoutId);
+  }
+
+  function splitCell(area: "header" | "hero", cellId: string, layoutId?: string) {
+    updateGrid(area, (grid) => {
+      const index = grid.cells.findIndex((cell) => cell.id === cellId);
+      if (index < 0 || grid.cells[index].span <= 1) return grid;
+
+      const target = grid.cells[index];
+      const cells = [...grid.cells];
+      const splitWidth =
+        Number(target.width_percent || (target.span / 4) * 100) / target.span;
+      const replacements = Array.from({ length: target.span }, (_, itemIndex) =>
+        itemIndex === 0
+          ? { ...target, span: 1, width_percent: splitWidth }
+          : {
+              ...defaultCell("empty", "", 1),
+              width_percent: splitWidth,
+            },
+      );
+      cells.splice(index, 1, ...replacements);
+      return { ...grid, cells };
+    }, layoutId);
+  }
+
+  function setGridColumnCount(
+    area: "header" | "hero",
+    columnCount: number,
+    layoutId?: string,
+  ) {
+    const safeCount = Math.max(1, Math.min(4, Math.round(columnCount)));
+
+    updateGrid(
+      area,
+      (grid) => {
+        if (grid.cells.length === safeCount) return grid;
+
+        if (safeCount < grid.cells.length) {
+          const removedCells = grid.cells.slice(safeCount);
+          const hasContent = removedCells.some((cell) =>
+            cell.type !== "empty" ||
+            Boolean(String(cell.text || "").trim()) ||
+            Boolean(cell.image_url) ||
+            Boolean(cell.phone_number),
+          );
+
+          if (hasContent) {
+            const confirmed = window.confirm(
+              `${safeCount}칸으로 줄이면 오른쪽 칸의 내용이 삭제됩니다. 계속할까요?`,
+            );
+            if (!confirmed) return grid;
+          }
+        }
+
+        const width = 100 / safeCount;
+        const cells = Array.from({ length: safeCount }, (_, index) => {
+          const existing = grid.cells[index];
+          if (existing) {
+            return {
+              ...existing,
+              span: 1,
+              width_percent: width,
+            };
+          }
+
+          return {
+            ...defaultCell("empty", "", 1),
+            width_percent: width,
+          };
+        });
+
+        return { ...grid, cells };
+      },
+      layoutId,
+    );
+
+    setMessage(`가로 레이아웃을 ${safeCount}칸으로 나눴습니다.`);
+    setError("");
+  }
+
+  function setGridRowCount(rowCount: number) {
+    if (!heroSection) return;
+
+    const safeCount = Math.max(1, Math.min(4, Math.round(rowCount)));
+    const currentCount = heroLayouts.length;
+
+    if (safeCount === currentCount) return;
+
+    if (safeCount < currentCount) {
+      const removedLayouts = heroLayouts.slice(safeCount);
+      const hasContent = removedLayouts.some((layout) =>
+        layout.cells.some((cell) =>
+          cell.type !== "empty" ||
+          Boolean(String(cell.text || "").trim()) ||
+          Boolean(cell.image_url) ||
+          Boolean(cell.phone_number),
+        ),
+      );
+
+      if (hasContent) {
+        const confirmed = window.confirm(
+          `${safeCount}줄로 줄이면 아래쪽 레이아웃의 내용이 삭제됩니다. 계속할까요?`,
+        );
+        if (!confirmed) return;
+      }
+    }
+
+    const nextLayouts = heroLayouts.slice(0, safeCount);
+
+    while (nextLayouts.length < safeCount) {
+      nextLayouts.push(createEmptyHeroLayout());
+    }
+
+    updateSectionContent(heroSection.id, {
+      layouts: nextLayouts,
+      grid: nextLayouts[0],
+    });
+
+    const selectedStillExists = nextLayouts.some(
+      (layout) => layout.id === selection.layoutId,
+    );
+
+    if (!selectedStillExists) {
+      const nextLayout = nextLayouts[nextLayouts.length - 1];
+      setSelection({
+        area: "hero",
+        sectionId: heroSection.id,
+        layoutId: nextLayout.id,
+        cellId: nextLayout.cells[0]?.id,
+      });
+    }
+
+    setMessage(`세로 레이아웃을 ${safeCount}줄로 나눴습니다.`);
+    setError("");
+  }
+
+  function duplicateCell(area: "header" | "hero", cellId: string, layoutId?: string) {
+    updateGrid(area, (grid) => {
+      const total = grid.cells.reduce((sum, cell) => sum + cell.span, 0);
+      if (total >= 4) return grid;
+
+      const index = grid.cells.findIndex((cell) => cell.id === cellId);
+      if (index < 0) return grid;
+
+      const copied = { ...grid.cells[index], id: createId(), span: 1 };
+      const cells = [...grid.cells];
+      cells.splice(index + 1, 0, copied);
+      return { ...grid, cells };
+    }, layoutId);
+  }
+
+  function clearCell(area: "header" | "hero", cellId: string, layoutId?: string) {
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: grid.cells.map((cell) => {
+          if (cell.id !== cellId) return cell;
+
+          // 비우기를 누르면 이전 텍스트, 이미지, 전화번호, 메뉴, 갤러리 등
+          // 모든 콘텐츠 속성을 완전히 제거합니다. 칸의 위치와 폭만 유지합니다.
+          return {
+            ...defaultCell("empty", "", cell.span || 1),
+            id: cell.id,
+            span: cell.span,
+            width_percent: cell.width_percent,
+            background_color: "transparent",
+          };
+        }),
+      }),
+      layoutId,
+    );
+
+    setSelection({
+      area,
+      sectionId: area === "hero" ? heroSection?.id : undefined,
+      layoutId: area === "hero" ? layoutId : undefined,
+      cellId,
+    });
+
+    setMessage("칸을 완전히 비웠습니다.");
+    setError("");
+  }
+
+  function createLayerSection(
+    template:
+      | "home"
+      | "about"
+      | "services"
+      | "gallery"
+      | "contact"
+      | "blank",
+    customName = "",
+  ): BusinessSection {
+    const maxOrder = sections.reduce(
+      (max, section) => Math.max(max, Number(section.sort_order) || 0),
+      0,
+    );
+    const temporaryId = -Date.now();
+
+    const templateMap = {
+      home: {
+        section_type: "hero",
+        title: "Home",
+        heading: "새 제목을 입력하세요",
+      },
+      about: {
+        section_type: "about",
+        title: "About",
+        heading: "About",
+      },
+      services: {
+        section_type: "services",
+        title: "Services",
+        heading: "Services",
+      },
+      gallery: {
+        section_type: "gallery",
+        title: "Gallery",
+        heading: "Gallery",
+      },
+      contact: {
+        section_type: "contact",
+        title: "Contact",
+        heading: "Contact",
+      },
+      blank: {
+        section_type: "custom",
+        title: customName.trim() || "New Layer",
+        heading: customName.trim() || "새 제목을 입력하세요",
+      },
+    } as const;
+
+    const selected = templateMap[template];
+    const initialLayout = createEmptyHeroLayout();
+    initialLayout.cells = initialLayout.cells.map((cell, index) =>
+      index === 0
+        ? {
+            ...cell,
+            text: selected.heading,
+          }
+        : cell,
+    );
+
+    return {
+      id: temporaryId,
+      business_id: Number(businessId),
+      section_type: selected.section_type,
+      title: selected.title,
+      content: {
+        page_type: "home-section",
+        background_type: "color",
+        background_color: "#ffffff",
+        grid: initialLayout,
+        layouts: [initialLayout],
+      },
+      settings: {
+        text_align: "left",
+        overlay: false,
+        overlay_opacity: 0,
+        height: "medium",
+      },
+      sort_order: maxOrder + 1,
+      is_visible: true,
+    };
+  }
+
+  function addLayer(
+    template:
+      | "home"
+      | "about"
+      | "services"
+      | "gallery"
+      | "contact"
+      | "blank",
+  ) {
+    const cleanLayerName = newLayerName.trim();
+
+    if (template === "blank" && !cleanLayerName) {
+      setError("레이어 이름을 입력해주세요.");
+      return;
+    }
+
+    if (
+      template === "home" &&
+      sections.some((section) => section.section_type === "hero")
+    ) {
+      setError("Home 레이어는 하나만 만들 수 있습니다.");
+      return;
+    }
+
+    const baseSection = createLayerSection(template, cleanLayerName);
+    const isCollapsible = newLayerVisibility === "collapsible";
+
+    const baseLayouts = normalizeHeroLayouts(baseSection.content);
+    const adjustedLayouts = baseLayouts.map((layout) => ({
+      ...layout,
+      // 숨김 레이어는 Privacy Policy처럼 긴 글을 넣을 수 있도록
+      // 편집 화면에서는 넉넉한 기본 높이로 시작하고,
+      // 공개 페이지에서는 실제 내용 길이에 따라 자동 확장합니다.
+      height: isCollapsible ? "large" : layout.height,
+      height_px: isCollapsible ? 900 : layout.height_px,
+      auto_height: isCollapsible,
+    }));
+
+    const newSection: BusinessSection = {
+      ...baseSection,
+      content: {
+        ...baseSection.content,
+        grid: adjustedLayouts[0],
+        layouts: adjustedLayouts,
+        collapsible: isCollapsible,
+        initially_hidden: isCollapsible,
+        close_button_enabled: isCollapsible,
+        scroll_on_open: isCollapsible,
+      },
+    };
+
+    setSections((current) => [...current, newSection]);
+
+    const firstLayout = normalizeHeroLayouts(newSection.content)[0];
+    setSelection({
+      area: "hero",
+      sectionId: newSection.id,
+      layoutId: firstLayout?.id,
+      cellId: firstLayout?.cells[0]?.id,
+    });
+
+    setLayerAddOpen(false);
+    setNewLayerName("");
+    setNewLayerVisibility("normal");
+    setMessage(
+      isCollapsible
+        ? `"${newSection.title}" 숨김 레이어를 추가했습니다. 링크를 클릭하면 펼쳐집니다.`
+        : `"${newSection.title}" 일반 레이어를 추가했습니다.`,
+    );
+    setError("");
+  }
+
+  function addLinkPage() {
+    const pageName = newLinkPageName.trim();
+    const pageSlug = slugifyMenuValue(pageName);
+
+    if (!pageName || !pageSlug) {
+      setError("링크 페이지 이름을 입력해주세요.");
+      return;
+    }
+
+    // 이미 저장된 링크 페이지뿐 아니라, 예전에 일반 레이어로 만든
+    // Menu/About 같은 페이지도 이름 또는 section_type으로 찾아 불러옵니다.
+    const existingPage = sections.find((section) => {
+      const savedPageSlug = slugifyMenuValue(
+        String(section.content?.page_slug || ""),
+      );
+      const titleSlug = slugifyMenuValue(section.title || "");
+      const sectionTypeSlug = slugifyMenuValue(section.section_type || "");
+
+      if (section.section_type === "hero") return false;
+
+      return (
+        savedPageSlug === pageSlug ||
+        titleSlug === pageSlug ||
+        sectionTypeSlug === pageSlug
+      );
+    });
+
+    if (existingPage) {
+      // 예전 일반 레이어였다면 내용을 그대로 보존하면서 링크 페이지로 표시합니다.
+      const upgradedPage: BusinessSection = {
+        ...existingPage,
+        title: existingPage.title || pageName,
+        content: {
+          ...(existingPage.content ?? {}),
+          page_type: "link-page",
+          page_slug: pageSlug,
+          link_page_kind: newLinkPageKind,
+        },
+        is_visible: true,
+      };
+
+      setSections((current) =>
+        current.map((section) =>
+          section.id === existingPage.id ? upgradedPage : section,
+        ),
+      );
+
+      const firstLayout = normalizeHeroLayouts(upgradedPage.content)[0];
+
+      setSelection({
+        area: "hero",
+        sectionId: upgradedPage.id,
+        layoutId: firstLayout?.id,
+        cellId: firstLayout?.cells[0]?.id,
+      });
+
+      setLinkPageOpen(false);
+      setNewLinkPageName("");
+      setNewLinkPageKind("blank");
+      setMessage(
+        `기존 "${upgradedPage.title || pageName}" 페이지를 불러왔습니다. 주소: /business/${businessId}/website/${pageSlug}`,
+      );
+      setError("");
+      return;
+    }
+
+    const maxOrder = sections.reduce(
+      (max, section) => Math.max(max, Number(section.sort_order) || 0),
+      0,
+    );
+    const initialLayout = createEmptyHeroLayout();
+    initialLayout.cells = initialLayout.cells.map((cell, index) =>
+      index === 0 ? { ...cell, text: pageName } : cell,
+    );
+
+    const newSection: BusinessSection = {
+      id: -Date.now(),
+      business_id: Number(businessId),
+      section_type: "custom",
+      title: pageName,
+      content: {
+        page_type: "link-page",
+        page_slug: pageSlug,
+        link_page_kind: newLinkPageKind,
+        background_type: "color",
+        background_color: "#ffffff",
+        grid: initialLayout,
+        layouts: [initialLayout],
+      },
+      settings: {
+        text_align: "left",
+        overlay: false,
+        overlay_opacity: 0,
+        height: "medium",
+      },
+      sort_order: maxOrder + 1,
+      is_visible: true,
+    };
+
+    setSections((current) => [...current, newSection]);
+    setSelection({
+      area: "hero",
+      sectionId: newSection.id,
+      layoutId: initialLayout.id,
+      cellId: initialLayout.cells[0]?.id,
+    });
+    setLinkPageOpen(false);
+    setNewLinkPageName("");
+    setNewLinkPageKind("blank");
+    setMessage(
+      `"${pageName}" 링크 페이지를 만들었습니다. 주소: /business/${businessId}/website/${pageSlug}`,
+    );
+    setError("");
+  }
+
+  function deleteSection(sectionId: number) {
+    const ordered = [...sections].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    );
+    const index = ordered.findIndex((section) => section.id === sectionId);
+    const target = ordered[index];
+    if (!target) return;
+
+    const layerName =
+      target.section_type === "hero"
+        ? "Home"
+        : target.title ||
+          SECTION_LABELS[target.section_type] ||
+          target.section_type;
+
+    const confirmed = window.confirm(
+      `"${layerName}" 레이어를 삭제할까요?\n삭제 직후에는 되돌릴 수 있습니다.`,
+    );
+
+    if (!confirmed) return;
+
+    setDeletedLayer({
+      section: target,
+      index,
+    });
+
+    const remaining = ordered
+      .filter((section) => section.id !== sectionId)
+      .map((section, orderIndex) => ({
+        ...section,
+        sort_order: orderIndex + 1,
+      }));
+
+    setSections(remaining);
+
+    if (selection.sectionId === sectionId) {
+      const first = remaining[0];
+
+      if (first) {
+        const firstLayout = normalizeHeroLayouts(first.content)[0];
+        setSelection({
+          area: "hero",
+          sectionId: first.id,
+          layoutId: firstLayout?.id,
+          cellId: firstLayout?.cells[0]?.id,
+        });
+      } else {
+        setSelection({ area: "header" });
+      }
+    }
+
+    setMessage(`"${layerName}" 레이어를 삭제했습니다.`);
+    setError("");
+  }
+
+  function undoDeleteLayer() {
+    if (!deletedLayer) return;
+
+    const restoredName =
+      deletedLayer.section.section_type === "hero"
+        ? "Home"
+        : deletedLayer.section.title ||
+          SECTION_LABELS[deletedLayer.section.section_type] ||
+          deletedLayer.section.section_type;
+
+    setSections((current) => {
+      const ordered = [...current].sort(
+        (a, b) => a.sort_order - b.sort_order,
+      );
+      const next = [...ordered];
+      next.splice(
+        Math.max(0, Math.min(deletedLayer.index, next.length)),
+        0,
+        deletedLayer.section,
+      );
+
+      return next.map((section, index) => ({
+        ...section,
+        sort_order: index + 1,
+      }));
+    });
+
+    const restoredLayout = normalizeHeroLayouts(
+      deletedLayer.section.content,
+    )[0];
+
+    setSelection({
+      area: "hero",
+      sectionId: deletedLayer.section.id,
+      layoutId: restoredLayout?.id,
+      cellId: restoredLayout?.cells[0]?.id,
+    });
+
+    setDeletedLayer(null);
+    setMessage(`"${restoredName}" 레이어를 되돌렸습니다.`);
+    setError("");
+  }
+
+  function moveSection(sectionId: number, direction: -1 | 1) {
+    setSections((current) => {
+      const ordered = [...current].sort((a, b) => a.sort_order - b.sort_order);
+      const index = ordered.findIndex((section) => section.id === sectionId);
+      const targetIndex = index + direction;
+
+      if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) {
+        return current;
+      }
+
+      const next = [...ordered];
+      const [moved] = next.splice(index, 1);
+      next.splice(targetIndex, 0, moved);
+
+      return next.map((section, orderIndex) => ({
+        ...section,
+        sort_order: orderIndex + 1,
+      }));
+    });
+  }
+
+  async function saveWebsite() {
+    if (!business || !adminKey) return;
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const sectionsForSave = sections.map((section) => {
+        if (section.content?.page_type !== "link-page") return section;
+
+        const content = section.content ?? {};
+        const html = String(content.link_page_html || "").trim();
+        const hasPdf =
+          (Array.isArray(content.link_page_pdfs) &&
+            content.link_page_pdfs.some((pdf) => pdf && pdf.url)) ||
+          Boolean(String(content.link_page_pdf_url || "").trim());
+
+        /*
+         * PDF만 사용하는 링크 페이지에서는 이전 메뉴 텍스트가
+         * description/headline 등에 남아 공개 페이지에서 다시 나타나지 않도록 제거합니다.
+         */
+        if (!html && hasPdf) {
+          return {
+            ...section,
+            content: {
+              ...content,
+              link_page_html: "",
+              description: "",
+              headline: "",
+              subheadline: "",
+            },
+          };
+        }
+
+        return section;
+      });
+
+      const currentSectionIds = sectionsForSave
+        .map((section) => Number(section.id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+      const deletedSectionIds = serverSectionIdsRef.current.filter(
+        (id) => !currentSectionIds.includes(id),
+      );
+
+      const response = await fetch(`/api/admin/businesses/${businessId}/website`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-key": adminKey,
+        },
+        body: JSON.stringify({
+          business,
+          sections: sectionsForSave,
+
+          /*
+           * 현재 왼쪽 Layers 목록을 서버의 최종 상태로 사용합니다.
+           * 서버에는 있었지만 현재 목록에 없는 기존 레이어 ID는 삭제합니다.
+           */
+          replace_sections: true,
+          deleted_section_ids: deletedSectionIds,
+        }),
+      });
+
+      const result = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `저장하지 못했습니다. HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      const previousDraft = loadWebsiteDraft(businessId);
+      backupWebsiteDraft(businessId, previousDraft, "서버 저장 성공 전 백업");
+
+      const returnedSections = Array.isArray(result.sections)
+        ? (result.sections as BusinessSection[])
+        : sectionsForSave;
+
+      const normalizedReturnedSections = returnedSections.map((section) =>
+        section.section_type === "hero"
+          ? {
+              ...section,
+              content: {
+                ...(section.content ?? {}),
+                background_type:
+                  section.content?.background_type ||
+                  (section.content?.image_url ? "image" : "gradient"),
+                grid: normalizeGrid(
+                  section.content?.grid,
+                  createDefaultHero(),
+                ),
+                layouts: normalizeHeroLayouts(section.content),
+              },
+            }
+          : section,
+      );
+
+      /*
+       * 새 레이어의 임시 음수 ID를 서버가 반환한 실제 양수 ID로 교체합니다.
+       * 이 처리가 없으면 다음 저장 때 같은 레이어가 다시 INSERT됩니다.
+       */
+      setSections(normalizedReturnedSections);
+
+      serverSectionIdsRef.current = normalizedReturnedSections
+        .map((section) => Number(section.id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+
+      setDeletedLayer(null);
+
+      const savedAt = saveWebsiteDraft(
+        businessId,
+        business,
+        normalizedReturnedSections,
+      );
+      setLastDraftSavedAt(savedAt);
+      setDraftMessage(`중간 저장도 동기화됨 · ${formatDraftTime(savedAt)}`);
+      setMessage(
+        deletedSectionIds.length > 0
+          ? `서버에 저장했습니다. 왼쪽 목록에 없는 기존 레이어 ${deletedSectionIds.length}개도 서버에서 삭제했습니다.`
+          : "서버에 저장되었습니다. 현재 왼쪽 Layers 목록만 서버에 유지됩니다.",
+      );
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save website.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!business) {
+    return (
+      <main className="min-h-screen bg-gray-100 px-4 py-10">
+        <div className="mx-auto max-w-md rounded-3xl bg-white p-7 shadow-sm">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-gray-500">
+            KTownTriangle
+          </p>
+          <h1 className="mt-2 text-2xl font-black text-gray-950">Website Builder</h1>
+          <p className="mt-3 text-sm leading-6 text-gray-600">
+            Vercel에 등록한 Website Builder 관리자 키를 입력하세요.
+          </p>
+          <input
+            type="password"
+            value={keyInput}
+            onChange={(event) => setKeyInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void loadWebsite(keyInput.trim());
+            }}
+            className="mt-6 w-full rounded-2xl border border-gray-300 px-4 py-3 outline-none focus:border-gray-950"
+            placeholder="Admin key"
+          />
+          <button
+            type="button"
+            disabled={loading || !keyInput.trim()}
+            onClick={() => void loadWebsite(keyInput.trim())}
+            className="mt-4 w-full rounded-2xl bg-gray-950 px-5 py-3 font-bold text-white disabled:opacity-50"
+          >
+            {loading ? "Loading..." : "Open Builder"}
+          </button>
+          {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+        </div>
+      </main>
+    );
+  }
+
+  const previewUrl = business.id
+    ? `/business/${business.id}/website`
+    : "";
+
+  return (
+    <main className="min-h-screen bg-[#eef1f5]">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+        <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 lg:px-6">
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Website Builder</p>
+            <h1 className="truncate text-lg font-black text-gray-950">{business.name || `Business #${businessId}`}</h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden rounded-full bg-gray-100 p-1 sm:flex">
+              <button type="button" onClick={() => setDevice("desktop")} className={`rounded-full px-3 py-1.5 text-xs font-bold ${device === "desktop" ? "bg-white shadow-sm" : "text-gray-500"}`}>Desktop</button>
+              <button type="button" onClick={() => setDevice("mobile")} className={`rounded-full px-3 py-1.5 text-xs font-bold ${device === "mobile" ? "bg-white shadow-sm" : "text-gray-500"}`}>Mobile</button>
+            </div>
+            <button
+              type="button"
+              disabled={restoringServerData || loading || saving}
+              onClick={() => void restoreFromServer()}
+              className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="브라우저 초안을 백업한 뒤 서버에 저장된 공개 사이트 데이터를 다시 불러옵니다."
+            >
+              {restoringServerData ? "복구 중..." : "서버 데이터 복구"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMenuImportOpen(true)}
+              className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800 hover:bg-orange-100"
+            >
+              🍽 메뉴 가져오기
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-100"
+            >
+              작업 미리보기
+            </button>
+            <button
+              type="button"
+              onClick={saveDraftNow}
+              className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 hover:bg-amber-100"
+            >
+              중간 저장
+            </button>
+            {previewUrl ? (
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="hidden rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-900 xl:inline-flex"
+              >
+                공개 페이지
+              </a>
+            ) : null}
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveWebsite()}
+              className="rounded-full bg-gray-950 px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {saving ? "저장 중..." : "서버 저장"}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {menuImportOpen ? (
+        <MenuImportModal
+          businessId={businessId}
+          adminKey={adminKey}
+          onClose={() => setMenuImportOpen(false)}
+        />
+      ) : null}
+
+      {draftMessage || lastDraftSavedAt ? (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-bold text-amber-900">
+          {draftMessage ||
+            `중간 저장됨 · ${formatDraftTime(lastDraftSavedAt)}`}
+        </div>
+      ) : null}
+
+      {deletedLayer ? (
+        <div className="flex items-center justify-center gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-800">
+          <span>
+            {deletedLayer.section.section_type === "hero"
+              ? "Home"
+              : deletedLayer.section.title ||
+                SECTION_LABELS[deletedLayer.section.section_type] ||
+                deletedLayer.section.section_type}
+            {" 레이어가 삭제되었습니다."}
+          </span>
+          <button
+            type="button"
+            onClick={undoDeleteLayer}
+            className="rounded-full bg-red-700 px-4 py-1.5 text-xs font-black text-white hover:bg-red-800"
+          >
+            ↶ 되돌리기
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeletedLayer(null)}
+            className="rounded-full border border-red-300 bg-white px-3 py-1.5 text-xs font-black text-red-700"
+          >
+            닫기
+          </button>
+        </div>
+      ) : null}
+
+      <div className="grid min-h-[calc(100vh-65px)] lg:grid-cols-[220px_minmax(0,1fr)_330px]">
+        <aside className="border-r border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between px-2">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">
+              Layers
+            </p>
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-500">
+              {homeSections.length}
+            </span>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            <button
+              type="button"
+              onClick={() => setSelection({ area: "header" })}
+              className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                selection.area === "header"
+                  ? "border-gray-950 bg-gray-950 text-white shadow"
+                  : "border-gray-200 bg-white text-gray-800 hover:bg-gray-50"
+              }`}
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] opacity-60">
+                공통 영역
+              </p>
+              <p className="mt-1 text-sm font-black">Header</p>
+            </button>
+
+            {homeSections.map((section, index) => {
+              const isHero = section.section_type === "hero";
+              const active =
+                selection.area === "hero" &&
+                selection.sectionId === section.id;
+              const layerName = isHero
+                ? "Home"
+                : section.title ||
+                  SECTION_LABELS[section.section_type] ||
+                  section.section_type;
+
+              return (
+                <div
+                  key={section.id}
+                  className={`rounded-2xl border transition ${
+                    active
+                      ? "border-blue-600 bg-blue-50 shadow-sm"
+                      : "border-gray-200 bg-white"
+                  } ${section.is_visible ? "" : "opacity-55"}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelection({
+                        area: "hero",
+                        sectionId: section.id,
+                        layoutId: normalizeHeroLayouts(section.content)[0]?.id,
+                        cellId: normalizeHeroLayouts(section.content)[0]?.cells[0]?.id,
+                      })
+                    }
+                    className="w-full px-3 pb-2 pt-3 text-left"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">
+                      Layer {index + 1}
+                    </p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-black text-gray-950">
+                        {layerName}
+                      </p>
+                      <span
+                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                          section.is_visible ? "bg-emerald-500" : "bg-gray-300"
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-1 border-t border-gray-100 px-2 py-2">
+                    <button
+                      type="button"
+                      title="레이어 위로 이동"
+                      disabled={index === 0}
+                      onClick={() => moveSection(section.id, -1)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-xs font-black text-gray-700 disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      title="레이어 아래로 이동"
+                      disabled={index === homeSections.length - 1}
+                      onClick={() => moveSection(section.id, 1)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-xs font-black text-gray-700 disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSection(section.id, {
+                          is_visible: !section.is_visible,
+                        })
+                      }
+                      className="ml-auto rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-700"
+                    >
+                      {section.is_visible ? "숨기기" : "보이기"}
+                    </button>
+
+                    <button
+                      type="button"
+                      title={`${layerName} 레이어 삭제`}
+                      onClick={() => deleteSection(section.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-xs font-black text-red-700 hover:bg-red-100"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setNewLayerName("");
+              setLayerAddOpen(true);
+            }}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-100"
+          >
+            <span className="text-lg">＋</span>
+            레이어 추가
+          </button>
+
+          <div className="mt-6 flex items-center justify-between px-2">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">
+              Link Pages
+            </p>
+            <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-700">
+              {linkPageSections.length}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setNewLinkPageName("");
+              setNewLinkPageKind("blank");
+              setLinkPageOpen(true);
+            }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-3 text-sm font-black text-orange-700 hover:bg-orange-100"
+          >
+            <span className="text-lg">＋</span>
+            NEW PAGE
+          </button>
+          <p className="mt-2 px-2 text-[10px] font-bold leading-4 text-gray-400">
+            일반 페이지 또는 🍽 Restaurant Menu 페이지를 만듭니다.
+          </p>
+
+          <div className="mt-3 space-y-2">
+            {linkPageSections.map((section) => {
+              const active =
+                selection.area === "hero" && selection.sectionId === section.id;
+              const pageName = section.title || "Link Page";
+              const pageSlug = slugifyMenuValue(
+                String(section.content?.page_slug || pageName),
+              );
+
+              return (
+                <div
+                  key={section.id}
+                  className={`rounded-2xl border ${
+                    active
+                      ? "border-violet-600 bg-violet-50 shadow-sm"
+                      : "border-gray-200 bg-white"
+                  } ${section.is_visible ? "" : "opacity-55"}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstLayout = normalizeHeroLayouts(section.content)[0];
+                      setSelection({
+                        area: "hero",
+                        sectionId: section.id,
+                        layoutId: firstLayout?.id,
+                        cellId: firstLayout?.cells[0]?.id,
+                      });
+                    }}
+                    className="w-full px-3 pb-2 pt-3 text-left"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
+                      🔗 Link Page
+                    </p>
+                    <p className="mt-1 truncate text-sm font-black text-gray-950">
+                      {pageName}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] font-bold text-gray-400">
+                      /business/{businessId}/website/{pageSlug}
+                    </p>
+                  </button>
+                  <div className="flex items-center gap-1 border-t border-gray-100 px-2 py-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSection(section.id, { is_visible: !section.is_visible })
+                      }
+                      className="ml-auto rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-700"
+                    >
+                      {section.is_visible ? "숨기기" : "보이기"}
+                    </button>
+                    <a
+                      href={`/business/${businessId}/website/${pageSlug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-lg bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700"
+                    >
+                      열기
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => deleteSection(section.id)}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-xs font-black text-red-700"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 rounded-2xl bg-gray-50 p-3">
+            <p className="text-xs font-black text-gray-700">레이어 편집</p>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              레이어를 선택하면 가운데에는 선택한 레이어만 표시됩니다.
+              ↑↓로 순서를 바꾸고, 숨기기 또는 🗑 버튼으로 관리할 수 있습니다.
+              전체 홈페이지는 위의 작업 미리보기에서 확인하세요.
+            </p>
+          </div>
+        </aside>
+
+        <section
+          className="min-w-0 overflow-auto p-4 sm:p-6 lg:p-8"
+          style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
+        >
+          <div className={`mx-auto overflow-visible bg-white shadow-xl transition-all ${device === "mobile" ? "max-w-[430px] rounded-[32px] border-[8px] border-gray-900" : "max-w-[1120px] rounded-2xl"}`}>
+            <div
+              className={`relative overflow-visible border-b border-dashed border-gray-300 ${
+                selection.area === "header" ? "block" : "hidden"
+              }`}
+              style={{
+                backgroundColor: String(
+                  websiteSettings.header_background_color || "#ffffff",
+                ),
+              }}
+            >
+              <EditableGrid
+                area="header"
+                grid={headerGrid}
+                selectedCellId={selection.area === "header" ? selection.cellId : undefined}
+                business={business}
+                accentColor={String(websiteSettings.accent_color)}
+                websiteSettings={websiteSettings}
+                previewDevice={device}
+                onSelect={(cellId) => setSelection({ area: "header", cellId })}
+                onResizeWidths={(widths) =>
+                  updateGridWidths("header", widths)
+                }
+                onResizeHeight={(heightPx) =>
+                  updateGridHeight("header", heightPx)
+                }
+              />
+
+
+              <HeaderSubmenu
+                websiteSettings={websiteSettings}
+                businessId={businessId}
+                previewDevice={device}
+                editable
+              />
+            </div>
+
+            {selection.area === "hero" && heroSection?.content?.page_type === "link-page" ? (
+              <LinkPageContent section={heroSection} editable />
+            ) : selection.area === "hero" && heroSection ? (
+              <div className="relative overflow-hidden" style={backgroundStyle(heroSection)}>
+                {heroSection.content.background_type === "video" && heroSection.content.video_url ? (
+                  <video className="absolute inset-0 h-full w-full object-cover" src={heroSection.content.video_url} autoPlay muted loop playsInline />
+                ) : null}
+                <div className="relative z-10 space-y-3">
+                  {heroSection.section_type !== "hero" &&
+                  !heroSection.content?.grid &&
+                  !(Array.isArray(heroSection.content?.layouts) && heroSection.content.layouts.length > 0) ? (
+                    <div className="border-b border-gray-200 bg-white px-5 py-6 sm:px-10 sm:py-8">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">
+                        {SECTION_LABELS[heroSection.section_type] || heroSection.section_type}
+                      </p>
+                      <h2 className="mt-2 text-3xl font-black text-gray-950">
+                        {heroSection.title ||
+                          SECTION_LABELS[heroSection.section_type] ||
+                          heroSection.section_type}
+                      </h2>
+                    </div>
+                  ) : null}
+
+                  {heroLayouts.map((layout, layoutIndex) => {
+                    const layoutSelected =
+                      selection.area === "hero" &&
+                      selection.layoutId === layout.id;
+
+                    const selectLayout = () => {
+                      const targetCell =
+                        layout.cells.find(
+                          (cell) => cell.id === selection.cellId,
+                        ) ?? layout.cells[0];
+
+                      if (!targetCell) return;
+                      selectHeroCell(layout, targetCell.id);
+                    };
+
+                    return (
+                    <div
+                      key={layout.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        if (event.target === event.currentTarget) {
+                          selectLayout();
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          selectLayout();
+                        }
+                      }}
+                      className={`relative rounded-2xl transition ${
+                        layoutSelected
+                          ? "ring-4 ring-blue-500/30"
+                          : "hover:ring-2 hover:ring-blue-300/40"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          selectLayout();
+                        }}
+                        className={`absolute left-3 top-3 z-50 rounded-full px-3 py-1 text-[11px] font-black shadow transition ${
+                          layoutSelected
+                            ? "bg-blue-600 text-white"
+                            : "bg-white/90 text-gray-800 hover:bg-blue-50"
+                        }`}
+                      >
+                        레이아웃 {layoutIndex + 1}
+                        {layoutSelected ? " · 편집 중" : " · 클릭해서 편집"}
+                      </button>
+
+                      <button
+                        type="button"
+                        title={`레이아웃 ${layoutIndex + 1} 삭제`}
+                        disabled={heroLayouts.length <= 1}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          deleteHeroLayout(layout.id || "");
+                        }}
+                        className="absolute right-3 top-3 z-50 flex h-8 items-center gap-1 rounded-full bg-red-600 px-3 text-[11px] font-black text-white shadow-lg hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                      >
+                        🗑 삭제
+                      </button>
+                      <EditableGrid
+                        area="hero"
+                        grid={layout}
+                        selectedCellId={
+                          selection.area === "hero" &&
+                          selection.layoutId === layout.id
+                            ? selection.cellId
+                            : undefined
+                        }
+                        business={business}
+                        accentColor={String(websiteSettings.accent_color)}
+                        onSelect={(cellId) =>
+                          selectHeroCell(layout, cellId)
+                        }
+                        onResizeWidths={(widths) =>
+                          updateGridWidths("hero", widths, layout.id)
+                        }
+                        onResizeHeight={(heightPx) =>
+                          updateGridHeight("hero", heightPx, layout.id)
+                        }
+                      />
+                    </div>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={addHeroLayout}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/80 bg-black/20 px-5 py-4 text-sm font-black text-white backdrop-blur-sm hover:bg-black/30"
+                  >
+                    <span className="text-xl">＋</span> 레이아웃 추가
+                  </button>
+                </div>
+              </div>
+            ) : selection.area === "hero" ? (
+              <div className="p-10 text-center text-sm font-bold text-red-600">
+                Home(hero) 레이어가 없습니다.
+              </div>
+            ) : null}
+
+          </div>
+        </section>
+
+        <aside className="border-l border-gray-200 bg-white p-4 lg:p-5">
+          <RightPanel
+            selection={selection}
+            selectedCell={selectedCell}
+            selectedSection={selectedSection}
+            heroSection={heroSection}
+            business={business}
+            websiteSettings={websiteSettings}
+            sections={sections}
+            onUpdateBusiness={updateBusiness}
+            onUpdateWebsiteSettings={updateWebsiteSettings}
+            onUpdateSection={updateSection}
+            onUpdateSectionContent={updateSectionContent}
+            onUpdateCell={updateCell}
+            onMergeCell={mergeCell}
+            onSplitCell={splitCell}
+            onSetGridColumns={setGridColumnCount}
+            onSetGridRows={setGridRowCount}
+            onSetSelectedCellRows={setSelectedCellRowCount}
+            gridRowCount={heroLayouts.length}
+            gridColumnCount={
+              selection.area === "header"
+                ? headerGrid.cells.length
+                : selection.area === "hero"
+                  ? heroLayouts.find((layout) => layout.id === selection.layoutId)?.cells.length || 1
+                  : 1
+            }
+            onDuplicateCell={duplicateCell}
+            onClearCell={clearCell}
+            businessId={businessId}
+            adminKey={adminKey}
+            onShowImageGuide={(area, cellId, title) =>
+              setImageGuide({ area, cellId, title })
+            }
+          />
+
+          {message ? <p className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
+          {error ? <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700">{error}</p> : null}
+        </aside>
+      </div>
+
+      {layerAddOpen ? (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/55 px-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setLayerAddOpen(false);
+              setNewLayerVisibility("normal");
+            }
+          }}
+        >
+          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+                  Add Layer
+                </p>
+                <h3 className="mt-1 text-2xl font-black text-gray-950">
+                  새 레이어 추가
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  삭제한 Home 레이어도 여기서 다시 만들 수 있습니다.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setLayerAddOpen(false);
+                  setNewLayerVisibility("normal");
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <p className="text-sm font-black text-gray-950">
+                이 레이어를 어떻게 사용할까요?
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gray-600">
+                숨김 레이어는 처음에는 보이지 않고, 연결된 글씨나 버튼을 클릭하면 펼쳐집니다.
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setNewLayerVisibility("normal")}
+                  className={`rounded-xl border px-4 py-3 text-left ${
+                    newLayerVisibility === "normal"
+                      ? "border-blue-600 bg-white ring-2 ring-blue-100"
+                      : "border-gray-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    항상 보이는 일반 레이어
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    페이지를 열면 바로 표시됩니다.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewLayerVisibility("collapsible")}
+                  className={`rounded-xl border px-4 py-3 text-left ${
+                    newLayerVisibility === "collapsible"
+                      ? "border-violet-600 bg-white ring-2 ring-violet-100"
+                      : "border-gray-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    클릭하면 펼쳐지는 숨김 레이어
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    Privacy Policy처럼 긴 내용은 기본 900px로 시작하고 내용만큼 자동으로 늘어납니다.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[
+                ["home", "🏠", "Home"],
+                ["about", "👤", "About"],
+                ["services", "⭐", "Services"],
+                ["gallery", "🖼", "Gallery"],
+                ["contact", "☎", "Contact"],
+              ].map(([value, icon, label]) => {
+                const disabled =
+                  value === "home" &&
+                  sections.some(
+                    (section) => section.section_type === "hero",
+                  );
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() =>
+                      addLayer(
+                        value as
+                          | "home"
+                          | "about"
+                          | "services"
+                          | "gallery"
+                          | "contact",
+                      )
+                    }
+                    className="rounded-2xl border border-gray-200 bg-white p-4 text-center hover:border-blue-500 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="block text-3xl">{icon}</span>
+                    <span className="mt-2 block text-sm font-black text-gray-900">
+                      {label}
+                    </span>
+                    {disabled ? (
+                      <span className="mt-1 block text-[10px] font-bold text-gray-400">
+                        이미 있음
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-gray-50 p-4">
+              <p className="text-sm font-black text-gray-800">
+                빈 레이어 직접 만들기
+              </p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={newLayerName}
+                  onChange={(event) => setNewLayerName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") addLayer("blank");
+                  }}
+                  placeholder="예: Lunch Special"
+                  className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                />
+                <button
+                  type="button"
+                  onClick={() => addLayer("blank")}
+                  className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-black text-white"
+                >
+                  추가
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+              새 레이어를 만든 뒤 반드시 <strong>서버 저장</strong>을 눌러야
+              데이터베이스에 최종 저장됩니다.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {linkPageOpen ? (
+        <div
+          className="fixed inset-0 z-[135] flex items-center justify-center bg-black/55 px-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setLinkPageOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">
+                  Link Page
+                </p>
+                <h3 className="mt-1 text-2xl font-black text-gray-950">
+                  새 페이지 만들기
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  일반 페이지 또는 DB 메뉴가 자동으로 표시되는 주문용 메뉴 페이지를 만듭니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkPageOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <p className="text-sm font-black text-gray-800">페이지 종류</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewLinkPageKind("blank")}
+                  className={`rounded-2xl border px-3 py-4 text-left transition ${
+                    newLinkPageKind === "blank"
+                      ? "border-violet-600 bg-violet-50 ring-2 ring-violet-100"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="block text-lg">📄</span>
+                  <span className="mt-1 block text-sm font-black text-gray-950">일반 페이지</span>
+                  <span className="mt-1 block text-[11px] leading-4 text-gray-500">HTML, 사진, PDF를 직접 편집</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewLinkPageKind("restaurant-menu");
+                    if (!newLinkPageName.trim()) setNewLinkPageName("Menu");
+                  }}
+                  className={`rounded-2xl border px-3 py-4 text-left transition ${
+                    newLinkPageKind === "restaurant-menu"
+                      ? "border-orange-600 bg-orange-50 ring-2 ring-orange-100"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="block text-lg">🍽</span>
+                  <span className="mt-1 block text-sm font-black text-gray-950">Restaurant Menu</span>
+                  <span className="mt-1 block text-[11px] leading-4 text-gray-500">DoorDash 스타일 · 주문 기능 확장용</span>
+                </button>
+              </div>
+            </div>
+
+            <label className="mt-5 block">
+              <span className="text-sm font-black text-gray-800">페이지 이름</span>
+              <input
+                autoFocus
+                value={newLinkPageName}
+                onChange={(event) => setNewLinkPageName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") addLinkPage();
+                }}
+                placeholder="예: Menu"
+                className="mt-2 w-full rounded-2xl border border-gray-300 px-4 py-3 outline-none focus:border-violet-600"
+              />
+            </label>
+
+            <div className="mt-3 rounded-2xl bg-gray-50 p-4 text-xs leading-5 text-gray-600">
+              생성 주소: <strong>/business/{businessId}/website/{slugifyMenuValue(newLinkPageName) || "page-name"}</strong>
+            </div>
+
+            <button
+              type="button"
+              disabled={!slugifyMenuValue(newLinkPageName)}
+              onClick={addLinkPage}
+              className="mt-5 w-full rounded-2xl bg-violet-600 px-5 py-3 font-black text-white disabled:opacity-40"
+            >
+              {newLinkPageKind === "restaurant-menu" ? "메뉴 페이지 만들기" : "일반 페이지 만들기"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {previewOpen ? (
+        <CurrentWebsitePreview
+          business={business}
+          sections={sections}
+          websiteSettings={websiteSettings}
+          device={device}
+          onDeviceChange={setDevice}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
+
+      {imageGuide ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setImageGuide(null);
+          }}
+        >
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-red-500">
+                  이미지 업로드 안내
+                </p>
+                <h3 className="mt-1 text-2xl font-black text-gray-950">
+                  {imageGuide.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageGuide(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3 rounded-2xl bg-amber-50 p-5 text-sm leading-6 text-amber-950">
+              <p className="font-black">
+                배경이 없는 투명 PNG 또는 WebP 이미지를 올려주세요.
+              </p>
+              <p>
+                현재 선택한 칸 안에 이미지 전체가 잘리지 않고 들어가도록
+                가로형 이미지를 사용하는 것이 좋습니다.
+              </p>
+              <p>
+                이미지 주변에 흰색 배경이나 큰 여백이 있으면 실제 화면에서
+                이미지가 작아 보일 수 있습니다.
+              </p>
+              <p>
+                권장 방식: 투명 배경 · 선명한 원본 · 글자가 너무 작지 않은 이미지
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setImageGuide(null)}
+              className="mt-5 w-full rounded-2xl bg-gray-950 px-5 py-3 font-black text-white"
+            >
+              확인하고 이미지 주소 입력
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </main>
+  );
+}
+
+
+
+
+function getMobileButtonText(cell: GridCell) {
+  const custom = String(cell.mobile_text || "").trim();
+  if (custom) return custom;
+
+  const desktopText = String(cell.text || "버튼").trim();
+
+  if (/^order\s+online$/i.test(desktopText)) {
+    return "ORDER";
+  }
+
+  return desktopText;
+}
+
+function HeaderSubmenu({
+  websiteSettings,
+  businessId,
+  previewDevice = "desktop",
+  editable = false,
+}: {
+  websiteSettings: WebsiteSettings;
+  businessId?: string | number;
+  previewDevice?: "desktop" | "mobile";
+  editable?: boolean;
+}) {
+  const [mobileSubmenuOpen, setMobileSubmenuOpen] = useState(false);
+
+  if (!websiteSettings.header_submenu_enabled) return null;
+
+  // 모바일에서는 헤더 안의 햄버거 메뉴가 메뉴/전화/주문 버튼을 한 번에 보여줍니다.
+  // 별도 서브메뉴를 다시 표시하면 헤더가 두 줄로 중복되므로 숨깁니다.
+  if (previewDevice === "mobile") return null;
+
+  const items = Array.isArray(websiteSettings.header_submenu_items)
+    ? websiteSettings.header_submenu_items
+    : [];
+
+  const visibleItems =
+    items.length > 0
+      ? items
+      : [
+          { id: "home", label: "Home", url: "#home" },
+          { id: "about", label: "About", url: "#about" },
+          { id: "menu", label: "Menu", url: "#menu" },
+          { id: "order", label: "Online Order", url: "#order" },
+          { id: "login", label: "Log In", url: "#login" },
+        ];
+
+  return (
+    <nav
+      className={`w-full border-t border-white/10 ${
+        editable ? "ring-2 ring-inset ring-blue-400/40" : ""
+      }`}
+      style={{
+        backgroundColor: String(
+          websiteSettings.header_submenu_background_color || "#000000",
+        ),
+        color: String(
+          websiteSettings.header_submenu_text_color || "#ffffff",
+        ),
+      }}
+    >
+      <div
+        className={
+          previewDevice === "mobile"
+            ? "flex w-full items-center justify-end gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "mx-auto flex max-w-5xl items-center justify-center gap-8 px-4"
+        }
+        style={{
+          minHeight:
+            previewDevice === "mobile"
+              ? "42px"
+              : `${Number(
+                  websiteSettings.header_submenu_height_px || 56,
+                )}px`,
+        }}
+      >
+        {visibleItems.map((item) => (
+          <a
+            key={item.id}
+            href={getHeaderMenuHref(item, businessId)}
+            onClick={(event) => {
+              if (editable) event.preventDefault();
+            }}
+            className={
+              previewDevice === "mobile"
+                ? "shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-black transition hover:bg-white/10"
+                : "whitespace-nowrap px-2 font-medium transition hover:opacity-70"
+            }
+            style={{
+              fontSize:
+                previewDevice === "mobile"
+                  ? "12px"
+                  : `${Number(
+                      websiteSettings.header_submenu_font_size_px || 14,
+                    )}px`,
+            }}
+          >
+            {item.label || "Menu"}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+
+function isHomeLikeSection(section: BusinessSection) {
+  const typeSlug = slugifyMenuValue(String(section.section_type || ""));
+  const titleSlug = slugifyMenuValue(String(section.title || ""));
+
+  return (
+    typeSlug === "hero" ||
+    typeSlug === "home" ||
+    typeSlug === "main" ||
+    titleSlug === "home" ||
+    titleSlug === "main"
+  );
+}
+
+function CurrentWebsitePreview({
+  business,
+  sections,
+  websiteSettings,
+  device,
+  onDeviceChange,
+  onClose,
+}: {
+  business: Business;
+  sections: BusinessSection[];
+  websiteSettings: WebsiteSettings;
+  device: "desktop" | "mobile";
+  onDeviceChange: (device: "desktop" | "mobile") => void;
+  onClose: () => void;
+}) {
+  const [openedPreviewLayerIds, setOpenedPreviewLayerIds] = useState<number[]>([]);
+  const [previewPageSlug, setPreviewPageSlug] = useState("");
+  const previewScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const openLayerFromHash = () => {
+      const layerSlug = slugifyMenuValue(
+        window.location.hash.replace(/^#/, ""),
+      );
+
+      if (!layerSlug) return;
+
+      const matchingSection = sections.find((section) => {
+        const sectionSlug =
+          slugifyMenuValue(
+            String(section.title || section.section_type || ""),
+          ) || section.section_type;
+
+        return (
+          section.content?.page_type !== "link-page" &&
+          sectionSlug === layerSlug
+        );
+      });
+
+      if (!matchingSection?.content?.collapsible) return;
+
+      setOpenedPreviewLayerIds((current) =>
+        current.includes(matchingSection.id)
+          ? current
+          : [...current, matchingSection.id],
+      );
+
+      window.setTimeout(() => {
+        document.getElementById(layerSlug)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    };
+
+    const handlePreviewLayerClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest(
+        "a[href^='#']",
+      ) as HTMLAnchorElement | null;
+
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href") || "";
+      const layerSlug = slugifyMenuValue(href.replace(/^#/, ""));
+      if (!layerSlug) return;
+
+      const matchingSection = sections.find((section) => {
+        const sectionSlug =
+          slugifyMenuValue(
+            String(section.title || section.section_type || ""),
+          ) || section.section_type;
+
+        return (
+          section.content?.page_type !== "link-page" &&
+          sectionSlug === layerSlug
+        );
+      });
+
+      if (!matchingSection?.content?.collapsible) return;
+
+      event.preventDefault();
+
+      if (window.location.hash !== `#${layerSlug}`) {
+        window.history.replaceState(null, "", `#${layerSlug}`);
+      }
+
+      openLayerFromHash();
+    };
+
+    openLayerFromHash();
+    window.addEventListener("hashchange", openLayerFromHash);
+    document.addEventListener("click", handlePreviewLayerClick);
+
+    return () => {
+      window.removeEventListener("hashchange", openLayerFromHash);
+      document.removeEventListener("click", handlePreviewLayerClick);
+    };
+  }, [sections]);
+
+  useEffect(() => {
+    const handleLinkedPagePreview = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const rawHref = anchor.getAttribute("href") || "";
+      if (!rawHref || rawHref.startsWith("mailto:") || rawHref.startsWith("tel:")) return;
+
+      let targetUrl: URL;
+      try {
+        targetUrl = new URL(rawHref, window.location.origin);
+      } catch {
+        return;
+      }
+
+      const basePath = `/business/${business.id}/website`;
+      if (targetUrl.origin !== window.location.origin || !targetUrl.pathname.startsWith(basePath)) return;
+
+      event.preventDefault();
+      const remainder = targetUrl.pathname.slice(basePath.length).replace(/^\/+|\/+$/g, "");
+      setPreviewPageSlug(slugifyMenuValue(decodeURIComponent(remainder)));
+
+      window.setTimeout(() => {
+        previewScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      }, 0);
+    };
+
+    document.addEventListener("click", handleLinkedPagePreview);
+    return () => document.removeEventListener("click", handleLinkedPagePreview);
+  }, [business.id]);
+
+  const previewLinkPage = sections.find((section) => {
+    if (section.content?.page_type !== "link-page") return false;
+    const slug = slugifyMenuValue(String(section.content?.page_slug || section.title || ""));
+    return slug === previewPageSlug;
+  }) ?? null;
+
+  const sortedSections = [...sections]
+    .filter(
+      (section) =>
+        section.is_visible && section.content?.page_type !== "link-page",
+    )
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const heroSection =
+    sortedSections.find((section) => section.section_type === "hero") ??
+    sortedSections.find(isHomeLikeSection) ??
+    null;
+  const headerGrid = normalizeGrid(
+    websiteSettings.header_grid,
+    createDefaultHeader(business.name || ""),
+  );
+  const heroLayouts = normalizeHeroLayouts(heroSection?.content);
+
+  return (
+    <div className="fixed inset-0 z-[120] flex flex-col overflow-hidden bg-[#e5e7eb]">
+      <div className="flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+            작업 중 미리보기
+          </p>
+          <h2 className="text-lg font-black text-gray-950">
+            저장 전 현재 화면
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-full bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => onDeviceChange("desktop")}
+              className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                device === "desktop"
+                  ? "bg-white text-gray-950 shadow-sm"
+                  : "text-gray-500"
+              }`}
+            >
+              Desktop
+            </button>
+            <button
+              type="button"
+              onClick={() => onDeviceChange("mobile")}
+              className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                device === "mobile"
+                  ? "bg-white text-gray-950 shadow-sm"
+                  : "text-gray-500"
+              }`}
+            >
+              Mobile
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-950 text-xl font-black text-white"
+            aria-label="미리보기 닫기"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={previewScrollRef}
+        className="min-h-0 flex-1 overflow-auto p-0"
+        style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
+      >
+        <div
+          className={`mx-auto bg-white shadow-2xl transition-all ${
+            device === "mobile"
+              ? "my-3 w-[min(430px,calc(100vw-16px))] rounded-[30px] border-[6px] border-gray-950"
+              : "w-full max-w-[1120px] overflow-visible"
+          }`}
+          style={{ overflow: device === "mobile" ? "visible" : "hidden" }}
+        >
+          <div
+            className="relative overflow-visible"
+            style={{
+              backgroundColor: String(
+                websiteSettings.header_background_color || "#ffffff",
+              ),
+            }}
+          >
+            <ReadOnlyGrid
+              area="header"
+              grid={headerGrid}
+              business={business}
+              accentColor={String(websiteSettings.accent_color || "#d97706")}
+              previewDevice={device}
+              websiteSettings={websiteSettings}
+            />
+
+
+            <HeaderSubmenu
+              websiteSettings={websiteSettings}
+              businessId={business.id}
+              previewDevice={device}
+            />
+          </div>
+
+          {previewLinkPage ? (
+            <div className="relative min-h-[60vh] bg-white">
+              <LinkPageContent section={previewLinkPage} previewDevice={device} />
+            </div>
+          ) : (
+            <>
+          {heroSection ? (
+            <div className="relative" style={backgroundStyle(heroSection)}>
+              {heroSection.content.background_type === "video" &&
+              heroSection.content.video_url ? (
+                <video
+                  className="absolute inset-0 h-full w-full object-cover"
+                  src={heroSection.content.video_url}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              ) : null}
+
+              <div className="relative z-10">
+                {heroLayouts.map((layout) => (
+                  <ReadOnlyGrid
+                    key={layout.id}
+                    area="hero"
+                    grid={layout}
+                    business={business}
+                    accentColor={String(
+                      websiteSettings.accent_color || "#d97706",
+                    )}
+                    previewDevice={device}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="bg-white">
+            {sortedSections
+              .filter(
+                (section) =>
+                  section.id !== heroSection?.id &&
+                  !isHomeLikeSection(section),
+              )
+              .map((section) => {
+                const isCollapsible = Boolean(
+                  section.content?.collapsible,
+                );
+                const isOpen =
+                  !isCollapsible ||
+                  section.content?.initially_hidden === false ||
+                  openedPreviewLayerIds.includes(section.id);
+
+                if (!isOpen) return null;
+
+                const sectionSlug =
+                  slugifyMenuValue(
+                    String(
+                      section.title ||
+                        section.section_type ||
+                        "",
+                    ),
+                  ) || section.section_type;
+
+                return (
+                  <div
+                    key={section.id}
+                    id={isCollapsible ? sectionSlug : undefined}
+                    className="relative"
+                  >
+                    {isCollapsible &&
+                    section.content?.close_button_enabled !== false ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenedPreviewLayerIds((current) =>
+                            current.filter(
+                              (id) => id !== section.id,
+                            ),
+                          );
+
+                          if (
+                            window.location.hash ===
+                            `#${sectionSlug}`
+                          ) {
+                            window.history.replaceState(
+                              null,
+                              "",
+                              window.location.pathname +
+                                window.location.search,
+                            );
+                          }
+                        }}
+                        className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-xl font-black text-white shadow-xl hover:bg-black"
+                        aria-label={`${section.title || "레이어"} 닫기`}
+                        title="닫기"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+
+                    <PreviewSection
+                      section={section}
+                      business={business}
+                      previewDevice={device}
+                      accentColor={String(
+                        websiteSettings.accent_color || "#d97706",
+                      )}
+                    />
+                  </div>
+                );
+              })}
+          </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RestaurantMenuDisplay({
+  businessId,
+  compact = false,
+  backgroundColor = "#ffffff",
+  textColor = "#111827",
+  scrollTopEnabled = true,
+  scrollTopButtonColor = "#111827",
+  scrollTopIconColor = "#ffffff",
+  scrollTopPosition = "right",
+}: {
+  businessId: number;
+  compact?: boolean;
+  backgroundColor?: string;
+  textColor?: string;
+  scrollTopEnabled?: boolean;
+  scrollTopButtonColor?: string;
+  scrollTopIconColor?: string;
+  scrollTopPosition?: "right" | "left";
+}) {
+  const [data, setData] = useState<RestaurantMenuPayload>({ categories: [], items: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [selectedItem, setSelectedItem] = useState<RestaurantMenuItem | null>(null);
+  const [originalImageOpen, setOriginalImageOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const [scrollTopButtonStyle, setScrollTopButtonStyle] = useState<React.CSSProperties>({});
+  const [categoryBarFixed, setCategoryBarFixed] = useState(false);
+  const [categoryBarStyle, setCategoryBarStyle] = useState<React.CSSProperties>({});
+  const rootRef = useRef<HTMLDivElement>(null);
+  const stickyCategoryRef = useRef<HTMLDivElement>(null);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+  function getMenuScrollContainer() {
+    const root = rootRef.current;
+    if (!root || typeof window === "undefined") return null;
+
+    let parent = root.parentElement;
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      if ((overflowY === "auto" || overflowY === "scroll") && parent.scrollHeight > parent.clientHeight) {
+        return parent;
+      }
+      parent = parent.parentElement;
+    }
+
+    return null;
+  }
+
+  function scrollMenuToElement(target: HTMLElement, behavior: ScrollBehavior = "smooth") {
+    const container = getMenuScrollContainer();
+    const stickyHeight = stickyCategoryRef.current?.offsetHeight || 0;
+    const extraGap = 12;
+
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextTop = container.scrollTop + targetRect.top - containerRect.top - stickyHeight - extraGap;
+      container.scrollTo({ top: Math.max(0, nextTop), behavior });
+      return;
+    }
+
+    const nextTop = window.scrollY + target.getBoundingClientRect().top - stickyHeight - extraGap;
+    window.scrollTo({ top: Math.max(0, nextTop), behavior });
+  }
+
+  function scrollCategories(direction: -1 | 1) {
+    const element = categoryScrollRef.current;
+    if (!element) return;
+    element.scrollBy({
+      left: direction * Math.max(220, element.clientWidth * 0.72),
+      behavior: "smooth",
+    });
+  }
+
+  useEffect(() => {
+    const container = getMenuScrollContainer();
+
+    const updateCategoryBar = () => {
+      const root = rootRef.current;
+      const bar = stickyCategoryRef.current;
+      if (!root || !bar) return;
+
+      const rootRect = root.getBoundingClientRect();
+      const barHeight = bar.offsetHeight || 0;
+      const containerRect = container?.getBoundingClientRect();
+      const viewportTop = Math.max(0, containerRect?.top ?? 0);
+      const viewportBottom = Math.min(
+        window.innerHeight,
+        containerRect?.bottom ?? window.innerHeight,
+      );
+
+      const shouldFix =
+        rootRect.top <= viewportTop &&
+        rootRect.bottom > viewportTop + barHeight &&
+        rootRect.top < viewportBottom;
+
+      setCategoryBarFixed(shouldFix);
+
+      if (shouldFix) {
+        setCategoryBarStyle({
+          position: "fixed",
+          top: `${viewportTop}px`,
+          left: `${rootRect.left}px`,
+          width: `${rootRect.width}px`,
+          zIndex: 11800,
+          backgroundColor: `${backgroundColor}FA`,
+          WebkitBackdropFilter: "blur(18px)",
+          backdropFilter: "blur(18px)",
+        });
+      } else {
+        setCategoryBarStyle({
+          position: "relative",
+          top: "auto",
+          left: "auto",
+          width: "100%",
+          zIndex: 11800,
+          backgroundColor: `${backgroundColor}FA`,
+          WebkitBackdropFilter: "blur(18px)",
+          backdropFilter: "blur(18px)",
+        });
+      }
+    };
+
+    updateCategoryBar();
+    const scrollTarget: EventTarget = container || window;
+    scrollTarget.addEventListener("scroll", updateCategoryBar, { passive: true });
+    window.addEventListener("scroll", updateCategoryBar, { passive: true });
+    window.addEventListener("resize", updateCategoryBar);
+
+    const observer = new ResizeObserver(updateCategoryBar);
+    if (rootRef.current) observer.observe(rootRef.current);
+
+    return () => {
+      scrollTarget.removeEventListener("scroll", updateCategoryBar);
+      window.removeEventListener("scroll", updateCategoryBar);
+      window.removeEventListener("resize", updateCategoryBar);
+      observer.disconnect();
+    };
+  }, [backgroundColor, compact]);
+
+  useEffect(() => {
+    if (!scrollTopEnabled) {
+      setShowScrollTop(false);
+      return;
+    }
+
+    const container = getMenuScrollContainer();
+
+    const updateButton = () => {
+      const root = rootRef.current;
+      if (!root) return;
+
+      const currentScroll = container ? container.scrollTop : window.scrollY;
+      setShowScrollTop(currentScroll >= 1500);
+
+      const rootRect = root.getBoundingClientRect();
+      const buttonSize = compact ? 48 : 56;
+      const sideGap = compact ? 12 : 20;
+      const bottomGap = compact ? 16 : 24;
+
+      const horizontal =
+        scrollTopPosition === "left"
+          ? Math.max(sideGap, rootRect.left + sideGap)
+          : Math.min(
+              window.innerWidth - buttonSize - sideGap,
+              rootRect.right - buttonSize - sideGap,
+            );
+
+      const containerRect = container?.getBoundingClientRect();
+      const visibleBottom = Math.min(
+        window.innerHeight,
+        containerRect?.bottom ?? window.innerHeight,
+      );
+
+      setScrollTopButtonStyle({
+        left: `${Math.max(sideGap, horizontal)}px`,
+        top: `${Math.max(12, visibleBottom - buttonSize - bottomGap)}px`,
+      });
+    };
+
+    updateButton();
+    const scrollTarget: EventTarget = container || window;
+    scrollTarget.addEventListener("scroll", updateButton, { passive: true });
+    window.addEventListener("resize", updateButton);
+
+    const observer = new ResizeObserver(updateButton);
+    if (rootRef.current) observer.observe(rootRef.current);
+
+    return () => {
+      scrollTarget.removeEventListener("scroll", updateButton);
+      window.removeEventListener("resize", updateButton);
+      observer.disconnect();
+    };
+  }, [scrollTopEnabled, scrollTopPosition, compact]);
+
+  function scrollMenuToTop() {
+    const container = getMenuScrollContainer();
+
+    // 편집기 미리보기에서는 실제 스크롤 컨테이너 하나만 정확히 맨 위로 이동합니다.
+    // root 위치를 다시 계산하면 현재 위치에 따라 아래쪽 값이 만들어질 수 있으므로 사용하지 않습니다.
+    if (container) {
+      container.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      return;
+    }
+
+    // 공개 페이지에서는 브라우저 문서 자체만 맨 위로 이동합니다.
+    const scrollingElement = document.scrollingElement;
+    if (scrollingElement) {
+      scrollingElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      return;
+    }
+
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMenu() {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await fetch(`/api/businesses/${encodeURIComponent(String(businessId))}/menu`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json()) as RestaurantMenuPayload & { error?: string };
+        if (!response.ok) throw new Error(payload.error || "메뉴를 불러오지 못했습니다.");
+        if (cancelled) return;
+        const categories = Array.isArray(payload.categories) ? payload.categories : [];
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        setData({ categories, items });
+        setActiveCategoryId((current) => current ?? categories[0]?.id ?? null);
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "메뉴를 불러오지 못했습니다.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadMenu();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  const visibleCategories = data.categories.filter((category) =>
+    data.items.some((item) => item.category_id === category.id),
+  );
+
+  function scrollToCategory(categoryId: number) {
+    setActiveCategoryId(categoryId);
+    const target = document.getElementById(`restaurant-menu-${businessId}-${categoryId}`);
+    if (!target) return;
+
+    window.requestAnimationFrame(() => {
+      scrollMenuToElement(target, "smooth");
+    });
+  }
+
+  if (loading) {
+    return <div className="flex min-h-[260px] w-full items-center justify-center bg-white text-sm font-black text-gray-500">메뉴 불러오는 중...</div>;
+  }
+
+  if (error) {
+    return <div className="flex min-h-[260px] w-full items-center justify-center bg-white px-5 text-center text-sm font-black text-red-600">{error}</div>;
+  }
+
+  if (!visibleCategories.length) {
+    return <div className="flex min-h-[260px] w-full items-center justify-center bg-white px-5 text-center text-sm font-black text-gray-500">등록된 메뉴가 없습니다. 메뉴 가져오기를 먼저 실행해주세요.</div>;
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className="relative h-full w-full overflow-visible text-left"
+      style={{ backgroundColor, color: textColor }}
+    >
+      {categoryBarFixed ? (
+        <div
+          aria-hidden="true"
+          style={{ height: `${stickyCategoryRef.current?.offsetHeight || 0}px` }}
+        />
+      ) : null}
+
+      <div
+        ref={stickyCategoryRef}
+        className="w-full border-b border-black/10 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-md backdrop-blur-xl sm:px-5 sm:py-3"
+        style={categoryBarStyle}
+      >
+        <div
+          ref={categoryScrollRef}
+          className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {visibleCategories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => scrollToCategory(category.id)}
+              className="shrink-0 rounded-full border px-4 py-2 text-xs font-black transition"
+              style={
+                activeCategoryId === category.id
+                  ? { backgroundColor: textColor, borderColor: textColor, color: backgroundColor }
+                  : { backgroundColor, borderColor: `${textColor}33`, color: textColor }
+              }
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-2 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => scrollCategories(-1)}
+            className="flex h-9 w-12 items-center justify-center rounded-full border text-lg font-black shadow-sm transition hover:scale-105"
+            style={{ backgroundColor, borderColor: `${textColor}33`, color: textColor }}
+            aria-label="이전 메뉴 카테고리"
+            title="이전"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollCategories(1)}
+            className="flex h-9 w-12 items-center justify-center rounded-full border text-lg font-black shadow-sm transition hover:scale-105"
+            style={{ backgroundColor, borderColor: `${textColor}33`, color: textColor }}
+            aria-label="다음 메뉴 카테고리"
+            title="다음"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+
+      <div className={`${compact ? "px-3 py-4" : "px-4 py-5 sm:px-7 sm:py-7"}`}>
+        {visibleCategories.map((category) => {
+          const categoryItems = data.items.filter((item) => item.category_id === category.id);
+          return (
+            <section
+              key={category.id}
+              id={`restaurant-menu-${businessId}-${category.id}`}
+              className="scroll-mt-[118px] border-b border-gray-200 pb-7 pt-2 last:border-b-0 sm:scroll-mt-24"
+            >
+              <h2 className={`mb-4 font-black tracking-tight ${compact ? "text-xl" : "text-xl sm:text-2xl"}`}>{category.name}</h2>
+              <div className={`grid grid-cols-1 gap-3 ${compact ? "" : "lg:grid-cols-2"}`}>
+                {categoryItems.map((item) => {
+                  const hasImage = Boolean(item.thumbnail_url || item.image_url);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedItem(item)}
+                      className="group flex min-h-[118px] w-full overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md"
+                      style={{ backgroundColor, borderColor: `${textColor}22`, color: textColor }}
+                    >
+                      <div className="min-w-0 flex-1 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className={`line-clamp-2 font-black leading-snug ${compact ? "text-[15px]" : "text-[15px] sm:text-base"}`}>{item.name}</h3>
+                          {item.price != null ? (
+                            <span className="shrink-0 text-sm font-black">${Number(item.price).toFixed(2)}</span>
+                          ) : null}
+                        </div>
+                        {item.description ? (
+                          <p className={`mt-2 line-clamp-3 font-medium leading-5 opacity-65 ${compact ? "text-xs" : "text-xs sm:text-sm"}`}>{item.description}</p>
+                        ) : null}
+                      </div>
+                      {hasImage ? (
+                        <img
+                          src={item.thumbnail_url || item.image_url || ""}
+                          alt={item.name}
+                          className={`m-2 shrink-0 rounded-xl object-cover ${compact ? "h-[94px] w-[94px]" : "h-[102px] w-[102px] sm:h-[116px] sm:w-[116px]"}`}
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+
+      {scrollTopEnabled && showScrollTop && typeof document !== "undefined"
+        ? createPortal(
+            <button
+              type="button"
+              onClick={scrollMenuToTop}
+              className={`fixed z-[11900] flex items-center justify-center rounded-full border text-xl font-black shadow-2xl backdrop-blur transition hover:-translate-y-0.5 ${
+                compact ? "h-12 w-12" : "h-14 w-14"
+              }`}
+              style={{
+                ...scrollTopButtonStyle,
+                backgroundColor: scrollTopButtonColor,
+                borderColor: `${scrollTopIconColor}55`,
+                color: scrollTopIconColor,
+              }}
+              aria-label="메뉴 맨 위로 이동"
+              title="맨 위로"
+            >
+              ↑
+            </button>,
+            document.body,
+          )
+        : null}
+
+      {selectedItem && typeof document !== "undefined"
+        ? createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[12000] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+                onClick={() => {
+                  setOriginalImageOpen(false);
+                  setSelectedItem(null);
+                }}
+              >
+                <div
+                  className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl shadow-2xl sm:max-w-lg sm:rounded-3xl"
+                  style={{ backgroundColor, color: textColor }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {selectedItem.image_url || selectedItem.thumbnail_url ? (
+                    <button
+                      type="button"
+                      className="relative block h-[300px] w-full cursor-zoom-in overflow-hidden rounded-t-3xl bg-black p-0 sm:h-[360px]"
+                      onClick={() => setOriginalImageOpen(true)}
+                      aria-label={`${selectedItem.name} 원본 이미지 보기`}
+                      title="원본 이미지 보기"
+                    >
+                      <img
+                        src={selectedItem.image_url || selectedItem.thumbnail_url || ""}
+                        alt={selectedItem.name}
+                        className="absolute inset-0 block h-full w-full scale-[2.05] object-cover"
+                        style={{
+                          objectPosition: "center 68%",
+                          transformOrigin: "center 68%",
+                        }}
+                      />
+                    </button>
+                  ) : null}
+
+                  <div className="p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <h2 className="text-2xl font-black leading-tight">{selectedItem.name}</h2>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOriginalImageOpen(false);
+                          setSelectedItem(null);
+                        }}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black"
+                        aria-label="메뉴 상세 닫기"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {selectedItem.price != null ? (
+                      <p className="mt-3 text-lg font-black">${Number(selectedItem.price).toFixed(2)}</p>
+                    ) : null}
+                    {selectedItem.description ? (
+                      <p className="mt-4 whitespace-pre-wrap text-sm font-medium leading-6 opacity-70">
+                        {selectedItem.description}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {originalImageOpen ? (
+                <div
+                  className="fixed inset-0 z-[13000] flex items-center justify-center bg-black/95 p-3 sm:p-6"
+                  onClick={() => setOriginalImageOpen(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setOriginalImageOpen(false)}
+                    className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[13010] flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black text-black shadow-2xl"
+                    aria-label="원본 이미지 닫기"
+                  >
+                    ×
+                  </button>
+                  <img
+                    src={selectedItem.image_url || selectedItem.thumbnail_url || ""}
+                    alt={`${selectedItem.name} 원본 이미지`}
+                    className="max-h-full max-w-full select-none object-contain"
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                </div>
+              ) : null}
+            </>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+export function PublicWebsiteRenderer({
+  business,
+  sections,
+  pageSlug = "home",
+}: {
+  business: Business;
+  sections: BusinessSection[];
+  pageSlug?: string;
+}) {
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [openedLayerIds, setOpenedLayerIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    const updateDevice = () =>
+      setDevice(window.innerWidth < 640 ? "mobile" : "desktop");
+    updateDevice();
+    window.addEventListener("resize", updateDevice);
+    return () => window.removeEventListener("resize", updateDevice);
+  }, []);
+
+  useEffect(() => {
+    function openLayerFromCurrentHash() {
+      const layerSlug = slugifyMenuValue(
+        window.location.hash.replace(/^#/, ""),
+      );
+      if (!layerSlug) return;
+
+      const matchingSection = sections.find((section) => {
+        const sectionSlug =
+          slugifyMenuValue(
+            String(section.title || section.section_type || ""),
+          ) || section.section_type;
+
+        return (
+          section.content?.page_type !== "link-page" &&
+          sectionSlug === layerSlug
+        );
+      });
+
+      if (!matchingSection?.content?.collapsible) return;
+
+      setOpenedLayerIds((current) =>
+  current.includes(matchingSection.id)
+    ? current.filter((id) => id !== matchingSection.id)
+    : [...current, matchingSection.id],
+);
+
+      window.setTimeout(() => {
+        document.getElementById(layerSlug)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    }
+
+    function handleLayerLinkClick(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      const anchorElement = target?.closest("a[href^='#']") as HTMLAnchorElement | null;
+      if (!anchorElement) return;
+
+      const rawHash = anchorElement.getAttribute("href") || "";
+      const layerSlug = slugifyMenuValue(rawHash.replace(/^#/, ""));
+      if (!layerSlug) return;
+
+      const matchingSection = sections.find((section) => {
+        const sectionSlug =
+          slugifyMenuValue(
+            String(section.title || section.section_type || ""),
+          ) || section.section_type;
+
+        return (
+          section.content?.page_type !== "link-page" &&
+          sectionSlug === layerSlug
+        );
+      });
+
+      if (!matchingSection?.content?.collapsible) return;
+
+      event.preventDefault();
+
+      setOpenedLayerIds((current) =>
+        current.includes(matchingSection.id)
+          ? current
+          : [...current, matchingSection.id],
+      );
+
+      window.setTimeout(() => {
+        const targetElement =
+          document.getElementById(layerSlug) ||
+          document.getElementById(`${layerSlug}-wrapper`);
+
+        targetElement?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 80);
+    }
+
+    openLayerFromCurrentHash();
+    window.addEventListener("hashchange", openLayerFromCurrentHash);
+    document.addEventListener("click", handleLayerLinkClick);
+
+    return () => {
+      window.removeEventListener("hashchange", openLayerFromCurrentHash);
+      document.removeEventListener("click", handleLayerLinkClick);
+    };
+  }, [sections]);
+
+  const websiteSettings = normalizeSettings(
+    business.website_settings,
+    business.name || "",
+  );
+  const normalizedSlug = slugifyMenuValue(pageSlug || "home") || "home";
+  const visibleSections = [...sections]
+    // 이전 데이터에서 is_visible이 null이어도 공개되도록 false만 제외합니다.
+    .filter((section) => section.is_visible !== false)
+    .sort((a, b) => {
+      const orderDifference = Number(a.sort_order || 0) - Number(b.sort_order || 0);
+      if (orderDifference !== 0) return orderDifference;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+
+  const pageSections =
+    normalizedSlug === "home"
+      ? visibleSections.filter(
+          (section) => section.content?.page_type !== "link-page",
+        )
+      : visibleSections.filter(
+          (section) =>
+            section.content?.page_type === "link-page" &&
+            slugifyMenuValue(
+              String(section.content?.page_slug || section.title || ""),
+            ) === normalizedSlug,
+        );
+
+  const hasSavedLayouts = (section: BusinessSection) =>
+    Array.isArray(section.content?.layouts) &&
+    section.content.layouts.length > 0;
+
+  /*
+   * 공개 홈은 오래된 기본 hero보다 실제 에디터에서 저장된 layouts를 우선합니다.
+   * 그래서 에디터 미리보기와 공개 홈페이지가 같은 Home 레이어를 표시합니다.
+   */
+  const heroSection =
+    normalizedSlug === "home"
+      ? pageSections.find(
+          (section) => isHomeLikeSection(section) && hasSavedLayouts(section),
+        ) ||
+        pageSections.find(hasSavedLayouts) ||
+        pageSections.find(isHomeLikeSection) ||
+        pageSections.find((section) => section.section_type === "hero") ||
+        pageSections[0] ||
+        null
+      : pageSections[0] || null;
+
+  // Home/Main으로 잘못 복제된 레이어는 공개 화면에 반복 표시하지 않습니다.
+  // 실제 본문 레이어(About, Services, Gallery 등)만 hero 아래에 렌더링합니다.
+  const remainingSections = pageSections.filter(
+    (section) =>
+      section.id !== heroSection?.id && !isHomeLikeSection(section),
+  );
+  const headerGrid = normalizeGrid(
+    websiteSettings.header_grid,
+    createDefaultHeader(business.name || ""),
+  );
+  const layouts = normalizeHeroLayouts(heroSection?.content);
+
+  return (
+    <main
+      className="min-h-screen"
+      style={{
+        backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb"),
+      }}
+    >
+      <div className="mx-auto min-h-screen w-full max-w-[1120px] overflow-visible bg-white shadow-2xl">
+        <header
+          className="relative overflow-visible"
+          style={{
+            backgroundColor: String(
+              websiteSettings.header_background_color || "#ffffff",
+            ),
+          }}
+        >
+          <ReadOnlyGrid
+            area="header"
+            grid={headerGrid}
+            business={business}
+            accentColor={String(websiteSettings.accent_color || "#d97706")}
+            previewDevice={device}
+            websiteSettings={websiteSettings}
+          />
+          <HeaderSubmenu
+            websiteSettings={websiteSettings}
+            businessId={business.id}
+            previewDevice={device}
+          />
+        </header>
+
+        {heroSection?.content?.page_type === "link-page" ? (
+          <section id={normalizedSlug} className="bg-white">
+            <LinkPageContent section={heroSection} />
+          </section>
+        ) : heroSection ? (
+          <section
+            id={normalizedSlug === "home" ? "home" : normalizedSlug}
+            className="relative"
+            style={backgroundStyle(heroSection)}
+          >
+            {heroSection.content.background_type === "video" &&
+            heroSection.content.video_url ? (
+              <video
+                className="absolute inset-0 h-full w-full object-cover"
+                src={heroSection.content.video_url}
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+            ) : null}
+            <div className="relative z-10">
+              {layouts.map((layout) => (
+                <ReadOnlyGrid
+                  key={layout.id}
+                  area="hero"
+                  grid={layout}
+                  business={business}
+                  accentColor={String(
+                    websiteSettings.accent_color || "#d97706",
+                  )}
+                  previewDevice={device}
+                />
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="p-10 text-center">
+            <h1 className="text-2xl font-black">페이지를 찾을 수 없습니다.</h1>
+            <a
+              href={`/business/${business.id}/website`}
+              className="mt-5 inline-flex rounded-full bg-gray-950 px-5 py-3 text-sm font-black text-white"
+            >
+              홈페이지로 돌아가기
+            </a>
+          </section>
+        )}
+
+        {remainingSections.map((section) => {
+          const isCollapsible = Boolean(section.content?.collapsible);
+          const isOpen =
+            !isCollapsible ||
+            section.content?.initially_hidden === false ||
+            openedLayerIds.includes(section.id);
+
+          if (!isOpen) return null;
+
+          const sectionSlug =
+            slugifyMenuValue(
+              String(section.title || section.section_type || ""),
+            ) || section.section_type;
+
+          return (
+            <div
+              key={section.id}
+              id={isCollapsible ? sectionSlug : undefined}
+              className="relative"
+            >
+              {isCollapsible &&
+              section.content?.close_button_enabled !== false ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenedLayerIds((current) =>
+                      current.filter((id) => id !== section.id),
+                    )
+                  }
+                  className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-xl font-black text-white shadow-xl hover:bg-black"
+                  aria-label={`${section.title || "레이어"} 닫기`}
+                  title="닫기"
+                >
+                  ×
+                </button>
+              ) : null}
+
+              <PreviewSection
+                section={section}
+                business={business}
+                previewDevice={device}
+                accentColor={String(
+                  websiteSettings.accent_color || "#d97706",
+                )}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </main>
+  );
+}
+
+function cellContainsDisplayMode(cell: GridCell, displayMode: GridCell["display_mode"]): boolean {
+  if (cell.display_mode === displayMode) return true;
+  return (cell.child_cells || []).some((child) =>
+    cellContainsDisplayMode(child, displayMode),
+  );
+}
+
+function gridContainsDisplayMode(
+  grid: GridData,
+  displayMode: GridCell["display_mode"],
+) {
+  return grid.cells.some((cell) => cellContainsDisplayMode(cell, displayMode));
+}
+
+
+const SNS_PLATFORM_OPTIONS: Array<{
+  value: SnsPlatform;
+  label: string;
+  placeholder: string;
+}> = [
+  { value: "facebook", label: "Facebook", placeholder: "https://www.facebook.com/..." },
+  { value: "instagram", label: "Instagram", placeholder: "https://www.instagram.com/..." },
+  { value: "youtube", label: "YouTube", placeholder: "https://www.youtube.com/@..." },
+  { value: "tiktok", label: "TikTok", placeholder: "https://www.tiktok.com/@..." },
+  { value: "x", label: "X", placeholder: "https://x.com/..." },
+  { value: "linkedin", label: "LinkedIn", placeholder: "https://www.linkedin.com/..." },
+  { value: "kakao", label: "KakaoTalk", placeholder: "https://open.kakao.com/..." },
+  { value: "custom", label: "기타 링크", placeholder: "https://..." },
+];
+
+function createSnsItem(platform: SnsPlatform = "facebook"): SnsItem {
+  const option = SNS_PLATFORM_OPTIONS.find((item) => item.value === platform);
+  return {
+    id: createId("sns"),
+    platform,
+    url: "",
+    label: option?.label || "SNS",
+  };
+}
+
+function normalizeSnsItems(cell: GridCell): SnsItem[] {
+  if (Array.isArray(cell.sns_items) && cell.sns_items.length > 0) {
+    return cell.sns_items.map((item) => ({
+      id: item.id || createId("sns"),
+      platform: SNS_PLATFORM_OPTIONS.some(
+        (option) => option.value === item.platform,
+      )
+        ? item.platform
+        : "custom",
+      url: String(item.url || ""),
+      label: String(
+        item.label ||
+          SNS_PLATFORM_OPTIONS.find(
+            (option) => option.value === item.platform,
+          )?.label ||
+          "SNS",
+      ),
+    }));
+  }
+
+  return [createSnsItem("facebook"), createSnsItem("instagram")];
+}
+
+function normalizeExternalUrl(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("mailto:") ||
+    raw.startsWith("tel:")
+  ) {
+    return raw;
+  }
+
+  return `https://${raw}`;
+}
+
+function normalizeButtonHref(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  // 같은 페이지의 섹션 링크
+  if (raw.startsWith("#")) return raw;
+
+  // 현재 사이트 내부 페이지
+  if (raw.startsWith("/")) return raw;
+
+  // 전화, 이메일, 완전한 외부 주소
+  if (
+    raw.startsWith("http://") ||
+    raw.startsWith("https://") ||
+    raw.startsWith("mailto:") ||
+    raw.startsWith("tel:")
+  ) {
+    return raw;
+  }
+
+  // www.example.com 또는 example.com 형식
+  return `https://${raw}`;
+}
+
+function isExternalButtonHref(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function SnsPlatformLogo({
+  platform,
+  size = 28,
+}: {
+  platform: SnsPlatform;
+  size?: number;
+}) {
+  const commonProps = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    "aria-hidden": true,
+  };
+
+  if (platform === "facebook") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="12" fill="#1877F2" />
+        <path
+          d="M13.7 8.2h2V5.1c-.35-.05-1.55-.15-2.97-.15-2.93 0-4.93 1.78-4.93 5.07v2.83H4.5v3.47h3.3V24h4.05v-7.67h3.38l.54-3.47h-3.92V10.4c0-1 .27-1.68 1.85-1.68Z"
+          fill="#fff"
+        />
+      </svg>
+    );
+  }
+
+  if (platform === "instagram") {
+    return (
+      <svg {...commonProps}>
+        <defs>
+          <linearGradient id="instagram-gradient" x1="2" y1="22" x2="22" y2="2">
+            <stop stopColor="#FFDC80" />
+            <stop offset=".35" stopColor="#FD1D1D" />
+            <stop offset=".7" stopColor="#C13584" />
+            <stop offset="1" stopColor="#405DE6" />
+          </linearGradient>
+        </defs>
+        <rect width="24" height="24" rx="6" fill="url(#instagram-gradient)" />
+        <rect x="5.2" y="5.2" width="13.6" height="13.6" rx="4" fill="none" stroke="#fff" strokeWidth="1.8" />
+        <circle cx="12" cy="12" r="3.25" fill="none" stroke="#fff" strokeWidth="1.8" />
+        <circle cx="17.1" cy="6.9" r="1.1" fill="#fff" />
+      </svg>
+    );
+  }
+
+  if (platform === "youtube") {
+    return (
+      <svg {...commonProps}>
+        <rect y="3" width="24" height="18" rx="5" fill="#FF0000" />
+        <path d="m10 8 6 4-6 4Z" fill="#fff" />
+      </svg>
+    );
+  }
+
+  if (platform === "tiktok") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="12" fill="#000" />
+        <path
+          d="M14.1 5.4c.5 1.8 1.6 2.9 3.5 3.4v2.5a7.1 7.1 0 0 1-3.5-1.1v4.9a4.8 4.8 0 1 1-4.2-4.8v2.6a2.2 2.2 0 1 0 1.6 2.2V5.4h2.6Z"
+          fill="#fff"
+        />
+      </svg>
+    );
+  }
+
+  if (platform === "x") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="12" fill="#000" />
+        <path d="M6.2 6h3.2l3.1 4.2L16.2 6h1.6l-4.6 5.3L18.4 18h-3.2l-3.5-4.7L7.6 18H6l5-5.8Z" fill="#fff" />
+      </svg>
+    );
+  }
+
+  if (platform === "linkedin") {
+    return (
+      <svg {...commonProps}>
+        <rect width="24" height="24" rx="3" fill="#0A66C2" />
+        <circle cx="6.2" cy="7" r="1.5" fill="#fff" />
+        <path d="M4.9 9.5h2.6V18H4.9Zm4.3 0h2.5v1.16h.04c.35-.67 1.2-1.38 2.48-1.38 2.65 0 3.14 1.75 3.14 4.02V18h-2.6v-4.17c0-1 0-2.28-1.39-2.28-1.4 0-1.61 1.09-1.61 2.2V18H9.2Z" fill="#fff" />
+      </svg>
+    );
+  }
+
+  if (platform === "kakao") {
+    return (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="12" fill="#FEE500" />
+        <path d="M12 6.1c-3.8 0-6.9 2.4-6.9 5.4 0 1.9 1.2 3.5 3.1 4.5l-.8 2.9c-.07.27.24.49.47.33l3.45-2.28c.22.02.45.03.68.03 3.8 0 6.9-2.4 6.9-5.4S15.8 6.1 12 6.1Z" fill="#3C1E1E" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...commonProps}>
+      <circle cx="12" cy="12" r="12" fill="#4B5563" />
+      <path d="M9.5 14.5 14.5 9m-6.1 1.1 1.7-1.7a3 3 0 0 1 4.2 0 3 3 0 0 1 0 4.2l-1.3 1.3m2.6 0-1.7 1.7a3 3 0 0 1-4.2 0 3 3 0 0 1 0-4.2l1.3-1.3" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ReadOnlyCellContent({
+  cell, business, accentColor, area, previewDevice, websiteSettings,
+}: {
+  cell: GridCell; business: Business; accentColor: string; area: "header" | "hero";
+  previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings;
+}) {
+  if (cell.child_cells?.length) {
+    return (
+      <div className="grid h-full w-full grid-rows-[repeat(var(--rows),minmax(0,1fr))] gap-0" style={{ "--rows": cell.child_cells.length } as React.CSSProperties}>
+        {cell.child_cells.map((child) => (
+          <div key={child.id} className="relative flex min-h-0 min-w-0 overflow-hidden" style={{ justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center", alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center", textAlign: child.text_align || "center", color: child.color || (area === "hero" ? "#ffffff" : "#111827"), background: area === "header" ? "transparent" : child.background_color || "transparent", padding: child.type === "image" ? 0 : "12px" }}>
+            <ReadOnlyCellContent cell={child} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="relative h-full w-full min-w-0">
+      <CellPreview
+        cell={cell}
+        business={business}
+        accentColor={accentColor}
+        area={area}
+        previewDevice={previewDevice}
+        websiteSettings={websiteSettings}
+      />
+    </div>
+  );
+}
+
+function getReadableHeaderTextColor(backgroundColor: string, preferredColor = "") {
+  const normalizeHex = (value: string) => {
+    const raw = String(value || "").trim().replace(/^#/, "");
+    if (/^[0-9a-f]{3}$/i.test(raw)) {
+      return raw.split("").map((char) => char + char).join("");
+    }
+    return /^[0-9a-f]{6}$/i.test(raw) ? raw : "";
+  };
+
+  const backgroundHex = normalizeHex(backgroundColor);
+  if (!backgroundHex) return preferredColor || "#ffffff";
+
+  const red = parseInt(backgroundHex.slice(0, 2), 16);
+  const green = parseInt(backgroundHex.slice(2, 4), 16);
+  const blue = parseInt(backgroundHex.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+
+  const preferredHex = normalizeHex(preferredColor);
+  if (preferredHex) {
+    const preferredRed = parseInt(preferredHex.slice(0, 2), 16);
+    const preferredGreen = parseInt(preferredHex.slice(2, 4), 16);
+    const preferredBlue = parseInt(preferredHex.slice(4, 6), 16);
+    const preferredLuminance =
+      (0.299 * preferredRed + 0.587 * preferredGreen + 0.114 * preferredBlue) / 255;
+
+    if (Math.abs(luminance - preferredLuminance) >= 0.42) {
+      return preferredColor;
+    }
+  }
+
+  return luminance < 0.55 ? "#ffffff" : "#111827";
+}
+
+function MobileWebsiteHeader({
+  grid,
+  business,
+  accentColor,
+  websiteSettings,
+}: {
+  grid: GridData;
+  business: Business;
+  accentColor: string;
+  websiteSettings?: WebsiteSettings;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const findFirstCellByType = (cells: GridCell[], type: CellType): GridCell | undefined => {
+    for (const current of cells) {
+      if (current.type === type) return current;
+      if (current.child_cells?.length) {
+        const nested = findFirstCellByType(current.child_cells, type);
+        if (nested) return nested;
+      }
+    }
+    return undefined;
+  };
+
+  const findAllCellsByType = (cells: GridCell[], type: CellType): GridCell[] => {
+    const result: GridCell[] = [];
+    for (const current of cells) {
+      if (current.type === type) result.push(current);
+      if (current.child_cells?.length) {
+        result.push(...findAllCellsByType(current.child_cells, type));
+      }
+    }
+    return result;
+  };
+
+  const logoCell = findFirstCellByType(grid.cells, "logo");
+  const titleCell = findFirstCellByType(grid.cells, "title");
+  const menuCell = findFirstCellByType(grid.cells, "menu");
+  const phoneCells = findAllCellsByType(grid.cells, "phone");
+  const buttonCells = findAllCellsByType(grid.cells, "button");
+
+  const gridMenuItems = menuCell ? normalizeMenuItems(menuCell) : [];
+  const submenuItems = Array.isArray(websiteSettings?.header_submenu_items)
+    ? websiteSettings.header_submenu_items.map((item) => ({
+        id: item.id || createId("mobile-menu"),
+        label: item.label || "Menu",
+        url: item.url || "#",
+        link_type: item.target_type || "section",
+        link_value: item.target_value || getLegacyMenuTarget(item.url || "").value,
+        image_url: "",
+      }))
+    : [];
+
+  // 헤더 메뉴 셀이 중첩 칸 안에 있거나 비어 있어도,
+  // 상단 서브메뉴 설정값을 이용해 모바일 메뉴가 반드시 표시되게 합니다.
+  const menuItems = gridMenuItems.length > 0 ? gridMenuItems : submenuItems;
+
+  const mobileHeight = Math.max(
+    76,
+    Math.min(Number(websiteSettings?.header_height_px || 104), 104),
+  );
+  const headerBackgroundColor = String(
+    websiteSettings?.header_background_color || "#ffffff",
+  );
+  const mobileTitleColor = getReadableHeaderTextColor(
+    headerBackgroundColor,
+    String(titleCell?.color || ""),
+  );
+  const mobileControlColor = getReadableHeaderTextColor(
+    headerBackgroundColor,
+    mobileTitleColor,
+  );
+
+  return (
+    <div
+      className="relative z-50 w-full"
+      style={{ backgroundColor: headerBackgroundColor }}
+    >
+      <div
+        className="grid w-full grid-cols-[72px_minmax(0,1fr)_48px] items-center gap-2 px-3"
+        style={{
+          minHeight: `${mobileHeight}px`,
+          backgroundColor: headerBackgroundColor,
+          color: mobileTitleColor,
+        }}
+      >
+        <div className="flex min-w-0 items-center justify-start overflow-hidden">
+          {logoCell ? (
+            <CellPreview
+              cell={{
+                ...logoCell,
+                logo_size_px: Math.min(
+                  Number(
+                    logoCell.logo_size_px ||
+                      websiteSettings?.header_logo_size_px ||
+                      56,
+                  ),
+                  62,
+                ),
+              }}
+              business={business}
+              accentColor={accentColor}
+              area="header"
+              previewDevice="mobile"
+              websiteSettings={websiteSettings}
+            />
+          ) : null}
+        </div>
+
+        <div className="min-w-0 overflow-hidden px-1 text-center">
+          {titleCell ? (
+            <div className="flex min-h-[54px] min-w-0 items-center justify-center overflow-hidden">
+              <CellPreview
+                cell={{
+                  ...titleCell,
+                  text_align: "center",
+                  font_size: Math.min(Number(titleCell.font_size || 20), 20),
+                  color: mobileTitleColor,
+                }}
+                business={business}
+                accentColor={accentColor}
+                area="header"
+                previewDevice="mobile"
+                websiteSettings={websiteSettings}
+              />
+            </div>
+          ) : (
+            <span className="block truncate text-lg font-black">
+              {business.name || "Business"}
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flex h-11 w-11 items-center justify-center rounded-full text-2xl font-black leading-none shadow-sm backdrop-blur"
+          style={{
+            color: mobileControlColor,
+            border: `1px solid ${mobileControlColor}55`,
+            backgroundColor: `${mobileControlColor}18`,
+          }}
+          aria-expanded={open}
+          aria-label={open ? "메뉴 닫기" : "메뉴 열기"}
+        >
+          {open ? "×" : "⋮"}
+        </button>
+      </div>
+
+      {open ? (
+        <div
+          className="relative z-[100] w-full overflow-y-auto px-4 py-4 shadow-2xl"
+          style={{
+            // absolute 드롭다운은 미리보기/공개 화면의 overflow-hidden 부모에
+            // 잘려서 X만 보이고 메뉴 목록이 보이지 않는 문제가 생깁니다.
+            // 메뉴를 헤더 흐름 안에 배치해 항상 보이게 하고, 아래 콘텐츠를 밀어냅니다.
+            backgroundColor: headerBackgroundColor,
+            color: mobileControlColor,
+            borderTop: `1px solid ${mobileControlColor}33`,
+            maxHeight: "min(70vh, 520px)",
+          }}
+        >
+          {menuItems.length ? (
+            <div className="flex w-full justify-end">
+              <nav className="grid w-full max-w-[280px] gap-1 text-right">
+                {menuItems.map((item) => (
+                  <a
+                    key={item.id}
+                    href={getGridMenuHref(item, business.id)}
+                    onClick={() => setOpen(false)}
+                    className="block w-full rounded-xl px-4 py-3 text-right text-sm font-black no-underline transition hover:opacity-70"
+                    style={{ color: mobileControlColor }}
+                  >
+                    {item.label || "Menu"}
+                  </a>
+                ))}
+              </nav>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed px-4 py-4 text-center text-sm font-bold opacity-70">
+              메뉴 항목을 먼저 추가해주세요.
+            </div>
+          )}
+
+          {phoneCells.length || buttonCells.length ? (
+            <div
+              className="ml-auto mt-3 grid w-full max-w-[280px] gap-3 pt-4"
+              style={{ borderTop: `1px solid ${mobileControlColor}33` }}
+            >
+              {phoneCells.map((cell) => {
+                const number = String(cell.phone_number || cell.text || "").trim();
+                return number ? (
+                  <a
+                    key={cell.id}
+                    href={normalizePhoneHref(number) || undefined}
+                    className="flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-black no-underline"
+                    style={{
+                      color: mobileControlColor,
+                      border: `1px solid ${mobileControlColor}55`,
+                    }}
+                  >
+                    <span aria-hidden="true">☎</span>
+                    <span>{number}</span>
+                  </a>
+                ) : null;
+              })}
+
+              {buttonCells.map((cell) => {
+                const href = normalizeButtonHref(cell.url);
+                const external = isExternalButtonHref(href);
+                return (
+                  <a
+                    key={cell.id}
+                    href={href || undefined}
+                    target={external ? "_blank" : undefined}
+                    rel={external ? "noreferrer noopener" : undefined}
+                    onClick={(event) => {
+                      if (!href) event.preventDefault();
+                      else setOpen(false);
+                    }}
+                    className="flex min-h-12 items-center justify-center rounded-full px-5 text-sm font-black text-white no-underline shadow"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    {getMobileButtonText(cell)}
+                  </a>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ReadOnlyGrid({
+  area,
+  grid,
+  business,
+  accentColor,
+  previewDevice,
+  websiteSettings,
+}: {
+  area: "header" | "hero";
+  grid: GridData;
+  business: Business;
+  accentColor: string;
+  previewDevice: "desktop" | "mobile";
+  websiteSettings?: WebsiteSettings;
+}) {
+  if (area === "header" && previewDevice === "mobile") {
+    return (
+      <MobileWebsiteHeader
+        grid={grid}
+        business={business}
+        accentColor={accentColor}
+        websiteSettings={websiteSettings}
+      />
+    );
+  }
+
+  const defaultHeight =
+    area === "header"
+      ? Number(websiteSettings?.header_height_px || 104)
+      : grid.height === "small"
+        ? 300
+        : grid.height === "medium"
+          ? 430
+          : 560;
+  const savedWidths = grid.cells.map((cell) =>
+    Number(cell.width_percent || (cell.span / 4) * 100),
+  );
+
+  const widths =
+    previewDevice === "mobile" && area === "header"
+      ? grid.cells.map((cell) => {
+          if (cell.type === "logo") return 25;
+          if (cell.type === "title") return 44;
+          if (cell.type === "menu") return 1;
+          if (cell.type === "button") return 30;
+          if (cell.type === "phone") return 18;
+          return 20;
+        })
+      : savedWidths;
+
+  const savedHeight = Number(grid.height_px || defaultHeight);
+  const autoContentHeight =
+    area !== "header" && Boolean(grid.auto_height);
+  const autoMobileBusinessHours =
+    previewDevice === "mobile" &&
+    area !== "header" &&
+    gridContainsDisplayMode(grid, "business-hours") ||
+    gridContainsDisplayMode(grid, "restaurant-menu");
+  const imageOnlyHero =
+    area === "hero" &&
+    grid.cells.every(
+      (cell) =>
+        cell.type === "image" ||
+        (cell.type === "title" &&
+          (cell.display_mode === "background-image" ||
+            cell.display_mode === "gallery" ||
+            cell.display_mode === "auto-slider" ||
+            cell.display_mode === "image-scroll")),
+    );
+
+  const mobileHeaderHeight = Math.max(
+    88,
+    Math.min(Number(websiteSettings?.header_height_px || 104), 116),
+  );
+
+  const displayHeight =
+    previewDevice === "mobile" && area === "header"
+      ? mobileHeaderHeight
+      : previewDevice === "mobile" &&
+          area !== "header" &&
+          !autoMobileBusinessHours &&
+          !autoContentHeight
+        ? Math.min(savedHeight, 420)
+        : savedHeight;
+
+  return (
+    <div
+      className={`grid gap-0 ${
+        previewDevice === "mobile" && area === "header"
+          ? "overflow-visible"
+          : ""
+      }`}
+      style={{
+        minHeight: imageOnlyHero
+          ? 0
+          : autoMobileBusinessHours
+            ? "180px"
+            : autoContentHeight
+              ? "420px"
+              : `${
+                previewDevice === "mobile" && area === "header"
+                  ? mobileHeaderHeight
+                  : area === "header"
+                    ? 96
+                    : 180
+              }px`,
+        height:
+          imageOnlyHero || autoMobileBusinessHours || autoContentHeight
+            ? "auto"
+            : `${displayHeight}px`,
+        aspectRatio: imageOnlyHero ? "3 / 2" : undefined,
+        gridTemplateColumns: widths
+          .map((width) => `${Math.max(width, 1)}fr`)
+          .join(" "),
+      }}
+    >
+      {grid.cells.map((cell) => (
+        <div
+          key={cell.id}
+          className={`relative min-w-0 ${
+            previewDevice === "mobile" && area === "header" && cell.type === "menu"
+              ? "hidden"
+              : autoContentHeight
+                ? "flex overflow-visible"
+                : autoMobileBusinessHours &&
+                    cellContainsDisplayMode(cell, "business-hours")
+                  ? "flex overflow-visible"
+                  : "flex overflow-hidden"
+          }`}
+          style={{
+            justifyContent:
+              cell.text_align === "left"
+                ? "flex-start"
+                : cell.text_align === "right"
+                  ? "flex-end"
+                  : "center",
+            alignItems:
+              cell.vertical_align === "top"
+                ? "flex-start"
+                : cell.vertical_align === "bottom"
+                  ? "flex-end"
+                  : "center",
+            textAlign: cell.text_align || "center",
+            color:
+              cell.color || (area === "hero" ? "#ffffff" : "#111827"),
+            background:
+              area === "header"
+                ? "transparent"
+                : cell.background_color || "transparent",
+            padding:
+              cell.child_cells?.length ||
+              cell.type === "image" ||
+              (cell.type === "title" &&
+                (cell.display_mode === "background-image" ||
+                  cell.display_mode === "service-card" ||
+                  cell.display_mode === "auto-slider" ||
+                  cell.display_mode === "image-scroll" ||
+                  cell.display_mode === "gallery"))
+                ? 0
+                : previewDevice === "mobile" && area === "header"
+                  ? "4px"
+                  : area === "header"
+                    ? `${Number(
+                        websiteSettings?.header_vertical_padding_px || 8,
+                      )}px`
+                    : "12px",
+          }}
+        >
+          <ReadOnlyCellContent
+            cell={cell}
+            business={business}
+            accentColor={accentColor}
+            area={area}
+            previewDevice={previewDevice}
+            websiteSettings={websiteSettings}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PreviewSection({
+  section,
+  business,
+  previewDevice,
+  accentColor,
+}: {
+  section: BusinessSection;
+  business: Business;
+  previewDevice: "desktop" | "mobile";
+  accentColor: string;
+}) {
+  const content = section.content ?? {};
+  const title =
+    section.title ||
+    content.headline ||
+    SECTION_LABELS[section.section_type] ||
+    section.section_type;
+  const description =
+    typeof content.description === "string" ? content.description : "";
+  const imageUrl =
+    typeof content.image_url === "string" ? content.image_url : "";
+  const hasLayoutContent =
+    Boolean(content.grid) ||
+    (Array.isArray(content.layouts) && content.layouts.length > 0);
+  const sectionLayouts = hasLayoutContent
+    ? normalizeHeroLayouts(content)
+    : [];
+
+  const isCollapsible = Boolean(content.collapsible);
+
+  return (
+    <section
+      id={slugifyMenuValue(String(section.title || section.section_type)) || section.section_type}
+      className="relative bg-white"
+    >
+      {isCollapsible ? (
+        <div className="absolute right-3 top-3 z-30 rounded-full bg-violet-600 px-3 py-1 text-[10px] font-black text-white shadow">
+          숨김 레이어 · 공개 페이지에서는 클릭 시 펼쳐짐
+        </div>
+      ) : null}
+      {!hasLayoutContent ? (
+        <div className="px-5 pt-8 sm:px-10 sm:pt-10">
+          <div className="mx-auto max-w-5xl">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">
+              {SECTION_LABELS[section.section_type] || section.section_type}
+            </p>
+            <h2 className="mt-2 text-3xl font-black text-gray-950">{title}</h2>
+          </div>
+        </div>
+      ) : null}
+
+      {hasLayoutContent ? (
+        <div className="w-full">
+          {sectionLayouts.map((layout) => (
+            <ReadOnlyGrid
+              key={layout.id}
+              area="hero"
+              grid={layout}
+              business={business}
+              accentColor={accentColor}
+              previewDevice={previewDevice}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {!hasLayoutContent && (imageUrl || description || content.button_text) ? (
+        <div className="px-5 pb-8 sm:px-10 sm:pb-10">
+          <div className="mx-auto max-w-5xl">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt=""
+                className={`${hasLayoutContent ? "mt-0" : "mt-6"} max-h-[520px] w-full rounded-3xl object-cover`}
+              />
+            ) : null}
+
+            {description ? (
+              <p className={`${hasLayoutContent ? "mt-0" : "mt-5"} whitespace-pre-line text-base leading-8 text-gray-600`}>
+                {description}
+              </p>
+            ) : null}
+
+            {content.button_text ? (
+              <span className={`${hasLayoutContent && !imageUrl && !description ? "mt-0" : "mt-6"} inline-flex rounded-full bg-gray-950 px-6 py-3 text-sm font-black text-white`}>
+                {String(content.button_text)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; }) {
+  const selectionHostRef = useRef<HTMLDivElement>(null);
+  const [selectionMenu, setSelectionMenu] = useState<{ left: number; top: number } | null>(null);
+
+  const checkSelectedText = useCallback(() => {
+    if (cell.type !== "text" && cell.type !== "title") {
+      setSelectionMenu(null);
+      return;
+    }
+
+    const host = selectionHostRef.current;
+    const selectionObject = window.getSelection();
+
+    if (!host || !selectionObject || selectionObject.rangeCount === 0 || selectionObject.isCollapsed) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    const range = selectionObject.getRangeAt(0);
+    if (!host.contains(range.commonAncestorContainer)) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    if (!rect.width && !rect.height) {
+      setSelectionMenu(null);
+      return;
+    }
+
+    onSelect(cell.id);
+    setSelectionMenu({
+      left: Math.max(12, Math.min(window.innerWidth - 150, rect.left + rect.width / 2 - 70)),
+      top: Math.max(12, rect.top - 52),
+    });
+  }, [cell.id, cell.type, onSelect]);
+
+  useEffect(() => {
+    function closeMenuOnOutsideSelection() {
+      const selectionObject = window.getSelection();
+      const host = selectionHostRef.current;
+      if (!selectionObject || selectionObject.rangeCount === 0 || selectionObject.isCollapsed || !host) {
+        setSelectionMenu(null);
+        return;
+      }
+      const range = selectionObject.getRangeAt(0);
+      if (!host.contains(range.commonAncestorContainer)) setSelectionMenu(null);
+    }
+
+    document.addEventListener("selectionchange", closeMenuOnOutsideSelection);
+    return () => document.removeEventListener("selectionchange", closeMenuOnOutsideSelection);
+  }, []);
+
+  if (cell.child_cells?.length) {
+    return (
+      <div className="grid h-full w-full gap-1" style={{ gridTemplateRows: `repeat(${cell.child_cells.length}, minmax(0, 1fr))` }}>
+        {cell.child_cells.map((child, index) => {
+          const selected = selectedCellId === child.id;
+          return (
+            <div key={child.id} role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); onSelect(child.id); }} className={`relative flex min-h-0 min-w-0 overflow-hidden rounded-lg border-2 border-dashed p-2 ${selected ? "border-purple-600 bg-purple-50/20 ring-2 ring-purple-500/20" : "border-white/50 hover:border-purple-400"}`} style={{ justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center", alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center", textAlign: child.text_align || "center", color: child.color || (area === "hero" ? "#ffffff" : "#111827"), background: area === "header" ? "transparent" : child.background_color || "transparent" }}>
+              <span className="absolute left-1 top-1 z-20 rounded bg-purple-700/85 px-1.5 py-0.5 text-[9px] font-black text-white">안쪽 {index + 1}</span>
+              <EditableCellContent cell={child} selectedCellId={selectedCellId} onSelect={onSelect} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
+              {child.type === "empty" && !child.child_cells?.length ? <span className="text-xs font-bold opacity-70">+ 내용 추가</span> : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  return <CellPreview cell={cell} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />;
+}
+
+function EditableGrid({
+  area,
+  grid,
+  selectedCellId,
+  business,
+  accentColor,
+  websiteSettings,
+  previewDevice = "desktop",
+  onSelect,
+  onResizeWidths,
+  onResizeHeight,
+}: {
+  area: "header" | "hero";
+  grid: GridData;
+  selectedCellId?: string;
+  business: Business;
+  accentColor: string;
+  websiteSettings?: WebsiteSettings;
+  previewDevice?: "desktop" | "mobile";
+  onSelect: (cellId: string) => void;
+  onResizeWidths: (widths: Record<string, number>) => void;
+  onResizeHeight: (heightPx: number) => void;
+}) {
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [localWidths, setLocalWidths] = useState<number[]>(() =>
+    grid.cells.map((cell) => Number(cell.width_percent || (cell.span / 4) * 100)),
+  );
+  const [dragging, setDragging] = useState<{
+    index: number;
+    cellId: string;
+    startX: number;
+    currentWidth: number;
+    nextWidth: number;
+  } | null>(null);
+  const [dragDirection, setDragDirection] = useState<-1 | 0 | 1>(0);
+  const defaultHeight =
+    area === "header"
+      ? Number(websiteSettings?.header_height_px || 104)
+      : grid.height === "small"
+        ? 300
+        : grid.height === "medium"
+          ? 430
+          : 560;
+  const [localHeight, setLocalHeight] = useState(
+    Number(grid.height_px || defaultHeight),
+  );
+  const [heightDragging, setHeightDragging] = useState<{
+    startY: number;
+    startHeight: number;
+  } | null>(null);
+  const latestHeightRef = useRef(Number(grid.height_px || defaultHeight));
+
+  useEffect(() => {
+    if (dragging) return;
+    setLocalWidths(
+      grid.cells.map((cell) =>
+        Number(cell.width_percent || (cell.span / 4) * 100),
+      ),
+    );
+  }, [grid.cells, dragging]);
+
+  useEffect(() => {
+    if (heightDragging) return;
+
+    const nextHeight = Number(grid.height_px || defaultHeight);
+    latestHeightRef.current = nextHeight;
+    setLocalHeight(nextHeight);
+    // heightDragging을 의존성에 넣으면 마우스를 놓는 순간
+    // 저장 전의 이전 높이로 다시 초기화될 수 있습니다.
+  }, [grid.height_px, grid.height, area, defaultHeight]);
+
+  const autoMobileBusinessHours =
+    previewDevice === "mobile" &&
+    area !== "header" &&
+    gridContainsDisplayMode(grid, "business-hours") ||
+    gridContainsDisplayMode(grid, "restaurant-menu");
+  const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[180px]";
+
+  function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setHeightDragging({
+      startY: event.clientY,
+      startHeight: localHeight,
+    });
+  }
+
+  function moveHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!heightDragging) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const minimum = area === "header" ? 96 : 180;
+    const nextHeight = Math.max(
+      minimum,
+      Math.min(3000, heightDragging.startHeight + event.clientY - heightDragging.startY),
+    );
+
+    const roundedHeight = Math.round(nextHeight);
+    latestHeightRef.current = roundedHeight;
+    setLocalHeight(roundedHeight);
+  }
+
+  function stopHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!heightDragging) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    const finalHeight = latestHeightRef.current;
+    setLocalHeight(finalHeight);
+    onResizeHeight(finalHeight);
+    setHeightDragging(null);
+  }
+
+  function startDragging(
+    event: React.PointerEvent<HTMLButtonElement>,
+    index: number,
+    cellId: string,
+  ) {
+    if (index >= grid.cells.length - 1) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    onSelect(cellId);
+    setDragging({
+      index,
+      cellId,
+      startX: event.clientX,
+      currentWidth: localWidths[index],
+      nextWidth: localWidths[index + 1],
+    });
+    setDragDirection(0);
+  }
+
+  function moveDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!dragging || !gridRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const gridWidth = gridRef.current.getBoundingClientRect().width;
+    if (gridWidth <= 0) return;
+
+    const minWidth = area === "header" ? 8 : 10;
+    const deltaPercent = ((event.clientX - dragging.startX) / gridWidth) * 100;
+    const pairTotal = dragging.currentWidth + dragging.nextWidth;
+
+    const nextCurrent = Math.max(
+      minWidth,
+      Math.min(pairTotal - minWidth, dragging.currentWidth + deltaPercent),
+    );
+    const nextNeighbor = pairTotal - nextCurrent;
+
+    setDragDirection(
+      nextCurrent > dragging.currentWidth + 0.2
+        ? 1
+        : nextCurrent < dragging.currentWidth - 0.2
+          ? -1
+          : 0,
+    );
+
+    setLocalWidths((current) =>
+      current.map((width, index) => {
+        if (index === dragging.index) return nextCurrent;
+        if (index === dragging.index + 1) return nextNeighbor;
+        return width;
+      }),
+    );
+  }
+
+  function stopDragging(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!dragging) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    const widths: Record<string, number> = {};
+    grid.cells.forEach((cell, index) => {
+      widths[cell.id] = localWidths[index];
+    });
+
+    onResizeWidths(widths);
+    setDragging(null);
+    setDragDirection(0);
+  }
+
+  return (
+    <div
+      ref={gridRef}
+      className={`relative grid gap-0 ${heightClass}`}
+      style={{
+        height: autoMobileBusinessHours ? "auto" : `${localHeight}px`,
+        gridTemplateColumns: localWidths
+          .map((width) => `${Math.max(width, 1)}fr`)
+          .join(" "),
+      }}
+    >
+      {grid.cells.map((cell, index) => {
+        const selected = selectedCellId === cell.id;
+        const isDragging = dragging?.cellId === cell.id;
+        const isLogo = cell.type === "logo";
+        const hasRightNeighbor = index < grid.cells.length - 1;
+        const handleColor = isLogo ? "red" : "blue";
+        const visibleWidth = Math.round(localWidths[index] || 0);
+
+        return (
+          <div key={cell.id} className="relative min-w-0">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelect(cell.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelect(cell.id);
+                }
+              }}
+              className={`group relative flex ${autoMobileBusinessHours && (cellContainsDisplayMode(cell, "business-hours") || cellContainsDisplayMode(cell, "restaurant-menu")) ? "h-auto" : "h-full"} min-h-[70px] w-full overflow-visible transition ${
+                selected
+                  ? isLogo
+                    ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
+                    : "bg-blue-50/15 ring-2 ring-inset ring-blue-600"
+                  : "ring-1 ring-inset ring-white/55 hover:ring-2 hover:ring-blue-400"
+              }`}
+              style={{
+                justifyContent:
+                  cell.text_align === "left"
+                    ? "flex-start"
+                    : cell.text_align === "right"
+                      ? "flex-end"
+                      : "center",
+                alignItems:
+                  cell.vertical_align === "top"
+                    ? "flex-start"
+                    : cell.vertical_align === "bottom"
+                      ? "flex-end"
+                      : "center",
+                textAlign: cell.text_align || "center",
+                color: cell.color || (area === "hero" ? "#ffffff" : "#111827"),
+                background:
+                  area === "header"
+                    ? "transparent"
+                    : cell.background_color || "transparent",
+                padding:
+                  cell.child_cells?.length ||
+                  cell.type === "image" ||
+                  (cell.type === "title" &&
+                    (cell.display_mode === "background-image" ||
+                      cell.display_mode === "service-card"))
+                    ? 0
+                    : previewDevice === "mobile" && area === "header"
+                      ? "4px"
+                      : area === "header"
+                        ? `${Number(
+                            websiteSettings?.header_vertical_padding_px || 8,
+                          )}px`
+                        : "12px",
+              }}
+            >
+              <span className="absolute left-2 top-2 z-20 rounded-full bg-black/75 px-2 py-1 text-[10px] font-black text-white shadow">
+                {index + 1}번 · {getCellLabel(cell.type)} · {visibleWidth}%
+              </span>
+
+              <EditableCellContent
+                cell={cell}
+                selectedCellId={selectedCellId}
+                onSelect={onSelect}
+                business={business}
+                accentColor={accentColor}
+                area={area}
+                previewDevice={previewDevice}
+                websiteSettings={websiteSettings}
+              />
+
+              {cell.type === "empty" && !cell.child_cells?.length ? (
+                <span
+                  className={`text-sm font-bold ${
+                    area === "hero" ? "text-white/70" : "text-gray-400"
+                  }`}
+                >
+                  + 클릭해서 내용 추가
+                </span>
+              ) : null}
+
+              {hasRightNeighbor ? (
+                <button
+                  type="button"
+                  aria-label={`${getCellLabel(cell.type)} 칸 너비 조절`}
+                  onPointerDown={(event) =>
+                    startDragging(event, index, cell.id)
+                  }
+                  onPointerMove={moveDragging}
+                  onPointerUp={stopDragging}
+                  onPointerCancel={stopDragging}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  className={`absolute right-[-13px] top-0 z-40 flex h-full w-7 touch-none items-center justify-center rounded-full outline-none ${
+                    handleColor === "red"
+                      ? "cursor-col-resize text-red-600"
+                      : "cursor-col-resize text-blue-600"
+                  }`}
+                >
+                  <span
+                    className={`absolute h-full w-[3px] rounded-full shadow-sm ${
+                      handleColor === "red" ? "bg-red-600" : "bg-blue-500"
+                    }`}
+                  />
+                  <span
+                    className={`relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 bg-white text-lg font-black shadow-lg ${
+                      handleColor === "red"
+                        ? "border-red-600 text-red-600"
+                        : "border-blue-500 text-blue-600"
+                    }`}
+                  >
+                    ↔
+                  </span>
+                </button>
+              ) : null}
+
+              {(isLogo && selected) || isDragging ? (
+                <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-3 w-max max-w-[340px] -translate-x-1/2">
+                  <div className="rounded-2xl border-2 border-red-600 bg-white px-4 py-3 text-center shadow-xl">
+                    <p className="text-xs font-black text-red-700">
+                      로고 칸 너비: {visibleWidth}%
+                    </p>
+                    <p className="mt-1 whitespace-nowrap text-sm font-black text-gray-950">
+                      로고 칸 축소 ←{" "}
+                      <span className="text-red-600">↔</span> → 로고 칸 확대
+                    </p>
+                    {isDragging ? (
+                      <p className="mt-1 text-xs font-bold text-red-600">
+                        {dragDirection < 0
+                          ? "왼쪽으로 이동 중: 축소"
+                          : dragDirection > 0
+                            ? "오른쪽으로 이동 중: 확대"
+                            : "좌우로 드래그하세요"}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+
+      {area === "hero" && !autoMobileBusinessHours ? (
+        <button
+          type="button"
+          title="드래그해서 레이아웃 높이 조절"
+          onPointerDown={startHeightDragging}
+          onPointerMove={moveHeightDragging}
+          onPointerUp={stopHeightDragging}
+          onPointerCancel={stopHeightDragging}
+          className={`absolute -bottom-3 left-1/2 z-[80] flex h-7 w-24 -translate-x-1/2 touch-none cursor-ns-resize items-center justify-center rounded-full border-2 bg-white shadow-lg transition ${
+            heightDragging
+              ? "border-blue-600 text-blue-700 ring-4 ring-blue-500/20"
+              : "border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-700"
+          }`}
+        >
+          <span className="mr-1 text-sm font-black">↕</span>
+          <span className="text-[10px] font-black">{localHeight}px</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function normalizePhoneHref(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  // 전화 연결에는 숫자와 맨 앞의 +만 사용합니다.
+  const hasLeadingPlus = raw.startsWith("+");
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+
+  return `tel:${hasLeadingPlus ? "+" : ""}${digits}`;
+}
+
+function CellPreview({
+  cell,
+  business,
+  accentColor,
+  area,
+  previewDevice,
+  websiteSettings,
+}: {
+  cell: GridCell;
+  business: Business;
+  accentColor: string;
+  area: "header" | "hero";
+  previewDevice?: "desktop" | "mobile";
+  websiteSettings?: WebsiteSettings;
+}) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const fontWeight = cell.font_weight === "black" ? 900 : cell.font_weight === "bold" ? 700 : cell.font_weight === "semibold" ? 600 : 400;
+  const responsiveFontSize =
+    previewDevice === "mobile"
+      ? Math.min(cell.font_size || 16, area === "header" ? 18 : 30)
+      : cell.font_size || 16;
+  const configuredHeaderTitleSize = Number(
+    websiteSettings?.header_title_font_size_px || responsiveFontSize,
+  );
+  const effectiveFontSize =
+    area === "header" && cell.type === "title"
+      ? previewDevice === "mobile"
+        ? Math.min(configuredHeaderTitleSize, 22)
+        : configuredHeaderTitleSize
+      : responsiveFontSize;
+  const fontFamily =
+    cell.font_family === "serif"
+      ? "Georgia, 'Times New Roman', serif"
+      : cell.font_family === "rounded"
+        ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
+        : cell.font_family === "mono"
+          ? "'Courier New', monospace"
+          : "Arial, Helvetica, sans-serif";
+  const commonStyle = { fontSize: `${effectiveFontSize}px`, fontWeight, fontFamily };
+
+  if (cell.type === "logo") {
+    const logo = cell.image_url || "";
+    const fallbackLogoSize =
+      area === "header"
+        ? Number(websiteSettings?.header_logo_size_px || 56)
+        : 120;
+    const configuredLogoSize = Number(cell.logo_size_px || fallbackLogoSize);
+    const logoSize = Math.max(24, Math.min(400, configuredLogoSize));
+
+    const homeHref = business.id
+      ? `/business/${business.id}/website`
+      : "#";
+
+    return (
+      <a
+        href={homeHref}
+        aria-label={`${business.name || "Business"} 홈으로 이동`}
+        className="inline-flex max-h-full max-w-full shrink-0 items-center justify-center no-underline"
+        onClick={(event) => {
+          if (!business.id) event.preventDefault();
+        }}
+      >
+        {logo ? (
+          <img
+            src={logo}
+            alt={`${business.name || "Business"} Logo`}
+            className="block max-w-none shrink-0 object-contain"
+            style={{
+              width: `${logoSize}px`,
+              height: `${logoSize}px`,
+              maxWidth: "100%",
+              maxHeight: "100%",
+            }}
+          />
+        ) : (
+          <span
+            className="flex items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
+            style={{
+              width: `${logoSize}px`,
+              height: `${logoSize}px`,
+              fontSize: `${Math.max(10, logoSize / 4)}px`,
+            }}
+          >
+            LOGO
+          </span>
+        )}
+      </a>
+    );
+  }
+  if (cell.type === "image") {
+    return cell.image_url ? (
+      <img
+        src={cell.image_url}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+    ) : (
+      <span className="text-sm font-bold opacity-70">이미지</span>
+    );
+  }
+  if (cell.type === "button") {
+    const globalHeight = Number(
+      websiteSettings?.header_button_height_px || 46,
+    );
+    const configuredHeight = Number(cell.button_height_px || globalHeight);
+    const configuredWidth = Number(cell.button_width_px || 130);
+    const configuredFontSize = Number(cell.font_size || 14);
+
+    const buttonHeight =
+      area === "header" && previewDevice === "mobile"
+        ? Math.min(configuredHeight, 48)
+        : configuredHeight;
+    const buttonWidth =
+      previewDevice === "mobile"
+        ? Math.min(configuredWidth, 110)
+        : configuredWidth;
+    const buttonFontSize =
+      previewDevice === "mobile"
+        ? Math.min(configuredFontSize, 14)
+        : configuredFontSize;
+
+    const buttonHref = normalizeButtonHref(cell.url);
+    const opensNewWindow = isExternalButtonHref(buttonHref);
+
+    return (
+      <a
+        href={buttonHref || undefined}
+        target={opensNewWindow ? "_blank" : undefined}
+        rel={opensNewWindow ? "noreferrer noopener" : undefined}
+        aria-disabled={!buttonHref}
+        onClick={(event) => {
+          if (!buttonHref) {
+            event.preventDefault();
+          }
+        }}
+        className={`inline-flex max-w-full items-center justify-center rounded-full px-3 text-center font-black leading-tight text-white no-underline shadow transition ${
+          buttonHref
+            ? "cursor-pointer hover:brightness-110 active:scale-[0.98]"
+            : "cursor-default opacity-70"
+        }`}
+        style={{
+          width: `${buttonWidth}px`,
+          maxWidth: "100%",
+          minHeight: `${buttonHeight}px`,
+          backgroundColor: accentColor,
+          fontSize: `${buttonFontSize}px`,
+          whiteSpace:
+            cell.button_no_wrap === false ? "normal" : "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+        title={
+          buttonHref
+            ? `${cell.text || "버튼"} · ${buttonHref}`
+            : cell.text || "버튼"
+        }
+      >
+        {previewDevice === "mobile"
+          ? getMobileButtonText(cell)
+          : cell.text || "버튼"}
+      </a>
+    );
+  }
+  if (cell.type === "phone") {
+    const phoneNumber = String(cell.phone_number || cell.text || "").trim();
+    const phoneHref = normalizePhoneHref(phoneNumber);
+
+    if (!phoneNumber) {
+      return (
+        <span className="inline-flex items-center gap-2 text-sm font-black opacity-70">
+          <span aria-hidden="true">📞</span>
+          <span className={previewDevice === "mobile" ? "sr-only" : "inline"}>
+            전화번호
+          </span>
+        </span>
+      );
+    }
+
+    return (
+      <a
+        href={phoneHref || undefined}
+        aria-label={`Call ${phoneNumber}`}
+        title={phoneNumber}
+        className="inline-flex max-w-full items-center justify-center gap-2 rounded-full px-2 py-2 font-black no-underline transition hover:opacity-75"
+        style={{ color: cell.color || "inherit", ...commonStyle }}
+      >
+        <span aria-hidden="true" className={previewDevice === "mobile" ? "text-2xl" : "text-base"}>
+          📞
+        </span>
+        {previewDevice === "mobile" ? (
+          <span className="sr-only">{phoneNumber}</span>
+        ) : (
+          <span className="min-w-0 break-words">{phoneNumber}</span>
+        )}
+      </a>
+    );
+  }
+  if (cell.type === "menu") {
+    const items = normalizeMenuItems(cell);
+
+    if (previewDevice === "mobile") {
+      return null;
+    }
+
+    return (
+      <nav className="flex flex-wrap items-center justify-center gap-4 text-sm font-bold">
+        {items.map((item) => {
+          const href = getGridMenuHref(item, business.id);
+
+          return (
+            <a
+              key={item.id}
+              href={href}
+              onClick={(event) => event.stopPropagation()}
+              className="cursor-pointer no-underline transition-opacity hover:opacity-65"
+              style={{ color: cell.color || "inherit" }}
+              title={`${item.label || "메뉴"} · ${href}`}
+            >
+              {item.label || "메뉴"}
+            </a>
+          );
+        })}
+      </nav>
+    );
+  }
+  if (cell.type === "sns") {
+    const snsItems = normalizeSnsItems(cell).filter((item) =>
+      String(item.url || "").trim(),
+    );
+    const iconSize = Math.max(
+      20,
+      Math.min(72, Number(cell.sns_icon_size_px || 32)),
+    );
+    const iconGap = Math.max(
+      4,
+      Math.min(40, Number(cell.sns_icon_gap_px || 12)),
+    );
+
+    if (!snsItems.length) {
+      return (
+        <span className="text-sm font-black text-gray-400">
+          SNS 주소를 입력해주세요
+        </span>
+      );
+    }
+
+    return (
+      <div
+        className="flex max-w-full flex-wrap items-center justify-center"
+        style={{ gap: `${iconGap}px` }}
+      >
+        {snsItems.map((item) => {
+          const href = normalizeExternalUrl(item.url);
+          const platformLabel =
+            item.label ||
+            SNS_PLATFORM_OPTIONS.find(
+              (option) => option.value === item.platform,
+            )?.label ||
+            "SNS";
+
+          return (
+            <a
+              key={item.id}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={platformLabel}
+              title={platformLabel}
+              className="inline-flex shrink-0 items-center justify-center rounded-full no-underline transition hover:scale-110 hover:opacity-85"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <SnsPlatformLogo
+                platform={item.platform}
+                size={iconSize}
+              />
+            </a>
+          );
+        })}
+      </div>
+    );
+  }
+  if (cell.type === "map") {
+    return (
+      <div className="absolute inset-0 h-full w-full p-1">
+        <BusinessLocationMap
+          business={business}
+          compact={previewDevice === "mobile"}
+        />
+      </div>
+    );
+  }
+  if (cell.type === "hours") return <span className="whitespace-pre-line text-sm font-semibold">{cell.text || "Mon–Fri 9:00 AM–6:00 PM"}</span>;
+  if (cell.type === "title") {
+    if (cell.display_mode === "restaurant-menu") {
+      return (
+        <div className={`${previewDevice === "mobile" ? "relative h-auto min-h-[520px] w-full overflow-visible" : "absolute inset-0 h-full w-full overflow-y-auto"} rounded-[10px] bg-white`}>
+          <RestaurantMenuDisplay businessId={business.id} compact={previewDevice === "mobile"} />
+        </div>
+      );
+    }
+
+    if (cell.display_mode === "business-hours") {
+      return (
+        <div
+          className={`${
+            previewDevice === "mobile"
+              ? "relative h-auto w-full overflow-visible rounded-[10px] px-0 py-2"
+              : "absolute inset-0 h-full w-full overflow-auto rounded-[10px] p-4 sm:p-6"
+          }`}
+          style={{ backgroundColor: cell.background_color || "#ffffff" }}
+        >
+          <BusinessHoursDisplay
+            cell={cell}
+            mobilePreview={previewDevice === "mobile"}
+          />
+        </div>
+      );
+    }
+
+    if (cell.display_mode === "service-card") {
+      return (
+        <div
+          className="absolute inset-0 flex h-full w-full flex-col overflow-hidden rounded-[10px]"
+          style={{ backgroundColor: cell.background_color || "#ffffff" }}
+        >
+          <div className="relative min-h-0 flex-[58] overflow-hidden bg-gray-100">
+            {cell.image_url ? (
+              <img
+                src={cell.image_url}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm font-black text-gray-500">
+                서비스 이미지
+              </div>
+            )}
+          </div>
+
+          <div
+            className="flex min-h-0 flex-[42] flex-col justify-start p-4"
+            style={{ textAlign: cell.text_align || "left" }}
+          >
+            <h3
+              className="line-clamp-2 font-black leading-tight"
+              style={{
+                color: cell.color || "#111827",
+                fontSize: `${Math.max(16, cell.font_size || 22)}px`,
+              }}
+            >
+              {cell.text || "서비스 제목"}
+            </h3>
+            <p className="mt-2 line-clamp-4 text-sm leading-relaxed text-gray-600">
+              {cell.card_description ||
+                "서비스에 대한 간단한 설명을 입력하세요."}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (cell.display_mode === "background-image") {
+      if (!cell.image_url) {
+        return (
+          <span className="text-sm font-black opacity-70">
+            배경 이미지를 넣어주세요
+          </span>
+        );
+      }
+
+      const overlayType = cell.background_overlay_type || "none";
+      const fontFamily =
+        cell.overlay_font_family === "serif"
+          ? "Georgia, 'Times New Roman', serif"
+          : cell.overlay_font_family === "rounded"
+            ? "'Arial Rounded MT Bold', 'Nunito', Arial, sans-serif"
+            : cell.overlay_font_family === "mono"
+              ? "'Courier New', monospace"
+              : "Arial, Helvetica, sans-serif";
+
+
+      return (
+        <>
+          <img
+            src={cell.image_url}
+            alt=""
+            className="absolute inset-0 h-full w-full rounded-[10px] object-cover"
+            style={{
+              filter: getBackgroundImageFilter(cell),
+              transform: `scale(${getBackgroundImageScale(cell)})`,
+              objectPosition: `${cell.background_image_focus_x ?? 50}% ${
+                cell.background_image_focus_y ?? 50
+              }%`,
+            }}
+          />
+
+          {(overlayType !== "none" ||
+            Boolean(cell.overlay_text) ||
+            Boolean(
+              cell.overlay_buttons_visible ??
+                (cell.background_overlay_type === "button" ||
+                  cell.overlay_buttons?.length),
+            )) ? (
+            <>
+              {(cell.overlay_text || overlayType === "text") ? (
+                <div
+                  className={`pointer-events-none absolute inset-0 z-10 flex p-6 ${overlayPositionClasses(
+                    cell.overlay_text_horizontal ?? "center",
+                    cell.overlay_text_vertical ?? "middle",
+                  )}`}
+                >
+                  <div
+                    className="max-w-[92%] whitespace-pre-line leading-tight"
+                    style={{
+                      color: cell.color || "#ffffff",
+                      fontSize: `${previewDevice === "mobile" ? Math.min(cell.font_size || 36, 28) : cell.font_size || 36}px`,
+                      fontWeight,
+                      fontFamily,
+                      textAlign: cell.overlay_text_horizontal ?? "center",
+                      textShadow: "0 2px 12px rgba(0,0,0,0.65)",
+                    }}
+                  >
+                    {cell.overlay_text || "이미지 위에 들어갈 글씨"}
+                  </div>
+                </div>
+              ) : null}
+
+              {(cell.overlay_buttons_visible ??
+                (cell.background_overlay_type === "button" ||
+                  Boolean(cell.overlay_buttons?.length))) ? (
+                <div
+                  className={`absolute inset-0 z-20 flex p-6 ${overlayPositionClasses(
+                    cell.overlay_button_horizontal ?? "center",
+                    cell.overlay_button_vertical ?? "bottom",
+                  )}`}
+                >
+                  <div
+                    className={`flex max-w-[96%] ${
+                      (cell.overlay_button_direction ?? "row") === "row"
+                        ? "flex-row flex-wrap"
+                        : "flex-col"
+                    }`}
+                    style={{ gap: `${cell.overlay_button_gap ?? 10}px` }}
+                  >
+                    {normalizeOverlayButtons(cell).map((button) => {
+                      const style =
+                        cell.overlay_button_group_style ?? "rounded";
+                      const backgroundColor =
+                        cell.overlay_button_group_color ?? "#111827";
+                      const textColor =
+                        cell.overlay_button_group_text_color ?? "#ffffff";
+                      const radius =
+                        style === "square"
+                          ? "4px"
+                          : style === "pill"
+                            ? "9999px"
+                            : "12px";
+
+                      return (
+                        <a
+                          key={button.id}
+                          href={button.url || "#"}
+                          onClick={(event) => event.preventDefault()}
+                          className="inline-flex shrink-0 items-center justify-center px-4 font-black shadow-lg"
+                          style={{
+                            width: `${cell.overlay_button_width ?? 140}px`,
+                            minHeight: `${cell.overlay_button_height ?? 44}px`,
+                            backgroundColor:
+                              style === "outline"
+                                ? "transparent"
+                                : backgroundColor,
+                            color: textColor,
+                            border:
+                              style === "outline"
+                                ? `2px solid ${backgroundColor}`
+                                : "none",
+                            borderRadius: radius,
+                            fontFamily,
+                            fontSize: `${cell.overlay_button_font_size ?? 15}px`,
+                          }}
+                        >
+                          {button.text || "버튼"}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      );
+    }
+
+    if (cell.display_mode === "auto-slider") {
+      const images = Array.isArray(cell.gallery_images)
+        ? cell.gallery_images
+        : [];
+
+      return images.length ? (
+        <AutoImageSlider images={images} />
+      ) : (
+        <span className="text-sm font-black opacity-70">
+          슬라이드 이미지를 선택해주세요
+        </span>
+      );
+    }
+
+    if (cell.display_mode === "image-scroll") {
+      const images = Array.isArray(cell.gallery_images)
+        ? cell.gallery_images
+        : [];
+
+      return images.length ? (
+        <HorizontalImageScroll
+          images={images}
+          speed={cell.image_scroll_speed ?? 28}
+          direction={cell.image_scroll_direction ?? "left"}
+          imageWidth={cell.image_scroll_width ?? 280}
+          gap={cell.image_scroll_gap ?? 12}
+        />
+      ) : (
+        <span className="text-sm font-black opacity-70">
+          흐르는 이미지를 선택해주세요
+        </span>
+      );
+    }
+
+    if (cell.display_mode === "gallery") {
+      const images = Array.isArray(cell.gallery_images)
+        ? cell.gallery_images
+        : [];
+
+      return images.length ? (
+        <div className={`grid h-full w-full gap-2 overflow-hidden ${previewDevice === "mobile" ? "grid-cols-2" : "grid-cols-3"}`}>
+          {images.slice(0, 9).map((url, index) => (
+            <img
+              key={`${url}-${index}`}
+              src={url}
+              alt=""
+              className={`${previewDevice === "mobile" ? "min-h-[70px]" : "min-h-[90px]"} h-full w-full rounded-lg object-cover`}
+            />
+          ))}
+        </div>
+      ) : (
+        <span className="text-sm font-black opacity-70">갤러리 이미지를 선택해주세요</span>
+      );
+    }
+
+    if (cell.display_mode === "map-section") {
+      return (
+        <div className="absolute inset-0 h-full w-full p-1">
+          <BusinessLocationMap
+            business={business}
+            compact={previewDevice === "mobile"}
+          />
+        </div>
+      );
+    }
+
+    const titleHtml = sanitizeCellRichTextHtml(
+      cell.rich_text_html || escapeCellText(cell.text || business.name || "제목"),
+    );
+    return (
+      <div
+        className="cell-rich-text min-w-0 max-w-full w-full overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        style={{ ...commonStyle, color: cell.color || "#111827" }}
+        dangerouslySetInnerHTML={{ __html: titleHtml }}
+      />
+    );
+  }
+  if (cell.type === "text") {
+    const textHtml = sanitizeCellRichTextHtml(
+      cell.rich_text_html || escapeCellText(cell.text || "내용을 입력하세요"),
+    );
+    return (
+      <div
+        className="cell-rich-text min-w-0 max-w-full w-full overflow-visible whitespace-pre-wrap leading-relaxed [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        style={{ ...commonStyle, color: cell.color || "#111827" }}
+        dangerouslySetInnerHTML={{ __html: textHtml }}
+      />
+    );
+  }
+  return area === "header" ? null : null;
+}
+
+
+function HeaderSubmenuEditor({
+  websiteSettings,
+  sections,
+  businessId,
+  onUpdate,
+}: {
+  websiteSettings: WebsiteSettings;
+  sections: BusinessSection[];
+  businessId: string;
+  onUpdate: (patch: Partial<WebsiteSettings>) => void;
+}) {
+  const [headerSizeOpen, setHeaderSizeOpen] = useState(false);
+  const [submenuSettingsOpen, setSubmenuSettingsOpen] = useState(false);
+
+  const items = Array.isArray(websiteSettings.header_submenu_items)
+    ? websiteSettings.header_submenu_items
+    : [];
+
+  const safeSections = Array.isArray(sections) ? sections : [];
+
+  const sectionOptions = [...safeSections]
+    .filter((section) => section.is_visible)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => {
+      const label =
+        section.section_type === "hero"
+          ? "Home"
+          : section.title ||
+            SECTION_LABELS[section.section_type] ||
+            section.section_type;
+      const value =
+        section.section_type === "hero"
+          ? "home"
+          : slugifyMenuValue(section.title || section.section_type);
+
+      return {
+        id: section.id,
+        label,
+        value,
+      };
+    })
+    .filter((section) => Boolean(section.value));
+
+  function updateItem(
+    itemId: string,
+    patch: Partial<{
+      label: string;
+      url: string;
+      target_type: "section" | "page";
+      target_value: string;
+    }>,
+  ) {
+    onUpdate({
+      header_submenu_items: items.map((item) => {
+        if (item.id !== itemId) return item;
+
+        const next = { ...item, ...patch };
+        const nextType =
+          next.target_type === "page" ? "page" : "section";
+        const nextValue = slugifyMenuValue(
+          next.target_value || next.label || "",
+        );
+
+        return {
+          ...next,
+          target_type: nextType,
+          target_value: nextValue,
+          url:
+            nextType === "page"
+              ? nextValue
+                ? `/business/${businessId}/website/${nextValue}`
+                : "#"
+              : nextValue
+                ? `#${nextValue}`
+                : "#",
+        };
+      }),
+    });
+  }
+
+  function addItem() {
+    const firstSection = sectionOptions[0];
+
+    onUpdate({
+      header_submenu_items: [
+        ...items,
+        {
+          id: createId("submenu"),
+          label: "New Menu",
+          url: firstSection ? `#${firstSection.value}` : "#home",
+          target_type: "section",
+          target_value: firstSection?.value || "home",
+        },
+      ],
+    });
+  }
+
+  function removeItem(itemId: string) {
+    onUpdate({
+      header_submenu_items: items.filter((item) => item.id !== itemId),
+    });
+  }
+
+  return (
+    <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <button
+          type="button"
+          onClick={() => setHeaderSizeOpen((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50"
+        >
+          <div>
+            <p className="text-sm font-black text-gray-900">
+              Header 크기 조절
+            </p>
+            <p className="mt-0.5 text-xs text-gray-500">
+              높이 · 로고 · 제목 · 버튼 · 상하 여백
+            </p>
+          </div>
+          <span
+            className={`text-lg font-black text-gray-500 transition-transform ${
+              headerSizeOpen ? "rotate-180" : ""
+            }`}
+          >
+            ⌄
+          </span>
+        </button>
+
+        {headerSizeOpen ? (
+          <div className="border-t border-gray-200 bg-gray-50 p-4">
+            <div className="space-y-4">
+              {[
+                {
+                  label: "Header 높이",
+                  value: Number(websiteSettings.header_height_px || 104),
+                  min: 64,
+                  max: 240,
+                  key: "header_height_px",
+                },
+                {
+                  label: "기본 헤더 로고 크기",
+                  value: Number(websiteSettings.header_logo_size_px || 56),
+                  min: 24,
+                  max: 400,
+                  key: "header_logo_size_px",
+                },
+                {
+                  label: "제목 글자 크기",
+                  value: Number(
+                    websiteSettings.header_title_font_size_px || 24,
+                  ),
+                  min: 14,
+                  max: 64,
+                  key: "header_title_font_size_px",
+                },
+                {
+                  label: "버튼 높이",
+                  value: Number(
+                    websiteSettings.header_button_height_px || 46,
+                  ),
+                  min: 32,
+                  max: 90,
+                  key: "header_button_height_px",
+                },
+                {
+                  label: "Header 상하 여백",
+                  value: Number(
+                    websiteSettings.header_vertical_padding_px || 8,
+                  ),
+                  min: 0,
+                  max: 48,
+                  key: "header_vertical_padding_px",
+                },
+              ].map((control) => (
+                <label key={control.key} className="block">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-black text-gray-700">
+                      {control.label}
+                    </span>
+                    <span className="text-xs font-bold text-blue-700">
+                      {control.value}px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={control.min}
+                    max={control.max}
+                    value={control.value}
+                    onChange={(event) =>
+                      onUpdate({
+                        [control.key]: Number(event.target.value),
+                      })
+                    }
+                    className="mt-2 w-full"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button
+            type="button"
+            onClick={() => setSubmenuSettingsOpen((current) => !current)}
+            className="min-w-0 flex-1 text-left"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-gray-900">
+                  Header 아래 메뉴 줄
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  메뉴 높이 · 글자 크기 · 색상 · 항목
+                </p>
+              </div>
+              <span
+                className={`text-lg font-black text-gray-500 transition-transform ${
+                  submenuSettingsOpen ? "rotate-180" : ""
+                }`}
+              >
+                ⌄
+              </span>
+            </div>
+          </button>
+
+          <input
+            type="checkbox"
+            checked={Boolean(websiteSettings.header_submenu_enabled)}
+            onChange={(event) =>
+              onUpdate({
+                header_submenu_enabled: event.target.checked,
+              })
+            }
+            className="h-5 w-5 shrink-0"
+            aria-label="Header 아래 메뉴 줄 표시"
+          />
+        </div>
+
+        {websiteSettings.header_submenu_enabled && submenuSettingsOpen ? (
+          <div className="border-t border-gray-200 p-4">
+          <div className="mt-4 space-y-4 rounded-2xl bg-gray-50 p-4">
+            <label className="block">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-gray-700">
+                  아래 메뉴 높이
+                </span>
+                <span className="text-xs font-bold text-blue-700">
+                  {Number(
+                    websiteSettings.header_submenu_height_px || 56,
+                  )}px
+                </span>
+              </div>
+              <input
+                type="range"
+                min="40"
+                max="120"
+                value={Number(
+                  websiteSettings.header_submenu_height_px || 56,
+                )}
+                onChange={(event) =>
+                  onUpdate({
+                    header_submenu_height_px: Number(event.target.value),
+                  })
+                }
+                className="mt-2 w-full"
+              />
+            </label>
+
+            <label className="block">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-gray-700">
+                  아래 메뉴 글자 크기
+                </span>
+                <span className="text-xs font-bold text-blue-700">
+                  {Number(
+                    websiteSettings.header_submenu_font_size_px || 14,
+                  )}px
+                </span>
+              </div>
+              <input
+                type="range"
+                min="11"
+                max="30"
+                value={Number(
+                  websiteSettings.header_submenu_font_size_px || 14,
+                )}
+                onChange={(event) =>
+                  onUpdate({
+                    header_submenu_font_size_px: Number(event.target.value),
+                  })
+                }
+                className="mt-2 w-full"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <ColorInput
+              label="메뉴 배경색"
+              value={String(
+                websiteSettings.header_submenu_background_color || "#000000",
+              )}
+              onChange={(value) =>
+                onUpdate({
+                  header_submenu_background_color: value,
+                })
+              }
+            />
+            <ColorInput
+              label="메뉴 글자색"
+              value={String(
+                websiteSettings.header_submenu_text_color || "#ffffff",
+              )}
+              onChange={(value) =>
+                onUpdate({
+                  header_submenu_text_color: value,
+                })
+              }
+            />
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {items.map((item, index) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-gray-200 bg-gray-50 p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-black text-gray-500">
+                    메뉴 {index + 1}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(item.id)}
+                    className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700"
+                  >
+                    삭제
+                  </button>
+                </div>
+
+                <label className="mt-2 block">
+                  <span className="text-[11px] font-black text-gray-600">
+                    메뉴 이름
+                  </span>
+                  <input
+                    value={item.label}
+                    onChange={(event) =>
+                      updateItem(item.id, { label: event.target.value })
+                    }
+                    placeholder="예: Catering"
+                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                  />
+                </label>
+
+                <div className="mt-3">
+                  <p className="text-[11px] font-black text-gray-600">
+                    이동 방식
+                  </p>
+                  <div className="mt-1 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstSection = sectionOptions[0];
+                        updateItem(item.id, {
+                          target_type: "section",
+                          target_value:
+                            item.target_type === "section" && item.target_value
+                              ? item.target_value
+                              : firstSection?.value || "home",
+                        });
+                      }}
+                      className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                        (item.target_type ||
+                          detectMenuLink(item.url || "")) === "section"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      }`}
+                    >
+                      섹션
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateItem(item.id, {
+                          target_type: "page",
+                          target_value:
+                            item.target_type === "page" && item.target_value
+                              ? item.target_value
+                              : slugifyMenuValue(item.label || "new-page"),
+                        })
+                      }
+                      className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                        (item.target_type ||
+                          detectMenuLink(item.url || "")) === "page"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-300 bg-white text-gray-700"
+                      }`}
+                    >
+                      새 페이지
+                    </button>
+                  </div>
+                </div>
+
+                {(item.target_type ||
+                  detectMenuLink(item.url || "")) === "section" ? (
+                  <label className="mt-3 block">
+                    <span className="text-[11px] font-black text-gray-600">
+                      연결할 레이어
+                    </span>
+                    <select
+                      value={
+                        item.target_value ||
+                        String(item.url || "").replace(/^#/, "") ||
+                        sectionOptions[0]?.value ||
+                        "home"
+                      }
+                      onChange={(event) =>
+                        updateItem(item.id, {
+                          target_type: "section",
+                          target_value: event.target.value,
+                        })
+                      }
+                      className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                    >
+                      {sectionOptions.length > 0 ? (
+                        sectionOptions.map((section) => (
+                          <option key={section.id} value={section.value}>
+                            {section.label}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="home">Home</option>
+                      )}
+                    </select>
+                  </label>
+                ) : (
+                  <div className="mt-3 space-y-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
+                    <label className="block">
+                      <span className="text-[11px] font-black text-blue-900">
+                        페이지 주소
+                      </span>
+                      <div className="mt-1 flex items-center overflow-hidden rounded-lg border border-blue-200 bg-white">
+                        <span className="shrink-0 border-r border-blue-100 bg-blue-50 px-2 py-2 text-[10px] font-bold text-blue-700">
+                          /website/
+                        </span>
+                        <input
+                          value={
+                            item.target_value ||
+                            slugifyMenuValue(item.label || "")
+                          }
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              target_type: "page",
+                              target_value: event.target.value,
+                            })
+                          }
+                          placeholder="catering"
+                          className="min-w-0 flex-1 px-3 py-2 text-sm font-bold outline-none"
+                        />
+                      </div>
+                    </label>
+                    <p className="break-all text-[10px] leading-4 text-blue-700">
+                      공개 주소: /business/{businessId}/website/
+                      {slugifyMenuValue(
+                        item.target_value || item.label || "new-page",
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addItem}
+            className="mt-3 w-full rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700"
+          >
+            ＋ 메뉴 추가
+          </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+
+function plainTextToBasicHtml(value: string) {
+  const escapeHtml = (text: string) =>
+    text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+
+  return String(value || "")
+    .split(/\n{2,}/)
+    .map((block) => `<p>${escapeHtml(block).replace(/\n/g, "<br>")}</p>`)
+    .join("\n");
+}
+
+function repairPastedHtmlForPage(value: string) {
+  const safeHtml = sanitizeLinkPageHtml(value);
+
+  if (typeof document === "undefined") {
+    return safeHtml;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = safeHtml;
+
+  const removableStyleProperties = [
+    "width",
+    "min-width",
+    "max-width",
+    "height",
+    "min-height",
+    "max-height",
+    "left",
+    "right",
+    "top",
+    "bottom",
+    "transform",
+    "translate",
+    "zoom",
+    "position",
+    "float",
+    "clear",
+    "overflow-x",
+  ];
+
+  wrapper.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    element.removeAttribute("width");
+    element.removeAttribute("height");
+
+    removableStyleProperties.forEach((property) => {
+      element.style.removeProperty(property);
+    });
+
+    element.style.setProperty("box-sizing", "border-box");
+    element.style.setProperty("max-width", "100%");
+    element.style.setProperty("min-width", "0");
+
+    const display = element.style.display.toLowerCase();
+
+    if (display === "flex" || display === "inline-flex") {
+      element.style.setProperty("display", "flex");
+      element.style.setProperty("flex-wrap", "wrap");
+      element.style.setProperty("width", "100%");
+      element.style.setProperty("gap", element.style.gap || "12px");
+    }
+
+    if (display === "grid" || element.style.gridTemplateColumns) {
+      element.style.setProperty("display", "grid");
+      element.style.setProperty(
+        "grid-template-columns",
+        "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
+      );
+      element.style.setProperty("width", "100%");
+      element.style.setProperty("gap", element.style.gap || "16px");
+    }
+
+    if (
+      element.tagName === "DIV" ||
+      element.tagName === "SECTION" ||
+      element.tagName === "ARTICLE" ||
+      element.tagName === "MAIN"
+    ) {
+      element.style.setProperty("max-width", "100%");
+    }
+
+    if (element.tagName === "IMG") {
+      element.style.setProperty("display", "block");
+      element.style.setProperty("width", "auto");
+      element.style.setProperty("height", "auto");
+      element.style.setProperty("max-width", "100%");
+    }
+
+    if (element.tagName === "TABLE") {
+      element.style.setProperty("width", "100%");
+      element.style.setProperty("max-width", "100%");
+      element.style.setProperty("table-layout", "auto");
+      element.style.setProperty("border-collapse", "collapse");
+    }
+
+    if (element.tagName === "TD" || element.tagName === "TH") {
+      element.style.setProperty("min-width", "0");
+      element.style.setProperty("white-space", "normal");
+      element.style.setProperty("overflow-wrap", "break-word");
+      element.style.setProperty("word-break", "normal");
+      element.removeAttribute("nowrap");
+    }
+
+    if (
+      element.tagName === "P" ||
+      element.tagName === "SPAN" ||
+      element.tagName === "A" ||
+      element.tagName === "LI"
+    ) {
+      element.style.setProperty("white-space", "normal");
+      element.style.setProperty("overflow-wrap", "break-word");
+      element.style.setProperty("word-break", "normal");
+    }
+  });
+
+  Array.from(wrapper.children).forEach((element) => {
+    if (element instanceof HTMLElement) {
+      element.style.setProperty("width", "100%");
+      element.style.setProperty("max-width", "100%");
+      element.style.setProperty("min-width", "0");
+    }
+  });
+
+  /*
+   * 메뉴 페이지를 복사하면 점선, 이름, 가격이 각각 별도 TD로 들어오는 경우가 많습니다.
+   * 이런 표에 table-layout: fixed가 적용되면 각 칸이 너무 좁아져 글자가 한 글자씩 내려갑니다.
+   * 열 수가 많은 메뉴 표는 자동 레이아웃으로 유지하고, 텍스트 칸이 실제 내용만큼 넓어지게 합니다.
+   */
+  wrapper.querySelectorAll<HTMLTableElement>("table").forEach((table) => {
+    const rows = Array.from(table.rows);
+    const maxColumns = rows.reduce(
+      (max, row) => Math.max(max, row.cells.length),
+      0,
+    );
+
+    table.style.setProperty("width", "100%");
+    table.style.setProperty("max-width", "100%");
+    table.style.setProperty("table-layout", "auto");
+    table.style.setProperty("border-collapse", "collapse");
+
+    rows.forEach((row) => {
+      row.style.setProperty("width", "100%");
+
+      Array.from(row.cells).forEach((cell) => {
+        cell.style.removeProperty("width");
+        cell.style.removeProperty("max-width");
+        cell.style.setProperty("min-width", "0");
+        cell.style.setProperty("white-space", "normal");
+        cell.style.setProperty("overflow-wrap", "break-word");
+        cell.style.setProperty("word-break", "normal");
+        cell.removeAttribute("width");
+        cell.removeAttribute("nowrap");
+      });
+    });
+
+    if (maxColumns >= 4) {
+      table.setAttribute("data-responsive-menu-table", "true");
+    }
+  });
+
+  return sanitizeLinkPageHtml(wrapper.innerHTML);
+}
+
+function RichWebPasteBox({
+  value,
+  onChange,
+  editorStyle,
+  large = false,
+  onUploadImage,
+  sectionLinkOptions = [],
+  pageLinkOptions = [],
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  editorStyle?: React.CSSProperties;
+  large?: boolean;
+  onUploadImage?: (file: File) => Promise<string>;
+  sectionLinkOptions?: Array<{ label: string; value: string }>;
+  pageLinkOptions?: Array<{ label: string; value: string }>;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [insertingImage, setInsertingImage] = useState(false);
+  const [insertError, setInsertError] = useState("");
+  const [repairMessage, setRepairMessage] = useState("");
+  const [selectedTextColor, setSelectedTextColor] = useState("#111827");
+  const [linkType, setLinkType] = useState<"section" | "page">("section");
+  const [linkValue, setLinkValue] = useState("");
+  const savedSelectionRangeRef = useRef<Range | null>(null);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (editor.innerHTML !== value) editor.innerHTML = value;
+  }, [value]);
+
+  function syncEditor() {
+    onChange(sanitizeLinkPageHtml(editorRef.current?.innerHTML || ""));
+  }
+
+  function rememberEditorSelection() {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+
+    if (
+      !editor ||
+      !selection ||
+      selection.rangeCount === 0 ||
+      !editor.contains(selection.anchorNode)
+    ) {
+      return;
+    }
+
+    savedSelectionRangeRef.current = selection.getRangeAt(0).cloneRange();
+  }
+
+  function restoreEditorSelection() {
+    const editor = editorRef.current;
+    const range = savedSelectionRangeRef.current;
+    if (!editor || !range) return false;
+
+    try {
+      editor.focus();
+      const selection = window.getSelection();
+      if (!selection) return false;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    } catch {
+      savedSelectionRangeRef.current = null;
+      return false;
+    }
+  }
+
+  function applySelectedTextColor(color: string) {
+    setSelectedTextColor(color);
+
+    if (!restoreEditorSelection()) {
+      setInsertError("먼저 글씨를 블록 지정한 후 색상을 선택해주세요.");
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setInsertError("먼저 글씨를 블록 지정한 후 색상을 선택해주세요.");
+      return;
+    }
+
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand("foreColor", false, color);
+    setInsertError("");
+    syncEditor();
+    rememberEditorSelection();
+  }
+
+  function applyLinkToSelection() {
+    const href = linkValue.trim();
+
+    if (!href) {
+      setInsertError(
+        linkType === "section"
+          ? "이동할 레이어를 선택해주세요."
+          : "이동할 페이지를 선택해주세요.",
+      );
+      return;
+    }
+
+    if (!restoreEditorSelection()) {
+      setInsertError("먼저 링크를 적용할 글씨를 블록 지정해주세요.");
+      return;
+    }
+
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+
+    if (
+      !editor ||
+      !selection ||
+      selection.rangeCount === 0 ||
+      selection.isCollapsed
+    ) {
+      setInsertError("먼저 링크를 적용할 글씨를 블록 지정해주세요.");
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) {
+      setInsertError("HTML 편집창 안의 글씨를 선택해주세요.");
+      return;
+    }
+
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.style.color = "inherit";
+    anchor.style.textDecoration = "underline";
+    anchor.setAttribute(
+      "data-link-type",
+      linkType,
+    );
+
+    try {
+      const fragment = range.extractContents();
+      anchor.appendChild(fragment);
+      range.insertNode(anchor);
+
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(anchor);
+      selection.removeAllRanges();
+      selection.addRange(nextRange);
+      savedSelectionRangeRef.current = nextRange.cloneRange();
+
+      setInsertError("");
+      syncEditor();
+    } catch {
+      setInsertError("선택한 글씨에 링크를 적용하지 못했습니다.");
+    }
+  }
+
+  function removeLinkFromSelection() {
+    if (!restoreEditorSelection()) {
+      setInsertError("먼저 링크가 있는 글씨를 블록 지정해주세요.");
+      return;
+    }
+
+    document.execCommand("unlink", false);
+    setInsertError("");
+    syncEditor();
+    rememberEditorSelection();
+  }
+
+  function repairCurrentHtml() {
+    const currentHtml = editorRef.current?.innerHTML || value;
+
+    if (!currentHtml.trim()) {
+      setRepairMessage("복구할 HTML 내용이 없습니다.");
+      return;
+    }
+
+    const repaired = repairPastedHtmlForPage(currentHtml);
+
+    if (editorRef.current) {
+      editorRef.current.innerHTML = repaired;
+    }
+
+    onChange(repaired);
+    setInsertError("");
+    setRepairMessage(
+      "현재 페이지 폭에 맞게 고정 너비, 표, 그리드와 줄바꿈을 자동 정리했습니다.",
+    );
+  }
+
+  function insertHtmlAtCursor(html: string) {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      if (editor.contains(range.commonAncestorContainer)) {
+        range.deleteContents();
+        const fragment = range.createContextualFragment(html);
+        const lastNode = fragment.lastChild;
+        range.insertNode(fragment);
+        if (lastNode) {
+          range.setStartAfter(lastNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        requestAnimationFrame(syncEditor);
+        return;
+      }
+    }
+
+    editor.insertAdjacentHTML("beforeend", html);
+    requestAnimationFrame(syncEditor);
+  }
+
+  function insertCells(columns: number) {
+    const cells = Array.from({ length: columns }, (_, index) =>
+      `<td style="width:${100 / columns}%;min-width:0;border:1px solid #d1d5db;padding:14px;vertical-align:top;"><p>셀 ${index + 1}</p></td>`,
+    ).join("");
+    insertHtmlAtCursor(
+      `<table style="width:100%;table-layout:fixed;border-collapse:collapse;margin:12px 0;"><tbody><tr>${cells}</tr></tbody></table><p><br></p>`,
+    );
+  }
+
+  async function insertImage(file: File | undefined) {
+    if (!file || !onUploadImage) return;
+    setInsertingImage(true);
+    setInsertError("");
+    try {
+      const compressed = await compressLinkPageImage(file);
+      const url = await onUploadImage(compressed);
+      const alt = file.name.replace(/\.[^.]+$/, "").replace(/"/g, "");
+      insertHtmlAtCursor(
+        `<p style="text-align:center;"><img src="${url}" alt="${alt}" style="display:inline-block;max-width:100%;height:auto;border-radius:12px;" /></p><p><br></p>`,
+      );
+    } catch (error) {
+      setInsertError(error instanceof Error ? error.message : "이미지 추가에 실패했습니다.");
+    } finally {
+      setInsertingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  }
+
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const clipboardHtml = event.clipboardData.getData("text/html");
+    const clipboardText = event.clipboardData.getData("text/plain");
+    const pasted = clipboardHtml || plainTextToBasicHtml(clipboardText);
+    const cleaned = repairPastedHtmlForPage(pasted);
+    setRepairMessage(
+      "붙여넣은 내용을 현재 페이지 폭에 맞게 자동 정리했습니다.",
+    );
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      onChange(`${value}${cleaned}`);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const fragment = range.createContextualFragment(cleaned);
+    const lastNode = fragment.lastChild;
+    range.insertNode(fragment);
+
+    if (lastNode) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    requestAnimationFrame(syncEditor);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 p-2">
+        <span className="px-1 text-[11px] font-black text-violet-800">셀 나누기</span>
+        {[2, 3, 4].map((columns) => (
+          <button
+            key={columns}
+            type="button"
+            onClick={() => insertCells(columns)}
+            className="rounded-lg bg-white px-3 py-2 text-xs font-black text-violet-700 shadow-sm hover:bg-violet-100"
+          >
+            {columns}셀
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={repairCurrentHtml}
+          className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800 shadow-sm hover:bg-emerald-100"
+          title="다른 웹사이트에서 복사된 고정 폭과 깨진 표·그리드를 현재 페이지 폭에 맞게 정리합니다."
+        >
+          ↻ 우리 페이지에 맞게 복구
+        </button>
+        <button
+          type="button"
+          disabled={!onUploadImage || insertingImage}
+          onClick={() => imageInputRef.current?.click()}
+          className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-black text-white hover:bg-violet-700 disabled:opacity-50"
+        >
+          {insertingImage ? "이미지 추가 중..." : "＋ 이미지 추가"}
+        </button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => void insertImage(event.target.files?.[0])}
+        />
+        <span className="text-[10px] font-bold text-violet-600">커서를 놓은 위치에 들어갑니다.</span>
+      </div>
+
+      <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block">
+            <span className="text-[11px] font-black text-blue-900">
+              선택한 글씨 색상
+            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="color"
+                value={selectedTextColor}
+                onMouseDown={rememberEditorSelection}
+                onChange={(event) =>
+                  applySelectedTextColor(event.target.value)
+                }
+                className="h-9 w-12 cursor-pointer rounded-lg border border-blue-300 bg-white p-1"
+              />
+              <input
+                value={selectedTextColor}
+                onMouseDown={rememberEditorSelection}
+                onChange={(event) => setSelectedTextColor(event.target.value)}
+                onBlur={() => applySelectedTextColor(selectedTextColor)}
+                className="w-24 rounded-lg border border-blue-300 bg-white px-2 py-2 text-xs font-bold"
+              />
+            </div>
+          </label>
+
+          <label className="block min-w-[110px]">
+            <span className="text-[11px] font-black text-blue-900">
+              링크 종류
+            </span>
+            <select
+              value={linkType}
+              onMouseDown={rememberEditorSelection}
+              onChange={(event) => {
+                const nextType = event.target.value as "section" | "page";
+                setLinkType(nextType);
+                setLinkValue("");
+              }}
+              className="mt-1 w-full rounded-lg border border-blue-300 bg-white px-2 py-2 text-xs font-bold"
+            >
+              <option value="section">레이어 링크</option>
+              <option value="page">페이지 링크</option>
+            </select>
+          </label>
+
+          <label className="block min-w-[210px] flex-1">
+            <span className="text-[11px] font-black text-blue-900">
+              {linkType === "section"
+                ? "이동할 레이어"
+                : "이동할 페이지"}
+            </span>
+            <select
+              value={linkValue}
+              onMouseDown={rememberEditorSelection}
+              onChange={(event) => setLinkValue(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-blue-300 bg-white px-2 py-2 text-xs font-bold"
+            >
+              <option value="">
+                {linkType === "section"
+                  ? "레이어를 선택하세요"
+                  : "페이지를 선택하세요"}
+              </option>
+              {(linkType === "section"
+                ? sectionLinkOptions
+                : pageLinkOptions
+              ).map((option) => (
+                <option
+                  key={`${linkType}-${option.value}`}
+                  value={option.value}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              rememberEditorSelection();
+            }}
+            onClick={applyLinkToSelection}
+            className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-black text-white hover:bg-blue-700"
+          >
+            선택 글씨에 링크 적용
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              rememberEditorSelection();
+            }}
+            onClick={removeLinkFromSelection}
+            className="rounded-lg border border-blue-300 bg-white px-3 py-2.5 text-xs font-black text-blue-700 hover:bg-blue-100"
+          >
+            링크 제거
+          </button>
+        </div>
+
+        <p className="mt-2 text-[10px] font-bold leading-4 text-blue-700">
+          HTML 편집창에서 글씨를 먼저 블록 지정한 다음 색상이나 링크를 적용하세요.
+          레이어 링크는 공개 페이지에서 선택한 레이어 위치로 바로 이동합니다.
+        </p>
+      </div>
+
+      {repairMessage ? (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+          <span>{repairMessage}</span>
+          <button
+            type="button"
+            onClick={() => setRepairMessage("")}
+            className="shrink-0 rounded-full px-2 py-1 text-emerald-700 hover:bg-emerald-100"
+            aria-label="복구 안내 닫기"
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
+      {insertError ? <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">{insertError}</p> : null}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onPaste={handlePaste}
+        onInput={syncEditor}
+        onMouseUp={rememberEditorSelection}
+        onKeyUp={rememberEditorSelection}
+        onBlur={rememberEditorSelection}
+        className={`link-page-paste-editor mt-3 w-full overflow-auto rounded-xl border border-gray-300 px-5 py-5 outline-none focus:border-violet-600 ${large ? "min-h-[52vh] max-h-[52vh]" : "min-h-[260px]"}`}
+        style={editorStyle}
+        data-placeholder="웹페이지에서 메뉴 블록을 복사한 뒤 이곳에 붙여넣으세요."
+      />
+      <style>{`
+        .link-page-paste-editor:empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          pointer-events: none;
+        }
+        .link-page-paste-editor {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: hidden;
+        }
+        .link-page-paste-editor *,
+        .link-page-paste-editor *::before,
+        .link-page-paste-editor *::after {
+          max-width: 100%;
+          min-width: 0;
+          box-sizing: border-box;
+        }
+        .link-page-paste-editor [style*="display: flex"],
+        .link-page-paste-editor [style*="display:flex"] {
+          flex-wrap: wrap !important;
+          max-width: 100% !important;
+        }
+        .link-page-paste-editor [style*="display: grid"],
+        .link-page-paste-editor [style*="display:grid"],
+        .link-page-paste-editor [style*="grid-template-columns"] {
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)) !important;
+          max-width: 100% !important;
+        }
+        .link-page-paste-editor table {
+          width: 100% !important;
+          max-width: 100% !important;
+          table-layout: auto !important;
+          border-collapse: collapse;
+        }
+        .link-page-paste-editor td,
+        .link-page-paste-editor th,
+        .link-page-paste-editor p,
+        .link-page-paste-editor span,
+        .link-page-paste-editor a,
+        .link-page-paste-editor li {
+          min-width: 0 !important;
+          white-space: normal !important;
+          overflow-wrap: break-word !important;
+          word-break: normal !important;
+        }
+        .link-page-paste-editor a {
+          cursor: pointer;
+          text-decoration: underline;
+        }
+        .link-page-paste-editor h1 { font-size: 1.8rem; font-weight: 900; margin: 0 0 1rem; }
+        .link-page-paste-editor h2 { font-size: 1.4rem; font-weight: 900; margin: 1.5rem 0 .65rem; border-bottom: 2px solid #111827; padding-bottom: .35rem; }
+        .link-page-paste-editor h3 { font-size: 1.05rem; font-weight: 800; margin: 1rem 0 .25rem; }
+        .link-page-paste-editor p { margin: .25rem 0 .65rem; }
+        .link-page-paste-editor img { display: block; height: auto; margin: .75rem auto; }
+        .link-page-paste-editor table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+        .link-page-paste-editor th, .link-page-paste-editor td { min-width: 0; border: 1px solid #d1d5db; padding: .75rem; vertical-align: top; overflow-wrap: break-word; }
+      `}</style>
+    </div>
+  );
+}
+
+async function compressLinkPageImage(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("이미지 파일만 선택해주세요.");
+  if (file.size > 20 * 1024 * 1024) throw new Error("원본 이미지는 20MB 이하여야 합니다.");
+
+  const bitmap = await createImageBitmap(file);
+  const maxSide = 1800;
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("이미지 처리에 실패했습니다.");
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.82));
+  if (!blob) throw new Error("이미지 압축에 실패했습니다.");
+  const baseName = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9가-힣_-]+/g, "-") || "image";
+  return new File([blob], `${baseName}.webp`, { type: "image/webp" });
+}
+
+function LinkPageEditor({
+  section,
+  businessId,
+  adminKey,
+  allSections,
+  websiteSettings,
+  onUpdateWebsiteSettings,
+  onUpdate,
+}: {
+  section: BusinessSection;
+  businessId: string;
+  adminKey: string;
+  allSections: BusinessSection[];
+  websiteSettings: WebsiteSettings;
+  onUpdateWebsiteSettings: (patch: Partial<WebsiteSettings>) => void;
+  onUpdate: (patch: Partial<SectionContent>) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [htmlOpen, setHtmlOpen] = useState(true);
+  const [htmlModalOpen, setHtmlModalOpen] = useState(false);
+  const pageKind = section.content?.link_page_kind === "restaurant-menu" ? "restaurant-menu" : "blank";
+  const html = String(section.content?.link_page_html || "");
+  const images = Array.isArray(section.content?.link_page_images)
+    ? section.content.link_page_images.filter((item) => item && item.url).slice(0, 8)
+    : [];
+  const legacyPdfUrl = String(section.content?.link_page_pdf_url || "").trim();
+  const pdfs = Array.isArray(section.content?.link_page_pdfs) && section.content.link_page_pdfs.length
+    ? section.content.link_page_pdfs.filter((item) => item && item.url).slice(0, 2)
+    : legacyPdfUrl
+      ? [{
+          id: "legacy-pdf-1",
+          url: legacyPdfUrl,
+          name: String(section.content?.link_page_pdf_name || "PDF"),
+          caption: "",
+          caption_font_size: 16,
+          caption_font_family: "Arial, sans-serif",
+          caption_color: "#111827",
+          caption_background_color: "transparent",
+          caption_text_align: "left" as TextAlign,
+          caption_font_weight: "normal" as const,
+          caption_font_style: "normal" as const,
+          caption_text_decoration: "none" as const,
+        }]
+      : [];
+  const backgroundColor = String(section.content?.link_page_background_color || "#ffffff");
+  const outerBackgroundColor = String(websiteSettings.outer_background_color || "#e5e7eb");
+  const widthMode = String(section.content?.link_page_width || "normal") as "normal" | "wide" | "full";
+  const imageMode = String(section.content?.link_page_image_mode || "stack") as "stack" | "flipbook" | "scroll";
+  const htmlFontSize = Math.max(10, Math.min(72, Number(section.content?.link_page_html_font_size || 16)));
+  const htmlFontFamily = String(section.content?.link_page_html_font_family || "Arial, sans-serif");
+  const htmlColor = String(section.content?.link_page_html_color || "#111827");
+  const htmlBackgroundColor = String(section.content?.link_page_html_background_color || "#ffffff");
+  const htmlTextAlign = String(section.content?.link_page_html_text_align || "left") as TextAlign;
+  const htmlFontWeight = section.content?.link_page_html_font_weight === "bold" ? "bold" : "normal";
+  const htmlFontStyle = section.content?.link_page_html_font_style === "italic" ? "italic" : "normal";
+  const htmlTextDecoration = section.content?.link_page_html_text_decoration === "underline" ? "underline" : "none";
+  const htmlLineHeight = Math.max(1, Math.min(3, Number(section.content?.link_page_html_line_height || 1.65)));
+
+  const sectionLinkOptions = allSections
+    .filter(
+      (item) =>
+        item.content?.page_type !== "link-page" &&
+        item.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((item) => {
+      const slug =
+        slugifyMenuValue(
+          String(
+            item.content?.page_slug ||
+              item.title ||
+              item.section_type ||
+              "",
+          ),
+        ) || `section-${item.id}`;
+
+      return {
+        label: `${
+          item.section_type === "hero"
+            ? "Home"
+            : item.title ||
+              SECTION_LABELS[item.section_type] ||
+              item.section_type ||
+              `레이어 ${item.id}`
+        }${item.content?.collapsible ? " (숨김 레이어)" : ""}`,
+        value: `#${slug}`,
+      };
+    });
+
+  const pageLinkOptions = allSections
+    .filter(
+      (item) =>
+        item.content?.page_type === "link-page" &&
+        item.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((item) => {
+      const slug = slugifyMenuValue(
+        String(item.content?.page_slug || item.title || ""),
+      );
+
+      return {
+        label: item.title || slug || `페이지 ${item.id}`,
+        value: slug
+          ? `/business/${businessId}/website/${encodeURIComponent(slug)}`
+          : "#",
+      };
+    })
+    .filter((item) => item.value !== "#");
+
+  const htmlEditorStyle: React.CSSProperties = {
+    fontSize: `${htmlFontSize}px`,
+    fontFamily: htmlFontFamily,
+    color: htmlColor,
+    backgroundColor: htmlBackgroundColor,
+    textAlign: htmlTextAlign,
+    fontWeight: htmlFontWeight,
+    fontStyle: htmlFontStyle,
+    textDecoration: htmlTextDecoration,
+    lineHeight: htmlLineHeight,
+  };
+
+  function clearLinkPageHtml() {
+    const confirmed = window.confirm(
+      "붙여넣은 HTML 메뉴 내용을 완전히 삭제할까요?\n\nPDF와 이미지는 그대로 유지됩니다.",
+    );
+
+    if (!confirmed) return;
+
+    /*
+     * 예전 공개 페이지 코드가 link_page_html이 비었을 때
+     * description/headline/subheadline을 대신 표시할 수 있으므로
+     * HTML과 레거시 텍스트 필드를 함께 비웁니다.
+     */
+    onUpdate({
+      link_page_html: "",
+      description: "",
+      headline: "",
+      subheadline: "",
+    });
+
+    setHtmlModalOpen(false);
+    setHtmlOpen(false);
+    setUploadError("");
+  }
+
+  async function uploadFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("businessId", businessId);
+    formData.append("kind", file.type === "application/pdf" ? "pdf" : "link-page-image");
+
+    const response = await fetch(`/api/admin/businesses/${encodeURIComponent(businessId)}/website/upload`, {
+      method: "POST",
+      headers: { "x-admin-key": adminKey },
+      body: formData,
+    });
+    const result = await readApiResponse(response);
+    if (!response.ok) throw new Error(String(result.error || result.message || "파일 업로드 실패"));
+    const url = getUploadedUrl(result);
+    if (!url) throw new Error("업로드 응답에 공개 파일 URL이 없습니다. Storage bucket의 Public 설정을 확인하세요.");
+    return url;
+  }
+
+  async function addImages(files: FileList | null) {
+    const selected = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
+    if (!selected.length) return;
+    const remaining = 8 - images.length;
+    if (remaining <= 0) { setUploadError("사진은 최대 8장까지 등록할 수 있습니다."); return; }
+    const accepted = selected.slice(0, remaining);
+    setUploading(true);
+    setUploadError("");
+    try {
+      const next = [...images];
+      for (const original of accepted) {
+        const compressed = await compressLinkPageImage(original);
+        const url = await uploadFile(compressed);
+        next.push({
+          id: createId("link-image"),
+          url,
+          alt: original.name.replace(/\.[^.]+$/, ""),
+          caption: "",
+          caption_font_size: 16,
+          caption_font_family: "Arial, sans-serif",
+          caption_color: "#111827",
+          caption_background_color: "transparent",
+          caption_text_align: "left",
+          caption_font_weight: "normal",
+          caption_font_style: "normal",
+          caption_text_decoration: "none",
+        });
+      }
+      onUpdate({ link_page_images: next });
+      if (selected.length > accepted.length) setUploadError(`최대 8장까지만 등록되어 ${accepted.length}장만 추가했습니다.`);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "사진 업로드 실패");
+    } finally { setUploading(false); }
+  }
+
+  function savePdfs(next: NonNullable<SectionContent["link_page_pdfs"]>) {
+    const limited = next.slice(0, 2);
+    onUpdate({
+      link_page_pdfs: limited,
+      link_page_pdf_url: limited[0]?.url || "",
+      link_page_pdf_name: limited[0]?.name || "",
+    });
+  }
+
+  async function addPdf(file: File | undefined) {
+    if (!file) return;
+    if (pdfs.length >= 2) { setUploadError("PDF는 최대 2개까지 등록할 수 있습니다."); return; }
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) { setUploadError("PDF 파일만 선택해주세요."); return; }
+    if (file.size > 30 * 1024 * 1024) { setUploadError("PDF는 각각 30MB 이하여야 합니다."); return; }
+    setUploading(true); setUploadError("");
+    try {
+      const url = await uploadFile(file);
+      savePdfs([
+        ...pdfs,
+        {
+          id: createId("link-pdf"),
+          url,
+          name: file.name,
+          caption: "",
+          caption_font_size: 16,
+          caption_font_family: "Arial, sans-serif",
+          caption_color: "#111827",
+          caption_background_color: "transparent",
+          caption_text_align: "left",
+          caption_font_weight: "normal",
+          caption_font_style: "normal",
+          caption_text_decoration: "none",
+        },
+      ]);
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "PDF 업로드 실패");
+    } finally { setUploading(false); }
+  }
+
+  function updatePdf(index: number, patch: Partial<NonNullable<SectionContent["link_page_pdfs"]>[number]>) {
+    savePdfs(pdfs.map((pdf, pdfIndex) => pdfIndex === index ? { ...pdf, ...patch } : pdf));
+  }
+
+  function moveImage(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= images.length) return;
+    const next = [...images];
+    [next[index], next[target]] = [next[target], next[index]];
+    onUpdate({ link_page_images: next });
+  }
+
+  function updateImage(index: number, patch: Partial<NonNullable<SectionContent["link_page_images"]>[number]>) {
+    const next = images.map((image, imageIndex) =>
+      imageIndex === index ? { ...image, ...patch } : image,
+    );
+    onUpdate({ link_page_images: next });
+  }
+
+  function changePageKind(nextKind: "blank" | "restaurant-menu") {
+    if (nextKind === pageKind) return;
+
+    const message =
+      nextKind === "restaurant-menu"
+        ? "이 페이지에 Restaurant Menu를 표시할까요?\n\n기존 HTML, 사진, PDF 데이터는 삭제하지 않고 보관됩니다."
+        : "Restaurant Menu를 이 페이지에서 제거하고 일반 페이지 편집으로 바꿀까요?\n\n가져온 메뉴 DB 데이터는 삭제되지 않습니다.";
+
+    if (!window.confirm(message)) return;
+    onUpdate({ link_page_kind: nextKind });
+  }
+
+  const pageTypeSelector = (
+    <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+      <p className="text-sm font-black text-gray-950">페이지에 무엇을 표시할까요?</p>
+      <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">
+        페이지를 만든 뒤에도 언제든 추가하거나 제거하고 다른 형식으로 바꿀 수 있습니다.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => changePageKind("blank")}
+          className={`rounded-xl border px-3 py-3 text-left transition ${
+            pageKind === "blank"
+              ? "border-violet-600 bg-violet-600 text-white shadow-sm"
+              : "border-gray-200 bg-white text-gray-900 hover:border-violet-300"
+          }`}
+        >
+          <span className="block text-lg">📄</span>
+          <span className="mt-1 block text-xs font-black">일반 페이지</span>
+          <span className={`mt-1 block text-[10px] font-semibold leading-4 ${pageKind === "blank" ? "text-white/75" : "text-gray-500"}`}>
+            HTML · 사진 · PDF
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => changePageKind("restaurant-menu")}
+          className={`rounded-xl border px-3 py-3 text-left transition ${
+            pageKind === "restaurant-menu"
+              ? "border-orange-600 bg-orange-600 text-white shadow-sm"
+              : "border-gray-200 bg-white text-gray-900 hover:border-orange-300"
+          }`}
+        >
+          <span className="block text-lg">🍽</span>
+          <span className="mt-1 block text-xs font-black">Restaurant Menu</span>
+          <span className={`mt-1 block text-[10px] font-semibold leading-4 ${pageKind === "restaurant-menu" ? "text-white/80" : "text-gray-500"}`}>
+            DoorDash 스타일 메뉴
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+
+  if (pageKind === "restaurant-menu") {
+    return (
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">Link Page Editor</p>
+        <h2 className="mt-1 text-xl font-black text-gray-950">{section.title || "링크 페이지"}</h2>
+        <p className="mt-2 text-xs leading-5 text-gray-500">
+          이 페이지는 DB에 저장된 카테고리와 메뉴를 자동으로 표시합니다.
+        </p>
+
+        {pageTypeSelector}
+
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🍽</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-emerald-950">Restaurant Menu가 표시 중입니다</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-emerald-800">
+                카테고리와 메뉴는 CSV 가져오기 데이터에서 자동으로 갱신됩니다. 웹과 모바일 모두 DoorDash 스타일로 표시됩니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-white px-3 py-3 text-xs font-bold text-gray-700">
+            공개 주소: /business/{businessId}/website/{slugifyMenuValue(String(section.content?.page_slug || section.title || "menu"))}
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-emerald-200 bg-white p-3">
+            <label className="text-[11px] font-black text-gray-700">
+              메뉴 배경색
+              <input
+                type="color"
+                value={String(section.content?.restaurant_menu_background_color || "#ffffff")}
+                onChange={(event) =>
+                  onUpdate({ restaurant_menu_background_color: event.target.value })
+                }
+                className="mt-2 h-10 w-full cursor-pointer rounded-lg border border-gray-200 bg-white p-1"
+              />
+            </label>
+            <label className="text-[11px] font-black text-gray-700">
+              메뉴 글자색
+              <input
+                type="color"
+                value={String(section.content?.restaurant_menu_text_color || "#111827")}
+                onChange={(event) =>
+                  onUpdate({ restaurant_menu_text_color: event.target.value })
+                }
+                className="mt-2 h-10 w-full cursor-pointer rounded-lg border border-gray-200 bg-white p-1"
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
+            <label className="flex items-center gap-2.5 text-xs font-black text-gray-800">
+              <input
+                type="checkbox"
+                checked={section.content?.restaurant_menu_scroll_top_enabled !== false}
+                onChange={(event) =>
+                  onUpdate({ restaurant_menu_scroll_top_enabled: event.target.checked })
+                }
+                className="h-4 w-4"
+              />
+              위로가기 버튼 사용
+            </label>
+
+            {section.content?.restaurant_menu_scroll_top_enabled !== false ? (
+              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[11px] font-black text-gray-700">
+                    버튼 색상
+                    <input
+                      type="color"
+                      value={String(section.content?.restaurant_menu_scroll_top_button_color || "#111827")}
+                      onChange={(event) =>
+                        onUpdate({ restaurant_menu_scroll_top_button_color: event.target.value })
+                      }
+                      className="mt-2 h-10 w-full cursor-pointer rounded-lg border border-gray-200 bg-white p-1"
+                    />
+                  </label>
+                  <label className="text-[11px] font-black text-gray-700">
+                    아이콘 색상
+                    <input
+                      type="color"
+                      value={String(section.content?.restaurant_menu_scroll_top_icon_color || "#ffffff")}
+                      onChange={(event) =>
+                        onUpdate({ restaurant_menu_scroll_top_icon_color: event.target.value })
+                      }
+                      className="mt-2 h-10 w-full cursor-pointer rounded-lg border border-gray-200 bg-white p-1"
+                    />
+                  </label>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-black text-gray-700">표시 위치</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-black ${
+                      section.content?.restaurant_menu_scroll_top_position === "left"
+                        ? "border-gray-200 bg-white text-gray-700"
+                        : "border-emerald-500 bg-emerald-50 text-emerald-900"
+                    }`}>
+                      <input
+                        type="radio"
+                        name={`restaurant-menu-scroll-position-${section.id}`}
+                        checked={section.content?.restaurant_menu_scroll_top_position !== "left"}
+                        onChange={() => onUpdate({ restaurant_menu_scroll_top_position: "right" })}
+                      />
+                      오른쪽 아래
+                    </label>
+                    <label className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-black ${
+                      section.content?.restaurant_menu_scroll_top_position === "left"
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-900"
+                        : "border-gray-200 bg-white text-gray-700"
+                    }`}>
+                      <input
+                        type="radio"
+                        name={`restaurant-menu-scroll-position-${section.id}`}
+                        checked={section.content?.restaurant_menu_scroll_top_position === "left"}
+                        onChange={() => onUpdate({ restaurant_menu_scroll_top_position: "left" })}
+                      />
+                      왼쪽 아래
+                    </label>
+                  </div>
+                </div>
+
+                <p className="text-[10px] font-semibold leading-4 text-gray-500">
+                  페이지를 1,500px 이상 내리면 선택한 위치에 버튼이 나타납니다. 모바일에서는 하단 안전 영역 위에 표시됩니다.
+                </p>
+              </div>
+            ) : null}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => changePageKind("blank")}
+            className="mt-3 w-full rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-600 hover:bg-red-50"
+          >
+            Restaurant Menu 제거하고 일반 페이지로 변경
+          </button>
+          <p className="mt-2 text-[10px] font-semibold leading-4 text-gray-500">
+            이 버튼은 페이지에서 메뉴 표시만 제거합니다. Supabase의 메뉴와 이미지는 삭제하지 않습니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">Link Page Editor</p>
+      <h2 className="mt-1 text-xl font-black text-gray-950">{section.title || "링크 페이지"}</h2>
+      <p className="mt-2 text-xs leading-5 text-gray-500">HTML 모달에서 바탕색, 셀 나누기, 이미지 삽입을 사용할 수 있습니다. 사진과 PDF 기능도 그대로 유지됩니다.</p>
+
+      {pageTypeSelector}
+
+      <div className="mt-5 rounded-2xl border border-gray-200 p-4">
+        <button type="button" onClick={() => setHtmlOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 text-left">
+          <span className="text-sm font-black text-gray-900">1. HTML 편집</span>
+          <span className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">{htmlOpen ? "접기 ▲" : "펼치기 ▼"}</span>
+        </button>
+        {htmlOpen ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setHtmlModalOpen(true)}
+              className="flex w-full items-center justify-center rounded-xl bg-violet-600 px-4 py-3 text-sm font-black text-white hover:bg-violet-700"
+            >
+              크게 열어서 HTML 편집
+            </button>
+            <div className="mt-3 max-h-44 overflow-hidden rounded-xl border border-gray-200 bg-white p-3">
+              {html ? (
+                <div className="pointer-events-none origin-top scale-[0.78]" style={{ width: "128%", ...htmlEditorStyle }} dangerouslySetInnerHTML={{ __html: sanitizeLinkPageHtml(html) }} />
+              ) : (
+                <p className="py-8 text-center text-xs font-bold text-gray-400">아직 HTML 내용이 없습니다.</p>
+              )}
+            </div>
+            <button type="button" onClick={clearLinkPageHtml} className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700">HTML 완전히 지우기</button>
+          </div>
+        ) : null}
+      </div>
+
+      {htmlModalOpen ? (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-black/70 p-3 sm:p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setHtmlModalOpen(false);
+          }}
+        >
+          <div className="flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-200 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">HTML Editor</p>
+                <h3 className="mt-1 text-xl font-black text-gray-950">{section.title || "링크 페이지"} HTML 편집</h3>
+              </div>
+              <button type="button" onClick={() => setHtmlModalOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-2xl font-black text-gray-700">×</button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto bg-gray-100 p-3 sm:p-5">
+              <RichWebPasteBox
+                key={`${section.id}-${html ? "filled" : "empty"}`}
+                value={html}
+                onChange={(nextHtml) => onUpdate({ link_page_html: nextHtml })}
+                editorStyle={htmlEditorStyle}
+                onUploadImage={uploadFile}
+                sectionLinkOptions={sectionLinkOptions}
+                pageLinkOptions={pageLinkOptions}
+                large
+              />
+            </div>
+
+            <div className="border-t border-gray-200 bg-white px-4 py-4 sm:px-6">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+                <label className="block">
+                  <span className="text-[11px] font-black text-gray-600">글자 크기</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input type="range" min="10" max="48" value={htmlFontSize} onChange={(event) => onUpdate({ link_page_html_font_size: Number(event.target.value) })} className="min-w-0 flex-1" />
+                    <span className="w-10 text-right text-xs font-black text-violet-700">{htmlFontSize}px</span>
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="text-[11px] font-black text-gray-600">폰트</span>
+                  <select value={htmlFontFamily} onChange={(event) => onUpdate({ link_page_html_font_family: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs font-bold">
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="Verdana, sans-serif">Verdana</option>
+                    <option value="Tahoma, sans-serif">Tahoma</option>
+                    <option value="Georgia, serif">Georgia</option>
+                    <option value="'Times New Roman', serif">Times New Roman</option>
+                    <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                    <option value="'Noto Sans KR', sans-serif">Noto Sans KR</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-[11px] font-black text-gray-600">글자 색상</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input type="color" value={htmlColor} onChange={(event) => onUpdate({ link_page_html_color: event.target.value })} className="h-9 w-12 cursor-pointer rounded-lg border border-gray-300 bg-white p-1" />
+                    <input value={htmlColor} onChange={(event) => onUpdate({ link_page_html_color: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-xs font-bold" />
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="text-[11px] font-black text-gray-600">에디터 바탕색</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input type="color" value={htmlBackgroundColor} onChange={(event) => onUpdate({ link_page_html_background_color: event.target.value })} className="h-9 w-12 rounded-lg border border-gray-300 bg-white p-1" />
+                    <input type="text" value={htmlBackgroundColor} onChange={(event) => onUpdate({ link_page_html_background_color: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-xs font-bold" />
+                  </div>
+                </label>
+
+                <div>
+                  <span className="text-[11px] font-black text-gray-600">정렬</span>
+                  <div className="mt-1 grid grid-cols-3 gap-1">
+                    {([['left','왼쪽'],['center','가운데'],['right','오른쪽']] as const).map(([value,label]) => (
+                      <button key={value} type="button" onClick={() => onUpdate({ link_page_html_text_align: value })} className={`rounded-lg px-1 py-2 text-[10px] font-black ${htmlTextAlign === value ? "bg-violet-600 text-white" : "bg-gray-100 text-gray-700"}`}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-black text-gray-600">스타일</span>
+                  <div className="mt-1 grid grid-cols-3 gap-1">
+                    <button type="button" onClick={() => onUpdate({ link_page_html_font_weight: htmlFontWeight === "bold" ? "normal" : "bold" })} className={`rounded-lg py-2 text-xs font-black ${htmlFontWeight === "bold" ? "bg-gray-950 text-white" : "bg-gray-100 text-gray-700"}`}>B</button>
+                    <button type="button" onClick={() => onUpdate({ link_page_html_font_style: htmlFontStyle === "italic" ? "normal" : "italic" })} className={`rounded-lg py-2 text-xs font-black italic ${htmlFontStyle === "italic" ? "bg-gray-950 text-white" : "bg-gray-100 text-gray-700"}`}>I</button>
+                    <button type="button" onClick={() => onUpdate({ link_page_html_text_decoration: htmlTextDecoration === "underline" ? "none" : "underline" })} className={`rounded-lg py-2 text-xs font-black underline ${htmlTextDecoration === "underline" ? "bg-gray-950 text-white" : "bg-gray-100 text-gray-700"}`}>U</button>
+                  </div>
+                </div>
+
+                <label className="block">
+                  <span className="text-[11px] font-black text-gray-600">줄 간격</span>
+                  <input type="range" min="1" max="2.5" step="0.05" value={htmlLineHeight} onChange={(event) => onUpdate({ link_page_html_line_height: Number(event.target.value) })} className="mt-3 w-full" />
+                </label>
+
+                <button type="button" onClick={clearLinkPageHtml} className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700">HTML 완전히 지우기</button>
+                <button type="button" onClick={() => setHtmlModalOpen(false)} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white">편집 완료</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4 rounded-2xl border border-gray-200 p-4">
+        <p className="text-sm font-black text-gray-900">2. 페이지 디자인</p>
+        <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
+          <label className="text-xs font-bold text-gray-600">페이지 안쪽 컬러</label>
+          <input type="color" value={backgroundColor} onChange={(event) => onUpdate({ link_page_background_color: event.target.value })} className="h-10 w-14 cursor-pointer rounded-lg border border-gray-200 bg-white p-1" />
+        </div>
+        <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-3">
+          <div>
+            <label className="text-xs font-bold text-gray-600">화면 좌우 바깥 컬러</label>
+            <p className="mt-1 text-[11px] font-semibold text-gray-400">데스크톱에서 사이트 양쪽 여백에 표시됩니다.</p>
+          </div>
+          <input type="color" value={outerBackgroundColor} onChange={(event) => onUpdateWebsiteSettings({ outer_background_color: event.target.value })} className="h-10 w-14 cursor-pointer rounded-lg border border-gray-200 bg-white p-1" />
+        </div>
+        <p className="mt-4 text-xs font-bold text-gray-600">페이지 넓이</p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {([['normal','기본'],['wide','넓게'],['full','전체 폭']] as const).map(([value,label]) => (
+            <button key={value} type="button" onClick={() => onUpdate({ link_page_width: value })} className={`rounded-xl px-2 py-2.5 text-xs font-black ${widthMode === value ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-700'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-gray-200 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-black text-gray-900">3. 사진 추가</p>
+          <span className="text-xs font-black text-gray-500">{images.length} / 8</span>
+        </div>
+        <p className="mt-3 text-xs font-bold text-gray-600">표시 방식</p>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {([['stack','일렬 나열'],['flipbook','플립북'],['scroll','가로 스크롤']] as const).map(([value,label]) => (
+            <button key={value} type="button" onClick={() => onUpdate({ link_page_image_mode: value })} className={`rounded-xl px-2 py-2.5 text-[11px] font-black ${imageMode === value ? 'bg-violet-600 text-white' : 'bg-violet-50 text-violet-700'}`}>{label}</button>
+          ))}
+        </div>
+        <label className={`mt-3 flex items-center justify-center rounded-xl border-2 border-dashed px-4 py-4 text-sm font-black ${images.length >= 8 || uploading ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400' : 'cursor-pointer border-violet-300 bg-violet-50 text-violet-700'}`}>
+          {uploading ? "압축 후 업로드 중..." : images.length >= 8 ? "사진 8장 등록 완료" : `＋ 사진 추가 (${8 - images.length}장 가능)`}
+          <input type="file" accept="image/*" multiple disabled={uploading || images.length >= 8} onChange={(event) => { void addImages(event.target.files); event.currentTarget.value = ""; }} className="hidden" />
+        </label>
+        <p className="mt-2 text-[11px] leading-5 text-gray-500">업로드 전에 긴 쪽을 최대 1800px로 줄이고 WebP 품질 82%로 압축하여 저장합니다.</p>
+        <div className="mt-3 space-y-3">
+          {images.map((image, index) => {
+            const captionFontSize = Math.max(10, Math.min(48, Number(image.caption_font_size || 16)));
+            const captionFontFamily = String(image.caption_font_family || "Arial, sans-serif");
+            const captionColor = String(image.caption_color || "#111827");
+            const captionBackgroundColor = String(image.caption_background_color || "transparent");
+            const captionTextAlign = (image.caption_text_align || "left") as TextAlign;
+
+            return (
+              <div key={image.id || `${image.url}-${index}`} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                <div className="flex items-center gap-2">
+                  <img src={image.url} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                  <span className="min-w-0 flex-1 truncate text-xs font-black text-gray-700">사진 {index + 1}</span>
+                  <button type="button" onClick={() => moveImage(index, -1)} disabled={index === 0} className="rounded-lg bg-white px-2 py-1 text-xs font-black disabled:opacity-30">↑</button>
+                  <button type="button" onClick={() => moveImage(index, 1)} disabled={index === images.length - 1} className="rounded-lg bg-white px-2 py-1 text-xs font-black disabled:opacity-30">↓</button>
+                  <button type="button" onClick={() => onUpdate({ link_page_images: images.filter((_, i) => i !== index) })} className="rounded-lg bg-red-50 px-2 py-1 text-xs font-black text-red-700">삭제</button>
+                </div>
+
+                <label className="mt-3 block">
+                  <span className="text-[11px] font-black text-gray-600">이 사진 아래에 표시할 글</span>
+                  <textarea
+                    value={String(image.caption || "")}
+                    onChange={(event) => updateImage(index, { caption: event.target.value })}
+                    rows={3}
+                    placeholder="사진 설명이나 다음 사진 사이에 들어갈 글을 입력하세요."
+                    className="mt-1 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500"
+                  />
+                </label>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">글자 크기</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input type="range" min="10" max="48" value={captionFontSize} onChange={(event) => updateImage(index, { caption_font_size: Number(event.target.value) })} className="min-w-0 flex-1" />
+                      <span className="w-9 text-right text-[10px] font-black text-violet-700">{captionFontSize}px</span>
+                    </div>
+                  </label>
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">폰트</span>
+                    <select value={captionFontFamily} onChange={(event) => updateImage(index, { caption_font_family: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs font-bold">
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="Verdana, sans-serif">Verdana</option>
+                      <option value="Tahoma, sans-serif">Tahoma</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="'Noto Sans KR', sans-serif">Noto Sans KR</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">글자 색상</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input type="color" value={captionColor} onChange={(event) => updateImage(index, { caption_color: event.target.value })} className="h-9 w-12 rounded-lg border border-gray-300 bg-white p-1" />
+                      <input value={captionColor} onChange={(event) => updateImage(index, { caption_color: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-xs font-bold" />
+                    </div>
+                  </label>
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">글 배경색</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input type="color" value={captionBackgroundColor === "transparent" ? "#ffffff" : captionBackgroundColor} onChange={(event) => updateImage(index, { caption_background_color: event.target.value })} className="h-9 w-12 rounded-lg border border-gray-300 bg-white p-1" />
+                      <button type="button" onClick={() => updateImage(index, { caption_background_color: "transparent" })} className="rounded-lg bg-white px-3 py-2 text-[10px] font-black text-gray-600">투명</button>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  {([['left','왼쪽'],['center','가운데'],['right','오른쪽']] as const).map(([value,label]) => (
+                    <button key={value} type="button" onClick={() => updateImage(index, { caption_text_align: value })} className={`rounded-lg px-2 py-2 text-[10px] font-black ${captionTextAlign === value ? "bg-violet-600 text-white" : "bg-white text-gray-700"}`}>{label}</button>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  <button type="button" onClick={() => updateImage(index, { caption_font_weight: image.caption_font_weight === "bold" ? "normal" : "bold" })} className={`rounded-lg py-2 text-xs font-black ${image.caption_font_weight === "bold" ? "bg-gray-950 text-white" : "bg-white text-gray-700"}`}>B</button>
+                  <button type="button" onClick={() => updateImage(index, { caption_font_style: image.caption_font_style === "italic" ? "normal" : "italic" })} className={`rounded-lg py-2 text-xs font-black italic ${image.caption_font_style === "italic" ? "bg-gray-950 text-white" : "bg-white text-gray-700"}`}>I</button>
+                  <button type="button" onClick={() => updateImage(index, { caption_text_decoration: image.caption_text_decoration === "underline" ? "none" : "underline" })} className={`rounded-lg py-2 text-xs font-black underline ${image.caption_text_decoration === "underline" ? "bg-gray-950 text-white" : "bg-white text-gray-700"}`}>U</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-gray-200 p-4">
+        <p className="text-sm font-black text-gray-900">4. PDF 플립북 · 최대 2개</p>
+        <p className="mt-1 text-[11px] leading-5 text-gray-500">첫 번째 PDF 아래에 입력한 글이 두 번째 PDF와의 사이에 표시됩니다.</p>
+
+        <label className={`mt-3 flex items-center justify-center rounded-xl border-2 border-dashed px-4 py-4 text-sm font-black ${pdfs.length >= 2 || uploading ? "cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400" : "cursor-pointer border-blue-300 bg-blue-50 text-blue-700"}`}>
+          {uploading ? "업로드 중..." : pdfs.length >= 2 ? "PDF 2개 등록 완료" : `＋ PDF 추가 (${2 - pdfs.length}개 가능)`}
+          <input type="file" accept="application/pdf,.pdf" disabled={uploading || pdfs.length >= 2} onChange={(event) => { void addPdf(event.target.files?.[0]); event.currentTarget.value = ""; }} className="hidden" />
+        </label>
+
+        <div className="mt-3 space-y-4">
+          {pdfs.map((pdf, index) => {
+            const captionFontSize = Math.max(10, Math.min(48, Number(pdf.caption_font_size || 16)));
+            const captionFontFamily = String(pdf.caption_font_family || "Arial, sans-serif");
+            const captionColor = String(pdf.caption_color || "#111827");
+            const captionBackgroundColor = String(pdf.caption_background_color || "transparent");
+            const captionTextAlign = (pdf.caption_text_align || "left") as TextAlign;
+
+            return (
+              <div key={pdf.id || `${pdf.url}-${index}`} className="rounded-2xl border border-blue-100 bg-blue-50/40 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-black text-white">PDF {index + 1}</span>
+                  <p className="min-w-0 flex-1 truncate text-xs font-black text-gray-800">{String(pdf.name || `PDF ${index + 1}`)}</p>
+                  <button type="button" onClick={() => savePdfs(pdfs.filter((_, pdfIndex) => pdfIndex !== index))} className="rounded-lg bg-red-50 px-2 py-1 text-xs font-black text-red-700">삭제</button>
+                </div>
+
+                <label className="mt-3 block">
+                  <span className="text-[11px] font-black text-gray-600">{index === 0 ? "첫 번째 PDF와 두 번째 PDF 사이에 표시할 글" : "두 번째 PDF 아래에 표시할 글"}</span>
+                  <textarea
+                    value={String(pdf.caption || "")}
+                    onChange={(event) => updatePdf(index, { caption: event.target.value })}
+                    rows={3}
+                    placeholder={index === 0 ? "두 PDF 사이에 들어갈 안내문이나 설명을 입력하세요." : "두 번째 PDF 아래에 표시할 설명을 입력하세요."}
+                    className="mt-1 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </label>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">글자 크기</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input type="range" min="10" max="48" value={captionFontSize} onChange={(event) => updatePdf(index, { caption_font_size: Number(event.target.value) })} className="min-w-0 flex-1" />
+                      <span className="w-9 text-right text-[10px] font-black text-blue-700">{captionFontSize}px</span>
+                    </div>
+                  </label>
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">폰트</span>
+                    <select value={captionFontFamily} onChange={(event) => updatePdf(index, { caption_font_family: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs font-bold">
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="Verdana, sans-serif">Verdana</option>
+                      <option value="Tahoma, sans-serif">Tahoma</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="'Times New Roman', serif">Times New Roman</option>
+                      <option value="'Noto Sans KR', sans-serif">Noto Sans KR</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">글자 색상</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input type="color" value={captionColor} onChange={(event) => updatePdf(index, { caption_color: event.target.value })} className="h-9 w-12 rounded-lg border border-gray-300 bg-white p-1" />
+                      <input value={captionColor} onChange={(event) => updatePdf(index, { caption_color: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-2 text-xs font-bold" />
+                    </div>
+                  </label>
+                  <label>
+                    <span className="text-[10px] font-black text-gray-500">글 배경색</span>
+                    <div className="mt-1 flex items-center gap-2">
+                      <input type="color" value={captionBackgroundColor === "transparent" ? "#ffffff" : captionBackgroundColor} onChange={(event) => updatePdf(index, { caption_background_color: event.target.value })} className="h-9 w-12 rounded-lg border border-gray-300 bg-white p-1" />
+                      <button type="button" onClick={() => updatePdf(index, { caption_background_color: "transparent" })} className="rounded-lg bg-white px-3 py-2 text-[10px] font-black text-gray-600">투명</button>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  {([["left","왼쪽"],["center","가운데"],["right","오른쪽"]] as const).map(([value,label]) => (
+                    <button key={value} type="button" onClick={() => updatePdf(index, { caption_text_align: value })} className={`rounded-lg px-2 py-2 text-[10px] font-black ${captionTextAlign === value ? "bg-blue-600 text-white" : "bg-white text-gray-700"}`}>{label}</button>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  <button type="button" onClick={() => updatePdf(index, { caption_font_weight: pdf.caption_font_weight === "bold" ? "normal" : "bold" })} className={`rounded-lg py-2 text-xs font-black ${pdf.caption_font_weight === "bold" ? "bg-gray-950 text-white" : "bg-white text-gray-700"}`}>B</button>
+                  <button type="button" onClick={() => updatePdf(index, { caption_font_style: pdf.caption_font_style === "italic" ? "normal" : "italic" })} className={`rounded-lg py-2 text-xs font-black italic ${pdf.caption_font_style === "italic" ? "bg-gray-950 text-white" : "bg-white text-gray-700"}`}>I</button>
+                  <button type="button" onClick={() => updatePdf(index, { caption_text_decoration: pdf.caption_text_decoration === "underline" ? "none" : "underline" })} className={`rounded-lg py-2 text-xs font-black underline ${pdf.caption_text_decoration === "underline" ? "bg-gray-950 text-white" : "bg-white text-gray-700"}`}>U</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {uploadError ? <p className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{uploadError}</p> : null}
+    </div>
+  );
+}
+
+function RightPanel(props: {
+  selection: Selection;
+  selectedCell: GridCell | null;
+  selectedSection: BusinessSection | null;
+  heroSection: BusinessSection | null;
+  business: Business;
+  websiteSettings: WebsiteSettings;
+  sections: BusinessSection[];
+  businessId: string;
+  adminKey: string;
+  onUpdateBusiness: (patch: Partial<Business>) => void;
+  onUpdateWebsiteSettings: (patch: Partial<WebsiteSettings>) => void;
+  onUpdateSection: (sectionId: number, patch: Partial<BusinessSection>) => void;
+  onUpdateSectionContent: (sectionId: number, patch: Partial<SectionContent>) => void;
+  onUpdateCell: (area: "header" | "hero", cellId: string, patch: Partial<GridCell>, layoutId?: string) => void;
+  onMergeCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
+  onSplitCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
+  onSetGridColumns: (area: "header" | "hero", columnCount: number, layoutId?: string) => void;
+  onSetGridRows: (rowCount: number) => void;
+  onSetSelectedCellRows: (area: "header" | "hero", cellId: string, rowCount: number, layoutId?: string) => void;
+  gridRowCount: number;
+  gridColumnCount: number;
+  onDuplicateCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
+  onClearCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
+  onShowImageGuide: (
+    area: "header" | "hero",
+    cellId: string,
+    title: string,
+  ) => void;
+}) {
+  const { selection, selectedCell, selectedSection, heroSection, business, websiteSettings } = props;
+  const [cellTypePickerOpen, setCellTypePickerOpen] = useState(false);
+  const [textEditorOpen, setTextEditorOpen] = useState(false);
+  const [textEditorHtml, setTextEditorHtml] = useState("");
+  const [selectionFontSize, setSelectionFontSize] = useState(24);
+  const [inputFontSize, setInputFontSize] = useState(24);
+  const [inputFontFamily, setInputFontFamily] = useState<GridCell["font_family"]>("sans");
+  const [inputFontWeight, setInputFontWeight] = useState<GridCell["font_weight"]>("normal");
+  const [inputFontStyle, setInputFontStyle] = useState<"normal" | "italic">("normal");
+  const [inputTextDecoration, setInputTextDecoration] = useState<"none" | "underline">("none");
+  const [inputColor, setInputColor] = useState("#111827");
+  const [inputBackgroundColor, setInputBackgroundColor] = useState("#ffffff");
+  const [inputTextAlign, setInputTextAlign] = useState<TextAlign>("left");
+  const [textLinkType, setTextLinkType] = useState<"section" | "page">("section");
+  const [textLinkValue, setTextLinkValue] = useState("");
+  const [textEditorMessage, setTextEditorMessage] = useState("");
+  const textEditorRef = useRef<HTMLDivElement>(null);
+  const savedTextRangeRef = useRef<Range | null>(null);
+  const textEditorInitializedRef = useRef(false);
+
+  function openTextEditor() {
+    const initialHtml = selectedCell?.rich_text_html
+      ? sanitizeCellRichTextHtml(selectedCell.rich_text_html)
+      : escapeCellText(selectedCell?.text || "");
+
+    setTextEditorHtml(initialHtml);
+    setSelectionFontSize(selectedCell?.font_size || 24);
+    setInputFontSize(selectedCell?.font_size || 24);
+    setInputFontFamily(selectedCell?.font_family || "sans");
+    setInputFontWeight(selectedCell?.font_weight || "normal");
+    setInputFontStyle(selectedCell?.font_style || "normal");
+    setInputTextDecoration(selectedCell?.text_decoration || "none");
+    setInputColor(selectedCell?.color || "#111827");
+    setInputBackgroundColor(
+      selectedCell?.background_color === "transparent"
+        ? "#ffffff"
+        : selectedCell?.background_color || "#ffffff",
+    );
+    setInputTextAlign(selectedCell?.text_align || "left");
+    setTextLinkType("section");
+    setTextLinkValue("");
+    setTextEditorMessage("");
+    savedTextRangeRef.current = null;
+    textEditorInitializedRef.current = false;
+    setTextEditorOpen(true);
+  }
+
+  useEffect(() => {
+    function handleOpenTextEditor(event: Event) {
+      const customEvent = event as CustomEvent<{ cellId?: string }>;
+      const requestedCellId = customEvent.detail?.cellId;
+
+      if (
+        requestedCellId &&
+        selectedCell?.id === requestedCellId &&
+        (selectedCell.type === "text" || selectedCell.type === "title")
+      ) {
+        openTextEditor();
+      }
+    }
+
+    window.addEventListener("website-builder-open-text-editor", handleOpenTextEditor);
+    return () => window.removeEventListener("website-builder-open-text-editor", handleOpenTextEditor);
+  }, [selectedCell]);
+
+  useEffect(() => {
+    if (!textEditorOpen || !textEditorRef.current) return;
+    if (textEditorInitializedRef.current) return;
+
+    textEditorRef.current.innerHTML = textEditorHtml;
+    textEditorInitializedRef.current = true;
+
+    window.setTimeout(() => {
+      textEditorRef.current?.focus();
+    }, 0);
+  }, [textEditorOpen, textEditorHtml]);
+
+  function rememberTextSelection() {
+    const editor = textEditorRef.current;
+    const selectionObject = window.getSelection();
+    if (!editor || !selectionObject || selectionObject.rangeCount === 0) return;
+
+    const range = selectionObject.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) {
+      savedTextRangeRef.current = range.cloneRange();
+    }
+  }
+
+  function restoreTextSelection() {
+    const editor = textEditorRef.current;
+    const range = savedTextRangeRef.current;
+    if (!editor) return false;
+
+    editor.focus({ preventScroll: true });
+    if (!range) return false;
+
+    const selectionObject = window.getSelection();
+    if (!selectionObject) return false;
+
+    try {
+      selectionObject.removeAllRanges();
+      selectionObject.addRange(range);
+      return true;
+    } catch {
+      savedTextRangeRef.current = null;
+      return false;
+    }
+  }
+
+  function syncEditorHtml() {
+    const editor = textEditorRef.current;
+    if (!editor) return;
+    setTextEditorHtml(editor.innerHTML);
+  }
+
+  function runRichTextCommand(command: string, value?: string) {
+    if (!restoreTextSelection()) return;
+
+    document.execCommand("styleWithCSS", false, "true");
+    document.execCommand(command, false, value);
+    syncEditorHtml();
+    rememberTextSelection();
+  }
+
+  function applyInlineStyle(styleName: "fontSize" | "fontFamily" | "color", value: string) {
+    if (!restoreTextSelection()) return;
+
+    const editor = textEditorRef.current;
+    const selectionObject = window.getSelection();
+    if (!editor || !selectionObject || selectionObject.rangeCount === 0) return;
+
+    const range = selectionObject.getRangeAt(0);
+    if (range.collapsed) return;
+
+    const span = document.createElement("span");
+    span.style.setProperty(
+      styleName.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+      value,
+    );
+
+    try {
+      const fragment = range.extractContents();
+      span.appendChild(fragment);
+      range.insertNode(span);
+
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(span);
+      selectionObject.removeAllRanges();
+      selectionObject.addRange(nextRange);
+      savedTextRangeRef.current = nextRange.cloneRange();
+    } catch {
+      return;
+    }
+
+    editor.normalize();
+    syncEditorHtml();
+  }
+
+  function applySelectedFontSize(size: number) {
+    setSelectionFontSize(size);
+    applyInlineStyle("fontSize", `${size}px`);
+  }
+
+  function applySelectedFontFamily(fontFamily: string) {
+    applyInlineStyle("fontFamily", fontFamily);
+  }
+
+  function applySelectedColor(color: string) {
+    applyInlineStyle("color", color);
+  }
+
+  function applySelectedAlignment(alignment: TextAlign) {
+    if (!restoreTextSelection()) return;
+
+    const command =
+      alignment === "center"
+        ? "justifyCenter"
+        : alignment === "right"
+          ? "justifyRight"
+          : "justifyLeft";
+
+    document.execCommand(command, false);
+    syncEditorHtml();
+    rememberTextSelection();
+  }
+
+  function recoverSelectedTextBlock() {
+    if (!restoreTextSelection()) {
+      setTextEditorMessage(
+        "먼저 편집창에서 모바일에서 잘리는 글 전체를 블록 지정하세요.",
+      );
+      return;
+    }
+
+    const editor = textEditorRef.current;
+    const selectionObject = window.getSelection();
+
+    if (
+      !editor ||
+      !selectionObject ||
+      selectionObject.rangeCount === 0 ||
+      selectionObject.isCollapsed
+    ) {
+      setTextEditorMessage(
+        "먼저 편집창에서 모바일에서 잘리는 글 전체를 블록 지정하세요.",
+      );
+      return;
+    }
+
+    const range = selectionObject.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) {
+      setTextEditorMessage("편집창 안의 글 전체를 선택하세요.");
+      return;
+    }
+
+    const fragment = range.extractContents();
+    const wrapper = document.createElement("div");
+
+    wrapper.setAttribute("data-mobile-recovered", "true");
+    wrapper.style.setProperty("display", "block");
+    wrapper.style.setProperty("width", "100%");
+    wrapper.style.setProperty("max-width", "100%");
+    wrapper.style.setProperty("min-width", "0");
+    wrapper.style.setProperty("margin-left", "0");
+    wrapper.style.setProperty("margin-right", "0");
+    wrapper.style.setProperty("left", "auto");
+    wrapper.style.setProperty("right", "auto");
+    wrapper.style.setProperty("position", "static");
+    wrapper.style.setProperty("transform", "none");
+    wrapper.style.setProperty("white-space", "normal");
+    wrapper.style.setProperty("overflow-wrap", "break-word");
+    wrapper.style.setProperty("word-break", "normal");
+    wrapper.style.setProperty("box-sizing", "border-box");
+
+    const layoutProperties = [
+      "width",
+      "min-width",
+      "max-width",
+      "left",
+      "right",
+      "top",
+      "bottom",
+      "position",
+      "transform",
+      "translate",
+      "margin-left",
+      "margin-right",
+      "float",
+      "white-space",
+      "overflow-x",
+    ];
+
+    fragment.querySelectorAll<HTMLElement>("*").forEach((element) => {
+      layoutProperties.forEach((property) =>
+        element.style.removeProperty(property),
+      );
+
+      element.removeAttribute("width");
+      element.style.setProperty("max-width", "100%");
+      element.style.setProperty("min-width", "0");
+      element.style.setProperty("box-sizing", "border-box");
+      element.style.setProperty("white-space", "normal");
+      element.style.setProperty("overflow-wrap", "break-word");
+      element.style.setProperty("word-break", "normal");
+
+      if (element instanceof HTMLImageElement) {
+        element.removeAttribute("height");
+        element.style.setProperty("width", "auto");
+        element.style.setProperty("height", "auto");
+      }
+    });
+
+    wrapper.appendChild(fragment);
+    range.insertNode(wrapper);
+
+    const nextRange = document.createRange();
+    nextRange.selectNodeContents(wrapper);
+    selectionObject.removeAllRanges();
+    selectionObject.addRange(nextRange);
+    savedTextRangeRef.current = nextRange.cloneRange();
+
+    editor.normalize();
+    syncEditorHtml();
+    setTextEditorMessage(
+      "선택한 블록의 고정 폭과 밀림 위치를 복구했습니다. 저장 버튼을 누르세요.",
+    );
+  }
+
+
+  const textSectionLinkOptions = props.sections
+    .filter(
+      (section) =>
+        section.content?.page_type !== "link-page" &&
+        section.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => {
+      const slug =
+        slugifyMenuValue(
+          String(section.title || section.section_type || ""),
+        ) || section.section_type;
+
+      return {
+        label: `${
+          section.section_type === "hero"
+            ? "Home"
+            : section.title ||
+              SECTION_LABELS[section.section_type] ||
+              section.section_type
+        }${section.content?.collapsible ? " (숨김 레이어)" : ""}`,
+        value: `#${slug}`,
+      };
+    });
+
+  const textPageLinkOptions = props.sections
+    .filter(
+      (section) =>
+        section.content?.page_type === "link-page" &&
+        section.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => {
+      const slug = slugifyMenuValue(
+        String(section.content?.page_slug || section.title || ""),
+      );
+
+      return {
+        label: section.title || slug || `페이지 ${section.id}`,
+        value: slug
+          ? `/business/${props.businessId}/website/${encodeURIComponent(slug)}`
+          : "",
+      };
+    })
+    .filter((option) => Boolean(option.value));
+
+  function applyTextLink() {
+    if (!textLinkValue) {
+      setTextEditorMessage(
+        textLinkType === "section"
+          ? "이동할 레이어를 선택하세요."
+          : "이동할 페이지를 선택하세요.",
+      );
+      return;
+    }
+
+    if (!restoreTextSelection()) {
+      setTextEditorMessage("먼저 편집창에서 링크를 줄 글씨를 블록 지정하세요.");
+      return;
+    }
+
+    const editor = textEditorRef.current;
+    const selectionObject = window.getSelection();
+
+    if (
+      !editor ||
+      !selectionObject ||
+      selectionObject.rangeCount === 0 ||
+      selectionObject.isCollapsed
+    ) {
+      setTextEditorMessage("먼저 편집창에서 링크를 줄 글씨를 블록 지정하세요.");
+      return;
+    }
+
+    const range = selectionObject.getRangeAt(0);
+
+    if (!editor.contains(range.commonAncestorContainer)) {
+      setTextEditorMessage("편집창 안의 글씨를 선택하세요.");
+      return;
+    }
+
+    const anchorElement = document.createElement("a");
+    anchorElement.href = textLinkValue;
+    anchorElement.setAttribute("data-link-type", textLinkType);
+    anchorElement.style.color = "inherit";
+    anchorElement.style.textDecoration = "underline";
+    anchorElement.style.cursor = "pointer";
+
+    try {
+      const fragment = range.extractContents();
+      anchorElement.appendChild(fragment);
+      range.insertNode(anchorElement);
+
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(anchorElement);
+      selectionObject.removeAllRanges();
+      selectionObject.addRange(nextRange);
+      savedTextRangeRef.current = nextRange.cloneRange();
+
+      editor.normalize();
+      syncEditorHtml();
+      setTextEditorMessage(
+        textLinkType === "section"
+          ? "선택한 글씨에 레이어 링크를 적용했습니다."
+          : "선택한 글씨에 페이지 링크를 적용했습니다.",
+      );
+    } catch {
+      setTextEditorMessage("선택한 글씨에 링크를 적용하지 못했습니다.");
+    }
+  }
+
+  function removeTextLink() {
+    if (!restoreTextSelection()) {
+      setTextEditorMessage("먼저 링크가 적용된 글씨를 블록 지정하세요.");
+      return;
+    }
+
+    document.execCommand("unlink", false);
+    syncEditorHtml();
+    rememberTextSelection();
+    setTextEditorMessage("선택한 글씨의 링크를 제거했습니다.");
+  }
+
+  function renderLayerNameEditor(section: BusinessSection) {
+    const currentName = String(section.title || "");
+
+    return (
+      <div className="mb-5 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
+        <p className="text-sm font-black text-violet-950">레이어 이름</p>
+        <p className="mt-1 text-xs leading-5 text-violet-700">
+          왼쪽 레이어 목록과 숨김 레이어 링크 이름에 사용됩니다.
+        </p>
+
+        <input
+          value={currentName}
+          onChange={(event) =>
+            props.onUpdateSection(section.id, {
+              title: event.target.value,
+            })
+          }
+          onBlur={(event) => {
+            const nextName = event.target.value.trim();
+
+            if (!nextName) {
+              props.onUpdateSection(section.id, {
+                title:
+                  section.section_type === "hero"
+                    ? "Home"
+                    : SECTION_LABELS[section.section_type] || "New Layer",
+              });
+              return;
+            }
+
+            if (nextName !== event.target.value) {
+              props.onUpdateSection(section.id, {
+                title: nextName,
+              });
+            }
+          }}
+          placeholder="예: POLICY"
+          className="mt-3 w-full rounded-xl border border-violet-300 bg-white px-3 py-2.5 text-sm font-bold text-gray-950 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-200"
+        />
+
+        <p className="mt-2 text-[11px] leading-5 text-violet-600">
+          이름을 바꾸면 왼쪽 목록에도 바로 반영됩니다. 변경 후 서버 저장을 눌러주세요.
+        </p>
+      </div>
+    );
+  }
+
+  function saveTextEditor() {
+    if (!selectedCell) return;
+
+    const editor = textEditorRef.current;
+    const html = sanitizeCellRichTextHtml(editor?.innerHTML || textEditorHtml);
+    const plainText = richTextToPlainText(html);
+
+    props.onUpdateCell(
+      selection.area as "header" | "hero",
+      selectedCell.id,
+      {
+        rich_text_html: html,
+        text: plainText,
+        font_size: inputFontSize,
+        font_family: inputFontFamily,
+        font_weight: inputFontWeight,
+        font_style: inputFontStyle,
+        text_decoration: inputTextDecoration,
+        color: inputColor,
+        background_color: inputBackgroundColor,
+        text_align: inputTextAlign,
+      },
+      selection.layoutId,
+    );
+
+    setTextEditorHtml(html);
+    savedTextRangeRef.current = null;
+    textEditorInitializedRef.current = false;
+    setTextEditorOpen(false);
+  }
+
+  if (selectedSection?.content?.page_type === "link-page") {
+    return (
+      <LinkPageEditor
+        section={selectedSection}
+        businessId={props.businessId}
+        adminKey={props.adminKey}
+        allSections={props.sections}
+        websiteSettings={websiteSettings}
+        onUpdateWebsiteSettings={props.onUpdateWebsiteSettings}
+        onUpdate={(patch) => props.onUpdateSectionContent(selectedSection.id, patch)}
+      />
+    );
+  }
+
+  if ((selection.area === "header" || selection.area === "hero") && selectedCell) {
+    const area = selection.area;
+    return (
+      <div>
+        {area === "hero" && heroSection
+          ? renderLayerNameEditor(heroSection)
+          : null}
+
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">선택한 칸</p>
+        <h2 className="mt-1 text-xl font-black text-gray-950">
+          {area === "header"
+            ? "Header"
+            : `${
+                heroSection?.section_type === "hero"
+                  ? "Home"
+                  : heroSection?.title ||
+                    SECTION_LABELS[heroSection?.section_type || ""] ||
+                    heroSection?.section_type ||
+                    "Layer"
+              } · 레이아웃 ${
+                Math.max(
+                  0,
+                  normalizeHeroLayouts(heroSection?.content).findIndex(
+                    (layout) => layout.id === selection.layoutId,
+                  ),
+                ) + 1
+              }`}{" "}
+          · {getCellLabel(selectedCell.type)}
+        </h2>
+
+        {area === "header" ? (
+          <details className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50">
+              <div>
+                <p className="text-sm font-black text-gray-900">
+                  Header 설정
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  배경 · 높이 · 로고 · 제목 · 아래 메뉴
+                </p>
+              </div>
+              <span className="text-lg font-black text-gray-500">⌄</span>
+            </summary>
+
+            <div className="border-t border-gray-200 p-4">
+              <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+              <p className="text-sm font-black text-blue-950">Header 전체 배경색</p>
+              <p className="mt-1 text-xs leading-5 text-blue-700">
+                여기서 색을 한 번 선택하면 로고, 제목, 메뉴를 포함한 Header 모든 칸에 같은 배경색이 적용됩니다.
+              </p>
+              <ColorInput
+                label="전체 배경색"
+                value={String(
+                  websiteSettings.header_background_color || "#ffffff",
+                )}
+                onChange={(value) =>
+                  props.onUpdateWebsiteSettings({
+                    header_background_color: value,
+                  })
+                }
+              />
+            </div>
+
+              <HeaderSubmenuEditor
+                websiteSettings={websiteSettings}
+                sections={props.sections}
+                businessId={props.businessId}
+                onUpdate={props.onUpdateWebsiteSettings}
+              />
+            </div>
+          </details>
+        ) : null}
+
+        <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setCellTypePickerOpen((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          >
+            <div>
+              <p className="text-sm font-black text-gray-800">무엇을 넣을까요?</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                현재 선택: {getCellLabel(selectedCell.type)}
+              </p>
+            </div>
+            <span
+              className={`text-lg font-black text-gray-500 transition-transform ${
+                cellTypePickerOpen ? "rotate-180" : ""
+              }`}
+            >
+              ⌄
+            </span>
+          </button>
+
+          {cellTypePickerOpen ? (
+            <div className="border-t border-gray-200 p-3">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        type: "title",
+                        display_mode: "restaurant-menu",
+                        text: "Restaurant Menu",
+                        background_color: "#ffffff",
+                        color: "#111827",
+                      },
+                      selection.layoutId,
+                    );
+                    setCellTypePickerOpen(false);
+                  }}
+                  className={`rounded-xl border p-2 text-center ${
+                    selectedCell.display_mode === "restaurant-menu"
+                      ? "border-orange-500 bg-orange-50 text-orange-700"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-orange-300 hover:bg-orange-50"
+                  }`}
+                >
+                  <span className="block text-xl">🍽</span>
+                  <span className="mt-1 block text-[11px] font-black leading-tight">
+                    Restaurant Menu
+                  </span>
+                </button>
+
+                {CELL_TYPES.map((entry) => (
+                  <button
+                    key={entry.value}
+                    type="button"
+                    onClick={() => {
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        entry.value === "menu"
+                          ? {
+                              type: "menu",
+                              menu_mode: "text",
+                              menu_items:
+                                selectedCell.menu_items &&
+                                selectedCell.menu_items.length > 0
+                                  ? selectedCell.menu_items
+                                  : [
+                                      createMenuItem("Home"),
+                                      createMenuItem("About"),
+                                    ],
+                            }
+                          : entry.value === "phone"
+                            ? {
+                                type: "phone",
+                                phone_number:
+                                  selectedCell.phone_number ||
+                                  selectedCell.text ||
+                                  "",
+                                text:
+                                  selectedCell.phone_number ||
+                                  selectedCell.text ||
+                                  "",
+                              }
+                            : entry.value === "sns"
+                              ? {
+                                  type: "sns",
+                                  sns_items: normalizeSnsItems(selectedCell),
+                                  sns_icon_size_px:
+                                    selectedCell.sns_icon_size_px || 32,
+                                  sns_icon_gap_px:
+                                    selectedCell.sns_icon_gap_px || 12,
+                                }
+                              : { type: entry.value },
+                        selection.layoutId,
+                      );
+                      setCellTypePickerOpen(false);
+                    }}
+                    className={`rounded-xl border p-2 text-center ${
+                      selectedCell.type === entry.value
+                        ? "border-gray-950 bg-gray-950 text-white"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <span className="block text-lg">{entry.icon}</span>
+                    <span className="mt-1 block text-[11px] font-bold">
+                      {entry.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {selectedCell.type === "phone" ? (
+          <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-4">
+            <Field label="전화번호">
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="예: (919) 806-0078"
+                value={selectedCell.phone_number || selectedCell.text || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    {
+                      phone_number: event.target.value,
+                      text: event.target.value,
+                    },
+                    selection.layoutId,
+                  )
+                }
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base font-bold"
+              />
+            </Field>
+            <p className="mt-2 text-xs font-semibold leading-5 text-gray-500">
+              컴퓨터에서는 전화번호가 표시되고, 휴대폰에서는 📞 아이콘만 표시됩니다. 아이콘을 누르면 바로 전화 앱이 열립니다.
+            </p>
+            {String(selectedCell.phone_number || selectedCell.text || "").trim() ? (
+              <a
+                href={normalizePhoneHref(selectedCell.phone_number || selectedCell.text)}
+                className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-black text-white"
+              >
+                📞 전화 연결 테스트
+              </a>
+            ) : null}
+          </div>
+        ) : selectedCell.type === "text" ? (
+          <button
+            type="button"
+            onClick={openTextEditor}
+            className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700"
+          >
+            텍스트 편집
+          </button>
+        ) : selectedCell.type !== "empty" &&
+        selectedCell.type !== "logo" &&
+        selectedCell.type !== "image" &&
+        selectedCell.type !== "map" &&
+        selectedCell.type !== "menu" &&
+        selectedCell.type !== "phone" &&
+        selectedCell.type !== "sns" &&
+        selectedCell.type !== "title" ? (
+          <Field label="내용">
+            <textarea
+              rows={selectedCell.type === "hours" ? 4 : 2}
+              value={selectedCell.text || ""}
+              onChange={(event) =>
+                props.onUpdateCell(area, selectedCell.id, {
+                  text: event.target.value,
+                }, selection.layoutId)
+              }
+              className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5"
+            />
+          </Field>
+        ) : null}
+
+        {selectedCell.type === "sns" ? (
+          <SnsCellEditor
+            cell={selectedCell}
+            onUpdate={(patch) =>
+              props.onUpdateCell(
+                area,
+                selectedCell.id,
+                patch,
+                selection.layoutId,
+              )
+            }
+          />
+        ) : null}
+
+        {selectedCell.type === "logo" ? (
+          <div className="space-y-4">
+            <LogoImageUploader
+              businessId={props.businessId}
+              adminKey={props.adminKey}
+              area={area}
+              cell={selectedCell}
+              onUpdate={(patch) =>
+                props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)
+              }
+              onShowGuide={() =>
+                props.onShowImageGuide(
+                  area,
+                  selectedCell.id,
+                  area === "header" ? "헤더 로고 이미지" : "로고 이미지",
+                )
+              }
+            />
+
+            <Field label="로고 이미지 주소">
+              <input
+                type="url"
+                inputMode="url"
+                placeholder="https://example.com/logo.png"
+                value={selectedCell.image_url || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { image_url: event.target.value.trim() },
+                    selection.layoutId,
+                  )
+                }
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+              <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
+                이미지 업로드 대신 로고의 공개 이미지 주소를 직접 입력할 수 있습니다.
+              </p>
+            </Field>
+
+            <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-gray-900">로고 크기</p>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    슬라이더나 숫자를 사용해 자유롭게 조절하세요.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 rounded-xl border border-gray-300 bg-white px-2">
+                  <input
+                    type="number"
+                    min={24}
+                    max={400}
+                    value={Math.round(
+                      Number(
+                        selectedCell.logo_size_px ||
+                          (area === "header"
+                            ? websiteSettings.header_logo_size_px || 56
+                            : 120),
+                      ),
+                    )}
+                    onChange={(event) => {
+                      const next = Math.max(
+                        24,
+                        Math.min(400, Number(event.target.value) || 24),
+                      );
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        { logo_size_px: next },
+                        selection.layoutId,
+                      );
+                    }}
+                    className="w-16 border-0 bg-transparent py-2 text-right text-sm font-black text-gray-900 outline-none"
+                  />
+                  <span className="text-xs font-bold text-gray-500">px</span>
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min={24}
+                max={400}
+                step={1}
+                value={Math.max(
+                  24,
+                  Math.min(
+                    400,
+                    Number(
+                      selectedCell.logo_size_px ||
+                        (area === "header"
+                          ? websiteSettings.header_logo_size_px || 56
+                          : 120),
+                    ),
+                  ),
+                )}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { logo_size_px: Number(event.target.value) },
+                    selection.layoutId,
+                  )
+                }
+                className="mt-4 w-full accent-gray-950"
+              />
+
+              <div className="mt-2 flex justify-between text-[11px] font-bold text-gray-400">
+                <span>24px</span>
+                <span>400px</span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {[60, 100, 150, 220].map((size) => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() =>
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        { logo_size_px: size },
+                        selection.layoutId,
+                      )
+                    }
+                    className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-xs font-black text-gray-700 hover:border-gray-950 hover:text-gray-950"
+                  >
+                    {size}px
+                  </button>
+                ))}
+              </div>
+
+              {area === "header" ? (
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-800">
+                  로고가 잘리면 위의 Header 크기에서 Header 높이도 함께 늘려주세요.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {selectedCell.type === "title" ? (
+          <TitleCellEditor
+            businessId={props.businessId}
+            adminKey={props.adminKey}
+            area={area}
+            cell={selectedCell}
+            business={business}
+            onOpenTextEditor={openTextEditor}
+            onUpdate={(patch) =>
+              props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)
+            }
+            onShowImageGuide={() =>
+              props.onShowImageGuide(
+                area,
+                selectedCell.id,
+                area === "header" ? "헤더 제목 이미지" : "제목 이미지",
+              )
+            }
+          />
+        ) : null}
+
+        {selectedCell.type === "menu" ? (
+          <MenuCellEditor
+            area={area}
+            cell={selectedCell}
+            sections={props.sections}
+            onUpdate={(patch) =>
+              props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)
+            }
+          />
+        ) : null}
+
+        {selectedCell.type === "image" ? (
+          <Field label="사진 URL">
+            <input
+              value={selectedCell.image_url || ""}
+              onChange={(event) =>
+                props.onUpdateCell(area, selectedCell.id, {
+                  image_url: event.target.value,
+                }, selection.layoutId)
+              }
+              placeholder="https://..."
+              className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+            />
+          </Field>
+        ) : null}
+
+        {selectedCell.type === "button" ? (
+          <>
+            <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+              <p className="text-sm font-black text-orange-900">
+                데스크톱 / 모바일 버튼 문구
+              </p>
+              <p className="mt-1 text-xs leading-5 text-orange-700">
+                데스크톱과 모바일에서 서로 다른 버튼 문구를 사용할 수 있습니다.
+              </p>
+            </div>
+
+            <Field label="데스크톱 버튼 문구">
+              <input
+                value={selectedCell.text || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { text: event.target.value },
+                    selection.layoutId,
+                  )
+                }
+                placeholder="예: ORDER ONLINE"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+            </Field>
+
+            <Field label="모바일 버튼 문구">
+              <input
+                value={selectedCell.mobile_text || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { mobile_text: event.target.value },
+                    selection.layoutId,
+                  )
+                }
+                placeholder="예: ORDER"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                비워두면 데스크톱 문구를 그대로 사용합니다.
+              </p>
+            </Field>
+
+            <Field label="버튼 링크">
+              <input
+                value={selectedCell.url || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { url: event.target.value },
+                    selection.layoutId,
+                  )
+                }
+                placeholder="예: https://doordash.com/... 또는 #about"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                외부 주소, 사이트 내부 주소(/menu), 같은 페이지 섹션(#about)을 사용할 수 있습니다.
+              </p>
+            </Field>
+
+            <Field label="버튼 글자 크기">
+              <input
+                type="range"
+                min="9"
+                max="32"
+                value={selectedCell.font_size || 14}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { font_size: Number(event.target.value) },
+                    selection.layoutId,
+                  )
+                }
+                className="w-full"
+              />
+              <p className="mt-1 text-xs font-bold text-gray-500">
+                {selectedCell.font_size || 14}px
+              </p>
+            </Field>
+
+            <Field label="버튼 너비">
+              <input
+                type="range"
+                min="70"
+                max="240"
+                value={selectedCell.button_width_px || 130}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { button_width_px: Number(event.target.value) },
+                    selection.layoutId,
+                  )
+                }
+                className="w-full"
+              />
+              <p className="mt-1 text-xs font-bold text-gray-500">
+                {selectedCell.button_width_px || 130}px
+              </p>
+            </Field>
+
+            <Field label="버튼 높이">
+              <input
+                type="range"
+                min="32"
+                max="90"
+                value={
+                  selectedCell.button_height_px ||
+                  Number(websiteSettings.header_button_height_px || 46)
+                }
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { button_height_px: Number(event.target.value) },
+                    selection.layoutId,
+                  )
+                }
+                className="w-full"
+              />
+              <p className="mt-1 text-xs font-bold text-gray-500">
+                {selectedCell.button_height_px ||
+                  Number(websiteSettings.header_button_height_px || 46)}
+                px
+              </p>
+            </Field>
+
+            <label className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 p-3">
+              <div>
+                <p className="text-sm font-black text-gray-800">
+                  글자 한 줄 유지
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  긴 버튼 문구가 두 줄로 내려가지 않게 합니다.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={selectedCell.button_no_wrap !== false}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { button_no_wrap: event.target.checked },
+                    selection.layoutId,
+                  )
+                }
+                className="h-5 w-5"
+              />
+            </label>
+
+            <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+              모바일에서는 <strong>ORDER ONLINE</strong>처럼 긴 문구보다
+              <strong> ORDER</strong> 또는 <strong>주문하기</strong>처럼 짧게
+              쓰는 것이 가장 깔끔합니다. 긴 문구를 유지하려면 버튼 글자를
+              10~12px로 줄이고 버튼 너비를 늘리세요.
+            </div>
+          </>
+        ) : null}
+
+        <div className={`mt-4 grid gap-3 ${area === "header" ? "grid-cols-1" : "grid-cols-2"}`}>
+          <ColorInput
+            label="글자 색"
+            value={selectedCell.color || "#111827"}
+            onChange={(value) =>
+              props.onUpdateCell(area, selectedCell.id, { color: value }, selection.layoutId)
+            }
+          />
+          {area !== "header" ? (
+            <ColorInput
+              label="칸 배경"
+              value={
+                selectedCell.background_color === "transparent"
+                  ? "#ffffff"
+                  : selectedCell.background_color || "#ffffff"
+              }
+              onChange={(value) =>
+                props.onUpdateCell(area, selectedCell.id, {
+                  background_color: value,
+                }, selection.layoutId)
+              }
+            />
+          ) : null}
+        </div>
+
+        <Field label={selectedCell.type === "menu" ? "메뉴 정렬" : "정렬"}>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              {(["left", "center", "right"] as TextAlign[]).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    props.onUpdateCell(area, selectedCell.id, {
+                      text_align: value,
+                    }, selection.layoutId)
+                  }
+                  className={`rounded-xl border px-3 py-2 text-sm font-bold ${
+                    selectedCell.text_align === value
+                      ? "border-gray-950 bg-gray-950 text-white"
+                      : "border-gray-200"
+                  }`}
+                >
+                  {value === "left"
+                    ? "왼쪽"
+                    : value === "right"
+                      ? "오른쪽"
+                      : "가운데"}
+                </button>
+              ))}
+            </div>
+
+            {(selectedCell.type === "menu" || selectedCell.type === "text" || selectedCell.type === "title") ? (
+              <div className="grid grid-cols-3 gap-2">
+                {(["top", "center", "bottom"] as VerticalAlign[]).map(
+                  (value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() =>
+                        props.onUpdateCell(area, selectedCell.id, {
+                          vertical_align: value,
+                        }, selection.layoutId)
+                      }
+                      className={`rounded-xl border px-3 py-2 text-sm font-bold ${
+                        selectedCell.vertical_align === value
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-200"
+                      }`}
+                    >
+                      {value === "top"
+                        ? "위"
+                        : value === "bottom"
+                          ? "아래"
+                          : "가운데"}
+                    </button>
+                  ),
+                )}
+              </div>
+            ) : null}
+          </div>
+        </Field>
+
+        {(selectedCell.type === "text" || selectedCell.type === "title") &&
+        textEditorOpen &&
+        typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[9999] flex pointer-events-auto items-center justify-center bg-black/65 p-3 sm:p-6"
+                onMouseDown={(event) => {
+                  if (event.currentTarget === event.target) setTextEditorOpen(false);
+                }}
+              >
+                <div
+                  className="flex max-h-[94vh] w-full max-w-5xl pointer-events-auto flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                >
+              <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-7">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+                    {selectedCell.type === "title" ? "Title Editor" : "Text Editor"}
+                  </p>
+                  <h3 className="mt-1 text-xl font-black text-gray-950">
+                    {selectedCell.type === "title" ? "제목 편집" : "텍스트 편집"}
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    글자를 블록 지정한 다음 크기·폰트·색상·링크·정렬을 적용하세요.
+                  </p>
+                </div>
+                <button type="button" onClick={() => setTextEditorOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-950 text-xl font-black text-white" aria-label="텍스트 편집 닫기">×</button>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
+                <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                  <p className="mb-3 text-xs font-black text-blue-900">
+                    ① 아래 편집창에서 글자를 드래그해 블록 지정 → ② 서식 선택 → ③ 저장
+                  </p>
+
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="min-w-[130px] flex-1">
+                      <span className="mb-1 block text-[11px] font-black text-gray-600">선택 글자 크기</span>
+                      <select
+                        value={selectionFontSize}
+                        onMouseDown={rememberTextSelection}
+                        onChange={(event) => applySelectedFontSize(Number(event.target.value))}
+                        className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                      >
+                        {[12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72, 84, 96].map((size) => (
+                          <option key={size} value={size}>{size}px</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="min-w-[150px] flex-1">
+                      <span className="mb-1 block text-[11px] font-black text-gray-600">선택 글자 폰트</span>
+                      <select
+                        defaultValue="Arial"
+                        onMouseDown={rememberTextSelection}
+                        onChange={(event) => applySelectedFontFamily(event.target.value)}
+                        className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                      >
+                        <option value="Arial, Helvetica, sans-serif">기본 고딕</option>
+                        <option value="Georgia, 'Times New Roman', serif">명조 / 세리프</option>
+                        <option value="'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif">둥근 글꼴</option>
+                        <option value="'Courier New', monospace">고정폭 글꼴</option>
+                      </select>
+                    </label>
+
+                    <label>
+                      <span className="mb-1 block text-[11px] font-black text-gray-600">선택 색상</span>
+                      <input
+                        type="color"
+                        value={inputColor}
+                        onMouseDown={rememberTextSelection}
+                        onChange={(event) => applySelectedColor(event.target.value)}
+                        className="h-10 w-14 rounded-xl border border-gray-300 bg-white p-1"
+                      />
+                    </label>
+
+                    <label>
+                      <span className="mb-1 block text-[11px] font-black text-gray-600">입력 기본 색상</span>
+                      <input
+                        type="color"
+                        value={inputColor}
+                        onChange={(event) => setInputColor(event.target.value)}
+                        className="h-10 w-14 rounded-xl border border-gray-300 bg-white p-1"
+                      />
+                    </label>
+
+                    <div className="flex gap-1">
+                      <button type="button" title="굵게" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={() => runRichTextCommand("bold")} className="h-10 min-w-10 rounded-xl border border-gray-300 bg-white px-3 text-sm font-black">B</button>
+                      <button type="button" title="기울임" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={() => runRichTextCommand("italic")} className="h-10 min-w-10 rounded-xl border border-gray-300 bg-white px-3 text-sm font-black italic">I</button>
+                      <button type="button" title="밑줄" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={() => runRichTextCommand("underline")} className="h-10 min-w-10 rounded-xl border border-gray-300 bg-white px-3 text-sm font-black underline">U</button>
+                    </div>
+
+                    <div className="flex gap-1">
+                      <button type="button" title="왼쪽 정렬" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={() => applySelectedAlignment("left")} className="h-10 rounded-xl border border-gray-300 bg-white px-3 text-xs font-black">왼쪽</button>
+                      <button type="button" title="가운데 정렬" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={() => applySelectedAlignment("center")} className="h-10 rounded-xl border border-gray-300 bg-white px-3 text-xs font-black">가운데</button>
+                      <button type="button" title="오른쪽 정렬" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={() => applySelectedAlignment("right")} className="h-10 rounded-xl border border-gray-300 bg-white px-3 text-xs font-black">오른쪽</button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 border-t border-blue-200 pt-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-black text-amber-950">
+                          모바일에서 글이 좌우로 잘릴 때
+                        </p>
+                        <p className="mt-1 text-[11px] leading-5 text-amber-800">
+                          잘리는 글 전체를 블록 지정한 뒤 복구하기를 누르세요.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          rememberTextSelection();
+                        }}
+                        onClick={recoverSelectedTextBlock}
+                        className="h-10 shrink-0 rounded-xl bg-amber-500 px-4 text-xs font-black text-white shadow-sm hover:bg-amber-600"
+                      >
+                        복구하기
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 border-t border-blue-200 pt-3">
+                    <p className="mb-2 text-[11px] font-black text-blue-900">
+                      선택한 글씨에 링크
+                    </p>
+
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="min-w-[125px]">
+                        <span className="mb-1 block text-[11px] font-black text-gray-600">
+                          링크 종류
+                        </span>
+                        <select
+                          value={textLinkType}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) => {
+                            setTextLinkType(
+                              event.target.value as "section" | "page",
+                            );
+                            setTextLinkValue("");
+                            setTextEditorMessage("");
+                          }}
+                          className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                        >
+                          <option value="section">레이어 링크</option>
+                          <option value="page">페이지 링크</option>
+                        </select>
+                      </label>
+
+                      <label className="min-w-[220px] flex-1">
+                        <span className="mb-1 block text-[11px] font-black text-gray-600">
+                          {textLinkType === "section"
+                            ? "이동할 레이어"
+                            : "이동할 페이지"}
+                        </span>
+                        <select
+                          value={textLinkValue}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) => setTextLinkValue(event.target.value)}
+                          className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                        >
+                          <option value="">
+                            {textLinkType === "section"
+                              ? "레이어를 선택하세요"
+                              : "페이지를 선택하세요"}
+                          </option>
+                          {(textLinkType === "section"
+                            ? textSectionLinkOptions
+                            : textPageLinkOptions
+                          ).map((option) => (
+                            <option
+                              key={`${textLinkType}-${option.value}`}
+                              value={option.value}
+                            >
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          rememberTextSelection();
+                        }}
+                        onClick={applyTextLink}
+                        className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700"
+                      >
+                        링크 적용
+                      </button>
+
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          rememberTextSelection();
+                        }}
+                        onClick={removeTextLink}
+                        className="h-10 rounded-xl border border-blue-300 bg-white px-4 text-xs font-black text-blue-700 hover:bg-blue-100"
+                      >
+                        링크 제거
+                      </button>
+                    </div>
+
+                    {textEditorMessage ? (
+                      <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-blue-800">
+                        {textEditorMessage}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <style>{`
+                  .text-cell-rich-editor a {
+                    color: #2563eb;
+                    text-decoration: underline;
+                    cursor: pointer;
+                  }
+
+                  .text-cell-rich-editor,
+                  .text-cell-rich-editor * {
+                    box-sizing: border-box;
+                    max-width: 100%;
+                  }
+
+                  .text-cell-rich-editor [data-mobile-recovered="true"],
+                  .text-cell-rich-editor [data-mobile-recovered="true"] * {
+                    min-width: 0 !important;
+                    max-width: 100% !important;
+                    transform: none !important;
+                    overflow-wrap: break-word !important;
+                    word-break: normal !important;
+                  }
+                `}</style>
+
+                <div
+                  ref={textEditorRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  autoFocus
+                  onInput={syncEditorHtml}
+                  onMouseUp={rememberTextSelection}
+                  onKeyUp={rememberTextSelection}
+                  onBlur={rememberTextSelection}
+                  className="text-cell-rich-editor min-h-[300px] w-full whitespace-pre-wrap rounded-2xl border-2 border-gray-300 px-5 py-4 text-lg leading-8 outline-none focus:border-blue-500"
+                  style={{
+                    fontSize: `${inputFontSize}px`,
+                    fontWeight:
+                      inputFontWeight === "black"
+                        ? 900
+                        : inputFontWeight === "bold"
+                          ? 700
+                          : inputFontWeight === "semibold" || inputFontWeight === "600"
+                            ? 600
+                            : 400,
+                    fontFamily:
+                      inputFontFamily === "serif"
+                        ? "Georgia, 'Times New Roman', serif"
+                        : inputFontFamily === "rounded"
+                          ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
+                          : inputFontFamily === "mono"
+                            ? "'Courier New', monospace"
+                            : "Arial, Helvetica, sans-serif",
+                    fontStyle: inputFontStyle,
+                    textDecoration: inputTextDecoration,
+                    color: inputColor,
+                    backgroundColor: inputBackgroundColor,
+                    textAlign: inputTextAlign,
+                  }}
+                />
+                <p className="mt-2 text-xs font-bold text-blue-700">
+                  먼저 편집창 안에서 원하는 글자를 드래그해 선택한 뒤 아래 서식 버튼을 누르세요. 서식은 저장 버튼을 누를 때 레이아웃에 반영됩니다.
+                </p>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-sm font-black text-gray-900">입력하는 글씨 기본 설정</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      블록 지정과 관계없이 편집창에 입력하는 전체 글씨의 기본 모양을 정합니다.
+                    </p>
+
+                    <Field label="입력 글씨 폰트">
+                      <select
+                        value={inputFontFamily || "sans"}
+                        onChange={(event) =>
+                          setInputFontFamily(event.target.value as GridCell["font_family"])
+                        }
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                      >
+                        <option value="sans">기본 고딕</option>
+                        <option value="serif">명조 / 세리프</option>
+                        <option value="rounded">둥근 글꼴</option>
+                        <option value="mono">고정폭 글꼴</option>
+                      </select>
+                    </Field>
+
+                    <Field label="입력 글씨 크기">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min="12"
+                          max="96"
+                          value={inputFontSize}
+                          onChange={(event) => setInputFontSize(Number(event.target.value))}
+                          className="min-w-0 flex-1"
+                        />
+                        <span className="w-14 rounded-lg bg-white px-2 py-2 text-center text-sm font-black">
+                          {inputFontSize}px
+                        </span>
+                      </div>
+                    </Field>
+
+                    <p className="mt-4 text-xs font-black text-gray-600">입력 글씨 모양</p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setInputFontWeight((current) =>
+                            current === "bold" ? "normal" : "bold",
+                          )
+                        }
+                        className={`rounded-xl border px-3 py-3 text-sm font-black ${
+                          inputFontWeight === "bold"
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-200 bg-white"
+                        }`}
+                      >
+                        굵게
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setInputFontStyle((current) =>
+                            current === "italic" ? "normal" : "italic",
+                          )
+                        }
+                        className={`rounded-xl border px-3 py-3 text-sm italic ${
+                          inputFontStyle === "italic"
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-200 bg-white"
+                        }`}
+                      >
+                        기울임
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setInputTextDecoration((current) =>
+                            current === "underline" ? "none" : "underline",
+                          )
+                        }
+                        className={`rounded-xl border px-3 py-3 text-sm underline ${
+                          inputTextDecoration === "underline"
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-200 bg-white"
+                        }`}
+                      >
+                        밑줄
+                      </button>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <label className="block">
+                        <span className="text-xs font-black text-gray-600">입력 글자 색</span>
+                        <input
+                          type="color"
+                          value={inputColor}
+                          onChange={(event) => setInputColor(event.target.value)}
+                          className="mt-2 h-11 w-full rounded-xl border border-gray-300 bg-white p-1"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-black text-gray-600">칸 바탕색</span>
+                        <input
+                          type="color"
+                          value={inputBackgroundColor}
+                          onChange={(event) => setInputBackgroundColor(event.target.value)}
+                          className="mt-2 h-11 w-full rounded-xl border border-gray-300 bg-white p-1"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="text-sm font-black text-gray-900">입력 글씨 정렬</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-500">편집창에 입력하는 전체 글씨의 기본 정렬을 정합니다.</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {([
+                        ["left", "왼쪽"],
+                        ["center", "가운데"],
+                        ["right", "오른쪽"],
+                      ] as Array<[TextAlign, string]>).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setInputTextAlign(value)}
+                          className={`rounded-xl border px-3 py-3 text-sm font-black ${
+                            inputTextAlign === value
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-gray-200 bg-white"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="mt-5 text-xs font-black text-gray-600">칸 전체 세로 정렬</p>
+                    <div className="mt-2 grid grid-cols-3 gap-2">
+                      {(["top", "center", "bottom"] as VerticalAlign[]).map((value) => (
+                        <button key={value} type="button" onClick={() => props.onUpdateCell(area, selectedCell.id, { vertical_align: value }, selection.layoutId)} className={`rounded-xl border px-3 py-3 text-sm font-black ${selectedCell.vertical_align === value ? "border-blue-600 bg-blue-600 text-white" : "border-gray-200 bg-white text-gray-700"}`}>
+                          {value === "top" ? "위" : value === "bottom" ? "아래" : "가운데"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4 sm:px-7">
+                <button type="button" onClick={() => setTextEditorOpen(false)} className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-sm font-black text-gray-700">취소</button>
+                <button type="button" onClick={saveTextEditor} className="rounded-xl bg-blue-600 px-7 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700">저장</button>
+              </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        <div className="mt-5 border-t border-gray-200 pt-5">
+          <p className="text-sm font-black text-gray-900">선택한 칸 안에서 위·아래로 나누기</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            현재 선택한 칸만 나눕니다. 다른 칸은 그대로 유지됩니다.
+          </p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => props.onSetSelectedCellRows(area, selectedCell.id, count, selection.layoutId)}
+                className={`rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  (selectedCell.child_cells?.length || 1) === count
+                    ? "border-purple-600 bg-purple-600 text-white"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-purple-500 hover:text-purple-700"
+                }`}
+              >
+                {count}칸
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-gray-200 pt-5">
+          <p className="text-sm font-black text-gray-900">레이아웃 전체 좌우 칸 수</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            전체 레이아웃을 왼쪽·오른쪽 칸으로 나눕니다. 선택한 칸만 나누려면 위의 보라색 버튼을 사용하세요.
+          </p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => props.onSetGridColumns(area, count, selection.layoutId)}
+                className={`rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  props.gridColumnCount === count
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-blue-500 hover:text-blue-700"
+                }`}
+              >
+                {count}칸
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {area === "hero" ? (
+          <div className="mt-5 border-t border-gray-200 pt-5">
+            <p className="text-sm font-black text-gray-900">세로 칸 나누기</p>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              반대 방향으로 레이어를 위아래 줄로 나눕니다. 각 줄은 다시 가로 칸으로 나눌 수 있습니다.
+            </p>
+            <div className="mt-3 grid grid-cols-4 gap-2">
+              {[1, 2, 3, 4].map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  onClick={() => props.onSetGridRows(count)}
+                  className={`rounded-xl border px-3 py-3 text-sm font-black transition ${
+                    props.gridRowCount === count
+                      ? "border-emerald-600 bg-emerald-600 text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:border-emerald-500 hover:text-emerald-700"
+                  }`}
+                >
+                  {count}줄
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid grid-cols-2 gap-2 border-t border-gray-200 pt-5">
+          <ActionButton label="칸 합치기" onClick={() => props.onMergeCell(area, selectedCell.id, selection.layoutId)} />
+          <ActionButton label="칸 나누기" onClick={() => props.onSplitCell(area, selectedCell.id, selection.layoutId)} />
+          <ActionButton label="복사" onClick={() => props.onDuplicateCell(area, selectedCell.id, selection.layoutId)} />
+          <ActionButton label="비우기" danger onClick={() => props.onClearCell(area, selectedCell.id, selection.layoutId)} />
+        </div>
+      </div>
+    );
+  }
+
+  if (selection.area === "header") {
+    return (
+      <div>
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">
+          Header 전체 설정
+        </p>
+        <h2 className="mt-1 text-xl font-black text-gray-950">
+          Header 배경색
+        </h2>
+
+        <div className="mt-5 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-black text-blue-950">한 번만 선택하세요</p>
+          <p className="mt-1 text-xs leading-5 text-blue-700">
+            선택한 색이 Header의 로고, 제목, 메뉴와 빈칸 전체에 동시에 적용됩니다.
+          </p>
+          <ColorInput
+            label="Header 전체 배경색"
+            value={String(
+              websiteSettings.header_background_color || "#ffffff",
+            )}
+            onChange={(value) =>
+              props.onUpdateWebsiteSettings({
+                header_background_color: value,
+              })
+            }
+          />
+        </div>
+
+        <div className="mt-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm font-black text-emerald-950">페이지 전체 배경</p>
+          <p className="mt-1 text-xs leading-5 text-emerald-700">
+            데스크톱 화면에서 사이트 왼쪽과 오른쪽에 보이는 바깥 여백 색상입니다.
+            홈페이지와 모든 별도 페이지에 공통으로 적용됩니다.
+          </p>
+          <ColorInput
+            label="화면 좌우 바깥 컬러"
+            value={String(
+              websiteSettings.outer_background_color || "#e5e7eb",
+            )}
+            onChange={(value) =>
+              props.onUpdateWebsiteSettings({
+                outer_background_color: value,
+              })
+            }
+          />
+        </div>
+
+        <HeaderSubmenuEditor
+          websiteSettings={websiteSettings}
+          sections={props.sections}
+          businessId={props.businessId}
+          onUpdate={props.onUpdateWebsiteSettings}
+        />
+
+        <p className="mt-5 rounded-2xl bg-gray-50 p-3 text-sm leading-6 text-gray-700">
+          가운데 Header 칸을 클릭하면 로고, 제목, 메뉴 내용과 글자색을 각각 수정할 수 있습니다. 칸별 배경색은 사용하지 않습니다.
+        </p>
+      </div>
+    );
+  }
+
+  if (selection.area === "hero" && heroSection) {
+    return (
+      <div>
+        {renderLayerNameEditor(heroSection)}
+
+        <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">Main 배경</p>
+        <h2 className="mt-1 text-xl font-black text-gray-950">배경 선택</h2>
+        <div className="mt-5 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-black text-blue-950">레이어 전체 배경색</p>
+          <p className="mt-1 text-xs leading-5 text-blue-700">
+            색을 고르면 현재 레이어의 모든 가로 레이아웃에 한 번에 적용됩니다.
+          </p>
+          <ColorInput
+            label="전체 배경색"
+            value={heroSection.content.background_color || "#6b3f1f"}
+            onChange={(value) =>
+              props.onUpdateSectionContent(heroSection.id, {
+                background_type: "color",
+                background_color: value,
+              })
+            }
+          />
+        </div>
+
+        <Field label="다른 배경 사용">
+          <select value={heroSection.content.background_type || "color"} onChange={(event) => props.onUpdateSectionContent(heroSection.id, { background_type: event.target.value as SectionContent["background_type"] })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5">
+            <option value="color">단색</option><option value="image">사진</option><option value="gradient">그라데이션</option><option value="video">동영상</option>
+          </select>
+        </Field>
+        {heroSection.content.background_type === "image" ? <Field label="배경 사진 URL"><input value={heroSection.content.image_url || ""} onChange={(event) => props.onUpdateSectionContent(heroSection.id, { image_url: event.target.value })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5" /></Field> : null}
+        {heroSection.content.background_type === "gradient" || !heroSection.content.background_type ? <div className="mt-4 grid grid-cols-2 gap-3"><ColorInput label="시작색" value={heroSection.content.gradient_from || "#111827"} onChange={(value) => props.onUpdateSectionContent(heroSection.id, { gradient_from: value })} /><ColorInput label="끝색" value={heroSection.content.gradient_to || "#d97706"} onChange={(value) => props.onUpdateSectionContent(heroSection.id, { gradient_to: value })} /></div> : null}
+        {heroSection.content.background_type === "video" ? <Field label="동영상 URL"><input value={heroSection.content.video_url || ""} onChange={(event) => props.onUpdateSectionContent(heroSection.id, { video_url: event.target.value })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5" /></Field> : null}
+        <p className="mt-6 rounded-2xl bg-blue-50 p-3 text-sm leading-6 text-blue-800">현재 레이어 전체 배경은 여기서 한 번 선택합니다. 각 가로 레이아웃 안의 칸을 클릭하면 세로 칸 나누기·합치기와 내용 편집을 할 수 있습니다. 아래 “레이아웃 추가”를 누르면 새 가로칸이 계속 추가됩니다.</p>
+      </div>
+    );
+  }
+
+
+  return (
+    <div>
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">Website</p>
+      <h2 className="mt-1 text-xl font-black text-gray-950">기본 설정</h2>
+      <Field label="웹사이트 주소"><input value={business.website_slug || ""} onChange={(event) => props.onUpdateBusiness({ website_slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "") })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5" /></Field>
+      <Field label="상태"><select value={business.website_status || "draft"} onChange={(event) => props.onUpdateBusiness({ website_status: event.target.value })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5"><option value="draft">Draft</option><option value="published">Published</option><option value="disabled">Disabled</option></select></Field>
+      <ColorInput label="버튼 색" value={String(websiteSettings.accent_color || "#d97706")} onChange={(value) => props.onUpdateWebsiteSettings({ accent_color: value })} />
+      <label className="mt-5 flex items-center justify-between rounded-xl bg-gray-50 p-3"><span className="text-sm font-bold text-gray-700">Website enabled</span><input type="checkbox" checked={Boolean(business.website_enabled)} onChange={(event) => props.onUpdateBusiness({ website_enabled: event.target.checked })} className="h-5 w-5" /></label>
+    </div>
+  );
+}
+
+
+function LogoImageUploader({
+  businessId,
+  adminKey,
+  area,
+  cell,
+  onUpdate,
+  onShowGuide,
+}: {
+  businessId: string;
+  adminKey: string;
+  area: "header" | "hero";
+  cell: GridCell;
+  onUpdate: (patch: Partial<GridCell>) => void;
+  onShowGuide: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  async function uploadLogo(file: File) {
+    setUploadError("");
+
+    const allowedTypes = ["image/png", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError("투명 PNG 또는 WebP 이미지만 업로드할 수 있습니다.");
+      return;
+    }
+
+    const maxSize = 8 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadError("이미지 크기는 8MB 이하여야 합니다.");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("area", area);
+      formData.append("cellId", cell.id);
+
+      const response = await fetch(
+        `/api/admin/businesses/${encodeURIComponent(
+          businessId,
+        )}/website/upload`,
+        {
+          method: "POST",
+          headers: {
+            "x-admin-key": adminKey,
+          },
+          body: formData,
+        },
+      );
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `로고 업로드에 실패했습니다. HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      const imageUrl = String(result.url || "").trim();
+      if (!imageUrl) {
+        throw new Error("업로드된 이미지 주소를 받지 못했습니다.");
+      }
+
+      onUpdate({
+        image_url: imageUrl,
+        display_mode: "image",
+      });
+    } catch (error) {
+      setUploadError(
+        error instanceof Error ? error.message : "로고 업로드에 실패했습니다.",
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function handleFiles(files: FileList | null) {
+    const file = files?.[0];
+    if (file) void uploadLogo(file);
+  }
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-gray-800">로고 이미지</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            배경 없는 투명 PNG 또는 WebP 이미지를 올려주세요.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onShowGuide}
+          className="shrink-0 rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-900"
+        >
+          이미지 안내
+        </button>
+      </div>
+
+      {cell.image_url ? (
+        <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-[linear-gradient(45deg,#f3f4f6_25%,transparent_25%),linear-gradient(-45deg,#f3f4f6_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f3f4f6_75%),linear-gradient(-45deg,transparent_75%,#f3f4f6_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0px] p-5">
+          <img
+            src={cell.image_url}
+            alt="업로드된 로고"
+            className="mx-auto max-h-36 max-w-full object-contain"
+          />
+        </div>
+      ) : null}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/webp,.png,.webp"
+        className="hidden"
+        onChange={(event) => handleFiles(event.target.files)}
+      />
+
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          setDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          handleFiles(event.dataTransfer.files);
+        }}
+        className={`mt-3 flex min-h-32 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-6 text-center transition ${
+          dragging
+            ? "border-blue-600 bg-blue-50"
+            : "border-gray-300 bg-white hover:border-gray-950"
+        } disabled:cursor-wait disabled:opacity-60`}
+      >
+        <span className="text-3xl">{uploading ? "◌" : "▧"}</span>
+        <span className="mt-2 text-sm font-black text-gray-900">
+          {uploading
+            ? "로고를 업로드하고 있습니다..."
+            : cell.image_url
+              ? "새 로고로 교체"
+              : "로고 이미지 선택"}
+        </span>
+        <span className="mt-1 text-xs leading-5 text-gray-500">
+          클릭하거나 파일을 이곳으로 끌어오세요.
+          <br />
+          PNG · WebP · 최대 8MB
+        </span>
+      </button>
+
+      {uploading ? (
+        <div className="mt-3 overflow-hidden rounded-full bg-gray-200">
+          <div className="h-2 w-2/3 animate-pulse rounded-full bg-gray-950" />
+        </div>
+      ) : null}
+
+      {uploadError ? (
+        <p className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold leading-5 text-red-700">
+          {uploadError}
+        </p>
+      ) : null}
+
+      {cell.image_url ? (
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() =>
+            onUpdate({
+              image_url: "",
+              display_mode: "image",
+            })
+          }
+          className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 disabled:opacity-50"
+        >
+          로고 삭제
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function HorizontalImageScroll({
+  images,
+  speed,
+  direction,
+  imageWidth,
+  gap,
+}: {
+  images: string[];
+  speed: number;
+  direction: "left" | "right";
+  imageWidth: number;
+  gap: number;
+}) {
+  const safeImages = Array.from(
+    new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
+  ).slice(0, 10);
+
+  if (!safeImages.length) return null;
+
+  const repeatedImages =
+    safeImages.length === 1
+      ? [...safeImages, ...safeImages, ...safeImages, ...safeImages]
+      : [...safeImages, ...safeImages];
+
+  const duration = Math.max(8, Math.min(90, Number(speed) || 28));
+  const width = Math.max(120, Math.min(520, Number(imageWidth) || 280));
+  const spacing = Math.max(0, Math.min(48, Number(gap) || 12));
+
+  return (
+    <div className="relative h-full min-h-[180px] w-full overflow-hidden rounded-[10px] bg-gray-100">
+      <div
+        className="flex h-full w-max items-stretch will-change-transform"
+        style={{
+          gap: `${spacing}px`,
+          animationName:
+            direction === "right"
+              ? "website-image-flow-right"
+              : "website-image-flow-left",
+          animationDuration: `${duration}s`,
+          animationTimingFunction: "linear",
+          animationIterationCount: "infinite",
+        }}
+      >
+        {repeatedImages.map((url, index) => (
+          <div
+            key={`${url}-${index}`}
+            className="relative h-full shrink-0 overflow-hidden rounded-lg bg-gray-200"
+            style={{ width: `${width}px` }}
+          >
+            <img
+              src={url}
+              alt={`흐르는 이미지 ${(index % safeImages.length) + 1}`}
+              draggable={false}
+              className="absolute inset-0 block h-full w-full select-none object-cover"
+            style={{ borderRadius: "inherit" }}
+            />
+          </div>
+        ))}
+      </div>
+
+      <style jsx>{`
+        @keyframes website-image-flow-left {
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(calc(-50% - ${spacing / 2}px));
+          }
+        }
+
+        @keyframes website-image-flow-right {
+          from {
+            transform: translateX(calc(-50% - ${spacing / 2}px));
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function AutoImageSlider({ images }: { images: string[] }) {
+  const safeImages = Array.from(
+    new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
+  ).slice(0, 10);
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const touchStartX = useRef<number | null>(null);
+  const touchDeltaX = useRef(0);
+
+  useEffect(() => {
+    if (safeImages.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % safeImages.length);
+    }, 4500);
+
+    return () => window.clearInterval(timer);
+  }, [safeImages.length]);
+
+  useEffect(() => {
+    if (activeIndex >= safeImages.length) {
+      setActiveIndex(0);
+    }
+  }, [activeIndex, safeImages.length]);
+
+  if (!safeImages.length) return null;
+
+  function goTo(index: number) {
+    const total = safeImages.length;
+    setActiveIndex(((index % total) + total) % total);
+  }
+
+  return (
+    <div
+      className="group/slider relative h-full min-h-[220px] w-full overflow-hidden bg-transparent"
+      style={{ borderRadius: "inherit" }}
+      onTouchStart={(event) => {
+        touchStartX.current = event.touches[0]?.clientX ?? null;
+        touchDeltaX.current = 0;
+      }}
+      onTouchMove={(event) => {
+        if (touchStartX.current === null) return;
+
+        touchDeltaX.current =
+          (event.touches[0]?.clientX ?? touchStartX.current) -
+          touchStartX.current;
+      }}
+      onTouchEnd={() => {
+        if (Math.abs(touchDeltaX.current) >= 45) {
+          goTo(activeIndex + (touchDeltaX.current < 0 ? 1 : -1));
+        }
+
+        touchStartX.current = null;
+        touchDeltaX.current = 0;
+      }}
+    >
+      {safeImages.map((url, index) => (
+        <div
+          key={`${url}-${index}`}
+          className={`absolute inset-0 overflow-hidden transition-opacity duration-700 ${
+            index === activeIndex
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+        >
+          <img
+            src={url}
+            alt={`슬라이드 이미지 ${index + 1}`}
+            draggable={false}
+            className="absolute inset-0 h-full w-full select-none object-cover"
+          />
+        </div>
+      ))}
+
+      {safeImages.length > 1 ? (
+        <>
+          <button
+            type="button"
+            aria-label="이전 이미지"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              goTo(activeIndex - 1);
+            }}
+            className="absolute left-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-2xl font-black text-white shadow"
+          >
+            ‹
+          </button>
+
+          <button
+            type="button"
+            aria-label="다음 이미지"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              goTo(activeIndex + 1);
+            }}
+            className="absolute right-3 top-1/2 z-30 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-2xl font-black text-white shadow"
+          >
+            ›
+          </button>
+
+          <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/45 px-3 py-2">
+            {safeImages.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                aria-label={`${index + 1}번 이미지`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  goTo(index);
+                }}
+                className={`h-2.5 rounded-full transition-all ${
+                  index === activeIndex
+                    ? "w-6 bg-white"
+                    : "w-2.5 bg-white/55"
+                }`}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function TitleCellEditor({
+  businessId,
+  adminKey,
+  area,
+  cell,
+  business,
+  onOpenTextEditor,
+  onUpdate,
+  onShowImageGuide,
+}: {
+  businessId: string;
+  adminKey: string;
+  area: "header" | "hero";
+  cell: GridCell;
+  business: Business;
+  onOpenTextEditor: () => void;
+  onUpdate: (patch: Partial<GridCell>) => void;
+  onShowImageGuide: () => void;
+}) {
+  type SectionMode =
+    | "text"
+    | "background-image"
+    | "auto-slider"
+    | "image-scroll"
+    | "gallery"
+    | "map-section"
+    | "service-card"
+    | "business-hours"
+    | "restaurant-menu";
+
+  const mode: SectionMode =
+    cell.display_mode === "background-image" ||
+    cell.display_mode === "auto-slider" ||
+    cell.display_mode === "image-scroll" ||
+    cell.display_mode === "gallery" ||
+    cell.display_mode === "map-section" ||
+    cell.display_mode === "service-card" ||
+    cell.display_mode === "business-hours" ||
+    cell.display_mode === "restaurant-menu"
+      ? cell.display_mode
+      : "text";
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const [loadingImages, setLoadingImages] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState("");
+  const [availableImages, setAvailableImages] = useState<string[]>([]);
+  const [activeControlStep, setActiveControlStep] = useState<1 | 2 | null>(1);
+
+  function chooseMode(nextMode: SectionMode) {
+    if (nextMode === "image-scroll") {
+      onUpdate({
+        display_mode: "image-scroll",
+        gallery_images: Array.isArray(cell.gallery_images)
+          ? cell.gallery_images
+          : [],
+        image_scroll_speed: cell.image_scroll_speed ?? 28,
+        image_scroll_direction: cell.image_scroll_direction ?? "left",
+        image_scroll_width: cell.image_scroll_width ?? 280,
+        image_scroll_gap: cell.image_scroll_gap ?? 12,
+      });
+      return;
+    }
+
+    if (nextMode === "auto-slider") {
+      onUpdate({
+        display_mode: "auto-slider",
+        gallery_images: Array.isArray(cell.gallery_images)
+          ? cell.gallery_images
+          : [],
+      });
+      return;
+    }
+
+    if (nextMode === "gallery") {
+      onUpdate({
+        display_mode: "gallery",
+        gallery_images: Array.isArray(cell.gallery_images)
+          ? cell.gallery_images
+          : [],
+      });
+      return;
+    }
+
+    if (nextMode === "service-card") {
+      onUpdate({
+        display_mode: "service-card",
+        text: cell.text || "서비스 제목",
+        card_description:
+          cell.card_description || "서비스에 대한 간단한 설명을 입력하세요.",
+        image_url: cell.image_url || "",
+        background_color: cell.background_color || "#ffffff",
+        color: cell.color || "#111827",
+        text_align: cell.text_align || "left",
+      });
+      return;
+    }
+
+    if (nextMode === "restaurant-menu") {
+      onUpdate({
+        display_mode: "restaurant-menu",
+        text: "Restaurant Menu",
+        background_color: "#ffffff",
+        color: "#111827",
+      });
+      return;
+    }
+
+    if (nextMode === "business-hours") {
+      const parsedHours = parseBusinessTableHours(business.hours);
+      onUpdate({
+        display_mode: "business-hours",
+        business_hours_title: cell.business_hours_title || "Business Hours",
+        business_hours_file_name: "",
+        business_hours_business_name: "",
+        business_hours_note: "",
+        business_hours_data: parsedHours,
+        background_color: cell.background_color || "#ffffff",
+        color: cell.color || "#111827",
+      });
+      setUploadError(
+        parsedHours.some((item) => !item.closed)
+          ? ""
+          : "businesses 테이블의 hours에 표시할 영업시간이 없습니다.",
+      );
+      return;
+    }
+
+    if (nextMode === "background-image") {
+      onUpdate({
+        display_mode: "background-image",
+        background_overlay_type: cell.background_overlay_type || "none",
+        overlay_text: cell.overlay_text || "",
+        overlay_font_family: cell.overlay_font_family || "sans",
+        overlay_button_style: cell.overlay_button_style || "rounded",
+        overlay_button_color: cell.overlay_button_color || "#111827",
+        overlay_button_text_color:
+          cell.overlay_button_text_color || "#ffffff",
+        overlay_buttons: normalizeOverlayButtons(cell),
+        overlay_button_gap: cell.overlay_button_gap ?? 10,
+        background_image_blur: cell.background_image_blur ?? 0,
+        background_image_effect: cell.background_image_effect ?? "original",
+        background_image_focus_x: cell.background_image_focus_x ?? 50,
+        background_image_focus_y: cell.background_image_focus_y ?? 50,
+        overlay_text_horizontal: cell.overlay_text_horizontal ?? "center",
+        overlay_text_vertical: cell.overlay_text_vertical ?? "middle",
+        overlay_button_horizontal: cell.overlay_button_horizontal ?? "center",
+        overlay_button_vertical: cell.overlay_button_vertical ?? "bottom",
+        overlay_button_direction: cell.overlay_button_direction ?? "row",
+        overlay_button_width: cell.overlay_button_width ?? 140,
+        overlay_button_height: cell.overlay_button_height ?? 44,
+        overlay_button_font_size: cell.overlay_button_font_size ?? 15,
+        overlay_button_group_style:
+          cell.overlay_button_group_style ?? "rounded",
+        overlay_button_group_color:
+          cell.overlay_button_group_color ?? "#111827",
+        overlay_button_group_text_color:
+          cell.overlay_button_group_text_color ?? "#ffffff",
+        overlay_buttons_visible:
+          cell.overlay_buttons_visible ??
+          (cell.background_overlay_type === "button" ||
+            Boolean(cell.overlay_buttons?.length)),
+      });
+      return;
+    }
+
+    onUpdate({
+      display_mode: nextMode,
+    });
+  }
+
+  async function uploadBackgroundImage(
+    file: File,
+    targetMode: "background-image" | "service-card" = "background-image",
+  ) {
+    setUploadError("");
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("이미지 크기는 10MB 이하여야 합니다.");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("area", area);
+      formData.append("cellId", cell.id);
+
+      const response = await fetch(
+        `/api/admin/businesses/${encodeURIComponent(
+          businessId,
+        )}/website/upload`,
+        {
+          method: "POST",
+          headers: { "x-admin-key": adminKey },
+          body: formData,
+        },
+      );
+
+      const result = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `배경 이미지 업로드에 실패했습니다. HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      const imageUrl = String(result.url || "").trim();
+      if (!imageUrl) throw new Error("업로드된 이미지 주소를 받지 못했습니다.");
+
+      onUpdate({ image_url: imageUrl, display_mode: targetMode });
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : "배경 이미지 업로드에 실패했습니다.",
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function loadSavedImages(
+  requestedMode: "auto-slider" | "image-scroll" | "gallery" = "auto-slider",
+) {
+  setLoadingImages(true);
+  setImageLoadError("");
+
+  try {
+    const response = await fetch(
+      `/api/admin/businesses/${encodeURIComponent(
+        businessId,
+      )}/website/images`,
+      {
+        method: "GET",
+        headers: {
+          "x-admin-key": adminKey,
+        },
+        cache: "no-store",
+      },
+    );
+
+    const result = await readApiResponse(response);
+
+    if (!response.ok) {
+      throw new Error(
+        String(
+          result.error ||
+            result.message ||
+            `이미지를 불러오지 못했습니다. HTTP ${response.status}`,
+        ),
+      );
+    }
+
+    const rawImages = Array.isArray(result.images) ? result.images : [];
+
+    const urls = rawImages
+      .map((item: unknown) => {
+        if (typeof item === "string") {
+          return item.trim();
+        }
+
+        if (item && typeof item === "object") {
+          const image = item as {
+            url?: unknown;
+            image_url?: unknown;
+          };
+
+          return String(image.url || image.image_url || "").trim();
+        }
+
+        return "";
+      })
+      .filter(Boolean)
+      .filter((url: string, index: number, values: string[]) => {
+        return values.indexOf(url) === index;
+      });
+
+    setAvailableImages(urls);
+
+    const imagesToPlay = urls.slice(0, 10);
+
+    /*
+     * 중요:
+     * 이전 mode 값을 쓰지 않고 사용자가 선택한 모드를 직접 저장합니다.
+     */
+    onUpdate({
+      display_mode: requestedMode,
+      gallery_images: imagesToPlay,
+    });
+  } catch (error) {
+    setImageLoadError(
+      error instanceof Error
+        ? error.message
+        : "DB 이미지를 불러오지 못했습니다.",
+    );
+  } finally {
+    setLoadingImages(false);
+  }
+}
+
+  function toggleSelectedImage(url: string) {
+    const selected = Array.isArray(cell.gallery_images)
+      ? cell.gallery_images
+      : [];
+
+    if (selected.includes(url)) {
+      onUpdate({ gallery_images: selected.filter((item) => item !== url) });
+      return;
+    }
+
+    if (selected.length >= 10) {
+      setImageLoadError("이미지는 최대 10장까지 선택할 수 있습니다.");
+      return;
+    }
+
+    setImageLoadError("");
+    onUpdate({ gallery_images: [...selected, url] });
+  }
+
+  function handleFiles(files: FileList | null) {
+    const file = files?.[0];
+    if (file) void uploadBackgroundImage(file);
+  }
+
+  const selectedCount = cell.gallery_images?.length || 0;
+  const usesDbImages =
+    mode === "auto-slider" || mode === "image-scroll" || mode === "gallery";
+
+  const imageControlsOpen = activeControlStep === 1;
+  const overlayControlsOpen = activeControlStep === 2;
+
+  return (
+    <div className="mt-5">
+      <Field label="이 섹션을 어떻게 사용할까요?">
+        <select
+          value={mode}
+          onChange={(event) => {
+            const nextMode = event.target.value as SectionMode;
+            chooseMode(nextMode);
+            if (
+              (nextMode === "auto-slider" ||
+                nextMode === "image-scroll" ||
+                nextMode === "gallery") &&
+              availableImages.length === 0
+            ) {
+              void loadSavedImages(nextMode);
+            }
+          }}
+          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 font-bold text-gray-900"
+        >
+          <option value="text">📝 텍스트</option>
+          <option value="restaurant-menu">🍽 DoorDash 스타일 메뉴</option>
+          <option value="service-card">🧩 이미지 + 제목 + 설명 카드</option>
+          <option value="background-image">🖼 전체 배경 이미지</option>
+          <option value="auto-slider">🎞 자동 이미지 슬라이드</option>
+          <option value="image-scroll">↔ 옆으로 흐르는 이미지</option>
+          <option value="gallery">📸 이미지 갤러리</option>
+          <option value="map-section">🗺 지도</option>
+          <option value="business-hours">🕒 비즈니스시간 입력</option>
+        </select>
+      </Field>
+
+      {mode === "text" ? (
+        <Field label="제목 글자">
+          <button
+            type="button"
+            onClick={onOpenTextEditor}
+            className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700"
+          >
+            본문 편집
+          </button>
+        </Field>
+      ) : null}
+
+      {mode === "restaurant-menu" ? (
+        <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+          <p className="text-sm font-black text-orange-950">DoorDash 스타일 Restaurant Menu</p>
+          <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
+            가져온 카테고리와 메뉴를 자동으로 읽습니다. 데스크톱은 2열, 모바일은 1열이며 메뉴를 누르면 상세 사진 모달이 열립니다. 이 칸은 가로 4칸 전체로 합쳐 사용하는 것을 권장합니다.
+          </p>
+        </div>
+      ) : null}
+
+      {mode === "business-hours" ? (
+        <div className="mt-4 space-y-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+          <div>
+            <p className="text-sm font-black text-gray-900">비즈니스 영업시간</p>
+            <p className="mt-1 text-xs leading-5 text-gray-600">
+              이 비즈니스의 businesses 테이블 hours 값을 자동으로 읽어 표시합니다.
+              비즈니스 정보에서 시간을 수정한 뒤 이 항목을 다시 선택하면 최신 내용으로 갱신됩니다.
+            </p>
+          </div>
+
+          <Field label="표시 제목">
+            <input
+              type="text"
+              value={cell.business_hours_title || "Business Hours"}
+              onChange={(event) =>
+                onUpdate({ business_hours_title: event.target.value })
+              }
+              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+            />
+          </Field>
+
+          <button
+            type="button"
+            onClick={() => {
+              const parsedHours = parseBusinessTableHours(business.hours);
+              onUpdate({
+                business_hours_data: parsedHours,
+                business_hours_file_name: "",
+                business_hours_business_name: "",
+                business_hours_note: "",
+              });
+              setUploadError(
+                parsedHours.some((item) => !item.closed)
+                  ? ""
+                  : "businesses 테이블의 hours에 표시할 영업시간이 없습니다.",
+              );
+            }}
+            className="w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-amber-600"
+          >
+            businesses.hours 다시 읽기
+          </button>
+
+          {Array.isArray(cell.business_hours_data) && cell.business_hours_data.length > 0 ? (
+            <BusinessHoursDisplay cell={cell} compact />
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-xs font-bold text-gray-500">
+              businesses 테이블의 hours 값이 없거나 형식을 읽지 못했습니다.
+            </div>
+          )}
+
+          {uploadError ? (
+            <p className="text-xs font-bold text-red-600">{uploadError}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === "service-card" ? (
+        <div className="mt-4 space-y-4 rounded-2xl border border-gray-200 bg-white p-4">
+          <div>
+            <p className="text-sm font-black text-gray-900">
+              서비스 카드 이미지
+            </p>
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              MK Top Cleans 메인 서비스 카드처럼 이미지, 제목, 설명을 한 칸에 표시합니다.
+            </p>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void uploadBackgroundImage(file, "service-card");
+            }}
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="w-full rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm font-black text-gray-700 hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60"
+          >
+            {uploading
+              ? "이미지 업로드 중..."
+              : cell.image_url
+                ? "서비스 이미지 바꾸기"
+                : "서비스 이미지 업로드"}
+          </button>
+
+          {cell.image_url ? (
+            <div className="overflow-hidden rounded-xl border border-gray-200">
+              <img
+                src={cell.image_url}
+                alt=""
+                className="h-32 w-full object-cover"
+              />
+            </div>
+          ) : null}
+
+          {uploadError ? (
+            <p className="text-xs font-bold text-red-600">{uploadError}</p>
+          ) : null}
+
+          <Field label="서비스 제목">
+            <input
+              type="text"
+              value={cell.text || ""}
+              onChange={(event) => onUpdate({ text: event.target.value })}
+              placeholder="예: Medical Facility Cleaning"
+              className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+            />
+          </Field>
+
+          <Field label="서비스 설명">
+            <textarea
+              rows={3}
+              value={cell.card_description || ""}
+              onChange={(event) =>
+                onUpdate({ card_description: event.target.value })
+              }
+              placeholder="예: Clinics, exam rooms, waiting areas..."
+              className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="제목 색">
+              <input
+                type="color"
+                value={cell.color || "#111827"}
+                onChange={(event) => onUpdate({ color: event.target.value })}
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white p-1"
+              />
+            </Field>
+
+            <Field label="카드 배경">
+              <input
+                type="color"
+                value={cell.background_color || "#ffffff"}
+                onChange={(event) =>
+                  onUpdate({ background_color: event.target.value })
+                }
+                className="h-11 w-full rounded-lg border border-gray-300 bg-white p-1"
+              />
+            </Field>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "background-image" ? (
+        <>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-gray-800">전체 배경 이미지</p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                선택한 이미지가 이 칸 전체를 채웁니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onShowImageGuide}
+              className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-900"
+            >
+              이미지 안내
+            </button>
+          </div>
+
+          {cell.image_url ? (
+            <>
+              <div className="flex flex-col">
+                <div
+                  className={
+                    activeControlStep === 1
+                      ? "order-2"
+                      : "order-1"
+                  }
+                >
+<div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveControlStep((current) => (current === 1 ? null : 1))
+                  }
+                  aria-expanded={imageControlsOpen}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                >
+                  <div>
+                    <p className="text-sm font-black text-gray-950">
+                      1단계 · 이미지 컨트롤
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      클릭하면 아래로 이동해 펼쳐집니다. 이미지 효과와 위치를 조절합니다.
+                    </p>
+                  </div>
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50 text-xl font-black text-gray-700 transition-transform ${
+                      imageControlsOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  >
+                    ⌄
+                  </span>
+                </button>
+
+                {imageControlsOpen ? (
+                  <div className="border-t border-gray-100 p-4">
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdate({
+                            background_image_effect: "original",
+                            background_image_blur: 0,
+                            background_image_focus_x: 50,
+                            background_image_focus_y: 50,
+                          })
+                        }
+                        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-black text-gray-600"
+                      >
+                        초기화
+                      </button>
+                    </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {[
+                    {
+                      value: "original",
+                      label: "원본",
+                      description: "효과 없이 표시",
+                    },
+                    {
+                      value: "blur",
+                      label: "블러",
+                      description: "전체를 부드럽게",
+                    },
+                    {
+                      value: "out-focus",
+                      label: "아웃포커싱",
+                      description: "배경을 강하게 흐림",
+                    },
+                    {
+                      value: "in-focus",
+                      label: "인포커싱",
+                      description: "더 선명하고 또렷하게",
+                    },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() =>
+                        onUpdate({
+                          background_image_effect:
+                            option.value as GridCell["background_image_effect"],
+                          background_image_blur:
+                            option.value === "out-focus"
+                              ? Math.max(10, cell.background_image_blur ?? 0)
+                              : option.value === "blur"
+                                ? Math.max(4, cell.background_image_blur ?? 0)
+                                : 0,
+                        })
+                      }
+                      className={`rounded-xl border p-3 text-left ${
+                        (cell.background_image_effect ?? "original") ===
+                        option.value
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-gray-200 bg-white text-gray-700"
+                      }`}
+                    >
+                      <span className="block text-xs font-black">
+                        {option.label}
+                      </span>
+                      <span
+                        className={`mt-1 block text-[11px] ${
+                          (cell.background_image_effect ?? "original") ===
+                          option.value
+                            ? "text-blue-100"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        {option.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {(cell.background_image_effect === "blur" ||
+                  cell.background_image_effect === "out-focus") ? (
+                  <Field label="흐림 강도">
+                    <input
+                      type="range"
+                      min="1"
+                      max="30"
+                      step="1"
+                      value={Math.max(1, cell.background_image_blur ?? 4)}
+                      onChange={(event) =>
+                        onUpdate({
+                          background_image_blur: Number(event.target.value),
+                        })
+                      }
+                      className="w-full"
+                    />
+                    <div className="mt-1 flex items-center justify-between text-[11px] font-bold text-gray-500">
+                      <span>약하게</span>
+                      <span>{Math.max(1, cell.background_image_blur ?? 4)}px</span>
+                      <span>강하게</span>
+                    </div>
+                  </Field>
+                ) : null}
+
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-xs font-black text-gray-800">
+                    이미지 중심 위치
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-gray-500">
+                    사진에서 중요한 부분이 보이도록 가로·세로 중심을 움직이세요.
+                  </p>
+
+                  <Field label="가로 중심">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={cell.background_image_focus_x ?? 50}
+                      onChange={(event) =>
+                        onUpdate({
+                          background_image_focus_x: Number(event.target.value),
+                        })
+                      }
+                      className="w-full"
+                    />
+                    <div className="mt-1 flex justify-between text-[11px] font-bold text-gray-500">
+                      <span>왼쪽</span>
+                      <span>{cell.background_image_focus_x ?? 50}%</span>
+                      <span>오른쪽</span>
+                    </div>
+                  </Field>
+
+                  <Field label="세로 중심">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={cell.background_image_focus_y ?? 50}
+                      onChange={(event) =>
+                        onUpdate({
+                          background_image_focus_y: Number(event.target.value),
+                        })
+                      }
+                      className="w-full"
+                    />
+                    <div className="mt-1 flex justify-between text-[11px] font-bold text-gray-500">
+                      <span>위</span>
+                      <span>{cell.background_image_focus_y ?? 50}%</span>
+                      <span>아래</span>
+                    </div>
+                  </Field>
+                </div>
+                  </div>
+                ) : null}
+              </div>
+                </div>
+
+                <div
+                  className={
+                    activeControlStep === 2
+                      ? "order-2"
+                      : activeControlStep === 1
+                        ? "order-1"
+                        : "order-2"
+                  }
+                >
+<div className="mt-4 overflow-hidden rounded-2xl border-2 border-blue-200 bg-blue-50">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveControlStep((current) => (current === 2 ? null : 2))
+                  }
+                  aria-expanded={overlayControlsOpen}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                >
+                  <div>
+                    <p className="text-sm font-black text-blue-950">
+                      2단계 · 글씨와 버튼
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-blue-800">
+                      클릭하면 아래로 이동해 펼쳐집니다. 글씨와 버튼을 설정합니다.
+                    </p>
+                  </div>
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white text-xl font-black text-blue-800 transition-transform ${
+                      overlayControlsOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  >
+                    ⌄
+                  </span>
+                </button>
+
+                {overlayControlsOpen ? (
+                  <div className="border-t border-blue-200 p-4">
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[
+                { value: "none", label: "아무것도 없음" },
+                { value: "text", label: "글씨" },
+                { value: "button", label: "버튼" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    const nextType =
+                      option.value as GridCell["background_overlay_type"];
+
+                    if (nextType === "button") {
+                      onUpdate({
+                        background_overlay_type: "button",
+                        overlay_buttons_visible: true,
+                        overlay_buttons: normalizeOverlayButtons({
+                          ...cell,
+                          background_overlay_type: "button",
+                        }),
+                      });
+                      return;
+                    }
+
+                    onUpdate({
+                      background_overlay_type: nextType,
+                    });
+                  }}
+                  className={`rounded-xl border px-2 py-3 text-xs font-black ${
+                    (cell.background_overlay_type || "none") === option.value
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-gray-200 bg-white text-gray-700"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+
+          {cell.background_overlay_type === "text" ? (
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+              <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-800">
+                이 글씨는 배경이나 테두리 없이 이미지 위에 글씨만 표시됩니다.
+              </p>
+
+              <Field label="글씨 내용">
+                <textarea
+                  rows={3}
+                  value={cell.overlay_text || ""}
+                  onChange={(event) =>
+                    onUpdate({ overlay_text: event.target.value })
+                  }
+                  placeholder="이미지 위에 표시할 글씨"
+                  className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5"
+                />
+              </Field>
+
+              <Field label="글씨 크기">
+                <input
+                  type="range"
+                  min="14"
+                  max="80"
+                  value={cell.font_size || 36}
+                  onChange={(event) =>
+                    onUpdate({ font_size: Number(event.target.value) })
+                  }
+                  className="w-full"
+                />
+                <p className="mt-1 text-xs font-bold text-gray-500">
+                  {cell.font_size || 36}px
+                </p>
+              </Field>
+
+              <ColorInput
+                label="글씨 색상"
+                value={cell.color || "#ffffff"}
+                onChange={(value) => onUpdate({ color: value })}
+              />
+
+              <Field label="폰트">
+                <select
+                  value={cell.overlay_font_family || "sans"}
+                  onChange={(event) =>
+                    onUpdate({
+                      overlay_font_family:
+                        event.target.value as GridCell["overlay_font_family"],
+                    })
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                >
+                  <option value="sans">기본 깔끔한 글씨</option>
+                  <option value="serif">고급스러운 명조체</option>
+                  <option value="rounded">부드러운 둥근 글씨</option>
+                  <option value="mono">반듯한 고정폭 글씨</option>
+                </select>
+              </Field>
+
+              <Field label="굵기">
+                <select
+                  value={cell.font_weight || "black"}
+                  onChange={(event) =>
+                    onUpdate({
+                      font_weight:
+                        event.target.value as GridCell["font_weight"],
+                    })
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                >
+                  <option value="normal">보통</option>
+                  <option value="semibold">조금 굵게</option>
+                  <option value="bold">굵게</option>
+                  <option value="black">아주 굵게</option>
+                </select>
+              </Field>
+
+              <Field label="글씨 위치">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    ["left", "top", "좌측 상단"],
+                    ["center", "top", "상단 중앙"],
+                    ["right", "top", "우측 상단"],
+                    ["left", "middle", "좌측 중앙"],
+                    ["center", "middle", "정중앙"],
+                    ["right", "middle", "우측 중앙"],
+                    ["left", "bottom", "좌측 하단"],
+                    ["center", "bottom", "하단 중앙"],
+                    ["right", "bottom", "우측 하단"],
+                  ].map(([horizontal, vertical, label]) => {
+                    const active =
+                      (cell.overlay_text_horizontal ?? "center") === horizontal &&
+                      (cell.overlay_text_vertical ?? "middle") === vertical;
+
+                    return (
+                      <button
+                        key={`${horizontal}-${vertical}`}
+                        type="button"
+                        onClick={() =>
+                          onUpdate({
+                            overlay_text_horizontal:
+                              horizontal as GridCell["overlay_text_horizontal"],
+                            overlay_text_vertical:
+                              vertical as GridCell["overlay_text_vertical"],
+                          })
+                        }
+                        className={`rounded-xl border px-2 py-2 text-[11px] font-black ${
+                          active
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-200 bg-white text-gray-700"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            </div>
+          ) : null}
+
+          {cell.background_overlay_type === "button" ? (
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-gray-950">버튼 목록</p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    버튼 글자와 링크만 각각 입력하고, 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const current = normalizeOverlayButtons(cell);
+                    onUpdate({
+                      overlay_buttons_visible: true,
+                      overlay_buttons: [
+                        ...current,
+                        createOverlayButton(current.length),
+                      ],
+                    });
+                  }}
+                  className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
+                >
+                  ＋ 버튼 추가
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {normalizeOverlayButtons(cell).map((button, index) => (
+                  <div
+                    key={button.id}
+                    className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-gray-900">
+                        버튼 {index + 1}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={normalizeOverlayButtons(cell).length <= 1}
+                        onClick={() =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).filter(
+                              (item) => item.id !== button.id,
+                            ),
+                          })
+                        }
+                        className="rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-black text-red-600 disabled:opacity-35"
+                      >
+                        삭제
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <input
+                        value={button.text}
+                        onChange={(event) =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).map(
+                              (item) =>
+                                item.id === button.id
+                                  ? { ...item, text: event.target.value }
+                                  : item,
+                            ),
+                          })
+                        }
+                        placeholder="버튼 글자"
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                      />
+                      <input
+                        value={button.url}
+                        onChange={(event) =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).map(
+                              (item) =>
+                                item.id === button.id
+                                  ? { ...item, url: event.target.value }
+                                  : item,
+                            ),
+                          })
+                        }
+                        placeholder="/booking 또는 https://..."
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <label className="mt-4 flex items-center justify-between rounded-xl border border-gray-200 bg-white p-3">
+                <div>
+                  <span className="block text-sm font-black text-gray-900">
+                    버튼 표시
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    글씨 설정으로 돌아가도 버튼은 계속 표시됩니다.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={
+                    cell.overlay_buttons_visible ??
+                    (cell.background_overlay_type === "button" ||
+                      Boolean(cell.overlay_buttons?.length))
+                  }
+                  onChange={(event) =>
+                    onUpdate({
+                      overlay_buttons_visible: event.target.checked,
+                    })
+                  }
+                  className="h-5 w-5"
+                />
+              </label>
+
+              <div className="mt-5 rounded-2xl border-2 border-blue-100 bg-blue-50 p-4">
+                <p className="text-sm font-black text-blue-950">
+                  모든 버튼 공통 설정
+                </p>
+
+                <Field label="버튼 배열">
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "row", label: "가로 배열" },
+                      { value: "column", label: "세로 배열" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          onUpdate({
+                            overlay_button_direction:
+                              option.value as GridCell["overlay_button_direction"],
+                          })
+                        }
+                        className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                          (cell.overlay_button_direction ?? "row") === option.value
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-gray-200 bg-white text-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <Field label="버튼 스타일">
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "rounded", label: "둥근 사각형" },
+                      { value: "pill", label: "알약 모양" },
+                      { value: "square", label: "각진 모양" },
+                      { value: "outline", label: "테두리형" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          onUpdate({
+                            overlay_button_group_style:
+                              option.value as GridCell["overlay_button_group_style"],
+                          })
+                        }
+                        className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                          (cell.overlay_button_group_style ?? "rounded") ===
+                          option.value
+                            ? "border-gray-950 bg-gray-950 text-white"
+                            : "border-gray-200 bg-white text-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <ColorInput
+                    label="버튼 색상"
+                    value={cell.overlay_button_group_color ?? "#111827"}
+                    onChange={(value) =>
+                      onUpdate({ overlay_button_group_color: value })
+                    }
+                  />
+                  <ColorInput
+                    label="글자색"
+                    value={cell.overlay_button_group_text_color ?? "#ffffff"}
+                    onChange={(value) =>
+                      onUpdate({ overlay_button_group_text_color: value })
+                    }
+                  />
+                </div>
+
+                <Field label="버튼 가로 길이">
+                  <input
+                    type="range"
+                    min="70"
+                    max="240"
+                    value={cell.overlay_button_width ?? 140}
+                    onChange={(event) =>
+                      onUpdate({
+                        overlay_button_width: Number(event.target.value),
+                      })
+                    }
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    {cell.overlay_button_width ?? 140}px
+                  </p>
+                </Field>
+
+                <Field label="버튼 두께 · 높이">
+                  <input
+                    type="range"
+                    min="30"
+                    max="80"
+                    value={cell.overlay_button_height ?? 44}
+                    onChange={(event) =>
+                      onUpdate({
+                        overlay_button_height: Number(event.target.value),
+                      })
+                    }
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    {cell.overlay_button_height ?? 44}px
+                  </p>
+                </Field>
+
+                <Field label="버튼 글자 크기">
+                  <input
+                    type="range"
+                    min="10"
+                    max="30"
+                    value={cell.overlay_button_font_size ?? 15}
+                    onChange={(event) =>
+                      onUpdate({
+                        overlay_button_font_size: Number(event.target.value),
+                      })
+                    }
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    {cell.overlay_button_font_size ?? 15}px
+                  </p>
+                </Field>
+
+                <Field label="버튼 사이 간격">
+                  <input
+                    type="range"
+                    min="0"
+                    max="40"
+                    value={cell.overlay_button_gap ?? 10}
+                    onChange={(event) =>
+                      onUpdate({
+                        overlay_button_gap: Number(event.target.value),
+                      })
+                    }
+                    className="w-full"
+                  />
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    {cell.overlay_button_gap ?? 10}px
+                  </p>
+                </Field>
+
+                <Field label="버튼 위치">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      ["left", "top", "좌측 상단"],
+                      ["center", "top", "상단 중앙"],
+                      ["right", "top", "우측 상단"],
+                      ["left", "middle", "좌측 중앙"],
+                      ["center", "middle", "정중앙"],
+                      ["right", "middle", "우측 중앙"],
+                      ["left", "bottom", "좌측 하단"],
+                      ["center", "bottom", "하단 중앙"],
+                      ["right", "bottom", "우측 하단"],
+                    ].map(([horizontal, vertical, label]) => {
+                      const active =
+                        (cell.overlay_button_horizontal ?? "center") ===
+                          horizontal &&
+                        (cell.overlay_button_vertical ?? "bottom") === vertical;
+
+                      return (
+                        <button
+                          key={`${horizontal}-${vertical}`}
+                          type="button"
+                          onClick={() =>
+                            onUpdate({
+                              overlay_button_horizontal:
+                                horizontal as GridCell["overlay_button_horizontal"],
+                              overlay_button_vertical:
+                                vertical as GridCell["overlay_button_vertical"],
+                            })
+                          }
+                          className={`rounded-xl border px-2 py-2 text-[11px] font-black ${
+                            active
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-gray-200 bg-white text-gray-700"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+              </div>
+            </div>
+          ) : null}
+                  </div>
+                ) : null}
+              </div>
+                </div>
+              </div>
+
+            </>
+          ) : (
+            <div className="mt-4 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 p-5 text-center">
+              <p className="text-sm font-black text-amber-950">
+                먼저 배경 이미지를 선택해 주세요
+              </p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">
+                이미지를 올린 다음 글씨 또는 버튼을 추가할 수 있습니다.
+              </p>
+            </div>
+          )}
+
+          {cell.image_url ? (
+            <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200">
+              <img src={cell.image_url} alt="섹션 배경" className="h-40 w-full object-cover" />
+            </div>
+          ) : null}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => handleFiles(event.target.files)}
+          />
+
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setDragging(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              handleFiles(event.dataTransfer.files);
+            }}
+            className={`mt-3 flex min-h-28 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-5 text-center transition ${
+              dragging
+                ? "border-blue-600 bg-blue-50"
+                : "border-gray-300 bg-white hover:border-gray-950"
+            } disabled:cursor-wait disabled:opacity-60`}
+          >
+            <span className="text-2xl">▧</span>
+            <span className="mt-2 text-sm font-black text-gray-900">
+              {uploading
+                ? "업로드 중..."
+                : cell.image_url
+                  ? "배경 이미지 교체"
+                  : "배경 이미지 선택"}
+            </span>
+            <span className="mt-1 text-xs text-gray-500">
+              클릭하거나 이미지를 끌어오세요.
+            </span>
+          </button>
+
+          {cell.image_url ? (
+            <button
+              type="button"
+              onClick={() => onUpdate({ image_url: "" })}
+              className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700"
+            >
+              배경 이미지 삭제
+            </button>
+          ) : null}
+
+          {uploadError ? (
+            <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+              {uploadError}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+
+
+      {usesDbImages ? (
+        <div className="mt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-gray-800">
+                {mode === "auto-slider"
+                  ? "자동 이미지 슬라이드"
+                  : mode === "image-scroll"
+                    ? "옆으로 흐르는 이미지"
+                    : "이미지 갤러리"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                DB 이미지를 불러온 뒤 원하는 사진을 체크하세요.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={loadingImages}
+              onClick={() =>
+  void loadSavedImages(
+    mode === "gallery"
+      ? "gallery"
+      : mode === "image-scroll"
+        ? "image-scroll"
+        : "auto-slider",
+  )
+}
+              className="shrink-0 rounded-xl bg-gray-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+            >
+              {loadingImages ? "불러오는 중" : "DB 이미지 불러오기"}
+            </button>
+          </div>
+
+          {availableImages.length ? (
+            <div className="mt-3 grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
+              {availableImages.map((url, index) => {
+                const checked = cell.gallery_images?.includes(url) || false;
+                return (
+                  <label
+                    key={`${url}-${index}`}
+                    className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white ${
+                      checked ? "border-blue-600 ring-2 ring-blue-500/20" : "border-transparent"
+                    }`}
+                  >
+                    <img
+                      src={url}
+                      alt={`DB 이미지 ${index + 1}`}
+                      className="h-28 w-full object-cover"
+                    />
+                    <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelectedImage(url)}
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                    </span>
+                    {checked ? (
+                      <span className="absolute bottom-2 right-2 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-black text-white">
+                        선택
+                      </span>
+                    ) : null}
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">
+              DB 이미지 불러오기를 눌러주세요.
+            </div>
+          )}
+
+          <div className="mt-3 rounded-xl bg-blue-50 px-3 py-3 text-xs font-bold leading-5 text-blue-800">
+            현재 {selectedCount}장 선택 · 최대 10장
+            {mode === "auto-slider" ? (
+              <span className="block">
+                3장 이상 선택하면 4.5초마다 Fade 전환되며, Swipe·좌우 화살표·하단 점을 사용할 수 있습니다.
+              </span>
+            ) : null}
+            {mode === "image-scroll" ? (
+              <span className="block">
+                선택한 이미지가 한 줄로 이어져 계속 옆으로 흐릅니다.
+              </span>
+            ) : null}
+          </div>
+
+          {mode === "image-scroll" ? (
+            <div className="mt-4 space-y-4 rounded-2xl border border-gray-200 bg-white p-4">
+              <div>
+                <p className="text-sm font-black text-gray-900">
+                  흐르는 이미지 설정
+                </p>
+                <p className="mt-1 text-xs leading-5 text-gray-500">
+                  이미지가 흐르는 방향, 속도, 너비와 간격을 한 번에 조절합니다.
+                </p>
+              </div>
+
+              <Field label="흐르는 방향">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate({ image_scroll_direction: "left" })
+                    }
+                    className={`rounded-xl border px-3 py-2.5 text-sm font-black ${
+                      (cell.image_scroll_direction ?? "left") === "left"
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-200 bg-white text-gray-700"
+                    }`}
+                  >
+                    ← 왼쪽으로
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate({ image_scroll_direction: "right" })
+                    }
+                    className={`rounded-xl border px-3 py-2.5 text-sm font-black ${
+                      cell.image_scroll_direction === "right"
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-200 bg-white text-gray-700"
+                    }`}
+                  >
+                    오른쪽으로 →
+                  </button>
+                </div>
+              </Field>
+
+              <Field label={`흐르는 시간 · ${cell.image_scroll_speed ?? 28}초`}>
+                <input
+                  type="range"
+                  min="8"
+                  max="90"
+                  step="1"
+                  value={cell.image_scroll_speed ?? 28}
+                  onChange={(event) =>
+                    onUpdate({
+                      image_scroll_speed: Number(event.target.value),
+                    })
+                  }
+                  className="w-full"
+                />
+                <div className="mt-1 flex justify-between text-[11px] font-bold text-gray-500">
+                  <span>빠르게</span>
+                  <span>천천히</span>
+                </div>
+              </Field>
+
+              <Field label={`이미지 너비 · ${cell.image_scroll_width ?? 280}px`}>
+                <input
+                  type="range"
+                  min="120"
+                  max="520"
+                  step="10"
+                  value={cell.image_scroll_width ?? 280}
+                  onChange={(event) =>
+                    onUpdate({
+                      image_scroll_width: Number(event.target.value),
+                    })
+                  }
+                  className="w-full"
+                />
+              </Field>
+
+              <Field label={`이미지 간격 · ${cell.image_scroll_gap ?? 12}px`}>
+                <input
+                  type="range"
+                  min="0"
+                  max="48"
+                  step="2"
+                  value={cell.image_scroll_gap ?? 12}
+                  onChange={(event) =>
+                    onUpdate({
+                      image_scroll_gap: Number(event.target.value),
+                    })
+                  }
+                  className="w-full"
+                />
+              </Field>
+            </div>
+          ) : null}
+
+          {mode === "auto-slider" && selectedCount > 0 && selectedCount < 3 ? (
+            <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+              자동 슬라이드는 최소 3장을 선택해주세요.
+            </p>
+          ) : null}
+
+          {selectedCount ? (
+            <button
+              type="button"
+              onClick={() => onUpdate({ gallery_images: [] })}
+              className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700"
+            >
+              선택 이미지 모두 해제
+            </button>
+          ) : null}
+
+          {imageLoadError ? (
+            <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">
+              {imageLoadError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === "map-section" ? (
+        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-center">
+          <div className="text-4xl">🗺</div>
+          <p className="mt-2 text-sm font-black text-gray-900">
+            업체 주소 자동 지도
+          </p>
+          <p className="mt-1 text-xs leading-5 text-gray-600">
+            비즈니스에 저장된 주소 또는 위도·경도를 자동으로 가져와
+            레이아웃과 공개 페이지에 Google 지도를 표시합니다.
+          </p>
+          <p className="mt-2 text-[11px] font-bold text-blue-700">
+            지도 안에는 업체명, 주소, Directions 버튼이 함께 표시됩니다.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+function SnsCellEditor({
+  cell,
+  onUpdate,
+}: {
+  cell: GridCell;
+  onUpdate: (patch: Partial<GridCell>) => void;
+}) {
+  const items = normalizeSnsItems(cell);
+
+  function updateItem(itemId: string, patch: Partial<SnsItem>) {
+    onUpdate({
+      sns_items: items.map((item) =>
+        item.id === itemId ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function removeItem(itemId: string) {
+    onUpdate({
+      sns_items: items.filter((item) => item.id !== itemId),
+    });
+  }
+
+  function addPlatform(platform: SnsPlatform) {
+    onUpdate({
+      sns_items: [...items, createSnsItem(platform)],
+    });
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="rounded-2xl border border-pink-200 bg-pink-50 p-4">
+        <p className="text-sm font-black text-pink-950">
+          SNS 로고와 링크
+        </p>
+        <p className="mt-1 text-xs leading-5 text-pink-800">
+          Facebook, Instagram 등을 선택한 뒤 주소를 입력하면 공개
+          페이지에 해당 SNS 로고가 자동으로 표시됩니다.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {SNS_PLATFORM_OPTIONS.filter(
+          (option) => option.value !== "custom",
+        ).map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => addPlatform(option.value)}
+            className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left hover:border-gray-950"
+          >
+            <SnsPlatformLogo platform={option.value} size={24} />
+            <span className="truncate text-xs font-black text-gray-800">
+              {option.label}
+            </span>
+          </button>
+        ))}
+
+        <button
+          type="button"
+          onClick={() => addPlatform("custom")}
+          className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left hover:border-gray-950"
+        >
+          <SnsPlatformLogo platform="custom" size={24} />
+          <span className="truncate text-xs font-black text-gray-800">
+            기타
+          </span>
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {items.map((item, index) => {
+          const option =
+            SNS_PLATFORM_OPTIONS.find(
+              (entry) => entry.value === item.platform,
+            ) || SNS_PLATFORM_OPTIONS[SNS_PLATFORM_OPTIONS.length - 1];
+
+          return (
+            <div
+              key={item.id}
+              className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <SnsPlatformLogo platform={item.platform} size={34} />
+
+                <select
+                  value={item.platform}
+                  onChange={(event) => {
+                    const nextPlatform = event.target.value as SnsPlatform;
+                    const nextLabel =
+                      SNS_PLATFORM_OPTIONS.find(
+                        (entry) => entry.value === nextPlatform,
+                      )?.label || "SNS";
+
+                    updateItem(item.id, {
+                      platform: nextPlatform,
+                      label: nextLabel,
+                    });
+                  }}
+                  className="min-w-0 flex-1 rounded-xl border border-gray-300 px-3 py-2 text-sm font-bold"
+                >
+                  {SNS_PLATFORM_OPTIONS.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => removeItem(item.id)}
+                  className="rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100"
+                  aria-label={`${option.label} 삭제`}
+                >
+                  삭제
+                </button>
+              </div>
+
+              {item.platform === "custom" ? (
+                <label className="mt-3 block">
+                  <span className="mb-1 block text-xs font-black text-gray-700">
+                    표시 이름
+                  </span>
+                  <input
+                    value={item.label || ""}
+                    onChange={(event) =>
+                      updateItem(item.id, { label: event.target.value })
+                    }
+                    placeholder="예: Blog"
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                  />
+                </label>
+              ) : null}
+
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-black text-gray-700">
+                  {option.label} 주소
+                </span>
+                <input
+                  type="url"
+                  value={item.url}
+                  onChange={(event) =>
+                    updateItem(item.id, { url: event.target.value })
+                  }
+                  placeholder={option.placeholder}
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                />
+              </label>
+
+              {String(item.url || "").trim() ? (
+                <a
+                  href={normalizeExternalUrl(item.url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex text-xs font-black text-blue-600 underline"
+                >
+                  링크 열기 테스트
+                </a>
+              ) : null}
+
+              <p className="mt-2 text-[10px] font-bold text-gray-400">
+                SNS {index + 1}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {!items.length ? (
+        <div className="rounded-2xl border-2 border-dashed border-gray-300 px-4 py-8 text-center">
+          <p className="text-sm font-black text-gray-700">
+            위에서 SNS를 선택해주세요.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-4 rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:grid-cols-2">
+        <label>
+          <span className="mb-1 block text-xs font-black text-gray-700">
+            로고 크기
+          </span>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={20}
+              max={72}
+              value={Math.max(
+                20,
+                Math.min(72, Number(cell.sns_icon_size_px || 32)),
+              )}
+              onChange={(event) =>
+                onUpdate({
+                  sns_icon_size_px: Number(event.target.value),
+                })
+              }
+              className="min-w-0 flex-1 accent-gray-950"
+            />
+            <span className="w-12 text-right text-xs font-black">
+              {Math.max(
+                20,
+                Math.min(72, Number(cell.sns_icon_size_px || 32)),
+              )}
+              px
+            </span>
+          </div>
+        </label>
+
+        <label>
+          <span className="mb-1 block text-xs font-black text-gray-700">
+            로고 사이 간격
+          </span>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={4}
+              max={40}
+              value={Math.max(
+                4,
+                Math.min(40, Number(cell.sns_icon_gap_px || 12)),
+              )}
+              onChange={(event) =>
+                onUpdate({
+                  sns_icon_gap_px: Number(event.target.value),
+                })
+              }
+              className="min-w-0 flex-1 accent-gray-950"
+            />
+            <span className="w-12 text-right text-xs font-black">
+              {Math.max(
+                4,
+                Math.min(40, Number(cell.sns_icon_gap_px || 12)),
+              )}
+              px
+            </span>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function MenuCellEditor({
+  area,
+  cell,
+  sections,
+  onUpdate,
+}: {
+  area: "header" | "hero";
+  cell: GridCell;
+  sections: BusinessSection[];
+  onUpdate: (patch: Partial<GridCell>) => void;
+  onShowImageGuide?: () => void;
+}) {
+  const items = normalizeMenuItems(cell);
+
+  const sectionOptions = [...(Array.isArray(sections) ? sections : [])]
+    .filter(
+      (section) =>
+        section.is_visible && section.content?.page_type !== "link-page",
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => {
+      const label =
+        section.section_type === "hero"
+          ? "Home"
+          : section.title ||
+            SECTION_LABELS[section.section_type] ||
+            section.section_type ||
+            `Layer ${section.id}`;
+
+      const value =
+        section.section_type === "hero"
+          ? "home"
+          : slugifyMenuValue(section.title || section.section_type);
+
+      return { id: section.id, label, value };
+    })
+    .filter((section) => Boolean(section.value));
+
+  function updateItems(
+    updater: (
+      current: NonNullable<GridCell["menu_items"]>,
+    ) => NonNullable<GridCell["menu_items"]>,
+  ) {
+    const nextItems = updater(items).map((item) => {
+      const linkType = item.link_type || "section";
+      const linkValue = slugifyMenuValue(
+        typeof item.link_value === "string"
+          ? item.link_value
+          : linkType === "section"
+            ? item.label
+            : "",
+      );
+
+      return {
+        ...item,
+        url: buildMenuUrl(linkType, item.label, linkValue),
+        link_value: linkValue,
+      };
+    });
+
+    onUpdate({
+      menu_mode: "text",
+      menu_items: nextItems,
+      text: nextItems.map((item) => item.label).join(", "),
+    });
+  }
+
+  function moveItem(index: number, direction: "up" | "down") {
+    updateItems((current) => {
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+      if (targetIndex < 0 || targetIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      [next[index], next[targetIndex]] = [
+        next[targetIndex],
+        next[index],
+      ];
+
+      return next;
+    });
+  }
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-black text-gray-800">메뉴</p>
+          <p className="mt-1 text-xs text-gray-500">
+            이름과 이동 방식만 선택하세요.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            updateItems((current) => [...current, createMenuItem("새 메뉴")])
+          }
+          className="shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
+        >
+          + 추가
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {items.map((item, index) => {
+          const linkType = item.link_type || "section";
+
+          return (
+            <div
+              key={item.id}
+              className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  value={item.label}
+                  onChange={(event) =>
+                    updateItems((current) =>
+                      current.map((entry) =>
+                        entry.id === item.id
+                          ? { ...entry, label: event.target.value }
+                          : entry,
+                      ),
+                    )
+                  }
+                  placeholder="메뉴 이름"
+                  className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
+                />
+
+                <button
+                  type="button"
+                  disabled={index === 0}
+                  onClick={() => moveItem(index, "up")}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white font-black text-gray-700 disabled:opacity-25"
+                  aria-label={`${item.label} 위로 이동`}
+                >
+                  ↑
+                </button>
+
+                <button
+                  type="button"
+                  disabled={index === items.length - 1}
+                  onClick={() => moveItem(index, "down")}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white font-black text-gray-700 disabled:opacity-25"
+                  aria-label={`${item.label} 아래로 이동`}
+                >
+                  ↓
+                </button>
+              </div>
+
+              <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateItems((current) =>
+                      current.map((entry) =>
+                        entry.id === item.id
+                          ? {
+                              ...entry,
+                              link_type: "section",
+                              link_value:
+                                sectionOptions.some(
+                                  (option) => option.value === entry.link_value,
+                                )
+                                  ? entry.link_value
+                                  : sectionOptions[0]?.value || "home",
+                            }
+                          : entry,
+                      ),
+                    )
+                  }
+                  className={`rounded-xl border px-2 py-2 text-xs font-black ${
+                    linkType === "section"
+                      ? "border-gray-950 bg-gray-950 text-white"
+                      : "border-gray-200 bg-white text-gray-700"
+                  }`}
+                >
+                  현재 페이지
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateItems((current) =>
+                      current.map((entry) =>
+                        entry.id === item.id
+                          ? {
+                              ...entry,
+                              link_type: "page",
+                              link_value: slugifyMenuValue(
+                                entry.link_value || entry.label,
+                              ),
+                            }
+                          : entry,
+                      ),
+                    )
+                  }
+                  className={`rounded-xl border px-2 py-2 text-xs font-black ${
+                    linkType === "page"
+                      ? "border-gray-950 bg-gray-950 text-white"
+                      : "border-gray-200 bg-white text-gray-700"
+                  }`}
+                >
+                  별도 페이지
+                </button>
+
+                <button
+                  type="button"
+                  disabled={items.length <= 1}
+                  onClick={() =>
+                    updateItems((current) =>
+                      current.filter((entry) => entry.id !== item.id),
+                    )
+                  }
+                  className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 disabled:opacity-30"
+                >
+                  삭제
+                </button>
+              </div>
+
+              {linkType === "section" ? (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                  <label>
+                    <span className="mb-1 block text-xs font-black text-emerald-900">
+                      이동할 레이어
+                    </span>
+                    <select
+                      value={
+                        item.link_value ||
+                        sectionOptions[0]?.value ||
+                        "home"
+                      }
+                      onChange={(event) =>
+                        updateItems((current) =>
+                          current.map((entry) =>
+                            entry.id === item.id
+                              ? {
+                                  ...entry,
+                                  link_type: "section",
+                                  link_value: event.target.value,
+                                }
+                              : entry,
+                          ),
+                        )
+                      }
+                      className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    >
+                      {sectionOptions.length ? (
+                        sectionOptions.map((option) => (
+                          <option key={option.id} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="home">Home</option>
+                      )}
+                    </select>
+                  </label>
+
+                  <p className="mt-2 break-all text-[11px] font-bold leading-5 text-emerald-700">
+                    연결 위치: #{item.link_value || sectionOptions[0]?.value || "home"}
+                  </p>
+                </div>
+              ) : null}
+
+              {linkType === "page" ? (
+                <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                  <label>
+                    <span className="mb-1 block text-xs font-black text-blue-900">
+                      별도 페이지 주소
+                    </span>
+                    <div className="flex items-center overflow-hidden rounded-xl border border-blue-200 bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+                      <span className="shrink-0 border-r border-blue-100 bg-blue-50 px-3 py-2.5 text-xs font-black text-blue-700">
+                        /
+                      </span>
+                      <input
+                        value={item.link_value || ""}
+                        onChange={(event) =>
+                          updateItems((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? {
+                                    ...entry,
+                                    link_value: slugifyMenuValue(
+                                      event.target.value,
+                                    ),
+                                  }
+                                : entry,
+                            ),
+                          )
+                        }
+                        placeholder="menu"
+                        className="min-w-0 flex-1 border-0 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none"
+                      />
+                    </div>
+                  </label>
+
+                  <p className="mt-2 break-all text-[11px] font-bold leading-5 text-blue-700">
+                    연결 주소: /business/업체번호/website/{item.link_value || slugifyMenuValue(item.label) || "page"}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-3 rounded-xl bg-blue-50 px-3 py-2.5 text-xs leading-5 text-blue-800">
+        현재 페이지를 선택하면 이동할 레이어를 직접 고를 수 있습니다. 별도
+        페이지를 선택하면 표시되는 주소 칸에 menu, about처럼 입력하세요.
+      </p>
+    </div>
+  );
+}
+
+function PageButton({ active, label, muted = false, onClick }: { active: boolean; label: string; muted?: boolean; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className={`flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm font-bold ${active ? "bg-gray-950 text-white" : "bg-gray-50 text-gray-800 hover:bg-gray-100"} ${muted ? "opacity-45" : ""}`}><span>{label}</span><span>›</span></button>;
+}
+
+function OverlayPositionPicker({
+  cell,
+  onUpdate,
+}: {
+  cell: GridCell;
+  onUpdate: (patch: Partial<GridCell>) => void;
+}) {
+  const positions: Array<{
+    horizontal: TextAlign;
+    vertical: VerticalAlign;
+    label: string;
+  }> = [
+    { horizontal: "left", vertical: "top", label: "↖" },
+    { horizontal: "center", vertical: "top", label: "↑" },
+    { horizontal: "right", vertical: "top", label: "↗" },
+    { horizontal: "left", vertical: "center", label: "←" },
+    { horizontal: "center", vertical: "center", label: "●" },
+    { horizontal: "right", vertical: "center", label: "→" },
+    { horizontal: "left", vertical: "bottom", label: "↙" },
+    { horizontal: "center", vertical: "bottom", label: "↓" },
+    { horizontal: "right", vertical: "bottom", label: "↘" },
+  ];
+
+  return (
+    <Field label="위치 · 상하좌우 및 중앙">
+      <div className="grid grid-cols-3 gap-2">
+        {positions.map((position) => {
+          const active =
+            (cell.text_align || "center") === position.horizontal &&
+            (cell.vertical_align || "center") === position.vertical;
+
+          return (
+            <button
+              key={`${position.horizontal}-${position.vertical}`}
+              type="button"
+              onClick={() =>
+                onUpdate({
+                  text_align: position.horizontal,
+                  vertical_align: position.vertical,
+                })
+              }
+              className={`flex h-11 items-center justify-center rounded-xl border text-lg font-black ${
+                active
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-gray-200 bg-white text-gray-700"
+              }`}
+            >
+              {position.label}
+            </button>
+          );
+        })}
+      </div>
+    </Field>
+  );
+}
+
+
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="mt-4 block"><span className="mb-2 block text-sm font-black text-gray-700">{label}</span>{children}</label>;
+}
+
+function ColorInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return <label className="mt-4 block"><span className="mb-2 block text-sm font-black text-gray-700">{label}</span><div className="flex items-center gap-2"><input type="color" value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-12 rounded border border-gray-300 bg-white p-1" /><input value={value} onChange={(event) => onChange(event.target.value)} className="min-w-0 flex-1 rounded-xl border border-gray-300 px-3 py-2.5 text-sm" /></div></label>;
+}
+
+function ActionButton({ label, onClick, danger = false }: { label: string; onClick: () => void; danger?: boolean }) {
+  return <button type="button" onClick={onClick} className={`rounded-xl px-3 py-2.5 text-sm font-black ${danger ? "bg-red-50 text-red-700" : "bg-gray-100 text-gray-800"}`}>{label}</button>;
+}

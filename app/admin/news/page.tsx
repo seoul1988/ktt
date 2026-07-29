@@ -13,6 +13,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import RichTextEditor from "@/app/components/RichTextEditor";
 import ProfileButton from "@/app/components/ProfileButton";
 import { supabase } from "../../../lib/supabase";
+import BottomNav from "../../components/BottomNav";
+
 
 type NewsAttachment = {
   name: string;
@@ -1646,7 +1648,7 @@ function AdminBusinessNewsContent() {
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] px-3 py-4 text-[#172033]">
-      <div className="mx-auto w-full max-w-md">
+      <div className="mx-auto w-full max-w-xl">
         <div className="mb-4 flex items-center">
           <button
             type="button"
@@ -1755,6 +1757,10 @@ function AdminBusinessNewsContent() {
 
                   <option value="상공인뉴스">
                     상공인뉴스
+                  </option>
+
+                  <option value="한국경제">
+                    한국경제
                   </option>
 
                   <option value="공연/문화">
@@ -2368,6 +2374,7 @@ function AdminBusinessNewsContent() {
           )}
         </div>
       </div>
+	  <BottomNav activeNav="community" />
     </main>
   );
 }
