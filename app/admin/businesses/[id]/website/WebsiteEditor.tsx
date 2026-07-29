@@ -4980,18 +4980,11 @@ function HeaderSubmenu({
       }}
     >
       <div
-        className={
-          previewDevice === "mobile"
-            ? "flex w-full items-center justify-end gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            : "mx-auto flex max-w-5xl items-center justify-center gap-8 px-4"
-        }
+        className="mx-auto flex max-w-5xl items-center justify-center gap-8 px-4"
         style={{
-          minHeight:
-            previewDevice === "mobile"
-              ? "42px"
-              : `${Number(
-                  websiteSettings.header_submenu_height_px || 56,
-                )}px`,
+          minHeight: `${Number(
+            websiteSettings.header_submenu_height_px || 56,
+          )}px`,
         }}
       >
         {visibleItems.map((item) => (
@@ -5001,18 +4994,11 @@ function HeaderSubmenu({
             onClick={(event) => {
               if (editable) event.preventDefault();
             }}
-            className={
-              previewDevice === "mobile"
-                ? "shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-black transition hover:bg-white/10"
-                : "whitespace-nowrap px-2 font-medium transition hover:opacity-70"
-            }
+            className="whitespace-nowrap px-2 font-medium transition hover:opacity-70"
             style={{
-              fontSize:
-                previewDevice === "mobile"
-                  ? "12px"
-                  : `${Number(
-                      websiteSettings.header_submenu_font_size_px || 14,
-                    )}px`,
+              fontSize: `${Number(
+                websiteSettings.header_submenu_font_size_px || 14,
+              )}px`,
             }}
           >
             {item.label || "Menu"}
@@ -10800,7 +10786,6 @@ function RightPanel(props: {
         selectedCell.type !== "image" &&
         selectedCell.type !== "map" &&
         selectedCell.type !== "menu" &&
-        selectedCell.type !== "phone" &&
         selectedCell.type !== "sns" &&
         selectedCell.type !== "title" ? (
           <Field label="내용">
