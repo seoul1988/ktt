@@ -6834,10 +6834,7 @@ function ReadOnlyGrid({
           imageOnlyHero || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        // 이미지 전용 레이아웃은 슬라이더가 실제 이미지 비율을 직접 결정합니다.
-        // 여기에서 3 / 2로 고정하면 이미지를 교체한 뒤 이전 높이가 남아
-        // 아래쪽에 빈 공간이 생길 수 있습니다.
-        aspectRatio: undefined,
+        aspectRatio: imageOnlyHero ? "3 / 2" : undefined,
         gridTemplateColumns: widths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -7487,6 +7484,28 @@ function CellPreview({
   websiteSettings?: WebsiteSettings;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+
+  useEffect(() => {
+    if (!imageLightboxOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setImageLightboxOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [imageLightboxOpen]);
+
   const fontWeight = cell.font_weight === "black" ? 900 : cell.font_weight === "bold" ? 700 : cell.font_weight === "semibold" ? 600 : 400;
   const responsiveFontSize =
     previewDevice === "mobile"
@@ -7561,14 +7580,84 @@ function CellPreview({
     );
   }
   if (cell.type === "image") {
-    return cell.image_url ? (
+    if (!cell.image_url) {
+      return <span className="text-sm font-bold opacity-70">이미지</span>;
+    }
+
+    const imageHref = normalizeButtonHref(cell.url);
+    const imageOpensNewWindow = isExternalButtonHref(imageHref);
+    const imageElement = (
       <img
         src={cell.image_url}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
+        alt={cell.text || business.name || "이미지"}
+        draggable={false}
+        className="absolute inset-0 h-full w-full select-none object-cover"
       />
-    ) : (
-      <span className="text-sm font-bold opacity-70">이미지</span>
+    );
+
+    return (
+      <>
+        {imageHref ? (
+          <a
+            href={imageHref}
+            target={imageOpensNewWindow ? "_blank" : undefined}
+            rel={imageOpensNewWindow ? "noreferrer noopener" : undefined}
+            aria-label={cell.text || "이미지 링크 열기"}
+            className="absolute inset-0 block cursor-pointer overflow-hidden"
+            style={{ borderRadius: "inherit" }}
+          >
+            {imageElement}
+          </a>
+        ) : (
+          <button
+            type="button"
+            aria-label="이미지 크게 보기"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setImageLightboxOpen(true);
+            }}
+            className="absolute inset-0 block cursor-zoom-in overflow-hidden border-0 bg-transparent p-0"
+            style={{ borderRadius: "inherit" }}
+          >
+            {imageElement}
+          </button>
+        )}
+
+        {imageLightboxOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="이미지 크게 보기"
+                className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) {
+                    setImageLightboxOpen(false);
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  aria-label="크게 보기 닫기"
+                  onClick={() => setImageLightboxOpen(false)}
+                  className="fixed right-3 top-3 z-[10001] flex h-11 w-11 items-center justify-center rounded-full bg-black/65 text-3xl font-light leading-none text-white shadow-lg transition hover:bg-black sm:right-6 sm:top-6"
+                >
+                  ×
+                </button>
+
+                <img
+                  src={cell.image_url}
+                  alt={cell.text || business.name || "크게 보기 이미지"}
+                  draggable={false}
+                  className="block max-h-[94vh] max-w-[96vw] select-none object-contain sm:max-h-[92vh] sm:max-w-[92vw]"
+                  onClick={(event) => event.stopPropagation()}
+                />
+              </div>,
+              document.body,
+            )
+          : null}
+      </>
     );
   }
   if (cell.type === "button") {
@@ -10282,12 +10371,18 @@ function RightPanel(props: {
   const [inputColor, setInputColor] = useState("#111827");
   const [inputBackgroundColor, setInputBackgroundColor] = useState("#ffffff");
   const [inputTextAlign, setInputTextAlign] = useState<TextAlign>("left");
-  const [textLinkType, setTextLinkType] = useState<"section" | "page">("section");
+  const [textLinkType, setTextLinkType] = useState<
+    "section" | "page" | "external"
+  >("section");
   const [textLinkValue, setTextLinkValue] = useState("");
   const [textEditorMessage, setTextEditorMessage] = useState("");
   const textEditorRef = useRef<HTMLDivElement>(null);
   const savedTextRangeRef = useRef<Range | null>(null);
   const textEditorInitializedRef = useRef(false);
+  const textEditorImageInputRef = useRef<HTMLInputElement>(null);
+  const [textEditorImageUploading, setTextEditorImageUploading] = useState(false);
+  const [selectedTextEditorImageId, setSelectedTextEditorImageId] = useState("");
+  const [selectedTextEditorImageWidth, setSelectedTextEditorImageWidth] = useState(520);
 
   function openTextEditor() {
     const initialHtml = selectedCell?.rich_text_html
@@ -10311,6 +10406,8 @@ function RightPanel(props: {
     setTextLinkType("section");
     setTextLinkValue("");
     setTextEditorMessage("");
+    setSelectedTextEditorImageId("");
+    setSelectedTextEditorImageWidth(520);
     savedTextRangeRef.current = null;
     textEditorInitializedRef.current = false;
     setTextEditorOpen(true);
@@ -10345,6 +10442,141 @@ function RightPanel(props: {
       textEditorRef.current?.focus();
     }, 0);
   }, [textEditorOpen, textEditorHtml]);
+
+  async function uploadTextEditorImage(file: File) {
+    const compressed = await compressLinkPageImage(file);
+    const formData = new FormData();
+    formData.append("file", compressed);
+    formData.append("businessId", props.businessId);
+    formData.append("kind", "link-page-image");
+
+    const response = await fetch(
+      `/api/admin/businesses/${encodeURIComponent(props.businessId)}/website/upload`,
+      {
+        method: "POST",
+        headers: { "x-admin-key": props.adminKey },
+        body: formData,
+      },
+    );
+    const result = await readApiResponse(response);
+    if (!response.ok) {
+      throw new Error(String(result.error || result.message || "이미지 업로드 실패"));
+    }
+    const url = getUploadedUrl(result);
+    if (!url) throw new Error("업로드된 이미지 주소를 받지 못했습니다.");
+    return url;
+  }
+
+  function insertTextEditorHtmlAtCursor(html: string) {
+    const editor = textEditorRef.current;
+    if (!editor) return;
+    editor.focus();
+
+    const selectionObject = window.getSelection();
+    let range: Range | null = null;
+    if (savedTextRangeRef.current) {
+      range = savedTextRangeRef.current.cloneRange();
+    } else if (selectionObject && selectionObject.rangeCount > 0) {
+      const current = selectionObject.getRangeAt(0);
+      if (editor.contains(current.commonAncestorContainer)) range = current.cloneRange();
+    }
+
+    if (range && editor.contains(range.commonAncestorContainer)) {
+      range.deleteContents();
+      const fragment = range.createContextualFragment(html);
+      const lastNode = fragment.lastChild;
+      range.insertNode(fragment);
+      if (lastNode && selectionObject) {
+        range.setStartAfter(lastNode);
+        range.collapse(true);
+        selectionObject.removeAllRanges();
+        selectionObject.addRange(range);
+        savedTextRangeRef.current = range.cloneRange();
+      }
+    } else {
+      editor.insertAdjacentHTML("beforeend", html);
+    }
+    syncEditorHtml();
+  }
+
+  async function handleTextEditorImageFile(file: File | undefined) {
+    if (!file) return;
+    setTextEditorImageUploading(true);
+    setTextEditorMessage("");
+    try {
+      const url = await uploadTextEditorImage(file);
+      const imageId = createId("text-editor-image");
+      const alt = file.name.replace(/\.[^.]+$/, "").replace(/"/g, "");
+      insertTextEditorHtmlAtCursor(
+        `<p style="text-align:center;"><span data-text-editor-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
+      );
+      setSelectedTextEditorImageId(imageId);
+      setSelectedTextEditorImageWidth(520);
+      requestAnimationFrame(() => {
+        const wrapper = textEditorRef.current?.querySelector<HTMLElement>(
+          `[data-text-editor-image-id="${imageId}"]`,
+        );
+        wrapper?.setAttribute("data-selected", "true");
+      });
+    } catch (error) {
+      setTextEditorMessage(error instanceof Error ? error.message : "이미지 추가에 실패했습니다.");
+    } finally {
+      setTextEditorImageUploading(false);
+      if (textEditorImageInputRef.current) textEditorImageInputRef.current.value = "";
+    }
+  }
+
+  function selectTextEditorImage(target: EventTarget | null) {
+    const editor = textEditorRef.current;
+    const element = target instanceof HTMLElement ? target : null;
+    const wrapper = element?.closest<HTMLElement>("[data-text-editor-image-id]");
+    editor
+      ?.querySelectorAll<HTMLElement>("[data-text-editor-image-id][data-selected]")
+      .forEach((item) => item.removeAttribute("data-selected"));
+
+    if (!wrapper || !editor?.contains(wrapper)) {
+      setSelectedTextEditorImageId("");
+      return;
+    }
+    wrapper.setAttribute("data-selected", "true");
+    setSelectedTextEditorImageId(wrapper.dataset.textEditorImageId || "");
+    setSelectedTextEditorImageWidth(Math.max(80, Math.round(wrapper.getBoundingClientRect().width)));
+  }
+
+  function getSelectedTextEditorImage() {
+    if (!selectedTextEditorImageId) return null;
+    return textEditorRef.current?.querySelector<HTMLElement>(
+      `[data-text-editor-image-id="${selectedTextEditorImageId}"]`,
+    ) || null;
+  }
+
+  function resizeSelectedTextEditorImage(width: number) {
+    const wrapper = getSelectedTextEditorImage();
+    if (!wrapper) return;
+    const maxWidth = textEditorRef.current?.clientWidth || 1200;
+    const next = Math.max(80, Math.min(maxWidth, Math.round(width)));
+    wrapper.style.width = `${next}px`;
+    setSelectedTextEditorImageWidth(next);
+    syncEditorHtml();
+  }
+
+  function alignSelectedTextEditorImage(align: TextAlign) {
+    const wrapper = getSelectedTextEditorImage();
+    if (!wrapper) return;
+    const parent = wrapper.closest<HTMLElement>("p,div");
+    if (parent) parent.style.textAlign = align;
+    syncEditorHtml();
+  }
+
+  function deleteSelectedTextEditorImage() {
+    const wrapper = getSelectedTextEditorImage();
+    if (!wrapper) return;
+    const parent = wrapper.parentElement;
+    wrapper.remove();
+    if (parent && !parent.textContent?.trim() && !parent.querySelector("img")) parent.remove();
+    setSelectedTextEditorImageId("");
+    syncEditorHtml();
+  }
 
   function rememberTextSelection() {
     const editor = textEditorRef.current;
@@ -10605,11 +10837,19 @@ function RightPanel(props: {
     .filter((option) => Boolean(option.value));
 
   function applyTextLink() {
-    if (!textLinkValue) {
+    const rawLinkValue = textLinkValue.trim();
+    const href =
+      textLinkType === "external"
+        ? normalizeExternalUrl(rawLinkValue)
+        : rawLinkValue;
+
+    if (!href) {
       setTextEditorMessage(
         textLinkType === "section"
           ? "이동할 레이어를 선택하세요."
-          : "이동할 페이지를 선택하세요.",
+          : textLinkType === "page"
+            ? "이동할 페이지를 선택하세요."
+            : "연결할 외부 사이트 주소를 입력하세요.",
       );
       return;
     }
@@ -10640,8 +10880,12 @@ function RightPanel(props: {
     }
 
     const anchorElement = document.createElement("a");
-    anchorElement.href = textLinkValue;
+    anchorElement.href = href;
     anchorElement.setAttribute("data-link-type", textLinkType);
+    if (textLinkType === "external") {
+      anchorElement.target = "_blank";
+      anchorElement.rel = "noopener noreferrer";
+    }
     anchorElement.style.color = "inherit";
     anchorElement.style.textDecoration = "underline";
     anchorElement.style.cursor = "pointer";
@@ -10662,7 +10906,9 @@ function RightPanel(props: {
       setTextEditorMessage(
         textLinkType === "section"
           ? "선택한 글씨에 레이어 링크를 적용했습니다."
-          : "선택한 글씨에 페이지 링크를 적용했습니다.",
+          : textLinkType === "page"
+            ? "선택한 글씨에 페이지 링크를 적용했습니다."
+            : "선택한 글씨에 외부 사이트 링크를 적용했습니다.",
       );
     } catch {
       setTextEditorMessage("선택한 글씨에 링크를 적용하지 못했습니다.");
@@ -11540,6 +11786,61 @@ function RightPanel(props: {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-7">
+                <div className="mb-4 rounded-2xl border border-violet-300 bg-violet-50 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={textEditorImageUploading}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        rememberTextSelection();
+                      }}
+                      onClick={() => textEditorImageInputRef.current?.click()}
+                      className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      {textEditorImageUploading ? "이미지 등록 중..." : "＋ 이미지 등록"}
+                    </button>
+                    <input
+                      ref={textEditorImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => void handleTextEditorImageFile(event.target.files?.[0])}
+                    />
+                    <p className="text-xs font-bold text-violet-800">
+                      편집창에서 커서를 놓은 위치에 이미지가 들어갑니다. 이미지를 클릭한 뒤 오른쪽 아래를 드래그해 크기를 조절하세요.
+                    </p>
+                  </div>
+
+                  {selectedTextEditorImageId ? (
+                    <div className="mt-3 rounded-xl border border-amber-300 bg-white p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-black text-amber-900">선택한 이미지 폭</span>
+                        <input
+                          type="range"
+                          min="80"
+                          max="1200"
+                          value={selectedTextEditorImageWidth}
+                          onChange={(event) => resizeSelectedTextEditorImage(Number(event.target.value))}
+                          className="min-w-[180px] flex-1"
+                        />
+                        <input
+                          type="number"
+                          min="80"
+                          max="1200"
+                          value={selectedTextEditorImageWidth}
+                          onChange={(event) => resizeSelectedTextEditorImage(Number(event.target.value))}
+                          className="h-10 w-24 rounded-lg border border-gray-300 px-2 text-center text-sm font-black"
+                        />
+                        <button type="button" onClick={() => alignSelectedTextEditorImage("left")} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black">왼쪽</button>
+                        <button type="button" onClick={() => alignSelectedTextEditorImage("center")} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black">가운데</button>
+                        <button type="button" onClick={() => alignSelectedTextEditorImage("right")} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black">오른쪽</button>
+                        <button type="button" onClick={deleteSelectedTextEditorImage} className="h-10 rounded-lg bg-red-600 px-3 text-xs font-black text-white">삭제</button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
                   <p className="mb-3 text-xs font-black text-blue-900">
                     ① 아래 편집창에서 글자를 드래그해 블록 지정 → ② 서식 선택 → ③ 저장
@@ -11648,7 +11949,10 @@ function RightPanel(props: {
                           onMouseDown={rememberTextSelection}
                           onChange={(event) => {
                             setTextLinkType(
-                              event.target.value as "section" | "page",
+                              event.target.value as
+                                | "section"
+                                | "page"
+                                | "external",
                             );
                             setTextLinkValue("");
                             setTextEditorMessage("");
@@ -11657,6 +11961,7 @@ function RightPanel(props: {
                         >
                           <option value="section">레이어 링크</option>
                           <option value="page">페이지 링크</option>
+                          <option value="external">다른 사이트 링크</option>
                         </select>
                       </label>
 
@@ -11664,31 +11969,45 @@ function RightPanel(props: {
                         <span className="mb-1 block text-[11px] font-black text-gray-600">
                           {textLinkType === "section"
                             ? "이동할 레이어"
-                            : "이동할 페이지"}
+                            : textLinkType === "page"
+                              ? "이동할 페이지"
+                              : "외부 사이트 주소"}
                         </span>
-                        <select
-                          value={textLinkValue}
-                          onMouseDown={rememberTextSelection}
-                          onChange={(event) => setTextLinkValue(event.target.value)}
-                          className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
-                        >
-                          <option value="">
-                            {textLinkType === "section"
-                              ? "레이어를 선택하세요"
-                              : "페이지를 선택하세요"}
-                          </option>
-                          {(textLinkType === "section"
-                            ? textSectionLinkOptions
-                            : textPageLinkOptions
-                          ).map((option) => (
-                            <option
-                              key={`${textLinkType}-${option.value}`}
-                              value={option.value}
-                            >
-                              {option.label}
+
+                        {textLinkType === "external" ? (
+                          <input
+                            type="url"
+                            value={textLinkValue}
+                            onMouseDown={rememberTextSelection}
+                            onChange={(event) => setTextLinkValue(event.target.value)}
+                            placeholder="예: https://squareup.com/gift/..."
+                            className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                          />
+                        ) : (
+                          <select
+                            value={textLinkValue}
+                            onMouseDown={rememberTextSelection}
+                            onChange={(event) => setTextLinkValue(event.target.value)}
+                            className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                          >
+                            <option value="">
+                              {textLinkType === "section"
+                                ? "레이어를 선택하세요"
+                                : "페이지를 선택하세요"}
                             </option>
-                          ))}
-                        </select>
+                            {(textLinkType === "section"
+                              ? textSectionLinkOptions
+                              : textPageLinkOptions
+                            ).map((option) => (
+                              <option
+                                key={`${textLinkType}-${option.value}`}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </label>
 
                       <button
@@ -11716,6 +12035,13 @@ function RightPanel(props: {
                       </button>
                     </div>
 
+                    {textLinkType === "external" ? (
+                      <p className="mt-2 text-[11px] font-semibold leading-5 text-blue-800">
+                        http:// 또는 https://를 생략해도 자동으로 https://가 붙으며,
+                        공개 페이지에서는 새 창으로 열립니다.
+                      </p>
+                    ) : null}
+
                     {textEditorMessage ? (
                       <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-blue-800">
                         {textEditorMessage}
@@ -11737,6 +12063,46 @@ function RightPanel(props: {
                     max-width: 100%;
                   }
 
+                  .text-cell-rich-editor [data-text-editor-image-id] {
+                    display: inline-block;
+                    position: relative;
+                    max-width: 100% !important;
+                    min-width: 80px;
+                    resize: horizontal;
+                    overflow: auto;
+                    line-height: 0;
+                    border: 2px solid transparent;
+                    border-radius: 14px;
+                  }
+                  .text-cell-rich-editor [data-text-editor-image-id] img {
+                    display: block;
+                    width: 100% !important;
+                    max-width: none !important;
+                    height: auto !important;
+                    margin: 0 !important;
+                    pointer-events: none;
+                  }
+                  .text-cell-rich-editor [data-text-editor-image-id][data-selected="true"] {
+                    border-color: #f59e0b;
+                    box-shadow: 0 0 0 3px rgba(245, 158, 11, .25);
+                  }
+                  .text-cell-rich-editor [data-text-editor-image-id][data-selected="true"]::after {
+                    content: "↔";
+                    position: absolute;
+                    right: 2px;
+                    bottom: 2px;
+                    display: flex;
+                    width: 24px;
+                    height: 24px;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 999px;
+                    background: #f59e0b;
+                    color: white;
+                    font-size: 13px;
+                    pointer-events: none;
+                  }
+
                   .text-cell-rich-editor [data-mobile-recovered="true"],
                   .text-cell-rich-editor [data-mobile-recovered="true"] * {
                     min-width: 0 !important;
@@ -11753,7 +12119,8 @@ function RightPanel(props: {
                   suppressContentEditableWarning
                   autoFocus
                   onInput={syncEditorHtml}
-                  onMouseUp={rememberTextSelection}
+                  onClick={(event) => selectTextEditorImage(event.target)}
+                  onMouseUp={() => { rememberTextSelection(); syncEditorHtml(); }}
                   onKeyUp={rememberTextSelection}
                   onBlur={rememberTextSelection}
                   className="text-cell-rich-editor min-h-[300px] w-full whitespace-pre-wrap rounded-2xl border-2 border-gray-300 px-5 py-4 text-lg leading-8 outline-none focus:border-blue-500"
@@ -12425,25 +12792,8 @@ function AutoImageSlider({ images }: { images: string[] }) {
   ).slice(0, 10);
 
   const [activeIndex, setActiveIndex] = useState(0);
-  const [sliderAspectRatio, setSliderAspectRatio] = useState(3 / 2);
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef(0);
-
-  const imagesSignature = safeImages.join("|");
-
-  const applyNaturalRatio = useCallback(
-    (image: HTMLImageElement | null) => {
-      if (!image || !image.naturalWidth || !image.naturalHeight) return;
-
-      const naturalRatio = image.naturalWidth / image.naturalHeight;
-      if (!Number.isFinite(naturalRatio) || naturalRatio <= 0) return;
-
-      // 지나치게 세로로 길거나 가로로 긴 이미지도 레이아웃을 깨지 않도록
-      // 안전한 범위에서 실제 비율을 사용합니다.
-      setSliderAspectRatio(Math.max(0.55, Math.min(3.2, naturalRatio)));
-    },
-    [],
-  );
 
   useEffect(() => {
     if (safeImages.length <= 1) return;
@@ -12453,25 +12803,14 @@ function AutoImageSlider({ images }: { images: string[] }) {
     }, 4500);
 
     return () => window.clearInterval(timer);
-  }, [safeImages.length, imagesSignature]);
+  }, [safeImages.length]);
+
+  const imagesSignature = safeImages.join("|");
 
   useEffect(() => {
-    // DB 이미지가 삭제·추가·재정렬되면 첫 이미지부터 새 목록으로 재생하고,
-    // 이전 이미지의 비율도 즉시 버립니다.
+    // DB 이미지가 삭제·추가·재정렬되면 첫 이미지부터 새 목록으로 재생합니다.
     setActiveIndex(0);
-    setSliderAspectRatio(3 / 2);
-
-    const firstUrl = safeImages[0];
-    if (!firstUrl || typeof window === "undefined") return;
-
-    const preload = new Image();
-    preload.onload = () => applyNaturalRatio(preload);
-    preload.src = firstUrl;
-
-    return () => {
-      preload.onload = null;
-    };
-  }, [imagesSignature, applyNaturalRatio]);
+  }, [imagesSignature]);
 
   useEffect(() => {
     if (activeIndex >= safeImages.length) {
@@ -12488,12 +12827,8 @@ function AutoImageSlider({ images }: { images: string[] }) {
 
   return (
     <div
-      className="group/slider relative block w-full overflow-hidden bg-transparent"
-      style={{
-        borderRadius: "inherit",
-        aspectRatio: `${sliderAspectRatio}`,
-        minHeight: 0,
-      }}
+      className="group/slider relative h-full min-h-[220px] w-full overflow-hidden bg-transparent"
+      style={{ borderRadius: "inherit" }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -12527,12 +12862,7 @@ function AutoImageSlider({ images }: { images: string[] }) {
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            onLoad={(event) => {
-              // 새 이미지 목록의 첫 이미지가 로드될 때마다 높이를 다시 계산합니다.
-              if (index === 0) applyNaturalRatio(event.currentTarget);
-            }}
-            className="absolute inset-0 block h-full w-full select-none object-cover"
-            style={{ borderRadius: "inherit" }}
+            className="absolute inset-0 h-full w-full select-none object-cover"
           />
         </div>
       ))}
@@ -12570,14 +12900,16 @@ function AutoImageSlider({ images }: { images: string[] }) {
               <button
                 key={index}
                 type="button"
-                aria-label={`${index + 1}번 이미지로 이동`}
+                aria-label={`${index + 1}번 이미지`}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   goTo(index);
                 }}
-                className={`h-2.5 w-2.5 rounded-full transition ${
-                  index === activeIndex ? "bg-white" : "bg-white/45"
+                className={`h-2.5 rounded-full transition-all ${
+                  index === activeIndex
+                    ? "w-6 bg-white"
+                    : "w-2.5 bg-white/55"
                 }`}
               />
             ))}
