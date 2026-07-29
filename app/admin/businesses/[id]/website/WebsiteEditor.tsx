@@ -6834,7 +6834,9 @@ function ReadOnlyGrid({
           imageOnlyHero || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        aspectRatio: imageOnlyHero ? "3 / 2" : undefined,
+        // 이미지 전용 레이어는 슬라이더와 같은 비율을 사용합니다.
+        // 이전 3:2 높이가 남아서 아래쪽에 빈 공간이 생기는 문제를 방지합니다.
+        aspectRatio: imageOnlyHero ? "16 / 9" : undefined,
         gridTemplateColumns: widths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -12827,8 +12829,12 @@ function AutoImageSlider({ images }: { images: string[] }) {
 
   return (
     <div
-      className="group/slider relative h-full min-h-[220px] w-full overflow-hidden bg-transparent"
-      style={{ borderRadius: "inherit" }}
+      className="group/slider relative w-full min-h-0 overflow-hidden bg-transparent"
+      style={{
+        borderRadius: "inherit",
+        aspectRatio: "16 / 9",
+        height: "auto",
+      }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -12862,7 +12868,10 @@ function AutoImageSlider({ images }: { images: string[] }) {
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            className="absolute inset-0 h-full w-full select-none object-cover"
+            loading={index === 0 ? "eager" : "lazy"}
+            decoding="async"
+            className="absolute inset-0 block h-full w-full select-none object-cover"
+            style={{ minHeight: 0 }}
           />
         </div>
       ))}
