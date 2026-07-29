@@ -6802,7 +6802,7 @@ function ReadOnlyGrid({
           imageOnlyHero || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        aspectRatio: undefined,
+        aspectRatio: imageOnlyHero ? "3 / 2" : undefined,
         gridTemplateColumns: widths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -12164,25 +12164,13 @@ function HorizontalImageScroll({
 }
 
 function AutoImageSlider({ images }: { images: string[] }) {
-  const safeImages = useMemo(
-    () =>
-      Array.from(
-        new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
-      ).slice(0, 10),
-    [images],
-  );
+  const safeImages = Array.from(
+    new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
+  ).slice(0, 10);
 
   const [activeIndex, setActiveIndex] = useState(0);
-  const [sliderAspectRatio, setSliderAspectRatio] = useState("16 / 9");
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef(0);
-
-  // 이미지 목록이 바뀌면 첫 번째 새 이미지의 실제 비율을 다시 읽습니다.
-  // 따라서 이전 이미지의 높이가 남아 아래쪽에 빈 공간이 생기지 않습니다.
-  useEffect(() => {
-    setActiveIndex(0);
-    setSliderAspectRatio("16 / 9");
-  }, [safeImages.join("|")]);
 
   useEffect(() => {
     if (safeImages.length <= 1) return;
@@ -12193,6 +12181,13 @@ function AutoImageSlider({ images }: { images: string[] }) {
 
     return () => window.clearInterval(timer);
   }, [safeImages.length]);
+
+  const imagesSignature = safeImages.join("|");
+
+  useEffect(() => {
+    // DB 이미지가 삭제·추가·재정렬되면 첫 이미지부터 새 목록으로 재생합니다.
+    setActiveIndex(0);
+  }, [imagesSignature]);
 
   useEffect(() => {
     if (activeIndex >= safeImages.length) {
@@ -12207,28 +12202,10 @@ function AutoImageSlider({ images }: { images: string[] }) {
     setActiveIndex(((index % total) + total) % total);
   }
 
-  function applyNaturalImageRatio(
-    event: React.SyntheticEvent<HTMLImageElement>,
-    index: number,
-  ) {
-    // 슬라이더 전체 높이는 첫 번째 이미지 비율을 기준으로 고정합니다.
-    // 다른 비율의 사진은 object-cover로 꽉 채워 페이지가 위아래로 흔들리지 않습니다.
-    if (index !== 0) return;
-
-    const image = event.currentTarget;
-    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-      setSliderAspectRatio(`${image.naturalWidth} / ${image.naturalHeight}`);
-    }
-  }
-
   return (
     <div
-      className="group/slider relative block w-full overflow-hidden bg-transparent"
-      style={{
-        borderRadius: "inherit",
-        aspectRatio: sliderAspectRatio,
-        minHeight: 0,
-      }}
+      className="group/slider relative h-full min-h-[220px] w-full overflow-hidden bg-transparent"
+      style={{ borderRadius: "inherit" }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -12262,8 +12239,7 @@ function AutoImageSlider({ images }: { images: string[] }) {
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            onLoad={(event) => applyNaturalImageRatio(event, index)}
-            className="block h-full w-full select-none object-cover"
+            className="absolute inset-0 h-full w-full select-none object-cover"
           />
         </div>
       ))}
@@ -12615,15 +12591,35 @@ function TitleCellEditor({
     setAvailableImages(urls);
 
     const imagesToPlay = urls.slice(0, 10);
+    const currentImages = Array.isArray(cell.gallery_images)
+      ? cell.gallery_images.map((url) => String(url || "").trim()).filter(Boolean)
+      : [];
+    const imagesChanged =
+      currentImages.length !== imagesToPlay.length ||
+      currentImages.some((url, index) => url !== imagesToPlay[index]);
 
     /*
-     * 중요:
-     * 이전 mode 값을 쓰지 않고 사용자가 선택한 모드를 직접 저장합니다.
+     * 자동 슬라이드는 현재 비즈니스 DB 이미지 목록을 원본으로 사용합니다.
+     * 삭제·추가·순서 변경이 있을 때만 셀 데이터를 갱신하므로
+     * 불필요한 저장 상태 변경이나 반복 렌더링이 생기지 않습니다.
      */
-    onUpdate({
-      display_mode: requestedMode,
-      gallery_images: imagesToPlay,
-    });
+    if (requestedMode === "auto-slider") {
+      if (cell.display_mode !== "auto-slider" || imagesChanged) {
+        onUpdate({
+          display_mode: "auto-slider",
+          gallery_images: imagesToPlay,
+        });
+      }
+      return;
+    }
+
+    // 갤러리와 흐르는 이미지는 기존처럼 불러온 사진을 기본 선택합니다.
+    if (cell.display_mode !== requestedMode || imagesChanged) {
+      onUpdate({
+        display_mode: requestedMode,
+        gallery_images: imagesToPlay,
+      });
+    }
   } catch (error) {
     setImageLoadError(
       error instanceof Error
@@ -12665,6 +12661,48 @@ function TitleCellEditor({
 
   const imageControlsOpen = activeControlStep === 1;
   const overlayControlsOpen = activeControlStep === 2;
+
+  /*
+   * 자동 이미지 슬라이드가 선택된 동안 현재 비즈니스 이미지 목록을
+   * 주기적으로 다시 확인합니다. 다른 관리 화면에서 기존 이미지를 삭제하거나
+   * 새 이미지를 등록해도 새로고침 없이 슬라이드가 자동으로 바뀝니다.
+   */
+  useEffect(() => {
+    if (mode !== "auto-slider" || !businessId || !adminKey) return;
+
+    let cancelled = false;
+
+    const refreshBusinessSliderImages = async () => {
+      if (cancelled || document.visibilityState === "hidden") return;
+      await loadSavedImages("auto-slider");
+    };
+
+    void refreshBusinessSliderImages();
+
+    const timer = window.setInterval(() => {
+      void refreshBusinessSliderImages();
+    }, 4000);
+
+    const handleFocus = () => {
+      void refreshBusinessSliderImages();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshBusinessSliderImages();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [mode, businessId, adminKey]);
 
   return (
     <div className="mt-5">
