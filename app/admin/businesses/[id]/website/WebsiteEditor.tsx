@@ -1929,6 +1929,21 @@ function LinkPageContent({
           .link-page-rich-html ul, .link-page-rich-html ol { margin: .75rem 0 .9rem 1.35rem; padding: 0; }
           .link-page-rich-html li { margin: .25rem 0; }
           .link-page-rich-html img { display: block; width: auto; height: auto; margin: 1rem auto; border-radius: .75rem; }
+          .link-page-rich-html [data-html-image-id] {
+            display: inline-block;
+            max-width: 100% !important;
+            resize: none !important;
+            overflow: hidden !important;
+            line-height: 0;
+            vertical-align: top;
+          }
+          .link-page-rich-html [data-html-image-id] img {
+            display: block;
+            width: 100% !important;
+            max-width: none !important;
+            height: auto !important;
+            margin: 0 !important;
+          }
           .link-page-rich-html table {
             width: 100%;
             max-width: 100%;
@@ -6411,7 +6426,24 @@ function ReadOnlyCellContent({
     );
   }
   return (
-    <div className="relative h-full w-full min-w-0">
+    <div
+      className="relative flex h-full w-full min-w-0"
+      style={{
+        justifyContent:
+          cell.text_align === "left"
+            ? "flex-start"
+            : cell.text_align === "right"
+              ? "flex-end"
+              : "center",
+        alignItems:
+          cell.vertical_align === "top"
+            ? "flex-start"
+            : cell.vertical_align === "bottom"
+              ? "flex-end"
+              : "center",
+        textAlign: cell.text_align || "center",
+      }}
+    >
       <CellPreview
         cell={cell}
         business={business}
@@ -6802,7 +6834,10 @@ function ReadOnlyGrid({
           imageOnlyHero || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        aspectRatio: imageOnlyHero ? "3 / 2" : undefined,
+        // 이미지 전용 레이아웃은 슬라이더가 실제 이미지 비율을 직접 결정합니다.
+        // 여기에서 3 / 2로 고정하면 이미지를 교체한 뒤 이전 높이가 남아
+        // 아래쪽에 빈 공간이 생길 수 있습니다.
+        aspectRatio: undefined,
         gridTemplateColumns: widths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -7580,7 +7615,11 @@ function CellPreview({
           width: `${buttonWidth}px`,
           maxWidth: "100%",
           minHeight: `${buttonHeight}px`,
-          backgroundColor: accentColor,
+          backgroundColor:
+            cell.background_color && cell.background_color !== "transparent"
+              ? cell.background_color
+              : accentColor,
+          color: cell.color || "#ffffff",
           fontSize: `${buttonFontSize}px`,
           whiteSpace:
             cell.button_no_wrap === false ? "normal" : "nowrap",
@@ -7641,7 +7680,18 @@ function CellPreview({
     }
 
     return (
-      <nav className="flex flex-wrap items-center justify-center gap-4 text-sm font-bold">
+      <nav
+        className="flex max-w-full flex-wrap items-center gap-4 text-sm font-bold"
+        style={{
+          justifyContent:
+            cell.text_align === "left"
+              ? "flex-start"
+              : cell.text_align === "right"
+                ? "flex-end"
+                : "center",
+          textAlign: cell.text_align || "center",
+        }}
+      >
         {items.map((item) => {
           const href = getGridMenuHref(item, business.id);
 
@@ -8707,12 +8757,48 @@ function RichWebPasteBox({
   const [linkType, setLinkType] = useState<"section" | "page">("section");
   const [linkValue, setLinkValue] = useState("");
   const savedSelectionRangeRef = useRef<Range | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState("");
+  const [selectedImageWidth, setSelectedImageWidth] = useState(520);
+  const selectedImageObserverRef = useRef<ResizeObserver | null>(null);
 
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
     if (editor.innerHTML !== value) editor.innerHTML = value;
   }, [value]);
+
+  function getSelectedImageWrapper() {
+    const editor = editorRef.current;
+    if (!editor || !selectedImageId) return null;
+    return editor.querySelector<HTMLElement>(
+      `[data-html-image-id="${CSS.escape(selectedImageId)}"]`,
+    );
+  }
+
+  useEffect(() => {
+    selectedImageObserverRef.current?.disconnect();
+    selectedImageObserverRef.current = null;
+
+    const wrapper = getSelectedImageWrapper();
+    if (!wrapper) return;
+
+    wrapper.setAttribute("data-selected", "true");
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const width = Math.max(80, Math.round(entry.contentRect.width));
+      wrapper.style.width = `${width}px`;
+      setSelectedImageWidth(width);
+      requestAnimationFrame(syncEditor);
+    });
+    observer.observe(wrapper);
+    selectedImageObserverRef.current = observer;
+
+    return () => {
+      observer.disconnect();
+      wrapper.removeAttribute("data-selected");
+    };
+  }, [selectedImageId]);
 
   function syncEditor() {
     onChange(sanitizeLinkPageHtml(editorRef.current?.innerHTML || ""));
@@ -8914,15 +9000,68 @@ function RichWebPasteBox({
       const compressed = await compressLinkPageImage(file);
       const url = await onUploadImage(compressed);
       const alt = file.name.replace(/\.[^.]+$/, "").replace(/"/g, "");
+      const imageId = createId("html-image");
       insertHtmlAtCursor(
-        `<p style="text-align:center;"><img src="${url}" alt="${alt}" style="display:inline-block;max-width:100%;height:auto;border-radius:12px;" /></p><p><br></p>`,
+        `<p style="text-align:center;"><span data-html-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
       );
+      setSelectedImageId(imageId);
+      setSelectedImageWidth(520);
     } catch (error) {
       setInsertError(error instanceof Error ? error.message : "이미지 추가에 실패했습니다.");
     } finally {
       setInsertingImage(false);
       if (imageInputRef.current) imageInputRef.current.value = "";
     }
+  }
+
+  function selectEditorImage(target: EventTarget | null) {
+    const element = target instanceof HTMLElement ? target : null;
+    const wrapper = element?.closest<HTMLElement>("[data-html-image-id]");
+    const editor = editorRef.current;
+
+    editor
+      ?.querySelectorAll<HTMLElement>("[data-html-image-id][data-selected]")
+      .forEach((item) => item.removeAttribute("data-selected"));
+
+    if (!wrapper || !editor?.contains(wrapper)) {
+      setSelectedImageId("");
+      return;
+    }
+
+    const imageId = wrapper.dataset.htmlImageId || "";
+    wrapper.setAttribute("data-selected", "true");
+    setSelectedImageId(imageId);
+    setSelectedImageWidth(Math.max(80, Math.round(wrapper.getBoundingClientRect().width)));
+  }
+
+  function updateSelectedImageWidth(width: number) {
+    const wrapper = getSelectedImageWrapper();
+    if (!wrapper) return;
+    const editorWidth = editorRef.current?.clientWidth || 1200;
+    const nextWidth = Math.max(80, Math.min(editorWidth, Math.round(width)));
+    wrapper.style.width = `${nextWidth}px`;
+    setSelectedImageWidth(nextWidth);
+    syncEditor();
+  }
+
+  function alignSelectedImage(align: "left" | "center" | "right") {
+    const wrapper = getSelectedImageWrapper();
+    if (!wrapper) return;
+    const paragraph = wrapper.closest<HTMLElement>("p,div");
+    if (paragraph) paragraph.style.textAlign = align;
+    syncEditor();
+  }
+
+  function deleteSelectedImage() {
+    const wrapper = getSelectedImageWrapper();
+    if (!wrapper) return;
+    const parent = wrapper.parentElement;
+    wrapper.remove();
+    if (parent && !parent.textContent?.trim() && !parent.querySelector("img")) {
+      parent.remove();
+    }
+    setSelectedImageId("");
+    syncEditor();
   }
 
   function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
@@ -8997,6 +9136,56 @@ function RichWebPasteBox({
         />
         <span className="text-[10px] font-bold text-violet-600">커서를 놓은 위치에 들어갑니다.</span>
       </div>
+
+      {selectedImageId ? (
+        <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-black text-amber-900">선택한 이미지</span>
+            <label className="flex min-w-[260px] flex-1 items-center gap-2">
+              <span className="shrink-0 text-[11px] font-black text-amber-900">폭</span>
+              <input
+                type="range"
+                min="80"
+                max="1200"
+                value={selectedImageWidth}
+                onChange={(event) => updateSelectedImageWidth(Number(event.target.value))}
+                className="min-w-0 flex-1"
+              />
+              <input
+                type="number"
+                min="80"
+                max="1200"
+                value={selectedImageWidth}
+                onChange={(event) => updateSelectedImageWidth(Number(event.target.value))}
+                className="w-20 rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-xs font-black"
+              />
+              <span className="text-[11px] font-bold text-amber-800">px</span>
+            </label>
+            <div className="flex gap-1">
+              {(["left", "center", "right"] as const).map((align) => (
+                <button
+                  key={align}
+                  type="button"
+                  onClick={() => alignSelectedImage(align)}
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-900 hover:bg-amber-100"
+                >
+                  {align === "left" ? "왼쪽" : align === "center" ? "가운데" : "오른쪽"}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={deleteSelectedImage}
+              className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-700"
+            >
+              이미지 삭제
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] font-bold text-amber-800">
+            이미지 오른쪽 아래 모서리를 좌우로 드래그해도 크기가 조절됩니다. 비율은 자동으로 유지됩니다.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
         <div className="flex flex-wrap items-end gap-3">
@@ -9125,6 +9314,7 @@ function RichWebPasteBox({
         suppressContentEditableWarning
         onPaste={handlePaste}
         onInput={syncEditor}
+        onClick={(event) => selectEditorImage(event.target)}
         onMouseUp={rememberEditorSelection}
         onKeyUp={rememberEditorSelection}
         onBlur={rememberEditorSelection}
@@ -9187,6 +9377,40 @@ function RichWebPasteBox({
         .link-page-paste-editor h3 { font-size: 1.05rem; font-weight: 800; margin: 1rem 0 .25rem; }
         .link-page-paste-editor p { margin: .25rem 0 .65rem; }
         .link-page-paste-editor img { display: block; height: auto; margin: .75rem auto; }
+        .link-page-paste-editor [data-html-image-id] {
+          max-width: 100% !important;
+          cursor: ew-resize;
+          border: 2px solid transparent;
+          border-radius: 14px;
+        }
+        .link-page-paste-editor [data-html-image-id] img {
+          width: 100% !important;
+          max-width: none !important;
+          height: auto !important;
+          margin: 0 !important;
+          pointer-events: none;
+        }
+        .link-page-paste-editor [data-html-image-id][data-selected="true"] {
+          border-color: #f59e0b;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, .25);
+        }
+        .link-page-paste-editor [data-html-image-id][data-selected="true"]::after {
+          content: "↔";
+          position: absolute;
+          right: 2px;
+          bottom: 2px;
+          display: flex;
+          width: 24px;
+          height: 24px;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: #f59e0b;
+          color: white;
+          font-size: 13px;
+          line-height: 1;
+          pointer-events: none;
+        }
         .link-page-paste-editor table { width: 100%; table-layout: fixed; border-collapse: collapse; }
         .link-page-paste-editor th, .link-page-paste-editor td { min-width: 0; border: 1px solid #d1d5db; padding: .75rem; vertical-align: top; overflow-wrap: break-word; }
       `}</style>
@@ -11137,6 +11361,38 @@ function RightPanel(props: {
               </p>
             </Field>
 
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <ColorInput
+                label="버튼 색상"
+                value={
+                  selectedCell.background_color &&
+                  selectedCell.background_color !== "transparent"
+                    ? selectedCell.background_color
+                    : String(websiteSettings.accent_color || "#d97706")
+                }
+                onChange={(value) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { background_color: value },
+                    selection.layoutId,
+                  )
+                }
+              />
+              <ColorInput
+                label="글자색"
+                value={selectedCell.color || "#ffffff"}
+                onChange={(value) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    { color: value },
+                    selection.layoutId,
+                  )
+                }
+              />
+            </div>
+
             <label className="mt-4 flex items-center justify-between rounded-xl bg-gray-50 p-3">
               <div>
                 <p className="text-sm font-black text-gray-800">
@@ -12169,8 +12425,25 @@ function AutoImageSlider({ images }: { images: string[] }) {
   ).slice(0, 10);
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [sliderAspectRatio, setSliderAspectRatio] = useState(3 / 2);
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef(0);
+
+  const imagesSignature = safeImages.join("|");
+
+  const applyNaturalRatio = useCallback(
+    (image: HTMLImageElement | null) => {
+      if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+      const naturalRatio = image.naturalWidth / image.naturalHeight;
+      if (!Number.isFinite(naturalRatio) || naturalRatio <= 0) return;
+
+      // 지나치게 세로로 길거나 가로로 긴 이미지도 레이아웃을 깨지 않도록
+      // 안전한 범위에서 실제 비율을 사용합니다.
+      setSliderAspectRatio(Math.max(0.55, Math.min(3.2, naturalRatio)));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (safeImages.length <= 1) return;
@@ -12180,14 +12453,25 @@ function AutoImageSlider({ images }: { images: string[] }) {
     }, 4500);
 
     return () => window.clearInterval(timer);
-  }, [safeImages.length]);
-
-  const imagesSignature = safeImages.join("|");
+  }, [safeImages.length, imagesSignature]);
 
   useEffect(() => {
-    // DB 이미지가 삭제·추가·재정렬되면 첫 이미지부터 새 목록으로 재생합니다.
+    // DB 이미지가 삭제·추가·재정렬되면 첫 이미지부터 새 목록으로 재생하고,
+    // 이전 이미지의 비율도 즉시 버립니다.
     setActiveIndex(0);
-  }, [imagesSignature]);
+    setSliderAspectRatio(3 / 2);
+
+    const firstUrl = safeImages[0];
+    if (!firstUrl || typeof window === "undefined") return;
+
+    const preload = new Image();
+    preload.onload = () => applyNaturalRatio(preload);
+    preload.src = firstUrl;
+
+    return () => {
+      preload.onload = null;
+    };
+  }, [imagesSignature, applyNaturalRatio]);
 
   useEffect(() => {
     if (activeIndex >= safeImages.length) {
@@ -12204,8 +12488,12 @@ function AutoImageSlider({ images }: { images: string[] }) {
 
   return (
     <div
-      className="group/slider relative h-full min-h-[220px] w-full overflow-hidden bg-transparent"
-      style={{ borderRadius: "inherit" }}
+      className="group/slider relative block w-full overflow-hidden bg-transparent"
+      style={{
+        borderRadius: "inherit",
+        aspectRatio: `${sliderAspectRatio}`,
+        minHeight: 0,
+      }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -12239,7 +12527,12 @@ function AutoImageSlider({ images }: { images: string[] }) {
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            className="absolute inset-0 h-full w-full select-none object-cover"
+            onLoad={(event) => {
+              // 새 이미지 목록의 첫 이미지가 로드될 때마다 높이를 다시 계산합니다.
+              if (index === 0) applyNaturalRatio(event.currentTarget);
+            }}
+            className="absolute inset-0 block h-full w-full select-none object-cover"
+            style={{ borderRadius: "inherit" }}
           />
         </div>
       ))}
@@ -12277,16 +12570,14 @@ function AutoImageSlider({ images }: { images: string[] }) {
               <button
                 key={index}
                 type="button"
-                aria-label={`${index + 1}번 이미지`}
+                aria-label={`${index + 1}번 이미지로 이동`}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
                   goTo(index);
                 }}
-                className={`h-2.5 rounded-full transition-all ${
-                  index === activeIndex
-                    ? "w-6 bg-white"
-                    : "w-2.5 bg-white/55"
+                className={`h-2.5 w-2.5 rounded-full transition ${
+                  index === activeIndex ? "bg-white" : "bg-white/45"
                 }`}
               />
             ))}
