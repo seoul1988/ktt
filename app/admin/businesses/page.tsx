@@ -25,6 +25,9 @@ type Business = {
   website_enabled: boolean | null;
   website_enabled_at: string | null;
   website_enabled_by: string | null;
+
+  // 커스텀 도메인: 프로토콜/www 없이 저장
+  custom_domain: string | null;
 };
 
 export default function AdminBusinessesPage() {
@@ -40,6 +43,12 @@ export default function AdminBusinessesPage() {
 
   const [websiteSavingId, setWebsiteSavingId] =
     useState<number | null>(null);
+
+  const [domainSavingId, setDomainSavingId] =
+    useState<number | null>(null);
+
+  const [domains, setDomains] =
+    useState<Record<number, string>>({});
 
   const [orders, setOrders] = useState<Record<number, string>>({});
   const [searchTerm, setSearchTerm] = useState("");
@@ -65,7 +74,8 @@ export default function AdminBusinessesPage() {
           hidden,
           website_enabled,
           website_enabled_at,
-          website_enabled_by
+          website_enabled_by,
+          custom_domain
         `,
       )
       .order("category", {
@@ -91,14 +101,19 @@ export default function AdminBusinessesPage() {
     setBusinesses(rows);
 
     const nextOrders: Record<number, string> = {};
+    const nextDomains: Record<number, string> = {};
 
     rows.forEach((business) => {
       nextOrders[business.id] = String(
         business.display_order ?? 999,
       );
+
+      nextDomains[business.id] =
+        business.custom_domain ?? "";
     });
 
     setOrders(nextOrders);
+    setDomains(nextDomains);
     setLoading(false);
   }
 
@@ -116,6 +131,7 @@ export default function AdminBusinessesPage() {
         business.address,
         business.phone,
         business.category,
+        business.custom_domain,
       ];
 
       return searchableValues.some((value) =>
@@ -356,6 +372,108 @@ export default function AdminBusinessesPage() {
     }
   }
 
+  function normalizeCustomDomain(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .split("/")[0]
+      .split(":")[0]
+      .replace(/\.$/, "");
+  }
+
+  function isValidCustomDomain(value: string) {
+    if (!value) return true;
+
+    if (
+      value === "localhost" ||
+      value === "ktowntriangle.com" ||
+      value.endsWith(".vercel.app")
+    ) {
+      return false;
+    }
+
+    return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+      value,
+    );
+  }
+
+  async function saveCustomDomain(
+    id: number,
+    businessName: string | null,
+  ) {
+    const normalized = normalizeCustomDomain(
+      domains[id] ?? "",
+    );
+
+    if (!isValidCustomDomain(normalized)) {
+      alert(
+        "올바른 도메인을 입력하세요. 예: example.com\\nhttps://, www, 경로는 입력하지 마세요.",
+      );
+      return;
+    }
+
+    const actionText = normalized
+      ? `"${businessName || "Business"}"에 ${normalized} 도메인을 연결할까요?`
+      : `"${businessName || "Business"}"의 커스텀 도메인을 삭제할까요?`;
+
+    if (!window.confirm(actionText)) {
+      return;
+    }
+
+    setDomainSavingId(id);
+
+    try {
+      const { error } = await supabase
+        .from("businesses")
+        .update({
+          custom_domain: normalized || null,
+        })
+        .eq("id", id);
+
+      if (error) {
+        if (
+          error.code === "23505" ||
+          error.message.toLowerCase().includes("duplicate")
+        ) {
+          alert(
+            "이 도메인은 이미 다른 비즈니스에 연결되어 있습니다.",
+          );
+        } else {
+          alert(
+            "도메인 저장 실패: " + error.message,
+          );
+        }
+        return;
+      }
+
+      setDomains((prev) => ({
+        ...prev,
+        [id]: normalized,
+      }));
+
+      setBusinesses((prev) =>
+        prev.map((business) =>
+          business.id === id
+            ? {
+                ...business,
+                custom_domain: normalized || null,
+              }
+            : business,
+        ),
+      );
+
+      alert(
+        normalized
+          ? `도메인을 저장했습니다.\\n\\n다음 단계:\\n1. Vercel Domains에 ${normalized} 추가\\n2. Vercel Domains에 www.${normalized} 추가\\n3. 도메인 회사에서 Vercel이 안내하는 A/CNAME 설정`
+          : "커스텀 도메인을 삭제했습니다.",
+      );
+    } finally {
+      setDomainSavingId(null);
+    }
+  }
+
   async function deleteBusiness(
     id: number,
     name: string | null,
@@ -557,6 +675,12 @@ export default function AdminBusinessesPage() {
                                   ? "🟢 Website ON"
                                   : "🔴 Website OFF"}
                               </span>
+
+                              {business.custom_domain && (
+                                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-black text-blue-700">
+                                  🌐 Domain
+                                </span>
+                              )}
                             </div>
 
                             <p className="mt-1 break-words text-sm text-gray-600">
@@ -695,6 +819,88 @@ export default function AdminBusinessesPage() {
       : "Hide"}
   </label>
 </div>
+
+                        <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-3">
+                          <div className="mb-2 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-black text-[#172033]">
+                                🌐 Website Domain
+                              </p>
+                              <p className="mt-0.5 text-[10px] font-bold text-gray-500">
+                                https://와 www 없이 한 번만 입력
+                              </p>
+                            </div>
+
+                            {business.custom_domain && (
+                              <a
+                                href={`https://${business.custom_domain}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-black text-blue-700 shadow-sm"
+                              >
+                                Open ↗
+                              </a>
+                            )}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={domains[business.id] ?? ""}
+                              onChange={(e) =>
+                                setDomains((prev) => ({
+                                  ...prev,
+                                  [business.id]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  saveCustomDomain(
+                                    business.id,
+                                    business.name,
+                                  );
+                                }
+                              }}
+                              placeholder="example.com"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              className="min-w-0 flex-1 rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-bold text-[#172033] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                saveCustomDomain(
+                                  business.id,
+                                  business.name,
+                                )
+                              }
+                              disabled={
+                                domainSavingId === business.id
+                              }
+                              className="shrink-0 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {domainSavingId === business.id
+                                ? "Saving..."
+                                : "Save Domain"}
+                            </button>
+                          </div>
+
+                          {business.custom_domain ? (
+                            <div className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-bold text-blue-700">
+                              연결 도메인: {business.custom_domain}
+                              <br />
+                              Vercel에는 {business.custom_domain}과
+                              {" "}www.{business.custom_domain}을 추가하세요.
+                            </div>
+                          ) : (
+                            <p className="mt-2 text-[11px] font-bold text-gray-500">
+                              비워서 저장하면 기존 도메인 연결이 삭제됩니다.
+                            </p>
+                          )}
+                        </div>
 
                         {business.hidden && (
                           <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
