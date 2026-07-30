@@ -13,12 +13,18 @@ type IOSNavigator = Navigator & {
   standalone?: boolean;
 };
 
-const HIDE_KEY = "ktt_install_banner_hide_until";
-const INSTALLED_KEY = "ktt_pwa_installed";
+const MAIN_HIDE_KEY = "ktt_install_banner_hide_until";
+const MAIN_INSTALLED_KEY = "ktt_pwa_installed";
 const HIDE_TIME = 24 * 60 * 60 * 1000;
 const AUTO_HIDE_TIME = 5000;
 
-export default function InstallAppButton() {
+type InstallAppButtonProps = {
+  businessName?: string;
+};
+
+export default function InstallAppButton({
+  businessName,
+}: InstallAppButtonProps) {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
 
@@ -27,6 +33,10 @@ export default function InstallAppButton() {
   const [hasCheckedInstallState, setHasCheckedInstallState] =
     useState(false);
 
+  const [displayName, setDisplayName] = useState(
+    businessName?.trim() || "KTown Triangle",
+  );
+
   const [showBanner, setShowBanner] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [showInstalledNotice, setShowInstalledNotice] =
@@ -34,9 +44,90 @@ export default function InstallAppButton() {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
+  useEffect(() => {
+    const explicitName = businessName?.trim();
+
+    function updateDisplayName() {
+      if (explicitName) {
+        setDisplayName(explicitName);
+        return;
+      }
+
+      /*
+       * 비즈니스 페이지 metadata가
+       * "Business Name | KTown Triangle" 형식이면
+       * 앞부분을 설치 앱 이름으로 사용합니다.
+       */
+      const pageTitle = document.title
+        .split("|")[0]
+        ?.trim();
+
+      if (
+        pageTitle &&
+        pageTitle.toLowerCase() !== "ktown triangle"
+      ) {
+        setDisplayName(pageTitle);
+      } else {
+        setDisplayName("KTown Triangle");
+      }
+    }
+
+    updateDisplayName();
+
+    /*
+     * Next.js 클라이언트 페이지 이동으로 document.title이
+     * 나중에 변경되는 경우에도 새 비즈니스 이름을 반영합니다.
+     */
+    const titleElement = document.querySelector("title");
+
+    if (!titleElement) {
+      return;
+    }
+
+    const observer = new MutationObserver(updateDisplayName);
+
+    observer.observe(titleElement, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [businessName]);
+
+  function getBusinessIdFromPath() {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const match = window.location.pathname.match(
+      /^\/business(?:es)?\/(\d+)\/website(?:\/|$)/,
+    );
+
+    return match?.[1] || null;
+  }
+
+  function getInstalledStorageKey() {
+    const businessId = getBusinessIdFromPath();
+
+    return businessId
+      ? `ktt_business_${businessId}_pwa_installed`
+      : MAIN_INSTALLED_KEY;
+  }
+
+  function getHideStorageKey() {
+    const businessId = getBusinessIdFromPath();
+
+    return businessId
+      ? `ktt_business_${businessId}_install_banner_hide_until`
+      : MAIN_HIDE_KEY;
+  }
+
   function getSavedInstalledState() {
     try {
-      return localStorage.getItem(INSTALLED_KEY) === "true";
+      return localStorage.getItem(getInstalledStorageKey()) === "true";
     } catch {
       return false;
     }
@@ -45,9 +136,9 @@ export default function InstallAppButton() {
   function saveInstalledState(installed: boolean) {
     try {
       if (installed) {
-        localStorage.setItem(INSTALLED_KEY, "true");
+        localStorage.setItem(getInstalledStorageKey(), "true");
       } else {
-        localStorage.removeItem(INSTALLED_KEY);
+        localStorage.removeItem(getInstalledStorageKey());
       }
     } catch {
       // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
@@ -69,6 +160,17 @@ export default function InstallAppButton() {
 
     const iosStandalone =
       (window.navigator as IOSNavigator).standalone === true;
+
+    const businessId = getBusinessIdFromPath();
+
+    /*
+     * 비즈니스 웹에서는 메인 KTown 앱의 standalone 상태를
+     * 해당 비즈니스 앱 설치 상태로 사용하면 안 됩니다.
+     * 비즈니스별 저장 키만 확인합니다.
+     */
+    if (businessId) {
+      return getSavedInstalledState();
+    }
 
     return (
       displayModeStandalone ||
@@ -96,7 +198,7 @@ export default function InstallAppButton() {
   function hideFor24Hours() {
     try {
       localStorage.setItem(
-        HIDE_KEY,
+        getHideStorageKey(),
         String(Date.now() + HIDE_TIME),
       );
     } catch {
@@ -107,7 +209,7 @@ export default function InstallAppButton() {
   function shouldShowBanner() {
     try {
       const hideUntil = Number(
-        localStorage.getItem(HIDE_KEY) || 0,
+        localStorage.getItem(getHideStorageKey()) || 0,
       );
 
       return Date.now() > hideUntil;
@@ -407,7 +509,7 @@ export default function InstallAppButton() {
         aria-live="polite"
       >
         <p className="text-sm font-black">
-          ✓ KTown Triangle has been installed.
+          ✓ {displayName} has been installed.
         </p>
         <p className="mt-1 text-xs font-semibold text-white/75">
           You can now open it from your apps or Home Screen.
@@ -442,7 +544,7 @@ export default function InstallAppButton() {
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <p className="text-sm font-black">
-                📱 Install KTown Triangle
+                📱 Install {displayName}
               </p>
 
               <p className="mt-1 text-xs font-semibold text-white/75">
@@ -499,7 +601,7 @@ export default function InstallAppButton() {
                   id="ios-install-guide-title"
                   className="text-lg font-black sm:text-xl"
                 >
-                  Install KTown Triangle
+                  Install {displayName}
                 </h2>
 
                 <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
