@@ -264,7 +264,7 @@ export default function InstallAppButton() {
      * 아이폰 Safari는 자동 설치창이 없으므로
      * 홈 화면 추가 안내 이미지를 보여줍니다.
      */
-   if (!installPrompt) {
+if (!installPrompt) {
   if (isIOS) {
     setShowIOSGuide(true);
     hideFor24Hours();
@@ -273,9 +273,8 @@ export default function InstallAppButton() {
     return;
   }
 
-  alert(
-    "Install is not ready yet. Please use your browser menu and select Install app."
-  );
+  setShowBanner(false);
+  setIsClosing(false);
   return;
 }
 
