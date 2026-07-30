@@ -151,6 +151,11 @@ type GridData = {
 };
 
 type WebsiteSettings = {
+  /**
+   * 헤더 로고를 저장하면 홈 화면 설치 아이콘에도 자동 사용됩니다.
+   */
+  logo_url?: string;
+  app_icon_url?: string;
   primary_color?: string;
   secondary_color?: string;
   accent_color?: string;
@@ -3180,6 +3185,84 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     patch: Partial<GridCell>,
     layoutId?: string,
   ) {
+    /*
+     * 헤더의 로고 셀에서 이미지를 업로드하거나 URL을 바꾸면
+     * 같은 주소를 website_settings.logo_url과 app_icon_url에도 저장합니다.
+     *
+     * 따라서 사용자는 로고를 한 번만 올리면:
+     * 1. 홈페이지 헤더 로고
+     * 2. Android 홈 화면 아이콘
+     * 3. iPhone 홈 화면 아이콘
+     * 에 같은 이미지가 자동으로 사용됩니다.
+     */
+    if (area === "header") {
+      setBusiness((current) => {
+        if (!current) return current;
+
+        const settings = normalizeSettings(
+          current.website_settings,
+          current.name || "",
+        );
+
+        const currentHeaderGrid = normalizeGrid(
+          settings.header_grid,
+          createDefaultHeader(current.name || ""),
+        );
+
+        let changedCellType: CellType | null = null;
+        let changedLogoUrl = "";
+
+        const nextHeaderGrid: GridData = {
+          ...currentHeaderGrid,
+          cells: mapCellRecursive(
+            currentHeaderGrid.cells,
+            cellId,
+            (cell) => {
+              const nextCell = {
+                ...cell,
+                ...patch,
+              };
+
+              changedCellType = nextCell.type;
+
+              if (
+                nextCell.type === "logo" &&
+                Object.prototype.hasOwnProperty.call(patch, "image_url")
+              ) {
+                changedLogoUrl = String(nextCell.image_url || "").trim();
+              }
+
+              return nextCell;
+            },
+          ),
+        };
+
+        const nextSettings: WebsiteSettings = {
+          ...settings,
+          header_grid: nextHeaderGrid,
+        };
+
+        /*
+         * 로고를 삭제했을 때도 이전 앱 아이콘 주소가 남지 않도록
+         * 빈 문자열까지 그대로 저장합니다.
+         */
+        if (
+          changedCellType === "logo" &&
+          Object.prototype.hasOwnProperty.call(patch, "image_url")
+        ) {
+          nextSettings.logo_url = changedLogoUrl;
+          nextSettings.app_icon_url = changedLogoUrl;
+        }
+
+        return {
+          ...current,
+          website_settings: nextSettings,
+        };
+      });
+
+      return;
+    }
+
     updateGrid(
       area,
       (grid) => ({
@@ -11484,7 +11567,8 @@ function RightPanel(props: {
                 className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
               />
               <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
-                이미지 업로드 대신 로고의 공개 이미지 주소를 직접 입력할 수 있습니다.
+                이미지 업로드 또는 공개 이미지 주소 입력 시 홈 화면 앱 아이콘에도
+                같은 로고가 자동으로 적용됩니다.
               </p>
             </Field>
 
