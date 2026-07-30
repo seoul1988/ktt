@@ -11622,18 +11622,55 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "image" ? (
-          <Field label="사진 URL">
-            <input
-              value={selectedCell.image_url || ""}
-              onChange={(event) =>
-                props.onUpdateCell(area, selectedCell.id, {
-                  image_url: event.target.value,
-                }, selection.layoutId)
-              }
-              placeholder="https://..."
-              className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
-            />
-          </Field>
+          <>
+            <Field label="사진 URL">
+              <input
+                value={selectedCell.image_url || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    {
+                      image_url: event.target.value,
+                    },
+                    selection.layoutId,
+                  )
+                }
+                placeholder="https://..."
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+            </Field>
+
+            <Field label="이미지 클릭 링크 · 선택사항">
+              <input
+                value={selectedCell.url || ""}
+                onChange={(event) =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    {
+                      url: event.target.value,
+                    },
+                    selection.layoutId,
+                  )
+                }
+                placeholder="비워두면 클릭할 때 이미지를 크게 보여줍니다."
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+
+              <div
+                className={`mt-2 rounded-xl px-3 py-2 text-xs font-bold leading-5 ${
+                  String(selectedCell.url || "").trim()
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {String(selectedCell.url || "").trim()
+                  ? "링크가 있으므로 이미지를 클릭하면 해당 주소로 이동합니다."
+                  : "링크가 없으므로 공개 홈페이지에서 이미지를 클릭하면 크게 보기 모달이 열립니다."}
+              </div>
+            </Field>
+          </>
         ) : null}
 
         {selectedCell.type === "button" ? (
