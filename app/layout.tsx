@@ -8,7 +8,7 @@ import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
-import InstallAppButton from "./components/InstallAppButton";
+import MainInstallAppButton from "./components/MainInstallAppButton";
 
 import "./globals.css";
 
@@ -183,8 +183,12 @@ export default function RootLayout({
         <AuthProvider>
           <ServiceWorkerRegister />
 
-          {/* 설치되지 않은 일반 브라우저에서만 설치 버튼 표시 */}
-          <InstallAppButton />
+          {/*
+           * 메인 KTown 페이지에서만 설치 버튼을 표시합니다.
+           * /business/[id]/website 페이지에서는 비즈니스 전용
+           * InstallAppButton을 사용하므로 여기서는 자동으로 숨깁니다.
+           */}
+          <MainInstallAppButton />
 
           {/* Instagram, Facebook, Threads는 영어 안내
               KakaoTalk은 한글 안내
