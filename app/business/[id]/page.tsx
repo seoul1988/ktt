@@ -10,7 +10,6 @@ import ProfileButton from "../../components/ProfileButton";
 import BusinessCouponPopup from "../../components/BusinessCouponPopup";
 import BusinessCopyButton from "../../components/BusinessCopyButton";
 import BusinessDirectionsButton from "../../components/BusinessDirectionsButton";
-import DeleteBusinessButton from "../../components/DeleteBusinessButton";
 
 function timeTextToMinutes(timeText?: string | null) {
   if (!timeText) return null;
@@ -279,13 +278,33 @@ export default async function BusinessPage({
   /*
    * 비즈니스 오너 확인
    *
-   * businesses 테이블에 owner_id 또는 user_id 중
-   * 실제 사용하는 컬럼과 로그인 user.id를 비교합니다.
+   * 오너 권한은 business_owners 테이블에서 확인합니다.
+   * 기존 businesses.owner_id / businesses.user_id 값도
+   * 이전 데이터 호환을 위해 함께 확인합니다.
    */
-  const isOwner =
+  let isRegisteredOwner = false;
+
+  if (user?.id) {
+    const { data: ownerRow, error: ownerError } =
+      await authSupabase
+        .from("business_owners")
+        .select("business_id")
+        .eq("business_id", spot.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (!ownerError && ownerRow) {
+      isRegisteredOwner = true;
+    }
+  }
+
+  const isLegacyOwner =
     Boolean(user?.id) &&
     (spot.owner_id === user?.id ||
       spot.user_id === user?.id);
+
+  const isOwner =
+    isRegisteredOwner || isLegacyOwner;
 
   const canManage = isOwner || isAdmin;
 
@@ -435,19 +454,13 @@ export default async function BusinessPage({
             </p>
 
             {canManage && (
-              <div className="ml-auto flex shrink-0 gap-2">
+              <div className="ml-auto flex shrink-0">
                 <Link
                   href={`/business/${spot.id}/edit`}
                   className="rounded bg-blue-600 px-3 py-1 text-xs font-bold text-white"
                 >
                   Edit
                 </Link>
-
-                <DeleteBusinessButton
-                  businessId={String(spot.id)}
-                  businessName={spot.name}
-                  redirectHref={backHref}
-                />
               </div>
             )}
           </div>
