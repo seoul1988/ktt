@@ -36,11 +36,12 @@ async function findBusinessIdByDomain(domain: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) return null;
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error("Missing Supabase environment variables");
+    return null;
+  }
 
-  const query = new URL(
-    `${supabaseUrl}/rest/v1/businesses`,
-  );
+  const query = new URL(`${supabaseUrl}/rest/v1/businesses`);
 
   query.searchParams.set("select", "id");
   query.searchParams.set("custom_domain", `eq.${domain}`);
@@ -62,10 +63,12 @@ async function findBusinessIdByDomain(domain: string) {
       response.status,
       await response.text(),
     );
+
     return null;
   }
 
   const rows = (await response.json()) as Array<{ id: number }>;
+
   return rows[0]?.id ?? null;
 }
 
@@ -95,11 +98,15 @@ export async function proxy(request: NextRequest) {
 
   const url = request.nextUrl.clone();
 
- if (pathname === "/") {
-  url.pathname = `/business/${businessId}/website`;
-} else {
-  const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
-  url.pathname = `/business/${businessId}/website/${cleanPath}`;
+  if (pathname === "/") {
+    url.pathname = `/business/${businessId}/website`;
+  } else {
+    const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
+
+    url.pathname = `/business/${businessId}/website/${cleanPath}`;
+  }
+
+  return NextResponse.rewrite(url);
 }
 
 export const config = {
