@@ -423,100 +423,73 @@ export default function InstallAppButton() {
         </button>
       )}
 
-      {showInstallGuide && (
-        <div
-          className="fixed inset-0 z-[100000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-[2px] sm:items-center sm:p-5"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="install-guide-title"
-          onClick={() => setShowInstallGuide(false)}
-        >
-          <div
-            onClick={(event) => event.stopPropagation()}
-            className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] bg-white text-[#172033] shadow-2xl"
+      {showInstallGuide && isIOS && (
+  <div
+    className="fixed inset-0 z-[100000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-[2px] sm:items-center sm:p-5"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="install-guide-title"
+    onClick={() => setShowInstallGuide(false)}
+  >
+    <div
+      onClick={(event) => event.stopPropagation()}
+      className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] bg-white text-[#172033] shadow-2xl"
+    >
+      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:px-6">
+        <div>
+          <h2
+            id="install-guide-title"
+            className="text-lg font-black sm:text-xl"
           >
-            <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:px-6">
-              <div>
-                <h2
-                  id="install-guide-title"
-                  className="text-lg font-black sm:text-xl"
-                >
-                  Install KTown Triangle
-                </h2>
+            Install KTown Triangle
+          </h2>
 
-                <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-                  {isIOS
-                    ? "Follow the image below to add KTown Triangle to your iPhone Home Screen."
-                    : "Use your browser menu to install KTown Triangle."}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowInstallGuide(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-600"
-                aria-label="Close installation guide"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8F9FB] p-3 sm:p-4">
-              {isIOS ? (
-                <div className="mx-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                  <img
-                    src="/images/ios-install-guide.png"
-                    alt="How to add KTownTriangle.com to the iPhone Home Screen"
-                    className="h-auto w-full"
-                    loading="eager"
-                    decoding="async"
-                  />
-                </div>
-              ) : (
-                <div className="mx-auto max-w-xl space-y-3">
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <p className="font-black">Chrome</p>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-gray-600">
-                      Open the browser menu ⋮ and select
-                      <strong> Install KTown Triangle</strong> or
-                      <strong> Add to Home screen</strong>.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <p className="font-black">Microsoft Edge</p>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-gray-600">
-                      Open the browser menu ⋯ and select
-                      <strong> Apps → Install this site as an app</strong>.
-                    </p>
-                  </div>
-
-                  <p className="px-1 text-xs font-semibold leading-5 text-gray-500">
-                    After deleting the app, refresh this browser page once.
-                    The install option may take a moment to become available again.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div
-              className="border-t border-gray-200 bg-white px-4 pt-4 sm:px-6"
-              style={{
-                paddingBottom:
-                  "calc(env(safe-area-inset-bottom) + 16px)",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => setShowInstallGuide(false)}
-                className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white transition active:scale-[0.98]"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+          <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+            Follow the image below to add KTown Triangle
+            to your iPhone Home Screen.
+          </p>
         </div>
-      )}
+
+        <button
+          type="button"
+          onClick={() => setShowInstallGuide(false)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-600"
+          aria-label="Close installation guide"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8F9FB] p-2 sm:p-4">
+        <div className="mx-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <img
+            src="/images/ios-install-guide.png"
+            alt="How to add KTownTriangle.com to the iPhone Home Screen"
+            className="h-auto w-full"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+      </div>
+
+      <div
+        className="border-t border-gray-200 bg-white px-4 pt-4 sm:px-6"
+        style={{
+          paddingBottom:
+            "calc(env(safe-area-inset-bottom) + 16px)",
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setShowInstallGuide(false)}
+          className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white transition active:scale-[0.98]"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </>
   );
 }
