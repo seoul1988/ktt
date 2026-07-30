@@ -239,11 +239,12 @@ export default function InstallAppButton({
   }
 
   useEffect(() => {
-    const alreadyInstalled = checkInstalledState();
-
-    if (alreadyInstalled) {
-      return;
-    }
+    /*
+     * 설치 상태가 저장되어 있어도 이벤트 리스너는 계속 등록합니다.
+     * 사용자가 앱을 삭제하면 beforeinstallprompt가 다시 발생할 수 있고,
+     * 그때 남아 있는 설치 상태를 자동으로 초기화해야 하기 때문입니다.
+     */
+    checkInstalledState();
 
     const userAgent = window.navigator.userAgent.toLowerCase();
 
@@ -292,22 +293,42 @@ export default function InstallAppButton({
     function handleBeforeInstallPrompt(event: Event) {
       event.preventDefault();
 
-      if (checkInstalledState()) return;
-
       /*
-       * beforeinstallprompt가 다시 발생했다는 것은 브라우저가
-       * 현재 앱을 설치할 수 있다고 판단했다는 뜻입니다.
-       * 앱을 삭제한 경우 저장된 설치 상태를 해제합니다.
+       * beforeinstallprompt가 발생했다는 것은 브라우저가 현재 앱을
+       * 다시 설치할 수 있다고 판단했다는 뜻입니다.
+       *
+       * 설치 여부를 먼저 검사하면 앱 삭제 후에도 localStorage의
+       * 오래된 true 값 때문에 여기서 중단될 수 있으므로,
+       * 저장된 설치 상태를 먼저 해제해야 합니다.
        */
       saveInstalledState(false);
       setIsInstalled(false);
+      setHasCheckedInstallState(true);
       setInstallPrompt(event as BeforeInstallPromptEvent);
 
       /*
-       * 24시간 숨김 기간이 끝난 경우에만
-       * 자동 설치 배너를 다시 표시합니다.
+       * 앱을 삭제한 뒤 다시 설치 가능 상태가 되면
+       * 이전 24시간 숨김 제한도 해제합니다.
        */
-      showThenAutoHide();
+      try {
+        localStorage.removeItem(getHideStorageKey());
+      } catch {
+        // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
+      }
+
+      clearAutoTimer();
+      setShowBanner(true);
+      setIsClosing(false);
+
+      autoTimer = window.setTimeout(() => {
+        setIsClosing(true);
+        hideFor24Hours();
+
+        window.setTimeout(() => {
+          setShowBanner(false);
+          setIsClosing(false);
+        }, 350);
+      }, AUTO_HIDE_TIME);
     }
 
     function handleAppInstalled() {
@@ -321,7 +342,7 @@ export default function InstallAppButton({
       showInstallationCompleteNotice();
 
       try {
-        localStorage.removeItem(HIDE_KEY);
+        localStorage.removeItem(getHideStorageKey());
       } catch {
         // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
       }
