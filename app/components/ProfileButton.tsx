@@ -8,6 +8,18 @@ type Profile = {
   role: string | null;
 };
 
+type ConnectedBusiness = {
+  website_enabled: boolean | null;
+};
+
+type BusinessOwnerRow = {
+  business_id: number;
+  businesses:
+    | ConnectedBusiness
+    | ConnectedBusiness[]
+    | null;
+};
+
 function timeout<T>(
   promise: PromiseLike<T>,
   ms = 5000,
@@ -16,12 +28,7 @@ function timeout<T>(
     Promise.resolve(promise),
     new Promise<T>((_, reject) =>
       setTimeout(
-        () =>
-          reject(
-            new Error(
-              "Request timeout",
-            ),
-          ),
+        () => reject(new Error("Request timeout")),
         ms,
       ),
     ),
@@ -31,26 +38,125 @@ function timeout<T>(
 export default function ProfileButton() {
   const [userId, setUserId] =
     useState<string | null>(null);
+
   const [role, setRole] =
     useState<string | null>(null);
+
+  /*
+   * 관리자가 website_enabled=true로 열어준
+   * 비즈니스 ID만 저장합니다.
+   */
+  const [businessIds, setBusinessIds] =
+    useState<number[]>([]);
+
+  /*
+   * 비즈니스 연결은 되어 있지만 사이트 관리가
+   * 아직 승인되지 않은 경우를 구분합니다.
+   */
+  const [
+    hasConnectedBusiness,
+    setHasConnectedBusiness,
+  ] = useState(false);
+
   const [open, setOpen] =
     useState(false);
+
   const [checking, setChecking] =
     useState(true);
 
   const menuRef =
-    useRef<HTMLDivElement | null>(
-      null,
-    );
+    useRef<HTMLDivElement | null>(null);
 
-  const isUser =
-    role === "user";
-  const isOwner =
-    role === "owner";
-  const isAdmin =
-    role === "admin";
-  const canManage =
-    isOwner || isAdmin;
+  const isUser = role === "user";
+  const isOwner = role === "owner";
+  const isAdmin = role === "admin";
+
+  const canManage = isOwner || isAdmin;
+  const hasEnabledBusiness =
+    businessIds.length > 0;
+
+  const managementHref =
+    businessIds.length === 1
+      ? `/owner/business/${businessIds[0]}/manage`
+      : "/owner/business";
+
+  function resetBusinessState() {
+    setBusinessIds([]);
+    setHasConnectedBusiness(false);
+  }
+
+  async function loadBusinessIds(
+    currentUserId: string,
+    currentRole: string,
+  ) {
+    try {
+      /*
+       * 관리자는 전체 비즈니스 관리 페이지에서
+       * 업체를 선택하므로 오너 연결 조회를 생략합니다.
+       */
+      if (currentRole === "admin") {
+        resetBusinessState();
+        return;
+      }
+
+      const { data, error } = await timeout(
+        supabase
+          .from("business_owners")
+          .select(`
+            business_id,
+            businesses (
+              website_enabled
+            )
+          `)
+          .eq("user_id", currentUserId),
+        5000,
+      );
+
+      if (error) {
+        throw error;
+      }
+
+      const rows =
+        (data || []) as BusinessOwnerRow[];
+
+      setHasConnectedBusiness(
+        rows.length > 0,
+      );
+
+      const enabledBusinessIds = rows
+        .filter((row) => {
+          const business =
+            Array.isArray(row.businesses)
+              ? row.businesses[0]
+              : row.businesses;
+
+          return (
+            business?.website_enabled === true
+          );
+        })
+        .map((row) =>
+          Number(row.business_id),
+        )
+        .filter(
+          (id) =>
+            Number.isFinite(id) &&
+            id > 0,
+        );
+
+      setBusinessIds(
+        Array.from(
+          new Set(enabledBusinessIds),
+        ),
+      );
+    } catch (error) {
+      console.error(
+        "Failed to load connected businesses:",
+        error,
+      );
+
+      resetBusinessState();
+    }
+  }
 
   async function loadUser() {
     try {
@@ -69,14 +175,17 @@ export default function ProfileButton() {
       if (!user) {
         setUserId(null);
         setRole(null);
+        resetBusinessState();
         setOpen(false);
         return;
       }
 
       setUserId(user.id);
 
+      let loadedRole = "user";
+
       try {
-        const { data } =
+        const { data, error } =
           await timeout(
             supabase
               .from("profiles")
@@ -86,15 +195,43 @@ export default function ProfileButton() {
             5000,
           );
 
-        setRole(
-          data?.role || "user",
+        if (error) {
+          throw error;
+        }
+
+        loadedRole =
+          data?.role || "user";
+      } catch (error) {
+        console.error(
+          "Failed to load profile:",
+          error,
         );
-      } catch {
-        setRole("user");
+
+        loadedRole = "user";
       }
-    } catch {
+
+      setRole(loadedRole);
+
+      if (
+        loadedRole === "owner" ||
+        loadedRole === "admin"
+      ) {
+        await loadBusinessIds(
+          user.id,
+          loadedRole,
+        );
+      } else {
+        resetBusinessState();
+      }
+    } catch (error) {
+      console.error(
+        "Failed to load user:",
+        error,
+      );
+
       setUserId(null);
       setRole(null);
+      resetBusinessState();
       setOpen(false);
     } finally {
       setChecking(false);
@@ -127,10 +264,12 @@ export default function ProfileButton() {
       "online",
       safeLoad,
     );
+
     window.addEventListener(
       "focus",
       safeLoad,
     );
+
     window.addEventListener(
       "pageshow",
       safeLoad,
@@ -145,10 +284,12 @@ export default function ProfileButton() {
         "online",
         safeLoad,
       );
+
       window.removeEventListener(
         "focus",
         safeLoad,
       );
+
       window.removeEventListener(
         "pageshow",
         safeLoad,
@@ -179,6 +320,7 @@ export default function ProfileButton() {
       "mousedown",
       handleClickOutside,
     );
+
     document.addEventListener(
       "touchstart",
       handleClickOutside,
@@ -189,6 +331,7 @@ export default function ProfileButton() {
         "mousedown",
         handleClickOutside,
       );
+
       document.removeEventListener(
         "touchstart",
         handleClickOutside,
@@ -202,13 +345,20 @@ export default function ProfileButton() {
     } finally {
       setUserId(null);
       setRole(null);
+      resetBusinessState();
       setOpen(false);
 
       window.location.href = "/";
     }
   }
 
-  if (checking || !userId) {
+  if (checking) {
+    return (
+      <div className="h-8 w-8 animate-pulse rounded-lg border border-[#E8DED1] bg-white" />
+    );
+  }
+
+  if (!userId) {
     return (
       <Link
         href="/login"
@@ -237,6 +387,7 @@ export default function ProfileButton() {
         }}
         className="relative z-[99999] flex h-8 w-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white text-[#172033] shadow-sm active:scale-95"
         aria-label="Open profile menu"
+        aria-expanded={open}
       >
         <span className="flex flex-col items-center justify-center gap-[3px]">
           <span className="h-[2px] w-[14px] rounded-full bg-[#172033]" />
@@ -246,32 +397,22 @@ export default function ProfileButton() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-[999999] w-60 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
-          {isUser ? (
-            <Link
-				  href="/profile"
-				  className="flex items-center justify-between px-4 py-3 hover:bg-[#F8F3EC]"
-				  onClick={() => setOpen(false)}
-				>
-				  <span>Edit Profile</span>
+        <div className="absolute right-0 top-10 z-[999999] w-64 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
+          <Link
+            href="/profile"
+            className="flex items-center justify-between px-4 py-3 hover:bg-[#F8F3EC]"
+            onClick={() =>
+              setOpen(false)
+            }
+          >
+            <span>Edit Profile</span>
 
-				  {isUser && (
-					<span className="rounded-full bg-[#FFF3C9] px-2.5 py-1 text-[11px] font-black text-[#C4483A]">
-					  🏪 오너 신청
-					</span>
-				  )}
-				</Link>
-          ) : (
-            <Link
-              href="/profile"
-              className="block px-4 py-3 hover:bg-[#F8F3EC]"
-              onClick={() =>
-                setOpen(false)
-              }
-            >
-              Edit Profile
-            </Link>
-          )}
+            {isUser && (
+              <span className="rounded-full bg-[#FFF3C9] px-2.5 py-1 text-[11px] font-black text-[#C4483A]">
+                🏪 오너 신청
+              </span>
+            )}
+          </Link>
 
           <div className="border-t border-[#EFE5D8]" />
 
@@ -285,19 +426,54 @@ export default function ProfileButton() {
             My Coupons
           </Link>
 
-          <Link
-            href="/community/inquiries"
-            className="block px-4 py-3 hover:bg-[#F8F3EC]"
-            onClick={() =>
-              setOpen(false)
-            }
-          >
-            💬 Inquiries
-          </Link>
-
           {canManage && (
             <>
               <div className="border-t border-[#EFE5D8]" />
+
+              {isAdmin ? (
+                <Link
+                  href="/admin/businesses"
+                  className="flex items-center justify-between bg-[#FFF9EF] px-4 py-3 font-black text-[#B64032] hover:bg-[#FFF3DF]"
+                  onClick={() =>
+                    setOpen(false)
+                  }
+                >
+                  <span>
+                    ⚙️ 사이트 관리
+                  </span>
+                  <span>›</span>
+                </Link>
+              ) : hasEnabledBusiness ? (
+                <Link
+                  href={managementHref}
+                  className="flex items-center justify-between bg-[#FFF9EF] px-4 py-3 font-black text-[#B64032] hover:bg-[#FFF3DF]"
+                  onClick={() =>
+                    setOpen(false)
+                  }
+                >
+                  <span>
+                    ⚙️ 사이트 관리
+                  </span>
+                  <span>›</span>
+                </Link>
+              ) : hasConnectedBusiness ? (
+                <div className="bg-[#FFFBEB] px-4 py-3">
+                  <div className="text-xs font-black text-[#A16207]">
+                    🔒 사이트 관리 승인 대기 중
+                  </div>
+
+                  <div className="mt-1 text-[11px] font-bold leading-5 text-gray-500">
+                    관리자가 사이트를 활성화하면
+                    카테고리, 품목, 가격 및
+                    웹사이트 관리 기능을 사용할 수
+                    있습니다.
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 py-3 text-xs font-bold leading-5 text-gray-500">
+                  연결된 비즈니스가 없습니다.
+                </div>
+              )}
 
               <Link
                 href="/owner"
@@ -401,4 +577,3 @@ export default function ProfileButton() {
     </div>
   );
 }
-

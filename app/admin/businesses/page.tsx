@@ -20,6 +20,11 @@ type Business = {
 
   // 메인, 지도, 검색 숨김 여부
   hidden: boolean | null;
+
+  // 비즈니스 사이트 관리 활성화 여부
+  website_enabled: boolean | null;
+  website_enabled_at: string | null;
+  website_enabled_by: string | null;
 };
 
 export default function AdminBusinessesPage() {
@@ -31,6 +36,9 @@ export default function AdminBusinessesPage() {
     useState<number | null>(null);
 
   const [hiddenSavingId, setHiddenSavingId] =
+    useState<number | null>(null);
+
+  const [websiteSavingId, setWebsiteSavingId] =
     useState<number | null>(null);
 
   const [orders, setOrders] = useState<Record<number, string>>({});
@@ -54,7 +62,10 @@ export default function AdminBusinessesPage() {
           category,
           display_order,
           featured_sponsor,
-          hidden
+          hidden,
+          website_enabled,
+          website_enabled_at,
+          website_enabled_by
         `,
       )
       .order("category", {
@@ -268,6 +279,83 @@ export default function AdminBusinessesPage() {
     setHiddenSavingId(null);
   }
 
+  async function toggleWebsiteEnabled(
+    id: number,
+    currentValue: boolean | null,
+  ) {
+    const nextValue = !Boolean(currentValue);
+
+    const actionText = nextValue
+      ? "사이트 관리 기능을 열어줄까요?"
+      : "사이트 관리 기능을 닫을까요?";
+
+    const ok = window.confirm(actionText);
+
+    if (!ok) {
+      return;
+    }
+
+    setWebsiteSavingId(id);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        alert("관리자 로그인 정보를 확인할 수 없습니다.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("businesses")
+        .update({
+          website_enabled: nextValue,
+          website_enabled_at: nextValue
+            ? new Date().toISOString()
+            : null,
+          website_enabled_by: nextValue
+            ? user.id
+            : null,
+        })
+        .eq("id", id);
+
+      if (error) {
+        alert(
+          "사이트 관리 상태 변경 실패: " +
+            error.message,
+        );
+        return;
+      }
+
+      setBusinesses((prev) =>
+        prev.map((business) =>
+          business.id === id
+            ? {
+                ...business,
+                website_enabled: nextValue,
+                website_enabled_at: nextValue
+                  ? new Date().toISOString()
+                  : null,
+                website_enabled_by: nextValue
+                  ? user.id
+                  : null,
+              }
+            : business,
+        ),
+      );
+
+      alert(
+        nextValue
+          ? "사이트 관리 기능을 활성화했습니다."
+          : "사이트 관리 기능을 비활성화했습니다.",
+      );
+    } finally {
+      setWebsiteSavingId(null);
+    }
+  }
+
   async function deleteBusiness(
     id: number,
     name: string | null,
@@ -457,6 +545,18 @@ export default function AdminBusinessesPage() {
                                   숨김
                                 </span>
                               )}
+
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-black ${
+                                  business.website_enabled
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-gray-200 text-gray-700"
+                                }`}
+                              >
+                                {business.website_enabled
+                                  ? "🟢 Website ON"
+                                  : "🔴 Website OFF"}
+                              </span>
                             </div>
 
                             <p className="mt-1 break-words text-sm text-gray-600">
@@ -534,6 +634,28 @@ export default function AdminBusinessesPage() {
         : "Sponsor"}
   </button>
 
+  <button
+    type="button"
+    onClick={() =>
+      toggleWebsiteEnabled(
+        business.id,
+        business.website_enabled,
+      )
+    }
+    disabled={websiteSavingId === business.id}
+    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-xs ${
+      business.website_enabled
+        ? "bg-green-600"
+        : "bg-gray-500"
+    }`}
+  >
+    {websiteSavingId === business.id
+      ? "Saving..."
+      : business.website_enabled
+        ? "Website ON"
+        : "Website OFF"}
+  </button>
+
   <Link
     href={`/business/${business.id}/edit`}
     className="shrink-0 rounded-lg bg-[#172033] px-2.5 py-1.5 text-[11px] font-bold text-white sm:px-3 sm:text-xs"
@@ -581,6 +703,18 @@ export default function AdminBusinessesPage() {
                             상태입니다.
                           </div>
                         )}
+
+                        <div
+                          className={`mt-3 rounded-xl px-3 py-2 text-xs font-bold ${
+                            business.website_enabled
+                              ? "bg-green-50 text-green-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {business.website_enabled
+                            ? "오너가 카테고리, 품목, 가격 및 웹사이트 관리 기능을 사용할 수 있습니다."
+                            : "사이트 관리가 비활성화되어 있습니다. Website OFF 버튼을 눌러 열어주세요."}
+                        </div>
                       </div>
                     ))}
                   </div>
