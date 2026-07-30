@@ -14,6 +14,7 @@ type IOSNavigator = Navigator & {
 };
 
 const HIDE_KEY = "ktt_install_banner_hide_until";
+const INSTALLED_KEY = "ktt_pwa_installed";
 const HIDE_TIME = 24 * 60 * 60 * 1000;
 const AUTO_HIDE_TIME = 5000;
 
@@ -28,8 +29,38 @@ export default function InstallAppButton() {
 
   const [showBanner, setShowBanner] = useState(false);
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showInstalledNotice, setShowInstalledNotice] =
+    useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isClosing, setIsClosing] = useState(false);
+
+  function getSavedInstalledState() {
+    try {
+      return localStorage.getItem(INSTALLED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  }
+
+  function saveInstalledState(installed: boolean) {
+    try {
+      if (installed) {
+        localStorage.setItem(INSTALLED_KEY, "true");
+      } else {
+        localStorage.removeItem(INSTALLED_KEY);
+      }
+    } catch {
+      // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
+    }
+  }
+
+  function showInstallationCompleteNotice() {
+    setShowInstalledNotice(true);
+
+    window.setTimeout(() => {
+      setShowInstalledNotice(false);
+    }, 4000);
+  }
 
   function getInstalledState() {
     const displayModeStandalone = window.matchMedia(
@@ -39,7 +70,11 @@ export default function InstallAppButton() {
     const iosStandalone =
       (window.navigator as IOSNavigator).standalone === true;
 
-    return displayModeStandalone || iosStandalone;
+    return (
+      displayModeStandalone ||
+      iosStandalone ||
+      getSavedInstalledState()
+    );
   }
 
   function checkInstalledState() {
@@ -157,6 +192,13 @@ export default function InstallAppButton() {
 
       if (checkInstalledState()) return;
 
+      /*
+       * beforeinstallprompt가 다시 발생했다는 것은 브라우저가
+       * 현재 앱을 설치할 수 있다고 판단했다는 뜻입니다.
+       * 앱을 삭제한 경우 저장된 설치 상태를 해제합니다.
+       */
+      saveInstalledState(false);
+      setIsInstalled(false);
       setInstallPrompt(event as BeforeInstallPromptEvent);
 
       /*
@@ -167,12 +209,14 @@ export default function InstallAppButton() {
     }
 
     function handleAppInstalled() {
+      saveInstalledState(true);
       setIsInstalled(true);
       setHasCheckedInstallState(true);
       setInstallPrompt(null);
       setShowBanner(false);
       setShowIOSGuide(false);
       setIsClosing(false);
+      showInstallationCompleteNotice();
 
       try {
         localStorage.removeItem(HIDE_KEY);
@@ -319,8 +363,12 @@ export default function InstallAppButton() {
 
       if (choice.outcome === "accepted") {
         /*
-         * 실제 설치 완료 처리는 appinstalled 이벤트가 담당합니다.
+         * 현재 브라우저 탭은 설치 후에도 browser 모드로 남아 있을 수
+         * 있으므로 설치 완료 상태를 별도로 저장합니다.
          */
+        saveInstalledState(true);
+        setIsInstalled(true);
+        showInstallationCompleteNotice();
       }
     } catch (error) {
       console.error("App installation error:", error);
@@ -352,7 +400,20 @@ export default function InstallAppButton() {
    * 배너와 오른쪽 ≡ 버튼을 모두 숨깁니다.
    */
   if (isInstalled) {
-    return null;
+    return showInstalledNotice ? (
+      <div
+        className="fixed left-1/2 top-5 z-[100001] w-[calc(100%-32px)] max-w-sm -translate-x-1/2 rounded-2xl bg-[#172033] px-5 py-4 text-center text-white shadow-2xl"
+        role="status"
+        aria-live="polite"
+      >
+        <p className="text-sm font-black">
+          ✓ KTown Triangle has been installed.
+        </p>
+        <p className="mt-1 text-xs font-semibold text-white/75">
+          You can now open it from your apps or Home Screen.
+        </p>
+      </div>
+    ) : null;
   }
 
   return (
