@@ -22,9 +22,28 @@ type InstallAppButtonProps = {
   businessName?: string;
 };
 
+type InstallOwner = {
+  id: string;
+  priority: number;
+};
+
+declare global {
+  interface Window {
+    __KTT_INSTALL_OWNER__?: InstallOwner;
+  }
+}
+
+const INSTALL_OWNER_CHANGE_EVENT = "ktt-install-owner-change";
+
 export default function InstallAppButton({
   businessName,
 }: InstallAppButtonProps) {
+  const instanceIdRef = useRef(
+    `ktt-install-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const ownerPriority = businessName?.trim() ? 2 : 1;
+  const [isInstallOwner, setIsInstallOwner] = useState(false);
+
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
 
@@ -62,6 +81,57 @@ export default function InstallAppButton({
   const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
+    const instanceId = instanceIdRef.current;
+
+    function syncOwnership() {
+      const currentOwner = window.__KTT_INSTALL_OWNER__;
+
+      if (
+        !currentOwner ||
+        currentOwner.id === instanceId ||
+        currentOwner.priority < ownerPriority
+      ) {
+        window.__KTT_INSTALL_OWNER__ = {
+          id: instanceId,
+          priority: ownerPriority,
+        };
+      }
+
+      setIsInstallOwner(
+        window.__KTT_INSTALL_OWNER__?.id === instanceId,
+      );
+    }
+
+    function handleOwnerChange() {
+      syncOwnership();
+    }
+
+    window.addEventListener(
+      INSTALL_OWNER_CHANGE_EVENT,
+      handleOwnerChange,
+    );
+
+    syncOwnership();
+    window.dispatchEvent(new Event(INSTALL_OWNER_CHANGE_EVENT));
+
+    return () => {
+      window.removeEventListener(
+        INSTALL_OWNER_CHANGE_EVENT,
+        handleOwnerChange,
+      );
+
+      if (window.__KTT_INSTALL_OWNER__?.id === instanceId) {
+        delete window.__KTT_INSTALL_OWNER__;
+        window.dispatchEvent(
+          new Event(INSTALL_OWNER_CHANGE_EVENT),
+        );
+      }
+    };
+  }, [ownerPriority]);
+
+  useEffect(() => {
+    if (!isInstallOwner) return;
+
     const explicitName = businessName?.trim();
 
     function updateDisplayName() {
@@ -112,7 +182,7 @@ export default function InstallAppButton({
     return () => {
       observer.disconnect();
     };
-  }, [businessName]);
+  }, [businessName, isInstallOwner]);
 
   function getBusinessIdFromPath() {
     if (typeof window === "undefined") {
@@ -270,6 +340,8 @@ export default function InstallAppButton({
   }
 
   useEffect(() => {
+    if (!isInstallOwner) return;
+
     /*
      * 설치 상태가 저장되어 있어도 이벤트 리스너는 계속 등록합니다.
      * 사용자가 앱을 삭제하면 beforeinstallprompt가 다시 발생할 수 있고,
@@ -469,10 +541,10 @@ export default function InstallAppButton({
         handleDisplayModeChange,
       );
     };
-  }, []);
+  }, [isInstallOwner]);
 
   useEffect(() => {
-    if (!showIOSGuide) return;
+    if (!isInstallOwner || !showIOSGuide) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -480,7 +552,7 @@ export default function InstallAppButton({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [showIOSGuide]);
+  }, [isInstallOwner, showIOSGuide]);
 
   async function installApp() {
     console.log("Install button clicked.");
@@ -594,6 +666,10 @@ export default function InstallAppButton({
     }
 
     setTouchStartX(null);
+  }
+
+  if (!isInstallOwner) {
+    return null;
   }
 
   if (!hasCheckedInstallState) {
