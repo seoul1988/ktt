@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -27,15 +27,6 @@ export default function InstallAppButton({
 }: InstallAppButtonProps) {
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-
-  /*
-   * beforeinstallprompt 객체는 한 번만 사용할 수 있습니다.
-   * state와 ref에 함께 보관하여 버튼 클릭 시 최신 객체를 확실히 사용합니다.
-   */
-  const installPromptRef =
-    useRef<BeforeInstallPromptEvent | null>(null);
-
-  const [installMessage, setInstallMessage] = useState("");
 
   const [isInstalled, setIsInstalled] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -195,9 +186,7 @@ export default function InstallAppButton({
     setHasCheckedInstallState(true);
 
     if (installed) {
-      installPromptRef.current = null;
       setInstallPrompt(null);
-      setInstallMessage("");
       setShowBanner(false);
       setShowIOSGuide(false);
       setIsClosing(false);
@@ -245,7 +234,6 @@ export default function InstallAppButton({
   function openBanner() {
     if (checkInstalledState()) return;
 
-    setInstallMessage("");
     setShowBanner(true);
     setIsClosing(false);
   }
@@ -305,55 +293,49 @@ export default function InstallAppButton({
     function handleBeforeInstallPrompt(event: Event) {
       event.preventDefault();
 
-      const promptEvent =
-        event as BeforeInstallPromptEvent;
-
-      console.log(
-        "✅ beforeinstallprompt fired:",
-        promptEvent,
-      );
-
-      /*
-       * state만 사용하면 렌더링 타이밍에 따라 버튼 클릭 시
-       * 이전 null 값이 보일 수 있으므로 ref에도 함께 저장합니다.
-       */
-      installPromptRef.current = promptEvent;
-      setInstallPrompt(promptEvent);
-      setInstallMessage("");
-
       /*
        * beforeinstallprompt가 발생했다는 것은 브라우저가 현재 앱을
-       * 설치할 수 있다고 판단했다는 뜻이므로 오래된 설치 기록을
-       * 해제합니다.
+       * 다시 설치할 수 있다고 판단했다는 뜻입니다.
+       *
+       * 설치 여부를 먼저 검사하면 앱 삭제 후에도 localStorage의
+       * 오래된 true 값 때문에 여기서 중단될 수 있으므로,
+       * 저장된 설치 상태를 먼저 해제해야 합니다.
        */
       saveInstalledState(false);
       setIsInstalled(false);
       setHasCheckedInstallState(true);
+      setInstallPrompt(event as BeforeInstallPromptEvent);
 
+      /*
+       * 앱을 삭제한 뒤 다시 설치 가능 상태가 되면
+       * 이전 24시간 숨김 제한도 해제합니다.
+       */
       try {
         localStorage.removeItem(getHideStorageKey());
       } catch {
         // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
       }
 
-      /*
-       * 설치 이벤트를 받은 뒤에는 5초 후 자동으로 닫지 않습니다.
-       * 사용자가 Install App 버튼을 직접 누를 때까지 유지합니다.
-       */
       clearAutoTimer();
       setShowBanner(true);
       setIsClosing(false);
+
+      autoTimer = window.setTimeout(() => {
+        setIsClosing(true);
+        hideFor24Hours();
+
+        window.setTimeout(() => {
+          setShowBanner(false);
+          setIsClosing(false);
+        }, 350);
+      }, AUTO_HIDE_TIME);
     }
 
     function handleAppInstalled() {
-      console.log("✅ appinstalled fired");
-
-      installPromptRef.current = null;
       saveInstalledState(true);
       setIsInstalled(true);
       setHasCheckedInstallState(true);
       setInstallPrompt(null);
-      setInstallMessage("");
       setShowBanner(false);
       setShowIOSGuide(false);
       setIsClosing(false);
@@ -459,20 +441,14 @@ export default function InstallAppButton({
   }, [showIOSGuide]);
 
   async function installApp() {
-    console.log("Install button clicked.");
-
-    if (checkInstalledState()) {
-      console.log("The app is already marked as installed.");
-      return;
-    }
+    if (checkInstalledState()) return;
 
     /*
-     * iPhone/iPad에서는 beforeinstallprompt가 없으므로
-     * 홈 화면 추가 안내를 표시합니다.
+     * iPhone/iPad에서는 브라우저 자동 설치창을 제공하지 않으므로
+     * 홈 화면 추가 안내 이미지를 표시합니다.
      */
-    if (isIOS) {
+    if (isIOS && !installPrompt) {
       hideFor24Hours();
-      setInstallMessage("");
       setShowIOSGuide(true);
       setShowBanner(false);
       setIsClosing(false);
@@ -480,80 +456,49 @@ export default function InstallAppButton({
     }
 
     /*
-     * 가장 최근 beforeinstallprompt 객체를 사용합니다.
-     * ref를 먼저 확인하여 React state 갱신 타이밍 문제를 방지합니다.
+     * Chrome/Edge에서 beforeinstallprompt가 아직 준비되지 않았다면
+     * 별도 Chrome/Edge 설명 모달은 띄우지 않습니다.
      */
-    const promptEvent =
-      installPromptRef.current || installPrompt;
-
-    console.log("Stored install prompt:", promptEvent);
-
-    if (!promptEvent) {
-      /*
-       * 이벤트가 아직 준비되지 않은 경우 배너를 없애지 않습니다.
-       * 사용자가 아무 반응이 없다고 느끼지 않도록 이유를 표시합니다.
-       */
-      setInstallMessage(
-        "The browser installation window is not available yet. Open the Chrome or Edge menu ⋮ and choose Install app, or reload this page and try again.",
-      );
-      setShowBanner(true);
+    if (!installPrompt) {
+      setShowBanner(false);
       setIsClosing(false);
       return;
     }
 
     try {
-      setInstallMessage("");
+      await installPrompt.prompt();
+
+      const choice = await installPrompt.userChoice;
 
       /*
-       * prompt()는 반드시 사용자의 클릭 동작 안에서 호출해야 합니다.
+       * beforeinstallprompt 객체는 한 번만 사용할 수 있습니다.
        */
-      await promptEvent.prompt();
-
-      console.log("Browser install prompt opened.");
-
-      const choice = await promptEvent.userChoice;
-
-      console.log(
-        "Install prompt result:",
-        choice.outcome,
-      );
-
-      /*
-       * 이 객체는 한 번만 사용할 수 있으므로 즉시 제거합니다.
-       */
-      installPromptRef.current = null;
       setInstallPrompt(null);
 
-      if (choice.outcome === "accepted") {
-        saveInstalledState(true);
-        setIsInstalled(true);
-        setInstallMessage("");
-        setShowBanner(false);
-        setIsClosing(false);
-        showInstallationCompleteNotice();
-        return;
-      }
-
       /*
-       * 사용자가 취소한 경우 설치 완료로 저장하지 않습니다.
-       * 오른쪽 ≡ 버튼으로 다시 열 수 있도록 배너만 닫습니다.
+       * 설치를 수락하거나 취소한 뒤에는 자동 배너를
+       * 24시간 동안 다시 표시하지 않습니다.
+       * 오른쪽 ≡ 버튼을 누르면 수동으로 다시 열 수 있습니다.
        */
-      saveInstalledState(false);
       hideFor24Hours();
-      setInstallMessage("");
       setShowBanner(false);
       setIsClosing(false);
+
+      if (choice.outcome === "accepted") {
+        /*
+         * 현재 브라우저 탭은 설치 후에도 browser 모드로 남아 있을 수
+         * 있으므로 설치 완료 상태를 별도로 저장합니다.
+         */
+        saveInstalledState(true);
+        setIsInstalled(true);
+        showInstallationCompleteNotice();
+      }
     } catch (error) {
       console.error("App installation error:", error);
 
-      installPromptRef.current = null;
       setInstallPrompt(null);
-      saveInstalledState(false);
-
-      setInstallMessage(
-        "The installation window could not be opened. Reload the page, then try again.",
-      );
-      setShowBanner(true);
+      hideFor24Hours();
+      setShowBanner(false);
       setIsClosing(false);
     }
   }
@@ -626,15 +571,6 @@ export default function InstallAppButton({
               <p className="mt-1 text-xs font-semibold text-white/75">
                 Add this app to your phone for faster access.
               </p>
-
-              {installMessage ? (
-                <p
-                  className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-xs font-semibold leading-5 text-white"
-                  role="alert"
-                >
-                  {installMessage}
-                </p>
-              ) : null}
             </div>
 
             <button
