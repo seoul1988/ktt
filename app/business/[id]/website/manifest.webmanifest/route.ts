@@ -10,61 +10,8 @@ type Props = {
 
 type UnknownRecord = Record<string, unknown>;
 
-const SITE_URL =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ||
-  "https://www.ktowntriangle.com";
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function findUploadedLogo(value: unknown): string {
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = findUploadedLogo(item);
-      if (found) return found;
-    }
-    return "";
-  }
-
-  if (!isRecord(value)) return "";
-
-  const type = text(value.type).toLowerCase();
-
-  if (type === "logo") {
-    const logo =
-      text(value.image_url) ||
-      text(value.imageUrl) ||
-      text(value.logo_url) ||
-      text(value.logoUrl) ||
-      text(value.url) ||
-      text(value.src);
-
-    if (logo) return logo;
-  }
-
-  const explicitLogo =
-    text(value.app_icon_url) ||
-    text(value.appIconUrl) ||
-    text(value.logo_url) ||
-    text(value.logoUrl) ||
-    text(value.business_logo_url) ||
-    text(value.businessLogoUrl) ||
-    text(value.header_logo_url) ||
-    text(value.headerLogoUrl);
-
-  if (explicitLogo) return explicitLogo;
-
-  for (const child of Object.values(value)) {
-    const found = findUploadedLogo(child);
-    if (found) return found;
-  }
-
-  return "";
 }
 
 function getServerSupabase() {
@@ -86,15 +33,6 @@ function getServerSupabase() {
   });
 }
 
-function absoluteUrl(value: unknown, fallback = "/icon-512.png") {
-  const url = text(value) || fallback;
-
-  if (/^https?:\/\//i.test(url)) return url;
-  if (url.startsWith("//")) return `https:${url}`;
-
-  return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
-}
-
 export async function GET(_request: Request, { params }: Props) {
   const { id } = await params;
   const businessId = Number(id);
@@ -108,12 +46,15 @@ export async function GET(_request: Request, { params }: Props) {
 
   const { data: business, error } = await getServerSupabase()
     .from("businesses")
-    .select("id, name, image_url, website_settings")
+    .select("id, name")
     .eq("id", businessId)
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 },
+    );
   }
 
   if (!business) {
@@ -125,40 +66,41 @@ export async function GET(_request: Request, { params }: Props) {
 
   const businessName = text(business.name) || "Business";
 
-  const uploadedLogo = findUploadedLogo(business.website_settings);
-  const appIcon = absoluteUrl(
-    uploadedLogo || business.image_url,
-    "/icon-512.png",
-  );
-
+  /*
+   * 실제 접속 주소와 scope를 완전히 동일하게 사용합니다.
+   * 끝의 /를 한쪽에만 붙이면 scope ignored 경고가 발생할 수 있습니다.
+   */
   const startUrl = `/business/${businessId}/website`;
-   
+
   return NextResponse.json(
     {
       id: startUrl,
       name: businessName,
-      short_name: businessName.slice(0, 12),
+      short_name: businessName.slice(0, 12).trim(),
       description: `${businessName} official website`,
       start_url: startUrl,
-      scope: `${startUrl}/`,
+      scope: startUrl,
       display: "standalone",
       orientation: "portrait-primary",
       background_color: "#ffffff",
       theme_color: "#ffffff",
       icons: [
         {
-          src: appIcon,
+          src: `/business/${businessId}/website/icon/192`,
           sizes: "192x192",
+          type: "image/png",
           purpose: "any",
         },
         {
-          src: appIcon,
+          src: `/business/${businessId}/website/icon/512`,
           sizes: "512x512",
+          type: "image/png",
           purpose: "any",
         },
         {
-          src: appIcon,
+          src: `/business/${businessId}/website/icon/512?purpose=maskable`,
           sizes: "512x512",
+          type: "image/png",
           purpose: "maskable",
         },
       ],
