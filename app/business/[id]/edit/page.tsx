@@ -769,46 +769,84 @@ export default function EditBusinessPage() {
   async function saveWebsiteMenuPrices() {
     if (websiteMenuItems.length === 0) return;
 
-    const invalidItem = websiteMenuItems.find((item) => {
-      if (!item.price.trim()) return false;
-      const value = Number(item.price);
-      return !Number.isFinite(value) || value < 0;
-    });
+    const pricesToSave = websiteMenuItems.map((item) => {
+      const inputValue =
+        menuPriceInputRefs.current[item.id]?.value?.trim() ?? item.price.trim();
 
-    if (invalidItem) {
-      alert(`${invalidItem.name}의 가격을 숫자로 입력해 주세요.`);
-      return;
-    }
+      const normalized = inputValue.replace(/,/g, "").replace(/[^0-9.]/g, "");
+      const priceValue =
+        normalized === "" ? null : Number(Number(normalized).toFixed(2));
+
+      if (
+        priceValue !== null &&
+        (!Number.isFinite(priceValue) || priceValue < 0)
+      ) {
+        throw new Error(`${item.name}의 가격을 숫자로 입력해 주세요.`);
+      }
+
+      return {
+        id: Number(item.id),
+        price: priceValue,
+      };
+    });
 
     setSavingMenuPrices(true);
     setMenuPriceMessage("");
 
     try {
-      for (const item of websiteMenuItems) {
-        const priceValue = item.price.trim()
-          ? Number(Number(item.price).toFixed(2))
-          : null;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-        const { error } = await supabase
-          .from("business_menu_items")
-          .update({ price: priceValue })
-          .eq("id", item.id)
-          .eq("business_id", businessId);
-
-        if (error) throw error;
+      if (!session?.access_token) {
+        throw new Error("로그인이 만료되었습니다. 다시 로그인해 주세요.");
       }
 
-      setWebsiteMenuItems((prev) =>
-        prev.map((item) => ({
+      const response = await fetch(`/api/businesses/${businessId}/menu`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          items: pricesToSave,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result?.error || "메뉴 가격 저장에 실패했습니다.");
+      }
+
+      const nextItems = websiteMenuItems.map((item) => {
+        const saved = pricesToSave.find(
+          (row) => row.id === Number(item.id),
+        );
+
+        return {
           ...item,
-          price: item.price.trim()
-            ? Number(item.price).toFixed(2)
-            : "",
-        })),
-      );
+          price:
+            saved?.price === null || saved?.price === undefined
+              ? ""
+              : Number(saved.price).toFixed(2),
+        };
+      });
+
+      setWebsiteMenuItems(nextItems);
+
+      window.requestAnimationFrame(() => {
+        for (const item of nextItems) {
+          const input = menuPriceInputRefs.current[item.id];
+          if (input) input.value = item.price;
+        }
+      });
+
       setMenuPriceMessage(
-        "✓ 메뉴 가격을 저장했습니다. 공개 메뉴를 새로고침하면 바로 반영됩니다.",
+        `✓ 메뉴 가격 ${result.updatedCount || pricesToSave.length}개를 저장했습니다.`,
       );
+
+      alert("메뉴 가격을 저장했습니다.");
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "메뉴 가격 저장 오류";
