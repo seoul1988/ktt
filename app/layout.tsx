@@ -8,6 +8,7 @@ import VisitorTracker from "./components/VisitorTracker";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
+import InstallAppButton from "./components/InstallAppButton";
 
 import "./globals.css";
 
@@ -181,6 +182,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ServiceWorkerRegister />
+
+          {/* 설치되지 않은 일반 브라우저에서만 설치 버튼 표시 */}
+          <InstallAppButton />
 
           {/* Instagram, Facebook, Threads는 영어 안내
               KakaoTalk은 한글 안내
