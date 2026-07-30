@@ -27,7 +27,7 @@ export default function InstallAppButton() {
     useState(false);
 
   const [showBanner, setShowBanner] = useState(false);
-  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -51,7 +51,7 @@ export default function InstallAppButton() {
     if (installed) {
       setInstallPrompt(null);
       setShowBanner(false);
-      setShowInstallGuide(false);
+      setShowIOSGuide(false);
       setIsClosing(false);
     }
 
@@ -160,16 +160,9 @@ export default function InstallAppButton() {
       setInstallPrompt(event as BeforeInstallPromptEvent);
 
       /*
-       * 설치 이벤트가 다시 발생했다는 것은 브라우저에서
-       * 현재 사이트를 다시 설치할 수 있다는 뜻입니다.
-       * 자동 배너 숨김 기록은 지우고 설치 안내를 다시 표시합니다.
+       * 24시간 숨김 기간이 끝난 경우에만
+       * 자동 설치 배너를 다시 표시합니다.
        */
-      try {
-        localStorage.removeItem(HIDE_KEY);
-      } catch {
-        // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
-      }
-
       showThenAutoHide();
     }
 
@@ -178,7 +171,7 @@ export default function InstallAppButton() {
       setHasCheckedInstallState(true);
       setInstallPrompt(null);
       setShowBanner(false);
-      setShowInstallGuide(false);
+      setShowIOSGuide(false);
       setIsClosing(false);
 
       try {
@@ -189,8 +182,8 @@ export default function InstallAppButton() {
     }
 
     /*
-     * iPhone Safari는 beforeinstallprompt를 지원하지 않으므로
-     * 설치 방법 배너를 표시합니다.
+     * iPhone Safari에서는 beforeinstallprompt가 없으므로
+     * 24시간 제한이 없을 때 설치 안내 배너를 표시합니다.
      */
     if (ios) {
       showThenAutoHide();
@@ -270,7 +263,7 @@ export default function InstallAppButton() {
   }, []);
 
   useEffect(() => {
-    if (!showInstallGuide) return;
+    if (!showIOSGuide) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -278,17 +271,28 @@ export default function InstallAppButton() {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [showInstallGuide]);
+  }, [showIOSGuide]);
 
   async function installApp() {
     if (checkInstalledState()) return;
 
     /*
-     * iPhone/iPad 또는 beforeinstallprompt가 아직 없는 브라우저는
-     * 수동 설치 방법을 보여줍니다.
+     * iPhone/iPad에서는 브라우저 자동 설치창을 제공하지 않으므로
+     * 홈 화면 추가 안내 이미지를 표시합니다.
+     */
+    if (isIOS && !installPrompt) {
+      hideFor24Hours();
+      setShowIOSGuide(true);
+      setShowBanner(false);
+      setIsClosing(false);
+      return;
+    }
+
+    /*
+     * Chrome/Edge에서 beforeinstallprompt가 아직 준비되지 않았다면
+     * 별도 Chrome/Edge 설명 모달은 띄우지 않습니다.
      */
     if (!installPrompt) {
-      setShowInstallGuide(true);
       setShowBanner(false);
       setIsClosing(false);
       return;
@@ -300,30 +304,29 @@ export default function InstallAppButton() {
       const choice = await installPrompt.userChoice;
 
       /*
-       * beforeinstallprompt 객체는 한 번만 사용할 수 있으므로
-       * 사용자 선택 이후에는 비웁니다.
+       * beforeinstallprompt 객체는 한 번만 사용할 수 있습니다.
        */
       setInstallPrompt(null);
 
+      /*
+       * 설치를 수락하거나 취소한 뒤에는 자동 배너를
+       * 24시간 동안 다시 표시하지 않습니다.
+       * 오른쪽 ≡ 버튼을 누르면 수동으로 다시 열 수 있습니다.
+       */
+      hideFor24Hours();
+      setShowBanner(false);
+      setIsClosing(false);
+
       if (choice.outcome === "accepted") {
         /*
-         * 실제 설치 완료 처리는 appinstalled 이벤트에서 합니다.
-         * 설치창을 수락했을 때 현재 배너만 닫습니다.
+         * 실제 설치 완료 처리는 appinstalled 이벤트가 담당합니다.
          */
-        setShowBanner(false);
-        setIsClosing(false);
-      } else {
-        /*
-         * 사용자가 설치를 취소했어도 오른쪽 ≡ 버튼은 남겨두므로
-         * 언제든 다시 시도할 수 있습니다.
-         */
-        setShowBanner(false);
-        setIsClosing(false);
       }
     } catch (error) {
       console.error("App installation error:", error);
+
       setInstallPrompt(null);
-      setShowInstallGuide(true);
+      hideFor24Hours();
       setShowBanner(false);
       setIsClosing(false);
     }
@@ -345,19 +348,13 @@ export default function InstallAppButton() {
   }
 
   /*
-   * 홈 화면 앱 또는 설치된 PWA 안에서는
-   * 배너과 오른쪽 ≡ 버튼을 모두 표시하지 않습니다.
+   * 설치된 PWA 또는 iPhone 홈 화면 앱에서는
+   * 배너와 오른쪽 ≡ 버튼을 모두 숨깁니다.
    */
   if (isInstalled) {
     return null;
   }
 
-  /*
-   * 중요:
-   * installPrompt가 아직 없어도 return null 하지 않습니다.
-   * 따라서 앱을 삭제한 뒤 일반 브라우저로 다시 접속하면
-   * 오른쪽 ≡ 설치 버튼이 다시 나타납니다.
-   */
   return (
     <>
       {showBanner ? (
@@ -423,73 +420,73 @@ export default function InstallAppButton() {
         </button>
       )}
 
-      {showInstallGuide && isIOS && (
-  <div
-    className="fixed inset-0 z-[100000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-[2px] sm:items-center sm:p-5"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="install-guide-title"
-    onClick={() => setShowInstallGuide(false)}
-  >
-    <div
-      onClick={(event) => event.stopPropagation()}
-      className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] bg-white text-[#172033] shadow-2xl"
-    >
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:px-6">
-        <div>
-          <h2
-            id="install-guide-title"
-            className="text-lg font-black sm:text-xl"
+      {showIOSGuide && isIOS && (
+        <div
+          className="fixed inset-0 z-[100000] flex items-end justify-center bg-black/60 p-3 backdrop-blur-[2px] sm:items-center sm:p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ios-install-guide-title"
+          onClick={() => setShowIOSGuide(false)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-[28px] bg-white text-[#172033] shadow-2xl"
           >
-            Install KTown Triangle
-          </h2>
+            <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-4 sm:px-6">
+              <div>
+                <h2
+                  id="ios-install-guide-title"
+                  className="text-lg font-black sm:text-xl"
+                >
+                  Install KTown Triangle
+                </h2>
 
-          <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-            Follow the image below to add KTown Triangle
-            to your iPhone Home Screen.
-          </p>
+                <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+                  Follow the image below to add KTown Triangle
+                  to your iPhone Home Screen.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowIOSGuide(false)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-600"
+                aria-label="Close installation guide"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8F9FB] p-2 sm:p-4">
+              <div className="mx-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <img
+                  src="/images/ios-install-guide.png"
+                  alt="How to add KTownTriangle.com to the iPhone Home Screen"
+                  className="h-auto w-full"
+                  loading="eager"
+                  decoding="async"
+                />
+              </div>
+            </div>
+
+            <div
+              className="border-t border-gray-200 bg-white px-4 pt-4 sm:px-6"
+              style={{
+                paddingBottom:
+                  "calc(env(safe-area-inset-bottom) + 16px)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setShowIOSGuide(false)}
+                className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white transition active:scale-[0.98]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setShowInstallGuide(false)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-600"
-          aria-label="Close installation guide"
-        >
-          ✕
-        </button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#F8F9FB] p-2 sm:p-4">
-        <div className="mx-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <img
-            src="/images/ios-install-guide.png"
-            alt="How to add KTownTriangle.com to the iPhone Home Screen"
-            className="h-auto w-full"
-            loading="eager"
-            decoding="async"
-          />
-        </div>
-      </div>
-
-      <div
-        className="border-t border-gray-200 bg-white px-4 pt-4 sm:px-6"
-        style={{
-          paddingBottom:
-            "calc(env(safe-area-inset-bottom) + 16px)",
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setShowInstallGuide(false)}
-          className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white transition active:scale-[0.98]"
-        >
-          Close
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+      )}
     </>
   );
 }
