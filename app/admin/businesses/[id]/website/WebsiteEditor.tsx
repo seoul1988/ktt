@@ -1158,6 +1158,10 @@ function BusinessLocationMap({
 }) {
   const address = getBusinessAddress(business);
   const query = getBusinessMapQuery(business);
+  const latitude = Number(business.latitude ?? business.lat);
+  const longitude = Number(business.longitude ?? business.lng);
+  const hasCoordinates =
+    Number.isFinite(latitude) && Number.isFinite(longitude);
 
   if (!query) {
     return (
@@ -1174,9 +1178,28 @@ function BusinessLocationMap({
   }
 
   const encodedQuery = encodeURIComponent(query);
-  const mapUrl = `https://www.google.com/maps?q=${encodedQuery}&output=embed`;
+
+  // 좌표가 있으면 Google 기본 빨간 핀이 나타나지 않는 중심 좌표 지도를 사용하고,
+  // 지도 정중앙에 비즈니스 로고를 28×28 사용자 지정 마커로 표시합니다.
+  // 좌표가 없으면 기존 주소 검색 방식으로 지도를 표시합니다.
+  const mapUrl = hasCoordinates
+    ? `https://www.google.com/maps?output=embed&ll=${latitude},${longitude}&z=16`
+    : `https://www.google.com/maps?q=${encodedQuery}&output=embed`;
+
   const directionsUrl =
     `https://www.google.com/maps/dir/?api=1&destination=${encodedQuery}`;
+
+  const logoUrl = String(
+    business.logo_url ||
+      business.website_settings?.logo_url ||
+      business.image_url ||
+      "",
+  ).trim();
+
+  const fallbackLetter = String(business.name || "B")
+    .trim()
+    .slice(0, 1)
+    .toUpperCase();
 
   return (
     <div className="relative h-full min-h-[240px] w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-sm">
@@ -1189,8 +1212,31 @@ function BusinessLocationMap({
         allowFullScreen
       />
 
+      {/* 비즈니스 위치 로고 마커: 28×28 */}
       <div
-        className={`absolute left-3 top-3 z-10 max-w-[calc(100%-24px)] rounded-xl bg-white/95 shadow-lg backdrop-blur ${
+        className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-full"
+        aria-hidden="true"
+      >
+        <div className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white shadow-[0_3px_10px_rgba(0,0,0,0.45)]">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center bg-gray-950 text-[11px] font-black text-white">
+              {fallbackLetter}
+            </span>
+          )}
+        </div>
+
+        <span className="absolute left-1/2 top-[25px] h-2 w-2 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-white bg-white shadow-[2px_2px_3px_rgba(0,0,0,0.18)]" />
+      </div>
+
+      <div
+        className={`absolute left-3 top-3 z-30 max-w-[calc(100%-24px)] rounded-xl bg-white/95 shadow-lg backdrop-blur ${
           compact ? "px-3 py-2" : "px-4 py-3"
         }`}
       >
@@ -10602,6 +10648,8 @@ function RightPanel(props: {
 }) {
   const { selection, selectedCell, selectedSection, heroSection, business, websiteSettings } = props;
   const [cellTypePickerOpen, setCellTypePickerOpen] = useState(false);
+  const [phoneEditorOpen, setPhoneEditorOpen] = useState(false);
+  const [snsEditorOpen, setSnsEditorOpen] = useState(false);
   const [textEditorOpen, setTextEditorOpen] = useState(false);
   const [textEditorHtml, setTextEditorHtml] = useState("");
   const [selectionFontSize, setSelectionFontSize] = useState(24);
@@ -10618,6 +10666,14 @@ function RightPanel(props: {
     "section" | "page" | "external"
   >("section");
   const [textLinkValue, setTextLinkValue] = useState("");
+  const [textInsertPhone, setTextInsertPhone] = useState("");
+  const [textInsertPhoneLabel, setTextInsertPhoneLabel] = useState("Call Us");
+  const [textInsertSnsPlatform, setTextInsertSnsPlatform] = useState<SnsPlatform>("instagram");
+  const [textInsertSnsUrl, setTextInsertSnsUrl] = useState("");
+  const [textInsertSnsLabel, setTextInsertSnsLabel] = useState("Follow Us");
+  const [textInsertSnsTextColor, setTextInsertSnsTextColor] = useState("#111827");
+  const [textInsertSnsIconBackgroundColor, setTextInsertSnsIconBackgroundColor] = useState("#111827");
+  const [textInsertSnsIconColor, setTextInsertSnsIconColor] = useState("#ffffff");
   const [textEditorMessage, setTextEditorMessage] = useState("");
   const textEditorRef = useRef<HTMLDivElement>(null);
   const savedTextRangeRef = useRef<Range | null>(null);
@@ -10649,6 +10705,14 @@ function RightPanel(props: {
     setInputVerticalAlign(selectedCell?.vertical_align || "top");
     setTextLinkType("section");
     setTextLinkValue("");
+    setTextInsertPhone(selectedCell?.phone_number || "");
+    setTextInsertPhoneLabel("Call Us");
+    setTextInsertSnsPlatform("instagram");
+    setTextInsertSnsUrl("");
+    setTextInsertSnsLabel("Follow Us");
+    setTextInsertSnsTextColor("#111827");
+    setTextInsertSnsIconBackgroundColor("#111827");
+    setTextInsertSnsIconColor("#ffffff");
     setTextEditorMessage("");
     setSelectedTextEditorImageId("");
     setSelectedTextEditorImageWidth(520);
@@ -11218,6 +11282,70 @@ function RightPanel(props: {
     );
   }
 
+  function escapeTextEditorAttribute(value: string) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function insertPhoneIntoTextEditor() {
+    const rawPhone = String(textInsertPhone || "").trim();
+    if (!rawPhone) {
+      setTextEditorMessage("전화번호를 입력하세요.");
+      return;
+    }
+
+    const telValue = rawPhone.replace(/[^0-9+*#,;]/g, "");
+    if (!telValue) {
+      setTextEditorMessage("올바른 전화번호를 입력하세요.");
+      return;
+    }
+
+    const label = String(textInsertPhoneLabel || rawPhone).trim() || rawPhone;
+    insertTextEditorHtmlAtCursor(
+      `<a href="tel:${escapeTextEditorAttribute(telValue)}" data-text-phone="true" style="display:inline-flex;align-items:center;gap:6px;color:#2563eb;font-weight:700;text-decoration:none;white-space:nowrap;"><span aria-hidden="true">☎</span><span>${escapeCellText(label)}</span></a>&nbsp;`,
+    );
+    setTextEditorMessage("커서 위치에 전화 링크를 추가했습니다.");
+  }
+
+  function insertSnsIntoTextEditor() {
+    let url = String(textInsertSnsUrl || "").trim();
+    if (!url) {
+      setTextEditorMessage("SNS 주소를 입력하세요.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+
+    const platformLabel: Record<SnsPlatform, string> = {
+      facebook: "Facebook",
+      instagram: "Instagram",
+      youtube: "YouTube",
+      tiktok: "TikTok",
+      x: "X",
+      linkedin: "LinkedIn",
+      kakao: "KakaoTalk",
+      custom: "SNS",
+    };
+    const platformIcon: Record<SnsPlatform, string> = {
+      facebook: "f",
+      instagram: "◎",
+      youtube: "▶",
+      tiktok: "♪",
+      x: "𝕏",
+      linkedin: "in",
+      kakao: "💬",
+      custom: "↗",
+    };
+    const label = String(textInsertSnsLabel || platformLabel[textInsertSnsPlatform]).trim();
+
+    insertTextEditorHtmlAtCursor(
+      `<a href="${escapeTextEditorAttribute(url)}" target="_blank" rel="noreferrer" data-text-sns="${textInsertSnsPlatform}" data-sns-text-color="${escapeTextEditorAttribute(textInsertSnsTextColor)}" data-sns-icon-background="${escapeTextEditorAttribute(textInsertSnsIconBackgroundColor)}" data-sns-icon-color="${escapeTextEditorAttribute(textInsertSnsIconColor)}" style="display:inline-flex;align-items:center;gap:7px;color:${escapeTextEditorAttribute(textInsertSnsTextColor)};font-weight:700;text-decoration:none;white-space:nowrap;"><span aria-hidden="true" style="display:inline-flex;min-width:24px;height:24px;padding:0 5px;align-items:center;justify-content:center;border-radius:999px;background:${escapeTextEditorAttribute(textInsertSnsIconBackgroundColor)};color:${escapeTextEditorAttribute(textInsertSnsIconColor)};font-size:12px;font-weight:900;">${platformIcon[textInsertSnsPlatform]}</span><span>${escapeCellText(label || platformLabel[textInsertSnsPlatform])}</span></a>&nbsp;`,
+    );
+    setTextEditorMessage("커서 위치에 SNS 링크를 추가했습니다.");
+  }
+
   function saveTextEditor() {
     if (!selectedCell) return;
 
@@ -11455,39 +11583,14 @@ function RightPanel(props: {
         </div>
 
         {selectedCell.type === "phone" ? (
-          <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-4">
-            <Field label="전화번호">
-              <input
-                type="tel"
-                inputMode="tel"
-                placeholder="예: (919) 806-0078"
-                value={selectedCell.phone_number || selectedCell.text || ""}
-                onChange={(event) =>
-                  props.onUpdateCell(
-                    area,
-                    selectedCell.id,
-                    {
-                      phone_number: event.target.value,
-                      text: event.target.value,
-                    },
-                    selection.layoutId,
-                  )
-                }
-                className="w-full rounded-xl border border-gray-300 px-3 py-2.5 text-base font-bold"
-              />
-            </Field>
-            <p className="mt-2 text-xs font-semibold leading-5 text-gray-500">
-              컴퓨터에서는 전화번호가 표시되고, 휴대폰에서는 📞 아이콘만 표시됩니다. 아이콘을 누르면 바로 전화 앱이 열립니다.
-            </p>
-            {String(selectedCell.phone_number || selectedCell.text || "").trim() ? (
-              <a
-                href={normalizePhoneHref(selectedCell.phone_number || selectedCell.text)}
-                className="mt-3 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-black text-white"
-              >
-                📞 전화 연결 테스트
-              </a>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={() => setPhoneEditorOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-emerald-700"
+          >
+            <span aria-hidden="true">☎</span>
+            전화번호 입력·수정
+          </button>
         ) : selectedCell.type === "text" ? (
           <button
             type="button"
@@ -11518,17 +11621,14 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "sns" ? (
-          <SnsCellEditor
-            cell={selectedCell}
-            onUpdate={(patch) =>
-              props.onUpdateCell(
-                area,
-                selectedCell.id,
-                patch,
-                selection.layoutId,
-              )
-            }
-          />
+          <button
+            type="button"
+            onClick={() => setSnsEditorOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-pink-700"
+          >
+            <span aria-hidden="true">♡</span>
+            SNS 링크 입력·수정
+          </button>
         ) : null}
 
         {selectedCell.type === "logo" ? (
@@ -12038,6 +12138,48 @@ function RightPanel(props: {
           </div>
         </Field>
 
+        {phoneEditorOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/65 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setPhoneEditorOpen(false); }}>
+                <div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                    <div><p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-600">Phone</p><h3 className="mt-1 text-xl font-black text-gray-950">전화번호 입력</h3></div>
+                    <button type="button" onClick={() => setPhoneEditorOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200" aria-label="전화번호 편집창 닫기">×</button>
+                  </div>
+                  <div className="overflow-y-auto px-5 py-5 sm:px-6">
+                    <Field label="전화번호">
+                      <input autoFocus type="tel" inputMode="tel" placeholder="예: (919) 806-0078" value={selectedCell.phone_number || selectedCell.text || ""} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { phone_number: event.target.value, text: event.target.value }, selection.layoutId)} className="w-full rounded-xl border border-gray-300 px-4 py-3 text-lg font-black outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                    </Field>
+                    <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-xs font-semibold leading-5 text-emerald-900">휴대폰에서 전화 아이콘을 누르면 바로 전화 앱이 열립니다. 국가번호가 필요한 경우 +1처럼 함께 입력하세요.</p>
+                    {String(selectedCell.phone_number || selectedCell.text || "").trim() ? (
+                      <a href={normalizePhoneHref(selectedCell.phone_number || selectedCell.text)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white no-underline hover:bg-emerald-700">☎ 전화 연결 테스트</a>
+                    ) : null}
+                  </div>
+                  <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setPhoneEditorOpen(false)} className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white">완료</button></div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {snsEditorOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/65 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setSnsEditorOpen(false); }}>
+                <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+                  <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                    <div><p className="text-xs font-black uppercase tracking-[0.16em] text-pink-600">Social Media</p><h3 className="mt-1 text-xl font-black text-gray-950">SNS 링크 입력</h3></div>
+                    <button type="button" onClick={() => setSnsEditorOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200" aria-label="SNS 편집창 닫기">×</button>
+                  </div>
+                  <div className="overflow-y-auto px-5 py-2 sm:px-6">
+                    <SnsCellEditor cell={selectedCell} onUpdate={(patch) => props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)} />
+                  </div>
+                  <div className="flex justify-end border-t border-gray-200 bg-gray-50 px-5 py-4 sm:px-6"><button type="button" onClick={() => setSnsEditorOpen(false)} className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white">완료</button></div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
         {(selectedCell.type === "text" || selectedCell.type === "title") &&
         textEditorOpen &&
         typeof document !== "undefined"
@@ -12122,6 +12264,184 @@ function RightPanel(props: {
                       </div>
                     </div>
                   ) : null}
+                </div>
+
+                <div className="mb-4 grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Phone</p>
+                        <h4 className="mt-1 text-base font-black text-emerald-950">전화 링크 추가</h4>
+                      </div>
+                      <span className="text-2xl" aria-hidden="true">☎</span>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-emerald-800">
+                      편집창에서 커서를 놓은 위치에 누르면 바로 전화되는 링크를 넣습니다.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <input
+                        value={textInsertPhone}
+                        onChange={(event) => setTextInsertPhone(event.target.value)}
+                        placeholder="919-555-1234"
+                        className="h-11 rounded-xl border border-emerald-300 bg-white px-3 text-sm font-bold outline-none focus:border-emerald-600"
+                      />
+                      <input
+                        value={textInsertPhoneLabel}
+                        onChange={(event) => setTextInsertPhoneLabel(event.target.value)}
+                        placeholder="표시 문구: Call Us"
+                        className="h-11 rounded-xl border border-emerald-300 bg-white px-3 text-sm font-bold outline-none focus:border-emerald-600"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        rememberTextSelection();
+                      }}
+                      onClick={insertPhoneIntoTextEditor}
+                      className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700"
+                    >
+                      ＋ 전화 추가
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-pink-300 bg-pink-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-pink-700">Social Media</p>
+                        <h4 className="mt-1 text-base font-black text-pink-950">SNS 링크 추가</h4>
+                      </div>
+                      <span className="text-2xl" aria-hidden="true">♡</span>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-pink-800">
+                      플랫폼과 주소를 입력하면 커서 위치에 SNS 아이콘 링크가 들어갑니다.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[140px_1fr]">
+                      <select
+                        value={textInsertSnsPlatform}
+                        onChange={(event) => setTextInsertSnsPlatform(event.target.value as SnsPlatform)}
+                        className="h-11 rounded-xl border border-pink-300 bg-white px-3 text-sm font-bold outline-none focus:border-pink-600"
+                      >
+                        <option value="facebook">Facebook</option>
+                        <option value="instagram">Instagram</option>
+                        <option value="youtube">YouTube</option>
+                        <option value="tiktok">TikTok</option>
+                        <option value="x">X</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="kakao">KakaoTalk</option>
+                        <option value="custom">기타 SNS</option>
+                      </select>
+                      <input
+                        value={textInsertSnsUrl}
+                        onChange={(event) => setTextInsertSnsUrl(event.target.value)}
+                        placeholder="https://instagram.com/..."
+                        className="h-11 rounded-xl border border-pink-300 bg-white px-3 text-sm font-bold outline-none focus:border-pink-600"
+                      />
+                    </div>
+                    <input
+                      value={textInsertSnsLabel}
+                      onChange={(event) => setTextInsertSnsLabel(event.target.value)}
+                      placeholder="표시 문구: Follow Us"
+                      className="mt-2 h-11 w-full rounded-xl border border-pink-300 bg-white px-3 text-sm font-bold outline-none focus:border-pink-600"
+                    />
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <label className="rounded-xl border border-pink-200 bg-white p-2">
+                        <span className="mb-1 block text-[11px] font-black text-gray-700">문구 색상</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={textInsertSnsTextColor}
+                            onChange={(event) => setTextInsertSnsTextColor(event.target.value)}
+                            className="h-9 w-11 cursor-pointer rounded border border-gray-300 bg-white p-1"
+                          />
+                          <input
+                            value={textInsertSnsTextColor}
+                            onChange={(event) => setTextInsertSnsTextColor(event.target.value)}
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-300 px-2 text-xs font-bold uppercase"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="rounded-xl border border-pink-200 bg-white p-2">
+                        <span className="mb-1 block text-[11px] font-black text-gray-700">아이콘 배경색</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={textInsertSnsIconBackgroundColor}
+                            onChange={(event) => setTextInsertSnsIconBackgroundColor(event.target.value)}
+                            className="h-9 w-11 cursor-pointer rounded border border-gray-300 bg-white p-1"
+                          />
+                          <input
+                            value={textInsertSnsIconBackgroundColor}
+                            onChange={(event) => setTextInsertSnsIconBackgroundColor(event.target.value)}
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-300 px-2 text-xs font-bold uppercase"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="rounded-xl border border-pink-200 bg-white p-2">
+                        <span className="mb-1 block text-[11px] font-black text-gray-700">아이콘 색상</span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={textInsertSnsIconColor}
+                            onChange={(event) => setTextInsertSnsIconColor(event.target.value)}
+                            className="h-9 w-11 cursor-pointer rounded border border-gray-300 bg-white p-1"
+                          />
+                          <input
+                            value={textInsertSnsIconColor}
+                            onChange={(event) => setTextInsertSnsIconColor(event.target.value)}
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-300 px-2 text-xs font-bold uppercase"
+                          />
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-pink-200 bg-white p-3">
+                      <p className="mb-2 text-[11px] font-black text-gray-600">미리보기</p>
+                      <span
+                        className="inline-flex items-center gap-2 whitespace-nowrap font-bold"
+                        style={{ color: textInsertSnsTextColor }}
+                      >
+                        <span
+                          className="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-black"
+                          style={{
+                            backgroundColor: textInsertSnsIconBackgroundColor,
+                            color: textInsertSnsIconColor,
+                          }}
+                        >
+                          {textInsertSnsPlatform === "facebook"
+                            ? "f"
+                            : textInsertSnsPlatform === "instagram"
+                              ? "◎"
+                              : textInsertSnsPlatform === "youtube"
+                                ? "▶"
+                                : textInsertSnsPlatform === "tiktok"
+                                  ? "♪"
+                                  : textInsertSnsPlatform === "x"
+                                    ? "𝕏"
+                                    : textInsertSnsPlatform === "linkedin"
+                                      ? "in"
+                                      : textInsertSnsPlatform === "kakao"
+                                        ? "💬"
+                                        : "↗"}
+                        </span>
+                        <span>{textInsertSnsLabel || "Follow Us"}</span>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        rememberTextSelection();
+                      }}
+                      onClick={insertSnsIntoTextEditor}
+                      className="mt-3 w-full rounded-xl bg-pink-600 px-4 py-3 text-sm font-black text-white hover:bg-pink-700"
+                    >
+                      ＋ SNS 추가
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
