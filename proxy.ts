@@ -95,14 +95,11 @@ export async function proxy(request: NextRequest) {
 
   const url = request.nextUrl.clone();
 
-  if (pathname === "/") {
-    url.pathname = `/businesses/${businessId}/website`;
-  } else {
-    const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
-    url.pathname = `/businesses/${businessId}/website/${cleanPath}`;
-  }
-
-  return NextResponse.rewrite(url);
+ if (pathname === "/") {
+  url.pathname = `/business/${businessId}/website`;
+} else {
+  const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
+  url.pathname = `/business/${businessId}/website/${cleanPath}`;
 }
 
 export const config = {
