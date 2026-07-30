@@ -35,6 +35,14 @@ export default function InstallAppButton({
   const installPromptRef =
     useRef<BeforeInstallPromptEvent | null>(null);
 
+  /*
+   * Android Chrome에서는 userChoice의 accepted 처리 직후
+   * appinstalled 이벤트도 이어서 발생할 수 있습니다.
+   * 설치 완료 안내가 중복 표시되지 않도록 한 번만 허용합니다.
+   */
+  const installedNoticeShownRef = useRef(false);
+  const installedNoticeTimerRef = useRef<number | null>(null);
+
   const [installMessage, setInstallMessage] = useState("");
 
   const [isInstalled, setIsInstalled] = useState(false);
@@ -155,10 +163,21 @@ export default function InstallAppButton({
   }
 
   function showInstallationCompleteNotice() {
+    if (installedNoticeShownRef.current) {
+      return;
+    }
+
+    installedNoticeShownRef.current = true;
     setShowInstalledNotice(true);
 
-    window.setTimeout(() => {
+    if (installedNoticeTimerRef.current !== null) {
+      window.clearTimeout(installedNoticeTimerRef.current);
+    }
+
+    installedNoticeTimerRef.current = window.setTimeout(() => {
       setShowInstalledNotice(false);
+      installedNoticeShownRef.current = false;
+      installedNoticeTimerRef.current = null;
     }, 4000);
   }
 
@@ -422,6 +441,11 @@ export default function InstallAppButton({
     return () => {
       clearAutoTimer();
 
+      if (installedNoticeTimerRef.current !== null) {
+        window.clearTimeout(installedNoticeTimerRef.current);
+        installedNoticeTimerRef.current = null;
+      }
+
       window.removeEventListener(
         "beforeinstallprompt",
         handleBeforeInstallPrompt,
@@ -525,12 +549,15 @@ export default function InstallAppButton({
       setInstallPrompt(null);
 
       if (choice.outcome === "accepted") {
+        /*
+         * 여기서는 설치창만 닫습니다.
+         * 설치 완료 안내는 실제 appinstalled 이벤트에서 한 번만 표시합니다.
+         */
         saveInstalledState(true);
         setIsInstalled(true);
         setInstallMessage("");
         setShowBanner(false);
         setIsClosing(false);
-        showInstallationCompleteNotice();
         return;
       }
 
