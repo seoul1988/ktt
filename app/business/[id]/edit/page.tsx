@@ -59,6 +59,15 @@ const flipbookAdOptions = [
 ];
 
 
+
+type WebsiteMenuItem = {
+  id: string;
+  category_id: number | null;
+  name: string;
+  price: string;
+  display_order: number | null;
+};
+
 type Business = {
   id: number;
   name: string;
@@ -525,6 +534,10 @@ export default function EditBusinessPage() {
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreview, setNewVideoPreview] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [websiteMenuItems, setWebsiteMenuItems] = useState<WebsiteMenuItem[]>([]);
+  const [loadingMenuPrices, setLoadingMenuPrices] = useState(false);
+  const [savingMenuPrices, setSavingMenuPrices] = useState(false);
+  const [menuPriceMessage, setMenuPriceMessage] = useState("");
 
   // 관리자 전용 플립북 광고 설정
   const [existingFlipbookAds, setExistingFlipbookAds] = useState<
@@ -694,7 +707,117 @@ export default function EditBusinessPage() {
         .filter(Boolean),
     );
 
+    setLoadingMenuPrices(true);
+    setMenuPriceMessage("");
+
+    const { data: menuItemsData, error: menuItemsError } = await supabase
+      .from("business_menu_items")
+      .select("id,category_id,name,price,display_order")
+      .eq("business_id", businessId)
+      .order("display_order", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (menuItemsError) {
+      console.error("Website menu prices load error:", menuItemsError);
+      setMenuPriceMessage(
+        `메뉴 가격을 불러오지 못했습니다: ${menuItemsError.message}`,
+      );
+      setWebsiteMenuItems([]);
+    } else {
+      setWebsiteMenuItems(
+        (menuItemsData || []).map((item) => ({
+          id: String(item.id),
+          category_id:
+            item.category_id === null || item.category_id === undefined
+              ? null
+              : Number(item.category_id),
+          name: String(item.name || ""),
+          price:
+            item.price === null || item.price === undefined
+              ? ""
+              : String(item.price),
+          display_order:
+            item.display_order === null || item.display_order === undefined
+              ? null
+              : Number(item.display_order),
+        })),
+      );
+    }
+
+    setLoadingMenuPrices(false);
     setLoading(false);
+  }
+
+  function updateWebsiteMenuPrice(itemIndex: number, value: string) {
+    // 숫자와 소수점 하나만 허용합니다.
+    const normalized = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
+    const firstDotIndex = normalized.indexOf(".");
+    const cleaned =
+      firstDotIndex === -1
+        ? normalized
+        : normalized.slice(0, firstDotIndex + 1) +
+          normalized.slice(firstDotIndex + 1).replace(/\./g, "");
+
+    setWebsiteMenuItems((prev) =>
+      prev.map((item, index) =>
+        index === itemIndex ? { ...item, price: cleaned } : item,
+      ),
+    );
+    setMenuPriceMessage("");
+  }
+
+  async function saveWebsiteMenuPrices() {
+    if (websiteMenuItems.length === 0) return;
+
+    const invalidItem = websiteMenuItems.find((item) => {
+      if (!item.price.trim()) return false;
+      const value = Number(item.price);
+      return !Number.isFinite(value) || value < 0;
+    });
+
+    if (invalidItem) {
+      alert(`${invalidItem.name}의 가격을 숫자로 입력해 주세요.`);
+      return;
+    }
+
+    setSavingMenuPrices(true);
+    setMenuPriceMessage("");
+
+    try {
+      for (const item of websiteMenuItems) {
+        const priceValue = item.price.trim()
+          ? Number(Number(item.price).toFixed(2))
+          : null;
+
+        const { error } = await supabase
+          .from("business_menu_items")
+          .update({ price: priceValue })
+          .eq("id", item.id)
+          .eq("business_id", businessId);
+
+        if (error) throw error;
+      }
+
+      setWebsiteMenuItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          price: item.price.trim()
+            ? Number(item.price).toFixed(2)
+            : "",
+        })),
+      );
+      setMenuPriceMessage(
+        "✓ 메뉴 가격을 저장했습니다. 공개 메뉴를 새로고침하면 바로 반영됩니다.",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "메뉴 가격 저장 오류";
+      console.error("Website menu prices save error:", error);
+      setMenuPriceMessage(`저장 오류: ${message}`);
+      alert(`메뉴 가격 저장 오류: ${message}`);
+    } finally {
+      setSavingMenuPrices(false);
+    }
   }
 
   function handleVideoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -2225,6 +2348,108 @@ export default function EditBusinessPage() {
                   })}
                 </div>
               )}
+            </div>
+
+            <div className="rounded-2xl border-2 border-blue-200 bg-blue-50/70 p-4">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-[#172033]">Website Menu Prices</p>
+                  <p className="mt-1 text-xs font-bold leading-5 text-gray-600">
+                    /business/{businessId}/website 메뉴에 표시되는 가격입니다.
+                    각 가격을 수정한 뒤 아래 저장 버튼을 누르세요.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.open(`/business/${businessId}/website/menu`, "_blank");
+                  }}
+                  className="shrink-0 rounded-xl border border-blue-300 bg-white px-3 py-2 text-xs font-black text-blue-700"
+                >
+                  메뉴 보기
+                </button>
+              </div>
+
+              {loadingMenuPrices ? (
+                <p className="rounded-xl bg-white p-4 text-sm font-bold text-gray-500">
+                  메뉴 가격을 불러오는 중...
+                </p>
+              ) : websiteMenuItems.length === 0 ? (
+                <p className="rounded-xl bg-white p-4 text-sm font-bold text-gray-500">
+                  business_menu_items에 등록된 메뉴가 없습니다.
+                </p>
+              ) : (
+                <div className="max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                  {websiteMenuItems.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-[36px_minmax(0,1fr)_110px] items-center gap-2 rounded-xl border bg-white p-3"
+                    >
+                      <span className="text-center text-xs font-black text-gray-400">
+                        {index + 1}
+                      </span>
+
+                      <p className="min-w-0 break-words text-sm font-bold text-[#172033]">
+                        {item.name}
+                      </p>
+
+                      <label className="relative block">
+                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-gray-500">
+                          $
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={item.price}
+                          onChange={(event) =>
+                            updateWebsiteMenuPrice(index, event.currentTarget.value)
+                          }
+                          onInput={(event) =>
+                            updateWebsiteMenuPrice(
+                              index,
+                              (event.currentTarget as HTMLInputElement).value,
+                            )
+                          }
+                          onClick={(event) => event.stopPropagation()}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onTouchStart={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          placeholder="0.00"
+                          autoComplete="off"
+                          className="relative z-20 w-full touch-auto select-text rounded-lg border border-blue-300 bg-white py-2 pl-7 pr-2 text-right text-sm font-black text-[#172033] outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-200"
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {menuPriceMessage && (
+                <p
+                  className={`mt-3 rounded-xl px-3 py-2 text-xs font-black ${
+                    menuPriceMessage.startsWith("✓")
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {menuPriceMessage}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void saveWebsiteMenuPrices()}
+                disabled={
+                  savingMenuPrices ||
+                  loadingMenuPrices ||
+                  websiteMenuItems.length === 0
+                }
+                className="mt-4 w-full rounded-xl bg-blue-600 py-3 text-sm font-black text-white disabled:opacity-50"
+              >
+                {savingMenuPrices ? "메뉴 가격 저장 중..." : "Save Menu Prices"}
+              </button>
             </div>
 
             <div className="rounded-2xl border bg-gray-50 p-4">
