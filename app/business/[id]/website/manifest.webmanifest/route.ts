@@ -132,7 +132,7 @@ export async function GET(_request: Request, { params }: Props) {
   );
 
   const startUrl = `/business/${businessId}/website`;
-
+   
   return NextResponse.json(
     {
       id: startUrl,
