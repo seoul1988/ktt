@@ -20,7 +20,10 @@ self.addEventListener("push", function (event) {
   }
 
   const title = data.title || "KTown Triangle";
-  const badgeCount = Math.max(1, Number(data.badgeCount || 1));
+  const badgeCount = Math.max(
+    1,
+    Number(data.badgeCount || 1),
+  );
 
   const options = {
     body: data.body || "새 알림이 있습니다.",
@@ -53,37 +56,61 @@ self.addEventListener("push", function (event) {
   );
 });
 
-self.addEventListener("notificationclick", function (event) {
-  event.notification.close();
+self.addEventListener(
+  "notificationclick",
+  function (event) {
+    event.notification.close();
 
-  const targetPath =
-    event.notification.data?.url || "/whats-new";
+    const targetPath =
+      event.notification.data?.url || "/whats-new";
 
-  const targetUrl = new URL(
-    targetPath,
-    self.location.origin,
-  ).href;
+    const targetUrl = new URL(
+      targetPath,
+      self.location.origin,
+    ).href;
 
-  event.waitUntil(
-    self.clients
-      .matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      })
-      .then(async function (clientList) {
-        for (const client of clientList) {
-          if ("navigate" in client) {
-            await client.navigate(targetUrl);
+    event.waitUntil(
+      self.clients
+        .matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        })
+        .then(async function (clientList) {
+          for (const client of clientList) {
+            if ("navigate" in client) {
+              await client.navigate(targetUrl);
+            }
+
+            if ("focus" in client) {
+              return client.focus();
+            }
           }
 
-          if ("focus" in client) {
-            return client.focus();
+          if (self.clients.openWindow) {
+            return self.clients.openWindow(targetUrl);
           }
-        }
+        }),
+    );
+  },
+);
 
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
-        }
-      }),
+/*
+ * 네트워크 요청을 처리하는 fetch 이벤트입니다.
+ *
+ * POST, PUT, DELETE 같은 요청은 건드리지 않고,
+ * 일반적인 GET 요청만 네트워크로 전달합니다.
+ */
+self.addEventListener("fetch", function (event) {
+  if (event.request.method !== "GET") {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request).catch(function () {
+      return new Response("Network error", {
+        status: 503,
+        statusText: "Service Unavailable",
+      });
+    }),
   );
 });
