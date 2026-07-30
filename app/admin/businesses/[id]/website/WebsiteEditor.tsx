@@ -71,6 +71,7 @@ type GridCell = {
     | "business-hours"
     | "restaurant-menu";
   gallery_images?: string[];
+  slider_auto_height?: boolean;
   image_scroll_speed?: number;
   image_scroll_direction?: "left" | "right";
   image_scroll_width?: number;
@@ -2755,14 +2756,29 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   );
 
   const heroSection = useMemo(() => {
+    /*
+     * 편집기의 "hero" area는 실제 Home(hero) 레이어뿐 아니라
+     * About, Services, Gallery 같은 모든 홈페이지 레이어와 Link Page를
+     * 공통 편집 화면에서 다루기 위해 사용합니다.
+     *
+     * 이전 코드는 section_type === "hero"인 항목만 반환했기 때문에
+     * 다른 레이어를 클릭해도 선택은 바뀌지만 화면과 오른쪽 편집 패널은
+     * 계속 Home만 보여 주는 문제가 있었습니다.
+     */
     if (selection.area === "hero" && selection.sectionId) {
-      return (
-        sections.find((section) => section.id === selection.sectionId) ?? null
+      const selectedSection = sections.find(
+        (section) => section.id === selection.sectionId,
       );
+
+      if (selectedSection) return selectedSection;
     }
 
     return (
-      sections.find((section) => section.section_type === "hero") ?? null
+      sections.find(
+        (section) =>
+          section.section_type === "hero" &&
+          section.content?.page_type !== "link-page",
+      ) ?? null
     );
   }, [sections, selection.area, selection.sectionId]);
 
@@ -3280,7 +3296,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        height_px: Math.max(area === "header" ? 84 : 180, Math.min(3000, heightPx)),
+        height_px: Math.max(area === "header" ? 84 : 100, Math.min(3000, heightPx)),
       }),
       layoutId,
     );
@@ -3984,6 +4000,37 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
        * 이 처리가 없으면 다음 저장 때 같은 레이어가 다시 INSERT됩니다.
        */
       setSections(normalizedReturnedSections);
+
+      /*
+       * 저장 응답에서 hero의 ID가 바뀐 경우 현재 선택도 새 ID로 동기화합니다.
+       * 레이아웃/셀 선택은 가능한 한 그대로 유지하고, 존재하지 않으면
+       * 첫 번째 레이아웃과 첫 번째 셀을 선택합니다.
+       */
+      if (selection.area === "hero") {
+        const savedHero = normalizedReturnedSections.find(
+          (section) =>
+            section.section_type === "hero" &&
+            section.content?.page_type !== "link-page",
+        );
+
+        if (savedHero) {
+          const savedLayouts = normalizeHeroLayouts(savedHero.content);
+          const savedLayout =
+            savedLayouts.find((layout) => layout.id === selection.layoutId) ||
+            savedLayouts[0];
+          const savedCell =
+            (selection.cellId
+              ? findCellRecursive(savedLayout?.cells || [], selection.cellId)
+              : null) || savedLayout?.cells[0] || null;
+
+          setSelection({
+            area: "hero",
+            sectionId: savedHero.id,
+            layoutId: savedLayout?.id,
+            cellId: savedCell?.id,
+          });
+        }
+      }
 
       serverSectionIdsRef.current = normalizedReturnedSections
         .map((section) => Number(section.id))
@@ -6416,9 +6463,30 @@ function ReadOnlyCellContent({
 }) {
   if (cell.child_cells?.length) {
     return (
-      <div className="grid h-full w-full grid-rows-[repeat(var(--rows),minmax(0,1fr))] gap-0" style={{ "--rows": cell.child_cells.length } as React.CSSProperties}>
+      <div
+        className={`grid w-full gap-0 ${previewDevice === "mobile" ? "h-auto" : "h-full"}`}
+        style={{
+          gridTemplateRows:
+            previewDevice === "mobile"
+              ? `repeat(${cell.child_cells.length}, auto)`
+              : `repeat(${cell.child_cells.length}, minmax(0, 1fr))`,
+        }}
+      >
         {cell.child_cells.map((child) => (
-          <div key={child.id} className="relative flex min-h-0 min-w-0 overflow-hidden" style={{ justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center", alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center", textAlign: child.text_align || "center", color: child.color || (area === "hero" ? "#ffffff" : "#111827"), background: area === "header" ? "transparent" : child.background_color || "transparent", padding: child.type === "image" ? 0 : "12px" }}>
+          <div
+            key={child.id}
+            className="relative flex min-w-0 overflow-hidden"
+            style={{
+              minHeight:
+                previewDevice === "mobile"
+                  ? cellContainsDisplayMode(child, "auto-slider")
+                    ? 0
+                    : "180px"
+                  : 0,
+              aspectRatio: undefined,
+              justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center", alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center", textAlign: child.text_align || "center", color: child.color || (area === "hero" ? "#ffffff" : "#111827"), background: area === "header" ? "transparent" : child.background_color || "transparent", padding: child.type === "image" || child.display_mode === "auto-slider" ? 0 : "12px"
+            }}
+          >
             <ReadOnlyCellContent cell={child} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
           </div>
         ))}
@@ -6427,7 +6495,11 @@ function ReadOnlyCellContent({
   }
   return (
     <div
-      className="relative flex h-full w-full min-w-0"
+      className={`relative flex w-full min-w-0 ${
+        previewDevice === "mobile" && cell.display_mode === "auto-slider"
+          ? "h-auto"
+          : "h-full"
+      }`}
       style={{
         justifyContent:
           cell.text_align === "left"
@@ -6659,8 +6731,19 @@ function MobileWebsiteHeader({
                     key={item.id}
                     href={getGridMenuHref(item, business.id)}
                     onClick={() => setOpen(false)}
-                    className="block w-full rounded-xl px-4 py-3 text-right text-sm font-black no-underline transition hover:opacity-70"
-                    style={{ color: mobileControlColor }}
+                    className="block w-full rounded-xl px-4 py-3 text-right font-black no-underline transition hover:opacity-70"
+                    style={{
+                      color: mobileControlColor,
+                      fontSize: `${Math.max(10, Math.min(40, Number(menuCell?.font_size || 14)))}px`,
+                      fontFamily:
+                        menuCell?.font_family === "serif"
+                          ? "Georgia, 'Times New Roman', serif"
+                          : menuCell?.font_family === "rounded"
+                            ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
+                            : menuCell?.font_family === "mono"
+                              ? "'Courier New', monospace"
+                              : "Arial, Helvetica, sans-serif",
+                    }}
                   >
                     {item.label || "Menu"}
                   </a>
@@ -6775,6 +6858,19 @@ function ReadOnlyGrid({
       : savedWidths;
 
   const savedHeight = Number(grid.height_px || defaultHeight);
+  const isMobileContentGrid = previewDevice === "mobile" && area !== "header";
+  // 모바일에서는 데스크톱의 가로 분할 칸을 한 줄에 하나씩 세로로 표시합니다.
+  // 내용이 전혀 없는 칸은 모바일에서 제거해 불필요한 빈 공간이 생기지 않게 합니다.
+  const renderedCells = isMobileContentGrid
+    ? grid.cells.filter(
+        (cell) =>
+          cell.type !== "empty" ||
+          Boolean(cell.child_cells?.length) ||
+          Boolean(cell.display_mode) ||
+          Boolean(String(cell.text || "").trim()) ||
+          Boolean(cell.image_url),
+      )
+    : grid.cells;
   const autoContentHeight =
     area !== "header" && Boolean(grid.auto_height);
   const autoMobileBusinessHours =
@@ -6782,17 +6878,20 @@ function ReadOnlyGrid({
     area !== "header" &&
     gridContainsDisplayMode(grid, "business-hours") ||
     gridContainsDisplayMode(grid, "restaurant-menu");
-  const imageOnlyHero =
-    area === "hero" &&
+  const hasAutoSlider = grid.cells.some(
+    (cell) => cell.display_mode === "auto-slider",
+  );
+  const sliderAutoHeight =
+    area !== "header" &&
+    hasAutoSlider &&
     grid.cells.every(
       (cell) =>
-        cell.type === "image" ||
-        (cell.type === "title" &&
-          (cell.display_mode === "background-image" ||
-            cell.display_mode === "gallery" ||
-            cell.display_mode === "auto-slider" ||
-            cell.display_mode === "image-scroll")),
-    );
+        cell.type === "empty" ||
+        cell.display_mode === "auto-slider",
+    ) &&
+    grid.cells
+      .filter((cell) => cell.display_mode === "auto-slider")
+      .every((cell) => cell.slider_auto_height !== false);
 
   const mobileHeaderHeight = Math.max(
     88,
@@ -6817,7 +6916,7 @@ function ReadOnlyGrid({
           : ""
       }`}
       style={{
-        minHeight: imageOnlyHero
+        minHeight: sliderAutoHeight
           ? 0
           : autoMobileBusinessHours
             ? "180px"
@@ -6828,21 +6927,21 @@ function ReadOnlyGrid({
                   ? mobileHeaderHeight
                   : area === "header"
                     ? 96
-                    : 180
+                    : 100
               }px`,
         height:
-          imageOnlyHero || autoMobileBusinessHours || autoContentHeight
+          isMobileContentGrid || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        // 이미지 전용 레이어는 슬라이더와 같은 비율을 사용합니다.
-        // 이전 3:2 높이가 남아서 아래쪽에 빈 공간이 생기는 문제를 방지합니다.
-        aspectRatio: imageOnlyHero ? "16 / 9" : undefined,
-        gridTemplateColumns: widths
-          .map((width) => `${Math.max(width, 1)}fr`)
-          .join(" "),
+        // 모바일에서는 각 슬라이더 칸 자체에 비율을 적용하므로 전체 레이어에는
+        // 고정 비율을 주지 않습니다. 그래야 슬라이더 아래 흰 여백이 남지 않습니다.
+        aspectRatio: !isMobileContentGrid && sliderAutoHeight ? "16 / 9" : undefined,
+        gridTemplateColumns: isMobileContentGrid
+          ? "minmax(0, 1fr)"
+          : widths.map((width) => `${Math.max(width, 1)}fr`).join(" "),
       }}
     >
-      {grid.cells.map((cell) => (
+      {renderedCells.map((cell) => (
         <div
           key={cell.id}
           className={`relative min-w-0 ${
@@ -6856,6 +6955,18 @@ function ReadOnlyGrid({
                   : "flex overflow-hidden"
           }`}
           style={{
+            // 가로로 나뉜 레이어도 폰에서는 각 칸을 한 화면 폭으로 하나씩 표시합니다.
+            // 자동 슬라이드는 16:9 높이만 사용해 이미지 밑의 빈 공간을 없앱니다.
+            width: isMobileContentGrid ? "100%" : undefined,
+            minHeight: isMobileContentGrid
+              ? cellContainsDisplayMode(cell, "auto-slider")
+                ? undefined
+                : cellContainsDisplayMode(cell, "business-hours") ||
+                    cellContainsDisplayMode(cell, "restaurant-menu")
+                  ? undefined
+                  : "220px"
+              : undefined,
+            aspectRatio: undefined,
             justifyContent:
               cell.text_align === "left"
                 ? "flex-start"
@@ -6863,11 +6974,13 @@ function ReadOnlyGrid({
                   ? "flex-end"
                   : "center",
             alignItems:
-              cell.vertical_align === "top"
-                ? "flex-start"
-                : cell.vertical_align === "bottom"
-                  ? "flex-end"
-                  : "center",
+              isMobileContentGrid && cellContainsDisplayMode(cell, "auto-slider")
+                ? "stretch"
+                : cell.vertical_align === "top"
+                  ? "flex-start"
+                  : cell.vertical_align === "bottom"
+                    ? "flex-end"
+                    : "center",
             textAlign: cell.text_align || "center",
             color:
               cell.color || (area === "hero" ? "#ffffff" : "#111827"),
@@ -7147,11 +7260,25 @@ function EditableGrid({
   }, [grid.height_px, grid.height, area, defaultHeight]);
 
   const autoMobileBusinessHours =
-    previewDevice === "mobile" &&
-    area !== "header" &&
-    gridContainsDisplayMode(grid, "business-hours") ||
+    (previewDevice === "mobile" &&
+      area !== "header" &&
+      gridContainsDisplayMode(grid, "business-hours")) ||
     gridContainsDisplayMode(grid, "restaurant-menu");
-  const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[180px]";
+  const hasAutoSlider = grid.cells.some(
+    (cell) => cell.display_mode === "auto-slider",
+  );
+  const sliderAutoHeight =
+    area !== "header" &&
+    hasAutoSlider &&
+    grid.cells.every(
+      (cell) =>
+        cell.type === "empty" ||
+        cell.display_mode === "auto-slider",
+    ) &&
+    grid.cells
+      .filter((cell) => cell.display_mode === "auto-slider")
+      .every((cell) => cell.slider_auto_height !== false);
+  const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[100px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -7169,7 +7296,7 @@ function EditableGrid({
     event.preventDefault();
     event.stopPropagation();
 
-    const minimum = area === "header" ? 96 : 180;
+    const minimum = area === "header" ? 96 : 100;
     const nextHeight = Math.max(
       minimum,
       Math.min(3000, heightDragging.startHeight + event.clientY - heightDragging.startY),
@@ -7279,7 +7406,12 @@ function EditableGrid({
       ref={gridRef}
       className={`relative grid gap-0 ${heightClass}`}
       style={{
-        height: autoMobileBusinessHours ? "auto" : `${localHeight}px`,
+        height:
+          autoMobileBusinessHours || sliderAutoHeight
+            ? "auto"
+            : `${localHeight}px`,
+        aspectRatio: sliderAutoHeight ? "16 / 9" : undefined,
+        minHeight: sliderAutoHeight ? 0 : undefined,
         gridTemplateColumns: localWidths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -7772,8 +7904,11 @@ function CellPreview({
 
     return (
       <nav
-        className="flex max-w-full flex-wrap items-center gap-4 text-sm font-bold"
+        className="flex max-w-full flex-wrap items-center gap-4 font-bold"
         style={{
+          fontSize: `${Math.max(10, Math.min(40, Number(cell.font_size || 14)))}px`,
+          fontWeight,
+          fontFamily,
           justifyContent:
             cell.text_align === "left"
               ? "flex-start"
@@ -8077,7 +8212,11 @@ function CellPreview({
         : [];
 
       return images.length ? (
-        <AutoImageSlider images={images} />
+        <AutoImageSlider
+          images={images}
+          autoHeight={cell.slider_auto_height !== false}
+          mobile={previewDevice === "mobile"}
+        />
       ) : (
         <span className="text-sm font-black opacity-70">
           슬라이드 이미지를 선택해주세요
@@ -8142,8 +8281,17 @@ function CellPreview({
     );
     return (
       <div
-        className="cell-rich-text min-w-0 max-w-full w-full overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
-        style={{ ...commonStyle, color: cell.color || "#111827" }}
+        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        style={{
+          ...commonStyle,
+          color: cell.color || "#111827",
+          justifyContent:
+            cell.vertical_align === "top"
+              ? "flex-start"
+              : cell.vertical_align === "bottom"
+                ? "flex-end"
+                : "center",
+        }}
         dangerouslySetInnerHTML={{ __html: titleHtml }}
       />
     );
@@ -8154,8 +8302,17 @@ function CellPreview({
     );
     return (
       <div
-        className="cell-rich-text min-w-0 max-w-full w-full overflow-visible whitespace-pre-wrap leading-relaxed [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
-        style={{ ...commonStyle, color: cell.color || "#111827" }}
+        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-visible whitespace-pre-wrap leading-relaxed [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        style={{
+          ...commonStyle,
+          color: cell.color || "#111827",
+          justifyContent:
+            cell.vertical_align === "top"
+              ? "flex-start"
+              : cell.vertical_align === "bottom"
+                ? "flex-end"
+                : "center",
+        }}
         dangerouslySetInnerHTML={{ __html: textHtml }}
       />
     );
@@ -10373,6 +10530,7 @@ function RightPanel(props: {
   const [inputColor, setInputColor] = useState("#111827");
   const [inputBackgroundColor, setInputBackgroundColor] = useState("#ffffff");
   const [inputTextAlign, setInputTextAlign] = useState<TextAlign>("left");
+  const [inputVerticalAlign, setInputVerticalAlign] = useState<VerticalAlign>("top");
   const [textLinkType, setTextLinkType] = useState<
     "section" | "page" | "external"
   >("section");
@@ -10405,6 +10563,7 @@ function RightPanel(props: {
         : selectedCell?.background_color || "#ffffff",
     );
     setInputTextAlign(selectedCell?.text_align || "left");
+    setInputVerticalAlign(selectedCell?.vertical_align || "top");
     setTextLinkType("section");
     setTextLinkValue("");
     setTextEditorMessage("");
@@ -10997,6 +11156,7 @@ function RightPanel(props: {
         color: inputColor,
         background_color: inputBackgroundColor,
         text_align: inputTextAlign,
+        vertical_align: inputVerticalAlign,
       },
       selection.layoutId,
     );
@@ -12149,6 +12309,14 @@ function RightPanel(props: {
                     color: inputColor,
                     backgroundColor: inputBackgroundColor,
                     textAlign: inputTextAlign,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent:
+                      inputVerticalAlign === "top"
+                        ? "flex-start"
+                        : inputVerticalAlign === "bottom"
+                          ? "flex-end"
+                          : "center",
                   }}
                 />
                 <p className="mt-2 text-xs font-bold text-blue-700">
@@ -12291,7 +12459,16 @@ function RightPanel(props: {
                     <p className="mt-5 text-xs font-black text-gray-600">칸 전체 세로 정렬</p>
                     <div className="mt-2 grid grid-cols-3 gap-2">
                       {(["top", "center", "bottom"] as VerticalAlign[]).map((value) => (
-                        <button key={value} type="button" onClick={() => props.onUpdateCell(area, selectedCell.id, { vertical_align: value }, selection.layoutId)} className={`rounded-xl border px-3 py-3 text-sm font-black ${selectedCell.vertical_align === value ? "border-blue-600 bg-blue-600 text-white" : "border-gray-200 bg-white text-gray-700"}`}>
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setInputVerticalAlign(value)}
+                          className={`rounded-xl border px-3 py-3 text-sm font-black ${
+                            inputVerticalAlign === value
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-gray-200 bg-white text-gray-700"
+                          }`}
+                        >
                           {value === "top" ? "위" : value === "bottom" ? "아래" : "가운데"}
                         </button>
                       ))}
@@ -12734,7 +12911,7 @@ function HorizontalImageScroll({
   const spacing = Math.max(0, Math.min(48, Number(gap) || 12));
 
   return (
-    <div className="relative h-full min-h-[180px] w-full overflow-hidden rounded-[10px] bg-gray-100">
+    <div className="relative h-full min-h-[100px] w-full overflow-hidden rounded-[10px] bg-gray-100">
       <div
         className="flex h-full w-max items-stretch will-change-transform"
         style={{
@@ -12788,7 +12965,15 @@ function HorizontalImageScroll({
   );
 }
 
-function AutoImageSlider({ images }: { images: string[] }) {
+function AutoImageSlider({
+  images,
+  autoHeight = true,
+  mobile = false,
+}: {
+  images: string[];
+  autoHeight?: boolean;
+  mobile?: boolean;
+}) {
   const safeImages = Array.from(
     new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
   ).slice(0, 10);
@@ -12829,12 +13014,12 @@ function AutoImageSlider({ images }: { images: string[] }) {
 
   return (
     <div
-      className="group/slider relative w-full min-h-0 overflow-hidden bg-transparent"
-      style={{
-        borderRadius: "inherit",
-        aspectRatio: "16 / 9",
-        height: "auto",
-      }}
+      className={`group/slider min-h-0 w-full overflow-hidden bg-black ${
+        mobile
+          ? "relative block aspect-[16/9] h-auto"
+          : "absolute inset-0 h-full"
+      }`}
+      style={{ borderRadius: "inherit" }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -12868,10 +13053,7 @@ function AutoImageSlider({ images }: { images: string[] }) {
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            loading={index === 0 ? "eager" : "lazy"}
-            decoding="async"
-            className="absolute inset-0 block h-full w-full select-none object-cover"
-            style={{ minHeight: 0 }}
+            className="absolute inset-0 h-full w-full select-none object-cover"
           />
         </div>
       ))}
@@ -14424,6 +14606,28 @@ function TitleCellEditor({
             </div>
           )}
 
+          {mode === "auto-slider" ? (
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
+              <input
+                type="checkbox"
+                checked={cell.slider_auto_height !== false}
+                onChange={(event) =>
+                  onUpdate({ slider_auto_height: event.target.checked })
+                }
+                className="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600"
+              />
+              <span>
+                <span className="block text-sm font-black text-emerald-950">
+                  슬라이더 높이 자동
+                </span>
+                <span className="mt-1 block text-xs font-semibold leading-5 text-emerald-800">
+                  켜면 슬라이더가 16:9 비율로 자동 맞춰지고 아래 흰 여백이 없어집니다.
+                  끄면 레이어 아래쪽 조절선을 드래그하여 100px부터 원하는 높이로 조절할 수 있습니다.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
           <div className="mt-3 rounded-xl bg-blue-50 px-3 py-3 text-xs font-bold leading-5 text-blue-800">
             현재 {selectedCount}장 선택 · 최대 10장
             {mode === "auto-slider" ? (
@@ -14904,8 +15108,53 @@ function MenuCellEditor({
     });
   }
 
+  const menuFontSize = Math.max(10, Math.min(40, Number(cell.font_size || 14)));
+
   return (
     <div className="mt-5">
+      <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-gray-900">메뉴 글씨 크기</p>
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              데스크톱 메뉴와 모바일 3점 메뉴에 함께 적용됩니다.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-lg bg-gray-950 px-2.5 py-1 text-xs font-black text-white">
+            {menuFontSize}px
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_76px] items-center gap-3">
+          <input
+            type="range"
+            min="10"
+            max="40"
+            step="1"
+            value={menuFontSize}
+            onChange={(event) =>
+              onUpdate({ font_size: Number(event.target.value) })
+            }
+            className="w-full"
+          />
+          <input
+            type="number"
+            min="10"
+            max="40"
+            value={menuFontSize}
+            onChange={(event) =>
+              onUpdate({
+                font_size: Math.max(
+                  10,
+                  Math.min(40, Number(event.target.value) || 10),
+                ),
+              })
+            }
+            className="w-full rounded-xl border border-gray-300 px-2 py-2 text-center text-sm font-black"
+          />
+        </div>
+      </div>
+
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-black text-gray-800">메뉴</p>
