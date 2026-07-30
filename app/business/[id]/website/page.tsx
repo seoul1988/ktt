@@ -134,9 +134,9 @@ export async function generateMetadata({
 
   if (!Number.isInteger(businessId) || businessId <= 0) {
     return {
-      title: "Ktown Triangle",
+      title: "KTown Triangle",
       description:
-        "Discover local businesses on Ktown Triangle.",
+        "Discover local businesses on KTown Triangle.",
     };
   }
 
@@ -144,9 +144,9 @@ export async function generateMetadata({
 
   if (!business) {
     return {
-      title: "Ktown Triangle",
+      title: "KTown Triangle",
       description:
-        "Discover local businesses on Ktown Triangle.",
+        "Discover local businesses on KTown Triangle.",
     };
   }
 
@@ -156,20 +156,38 @@ export async function generateMetadata({
     business.website_settings,
   );
 
-  const appIcon = absoluteUrl(
+  const fallbackIcon = absoluteUrl(
     uploadedLogo || business.image_url,
     "/icon-512.png",
   );
 
-  const pageUrl =
-    `${SITE_URL}/business/${businessId}/website`;
+  const websitePath =
+    `/business/${businessId}/website`;
+
+  const pageUrl = `${SITE_URL}${websitePath}`;
+
+  /*
+   * ?v=4는 Chrome이 이전에 저장한 비즈니스 manifest를
+   * 계속 재사용하지 않고 새 manifest를 다시 읽게 하기 위한 버전입니다.
+   */
+  const manifestUrl =
+    `${websitePath}/manifest.webmanifest?v=4`;
+
+  const icon192 =
+    `${websitePath}/icon/192`;
+
+  const icon512 =
+    `${websitePath}/icon/512`;
 
   return {
     metadataBase: new URL(SITE_URL),
+
     title: businessName,
     description: `${businessName} official website`,
-    manifest:
-      `/business/${businessId}/website/manifest.webmanifest`,
+
+    applicationName: businessName,
+
+    manifest: manifestUrl,
 
     appleWebApp: {
       capable: true,
@@ -178,12 +196,38 @@ export async function generateMetadata({
     },
 
     icons: {
-      icon: [{ url: appIcon }],
-      apple: [{ url: appIcon }],
+      icon: [
+        {
+          url: icon192,
+          sizes: "192x192",
+          type: "image/png",
+        },
+        {
+          url: icon512,
+          sizes: "512x512",
+          type: "image/png",
+        },
+        {
+          url: fallbackIcon,
+        },
+      ],
+      apple: [
+        {
+          url: icon192,
+          sizes: "192x192",
+          type: "image/png",
+        },
+      ],
     },
 
     alternates: {
       canonical: pageUrl,
+    },
+
+    other: {
+      "mobile-web-app-capable": "yes",
+      "apple-mobile-web-app-capable": "yes",
+      "apple-mobile-web-app-title": businessName,
     },
   };
 }
@@ -235,11 +279,18 @@ export default async function BusinessWebsitePage({
 
   return (
     <>
+      {/*
+       * 비즈니스 전용 service worker를 먼저 등록합니다.
+       * InstallAppButton은 브라우저의 beforeinstallprompt 이벤트를
+       * 받아 실제 Chrome 설치창을 엽니다.
+       */}
       <BusinessServiceWorker
         businessId={String(businessId)}
       />
 
-      <InstallAppButton businessName={businessName} />
+      <InstallAppButton
+        businessName={businessName}
+      />
 
       <PublicWebsiteRenderer
         business={business}

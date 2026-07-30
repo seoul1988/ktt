@@ -8,20 +8,22 @@ type Props = {
   params: Promise<{ id: string }>;
 };
 
-type UnknownRecord = Record<string, unknown>;
-
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function getServerSupabase() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase 환경변수가 설정되어 있지 않습니다.");
+    throw new Error(
+      "Supabase 환경변수가 설정되어 있지 않습니다.",
+    );
   }
 
   return createClient(supabaseUrl, supabaseKey, {
@@ -33,22 +35,29 @@ function getServerSupabase() {
   });
 }
 
-export async function GET(_request: Request, { params }: Props) {
+export async function GET(
+  _request: Request,
+  { params }: Props,
+) {
   const { id } = await params;
   const businessId = Number(id);
 
-  if (!Number.isInteger(businessId) || businessId <= 0) {
+  if (
+    !Number.isInteger(businessId) ||
+    businessId <= 0
+  ) {
     return NextResponse.json(
       { error: "Invalid business ID" },
       { status: 400 },
     );
   }
 
-  const { data: business, error } = await getServerSupabase()
-    .from("businesses")
-    .select("id, name")
-    .eq("id", businessId)
-    .maybeSingle();
+  const { data: business, error } =
+    await getServerSupabase()
+      .from("businesses")
+      .select("id, name")
+      .eq("id", businessId)
+      .maybeSingle();
 
   if (error) {
     return NextResponse.json(
@@ -64,41 +73,77 @@ export async function GET(_request: Request, { params }: Props) {
     );
   }
 
-  const businessName = text(business.name) || "Business";
+  const businessName =
+    text(business.name) || "Business";
+
+  const websitePath =
+    `/business/${businessId}/website`;
 
   /*
-   * 실제 접속 주소와 scope를 완전히 동일하게 사용합니다.
-   * 끝의 /를 한쪽에만 붙이면 scope ignored 경고가 발생할 수 있습니다.
+   * 메인 KTownTriangle 앱과 다른 앱으로 인식되도록
+   * 비즈니스별 고유한 앱 ID를 사용합니다.
    */
-  const startUrl = `/business/${businessId}/website`;
+  const appId =
+    `${websitePath}?pwa=business-${businessId}`;
+
+  const startUrl =
+    `${websitePath}?source=pwa&business=${businessId}`;
 
   return NextResponse.json(
     {
-      id: startUrl,
+      id: appId,
+
       name: businessName,
-      short_name: businessName.slice(0, 12).trim(),
-      description: `${businessName} official website`,
+
+      short_name:
+        businessName.length > 12
+          ? businessName.slice(0, 12).trim()
+          : businessName,
+
+      description:
+        `${businessName} official website`,
+
       start_url: startUrl,
-      scope: startUrl,
+
+      /*
+       * /website와 /website/menu 같은 모든 하위 페이지를
+       * 비즈니스 앱 범위에 포함합니다.
+       */
+      scope: websitePath,
+
       display: "standalone",
-      orientation: "portrait-primary",
+
+      display_override: [
+        "window-controls-overlay",
+        "standalone",
+        "minimal-ui",
+      ],
+
+      orientation: "any",
+
       background_color: "#ffffff",
       theme_color: "#ffffff",
+
+      prefer_related_applications: false,
+
       icons: [
         {
-          src: `/business/${businessId}/website/icon/192`,
+          src:
+            `/business/${businessId}/website/icon/192`,
           sizes: "192x192",
           type: "image/png",
           purpose: "any",
         },
         {
-          src: `/business/${businessId}/website/icon/512`,
+          src:
+            `/business/${businessId}/website/icon/512`,
           sizes: "512x512",
           type: "image/png",
           purpose: "any",
         },
         {
-          src: `/business/${businessId}/website/icon/512?purpose=maskable`,
+          src:
+            `/business/${businessId}/website/icon/512?purpose=maskable`,
           sizes: "512x512",
           type: "image/png",
           purpose: "maskable",
@@ -107,8 +152,17 @@ export async function GET(_request: Request, { params }: Props) {
     },
     {
       headers: {
-        "Content-Type": "application/manifest+json; charset=utf-8",
-        "Cache-Control": "no-store, max-age=0",
+        "Content-Type":
+          "application/manifest+json; charset=utf-8",
+
+        /*
+         * Chrome이 이전 비즈니스 manifest를 재사용하지 않게 합니다.
+         */
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate, max-age=0",
+
+        Pragma: "no-cache",
+        Expires: "0",
       },
     },
   );
