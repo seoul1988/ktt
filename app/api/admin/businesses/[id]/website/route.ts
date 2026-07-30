@@ -24,6 +24,7 @@ type BusinessInput = {
   website_slug?: string | null;
   website_status?: string | null;
   website_settings?: Record<string, unknown> | null;
+  custom_domain?: string | null;
 };
 
 type DefaultSection = {
@@ -112,6 +113,33 @@ function normalizeSettings(value: unknown) {
 
 function normalizeSlug(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeCustomDomain(value: unknown) {
+  let domain = String(value ?? "").trim().toLowerCase();
+
+  if (!domain) return "";
+
+  domain = domain
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+    .split(":")[0]
+    .replace(/\.$/, "");
+
+  return domain;
+}
+
+function isValidCustomDomain(domain: string) {
+  if (!domain) return true;
+
+  if (domain === "localhost") return false;
+  if (domain.endsWith(".vercel.app")) return false;
+  if (domain === "ktowntriangle.com") return false;
+
+  return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(
+    domain,
+  );
 }
 
 function getErrorMessage(error: unknown) {
@@ -417,6 +445,50 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
+    const customDomain = normalizeCustomDomain(
+      businessInput.custom_domain,
+    );
+
+    if (!isValidCustomDomain(customDomain)) {
+      return jsonResponse(
+        {
+          error:
+            "Custom domain is invalid. Enter only a domain such as example.com.",
+        },
+        400,
+      );
+    }
+
+    if (customDomain) {
+      const { data: domainOwner, error: domainOwnerError } =
+        await supabaseAdmin
+          .from("businesses")
+          .select("id")
+          .eq("custom_domain", customDomain)
+          .neq("id", businessId)
+          .maybeSingle();
+
+      if (domainOwnerError) {
+        return jsonResponse(
+          {
+            error: domainOwnerError.message,
+            code: domainOwnerError.code,
+          },
+          500,
+        );
+      }
+
+      if (domainOwner) {
+        return jsonResponse(
+          {
+            error:
+              "This custom domain is already connected to another business.",
+          },
+          409,
+        );
+      }
+    }
+
     const websiteStatus = String(
       businessInput.website_status ?? "draft",
     ).trim();
@@ -436,6 +508,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           ? new Date().toISOString()
           : null,
       website_slug: websiteSlug || null,
+      custom_domain: customDomain || null,
     };
 
     const { error: businessError } = await supabaseAdmin
