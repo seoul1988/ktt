@@ -538,7 +538,8 @@ export default function EditBusinessPage() {
   const [loadingMenuPrices, setLoadingMenuPrices] = useState(false);
   const [savingMenuPrices, setSavingMenuPrices] = useState(false);
   const [menuPriceMessage, setMenuPriceMessage] = useState("");
-
+const menuPriceInputRefs =
+  useRef<Record<string, HTMLInputElement | null>>({});
   // 관리자 전용 플립북 광고 설정
   const [existingFlipbookAds, setExistingFlipbookAds] = useState<
     Partial<Record<FlipbookAdSize, FlipbookAdRecord>>
@@ -2848,3 +2849,4 @@ export default function EditBusinessPage() {
     </main>
   );
 }
+
