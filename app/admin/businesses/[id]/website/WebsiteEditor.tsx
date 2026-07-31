@@ -8898,9 +8898,7 @@ function CellPreview({
               height: "100%",
               maxWidth: "none",
               maxHeight: "none",
-              // 자동 높이에서는 이미지 원본 비율 전체를 표시합니다.
-              // 고정 높이를 선택한 경우에만 레이어를 꽉 채우도록 cover를 사용합니다.
-              objectFit: autoHeight ? "contain" : "cover",
+              objectFit: "cover",
               objectPosition: "50% 50%",
               transformOrigin: "50% 50%",
               filter: getBackgroundImageFilter(cell),
@@ -14581,7 +14579,7 @@ function AutoImageSlider({
               height: "100%",
               maxWidth: "none",
               maxHeight: "none",
-              objectFit: "cover",
+              objectFit: autoHeight ? "contain" : "cover",
               objectPosition: "50% 50%",
             }}
           />
