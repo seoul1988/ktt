@@ -2,9 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { Autocomplete, useLoadScript } from "@react-google-maps/api";
+import {
+  Autocomplete,
+  useLoadScript,
+  type Libraries,
+} from "@react-google-maps/api";
 import { supabase } from "../../../../lib/supabase";
 import BottomNav from "../../../components/BottomNav";
+
+const GOOGLE_MAP_LIBRARIES: Libraries = ["places"];
 
 type Category = {
   id: number;
@@ -488,7 +494,7 @@ export default function EditBusinessPage() {
 
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
-    libraries: ["places"],
+    libraries: GOOGLE_MAP_LIBRARIES,
   });
 
   const [loading, setLoading] = useState(true);
