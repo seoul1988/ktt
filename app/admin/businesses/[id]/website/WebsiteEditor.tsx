@@ -7575,14 +7575,14 @@ function ReadOnlyGrid({
       (cell) =>
         cell.type === "image" ||
         cell.display_mode === "auto-slider" ||
-        cell.display_mode === "image-gallery",
+        cell.display_mode === "gallery",
     ) &&
     grid.cells.every(
       (cell) =>
         cell.type === "empty" ||
         cell.type === "image" ||
         cell.display_mode === "auto-slider" ||
-        cell.display_mode === "image-gallery",
+        cell.display_mode === "gallery",
     );
   const mobileShouldAutoStack = isMobileContentGrid && !isVisualOnlyLayer;
 
