@@ -146,6 +146,12 @@ type GridData = {
   height?: "small" | "medium" | "large";
   height_px?: number;
 
+  /**
+   * 높이 조절 시 레이어 중심을 유지하기 위한 세로 위치값입니다.
+   * 높이가 커지면 위쪽으로 절반 이동하고, 작아지면 아래쪽으로 절반 이동합니다.
+   */
+  center_offset_y_px?: number;
+
   // 긴 약관·Privacy Policy처럼 내용 길이에 따라 자동으로 늘어나는 레이어
   auto_height?: boolean;
 };
@@ -174,6 +180,13 @@ type WebsiteSettings = {
     url: string;
     target_type?: "section" | "page";
     target_value?: string;
+    children?: Array<{
+      id: string;
+      label: string;
+      url: string;
+      target_type?: "section" | "page";
+      target_value?: string;
+    }>;
   }>;
   header_height_px?: number;
   header_logo_size_px?: number;
@@ -656,6 +669,58 @@ function normalizeSettings(
                       ? item.url
                       : "",
                   ).value,
+            children:
+              item &&
+              typeof item === "object" &&
+              Array.isArray(item.children)
+                ? item.children.map((child, childIndex) => {
+                    const childUrl =
+                      child && typeof child === "object" && typeof child.url === "string"
+                        ? child.url
+                        : "#";
+                    const legacyChild = getLegacyMenuTarget(childUrl);
+                    const childType =
+                      child &&
+                      typeof child === "object" &&
+                      (child.target_type === "page" || child.target_type === "section")
+                        ? child.target_type
+                        : legacyChild.type;
+                    const childLabel =
+                      child &&
+                      typeof child === "object" &&
+                      typeof child.label === "string"
+                        ? child.label
+                        : `Submenu ${childIndex + 1}`;
+                    const childValue =
+                      child &&
+                      typeof child === "object" &&
+                      typeof child.target_value === "string" &&
+                      child.target_value.trim()
+                        ? slugifyMenuValue(child.target_value)
+                        : legacyChild.value || slugifyMenuValue(childLabel);
+
+                    return {
+                      id:
+                        child &&
+                        typeof child === "object" &&
+                        typeof child.id === "string" &&
+                        child.id
+                          ? child.id
+                          : createId("submenu-child"),
+                      label: childLabel,
+                      url:
+                        childType === "page"
+                          ? childValue
+                            ? `/${childValue}`
+                            : "#"
+                          : childValue
+                            ? `#${childValue}`
+                            : "#",
+                      target_type: childType,
+                      target_value: childValue,
+                    };
+                  })
+                : [],
           }))
         : [
             {
@@ -1222,7 +1287,7 @@ function BusinessLocationMap({
             <img
               src={logoUrl}
               alt=""
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover object-center"
               draggable={false}
             />
           ) : (
@@ -1287,6 +1352,57 @@ function backgroundStyle(section: BusinessSection) {
 
   return { background: "#111827" };
 }
+
+function getSectionWidthMode(
+  section: BusinessSection | null | undefined,
+): "full" | "container" {
+  const savedWidth =
+    section?.content?.layer_width ||
+    section?.settings?.layer_width;
+
+  return savedWidth === "full" ? "full" : "container";
+}
+
+function getSectionWidthClass(
+  section: BusinessSection | null | undefined,
+) {
+  /*
+   * "전체 화면"은 현재 웹사이트 렌더러의 전체 폭을 사용합니다.
+   * w-screen/100vw와 음수 margin을 사용하면 편집기 미리보기나
+   * 상위 overflow 컨테이너 안에서 레이어가 잘리거나 좌우 배경이
+   * 흰색으로 노출될 수 있으므로 사용하지 않습니다.
+   */
+  return getSectionWidthMode(section) === "full"
+    ? "relative w-full max-w-none"
+    : "relative mx-auto w-full max-w-[1120px]";
+}
+
+function getSectionWidthStyle(
+  section: BusinessSection | null | undefined,
+): React.CSSProperties {
+  /*
+   * 공개 페이지가 RootLayout의 max-width 컨테이너 안에 있어도
+   * "전체 화면" 레이어는 실제 브라우저 폭으로 빠져나오게 합니다.
+   * 100vw 대신 100dvw를 사용해 오른쪽 1px 흰 줄/가로 스크롤을 줄입니다.
+   */
+  return getSectionWidthMode(section) === "full"
+    ? {
+        position: "relative",
+        left: "50%",
+        display: "block",
+        width: "100dvw",
+        maxWidth: "100dvw",
+        minWidth: 0,
+        margin: 0,
+        padding: 0,
+        transform: "translateX(-50%)",
+        boxSizing: "border-box",
+        border: 0,
+        overflow: "hidden",
+      }
+    : {};
+}
+
 
 
 function sanitizeLinkPageHtml(value: string) {
@@ -2766,6 +2882,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [newLayerVisibility, setNewLayerVisibility] = useState<
     "normal" | "collapsible"
   >("normal");
+  const [newLayerWidth, setNewLayerWidth] = useState<
+    "full" | "container" | "inherit"
+  >("container");
   const [linkPageOpen, setLinkPageOpen] = useState(false);
   const [newLinkPageName, setNewLinkPageName] = useState("");
   const [newLinkPageKind, setNewLinkPageKind] = useState<"blank" | "restaurant-menu">("blank");
@@ -2836,6 +2955,10 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const websiteSettings = useMemo(
     () => normalizeSettings(business?.website_settings, business?.name || ""),
     [business],
+  );
+
+  const outerBackgroundColor = String(
+    websiteSettings.outer_background_color || "#e5e7eb",
   );
 
   const headerGrid = normalizeGrid(
@@ -3425,7 +3548,13 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        height_px: Math.max(area === "header" ? 84 : 100, Math.min(3000, heightPx)),
+        height_px: Math.max(
+          area === "header" ? 84 : 100,
+          Math.min(3000, heightPx),
+        ),
+        // 레이어 자체 위치는 움직이지 않습니다.
+        // 이미지가 레이어 가운데를 기준으로 위·아래에서 동일하게 잘립니다.
+        center_offset_y_px: 0,
       }),
       layoutId,
     );
@@ -3742,6 +3871,13 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
     const baseSection = createLayerSection(template, cleanLayerName);
     const isCollapsible = newLayerVisibility === "collapsible";
+    const previousSection = [...sections]
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0))
+      .at(-1);
+    const resolvedLayerWidth =
+      newLayerWidth === "inherit"
+        ? getSectionWidthMode(previousSection)
+        : newLayerWidth;
 
     const baseLayouts = normalizeHeroLayouts(baseSection.content);
     const adjustedLayouts = baseLayouts.map((layout) => ({
@@ -3764,6 +3900,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         initially_hidden: isCollapsible,
         close_button_enabled: isCollapsible,
         scroll_on_open: isCollapsible,
+        layer_width: resolvedLayerWidth,
       },
     };
 
@@ -3780,6 +3917,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     setLayerAddOpen(false);
     setNewLayerName("");
     setNewLayerVisibility("normal");
+    setNewLayerWidth("container");
     setMessage(
       isCollapsible
         ? `"${newSection.title}" 숨김 레이어를 추가했습니다. 링크를 클릭하면 펼쳐집니다.`
@@ -4031,9 +4169,25 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
     try {
       const sectionsForSave = sections.map((section) => {
-        if (section.content?.page_type !== "link-page") return section;
+        const resolvedLayerWidth = getSectionWidthMode(section);
 
-        const content = section.content ?? {};
+        const sectionWithWidth = {
+          ...section,
+          content: {
+            ...(section.content ?? {}),
+            layer_width: resolvedLayerWidth,
+          },
+          settings: {
+            ...(section.settings ?? {}),
+            layer_width: resolvedLayerWidth,
+          },
+        };
+
+        if (sectionWithWidth.content?.page_type !== "link-page") {
+          return sectionWithWidth;
+        }
+
+        const content = sectionWithWidth.content ?? {};
         const html = String(content.link_page_html || "").trim();
         const hasPdf =
           (Array.isArray(content.link_page_pdfs) &&
@@ -4046,7 +4200,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
          */
         if (!html && hasPdf) {
           return {
-            ...section,
+            ...sectionWithWidth,
             content: {
               ...content,
               link_page_html: "",
@@ -4057,7 +4211,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           };
         }
 
-        return section;
+        return sectionWithWidth;
       });
 
       const currentSectionIds = sectionsForSave
@@ -4070,6 +4224,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
       const response = await fetch(`/api/admin/businesses/${businessId}/website`, {
         method: "PATCH",
+        cache: "no-store",
         headers: {
           "Content-Type": "application/json",
           "x-admin-key": adminKey,
@@ -4105,7 +4260,52 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         ? (result.sections as BusinessSection[])
         : sectionsForSave;
 
-      const normalizedReturnedSections = returnedSections.map((section) =>
+      /*
+       * 서버 응답이 content의 일부 필드만 반환하거나 저장 직전의 이전 값을
+       * 반환하더라도, 방금 저장한 로컬 설정을 잃지 않도록 합칩니다.
+       *
+       * 특히 다음 값이 서버 저장 직후 사라지는 문제를 막습니다.
+       * - content.layer_width
+       * - grid/layouts 안의 image-scroll 설정
+       * - height_px 및 셀 배경/이미지 설정
+       */
+      const mergedReturnedSections = returnedSections.map(
+        (returnedSection, returnedIndex) => {
+          const returnedId = Number(returnedSection.id);
+
+          const matchingLocalSection =
+            sectionsForSave.find(
+              (localSection) =>
+                Number(localSection.id) > 0 &&
+                Number(localSection.id) === returnedId,
+            ) ||
+            sectionsForSave.find(
+              (localSection) =>
+                Number(localSection.sort_order) ===
+                  Number(returnedSection.sort_order) &&
+                String(localSection.section_type) ===
+                  String(returnedSection.section_type),
+            ) ||
+            sectionsForSave[returnedIndex];
+
+          if (!matchingLocalSection) return returnedSection;
+
+          return {
+            ...matchingLocalSection,
+            ...returnedSection,
+            content: {
+              ...(returnedSection.content ?? {}),
+              ...(matchingLocalSection.content ?? {}),
+            },
+            settings: {
+              ...(returnedSection.settings ?? {}),
+              ...(matchingLocalSection.settings ?? {}),
+            },
+          };
+        },
+      );
+
+      const normalizedReturnedSections = mergedReturnedSections.map((section) =>
         section.section_type === "hero"
           ? {
               ...section,
@@ -4575,7 +4775,20 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           className="min-w-0 overflow-auto p-4 sm:p-6 lg:p-8"
           style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
         >
-          <div className={`mx-auto overflow-visible bg-white shadow-xl transition-all ${device === "mobile" ? "max-w-[430px] rounded-[32px] border-[8px] border-gray-900" : "max-w-[1120px] rounded-2xl"}`}>
+          <div
+            className={`mx-auto overflow-visible shadow-xl transition-all ${
+              device === "mobile"
+                ? "max-w-[430px] rounded-[32px] border-[8px] border-gray-900"
+                : getSectionWidthMode(
+                      selection.area === "hero" ? heroSection : selectedSection,
+                    ) === "full"
+                  ? "w-full max-w-none rounded-none"
+                  : "w-full max-w-[1120px] rounded-2xl"
+            }`}
+            style={{
+              backgroundColor: outerBackgroundColor,
+            }}
+          >
             <div
               className={`relative overflow-visible border-b border-dashed border-gray-300 ${
                 selection.area === "header" ? "block" : "hidden"
@@ -4615,9 +4828,15 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             {selection.area === "hero" && heroSection?.content?.page_type === "link-page" ? (
               <LinkPageContent section={heroSection} editable />
             ) : selection.area === "hero" && heroSection ? (
-              <div className="relative overflow-hidden" style={backgroundStyle(heroSection)}>
+              <div
+                className={`${getSectionWidthClass(heroSection)} overflow-hidden`}
+                style={{
+                  ...backgroundStyle(heroSection),
+                  ...getSectionWidthStyle(heroSection),
+                }}
+              >
                 {heroSection.content.background_type === "video" && heroSection.content.video_url ? (
-                  <video className="absolute inset-0 h-full w-full object-cover" src={heroSection.content.video_url} autoPlay muted loop playsInline />
+                  <video className="absolute inset-0 h-full w-full object-cover object-center" src={heroSection.content.video_url} autoPlay muted loop playsInline />
                 ) : null}
                 <div className="relative z-10 space-y-3">
                   {heroSection.section_type !== "hero" &&
@@ -4774,6 +4993,27 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             }
             onDuplicateCell={duplicateCell}
             onClearCell={clearCell}
+            selectedLayoutHeight={
+              selection.area === "hero"
+                ? Number(
+                    heroLayouts.find(
+                      (layout) => layout.id === selection.layoutId,
+                    )?.height_px || 560,
+                  )
+                : selection.area === "header"
+                  ? Number(headerGrid.height_px || 104)
+                  : 560
+            }
+            onResizeSelectedLayoutHeight={(heightPx) => {
+              if (selection.area === "header") {
+                updateGridHeight("header", heightPx);
+                return;
+              }
+
+              if (selection.area === "hero" && selection.layoutId) {
+                updateGridHeight("hero", heightPx, selection.layoutId);
+              }
+            }}
             businessId={businessId}
             adminKey={adminKey}
             onShowImageGuide={(area, cellId, title) =>
@@ -4793,6 +5033,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             if (event.target === event.currentTarget) {
               setLayerAddOpen(false);
               setNewLayerVisibility("normal");
+              setNewLayerWidth("container");
             }
           }}
         >
@@ -4815,6 +5056,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 onClick={() => {
                   setLayerAddOpen(false);
                   setNewLayerVisibility("normal");
+                  setNewLayerWidth("container");
                 }}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700"
               >
@@ -4862,6 +5104,68 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   </span>
                   <span className="mt-1 block text-xs text-gray-500">
                     Privacy Policy처럼 긴 내용은 기본 900px로 시작하고 내용만큼 자동으로 늘어납니다.
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-black text-gray-950">
+                레이어 너비
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gray-600">
+                이미지나 슬라이드는 전체 화면으로, 일반 글은 현재 기본 너비로 만들 수 있습니다.
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewLayerWidth("full")}
+                  className={`rounded-xl border px-4 py-3 text-left ${
+                    newLayerWidth === "full"
+                      ? "border-blue-600 bg-white ring-2 ring-blue-100"
+                      : "border-gray-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    전체 화면
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    배경 이미지와 콘텐츠가 브라우저 좌우 끝까지 표시됩니다.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewLayerWidth("container")}
+                  className={`rounded-xl border px-4 py-3 text-left ${
+                    newLayerWidth === "container"
+                      ? "border-blue-600 bg-white ring-2 ring-blue-100"
+                      : "border-gray-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    현재 기본 레이어 크기
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    지금처럼 최대 1120px 안에서 좌우 여백을 유지합니다.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewLayerWidth("inherit")}
+                  className={`rounded-xl border px-4 py-3 text-left ${
+                    newLayerWidth === "inherit"
+                      ? "border-violet-600 bg-white ring-2 ring-violet-100"
+                      : "border-gray-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    바로 위 레이어와 동일
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    바로 위에 있는 레이어의 전체 화면 또는 기본 너비 설정을 복사합니다.
                   </span>
                 </button>
               </div>
@@ -5178,23 +5482,68 @@ function HeaderSubmenu({
           )}px`,
         }}
       >
-        {visibleItems.map((item) => (
-          <a
-            key={item.id}
-            href={getHeaderMenuHref(item, businessId)}
-            onClick={(event) => {
-              if (editable) event.preventDefault();
-            }}
-            className="whitespace-nowrap px-2 font-medium transition hover:opacity-70"
-            style={{
-              fontSize: `${Number(
-                websiteSettings.header_submenu_font_size_px || 14,
-              )}px`,
-            }}
-          >
-            {item.label || "Menu"}
-          </a>
-        ))}
+        {visibleItems.map((item) => {
+          const children = Array.isArray(item.children) ? item.children : [];
+          const hasChildren = children.length > 0;
+
+          return (
+            <div key={item.id} className="group relative flex min-h-full items-center">
+              <a
+                href={getHeaderMenuHref(item, businessId)}
+                onClick={(event) => {
+                  if (editable || hasChildren) event.preventDefault();
+                }}
+                className="flex items-center gap-1 whitespace-nowrap px-2 font-medium transition hover:opacity-70"
+                style={{
+                  fontSize: `${Number(
+                    websiteSettings.header_submenu_font_size_px || 14,
+                  )}px`,
+                }}
+              >
+                <span>{item.label || "Menu"}</span>
+                {hasChildren ? (
+                  <span aria-hidden="true" className="text-[10px] opacity-70">
+                    ▼
+                  </span>
+                ) : null}
+              </a>
+
+              {hasChildren ? (
+                <div
+                  className="invisible absolute left-1/2 top-full z-[120] min-w-[190px] -translate-x-1/2 translate-y-1 rounded-xl border border-black/10 p-2 opacity-0 shadow-2xl transition group-hover:visible group-hover:translate-y-0 group-hover:opacity-100"
+                  style={{
+                    backgroundColor: String(
+                      websiteSettings.header_submenu_background_color || "#000000",
+                    ),
+                    color: String(
+                      websiteSettings.header_submenu_text_color || "#ffffff",
+                    ),
+                  }}
+                >
+                  {children.map((child) => (
+                    <a
+                      key={child.id}
+                      href={getHeaderMenuHref(child, businessId)}
+                      onClick={(event) => {
+                        if (editable) event.preventDefault();
+                      }}
+                      className="block rounded-lg px-3 py-2.5 text-left font-semibold no-underline transition hover:bg-white/10"
+                      style={{
+                        color: "inherit",
+                        fontSize: `${Math.max(
+                          11,
+                          Number(websiteSettings.header_submenu_font_size_px || 14) - 1,
+                        )}px`,
+                      }}
+                    >
+                      {child.label || "Submenu"}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </nav>
   );
@@ -5423,50 +5772,69 @@ function CurrentWebsitePreview({
         style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
       >
         <div
-          className={`mx-auto bg-white shadow-2xl transition-all ${
+          className={`mx-auto shadow-2xl transition-all ${
             device === "mobile"
               ? "my-3 w-[min(430px,calc(100vw-16px))] rounded-[30px] border-[6px] border-gray-950"
-              : "w-full max-w-[1120px] overflow-visible"
+              : "w-full max-w-none overflow-visible"
           }`}
-          style={{ overflow: device === "mobile" ? "visible" : "hidden" }}
+          style={{
+            overflow: device === "mobile" ? "visible" : "hidden",
+            backgroundColor: String(
+              websiteSettings.outer_background_color || "#e5e7eb",
+            ),
+          }}
         >
           <div
-            className="relative overflow-visible"
+            className="relative z-[100] w-full overflow-visible"
             style={{
               backgroundColor: String(
                 websiteSettings.header_background_color || "#ffffff",
               ),
             }}
           >
-            <ReadOnlyGrid
-              area="header"
-              grid={headerGrid}
-              business={business}
-              accentColor={String(websiteSettings.accent_color || "#d97706")}
-              previewDevice={device}
-              websiteSettings={websiteSettings}
-            />
+            <div className={device === "mobile" ? "w-full" : "mx-auto w-full max-w-[1120px]"}>
+              <ReadOnlyGrid
+                area="header"
+                grid={headerGrid}
+                business={business}
+                accentColor={String(websiteSettings.accent_color || "#d97706")}
+                previewDevice={device}
+                websiteSettings={websiteSettings}
+              />
 
-
-            <HeaderSubmenu
-              websiteSettings={websiteSettings}
-              businessId={business.id}
-              previewDevice={device}
-            />
+              <HeaderSubmenu
+                websiteSettings={websiteSettings}
+                businessId={business.id}
+                previewDevice={device}
+              />
+            </div>
           </div>
 
           {previewLinkPage ? (
-            <div className="relative min-h-[60vh] bg-white">
+            <div
+              className="relative min-h-[60vh]"
+              style={{
+                backgroundColor: String(
+                  websiteSettings.outer_background_color || "#e5e7eb",
+                ),
+              }}
+            >
               <LinkPageContent section={previewLinkPage} previewDevice={device} />
             </div>
           ) : (
             <>
           {heroSection ? (
-            <div className="relative" style={backgroundStyle(heroSection)}>
+            <div
+              className={getSectionWidthClass(heroSection)}
+              style={{
+                ...backgroundStyle(heroSection),
+                ...getSectionWidthStyle(heroSection),
+              }}
+            >
               {heroSection.content.background_type === "video" &&
               heroSection.content.video_url ? (
                 <video
-                  className="absolute inset-0 h-full w-full object-cover"
+                  className="absolute inset-0 h-full w-full object-cover object-center"
                   src={heroSection.content.video_url}
                   autoPlay
                   muted
@@ -5492,7 +5860,13 @@ function CurrentWebsitePreview({
             </div>
           ) : null}
 
-          <div className="bg-white">
+          <div
+            style={{
+              backgroundColor: String(
+                websiteSettings.outer_background_color || "#e5e7eb",
+              ),
+            }}
+          >
             {sortedSections
               .filter(
                 (section) =>
@@ -5523,7 +5897,8 @@ function CurrentWebsitePreview({
                   <div
                     key={section.id}
                     id={isCollapsible ? sectionSlug : undefined}
-                    className="relative"
+                    className={getSectionWidthClass(section)}
+                    style={getSectionWidthStyle(section)}
                   >
                     {isCollapsible &&
                     section.content?.close_button_enabled !== false ? (
@@ -6188,6 +6563,81 @@ export function PublicWebsiteRenderer({
     business.website_settings,
     business.name || "",
   );
+  const outerBackgroundColor = String(
+    websiteSettings.outer_background_color || "#e5e7eb",
+  );
+
+  // 공개 페이지가 상위 layout의 max-width나 흰 배경 안에 들어가더라도
+  // 브라우저 전체 좌우 여백에는 사용자가 선택한 바깥 배경색을 적용합니다.
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const appSafeArea =
+      document.getElementById("app-safe-area") ||
+      document.querySelector<HTMLElement>(".app-safe-area");
+
+    const previousHtmlBackground = html.style.backgroundColor;
+    const previousBodyBackground = body.style.backgroundColor;
+    const previousBodyMargin = body.style.margin;
+    const previousBodyPadding = body.style.padding;
+    const previousHtmlOverflowX = html.style.overflowX;
+    const previousBodyOverflowX = body.style.overflowX;
+
+    const previousAppStyles = appSafeArea
+      ? {
+          width: appSafeArea.style.width,
+          maxWidth: appSafeArea.style.maxWidth,
+          minWidth: appSafeArea.style.minWidth,
+          margin: appSafeArea.style.margin,
+          padding: appSafeArea.style.padding,
+          backgroundColor: appSafeArea.style.backgroundColor,
+          overflowX: appSafeArea.style.overflowX,
+        }
+      : null;
+
+    html.style.backgroundColor = outerBackgroundColor;
+    body.style.backgroundColor = outerBackgroundColor;
+    body.style.margin = "0";
+    body.style.padding = "0";
+    html.style.overflowX = "clip";
+    body.style.overflowX = "clip";
+
+    /*
+     * 공개 비즈니스 사이트가 RootLayout 또는 globals.css의
+     * max-width 안에 갇히지 않도록 공개 페이지 동안만 호스트를
+     * 브라우저 전체 폭으로 고정합니다.
+     */
+    if (appSafeArea) {
+      appSafeArea.style.width = "100%";
+      appSafeArea.style.maxWidth = "none";
+      appSafeArea.style.minWidth = "0";
+      appSafeArea.style.margin = "0";
+      appSafeArea.style.padding = "0";
+      appSafeArea.style.backgroundColor = outerBackgroundColor;
+      appSafeArea.style.overflowX = "hidden";
+    }
+
+    return () => {
+      html.style.backgroundColor = previousHtmlBackground;
+      body.style.backgroundColor = previousBodyBackground;
+      body.style.margin = previousBodyMargin;
+      body.style.padding = previousBodyPadding;
+      html.style.overflowX = previousHtmlOverflowX;
+      body.style.overflowX = previousBodyOverflowX;
+
+      if (appSafeArea && previousAppStyles) {
+        appSafeArea.style.width = previousAppStyles.width;
+        appSafeArea.style.maxWidth = previousAppStyles.maxWidth;
+        appSafeArea.style.minWidth = previousAppStyles.minWidth;
+        appSafeArea.style.margin = previousAppStyles.margin;
+        appSafeArea.style.padding = previousAppStyles.padding;
+        appSafeArea.style.backgroundColor =
+          previousAppStyles.backgroundColor;
+        appSafeArea.style.overflowX = previousAppStyles.overflowX;
+      }
+    };
+  }, [outerBackgroundColor]);
+
   const normalizedSlug = slugifyMenuValue(pageSlug || "home") || "home";
   const visibleSections = [...sections]
     // 이전 데이터에서 is_visible이 null이어도 공개되도록 false만 제외합니다.
@@ -6245,49 +6695,85 @@ export function PublicWebsiteRenderer({
 
   return (
     <main
-      className="min-h-screen"
+      className="relative block min-h-screen w-full max-w-none overflow-x-hidden"
       style={{
-        backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb"),
+        position: "relative",
+        left: "50%",
+        display: "block",
+        width: "100dvw",
+        maxWidth: "100dvw",
+        minWidth: 0,
+        margin: 0,
+        padding: 0,
+        transform: "translateX(-50%)",
+        boxSizing: "border-box",
+        overflowX: "clip",
+        backgroundColor: outerBackgroundColor,
       }}
     >
-      <div className="mx-auto min-h-screen w-full max-w-[1120px] overflow-visible bg-white shadow-2xl">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ backgroundColor: outerBackgroundColor }}
+      />
+
+      <div
+        className="min-h-screen w-full max-w-none overflow-x-hidden"
+        style={{
+          width: "100%",
+          maxWidth: "none",
+          backgroundColor: outerBackgroundColor,
+        }}
+      >
         <header
-          className="relative overflow-visible"
+          className="relative z-[100] w-full overflow-visible"
           style={{
             backgroundColor: String(
               websiteSettings.header_background_color || "#ffffff",
             ),
           }}
         >
-          <ReadOnlyGrid
-            area="header"
-            grid={headerGrid}
-            business={business}
-            accentColor={String(websiteSettings.accent_color || "#d97706")}
-            previewDevice={device}
-            websiteSettings={websiteSettings}
-          />
-          <HeaderSubmenu
-            websiteSettings={websiteSettings}
-            businessId={business.id}
-            previewDevice={device}
-          />
+          <div className="mx-auto w-full max-w-[1120px]">
+            <ReadOnlyGrid
+              area="header"
+              grid={headerGrid}
+              business={business}
+              accentColor={String(websiteSettings.accent_color || "#d97706")}
+              previewDevice={device}
+              websiteSettings={websiteSettings}
+            />
+            <HeaderSubmenu
+              websiteSettings={websiteSettings}
+              businessId={business.id}
+              previewDevice={device}
+            />
+          </div>
         </header>
 
         {heroSection?.content?.page_type === "link-page" ? (
-          <section id={normalizedSlug} className="bg-white">
+          <section
+            id={normalizedSlug}
+            style={{
+              backgroundColor: String(
+                websiteSettings.outer_background_color || "#e5e7eb",
+              ),
+            }}
+          >
             <LinkPageContent section={heroSection} />
           </section>
         ) : heroSection ? (
           <section
             id={normalizedSlug === "home" ? "home" : normalizedSlug}
-            className="relative"
-            style={backgroundStyle(heroSection)}
+            className={getSectionWidthClass(heroSection)}
+            style={{
+              ...backgroundStyle(heroSection),
+              ...getSectionWidthStyle(heroSection),
+            }}
           >
             {heroSection.content.background_type === "video" &&
             heroSection.content.video_url ? (
               <video
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover object-center"
                 src={heroSection.content.video_url}
                 autoPlay
                 muted
@@ -6340,7 +6826,8 @@ export function PublicWebsiteRenderer({
             <div
               key={section.id}
               id={isCollapsible ? sectionSlug : undefined}
-              className="relative"
+              className={getSectionWidthClass(section)}
+              style={getSectionWidthStyle(section)}
             >
               {isCollapsible &&
               section.content?.close_button_enabled !== false ? (
@@ -6740,6 +7227,18 @@ function MobileWebsiteHeader({
         link_type: item.target_type || "section",
         link_value: item.target_value || getLegacyMenuTarget(item.url || "").value,
         image_url: "",
+        children: Array.isArray(item.children)
+          ? item.children.map((child) => ({
+              id: child.id || createId("mobile-submenu"),
+              label: child.label || "Submenu",
+              url: child.url || "#",
+              link_type: child.target_type || "section",
+              link_value:
+                child.target_value ||
+                getLegacyMenuTarget(child.url || "").value,
+              image_url: "",
+            }))
+          : [],
       }))
     : [];
 
@@ -6855,28 +7354,53 @@ function MobileWebsiteHeader({
           {menuItems.length ? (
             <div className="flex w-full justify-end">
               <nav className="grid w-full max-w-[280px] gap-1 text-right">
-                {menuItems.map((item) => (
-                  <a
-                    key={item.id}
-                    href={getGridMenuHref(item, business.id)}
-                    onClick={() => setOpen(false)}
-                    className="block w-full rounded-xl px-4 py-3 text-right font-black no-underline transition hover:opacity-70"
-                    style={{
-                      color: mobileControlColor,
-                      fontSize: `${Math.max(10, Math.min(40, Number(menuCell?.font_size || 14)))}px`,
-                      fontFamily:
-                        menuCell?.font_family === "serif"
-                          ? "Georgia, 'Times New Roman', serif"
-                          : menuCell?.font_family === "rounded"
-                            ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
-                            : menuCell?.font_family === "mono"
-                              ? "'Courier New', monospace"
-                              : "Arial, Helvetica, sans-serif",
-                    }}
-                  >
-                    {item.label || "Menu"}
-                  </a>
-                ))}
+                {menuItems.map((item) => {
+                  const children = Array.isArray(
+                    (item as typeof item & { children?: typeof menuItems }).children,
+                  )
+                    ? (item as typeof item & { children?: typeof menuItems }).children || []
+                    : [];
+
+                  return (
+                    <div key={item.id}>
+                      <a
+                        href={getGridMenuHref(item, business.id)}
+                        onClick={() => setOpen(false)}
+                        className="block w-full rounded-xl px-4 py-3 text-right font-black no-underline transition hover:opacity-70"
+                        style={{
+                          color: mobileControlColor,
+                          fontSize: `${Math.max(10, Math.min(40, Number(menuCell?.font_size || 14)))}px`,
+                          fontFamily:
+                            menuCell?.font_family === "serif"
+                              ? "Georgia, 'Times New Roman', serif"
+                              : menuCell?.font_family === "rounded"
+                                ? "'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif"
+                                : menuCell?.font_family === "mono"
+                                  ? "'Courier New', monospace"
+                                  : "Arial, Helvetica, sans-serif",
+                        }}
+                      >
+                        {item.label || "Menu"}
+                      </a>
+
+                      {children.length > 0 ? (
+                        <div className="mb-2 border-r-2 pr-3" style={{ borderColor: `${mobileControlColor}33` }}>
+                          {children.map((child) => (
+                            <a
+                              key={child.id}
+                              href={getGridMenuHref(child, business.id)}
+                              onClick={() => setOpen(false)}
+                              className="block w-full rounded-lg px-4 py-2 text-right text-sm font-bold no-underline transition hover:opacity-70"
+                              style={{ color: mobileControlColor }}
+                            >
+                              └ {child.label || "Submenu"}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </nav>
             </div>
           ) : (
@@ -6988,8 +7512,25 @@ function ReadOnlyGrid({
 
   const savedHeight = Number(grid.height_px || defaultHeight);
   const isMobileContentGrid = previewDevice === "mobile" && area !== "header";
-  // 모바일에서는 데스크톱의 가로 분할 칸을 한 줄에 하나씩 세로로 표시합니다.
-  // 내용이 전혀 없는 칸은 모바일에서 제거해 불필요한 빈 공간이 생기지 않게 합니다.
+  const isVisualOnlyLayer =
+    area !== "header" &&
+    grid.cells.some(
+      (cell) =>
+        cell.type === "image" ||
+        cell.display_mode === "auto-slider" ||
+        cell.display_mode === "image-gallery",
+    ) &&
+    grid.cells.every(
+      (cell) =>
+        cell.type === "empty" ||
+        cell.type === "image" ||
+        cell.display_mode === "auto-slider" ||
+        cell.display_mode === "image-gallery",
+    );
+  const mobileShouldAutoStack = isMobileContentGrid && !isVisualOnlyLayer;
+
+  // 일반 콘텐츠는 모바일에서 세로로 쌓지만, 이미지·슬라이더 전용 레이어는
+  // 저장된 레이어 높이를 그대로 사용합니다.
   const renderedCells = isMobileContentGrid
     ? grid.cells.filter(
         (cell) =>
@@ -7010,17 +7551,7 @@ function ReadOnlyGrid({
   const hasAutoSlider = grid.cells.some(
     (cell) => cell.display_mode === "auto-slider",
   );
-  const sliderAutoHeight =
-    area !== "header" &&
-    hasAutoSlider &&
-    grid.cells.every(
-      (cell) =>
-        cell.type === "empty" ||
-        cell.display_mode === "auto-slider",
-    ) &&
-    grid.cells
-      .filter((cell) => cell.display_mode === "auto-slider")
-      .every((cell) => cell.slider_auto_height !== false);
+  const sliderAutoHeight = false;
 
   const mobileHeaderHeight = Math.max(
     88,
@@ -7034,7 +7565,7 @@ function ReadOnlyGrid({
           area !== "header" &&
           !autoMobileBusinessHours &&
           !autoContentHeight
-        ? Math.min(savedHeight, 420)
+        ? Math.max(100, Math.min(savedHeight, 900))
         : savedHeight;
 
   return (
@@ -7042,7 +7573,7 @@ function ReadOnlyGrid({
       className={`grid gap-0 ${
         previewDevice === "mobile" && area === "header"
           ? "overflow-visible"
-          : ""
+          : "overflow-hidden"
       }`}
       style={{
         minHeight: sliderAutoHeight
@@ -7059,11 +7590,15 @@ function ReadOnlyGrid({
                     : 100
               }px`,
         height:
-          isMobileContentGrid || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
+          mobileShouldAutoStack || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
             ? "auto"
             : `${displayHeight}px`,
-        // 모바일에서는 각 슬라이더 칸 자체에 비율을 적용하므로 전체 레이어에는
-        // 고정 비율을 주지 않습니다. 그래야 슬라이더 아래 흰 여백이 남지 않습니다.
+        maxHeight:
+          mobileShouldAutoStack || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
+            ? undefined
+            : `${displayHeight}px`,
+        // 자동 비율은 모바일에서만 사용합니다. 데스크톱에서는 저장한 레이어 높이를
+        // 정확히 따르므로 330px로 지정하면 이미지도 330px 안에서만 보입니다.
         aspectRatio: !isMobileContentGrid && sliderAutoHeight ? "16 / 9" : undefined,
         gridTemplateColumns: isMobileContentGrid
           ? "minmax(0, 1fr)"
@@ -7073,7 +7608,7 @@ function ReadOnlyGrid({
       {renderedCells.map((cell) => (
         <div
           key={cell.id}
-          className={`relative min-w-0 ${
+          className={`relative min-h-0 min-w-0 ${
             previewDevice === "mobile" && area === "header" && cell.type === "menu"
               ? "hidden"
               : autoContentHeight
@@ -7087,14 +7622,32 @@ function ReadOnlyGrid({
             // 가로로 나뉜 레이어도 폰에서는 각 칸을 한 화면 폭으로 하나씩 표시합니다.
             // 자동 슬라이드는 16:9 높이만 사용해 이미지 밑의 빈 공간을 없앱니다.
             width: isMobileContentGrid ? "100%" : undefined,
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            overflow:
+              cellContainsDisplayMode(cell, "auto-slider") ||
+              cellContainsDisplayMode(cell, "image-scroll") ||
+              cell.type === "image" ||
+              cell.display_mode === "background-image"
+                ? "hidden"
+                : undefined,
+            lineHeight: cellContainsDisplayMode(cell, "image-scroll")
+              ? 0
+              : undefined,
+            margin: 0,
             minHeight: isMobileContentGrid
               ? cellContainsDisplayMode(cell, "auto-slider")
-                ? undefined
+                ? "100%"
                 : cellContainsDisplayMode(cell, "business-hours") ||
                     cellContainsDisplayMode(cell, "restaurant-menu")
                   ? undefined
                   : "220px"
               : undefined,
+            height:
+              isMobileContentGrid &&
+              cellContainsDisplayMode(cell, "auto-slider")
+                ? "100%"
+                : undefined,
             aspectRatio: undefined,
             justifyContent:
               cell.text_align === "left"
@@ -7178,12 +7731,40 @@ function PreviewSection({
     ? normalizeHeroLayouts(content)
     : [];
 
+  /*
+   * 전체 화면 레이어의 좌우 빈 공간도 레이어 배경색으로 채웁니다.
+   * 이전에는 PreviewSection에 bg-white가 고정되어 있어서,
+   * 내부 셀은 검정이어도 공개 미리보기 좌우가 흰색으로 보였습니다.
+   */
+  const savedSectionBackground = String(
+    content.background_color || "",
+  ).trim();
+
+  const firstCellBackground =
+    sectionLayouts
+      .flatMap((layout) => layout.cells || [])
+      .map((cell) => String(cell.background_color || "").trim())
+      .find(
+        (color) =>
+          color &&
+          color.toLowerCase() !== "transparent" &&
+          color !== "rgba(0, 0, 0, 0)",
+      ) || "";
+
+  const sectionBackgroundColor =
+    savedSectionBackground ||
+    firstCellBackground ||
+    "transparent";
+
   const isCollapsible = Boolean(content.collapsible);
 
   return (
     <section
       id={slugifyMenuValue(String(section.title || section.section_type)) || section.section_type}
-      className="relative bg-white"
+      className="relative"
+      style={{
+        backgroundColor: sectionBackgroundColor,
+      }}
     >
       {isCollapsible ? (
         <div className="absolute right-3 top-3 z-30 rounded-full bg-violet-600 px-3 py-1 text-[10px] font-black text-white shadow">
@@ -7396,17 +7977,7 @@ function EditableGrid({
   const hasAutoSlider = grid.cells.some(
     (cell) => cell.display_mode === "auto-slider",
   );
-  const sliderAutoHeight =
-    area !== "header" &&
-    hasAutoSlider &&
-    grid.cells.every(
-      (cell) =>
-        cell.type === "empty" ||
-        cell.display_mode === "auto-slider",
-    ) &&
-    grid.cells
-      .filter((cell) => cell.display_mode === "auto-slider")
-      .every((cell) => cell.slider_auto_height !== false);
+  const sliderAutoHeight = false;
   const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[100px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
@@ -7533,14 +8104,17 @@ function EditableGrid({
   return (
     <div
       ref={gridRef}
-      className={`relative grid gap-0 ${heightClass}`}
+      className={`relative grid gap-0 overflow-hidden ${heightClass}`}
       style={{
         height:
-          autoMobileBusinessHours || sliderAutoHeight
+          autoMobileBusinessHours
             ? "auto"
             : `${localHeight}px`,
-        aspectRatio: sliderAutoHeight ? "16 / 9" : undefined,
-        minHeight: sliderAutoHeight ? 0 : undefined,
+        maxHeight: autoMobileBusinessHours ? undefined : `${localHeight}px`,
+        aspectRatio: undefined,
+        minHeight: autoMobileBusinessHours
+          ? `${area === "header" ? 96 : 100}px`
+          : `${area === "header" ? 96 : 100}px`,
         gridTemplateColumns: localWidths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -7700,7 +8274,7 @@ function EditableGrid({
       {area === "hero" && !autoMobileBusinessHours ? (
         <button
           type="button"
-          title="드래그해서 레이아웃 높이 조절"
+          title="드래그하면 이미지 중심을 유지한 채 위·아래가 동일하게 잘립니다"
           onPointerDown={startHeightDragging}
           onPointerMove={moveHeightDragging}
           onPointerUp={stopHeightDragging}
@@ -7712,7 +8286,7 @@ function EditableGrid({
           }`}
         >
           <span className="mr-1 text-sm font-black">↕</span>
-          <span className="text-[10px] font-black">{localHeight}px</span>
+          <span className="text-[10px] font-black">{localHeight}px · 가운데 자르기</span>
         </button>
       ) : null}
     </div>
@@ -7854,7 +8428,13 @@ function CellPreview({
         src={cell.image_url}
         alt={cell.text || business.name || "이미지"}
         draggable={false}
-        className="absolute inset-0 h-full w-full select-none object-cover"
+        className="absolute inset-0 block h-full w-full select-none"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "50% 50%",
+        }}
       />
     );
 
@@ -8171,7 +8751,13 @@ function CellPreview({
               <img
                 src={cell.image_url}
                 alt=""
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 block"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  objectPosition: "50% 50%",
+                }}
               />
             ) : (
               <div className="flex h-full items-center justify-center text-sm font-black text-gray-500">
@@ -8227,13 +8813,17 @@ function CellPreview({
           <img
             src={cell.image_url}
             alt=""
-            className="absolute inset-0 h-full w-full rounded-[10px] object-cover"
+            className="absolute inset-0 h-full w-full rounded-[10px] object-cover object-center"
             style={{
+              width: "100%",
+              height: "100%",
+              maxWidth: "none",
+              maxHeight: "none",
+              objectFit: "cover",
+              objectPosition: "50% 50%",
+              transformOrigin: "50% 50%",
               filter: getBackgroundImageFilter(cell),
               transform: `scale(${getBackgroundImageScale(cell)})`,
-              objectPosition: `${cell.background_image_focus_x ?? 50}% ${
-                cell.background_image_focus_y ?? 50
-              }%`,
             }}
           />
 
@@ -8359,13 +8949,18 @@ function CellPreview({
         : [];
 
       return images.length ? (
-        <HorizontalImageScroll
-          images={images}
-          speed={cell.image_scroll_speed ?? 28}
-          direction={cell.image_scroll_direction ?? "left"}
-          imageWidth={cell.image_scroll_width ?? 280}
-          gap={cell.image_scroll_gap ?? 12}
-        />
+        <div
+          className="absolute inset-0 block h-full w-full overflow-hidden"
+          style={{ margin: 0, padding: 0, lineHeight: 0 }}
+        >
+          <HorizontalImageScroll
+            images={images}
+            speed={cell.image_scroll_speed ?? 28}
+            direction={cell.image_scroll_direction ?? "left"}
+            imageWidth={cell.image_scroll_width ?? 280}
+            gap={cell.image_scroll_gap ?? 12}
+          />
+        </div>
       ) : (
         <span className="text-sm font-black opacity-70">
           흐르는 이미지를 선택해주세요
@@ -8462,7 +9057,8 @@ function HeaderSubmenuEditor({
   onUpdate: (patch: Partial<WebsiteSettings>) => void;
 }) {
   const [headerSizeOpen, setHeaderSizeOpen] = useState(false);
-  const [submenuSettingsOpen, setSubmenuSettingsOpen] = useState(false);
+  const [submenuSettingsOpen, setSubmenuSettingsOpen] = useState(true);
+  const [openMenuItemIds, setOpenMenuItemIds] = useState<string[]>([]);
 
   const items = Array.isArray(websiteSettings.header_submenu_items)
     ? websiteSettings.header_submenu_items
@@ -8493,38 +9089,66 @@ function HeaderSubmenuEditor({
     })
     .filter((section) => Boolean(section.value));
 
+  type HeaderMenuItem = NonNullable<WebsiteSettings["header_submenu_items"]>[number];
+  type HeaderMenuChild = NonNullable<HeaderMenuItem["children"]>[number];
+
+  function makeMenuUrl(
+    targetType: "section" | "page",
+    targetValue: string,
+  ) {
+    const value = slugifyMenuValue(targetValue);
+    if (!value) return "#";
+
+    return targetType === "page"
+      ? `/business/${businessId}/website/${value}`
+      : `#${value}`;
+  }
+
+  function normalizeEditedItem<T extends HeaderMenuItem | HeaderMenuChild>(
+    item: T,
+    patch: Partial<T>,
+  ): T {
+    const next = { ...item, ...patch };
+    const targetType = next.target_type === "page" ? "page" : "section";
+    const targetValue = slugifyMenuValue(
+      next.target_value || next.label || "",
+    );
+
+    return {
+      ...next,
+      target_type: targetType,
+      target_value: targetValue,
+      url: makeMenuUrl(targetType, targetValue),
+    } as T;
+  }
+
   function updateItem(
     itemId: string,
-    patch: Partial<{
-      label: string;
-      url: string;
-      target_type: "section" | "page";
-      target_value: string;
-    }>,
+    patch: Partial<HeaderMenuItem>,
+  ) {
+    onUpdate({
+      header_submenu_items: items.map((item) =>
+        item.id === itemId ? normalizeEditedItem(item, patch) : item,
+      ),
+    });
+  }
+
+  function updateChild(
+    parentId: string,
+    childId: string,
+    patch: Partial<HeaderMenuChild>,
   ) {
     onUpdate({
       header_submenu_items: items.map((item) => {
-        if (item.id !== itemId) return item;
-
-        const next = { ...item, ...patch };
-        const nextType =
-          next.target_type === "page" ? "page" : "section";
-        const nextValue = slugifyMenuValue(
-          next.target_value || next.label || "",
-        );
+        if (item.id !== parentId) return item;
 
         return {
-          ...next,
-          target_type: nextType,
-          target_value: nextValue,
-          url:
-            nextType === "page"
-              ? nextValue
-                ? `/business/${businessId}/website/${nextValue}`
-                : "#"
-              : nextValue
-                ? `#${nextValue}`
-                : "#",
+          ...item,
+          children: (item.children || []).map((child) =>
+            child.id === childId
+              ? normalizeEditedItem(child, patch)
+              : child,
+          ),
         };
       }),
     });
@@ -8542,15 +9166,63 @@ function HeaderSubmenuEditor({
           url: firstSection ? `#${firstSection.value}` : "#home",
           target_type: "section",
           target_value: firstSection?.value || "home",
+          children: [],
         },
       ],
     });
+  }
+
+  function addChild(parentId: string) {
+    const firstSection = sectionOptions[0];
+    const child: HeaderMenuChild = {
+      id: createId("submenu-child"),
+      label: "New Submenu",
+      url: firstSection ? `#${firstSection.value}` : "#home",
+      target_type: "section",
+      target_value: firstSection?.value || "home",
+    };
+
+    onUpdate({
+      header_submenu_items: items.map((item) =>
+        item.id === parentId
+          ? { ...item, children: [...(item.children || []), child] }
+          : item,
+      ),
+    });
+
+    setOpenMenuItemIds((current) =>
+      current.includes(parentId) ? current : [...current, parentId],
+    );
   }
 
   function removeItem(itemId: string) {
     onUpdate({
       header_submenu_items: items.filter((item) => item.id !== itemId),
     });
+    setOpenMenuItemIds((current) => current.filter((id) => id !== itemId));
+  }
+
+  function removeChild(parentId: string, childId: string) {
+    onUpdate({
+      header_submenu_items: items.map((item) =>
+        item.id === parentId
+          ? {
+              ...item,
+              children: (item.children || []).filter(
+                (child) => child.id !== childId,
+              ),
+            }
+          : item,
+      ),
+    });
+  }
+
+  function toggleItemOpen(itemId: string) {
+    setOpenMenuItemIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId],
+    );
   }
 
   return (
@@ -8687,12 +9359,19 @@ function HeaderSubmenuEditor({
               })
             }
             className="h-5 w-5 shrink-0"
-            aria-label="Header 아래 메뉴 줄 표시"
+            aria-label="헤더 메뉴 표시"
           />
         </div>
 
-        {websiteSettings.header_submenu_enabled && submenuSettingsOpen ? (
+        {submenuSettingsOpen ? (
           <div className="border-t border-gray-200 p-4">
+          {!websiteSettings.header_submenu_enabled ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs font-bold leading-5 text-amber-800">
+              메뉴를 먼저 등록할 수 있습니다. 실제 홈페이지에 표시하려면 위의
+              <span className="mx-1 font-black">헤더 메뉴 표시</span>
+              체크박스를 켜세요.
+            </div>
+          ) : null}
           <div className="mt-4 space-y-4 rounded-2xl bg-gray-50 p-4">
             <label className="block">
               <div className="flex items-center justify-between">
@@ -8775,155 +9454,246 @@ function HeaderSubmenuEditor({
           </div>
 
           <div className="mt-4 space-y-3">
-            {items.map((item, index) => (
-              <div
-                key={item.id}
-                className="rounded-xl border border-gray-200 bg-gray-50 p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-black text-gray-500">
-                    메뉴 {index + 1}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700"
-                  >
-                    삭제
-                  </button>
-                </div>
+            {items.map((item, index) => {
+              const children = Array.isArray(item.children) ? item.children : [];
+              const isOpen = openMenuItemIds.includes(item.id);
 
-                <label className="mt-2 block">
-                  <span className="text-[11px] font-black text-gray-600">
-                    메뉴 이름
-                  </span>
-                  <input
-                    value={item.label}
-                    onChange={(event) =>
-                      updateItem(item.id, { label: event.target.value })
-                    }
-                    placeholder="예: Catering"
-                    className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                  />
-                </label>
+              const renderTargetEditor = (
+                target: HeaderMenuItem | HeaderMenuChild,
+                onChange: (patch: Partial<HeaderMenuItem | HeaderMenuChild>) => void,
+              ) => {
+                const targetType =
+                  target.target_type || detectMenuLink(target.url || "");
 
-                <div className="mt-3">
-                  <p className="text-[11px] font-black text-gray-600">
-                    이동 방식
-                  </p>
-                  <div className="mt-1 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const firstSection = sectionOptions[0];
-                        updateItem(item.id, {
-                          target_type: "section",
-                          target_value:
-                            item.target_type === "section" && item.target_value
-                              ? item.target_value
-                              : firstSection?.value || "home",
-                        });
-                      }}
-                      className={`rounded-lg border px-3 py-2 text-xs font-black ${
-                        (item.target_type ||
-                          detectMenuLink(item.url || "")) === "section"
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-gray-300 bg-white text-gray-700"
-                      }`}
-                    >
-                      섹션
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateItem(item.id, {
-                          target_type: "page",
-                          target_value:
-                            item.target_type === "page" && item.target_value
-                              ? item.target_value
-                              : slugifyMenuValue(item.label || "new-page"),
-                        })
-                      }
-                      className={`rounded-lg border px-3 py-2 text-xs font-black ${
-                        (item.target_type ||
-                          detectMenuLink(item.url || "")) === "page"
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-gray-300 bg-white text-gray-700"
-                      }`}
-                    >
-                      새 페이지
-                    </button>
-                  </div>
-                </div>
+                return (
+                  <>
+                    <div className="mt-3">
+                      <p className="text-[11px] font-black text-gray-600">
+                        이동 방식
+                      </p>
+                      <div className="mt-1 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onChange({
+                              target_type: "section",
+                              target_value:
+                                targetType === "section" && target.target_value
+                                  ? target.target_value
+                                  : sectionOptions[0]?.value || "home",
+                            })
+                          }
+                          className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                            targetType === "section"
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-gray-300 bg-white text-gray-700"
+                          }`}
+                        >
+                          섹션
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onChange({
+                              target_type: "page",
+                              target_value:
+                                targetType === "page" && target.target_value
+                                  ? target.target_value
+                                  : slugifyMenuValue(target.label || "new-page"),
+                            })
+                          }
+                          className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                            targetType === "page"
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-gray-300 bg-white text-gray-700"
+                          }`}
+                        >
+                          별도 페이지
+                        </button>
+                      </div>
+                    </div>
 
-                {(item.target_type ||
-                  detectMenuLink(item.url || "")) === "section" ? (
-                  <label className="mt-3 block">
-                    <span className="text-[11px] font-black text-gray-600">
-                      연결할 레이어
-                    </span>
-                    <select
-                      value={
-                        item.target_value ||
-                        String(item.url || "").replace(/^#/, "") ||
-                        sectionOptions[0]?.value ||
-                        "home"
-                      }
-                      onChange={(event) =>
-                        updateItem(item.id, {
-                          target_type: "section",
-                          target_value: event.target.value,
-                        })
-                      }
-                      className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
-                    >
-                      {sectionOptions.length > 0 ? (
-                        sectionOptions.map((section) => (
-                          <option key={section.id} value={section.value}>
-                            {section.label}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="home">Home</option>
-                      )}
-                    </select>
-                  </label>
-                ) : (
-                  <div className="mt-3 space-y-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
-                    <label className="block">
-                      <span className="text-[11px] font-black text-blue-900">
-                        페이지 주소
-                      </span>
-                      <div className="mt-1 flex items-center overflow-hidden rounded-lg border border-blue-200 bg-white">
-                        <span className="shrink-0 border-r border-blue-100 bg-blue-50 px-2 py-2 text-[10px] font-bold text-blue-700">
-                          /website/
+                    {targetType === "section" ? (
+                      <label className="mt-3 block">
+                        <span className="text-[11px] font-black text-gray-600">
+                          연결할 레이어
+                        </span>
+                        <select
+                          value={
+                            target.target_value ||
+                            String(target.url || "").replace(/^#/, "") ||
+                            sectionOptions[0]?.value ||
+                            "home"
+                          }
+                          onChange={(event) =>
+                            onChange({
+                              target_type: "section",
+                              target_value: event.target.value,
+                            })
+                          }
+                          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                        >
+                          {sectionOptions.length > 0 ? (
+                            sectionOptions.map((section) => (
+                              <option key={section.id} value={section.value}>
+                                {section.label}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="home">Home</option>
+                          )}
+                        </select>
+                      </label>
+                    ) : (
+                      <label className="mt-3 block">
+                        <span className="text-[11px] font-black text-gray-600">
+                          페이지 주소
                         </span>
                         <input
                           value={
-                            item.target_value ||
-                            slugifyMenuValue(item.label || "")
+                            target.target_value ||
+                            slugifyMenuValue(target.label || "")
                           }
                           onChange={(event) =>
-                            updateItem(item.id, {
+                            onChange({
                               target_type: "page",
                               target_value: event.target.value,
                             })
                           }
                           placeholder="catering"
-                          className="min-w-0 flex-1 px-3 py-2 text-sm font-bold outline-none"
+                          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
                         />
-                      </div>
-                    </label>
-                    <p className="break-all text-[10px] leading-4 text-blue-700">
-                      공개 주소: /business/{businessId}/website/
-                      {slugifyMenuValue(
-                        item.target_value || item.label || "new-page",
-                      )}
-                    </p>
+                      </label>
+                    )}
+                  </>
+                );
+              };
+
+              return (
+                <div
+                  key={item.id}
+                  className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+                >
+                  <div className="flex items-center gap-2 px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => toggleItemOpen(item.id)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-lg font-black text-gray-800"
+                      aria-label={isOpen ? "메뉴 접기" : "메뉴 펼치기"}
+                    >
+                      {isOpen ? "−" : "+"}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-black text-gray-950">
+                        {item.label || `메뉴 ${index + 1}`}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-bold text-gray-500">
+                        하위 메뉴 {children.length}개
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => addChild(item.id)}
+                      className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[10px] font-black text-blue-700"
+                    >
+                      + 하위
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[10px] font-black text-red-700"
+                    >
+                      삭제
+                    </button>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {isOpen ? (
+                    <div className="border-t border-gray-200 bg-white p-3">
+                      <label className="block">
+                        <span className="text-[11px] font-black text-gray-600">
+                          메뉴 이름
+                        </span>
+                        <input
+                          value={item.label}
+                          onChange={(event) =>
+                            updateItem(item.id, { label: event.target.value })
+                          }
+                          placeholder="예: Menu"
+                          className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                        />
+                      </label>
+
+                      {renderTargetEditor(item, (patch) =>
+                        updateItem(item.id, patch as Partial<HeaderMenuItem>)
+                      )}
+
+                      <div className="mt-4 border-t border-gray-200 pt-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-black text-gray-800">
+                            하위 메뉴
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => addChild(item.id)}
+                            className="rounded-lg bg-gray-950 px-2.5 py-1.5 text-[10px] font-black text-white"
+                          >
+                            + 추가
+                          </button>
+                        </div>
+
+                        {children.length > 0 ? (
+                          <div className="mt-3 space-y-3 border-l-2 border-blue-200 pl-3">
+                            {children.map((child, childIndex) => (
+                              <div
+                                key={child.id}
+                                className="rounded-xl border border-blue-100 bg-blue-50/60 p-3"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="shrink-0 text-sm font-black text-blue-500">
+                                    └
+                                  </span>
+                                  <input
+                                    value={child.label}
+                                    onChange={(event) =>
+                                      updateChild(item.id, child.id, {
+                                        label: event.target.value,
+                                      })
+                                    }
+                                    placeholder={`하위 메뉴 ${childIndex + 1}`}
+                                    className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeChild(item.id, child.id)}
+                                    className="rounded-lg bg-red-50 px-2 py-2 text-[10px] font-black text-red-700"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+
+                                {renderTargetEditor(child, (patch) =>
+                                  updateChild(
+                                    item.id,
+                                    child.id,
+                                    patch as Partial<HeaderMenuChild>,
+                                  )
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-3 rounded-xl border border-dashed border-gray-300 px-3 py-4 text-center text-xs font-bold text-gray-500">
+                            하위 메뉴가 없습니다.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
 
           <button
@@ -10640,6 +11410,8 @@ function RightPanel(props: {
   gridColumnCount: number;
   onDuplicateCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
   onClearCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
+  selectedLayoutHeight: number;
+  onResizeSelectedLayoutHeight: (heightPx: number) => void;
   onShowImageGuide: (
     area: "header" | "hero",
     cellId: string,
@@ -10682,6 +11454,8 @@ function RightPanel(props: {
   const [textEditorImageUploading, setTextEditorImageUploading] = useState(false);
   const [selectedTextEditorImageId, setSelectedTextEditorImageId] = useState("");
   const [selectedTextEditorImageWidth, setSelectedTextEditorImageWidth] = useState(520);
+  const [layerBasicSettingsOpen, setLayerBasicSettingsOpen] = useState(true);
+  const [layerHeightSettingsOpen, setLayerHeightSettingsOpen] = useState(true);
 
   function openTextEditor() {
     const initialHtml = selectedCell?.rich_text_html
@@ -11239,45 +12013,124 @@ function RightPanel(props: {
     const currentName = String(section.title || "");
 
     return (
-      <div className="mb-5 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
-        <p className="text-sm font-black text-violet-950">레이어 이름</p>
-        <p className="mt-1 text-xs leading-5 text-violet-700">
-          왼쪽 레이어 목록과 숨김 레이어 링크 이름에 사용됩니다.
-        </p>
+      <div className="mb-5 overflow-hidden rounded-2xl border-2 border-violet-200 bg-violet-50">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p className="text-sm font-black text-violet-950">
+              레이어 기본 설정
+            </p>
+            <p className="mt-0.5 text-[11px] font-bold text-violet-600">
+              이름과 너비
+            </p>
+          </div>
 
-        <input
-          value={currentName}
-          onChange={(event) =>
-            props.onUpdateSection(section.id, {
-              title: event.target.value,
-            })
-          }
-          onBlur={(event) => {
-            const nextName = event.target.value.trim();
-
-            if (!nextName) {
-              props.onUpdateSection(section.id, {
-                title:
-                  section.section_type === "hero"
-                    ? "Home"
-                    : SECTION_LABELS[section.section_type] || "New Layer",
-              });
-              return;
+          <button
+            type="button"
+            onClick={() => setLayerBasicSettingsOpen((current) => !current)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-violet-300 bg-white text-xl font-black text-violet-950 shadow-sm"
+            aria-label={
+              layerBasicSettingsOpen
+                ? "레이어 기본 설정 접기"
+                : "레이어 기본 설정 펼치기"
             }
+          >
+            {layerBasicSettingsOpen ? "−" : "+"}
+          </button>
+        </div>
 
-            if (nextName !== event.target.value) {
-              props.onUpdateSection(section.id, {
-                title: nextName,
-              });
-            }
-          }}
-          placeholder="예: POLICY"
-          className="mt-3 w-full rounded-xl border border-violet-300 bg-white px-3 py-2.5 text-sm font-bold text-gray-950 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-200"
-        />
+        {layerBasicSettingsOpen ? (
+          <div className="border-t border-violet-200 p-4">
+            <p className="text-sm font-black text-violet-950">레이어 이름</p>
+            <p className="mt-1 text-xs leading-5 text-violet-700">
+              왼쪽 레이어 목록과 숨김 레이어 링크 이름에 사용됩니다.
+            </p>
 
-        <p className="mt-2 text-[11px] leading-5 text-violet-600">
-          이름을 바꾸면 왼쪽 목록에도 바로 반영됩니다. 변경 후 서버 저장을 눌러주세요.
-        </p>
+            <input
+              value={currentName}
+              onChange={(event) =>
+                props.onUpdateSection(section.id, {
+                  title: event.target.value,
+                })
+              }
+              onBlur={(event) => {
+                const nextName = event.target.value.trim();
+
+                if (!nextName) {
+                  props.onUpdateSection(section.id, {
+                    title:
+                      section.section_type === "hero"
+                        ? "Home"
+                        : SECTION_LABELS[section.section_type] || "New Layer",
+                  });
+                  return;
+                }
+
+                if (nextName !== event.target.value) {
+                  props.onUpdateSection(section.id, {
+                    title: nextName,
+                  });
+                }
+              }}
+              placeholder="예: POLICY"
+              className="mt-3 w-full rounded-xl border border-violet-300 bg-white px-3 py-2.5 text-sm font-bold text-gray-950 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-200"
+            />
+
+            <p className="mt-2 text-[11px] leading-5 text-violet-600">
+              이름을 바꾸면 왼쪽 목록에도 바로 반영됩니다. 변경 후 서버 저장을 눌러주세요.
+            </p>
+
+            <div className="mt-4 border-t border-violet-200 pt-4">
+              <p className="text-sm font-black text-violet-950">레이어 너비</p>
+              <p className="mt-1 text-xs leading-5 text-violet-700">
+                이미지 배너는 전체 화면, 글이나 메뉴는 기본 레이어 크기가 보기 좋습니다.
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    props.onUpdateSectionContent(section.id, {
+                      layer_width: "full",
+                    })
+                  }
+                  className={`rounded-xl border px-3 py-3 text-left ${
+                    getSectionWidthMode(section) === "full"
+                      ? "border-blue-600 bg-white ring-2 ring-blue-100"
+                      : "border-violet-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    전체 화면
+                  </span>
+                  <span className="mt-1 block text-[10px] leading-4 text-gray-500">
+                    브라우저 좌우 끝까지
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    props.onUpdateSectionContent(section.id, {
+                      layer_width: "container",
+                    })
+                  }
+                  className={`rounded-xl border px-3 py-3 text-left ${
+                    getSectionWidthMode(section) === "container"
+                      ? "border-blue-600 bg-white ring-2 ring-blue-100"
+                      : "border-violet-200 bg-white/70"
+                  }`}
+                >
+                  <span className="block text-sm font-black text-gray-950">
+                    기본 크기
+                  </span>
+                  <span className="mt-1 block text-[10px] leading-4 text-gray-500">
+                    현재 1120px 레이아웃
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -11400,6 +12253,108 @@ function RightPanel(props: {
           ? renderLayerNameEditor(heroSection)
           : null}
 
+        {area === "hero" && heroSection ? (
+          <div className="mb-5 overflow-hidden rounded-2xl border-2 border-amber-200 bg-amber-50">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="text-sm font-black text-amber-950">레이어 높이</p>
+                <p className="mt-0.5 text-[11px] font-bold text-amber-700">
+                  현재 {Math.round(Number(props.selectedLayoutHeight || 560))}px
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setLayerHeightSettingsOpen((current) => !current)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-300 bg-white text-xl font-black text-amber-950 shadow-sm"
+                aria-label={
+                  layerHeightSettingsOpen
+                    ? "레이어 높이 설정 접기"
+                    : "레이어 높이 설정 펼치기"
+                }
+              >
+                {layerHeightSettingsOpen ? "−" : "+"}
+              </button>
+            </div>
+
+            {layerHeightSettingsOpen ? (
+              <div className="border-t border-amber-200 p-4">
+                <p className="text-xs leading-5 text-amber-700">
+                  큰 이미지를 넣어도 여기서 보이는 높이를 직접 조절할 수 있습니다.
+                  이미지는 레이어 크기에 맞춰 자동으로 잘립니다.
+                </p>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={100}
+                    max={1600}
+                    step={10}
+                    value={Math.max(
+                      100,
+                      Math.min(1600, Number(props.selectedLayoutHeight || 560)),
+                    )}
+                    onChange={(event) =>
+                      props.onResizeSelectedLayoutHeight(Number(event.target.value))
+                    }
+                    className="min-w-0 flex-1"
+                  />
+                  <div className="flex w-24 items-center overflow-hidden rounded-xl border border-amber-300 bg-white">
+                    <input
+                      type="number"
+                      min={100}
+                      max={3000}
+                      step={10}
+                      value={Math.round(Number(props.selectedLayoutHeight || 560))}
+                      onChange={(event) =>
+                        props.onResizeSelectedLayoutHeight(
+                          Math.max(
+                            100,
+                            Math.min(3000, Number(event.target.value) || 100),
+                          ),
+                        )
+                      }
+                      className="w-full px-2 py-2 text-right text-sm font-black text-gray-900 outline-none"
+                    />
+                    <span className="pr-2 text-xs font-bold text-gray-500">px</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {[
+                    { label: "낮게", value: 320 },
+                    { label: "보통", value: 560 },
+                    { label: "크게", value: 760 },
+                    { label: "전체", value: 960 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() =>
+                        props.onResizeSelectedLayoutHeight(preset.value)
+                      }
+                      className={`rounded-lg border px-2 py-2 text-[11px] font-black ${
+                        Math.abs(
+                          Number(props.selectedLayoutHeight || 560) -
+                            preset.value,
+                        ) < 5
+                          ? "border-amber-600 bg-amber-600 text-white"
+                          : "border-amber-300 bg-white text-amber-900"
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="mt-3 text-[11px] leading-5 text-amber-700">
+                  편집 화면 아래쪽의 드래그 손잡이로도 높이를 조절할 수 있습니다.
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">선택한 칸</p>
         <h2 className="mt-1 text-xl font-black text-gray-950">
           {area === "header"
@@ -11423,7 +12378,7 @@ function RightPanel(props: {
         </h2>
 
         {area === "header" ? (
-          <details className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <details open className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 hover:bg-gray-50">
               <div>
                 <p className="text-sm font-black text-gray-900">
@@ -13352,9 +14307,21 @@ function HorizontalImageScroll({
   const spacing = Math.max(0, Math.min(48, Number(gap) || 12));
 
   return (
-    <div className="relative h-full min-h-[100px] w-full overflow-hidden rounded-[10px] bg-gray-100">
+    <div
+      className="absolute inset-0 block h-full min-h-0 w-full overflow-hidden bg-transparent align-top leading-none"
+      style={{
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        maxHeight: "100%",
+        margin: 0,
+        padding: 0,
+        borderRadius: "inherit",
+        lineHeight: 0,
+      }}
+    >
       <div
-        className="flex h-full w-max items-stretch will-change-transform"
+        className="flex h-full min-h-0 w-max items-stretch will-change-transform"
         style={{
           gap: `${spacing}px`,
           animationName:
@@ -13369,14 +14336,18 @@ function HorizontalImageScroll({
         {repeatedImages.map((url, index) => (
           <div
             key={`${url}-${index}`}
-            className="relative h-full shrink-0 overflow-hidden rounded-lg bg-gray-200"
-            style={{ width: `${width}px` }}
+            className="relative h-full min-h-0 shrink-0 overflow-hidden"
+            style={{
+              width: `${width}px`,
+              height: "100%",
+              minHeight: 0,
+            }}
           >
             <img
               src={url}
               alt={`흐르는 이미지 ${(index % safeImages.length) + 1}`}
               draggable={false}
-              className="absolute inset-0 block h-full w-full select-none object-cover"
+              className="absolute inset-0 block h-full w-full select-none object-cover object-center"
             style={{ borderRadius: "inherit" }}
             />
           </div>
@@ -13455,12 +14426,18 @@ function AutoImageSlider({
 
   return (
     <div
-      className={`group/slider min-h-0 w-full overflow-hidden bg-black ${
-        mobile
-          ? "relative block aspect-[16/9] h-auto"
-          : "absolute inset-0 h-full"
-      }`}
-      style={{ borderRadius: "inherit" }}
+      className="group/slider absolute inset-0 overflow-hidden bg-black"
+      style={{
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        maxHeight: "100%",
+        borderRadius: "inherit",
+      }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
         touchDeltaX.current = 0;
@@ -13484,7 +14461,7 @@ function AutoImageSlider({
       {safeImages.map((url, index) => (
         <div
           key={`${url}-${index}`}
-          className={`absolute inset-0 overflow-hidden transition-opacity duration-700 ${
+          className={`absolute inset-0 h-full w-full overflow-hidden transition-opacity duration-700 ${
             index === activeIndex
               ? "pointer-events-auto opacity-100"
               : "pointer-events-none opacity-0"
@@ -13494,7 +14471,15 @@ function AutoImageSlider({
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
             draggable={false}
-            className="absolute inset-0 h-full w-full select-none object-cover"
+            className="absolute inset-0 block select-none"
+            style={{
+              width: "100%",
+              height: "100%",
+              maxWidth: "none",
+              maxHeight: "none",
+              objectFit: "cover",
+              objectPosition: "50% 50%",
+            }}
           />
         </div>
       ))}
