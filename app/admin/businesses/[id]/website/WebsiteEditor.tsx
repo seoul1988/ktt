@@ -7608,7 +7608,11 @@ function ReadOnlyGrid({
   const hasAutoSlider = grid.cells.some(
     (cell) => cell.display_mode === "auto-slider",
   );
-  const sliderAutoHeight = false;
+  const sliderAutoHeight =
+    hasAutoSlider &&
+    grid.cells
+      .filter((cell) => cell.display_mode === "auto-slider")
+      .every((cell) => cell.slider_auto_height !== false);
 
   const mobileHeaderHeight = Math.max(
     88,
@@ -7656,7 +7660,7 @@ function ReadOnlyGrid({
             : `${displayHeight}px`,
         // 자동 비율은 모바일에서만 사용합니다. 데스크톱에서는 저장한 레이어 높이를
         // 정확히 따르므로 330px로 지정하면 이미지도 330px 안에서만 보입니다.
-        aspectRatio: !isMobileContentGrid && sliderAutoHeight ? "16 / 9" : undefined,
+        aspectRatio: undefined,
         gridTemplateColumns: isMobileContentGrid
           ? "minmax(0, 1fr)"
           : widths.map((width) => `${Math.max(width, 1)}fr`).join(" "),
@@ -8034,7 +8038,11 @@ function EditableGrid({
   const hasAutoSlider = grid.cells.some(
     (cell) => cell.display_mode === "auto-slider",
   );
-  const sliderAutoHeight = false;
+  const sliderAutoHeight =
+    hasAutoSlider &&
+    grid.cells
+      .filter((cell) => cell.display_mode === "auto-slider")
+      .every((cell) => cell.slider_auto_height !== false);
   const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[100px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
@@ -14448,6 +14456,7 @@ function AutoImageSlider({
   ).slice(0, 10);
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [imageAspectRatio, setImageAspectRatio] = useState(16 / 9);
   const touchStartX = useRef<number | null>(null);
   const touchDeltaX = useRef(0);
 
@@ -14474,6 +14483,18 @@ function AutoImageSlider({
     }
   }, [activeIndex, safeImages.length]);
 
+  useEffect(() => {
+    if (!autoHeight || !safeImages[activeIndex]) return;
+
+    const image = new Image();
+    image.onload = () => {
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+        setImageAspectRatio(image.naturalWidth / image.naturalHeight);
+      }
+    };
+    image.src = safeImages[activeIndex];
+  }, [activeIndex, autoHeight, imagesSignature]);
+
   if (!safeImages.length) return null;
 
   function goTo(index: number) {
@@ -14483,16 +14504,19 @@ function AutoImageSlider({
 
   return (
     <div
-      className="group/slider absolute inset-0 overflow-hidden bg-black"
+      className={`group/slider overflow-hidden bg-black ${
+        autoHeight ? "relative" : "absolute inset-0"
+      }`}
       style={{
-        top: 0,
-        right: 0,
-        bottom: 0,
-        left: 0,
+        top: autoHeight ? undefined : 0,
+        right: autoHeight ? undefined : 0,
+        bottom: autoHeight ? undefined : 0,
+        left: autoHeight ? undefined : 0,
         width: "100%",
-        height: "100%",
+        height: autoHeight ? "auto" : "100%",
         minHeight: 0,
-        maxHeight: "100%",
+        maxHeight: autoHeight ? "none" : "100%",
+        aspectRatio: autoHeight ? String(imageAspectRatio) : undefined,
         borderRadius: "inherit",
       }}
       onTouchStart={(event) => {
@@ -14527,6 +14551,13 @@ function AutoImageSlider({
           <img
             src={url}
             alt={`슬라이드 이미지 ${index + 1}`}
+            onLoad={(event) => {
+              if (!autoHeight || index !== activeIndex) return;
+              const image = event.currentTarget;
+              if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+                setImageAspectRatio(image.naturalWidth / image.naturalHeight);
+              }
+            }}
             draggable={false}
             className="absolute inset-0 block select-none"
             style={{
