@@ -6933,6 +6933,22 @@ function gridContainsDisplayMode(
   return grid.cells.some((cell) => cellContainsDisplayMode(cell, displayMode));
 }
 
+function getCellsByDisplayMode(
+  cells: GridCell[],
+  displayMode: GridCell["display_mode"],
+): GridCell[] {
+  const matches: GridCell[] = [];
+
+  for (const cell of cells) {
+    if (cell.display_mode === displayMode) matches.push(cell);
+    if (cell.child_cells?.length) {
+      matches.push(...getCellsByDisplayMode(cell.child_cells, displayMode));
+    }
+  }
+
+  return matches;
+}
+
 
 const SNS_PLATFORM_OPTIONS: Array<{
   value: SnsPlatform;
@@ -7605,14 +7621,13 @@ function ReadOnlyGrid({
     area !== "header" &&
     gridContainsDisplayMode(grid, "business-hours") ||
     gridContainsDisplayMode(grid, "restaurant-menu");
-  const hasAutoSlider = grid.cells.some(
-    (cell) => cell.display_mode === "auto-slider",
+  const autoSliderCells = getCellsByDisplayMode(
+    grid.cells,
+    "auto-slider",
   );
   const sliderAutoHeight =
-    hasAutoSlider &&
-    grid.cells
-      .filter((cell) => cell.display_mode === "auto-slider")
-      .every((cell) => cell.slider_auto_height !== false);
+    autoSliderCells.length > 0 &&
+    autoSliderCells.every((cell) => cell.slider_auto_height !== false);
 
   const mobileHeaderHeight = Math.max(
     88,
@@ -8035,14 +8050,13 @@ function EditableGrid({
       area !== "header" &&
       gridContainsDisplayMode(grid, "business-hours")) ||
     gridContainsDisplayMode(grid, "restaurant-menu");
-  const hasAutoSlider = grid.cells.some(
-    (cell) => cell.display_mode === "auto-slider",
+  const autoSliderCells = getCellsByDisplayMode(
+    grid.cells,
+    "auto-slider",
   );
   const sliderAutoHeight =
-    hasAutoSlider &&
-    grid.cells
-      .filter((cell) => cell.display_mode === "auto-slider")
-      .every((cell) => cell.slider_auto_height !== false);
+    autoSliderCells.length > 0 &&
+    autoSliderCells.every((cell) => cell.slider_auto_height !== false);
   const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[100px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
@@ -8884,7 +8898,9 @@ function CellPreview({
               height: "100%",
               maxWidth: "none",
               maxHeight: "none",
-              objectFit: "cover",
+              // 자동 높이에서는 이미지 원본 비율 전체를 표시합니다.
+              // 고정 높이를 선택한 경우에만 레이어를 꽉 채우도록 cover를 사용합니다.
+              objectFit: autoHeight ? "contain" : "cover",
               objectPosition: "50% 50%",
               transformOrigin: "50% 50%",
               filter: getBackgroundImageFilter(cell),
