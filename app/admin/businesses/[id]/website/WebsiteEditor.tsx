@@ -1366,41 +1366,49 @@ function getSectionWidthMode(
 function getSectionWidthClass(
   section: BusinessSection | null | undefined,
 ) {
-  /*
-   * "전체 화면"은 현재 웹사이트 렌더러의 전체 폭을 사용합니다.
-   * w-screen/100vw와 음수 margin을 사용하면 편집기 미리보기나
-   * 상위 overflow 컨테이너 안에서 레이어가 잘리거나 좌우 배경이
-   * 흰색으로 노출될 수 있으므로 사용하지 않습니다.
-   */
   return getSectionWidthMode(section) === "full"
-    ? "relative w-full max-w-none"
+    ? "relative max-w-none border-0"
     : "relative mx-auto w-full max-w-[1120px]";
 }
 
 function getSectionWidthStyle(
   section: BusinessSection | null | undefined,
+  useViewportWidth = false,
 ): React.CSSProperties {
-  /*
-   * 공개 페이지가 RootLayout의 max-width 컨테이너 안에 있어도
-   * "전체 화면" 레이어는 실제 브라우저 폭으로 빠져나오게 합니다.
-   * 100vw 대신 100dvw를 사용해 오른쪽 1px 흰 줄/가로 스크롤을 줄입니다.
-   */
-  return getSectionWidthMode(section) === "full"
-    ? {
-        position: "relative",
-        left: "50%",
-        display: "block",
-        width: "100dvw",
-        maxWidth: "100dvw",
-        minWidth: 0,
-        margin: 0,
-        padding: 0,
-        transform: "translateX(-50%)",
-        boxSizing: "border-box",
-        border: 0,
-        overflow: "hidden",
-      }
-    : {};
+  if (getSectionWidthMode(section) !== "full") return {};
+
+  // 에디터 미리보기에서는 미리보기 프레임의 100%를 사용합니다.
+  if (!useViewportWidth) {
+    return {
+      display: "block",
+      width: "100%",
+      maxWidth: "none",
+      minWidth: 0,
+      margin: 0,
+      padding: 0,
+      border: 0,
+      outline: 0,
+      boxSizing: "border-box",
+      overflow: "hidden",
+    };
+  }
+
+  // 공개 웹에서는 상위 고정 폭 레이아웃을 벗어나 viewport 전체 폭을 사용합니다.
+  return {
+    display: "block",
+    position: "relative",
+    left: "50%",
+    width: "100vw",
+    maxWidth: "100vw",
+    minWidth: 0,
+    marginLeft: "-50vw",
+    marginRight: "-50vw",
+    padding: 0,
+    border: 0,
+    outline: 0,
+    boxSizing: "border-box",
+    overflow: "hidden",
+  };
 }
 
 
@@ -6577,11 +6585,13 @@ export function PublicWebsiteRenderer({
       document.querySelector<HTMLElement>(".app-safe-area");
 
     const previousHtmlBackground = html.style.backgroundColor;
+    const previousHtmlOverflowX = html.style.overflowX;
     const previousBodyBackground = body.style.backgroundColor;
     const previousBodyMargin = body.style.margin;
     const previousBodyPadding = body.style.padding;
-    const previousHtmlOverflowX = html.style.overflowX;
     const previousBodyOverflowX = body.style.overflowX;
+    const previousBodyWidth = body.style.width;
+    const previousBodyMaxWidth = body.style.maxWidth;
 
     const previousAppStyles = appSafeArea
       ? {
@@ -6592,14 +6602,20 @@ export function PublicWebsiteRenderer({
           padding: appSafeArea.style.padding,
           backgroundColor: appSafeArea.style.backgroundColor,
           overflowX: appSafeArea.style.overflowX,
+          position: appSafeArea.style.position,
+          left: appSafeArea.style.left,
+          transform: appSafeArea.style.transform,
+          boxSizing: appSafeArea.style.boxSizing,
         }
       : null;
 
     html.style.backgroundColor = outerBackgroundColor;
+    html.style.overflowX = "clip";
     body.style.backgroundColor = outerBackgroundColor;
     body.style.margin = "0";
     body.style.padding = "0";
-    html.style.overflowX = "clip";
+    body.style.width = "100%";
+    body.style.maxWidth = "none";
     body.style.overflowX = "clip";
 
     /*
@@ -6608,22 +6624,28 @@ export function PublicWebsiteRenderer({
      * 브라우저 전체 폭으로 고정합니다.
      */
     if (appSafeArea) {
-      appSafeArea.style.width = "100%";
-      appSafeArea.style.maxWidth = "none";
+      appSafeArea.style.position = "relative";
+      appSafeArea.style.left = "50%";
+      appSafeArea.style.transform = "translateX(-50%)";
+      appSafeArea.style.width = "100vw";
+      appSafeArea.style.maxWidth = "100vw";
       appSafeArea.style.minWidth = "0";
       appSafeArea.style.margin = "0";
       appSafeArea.style.padding = "0";
+      appSafeArea.style.boxSizing = "border-box";
       appSafeArea.style.backgroundColor = outerBackgroundColor;
-      appSafeArea.style.overflowX = "hidden";
+      appSafeArea.style.overflowX = "clip";
     }
 
     return () => {
       html.style.backgroundColor = previousHtmlBackground;
+      html.style.overflowX = previousHtmlOverflowX;
       body.style.backgroundColor = previousBodyBackground;
       body.style.margin = previousBodyMargin;
       body.style.padding = previousBodyPadding;
-      html.style.overflowX = previousHtmlOverflowX;
       body.style.overflowX = previousBodyOverflowX;
+      body.style.width = previousBodyWidth;
+      body.style.maxWidth = previousBodyMaxWidth;
 
       if (appSafeArea && previousAppStyles) {
         appSafeArea.style.width = previousAppStyles.width;
@@ -6634,6 +6656,10 @@ export function PublicWebsiteRenderer({
         appSafeArea.style.backgroundColor =
           previousAppStyles.backgroundColor;
         appSafeArea.style.overflowX = previousAppStyles.overflowX;
+        appSafeArea.style.position = previousAppStyles.position;
+        appSafeArea.style.left = previousAppStyles.left;
+        appSafeArea.style.transform = previousAppStyles.transform;
+        appSafeArea.style.boxSizing = previousAppStyles.boxSizing;
       }
     };
   }, [outerBackgroundColor]);
@@ -6694,23 +6720,47 @@ export function PublicWebsiteRenderer({
   const layouts = normalizeHeroLayouts(heroSection?.content);
 
   return (
-    <main
-      className="relative block min-h-screen w-full max-w-none overflow-x-hidden"
-      style={{
-        position: "relative",
-        left: "50%",
-        display: "block",
-        width: "100dvw",
-        maxWidth: "100dvw",
-        minWidth: 0,
-        margin: 0,
-        padding: 0,
-        transform: "translateX(-50%)",
-        boxSizing: "border-box",
-        overflowX: "clip",
-        backgroundColor: outerBackgroundColor,
-      }}
-    >
+    <>
+      <style>{`
+        html,
+        body {
+          margin: 0 !important;
+          padding: 0 !important;
+          max-width: none !important;
+          overflow-x: clip !important;
+        }
+
+        [data-public-website-root],
+        [data-public-website-root] *,
+        [data-public-website-root] *::before,
+        [data-public-website-root] *::after {
+          box-sizing: border-box;
+        }
+
+        [data-public-website-root] section,
+        [data-public-website-root] [data-full-width-layer] {
+          border-right: 0 !important;
+        }
+      `}</style>
+
+      <main
+        data-public-website-root
+        className="relative block min-h-screen max-w-none overflow-x-clip"
+        style={{
+          display: "block",
+          position: "relative",
+          left: "50%",
+          width: "100vw",
+          maxWidth: "100vw",
+          minWidth: 0,
+          margin: 0,
+          padding: 0,
+          transform: "translateX(-50%)",
+          boxSizing: "border-box",
+          backgroundColor: outerBackgroundColor,
+          overflowX: "clip",
+        }}
+      >
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 -z-10"
@@ -6764,10 +6814,13 @@ export function PublicWebsiteRenderer({
         ) : heroSection ? (
           <section
             id={normalizedSlug === "home" ? "home" : normalizedSlug}
+            data-full-width-layer={
+              getSectionWidthMode(heroSection) === "full" ? "true" : undefined
+            }
             className={getSectionWidthClass(heroSection)}
             style={{
               ...backgroundStyle(heroSection),
-              ...getSectionWidthStyle(heroSection),
+              ...getSectionWidthStyle(heroSection, true),
             }}
           >
             {heroSection.content.background_type === "video" &&
@@ -6826,8 +6879,11 @@ export function PublicWebsiteRenderer({
             <div
               key={section.id}
               id={isCollapsible ? sectionSlug : undefined}
+              data-full-width-layer={
+                getSectionWidthMode(section) === "full" ? "true" : undefined
+              }
               className={getSectionWidthClass(section)}
-              style={getSectionWidthStyle(section)}
+              style={getSectionWidthStyle(section, true)}
             >
               {isCollapsible &&
               section.content?.close_button_enabled !== false ? (
@@ -6858,7 +6914,8 @@ export function PublicWebsiteRenderer({
           );
         })}
       </div>
-    </main>
+      </main>
+    </>
   );
 }
 
