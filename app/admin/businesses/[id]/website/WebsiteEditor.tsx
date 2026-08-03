@@ -10773,10 +10773,18 @@ function CellPreview({
         draggable={false}
         className="block select-none object-contain"
         style={{
-          width: `${imageSize}%`,
+          /*
+           * 가로·세로를 동시에 %로 주면 이미지 요소 자체가 셀 전체 폭을
+           * 차지하여 justifyContent를 바꿔도 좌우 이동 공간이 없어집니다.
+           * 높이를 기준으로 원본 비율을 유지하면 이미지 실제 폭만 차지하므로
+           * 왼쪽·가운데·오른쪽 정렬이 정상적으로 작동합니다.
+           */
+          width: "auto",
           height: `${imageSize}%`,
           maxWidth: "none",
           maxHeight: "none",
+          flexShrink: 0,
+          objectFit: "contain",
           margin: 0,
           padding: 0,
           lineHeight: 0,
@@ -10787,6 +10795,11 @@ function CellPreview({
     const imageContainerStyle: React.CSSProperties = {
       borderRadius: "inherit",
       display: "flex",
+      width: "100%",
+      height: "100%",
+      minWidth: 0,
+      minHeight: 0,
+      boxSizing: "border-box",
       justifyContent: horizontal,
       alignItems: vertical,
       lineHeight: 0,
@@ -11399,16 +11412,21 @@ function CellPreview({
         : rawTitleHtml;
     return (
       <div
-        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
+        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
           color: cell.color || "#111827",
-          justifyContent:
-            cell.vertical_align === "top"
+          width: "fit-content",
+          height: "fit-content",
+          maxWidth: "100%",
+          flex: "0 0 auto",
+          alignSelf:
+            cell.text_align === "left"
               ? "flex-start"
-              : cell.vertical_align === "bottom"
+              : cell.text_align === "right"
                 ? "flex-end"
                 : "center",
+          textAlign: cell.text_align || "center",
         }}
         dangerouslySetInnerHTML={{ __html: titleHtml }}
       />
@@ -11420,16 +11438,21 @@ function CellPreview({
     );
     return (
       <div
-        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-visible whitespace-pre-wrap leading-relaxed [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible whitespace-pre-wrap leading-relaxed [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
           color: cell.color || "#111827",
-          justifyContent:
-            cell.vertical_align === "top"
+          width: "fit-content",
+          height: "fit-content",
+          maxWidth: "100%",
+          flex: "0 0 auto",
+          alignSelf:
+            cell.text_align === "left"
               ? "flex-start"
-              : cell.vertical_align === "bottom"
+              : cell.text_align === "right"
                 ? "flex-end"
                 : "center",
+          textAlign: cell.text_align || "center",
         }}
         dangerouslySetInnerHTML={{ __html: textHtml }}
       />
@@ -16506,60 +16529,51 @@ function RightPanel(props: {
         </div>
 
         <Field label={selectedCell.type === "menu" ? "메뉴 정렬" : "정렬"}>
-          <div className="space-y-2">
-            <div className="grid grid-cols-3 gap-2">
-              {(["left", "center", "right"] as TextAlign[]).map((value) => (
+          <div className="grid w-[174px] grid-cols-3 gap-2">
+            {(
+              [
+                ["left", "top", "↖", "왼쪽 위"],
+                ["center", "top", "↑", "가운데 위"],
+                ["right", "top", "↗", "오른쪽 위"],
+                ["left", "center", "←", "왼쪽 가운데"],
+                ["center", "center", "●", "정중앙"],
+                ["right", "center", "→", "오른쪽 가운데"],
+                ["left", "bottom", "↙", "왼쪽 아래"],
+                ["center", "bottom", "↓", "가운데 아래"],
+                ["right", "bottom", "↘", "오른쪽 아래"],
+              ] as const
+            ).map(([horizontal, vertical, icon, label]) => {
+              const active =
+                (selectedCell.text_align || "center") === horizontal &&
+                (selectedCell.vertical_align || "center") === vertical;
+
+              return (
                 <button
-                  key={value}
+                  key={`${horizontal}-${vertical}`}
                   type="button"
+                  title={label}
+                  aria-label={label}
                   onClick={() =>
-                    props.onUpdateCell(area, selectedCell.id, {
-                      text_align: value,
-                    }, selection.layoutId)
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        text_align: horizontal,
+                        vertical_align: vertical,
+                      },
+                      selection.layoutId,
+                    )
                   }
-                  className={`rounded-xl border px-3 py-2 text-sm font-bold ${
-                    selectedCell.text_align === value
-                      ? "border-gray-950 bg-gray-950 text-white"
-                      : "border-gray-200"
+                  className={`flex h-12 items-center justify-center rounded-xl border text-xl font-black transition ${
+                    active
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-gray-200 bg-white text-gray-900 hover:border-blue-300 hover:bg-blue-50"
                   }`}
                 >
-                  {value === "left"
-                    ? "왼쪽"
-                    : value === "right"
-                      ? "오른쪽"
-                      : "가운데"}
+                  {icon}
                 </button>
-              ))}
-            </div>
-
-            {(selectedCell.type === "menu" || selectedCell.type === "text" || selectedCell.type === "title") ? (
-              <div className="grid grid-cols-3 gap-2">
-                {(["top", "center", "bottom"] as VerticalAlign[]).map(
-                  (value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() =>
-                        props.onUpdateCell(area, selectedCell.id, {
-                          vertical_align: value,
-                        }, selection.layoutId)
-                      }
-                      className={`rounded-xl border px-3 py-2 text-sm font-bold ${
-                        selectedCell.vertical_align === value
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-gray-200"
-                      }`}
-                    >
-                      {value === "top"
-                        ? "위"
-                        : value === "bottom"
-                          ? "아래"
-                          : "가운데"}
-                    </button>
-                  ),
-                )}
-              </div>
-            ) : null}
+              );
+            })}
           </div>
         </Field>
 
@@ -17140,6 +17154,28 @@ function RightPanel(props: {
                     max-width: 100%;
                   }
 
+                  /*
+                   * contentEditable이 flex-column이므로 text-align만 바꾸면
+                   * 직접 입력된 텍스트 노드는 좌우로 이동하지 않습니다.
+                   * 일반 문단은 전체 폭을 사용해 text-align이 적용되게 하고,
+                   * 직접 텍스트 노드는 부모의 align-items로 이동시킵니다.
+                   */
+                  .text-cell-rich-editor > p,
+                  .text-cell-rich-editor > div:not([data-text-editor-image-row="true"]),
+                  .text-cell-rich-editor > h1,
+                  .text-cell-rich-editor > h2,
+                  .text-cell-rich-editor > h3,
+                  .text-cell-rich-editor > h4,
+                  .text-cell-rich-editor > h5,
+                  .text-cell-rich-editor > h6,
+                  .text-cell-rich-editor > ul,
+                  .text-cell-rich-editor > ol,
+                  .text-cell-rich-editor > blockquote {
+                    width: 100%;
+                    margin-left: 0;
+                    margin-right: 0;
+                  }
+
                   .text-cell-rich-editor [data-text-editor-image-id] {
                     display: inline-block;
                     position: relative;
@@ -17226,6 +17262,12 @@ function RightPanel(props: {
                     textAlign: inputTextAlign,
                     display: "flex",
                     flexDirection: "column",
+                    alignItems:
+                      inputTextAlign === "left"
+                        ? "flex-start"
+                        : inputTextAlign === "right"
+                          ? "flex-end"
+                          : "center",
                     justifyContent:
                       inputVerticalAlign === "top"
                         ? "flex-start"
@@ -17348,45 +17390,49 @@ function RightPanel(props: {
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="text-sm font-black text-gray-900">입력 글씨 정렬</p>
-                    <p className="mt-2 text-xs leading-5 text-gray-500">편집창에 입력하는 전체 글씨의 기본 정렬을 정합니다.</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      {([
-                        ["left", "왼쪽"],
-                        ["center", "가운데"],
-                        ["right", "오른쪽"],
-                      ] as Array<[TextAlign, string]>).map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setInputTextAlign(value)}
-                          className={`rounded-xl border px-3 py-3 text-sm font-black ${
-                            inputTextAlign === value
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-gray-200 bg-white"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                    <p className="text-sm font-black text-gray-900">입력 글씨 9방향 정렬</p>
+                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                      편집창에 입력하는 전체 글씨를 칸 안에서 상하좌우 9개 위치로 이동합니다.
+                    </p>
 
-                    <p className="mt-5 text-xs font-black text-gray-600">칸 전체 세로 정렬</p>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      {(["top", "center", "bottom"] as VerticalAlign[]).map((value) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setInputVerticalAlign(value)}
-                          className={`rounded-xl border px-3 py-3 text-sm font-black ${
-                            inputVerticalAlign === value
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-gray-200 bg-white text-gray-700"
-                          }`}
-                        >
-                          {value === "top" ? "위" : value === "bottom" ? "아래" : "가운데"}
-                        </button>
-                      ))}
+                    <div className="mt-4 grid w-[180px] grid-cols-3 gap-2">
+                      {(
+                        [
+                          ["left", "top", "↖", "왼쪽 위"],
+                          ["center", "top", "↑", "가운데 위"],
+                          ["right", "top", "↗", "오른쪽 위"],
+                          ["left", "center", "←", "왼쪽 가운데"],
+                          ["center", "center", "●", "정중앙"],
+                          ["right", "center", "→", "오른쪽 가운데"],
+                          ["left", "bottom", "↙", "왼쪽 아래"],
+                          ["center", "bottom", "↓", "가운데 아래"],
+                          ["right", "bottom", "↘", "오른쪽 아래"],
+                        ] as const
+                      ).map(([horizontal, vertical, icon, label]) => {
+                        const active =
+                          inputTextAlign === horizontal &&
+                          inputVerticalAlign === vertical;
+
+                        return (
+                          <button
+                            key={`${horizontal}-${vertical}`}
+                            type="button"
+                            title={label}
+                            aria-label={label}
+                            onClick={() => {
+                              setInputTextAlign(horizontal);
+                              setInputVerticalAlign(vertical);
+                            }}
+                            className={`flex h-12 items-center justify-center rounded-xl border text-xl font-black transition ${
+                              active
+                                ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                                : "border-gray-200 bg-white text-gray-900 hover:border-blue-300 hover:bg-blue-50"
+                            }`}
+                          >
+                            {icon}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
