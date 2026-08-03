@@ -58,14 +58,6 @@ export default async function BusinessManagePage({
     notFound();
   }
 
-  /*
-   * 로그인 여부, 오너 연결 여부,
-   * website_enabled 상태를 서버에서 모두 확인합니다.
-   *
-   * 관리자는 website_enabled 상태와 관계없이 접근할 수 있고,
-   * 일반 오너는 자신에게 연결된 비즈니스이면서
-   * 관리자가 사이트를 활성화한 경우에만 접근할 수 있습니다.
-   */
   const access =
     await requireBusinessManagementAccess(
       businessId,
@@ -106,7 +98,7 @@ export default async function BusinessManagePage({
               </h1>
 
               <p className="mt-2 text-sm font-medium text-[#667085]">
-                메뉴, 가격, 카테고리와 홈페이지를 관리합니다.
+                메뉴, 배너와 홈페이지를 관리합니다.
               </p>
             </div>
 
@@ -123,24 +115,17 @@ export default async function BusinessManagePage({
 
         <section className="grid gap-4 sm:grid-cols-2">
           <ManagementCard
-            href={`/owner/business/${businessId}/categories`}
-            icon="📂"
-            title="카테고리 관리"
-            description="Burgers, Drinks, Lunch 등 메뉴 카테고리를 추가하고 순서를 변경합니다."
-          />
-
-          <ManagementCard
-            href={`/owner/business/${businessId}/items`}
-            icon="🍔"
-            title="품목 및 가격 관리"
-            description="메뉴 이름, 설명, 이미지, 가격과 판매 상태를 관리합니다."
-          />
-
-          <ManagementCard
             href={`/owner/business/${businessId}/menu`}
             icon="📋"
             title="전체 메뉴 관리"
-            description="카테고리별 메뉴 품목과 가격을 한 화면에서 빠르게 수정합니다."
+            description="카테고리, 메뉴 품목, 설명, 가격, 이미지, 순서와 판매 상태를 한 화면에서 관리합니다."
+          />
+
+          <ManagementCard
+            href={`/owner/business/${businessId}/banners`}
+            icon="📣"
+            title="배너 관리"
+            description="공지바, 할인행사, 쿠폰, 이미지형, 팝업 등 준비된 배너 종류를 선택해 등록하고 노출합니다."
           />
 
           <ManagementCard
@@ -149,35 +134,6 @@ export default async function BusinessManagePage({
             title="웹사이트 디자인"
             description="홈페이지 레이어, 이미지, 버튼, 메뉴와 모바일 디자인을 편집합니다."
           />
-        </section>
-
-        <section className="mt-6 rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-black text-[#172033]">
-            빠른 작업
-          </h2>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link
-              href={`/owner/business/${businessId}/categories/new`}
-              className="rounded-xl bg-[#172033] px-4 py-3 text-sm font-black text-white"
-            >
-              + 카테고리 추가
-            </Link>
-
-            <Link
-              href={`/owner/business/${businessId}/items/new`}
-              className="rounded-xl bg-[#B64032] px-4 py-3 text-sm font-black text-white"
-            >
-              + 메뉴 품목 추가
-            </Link>
-
-            <Link
-              href={`/admin/businesses/${businessId}/website`}
-              className="rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-black text-[#172033]"
-            >
-              웹사이트 편집
-            </Link>
-          </div>
         </section>
       </div>
     </main>

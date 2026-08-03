@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+import { requireBusinessApiAccess } from "@/lib/requireBusinessApiAccess";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -15,22 +17,6 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function isAuthorized(request: NextRequest) {
-  const receivedKey =
-    request.headers.get("x-admin-key")?.trim() || "";
-
-  const expectedKey =
-    process.env.WEBSITE_BUILDER_ADMIN_KEY?.trim() ||
-    process.env.ADMIN_KEY?.trim() ||
-    "";
-
-  return Boolean(
-    expectedKey &&
-      receivedKey &&
-      receivedKey === expectedKey,
-  );
-}
-
 function normalizeImageUrls(value: unknown): string[] {
   let values: unknown[] = [];
 
@@ -39,18 +25,11 @@ function normalizeImageUrls(value: unknown): string[] {
   } else if (typeof value === "string") {
     const trimmed = value.trim();
 
-    if (!trimmed) {
-      return [];
-    }
+    if (!trimmed) return [];
 
     try {
       const parsed = JSON.parse(trimmed);
-
-      if (Array.isArray(parsed)) {
-        values = parsed;
-      } else {
-        values = [trimmed];
-      }
+      values = Array.isArray(parsed) ? parsed : [trimmed];
     } catch {
       values = [trimmed];
     }
@@ -64,11 +43,7 @@ function normalizeImageUrls(value: unknown): string[] {
             return item.trim();
           }
 
-          if (
-            item &&
-            typeof item === "object" &&
-            !Array.isArray(item)
-          ) {
+          if (item && typeof item === "object" && !Array.isArray(item)) {
             const imageObject = item as {
               url?: unknown;
               image_url?: unknown;
@@ -91,30 +66,20 @@ function normalizeImageUrls(value: unknown): string[] {
 }
 
 export async function GET(
-  request: NextRequest,
-  context: {
-    params: Promise<{ id: string }>;
-  },
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> },
 ) {
-  if (!isAuthorized(request)) {
-    return json({ error: "Unauthorized" }, 401);
-  }
-
   const { id } = await context.params;
   const businessId = Number(id);
 
-  if (
-    !Number.isInteger(businessId) ||
-    businessId <= 0
-  ) {
-    return json(
-      { error: "잘못된 business ID입니다." },
-      400,
-    );
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return json({ error: "잘못된 business ID입니다." }, 400);
   }
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const access = await requireBusinessApiAccess(businessId);
+  if (!access.ok) return access.response;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -125,50 +90,39 @@ export async function GET(
     return json(
       {
         error:
-          "Supabase 환경변수가 없습니다. NEXT_PUBLIC_SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 확인하세요.",
+          "Supabase 환경변수가 없습니다. " +
+          "NEXT_PUBLIC_SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 확인하세요.",
       },
       500,
     );
   }
 
-  const supabase = createClient(
-    supabaseUrl,
-    supabaseKey,
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
     },
-  );
+  });
 
   try {
-    const { data: business, error } =
-      await supabase
-        .from("businesses")
-        .select("id, image_urls")
-        .eq("id", businessId)
-        .maybeSingle();
+    const { data: business, error } = await supabase
+      .from("businesses")
+      .select("id, image_urls")
+      .eq("id", businessId)
+      .maybeSingle();
 
     if (error) {
       return json(
-        {
-          error: `업체 이미지 조회 실패: ${error.message}`,
-        },
+        { error: `업체 이미지 조회 실패: ${error.message}` },
         500,
       );
     }
 
     if (!business) {
-      return json(
-        { error: "업체를 찾을 수 없습니다." },
-        404,
-      );
+      return json({ error: "업체를 찾을 수 없습니다." }, 404);
     }
 
-    const urls = normalizeImageUrls(
-      business.image_urls,
-    );
+    const urls = normalizeImageUrls(business.image_urls);
 
     return json({
       images: urls.map((url, index) => ({

@@ -237,6 +237,31 @@ type SectionContent = {
   gradient_from?: string;
   gradient_to?: string;
   video_url?: string;
+  video_poster_url?: string;
+  video_overlay_enabled?: boolean;
+  video_overlay_color?: string;
+  video_overlay_opacity?: number;
+  video_content_horizontal?: "left" | "center" | "right";
+  video_content_vertical?: "top" | "middle" | "bottom";
+  video_content_max_width?: number;
+  video_text_align?: TextAlign;
+  video_headline_color?: string;
+  video_headline_font_size?: number;
+  video_headline_mobile_font_size?: number;
+  video_subheadline_color?: string;
+  video_subheadline_font_size?: number;
+  video_description_color?: string;
+  video_description_font_size?: number;
+  video_button_background_color?: string;
+  video_button_text_color?: string;
+  video_button_border_color?: string;
+  video_button_style?: "solid" | "outline" | "pill";
+  video_button_font_size?: number;
+  video_button_height?: number;
+  video_min_height_desktop?: number;
+  video_min_height_mobile?: number;
+  video_object_position_x?: number;
+  video_object_position_y?: number;
   grid?: GridData;
   layouts?: GridData[];
   page_type?: "home-section" | "link-page";
@@ -297,6 +322,13 @@ type SectionContent = {
   initially_hidden?: boolean;
   close_button_enabled?: boolean;
   scroll_on_open?: boolean;
+
+  // 레이어 외곽선 설정
+  layer_border_enabled?: boolean;
+  layer_border_width?: number;
+  layer_border_color?: string;
+  layer_border_style?: "solid" | "dashed" | "dotted" | "double";
+  layer_border_radius?: number;
 
   [key: string]: unknown;
 };
@@ -790,13 +822,165 @@ function normalizeSettings(
   };
 }
 
-function getStoredAdminKey() {
-  if (typeof window === "undefined") return "";
-  return window.sessionStorage.getItem("website-builder-admin-key") ?? "";
+
+
+type WebsiteBackupSummary = {
+  id: number;
+  backup_name: string;
+  backed_up_at: string;
+  backup_reason: string;
+  created_by: string | null;
+  payload_bytes: number | null;
+  section_count: number;
+};
+
+type WebsiteBackupDetail = WebsiteBackupSummary & {
+  business_data: ServerEntryBackupPayload["business"];
+  sections_data: ServerEntryBackupPayload["sections"];
+};
+
+type ServerEntryBackupPayload = {
+  request_id: string;
+  backup_name: string;
+  backed_up_at: string;
+  backup_reason: "editor-entry-browser-prepared" | "before-restore" | "manual";
+  business: {
+    id: number;
+    name: string | null;
+    image_url: string | null;
+    image_urls: string[];
+    logo_url: string | null;
+    hours: unknown;
+    website_enabled: boolean;
+    website_slug: string | null;
+    website_status: string | null;
+    website_settings: WebsiteSettings;
+    custom_domain: string | null;
+  };
+  sections: Array<{
+    id: number;
+    business_id: number;
+    section_type: string;
+    title: string | null;
+    content: SectionContent;
+    settings: SectionSettings;
+    sort_order: number;
+    is_visible: boolean;
+  }>;
+};
+
+function formatServerBackupName(
+  businessId: string,
+  date = new Date(),
+) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "00";
+
+  return `business-${businessId}_${get("year")}-${get("month")}-${get(
+    "day",
+  )}_${get("hour")}-${get("minute")}-${get("second")}`;
 }
 
-function saveStoredAdminKey(value: string) {
-  window.sessionStorage.setItem("website-builder-admin-key", value);
+function normalizeBackupStringArray(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(
+    new Set(
+      value
+        .map((item) => String(item || "").trim())
+        .filter((item) => /^https?:\/\//i.test(item)),
+    ),
+  ).slice(0, 100);
+}
+
+/**
+ * 서버에서 다시 전체 행을 조회하지 않도록, 이미 브라우저가 받은 데이터로
+ * 안전한 백업 자료를 만듭니다. 웹사이트와 관계없는 businesses 컬럼은 제외합니다.
+ */
+function createBrowserServerBackupPayload(
+  businessId: string,
+  business: Business,
+  sections: BusinessSection[],
+  backupReason: ServerEntryBackupPayload["backup_reason"] =
+    "editor-entry-browser-prepared",
+): ServerEntryBackupPayload {
+  const now = new Date();
+  const numericBusinessId = Number(businessId);
+
+  return {
+    request_id:
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `backup-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    backup_name: formatServerBackupName(businessId, now),
+    backed_up_at: now.toISOString(),
+    backup_reason: backupReason,
+    business: {
+      id: numericBusinessId,
+      name:
+        typeof business.name === "string"
+          ? business.name
+          : null,
+      image_url:
+        typeof business.image_url === "string"
+          ? business.image_url
+          : null,
+      image_urls: normalizeBackupStringArray(business.image_urls),
+      logo_url:
+        typeof business.logo_url === "string"
+          ? business.logo_url
+          : null,
+      hours: business.hours ?? null,
+      website_enabled: business.website_enabled === true,
+      website_slug:
+        typeof business.website_slug === "string"
+          ? business.website_slug
+          : null,
+      website_status:
+        typeof business.website_status === "string"
+          ? business.website_status
+          : null,
+      website_settings: normalizeSettings(
+        business.website_settings,
+        business.name || "",
+      ),
+      custom_domain:
+        typeof business.custom_domain === "string"
+          ? business.custom_domain
+          : null,
+    },
+    sections: sections.slice(0, 300).map((section) => ({
+      id: Number(section.id) || 0,
+      business_id: numericBusinessId,
+      section_type: String(section.section_type || "").slice(0, 100),
+      title:
+        typeof section.title === "string"
+          ? section.title.slice(0, 500)
+          : null,
+      content:
+        section.content && typeof section.content === "object"
+          ? section.content
+          : {},
+      settings:
+        section.settings && typeof section.settings === "object"
+          ? section.settings
+          : {},
+      sort_order: Number(section.sort_order) || 0,
+      is_visible: section.is_visible !== false,
+    })),
+  };
 }
 
 type LocalWebsiteDraft = {
@@ -896,6 +1080,109 @@ function formatDraftTime(value: string) {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+
+function formatBackupDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function getBackupReasonLabel(reason: string) {
+  if (reason === "before-restore") return "복원 전 안전백업";
+  if (reason === "manual") return "수동백업";
+  if (reason === "server-save") return "서버저장";
+  if (reason === "publish") return "게시";
+  return "에디터 입장 자동백업";
+}
+
+function compareBackupWithCurrent(
+  backup: WebsiteBackupDetail,
+  currentBusiness: Business,
+  currentSections: BusinessSection[],
+) {
+  const currentSettings = JSON.stringify(
+    normalizeSettings(
+      currentBusiness.website_settings,
+      currentBusiness.name || "",
+    ),
+  );
+  const backupSettings = JSON.stringify(
+    normalizeSettings(
+      backup.business_data.website_settings,
+      backup.business_data.name || "",
+    ),
+  );
+
+  const currentByKey = new Map(
+    currentSections.map((section) => [
+      `${section.section_type}:${section.sort_order}`,
+      section,
+    ]),
+  );
+
+  let changedLayers = 0;
+  let missingNow = 0;
+
+  for (const backupSection of backup.sections_data) {
+    const key = `${backupSection.section_type}:${backupSection.sort_order}`;
+    const currentSection = currentByKey.get(key);
+
+    if (!currentSection) {
+      missingNow += 1;
+      changedLayers += 1;
+      continue;
+    }
+
+    const currentComparable = JSON.stringify({
+      title: currentSection.title,
+      content: currentSection.content,
+      settings: currentSection.settings,
+      is_visible: currentSection.is_visible,
+    });
+
+    const backupComparable = JSON.stringify({
+      title: backupSection.title,
+      content: backupSection.content,
+      settings: backupSection.settings,
+      is_visible: backupSection.is_visible,
+    });
+
+    if (currentComparable !== backupComparable) {
+      changedLayers += 1;
+    }
+  }
+
+  const backupKeys = new Set(
+    backup.sections_data.map(
+      (section) => `${section.section_type}:${section.sort_order}`,
+    ),
+  );
+
+  const addedAfterBackup = currentSections.filter(
+    (section) =>
+      !backupKeys.has(`${section.section_type}:${section.sort_order}`),
+  ).length;
+
+  return {
+    settingsChanged: currentSettings !== backupSettings,
+    changedLayers,
+    missingNow,
+    addedAfterBackup,
+    currentLayerCount: currentSections.length,
+    backupLayerCount: backup.sections_data.length,
+  };
 }
 
 function getCellLabel(type: CellType) {
@@ -1353,6 +1640,318 @@ function backgroundStyle(section: BusinessSection) {
   return { background: "#111827" };
 }
 
+
+function getVideoSectionMinHeight(
+  section: BusinessSection,
+  previewDevice: "desktop" | "mobile",
+) {
+  if (section.content?.background_type !== "video") return undefined;
+
+  const value =
+    previewDevice === "mobile"
+      ? Number(section.content.video_min_height_mobile ?? 520)
+      : Number(section.content.video_min_height_desktop ?? 680);
+
+  return `${Math.max(240, Math.min(1200, value))}px`;
+}
+
+function VideoBackgroundLayer({
+  section,
+}: {
+  section: BusinessSection;
+}) {
+  const content = section.content ?? {};
+  const videoUrl = String(content.video_url || "").trim();
+
+  if (
+    content.background_type !== "video" ||
+    !videoUrl
+  ) {
+    return null;
+  }
+
+  const focusX = Math.max(
+    0,
+    Math.min(100, Number(content.video_object_position_x ?? 50)),
+  );
+  const focusY = Math.max(
+    0,
+    Math.min(100, Number(content.video_object_position_y ?? 50)),
+  );
+  const overlayOpacity = Math.max(
+    0,
+    Math.min(0.95, Number(content.video_overlay_opacity ?? 0.42)),
+  );
+
+  return (
+    <>
+      <video
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+        src={videoUrl}
+        poster={String(content.video_poster_url || "") || undefined}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden="true"
+        style={{
+          objectPosition: `${focusX}% ${focusY}%`,
+        }}
+      />
+
+      {content.video_overlay_enabled !== false ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-[1]"
+          aria-hidden="true"
+          style={{
+            backgroundColor: String(
+              content.video_overlay_color || "#000000",
+            ),
+            opacity: overlayOpacity,
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function VideoOverlayContent({
+  section,
+  previewDevice,
+  editorPreview = false,
+}: {
+  section: BusinessSection;
+  previewDevice: "desktop" | "mobile";
+  editorPreview?: boolean;
+}) {
+  const content = section.content ?? {};
+
+  if (
+    content.background_type !== "video" ||
+    content.video_overlay_enabled === false
+  ) {
+    return null;
+  }
+
+  const headline = String(content.headline || "").trim();
+  const subheadline = String(content.subheadline || "").trim();
+  const description = String(content.description || "").trim();
+  const buttonText = String(content.button_text || "").trim();
+  const buttonUrl = String(
+    content.button_url || content.booking_url || "",
+  ).trim();
+
+  if (
+    !headline &&
+    !subheadline &&
+    !description &&
+    !buttonText
+  ) {
+    return null;
+  }
+
+  const horizontal =
+    content.video_content_horizontal === "left" ||
+    content.video_content_horizontal === "right"
+      ? content.video_content_horizontal
+      : "center";
+  const vertical =
+    content.video_content_vertical === "top" ||
+    content.video_content_vertical === "bottom"
+      ? content.video_content_vertical
+      : "middle";
+  const textAlign =
+    content.video_text_align === "left" ||
+    content.video_text_align === "right"
+      ? content.video_text_align
+      : "center";
+
+  const horizontalClass =
+    horizontal === "left"
+      ? "items-start"
+      : horizontal === "right"
+        ? "items-end"
+        : "items-center";
+  const verticalClass =
+    vertical === "top"
+      ? "justify-start"
+      : vertical === "bottom"
+        ? "justify-end"
+        : "justify-center";
+
+  const headlineSize =
+    previewDevice === "mobile"
+      ? Math.max(
+          18,
+          Math.min(
+            80,
+            Number(content.video_headline_mobile_font_size ?? 38),
+          ),
+        )
+      : Math.max(
+          22,
+          Math.min(
+            120,
+            Number(content.video_headline_font_size ?? 68),
+          ),
+        );
+
+  const maxWidth = Math.max(
+    260,
+    Math.min(
+      1100,
+      Number(content.video_content_max_width ?? 820),
+    ),
+  );
+
+  const buttonStyle =
+    content.video_button_style === "outline" ||
+    content.video_button_style === "pill"
+      ? content.video_button_style
+      : "solid";
+
+  const buttonNode = buttonText ? (
+    <span
+      className="inline-flex items-center justify-center px-6 font-black tracking-wide transition-transform duration-200 hover:-translate-y-0.5"
+      style={{
+        minHeight: `${Math.max(
+          34,
+          Math.min(
+            90,
+            Number(content.video_button_height ?? 52),
+          ),
+        )}px`,
+        fontSize: `${Math.max(
+          10,
+          Math.min(
+            36,
+            Number(content.video_button_font_size ?? 15),
+          ),
+        )}px`,
+        backgroundColor:
+          buttonStyle === "outline"
+            ? "transparent"
+            : String(
+                content.video_button_background_color ||
+                  "#ffffff",
+              ),
+        color: String(
+          content.video_button_text_color ||
+            (buttonStyle === "outline" ? "#ffffff" : "#111827"),
+        ),
+        border: `2px solid ${String(
+          content.video_button_border_color ||
+            content.video_button_background_color ||
+            "#ffffff",
+        )}`,
+        borderRadius:
+          buttonStyle === "pill"
+            ? "999px"
+            : "4px",
+      }}
+    >
+      {buttonText}
+    </span>
+  ) : null;
+
+  return (
+    <div
+      className={`pointer-events-none absolute inset-0 z-[15] flex px-5 py-10 sm:px-10 sm:py-16 ${horizontalClass} ${verticalClass}`}
+    >
+      <div
+        className="pointer-events-auto w-full"
+        style={{
+          maxWidth: `${maxWidth}px`,
+          textAlign,
+        }}
+      >
+        {subheadline ? (
+          <p
+            className="mb-3 font-black uppercase tracking-[0.24em]"
+            style={{
+              color: String(
+                content.video_subheadline_color || "#ffffff",
+              ),
+              fontSize: `${Math.max(
+                9,
+                Math.min(
+                  36,
+                  Number(content.video_subheadline_font_size ?? 14),
+                ),
+              )}px`,
+            }}
+          >
+            {subheadline}
+          </p>
+        ) : null}
+
+        {headline ? (
+          <h1
+            className="whitespace-pre-line font-black leading-[0.98] tracking-[-0.04em]"
+            style={{
+              color: String(
+                content.video_headline_color || "#ffffff",
+              ),
+              fontSize: `${headlineSize}px`,
+              textShadow: "0 3px 24px rgba(0,0,0,0.35)",
+            }}
+          >
+            {headline}
+          </h1>
+        ) : null}
+
+        {description ? (
+          <p
+            className="mt-5 whitespace-pre-line font-semibold leading-relaxed"
+            style={{
+              color: String(
+                content.video_description_color || "#ffffff",
+              ),
+              fontSize: `${Math.max(
+                11,
+                Math.min(
+                  42,
+                  Number(content.video_description_font_size ?? 18),
+                ),
+              )}px`,
+              textShadow: "0 2px 14px rgba(0,0,0,0.35)",
+            }}
+          >
+            {description}
+          </p>
+        ) : null}
+
+        {buttonNode ? (
+          <div className="mt-7">
+            {buttonUrl && !editorPreview ? (
+              <a
+                href={buttonUrl}
+                className="inline-flex no-underline"
+              >
+                {buttonNode}
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled={editorPreview || !buttonUrl}
+                onClick={() => {
+                  if (buttonUrl && !editorPreview) {
+                    window.location.href = buttonUrl;
+                  }
+                }}
+                className="inline-flex bg-transparent p-0 disabled:cursor-default"
+              >
+                {buttonNode}
+              </button>
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function getSectionWidthMode(
   section: BusinessSection | null | undefined,
 ): "full" | "container" {
@@ -1367,34 +1966,67 @@ function getSectionWidthClass(
   section: BusinessSection | null | undefined,
 ) {
   return getSectionWidthMode(section) === "full"
-    ? "relative max-w-none border-0"
+    ? "relative max-w-none"
     : "relative mx-auto w-full max-w-[1120px]";
+}
+
+function getSectionBorderStyle(
+  section: BusinessSection | null | undefined,
+): React.CSSProperties {
+  const content = section?.content ?? {};
+  const enabled = content.layer_border_enabled === true;
+  const width = Math.max(
+    0,
+    Math.min(20, Number(content.layer_border_width ?? 1)),
+  );
+  const radius = Math.max(
+    0,
+    Math.min(80, Number(content.layer_border_radius ?? 0)),
+  );
+  const style =
+    content.layer_border_style === "dashed" ||
+    content.layer_border_style === "dotted" ||
+    content.layer_border_style === "double"
+      ? content.layer_border_style
+      : "solid";
+
+  return {
+    boxSizing: "border-box",
+    borderStyle: enabled && width > 0 ? style : "none",
+    borderWidth: enabled && width > 0 ? `${width}px` : "0px",
+    borderColor: String(content.layer_border_color || "#111827"),
+    borderRadius: `${radius}px`,
+  };
 }
 
 function getSectionWidthStyle(
   section: BusinessSection | null | undefined,
   useViewportWidth = false,
 ): React.CSSProperties {
-  if (getSectionWidthMode(section) !== "full") return {};
+  const borderStyle = getSectionBorderStyle(section);
+
+  if (getSectionWidthMode(section) !== "full") {
+    return borderStyle;
+  }
 
   // 에디터 미리보기에서는 미리보기 프레임의 100%를 사용합니다.
   if (!useViewportWidth) {
     return {
+      ...borderStyle,
       display: "block",
       width: "100%",
       maxWidth: "none",
       minWidth: 0,
       margin: 0,
       padding: 0,
-      border: 0,
       outline: 0,
-      boxSizing: "border-box",
       overflow: "hidden",
     };
   }
 
   // 공개 웹에서는 상위 고정 폭 레이아웃을 벗어나 viewport 전체 폭을 사용합니다.
   return {
+    ...borderStyle,
     display: "block",
     position: "relative",
     left: "50%",
@@ -1404,9 +2036,7 @@ function getSectionWidthStyle(
     marginLeft: "-50vw",
     marginRight: "-50vw",
     padding: 0,
-    border: 0,
     outline: 0,
-    boxSizing: "border-box",
     overflow: "hidden",
   };
 }
@@ -2734,7 +3364,7 @@ function MenuImportModal({
           `/api/admin/businesses/${encodeURIComponent(businessId)}/menu/import`,
           {
             method: "POST",
-            headers: { "x-admin-key": adminKey },
+            credentials: "include",
             body: formData,
           },
         );
@@ -2864,8 +3494,8 @@ function MenuImportModal({
 }
 
 export default function WebsiteEditor({ businessId }: { businessId: string }) {
-  const [adminKey, setAdminKey] = useState("");
-  const [keyInput, setKeyInput] = useState("");
+  // 관리자 메뉴의 로그인 세션으로 인증합니다. 하위 컴포넌트 호환을 위해 값만 유지합니다.
+  const adminKey = "authenticated-session";
   const [business, setBusiness] = useState<Business | null>(null);
   const [sections, setSections] = useState<BusinessSection[]>([]);
   const [selection, setSelection] = useState<Selection>({ area: "header" });
@@ -2876,6 +3506,24 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [menuImportOpen, setMenuImportOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [backupHistory, setBackupHistory] = useState<WebsiteBackupSummary[]>([]);
+  const [selectedBackup, setSelectedBackup] =
+    useState<WebsiteBackupDetail | null>(null);
+  const [selectedBackupLoading, setSelectedBackupLoading] = useState(false);
+  const [restoringBackupId, setRestoringBackupId] = useState<number | null>(null);
+  const [undoRestoreBackupId, setUndoRestoreBackupId] =
+    useState<number | null>(() => {
+      if (typeof window === "undefined") return null;
+      const saved = Number(
+        window.sessionStorage.getItem(
+          `website-undo-restore-${businessId}`,
+        ) || 0,
+      );
+      return Number.isInteger(saved) && saved > 0 ? saved : null;
+    });
 
   // 미리보기는 사용자가 상단의 "작업 미리보기" 버튼을 직접 눌렀을 때만 엽니다.
   // 색상 선택, 텍스트 수정, 링크 해시 변경 등 편집 작업으로는 자동 전환하지 않습니다.
@@ -3017,16 +3665,278 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     [selection.sectionId, sections],
   );
 
+  const createServerEntryBackup = useCallback(
+    async (
+      serverBusiness: Business,
+      serverSections: BusinessSection[],
+      backupReason: ServerEntryBackupPayload["backup_reason"] =
+        "editor-entry-browser-prepared",
+    ) => {
+      try {
+        /*
+         * JSON 선택·정리·직렬화는 브라우저에서 실행합니다.
+         * 서버는 사용자 권한 확인과 DB INSERT만 수행합니다.
+         */
+        const payload = createBrowserServerBackupPayload(
+          businessId,
+          serverBusiness,
+          serverSections,
+          backupReason,
+        );
+
+        const serializedPayload = JSON.stringify(payload);
+
+        // 비정상적으로 큰 백업이 서버로 전송되는 것을 브라우저에서 먼저 차단합니다.
+        if (serializedPayload.length > 8 * 1024 * 1024) {
+          throw new Error(
+            "백업 데이터가 8MB를 초과했습니다. 큰 HTML이나 과도한 레이어 데이터를 확인해주세요.",
+          );
+        }
+
+        const response = await fetch(
+          `/api/admin/businesses/${businessId}/website/backups`,
+          {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: serializedPayload,
+          },
+        );
+
+        const result = await readApiResponse(response);
+
+        if (!response.ok) {
+          throw new Error(
+            String(
+              result.error ||
+                result.message ||
+                `서버 자동 백업 실패 · HTTP ${response.status}`,
+            ),
+          );
+        }
+
+        return {
+          ok: true as const,
+          backupName: String(result.backup_name || payload.backup_name),
+          backupTime: String(
+            result.backed_up_at || payload.backed_up_at,
+          ),
+          duplicated: result.duplicated === true,
+        };
+      } catch (backupError) {
+        console.error(
+          "Browser-prepared website entry backup failed:",
+          backupError,
+        );
+
+        return {
+          ok: false as const,
+          error:
+            backupError instanceof Error
+              ? backupError.message
+              : "서버 자동 백업에 실패했습니다.",
+        };
+      }
+    },
+    [businessId],
+  );
+
+  const loadBackupHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/businesses/${businessId}/website/backups?limit=100`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `백업 목록을 불러오지 못했습니다. HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      setBackupHistory(
+        Array.isArray(result.backups)
+          ? (result.backups as WebsiteBackupSummary[])
+          : [],
+      );
+    } catch (historyLoadError) {
+      setHistoryError(
+        historyLoadError instanceof Error
+          ? historyLoadError.message
+          : "백업 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [businessId]);
+
+  const openBackupHistory = useCallback(() => {
+    setHistoryOpen(true);
+    setSelectedBackup(null);
+    setHistoryError("");
+    void loadBackupHistory();
+  }, [loadBackupHistory]);
+
+  const loadBackupDetail = useCallback(
+    async (backupId: number) => {
+      setSelectedBackupLoading(true);
+      setHistoryError("");
+
+      try {
+        const response = await fetch(
+          `/api/admin/businesses/${businessId}/website/backups/${backupId}`,
+          {
+            method: "GET",
+            credentials: "include",
+            cache: "no-store",
+          },
+        );
+
+        const result = await readApiResponse(response);
+
+        if (!response.ok) {
+          throw new Error(
+            String(
+              result.error ||
+                result.message ||
+                `백업 내용을 불러오지 못했습니다. HTTP ${response.status}`,
+            ),
+          );
+        }
+
+        setSelectedBackup(result.backup as WebsiteBackupDetail);
+      } catch (detailError) {
+        setHistoryError(
+          detailError instanceof Error
+            ? detailError.message
+            : "백업 내용을 불러오지 못했습니다.",
+        );
+      } finally {
+        setSelectedBackupLoading(false);
+      }
+    },
+    [businessId],
+  );
+
+  const restoreBackup = useCallback(
+    async (backupId: number, isUndo = false) => {
+      if (!business) return;
+
+      const confirmed = window.confirm(
+        isUndo
+          ? "복원 직전 상태로 다시 되돌리시겠습니까? 현재 상태도 먼저 안전백업됩니다."
+          : "선택한 백업으로 서버 사이트를 복원하시겠습니까? 현재 상태는 먼저 안전백업됩니다.",
+      );
+
+      if (!confirmed) return;
+
+      setRestoringBackupId(backupId);
+      setHistoryError("");
+      setError("");
+      setMessage("");
+
+      try {
+        /*
+         * 현재 편집 상태의 백업 JSON은 브라우저에서 준비합니다.
+         * 서버는 권한 확인 후 안전백업 INSERT와 복원 DB 작업만 수행합니다.
+         */
+        const currentBackup = createBrowserServerBackupPayload(
+          businessId,
+          business,
+          sections,
+          "before-restore",
+        );
+
+        const response = await fetch(
+          `/api/admin/businesses/${businessId}/website/backups/${backupId}`,
+          {
+            method: "POST",
+            credentials: "include",
+            cache: "no-store",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              current_backup: currentBackup,
+            }),
+          },
+        );
+
+        const result = await readApiResponse(response);
+
+        if (!response.ok) {
+          throw new Error(
+            String(
+              result.error ||
+                result.message ||
+                `백업 복원에 실패했습니다. HTTP ${response.status}`,
+            ),
+          );
+        }
+
+        const undoId = Number(result.undo_backup_id);
+        const nextUndoId =
+          Number.isInteger(undoId) && undoId > 0 ? undoId : null;
+
+        setUndoRestoreBackupId(nextUndoId);
+
+        if (nextUndoId) {
+          window.sessionStorage.setItem(
+            `website-undo-restore-${businessId}`,
+            String(nextUndoId),
+          );
+        } else {
+          window.sessionStorage.removeItem(
+            `website-undo-restore-${businessId}`,
+          );
+        }
+
+        window.localStorage.removeItem(getWebsiteDraftKey(businessId));
+
+        /*
+         * 복원된 서버 데이터를 확실하게 다시 읽고 모든 편집 상태와
+         * 임시 레이어 ID를 초기화하기 위해 페이지를 새로고침합니다.
+         * Undo Restore ID는 sessionStorage에 보관되어 새로고침 후에도 유지됩니다.
+         */
+        window.location.reload();
+      } catch (restoreError) {
+        const restoreMessage =
+          restoreError instanceof Error
+            ? restoreError.message
+            : "백업 복원에 실패했습니다.";
+
+        setHistoryError(restoreMessage);
+        setError(restoreMessage);
+      } finally {
+        setRestoringBackupId(null);
+      }
+    },
+    [business, businessId, sections],
+  );
+
   const loadWebsite = useCallback(
     async (
-      key: string,
       options?: {
         ignoreLocalDraft?: boolean;
         recoveryMode?: boolean;
       },
     ) => {
-      if (!key) return;
-
       if (options?.recoveryMode) {
         setRestoringServerData(true);
       } else {
@@ -3038,7 +3948,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       try {
         const response = await fetch(`/api/admin/businesses/${businessId}/website`, {
           method: "GET",
-          headers: { "x-admin-key": key },
+          credentials: "include",
           cache: "no-store",
         });
 
@@ -3089,6 +3999,18 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           .map((section) => Number(section.id))
           .filter((id) => Number.isInteger(id) && id > 0);
 
+        /*
+         * 서버 데이터를 성공적으로 받은 직후, 편집 전 상태를 자동 백업합니다.
+         * recoveryMode에서는 이미 서버 데이터를 다시 불러오는 작업이므로
+         * 불필요한 추가 입장 백업을 만들지 않습니다.
+         */
+        const entryBackup = options?.recoveryMode
+          ? null
+          : await createServerEntryBackup(
+              normalizedBusiness,
+              normalizedSections,
+            );
+
         const localDraft = loadWebsiteDraft(businessId);
         const useServerData = options?.ignoreLocalDraft === true;
 
@@ -3119,22 +4041,42 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           });
           setSections(localDraft.sections);
           setLastDraftSavedAt(localDraft.savedAt);
-          setDraftMessage(
+          const localMessage =
             `이전에 중간 저장한 작업을 불러왔습니다. ${formatDraftTime(
               localDraft.savedAt,
-            )}`,
+            )}`;
+
+          setDraftMessage(
+            entryBackup?.ok
+              ? `${localMessage} · 서버 입장 백업 완료 ${formatDraftTime(
+                  entryBackup.backupTime,
+                )}`
+              : entryBackup && !entryBackup.ok
+                ? `${localMessage} · 서버 입장 백업 실패: ${entryBackup.error}`
+                : localMessage,
           );
         } else {
           setBusiness(normalizedBusiness);
           setSections(normalizedSections);
-          setDraftMessage("");
+
+          if (entryBackup?.ok) {
+            setDraftMessage(
+              `서버 입장 백업 완료 · ${formatDraftTime(
+                entryBackup.backupTime,
+              )}${entryBackup.duplicated ? " · 중복 요청 재사용" : ""}`,
+            );
+          } else if (entryBackup && !entryBackup.ok) {
+            setDraftMessage(
+              `사이트는 정상적으로 불러왔지만 서버 입장 백업에 실패했습니다. ${entryBackup.error}`,
+            );
+          } else {
+            setDraftMessage("");
+          }
+
           setLastDraftSavedAt("");
         }
 
         setSelection({ area: "header" });
-        saveStoredAdminKey(key);
-        setAdminKey(key);
-
         window.setTimeout(() => {
           draftReadyRef.current = true;
         }, 0);
@@ -3145,15 +4087,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         setRestoringServerData(false);
       }
     },
-    [businessId],
+    [businessId, createServerEntryBackup],
   );
 
   useEffect(() => {
-    const storedKey = getStoredAdminKey();
-    if (storedKey) {
-      setKeyInput(storedKey);
-      void loadWebsite(storedKey);
-    }
+    void loadWebsite();
   }, [loadWebsite]);
 
   useEffect(() => {
@@ -3213,7 +4151,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     draftReadyRef.current = false;
     suppressNextAutoSaveRef.current = true;
 
-    await loadWebsite(adminKey, {
+    await loadWebsite({
       ignoreLocalDraft: true,
       recoveryMode: true,
     });
@@ -4233,9 +5171,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       const response = await fetch(`/api/admin/businesses/${businessId}/website`, {
         method: "PATCH",
         cache: "no-store",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-key": adminKey,
         },
         body: JSON.stringify({
           business,
@@ -4396,34 +5334,22 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
   if (!business) {
     return (
-      <main className="min-h-screen bg-gray-100 px-4 py-10">
-        <div className="mx-auto max-w-md rounded-3xl bg-white p-7 shadow-sm">
+      <main className="flex min-h-screen items-center justify-center bg-gray-100 px-4 py-10">
+        <div className="w-full max-w-md rounded-3xl bg-white p-7 text-center shadow-sm">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-gray-500">
             KTownTriangle
           </p>
           <h1 className="mt-2 text-2xl font-black text-gray-950">Website Builder</h1>
-          <p className="mt-3 text-sm leading-6 text-gray-600">
-            Vercel에 등록한 Website Builder 관리자 키를 입력하세요.
-          </p>
-          <input
-            type="password"
-            value={keyInput}
-            onChange={(event) => setKeyInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") void loadWebsite(keyInput.trim());
-            }}
-            className="mt-6 w-full rounded-2xl border border-gray-300 px-4 py-3 outline-none focus:border-gray-950"
-            placeholder="Admin key"
-          />
-          <button
-            type="button"
-            disabled={loading || !keyInput.trim()}
-            onClick={() => void loadWebsite(keyInput.trim())}
-            className="mt-4 w-full rounded-2xl bg-gray-950 px-5 py-3 font-bold text-white disabled:opacity-50"
-          >
-            {loading ? "Loading..." : "Open Builder"}
-          </button>
-          {error ? <p className="mt-4 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p> : null}
+          {loading ? (
+            <p className="mt-5 text-sm font-bold text-gray-600">관리자 권한을 확인하고 웹에디터를 불러오는 중입니다...</p>
+          ) : error ? (
+            <div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-semibold leading-6 text-red-700">
+              <p>{error}</p>
+              <p className="mt-2 text-xs">관리자 메뉴에 로그인했는지 확인한 뒤 다시 접속해주세요.</p>
+            </div>
+          ) : (
+            <p className="mt-5 text-sm font-bold text-gray-600">웹에디터를 준비하고 있습니다...</p>
+          )}
         </div>
       </main>
     );
@@ -4447,6 +5373,28 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               <button type="button" onClick={() => setDevice("desktop")} className={`rounded-full px-3 py-1.5 text-xs font-bold ${device === "desktop" ? "bg-white shadow-sm" : "text-gray-500"}`}>Desktop</button>
               <button type="button" onClick={() => setDevice("mobile")} className={`rounded-full px-3 py-1.5 text-xs font-bold ${device === "mobile" ? "bg-white shadow-sm" : "text-gray-500"}`}>Mobile</button>
             </div>
+            <button
+              type="button"
+              onClick={openBackupHistory}
+              disabled={historyLoading || restoringBackupId !== null}
+              className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-black text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="날짜·시간별 서버 백업을 확인하고 안전하게 복원합니다."
+            >
+              🕒 History
+            </button>
+            {undoRestoreBackupId ? (
+              <button
+                type="button"
+                onClick={() => void restoreBackup(undoRestoreBackupId, true)}
+                disabled={restoringBackupId !== null}
+                className="rounded-full border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-black text-rose-800 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                title="마지막 복원 직전 상태로 다시 되돌립니다."
+              >
+                {restoringBackupId === undoRestoreBackupId
+                  ? "되돌리는 중..."
+                  : "↩ Undo Restore"}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={restoringServerData || loading || saving}
@@ -4506,6 +5454,284 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           onClose={() => setMenuImportOpen(false)}
         />
       ) : null}
+
+      {historyOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="웹사이트 백업 기록"
+              className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/65 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setHistoryOpen(false);
+                }
+              }}
+            >
+              <div
+                className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-500">
+                      Website Backup History
+                    </p>
+                    <h2 className="mt-1 text-xl font-black text-gray-950">
+                      날짜·시간별 백업 및 복원
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryOpen(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-2xl font-light text-gray-700 hover:bg-gray-200"
+                    aria-label="백업 기록 닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {historyError ? (
+                  <div className="border-b border-red-200 bg-red-50 px-5 py-3 text-sm font-bold text-red-700">
+                    {historyError}
+                  </div>
+                ) : null}
+
+                <div className="grid min-h-0 flex-1 lg:grid-cols-[360px_minmax(0,1fr)]">
+                  <aside className="min-h-0 overflow-y-auto border-b border-gray-200 bg-gray-50 lg:border-b-0 lg:border-r">
+                    <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-gray-50/95 px-4 py-3 backdrop-blur">
+                      <span className="text-sm font-black text-gray-800">
+                        백업 {backupHistory.length}개
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void loadBackupHistory()}
+                        disabled={historyLoading}
+                        className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-black text-gray-700 disabled:opacity-50"
+                      >
+                        {historyLoading ? "불러오는 중..." : "새로고침"}
+                      </button>
+                    </div>
+
+                    {historyLoading && backupHistory.length === 0 ? (
+                      <div className="p-8 text-center text-sm font-bold text-gray-500">
+                        백업 목록을 불러오는 중입니다...
+                      </div>
+                    ) : backupHistory.length === 0 ? (
+                      <div className="p-8 text-center text-sm font-bold text-gray-500">
+                        저장된 서버 백업이 없습니다.
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-200">
+                        {backupHistory.map((backup) => {
+                          const selected = selectedBackup?.id === backup.id;
+
+                          return (
+                            <button
+                              key={backup.id}
+                              type="button"
+                              onClick={() => void loadBackupDetail(backup.id)}
+                              className={`block w-full px-4 py-4 text-left transition ${
+                                selected
+                                  ? "bg-violet-100"
+                                  : "bg-white hover:bg-violet-50"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-black text-gray-950">
+                                    {formatBackupDateTime(backup.backed_up_at)}
+                                  </p>
+                                  <p className="mt-1 text-xs font-bold text-violet-700">
+                                    {getBackupReasonLabel(backup.backup_reason)}
+                                  </p>
+                                </div>
+                                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
+                                  {backup.section_count} layers
+                                </span>
+                              </div>
+                              <p className="mt-2 truncate text-[11px] font-semibold text-gray-400">
+                                {backup.backup_name}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </aside>
+
+                  <section className="min-h-0 overflow-y-auto p-5 sm:p-6">
+                    {selectedBackupLoading ? (
+                      <div className="flex min-h-[320px] items-center justify-center text-sm font-bold text-gray-500">
+                        백업 내용을 불러오는 중입니다...
+                      </div>
+                    ) : selectedBackup ? (
+                      (() => {
+                        const comparison = compareBackupWithCurrent(
+                          selectedBackup,
+                          business,
+                          sections,
+                        );
+
+                        return (
+                          <div className="space-y-5">
+                            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-5">
+                              <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">
+                                Selected Backup
+                              </p>
+                              <h3 className="mt-2 text-xl font-black text-gray-950">
+                                {formatBackupDateTime(
+                                  selectedBackup.backed_up_at,
+                                )}
+                              </h3>
+                              <p className="mt-1 text-sm font-bold text-violet-800">
+                                {getBackupReasonLabel(
+                                  selectedBackup.backup_reason,
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                              <div className="rounded-2xl border border-gray-200 p-4">
+                                <p className="text-xs font-bold text-gray-500">
+                                  백업 레이어
+                                </p>
+                                <p className="mt-1 text-2xl font-black text-gray-950">
+                                  {comparison.backupLayerCount}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-gray-200 p-4">
+                                <p className="text-xs font-bold text-gray-500">
+                                  현재와 다른 레이어
+                                </p>
+                                <p className="mt-1 text-2xl font-black text-amber-600">
+                                  {comparison.changedLayers}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-gray-200 p-4">
+                                <p className="text-xs font-bold text-gray-500">
+                                  백업 후 추가됨
+                                </p>
+                                <p className="mt-1 text-2xl font-black text-blue-600">
+                                  {comparison.addedAfterBackup}
+                                </p>
+                              </div>
+                              <div className="rounded-2xl border border-gray-200 p-4">
+                                <p className="text-xs font-bold text-gray-500">
+                                  사이트 설정
+                                </p>
+                                <p className={`mt-1 text-sm font-black ${
+                                  comparison.settingsChanged
+                                    ? "text-amber-600"
+                                    : "text-emerald-600"
+                                }`}>
+                                  {comparison.settingsChanged
+                                    ? "변경됨"
+                                    : "동일함"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-gray-200">
+                              <div className="border-b border-gray-200 px-4 py-3">
+                                <h4 className="font-black text-gray-950">
+                                  백업 레이어 미리보기
+                                </h4>
+                                <p className="mt-1 text-xs font-semibold text-gray-500">
+                                  실제 복원 전 레이어 이름, 순서 및 표시 상태를 확인하세요.
+                                </p>
+                              </div>
+                              <div className="max-h-[320px] divide-y divide-gray-100 overflow-y-auto">
+                                {selectedBackup.sections_data.map(
+                                  (section, index) => (
+                                    <div
+                                      key={`${section.section_type}-${section.sort_order}-${index}`}
+                                      className="flex items-center justify-between gap-4 px-4 py-3"
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-black text-gray-900">
+                                          {section.title ||
+                                            SECTION_LABELS[
+                                              section.section_type
+                                            ] ||
+                                            section.section_type}
+                                        </p>
+                                        <p className="mt-0.5 text-[11px] font-semibold text-gray-400">
+                                          순서 {section.sort_order} ·{" "}
+                                          {section.content?.page_type ===
+                                          "link-page"
+                                            ? "별도 페이지"
+                                            : "홈 레이어"}
+                                        </p>
+                                      </div>
+                                      <span
+                                        className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${
+                                          section.is_visible
+                                            ? "bg-emerald-50 text-emerald-700"
+                                            : "bg-gray-100 text-gray-500"
+                                        }`}
+                                      >
+                                        {section.is_visible
+                                          ? "표시"
+                                          : "숨김"}
+                                      </span>
+                                    </div>
+                                  ),
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-900">
+                              복원 버튼을 누르면 현재 상태를 먼저
+                              “복원 전 안전백업”으로 저장한 뒤 선택한
+                              백업으로 서버 사이트를 교체합니다. 복원 후에는
+                              상단의 Undo Restore 버튼으로 직전 상태를 다시
+                              복구할 수 있습니다.
+                            </div>
+
+                            <div className="flex flex-wrap justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBackup(null)}
+                                className="rounded-full border border-gray-300 bg-white px-5 py-2.5 text-sm font-black text-gray-700"
+                              >
+                                선택 해제
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void restoreBackup(selectedBackup.id)
+                                }
+                                disabled={restoringBackupId !== null}
+                                className="rounded-full bg-violet-700 px-6 py-2.5 text-sm font-black text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {restoringBackupId === selectedBackup.id
+                                  ? "안전백업 후 복원 중..."
+                                  : "이 백업으로 복원"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
+                        <div className="text-5xl">🕒</div>
+                        <h3 className="mt-4 text-lg font-black text-gray-900">
+                          왼쪽에서 백업을 선택하세요
+                        </h3>
+                        <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-gray-500">
+                          선택한 날짜의 레이어와 현재 상태의 차이를 먼저
+                          확인한 뒤 안전하게 복원할 수 있습니다.
+                        </p>
+                      </div>
+                    )}
+                  </section>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {draftMessage || lastDraftSavedAt ? (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs font-bold text-amber-900">
@@ -4841,11 +6067,19 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 style={{
                   ...backgroundStyle(heroSection),
                   ...getSectionWidthStyle(heroSection),
+                  minHeight: getVideoSectionMinHeight(
+                    heroSection,
+                    device,
+                  ),
                 }}
               >
-                {heroSection.content.background_type === "video" && heroSection.content.video_url ? (
-                  <video className="absolute inset-0 h-full w-full object-cover object-center" src={heroSection.content.video_url} autoPlay muted loop playsInline />
-                ) : null}
+                <VideoBackgroundLayer section={heroSection} />
+                <VideoOverlayContent
+                  section={heroSection}
+                  previewDevice={device}
+                  editorPreview
+                />
+
                 <div className="relative z-10 space-y-3">
                   {heroSection.section_type !== "hero" &&
                   !heroSection.content?.grid &&
@@ -5558,6 +6792,563 @@ function HeaderSubmenu({
 }
 
 
+
+type WebsiteBanner = {
+  id: number;
+  banner_type: "popup";
+  template_style: string | null;
+  title: string;
+  subtitle: string | null;
+  button_text: string | null;
+  link_url: string | null;
+  image_url: string | null;
+  background_color: string;
+  text_color: string;
+  button_color: string;
+  button_text_color: string;
+  title_color: string;
+  subtitle_color: string;
+  title_font_size: number;
+  subtitle_font_size: number;
+  button_font_size: number;
+  title_font_weight: number;
+  subtitle_font_weight: number;
+  text_align: "left" | "center" | "right";
+  image_position: "top" | "left" | "background";
+  popup_width: number;
+  button_enabled: boolean;
+  text_x: number;
+  text_y: number;
+  text_width: number;
+  image_x: number;
+  image_y: number;
+  image_width: number;
+  image_height: number;
+  image_fit: "contain" | "cover" | "fill";
+  image_zoom: number;
+  style_preset: string;
+  popup_radius: number;
+  image_radius: number;
+  button_radius: number;
+  popup_shadow: string;
+  popup_height: number;
+  lead_capture_enabled: boolean;
+  email_placeholder: string;
+  terms_text: string;
+  submit_button_text: string;
+  success_message: string;
+  coupon_code_prefix: string;
+  reward_signup_url: string | null;
+  form_background_color: string;
+  lead_expanded_mode: boolean;
+  display_order: number;
+};
+
+type WebsiteBannerPayload = {
+  banners?: WebsiteBanner[];
+  error?: string;
+};
+
+function getWebsitePopupShadow(value: string) {
+  if (value === "none") return "none";
+  if (value === "small") return "0 8px 24px rgba(15, 23, 42, 0.16)";
+  if (value === "medium") return "0 18px 50px rgba(15, 23, 42, 0.24)";
+  if (value === "glass") return "0 24px 70px rgba(15, 23, 42, 0.22), inset 0 1px 0 rgba(255,255,255,.65)";
+  return "0 30px 90px rgba(15, 23, 42, 0.34)";
+}
+
+function BusinessWebsiteBanners({
+  businessId,
+  previewDevice = "desktop",
+  editorPreview = false,
+}: {
+  businessId: string | number;
+  previewDevice?: "desktop" | "mobile";
+  editorPreview?: boolean;
+}) {
+  const [banners, setBanners] = useState<WebsiteBanner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [visibleBannerId, setVisibleBannerId] =
+    useState<number | null>(null);
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadExpanded, setLeadExpanded] = useState(false);
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadResult, setLeadResult] = useState<{ message: string; couponCode?: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function loadBanners() {
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        const response = await fetch(
+          `/api/businesses/${encodeURIComponent(
+            String(businessId),
+          )}/banners`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+
+        const payload =
+          (await response.json()) as WebsiteBannerPayload;
+
+        if (!response.ok) {
+          throw new Error(
+            payload.error ||
+              "팝업을 불러오지 못했습니다.",
+          );
+        }
+
+        if (cancelled) return;
+
+        const nextBanners = Array.isArray(payload.banners)
+          ? payload.banners
+          : [];
+
+        setBanners(nextBanners);
+
+        if (editorPreview) {
+          setVisibleBannerId(
+            nextBanners[0]?.id ?? null,
+          );
+          return;
+        }
+
+        const now = Date.now();
+        const firstVisible = nextBanners.find(
+          (banner) => {
+            const key =
+              `business-popup-dismissed-${businessId}-${banner.id}`;
+            const dismissedUntil = Number(
+              window.localStorage.getItem(key) || 0,
+            );
+
+            return !Number.isFinite(dismissedUntil) ||
+              dismissedUntil <= now;
+          },
+        );
+
+        setVisibleBannerId(
+          firstVisible?.id ?? null,
+        );
+      } catch (error) {
+        if (
+          cancelled ||
+          (error instanceof DOMException &&
+            error.name === "AbortError")
+        ) {
+          return;
+        }
+
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "팝업을 불러오지 못했습니다.",
+        );
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadBanners();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [businessId, editorPreview]);
+
+  useEffect(() => {
+    setLeadEmail("");
+    setLeadResult(null);
+    const current = banners.find((item) => item.id === visibleBannerId);
+    setLeadExpanded(current ? !current.lead_expanded_mode : false);
+  }, [visibleBannerId, banners]);
+
+  async function submitLead(banner: WebsiteBanner) {
+    const email = leadEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setLeadResult({ message: "Please enter a valid email address." });
+      return;
+    }
+    if (editorPreview) {
+      setLeadResult({ message: banner.success_message || "Check your email! 🎉", couponCode: `${banner.coupon_code_prefix || "WELCOME"}-DEMO` });
+      return;
+    }
+    setLeadSubmitting(true);
+    setLeadResult(null);
+    try {
+      const response = await fetch(`/api/businesses/${encodeURIComponent(String(businessId))}/popup-leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ banner_id: banner.id, email }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not submit your email.");
+      setLeadResult({ message: result.message || banner.success_message || "Check your email! 🎉", couponCode: result.coupon_code });
+      if (banner.reward_signup_url) {
+        window.setTimeout(() => window.location.assign(banner.reward_signup_url as string), 1200);
+      }
+    } catch (error) {
+      setLeadResult({ message: error instanceof Error ? error.message : "Could not submit your email." });
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }
+
+  function closePopup(bannerId: number) {
+    if (!editorPreview) {
+      const dismissedUntil =
+        Date.now() + 24 * 60 * 60 * 1000;
+
+      window.localStorage.setItem(
+        `business-popup-dismissed-${businessId}-${bannerId}`,
+        String(dismissedUntil),
+      );
+    }
+
+    const currentIndex = banners.findIndex(
+      (banner) => banner.id === bannerId,
+    );
+
+    const nextBanner = banners
+      .slice(currentIndex + 1)
+      .find((banner) => {
+        if (editorPreview) return true;
+
+        const key =
+          `business-popup-dismissed-${businessId}-${banner.id}`;
+        const dismissedUntil = Number(
+          window.localStorage.getItem(key) || 0,
+        );
+
+        return !Number.isFinite(dismissedUntil) ||
+          dismissedUntil <= Date.now();
+      });
+
+    setVisibleBannerId(
+      nextBanner?.id ?? null,
+    );
+  }
+
+  if (loading) {
+    return editorPreview ? (
+      <div className="mx-auto my-3 w-[calc(100%-24px)] rounded-xl border border-dashed border-gray-300 bg-white/70 px-4 py-3 text-center text-xs font-black text-gray-500">
+        등록된 팝업 확인 중...
+      </div>
+    ) : null;
+  }
+
+  if (errorMessage) {
+    return editorPreview ? (
+      <div className="mx-auto my-3 w-[calc(100%-24px)] rounded-xl bg-red-50 px-4 py-3 text-center text-xs font-black text-red-600">
+        팝업 미리보기 오류: {errorMessage}
+      </div>
+    ) : null;
+  }
+
+  const banner = banners.find(
+    (item) => item.id === visibleBannerId,
+  );
+
+  if (!banner) return null;
+
+  const popupHeight = Math.max(
+    320,
+    Math.min(900, Number(banner.popup_height) || 520),
+  );
+  const backgroundImage =
+    banner.image_position === "background" &&
+    banner.image_url
+      ? `linear-gradient(rgba(0,0,0,.36), rgba(0,0,0,.36)), url(${banner.image_url})`
+      : undefined;
+
+  const popupCard = (
+    <section
+      className="relative w-full overflow-visible border border-black/10"
+      style={{
+        width:
+          banner.style_preset === "circle"
+            ? `min(90vw, ${Math.max(
+                320,
+                Math.min(
+                  700,
+                  Math.min(
+                    Number(banner.popup_width) || 520,
+                    Number(banner.popup_height) || 520,
+                  ),
+                ),
+              )}px)`
+            : "100%",
+        maxWidth:
+          banner.style_preset === "circle"
+            ? `${Math.max(
+                320,
+                Math.min(
+                  700,
+                  Math.min(
+                    Number(banner.popup_width) || 520,
+                    Number(banner.popup_height) || 520,
+                  ),
+                ),
+              )}px`
+            : `${Math.max(
+                320,
+                Math.min(
+                  1100,
+                  Number(banner.popup_width) || 720,
+                ),
+              )}px`,
+        borderRadius:
+          banner.style_preset === "circle"
+            ? "50%"
+            : `${Math.max(
+                0,
+                Math.min(
+                  999,
+                  Number.isFinite(
+                    Number(banner.popup_radius),
+                  )
+                    ? Number(banner.popup_radius)
+                    : 28,
+                ),
+              )}px`,
+        boxShadow: getWebsitePopupShadow(
+          banner.popup_shadow || "medium",
+        ),
+        height:
+          banner.style_preset === "circle"
+            ? "auto"
+            : `${popupHeight}px`,
+        aspectRatio:
+          banner.style_preset === "circle"
+            ? "1 / 1"
+            : undefined,
+        backgroundColor: banner.background_color || "#FFFFFF",
+        backgroundImage,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => closePopup(banner.id)}
+        className="absolute z-[100] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-black/60 text-xl font-black leading-none text-white shadow-xl hover:bg-black"
+        style={{ right: banner.style_preset === "circle" ? "-14px" : "12px", top: banner.style_preset === "circle" ? "12%" : "12px" }}
+        aria-label="Close popup"
+      >×</button>
+
+      {banner.image_url && banner.image_position !== "background" ? (
+        <div
+          className="absolute z-10 overflow-hidden bg-white"
+          style={{
+            borderRadius: `${Math.max(0, Math.min(999, Number.isFinite(Number(banner.image_radius)) ? Number(banner.image_radius) : 18))}px`,
+            left: `${Number(banner.image_x) || 0}%`,
+            top: `${Number(banner.image_y) || 0}%`,
+            width: `${Number(banner.image_width) || 100}%`,
+            height: `${Number(banner.image_height) || 42}%`,
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={banner.image_url}
+            alt={banner.title}
+            draggable={false}
+            className="h-full w-full select-none"
+            style={{
+              objectFit:
+                banner.image_fit === "cover" || banner.image_fit === "fill"
+                  ? banner.image_fit
+                  : "contain",
+              objectPosition: "center",
+              transform: `scale(${Math.max(25, Math.min(300, Number(banner.image_zoom) || 100)) / 100})`,
+              transformOrigin: "center",
+            }}
+          />
+        </div>
+      ) : null}
+
+      <div
+        className="absolute z-20 p-4"
+        style={{
+          left: `${Number(banner.text_x) || 8}%`,
+          top: `${Number(banner.text_y) || 16}%`,
+          width: `${Number(banner.text_width) || 84}%`,
+          textAlign: banner.text_align || "left",
+        }}
+      >
+        {editorPreview ? (
+          <p
+            className="mb-2 text-[10px] font-black uppercase tracking-[0.16em]"
+            style={{
+              color: banner.subtitle_color || "#667085",
+              opacity: 0.65,
+            }}
+          >
+            Popup Preview
+          </p>
+        ) : null}
+
+        <h2
+          style={{
+            color: banner.title_color || "#172033",
+            fontSize: `${Math.max(16, Math.min(72, Number(banner.title_font_size) || 32))}px`,
+            fontWeight: Number(banner.title_font_weight) || 900,
+            lineHeight: 1.15,
+          }}
+        >
+          {banner.title}
+        </h2>
+
+        {banner.subtitle ? (
+          <p
+            className="mt-3 leading-relaxed"
+            style={{
+              color: banner.subtitle_color || "#667085",
+              fontSize: `${Math.max(10, Math.min(40, Number(banner.subtitle_font_size) || 16))}px`,
+              fontWeight: Number(banner.subtitle_font_weight) || 500,
+            }}
+          >
+            {banner.subtitle}
+          </p>
+        ) : null}
+
+        {banner.button_enabled !== false && banner.button_text ? (
+          banner.link_url ? (
+            <a
+              href={banner.link_url}
+              onClick={(event) => {
+                if (editorPreview) event.preventDefault();
+              }}
+              className="mt-5 inline-flex items-center justify-center rounded-xl px-5 py-3 font-black no-underline shadow-sm"
+              style={{
+                backgroundColor: banner.button_color || "#B64032",
+                color: banner.button_text_color || "#FFFFFF",
+                fontSize: `${Math.max(10, Math.min(32, Number(banner.button_font_size) || 14))}px`,
+                borderRadius: `${Math.max(0, Math.min(999, Number.isFinite(Number(banner.button_radius)) ? Number(banner.button_radius) : 12))}px`,
+              }}
+            >
+              {banner.button_text}
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="mt-5 inline-flex items-center justify-center rounded-xl px-5 py-3 font-black shadow-sm"
+              style={{
+                backgroundColor: banner.button_color || "#B64032",
+                color: banner.button_text_color || "#FFFFFF",
+                fontSize: `${Math.max(10, Math.min(32, Number(banner.button_font_size) || 14))}px`,
+                borderRadius: `${Math.max(0, Math.min(999, Number.isFinite(Number(banner.button_radius)) ? Number(banner.button_radius) : 12))}px`,
+              }}
+            >
+              {banner.button_text}
+            </button>
+          )
+        ) : null}
+
+        {!editorPreview ? (
+          <p
+            className="mt-4 text-[11px] font-bold"
+            style={{
+              color: banner.subtitle_color || "#667085",
+              opacity: 0.65,
+            }}
+          >
+            Close this popup to hide it for 24 hours.
+          </p>
+        ) : null}
+      </div>
+      {banner.lead_capture_enabled ? (
+        <div
+          className="absolute bottom-0 left-0 z-40 w-full border-t border-black/10 p-4"
+          style={{ backgroundColor: banner.form_background_color || "#FFFFFF" }}
+        >
+          {leadResult?.couponCode ? (
+            <div className="rounded-xl bg-green-50 px-4 py-3 text-center">
+              <p className="text-sm font-black text-green-800">{leadResult.message}</p>
+              <p className="mt-1 text-xl font-black tracking-widest text-green-950">{leadResult.couponCode}</p>
+            </div>
+          ) : (
+            <>
+              <input
+                type="email"
+                value={leadEmail}
+                onFocus={() => setLeadExpanded(true)}
+                onChange={(event) => setLeadEmail(event.target.value)}
+                placeholder={banner.email_placeholder || "Enter email to claim"}
+                className="h-14 w-full rounded-xl border-2 border-black/15 bg-white px-4 text-base font-bold text-gray-950 outline-none focus:border-gray-950"
+              />
+              {leadExpanded ? (
+                <div className="mt-3">
+                  {banner.terms_text ? <p className="whitespace-pre-line text-xs font-medium leading-5 text-gray-700">{banner.terms_text}</p> : null}
+                  <button
+                    type="button"
+                    disabled={leadSubmitting}
+                    onClick={() => void submitLead(banner)}
+                    className="mt-3 flex h-13 w-full items-center justify-center px-5 py-3 font-black text-white disabled:opacity-60"
+                    style={{ backgroundColor: banner.button_color || "#172033", borderRadius: `${Math.max(0, Math.min(999, Number(banner.button_radius) || 12))}px` }}
+                  >
+                    {leadSubmitting ? "SUBMITTING..." : banner.submit_button_text || "SIGN UP & CLAIM"}
+                  </button>
+                  {leadResult ? <p className="mt-2 text-center text-xs font-black text-red-600">{leadResult.message}</p> : null}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[2147483000] bg-black/60 backdrop-blur-sm"
+      data-editor-popup-preview={editorPreview ? "true" : undefined}
+      style={{
+        width: "100vw",
+        height: "100dvh",
+        margin: 0,
+        padding: 0,
+      }}
+    >
+      <div
+        className="fixed flex items-center justify-center"
+        style={{
+          left: "50%",
+          top: "50%",
+          width: "calc(100vw - 32px)",
+          maxWidth:
+            previewDevice === "mobile"
+              ? "384px"
+              : editorPreview
+                ? "900px"
+                : "768px",
+          maxHeight: "calc(100dvh - 32px)",
+          transform: "translate(-50%, -50%)",
+          margin: 0,
+          padding: 0,
+          overflow: "visible",
+        }}
+      >
+        {popupCard}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function isHomeLikeSection(section: BusinessSection) {
   const typeSlug = slugifyMenuValue(String(section.section_type || ""));
   const titleSlug = slugifyMenuValue(String(section.title || ""));
@@ -5591,85 +7382,15 @@ function CurrentWebsitePreview({
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const openLayerFromHash = () => {
-      const layerSlug = slugifyMenuValue(
-        window.location.hash.replace(/^#/, ""),
-      );
-
-      if (!layerSlug) return;
-
-      const matchingSection = sections.find((section) => {
-        const sectionSlug =
-          slugifyMenuValue(
-            String(section.title || section.section_type || ""),
-          ) || section.section_type;
-
-        return (
-          section.content?.page_type !== "link-page" &&
-          sectionSlug === layerSlug
-        );
-      });
-
-      if (!matchingSection?.content?.collapsible) return;
-
-      setOpenedPreviewLayerIds((current) =>
-        current.includes(matchingSection.id)
-          ? current
-          : [...current, matchingSection.id],
-      );
-
-      window.setTimeout(() => {
-        document.getElementById(layerSlug)?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      }, 100);
-    };
-
-    const handlePreviewLayerClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const anchor = target?.closest(
-        "a[href^='#']",
-      ) as HTMLAnchorElement | null;
-
-      if (!anchor) return;
-
-      const href = anchor.getAttribute("href") || "";
-      const layerSlug = slugifyMenuValue(href.replace(/^#/, ""));
-      if (!layerSlug) return;
-
-      const matchingSection = sections.find((section) => {
-        const sectionSlug =
-          slugifyMenuValue(
-            String(section.title || section.section_type || ""),
-          ) || section.section_type;
-
-        return (
-          section.content?.page_type !== "link-page" &&
-          sectionSlug === layerSlug
-        );
-      });
-
-      if (!matchingSection?.content?.collapsible) return;
-
-      event.preventDefault();
-
-      if (window.location.hash !== `#${layerSlug}`) {
-        window.history.replaceState(null, "", `#${layerSlug}`);
-      }
-
-      openLayerFromHash();
-    };
-
-    openLayerFromHash();
-    window.addEventListener("hashchange", openLayerFromHash);
-    document.addEventListener("click", handlePreviewLayerClick);
-
-    return () => {
-      window.removeEventListener("hashchange", openLayerFromHash);
-      document.removeEventListener("click", handlePreviewLayerClick);
-    };
+    /*
+     * 작업 중 미리보기는 현재 브라우저 주소의 #hash를 따라가지 않습니다.
+     * 관리자 화면 URL에 남아 있던 #policy, #menu 등이 미리보기에서
+     * 숨김 레이어를 자동으로 펼치는 현상을 막습니다.
+     */
+    setOpenedPreviewLayerIds([]);
+    setPreviewPageSlug("");
   }, [sections]);
+
 
   useEffect(() => {
     const handleLinkedPagePreview = (event: MouseEvent) => {
@@ -5793,7 +7514,11 @@ function CurrentWebsitePreview({
           }}
         >
           <div
-            className="relative z-[100] w-full overflow-visible"
+            className={
+              device === "mobile"
+                ? "sticky top-0 z-[1000] w-full overflow-visible shadow-md"
+                : "relative z-[100] w-full overflow-visible"
+            }
             style={{
               backgroundColor: String(
                 websiteSettings.header_background_color || "#ffffff",
@@ -5818,6 +7543,12 @@ function CurrentWebsitePreview({
             </div>
           </div>
 
+          <BusinessWebsiteBanners
+            businessId={business.id}
+            previewDevice={device}
+            editorPreview
+          />
+
           {previewLinkPage ? (
             <div
               className="relative min-h-[60vh]"
@@ -5837,19 +7568,19 @@ function CurrentWebsitePreview({
               style={{
                 ...backgroundStyle(heroSection),
                 ...getSectionWidthStyle(heroSection),
+                minHeight: getVideoSectionMinHeight(
+                  heroSection,
+                  device,
+                ),
               }}
             >
-              {heroSection.content.background_type === "video" &&
-              heroSection.content.video_url ? (
-                <video
-                  className="absolute inset-0 h-full w-full object-cover object-center"
-                  src={heroSection.content.video_url}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                />
-              ) : null}
+              <VideoBackgroundLayer section={heroSection} />
+
+              <VideoOverlayContent
+                section={heroSection}
+                previewDevice={device}
+                editorPreview
+              />
 
               <div className="relative z-10">
                 {heroLayouts.map((layout) => (
@@ -6776,7 +8507,11 @@ export function PublicWebsiteRenderer({
         }}
       >
         <header
-          className="relative z-[100] w-full overflow-visible"
+          className={
+            device === "mobile"
+              ? "fixed inset-x-0 top-0 z-[1000] w-full overflow-visible shadow-md"
+              : "relative z-[100] w-full overflow-visible"
+          }
           style={{
             backgroundColor: String(
               websiteSettings.header_background_color || "#ffffff",
@@ -6800,6 +8535,27 @@ export function PublicWebsiteRenderer({
           </div>
         </header>
 
+        {device === "mobile" ? (
+          <div
+            aria-hidden="true"
+            className="w-full"
+            style={{
+              height: `${Math.max(
+                76,
+                Math.min(
+                  Number(websiteSettings.header_height_px || 104),
+                  104,
+                ),
+              )}px`,
+            }}
+          />
+        ) : null}
+
+        <BusinessWebsiteBanners
+          businessId={business.id}
+          previewDevice={device}
+        />
+
         {heroSection?.content?.page_type === "link-page" ? (
           <section
             id={normalizedSlug}
@@ -6821,19 +8577,18 @@ export function PublicWebsiteRenderer({
             style={{
               ...backgroundStyle(heroSection),
               ...getSectionWidthStyle(heroSection, true),
+              minHeight: getVideoSectionMinHeight(
+                heroSection,
+                device,
+              ),
             }}
           >
-            {heroSection.content.background_type === "video" &&
-            heroSection.content.video_url ? (
-              <video
-                className="absolute inset-0 h-full w-full object-cover object-center"
-                src={heroSection.content.video_url}
-                autoPlay
-                muted
-                loop
-                playsInline
-              />
-            ) : null}
+            <VideoBackgroundLayer section={heroSection} />
+            <VideoOverlayContent
+              section={heroSection}
+              previewDevice={device}
+            />
+
             <div className="relative z-10">
               {layouts.map((layout) => (
                 <ReadOnlyGrid
@@ -10822,7 +12577,7 @@ function LinkPageEditor({
 
     const response = await fetch(`/api/admin/businesses/${encodeURIComponent(businessId)}/website/upload`, {
       method: "POST",
-      headers: { "x-admin-key": adminKey },
+      credentials: "include",
       body: formData,
     });
     const result = await readApiResponse(response);
@@ -11615,7 +13370,7 @@ function RightPanel(props: {
       `/api/admin/businesses/${encodeURIComponent(props.businessId)}/website/upload`,
       {
         method: "POST",
-        headers: { "x-admin-key": props.adminKey },
+        credentials: "include",
         body: formData,
       },
     );
@@ -12208,6 +13963,182 @@ function RightPanel(props: {
                 </button>
               </div>
             </div>
+
+            <div className="mt-4 border-t border-violet-200 pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-violet-950">
+                    레이어 테두리
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-violet-700">
+                    공개 웹과 미리보기에 같은 테두리가 적용됩니다.
+                  </p>
+                </div>
+
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-violet-300 bg-white px-3 py-2 text-xs font-black text-violet-900">
+                  <input
+                    type="checkbox"
+                    checked={section.content?.layer_border_enabled === true}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(section.id, {
+                        layer_border_enabled: event.target.checked,
+                        layer_border_width:
+                          Number(section.content?.layer_border_width) || 1,
+                        layer_border_color:
+                          String(
+                            section.content?.layer_border_color || "#111827",
+                          ),
+                        layer_border_style:
+                          section.content?.layer_border_style || "solid",
+                        layer_border_radius:
+                          Number(section.content?.layer_border_radius) || 0,
+                      })
+                    }
+                    className="h-4 w-4 accent-violet-700"
+                  />
+                  사용
+                </label>
+              </div>
+
+              {section.content?.layer_border_enabled === true ? (
+                <div className="mt-4 space-y-4 rounded-2xl border border-violet-200 bg-white p-4">
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-xs font-black text-gray-700">
+                        두께
+                      </label>
+                      <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-800">
+                        {Math.max(
+                          0,
+                          Math.min(
+                            20,
+                            Number(section.content?.layer_border_width || 1),
+                          ),
+                        )}
+                        px
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min={0}
+                      max={20}
+                      step={1}
+                      value={Math.max(
+                        0,
+                        Math.min(
+                          20,
+                          Number(section.content?.layer_border_width || 1),
+                        ),
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(section.id, {
+                          layer_border_width: Number(event.target.value),
+                        })
+                      }
+                      className="mt-3 w-full accent-violet-700"
+                    />
+
+                    <input
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={Math.max(
+                        0,
+                        Math.min(
+                          20,
+                          Number(section.content?.layer_border_width || 1),
+                        ),
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(section.id, {
+                          layer_border_width: Math.max(
+                            0,
+                            Math.min(20, Number(event.target.value) || 0),
+                          ),
+                        })
+                      }
+                      className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm font-bold"
+                    />
+                  </div>
+
+                  <ColorInput
+                    label="테두리 색상"
+                    value={String(
+                      section.content?.layer_border_color || "#111827",
+                    )}
+                    onChange={(value) =>
+                      props.onUpdateSectionContent(section.id, {
+                        layer_border_color: value,
+                      })
+                    }
+                  />
+
+                  <Field label="테두리 모양">
+                    <select
+                      value={String(
+                        section.content?.layer_border_style || "solid",
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(section.id, {
+                          layer_border_style: event.target
+                            .value as SectionContent["layer_border_style"],
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    >
+                      <option value="solid">실선</option>
+                      <option value="dashed">긴 점선</option>
+                      <option value="dotted">점선</option>
+                      <option value="double">이중선</option>
+                    </select>
+                  </Field>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-xs font-black text-gray-700">
+                        모서리 둥글기
+                      </label>
+                      <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-800">
+                        {Math.max(
+                          0,
+                          Math.min(
+                            80,
+                            Number(section.content?.layer_border_radius || 0),
+                          ),
+                        )}
+                        px
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min={0}
+                      max={80}
+                      step={1}
+                      value={Math.max(
+                        0,
+                        Math.min(
+                          80,
+                          Number(section.content?.layer_border_radius || 0),
+                        ),
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(section.id, {
+                          layer_border_radius: Number(event.target.value),
+                        })
+                      }
+                      className="mt-3 w-full accent-violet-700"
+                    />
+                  </div>
+
+                  <div
+                    className="h-16 w-full bg-gray-50"
+                    style={getSectionBorderStyle(section)}
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>
@@ -12508,7 +14439,10 @@ function RightPanel(props: {
             <div>
               <p className="text-sm font-black text-gray-800">무엇을 넣을까요?</p>
               <p className="mt-0.5 text-xs text-gray-500">
-                현재 선택: {getCellLabel(selectedCell.type)}
+                현재 선택:{" "}
+                {heroSection?.content?.background_type === "video"
+                  ? "동영상 Hero"
+                  : getCellLabel(selectedCell.type)}
               </p>
             </div>
             <span
@@ -12523,6 +14457,81 @@ function RightPanel(props: {
           {cellTypePickerOpen ? (
             <div className="border-t border-gray-200 p-3">
               <div className="grid grid-cols-3 gap-2">
+                {area !== "header" && heroSection ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      props.onUpdateSectionContent(heroSection.id, {
+                        background_type: "video",
+                        video_overlay_enabled: true,
+                        video_overlay_color:
+                          String(
+                            heroSection.content?.video_overlay_color ||
+                              "#000000",
+                          ),
+                        video_overlay_opacity:
+                          Number(
+                            heroSection.content?.video_overlay_opacity ??
+                              0.42,
+                          ),
+                        video_content_horizontal:
+                          heroSection.content?.video_content_horizontal ||
+                          "center",
+                        video_content_vertical:
+                          heroSection.content?.video_content_vertical ||
+                          "middle",
+                        video_text_align:
+                          heroSection.content?.video_text_align ||
+                          "center",
+                        video_min_height_desktop:
+                          Number(
+                            heroSection.content
+                              ?.video_min_height_desktop ?? 680,
+                          ),
+                        video_min_height_mobile:
+                          Number(
+                            heroSection.content
+                              ?.video_min_height_mobile ?? 520,
+                          ),
+                        video_headline_color:
+                          String(
+                            heroSection.content?.video_headline_color ||
+                              "#ffffff",
+                          ),
+                        video_description_color:
+                          String(
+                            heroSection.content
+                              ?.video_description_color || "#ffffff",
+                          ),
+                      });
+
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        {
+                          type: "empty",
+                          text: "",
+                          rich_text_html: "",
+                          background_color: "transparent",
+                        },
+                        selection.layoutId,
+                      );
+
+                      setCellTypePickerOpen(false);
+                    }}
+                    className={`rounded-xl border p-2 text-center ${
+                      heroSection.content?.background_type === "video"
+                        ? "border-purple-600 bg-purple-600 text-white"
+                        : "border-purple-200 bg-purple-50 text-purple-800 hover:border-purple-400"
+                    }`}
+                  >
+                    <span className="block text-xl">🎬</span>
+                    <span className="mt-1 block text-[11px] font-black leading-tight">
+                      동영상 배경
+                    </span>
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -12615,6 +14624,608 @@ function RightPanel(props: {
             </div>
           ) : null}
         </div>
+
+        {area !== "header" &&
+        heroSection?.content?.background_type === "video" ? (
+          <div className="mt-4 space-y-5 rounded-2xl border-2 border-purple-300 bg-purple-50 p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-purple-950">
+                  🎬 동영상 Hero 편집
+                </p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-purple-700">
+                  파일을 첨부하거나 URL을 입력하고, 위에 올라갈 글씨·버튼을 설정하세요.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  props.onUpdateSectionContent(heroSection.id, {
+                    background_type: "color",
+                    background_color:
+                      heroSection.content?.background_color || "#111827",
+                  })
+                }
+                className="shrink-0 rounded-full border border-purple-300 bg-white px-3 py-1.5 text-xs font-black text-purple-800"
+              >
+                동영상 해제
+              </button>
+            </div>
+
+            <VideoHeroUploader
+              businessId={businessId}
+              section={heroSection}
+              onUpdate={(patch) =>
+                props.onUpdateSectionContent(
+                  heroSection.id,
+                  patch,
+                )
+              }
+            />
+
+            <div className="rounded-xl bg-white p-3">
+              <p className="text-xs font-black text-gray-700">
+                또는 직접 동영상 URL 입력
+              </p>
+            </div>
+
+            <Field label="동영상 URL">
+              <input
+                value={heroSection.content.video_url || ""}
+                onChange={(event) =>
+                  props.onUpdateSectionContent(heroSection.id, {
+                    video_url: event.target.value,
+                  })
+                }
+                placeholder="https://.../hero-video.mp4"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+            </Field>
+
+            <Field label="동영상 로딩 전 포스터 이미지 URL">
+              <input
+                value={heroSection.content.video_poster_url || ""}
+                onChange={(event) =>
+                  props.onUpdateSectionContent(heroSection.id, {
+                    video_poster_url: event.target.value,
+                  })
+                }
+                placeholder="https://.../poster.webp"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+              />
+            </Field>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="PC 동영상 레이어 높이">
+                <div className="space-y-2">
+                  <input
+                    type="range"
+                    min={300}
+                    max={1200}
+                    step={10}
+                    value={Math.max(
+                      300,
+                      Math.min(
+                        1200,
+                        Number(
+                          heroSection.content.video_min_height_desktop ??
+                            680,
+                        ),
+                      ),
+                    )}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_min_height_desktop: Number(
+                          event.target.value,
+                        ),
+                      })
+                    }
+                    className="w-full accent-purple-700"
+                  />
+                  <input
+                    type="number"
+                    min={300}
+                    max={1200}
+                    value={Number(
+                      heroSection.content.video_min_height_desktop ??
+                        680,
+                    )}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_min_height_desktop: Math.max(
+                          300,
+                          Math.min(
+                            1200,
+                            Number(event.target.value) || 680,
+                          ),
+                        ),
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                  />
+                </div>
+              </Field>
+
+              <Field label="모바일 동영상 레이어 높이">
+                <div className="space-y-2">
+                  <input
+                    type="range"
+                    min={240}
+                    max={900}
+                    step={10}
+                    value={Math.max(
+                      240,
+                      Math.min(
+                        900,
+                        Number(
+                          heroSection.content.video_min_height_mobile ??
+                            520,
+                        ),
+                      ),
+                    )}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_min_height_mobile: Number(
+                          event.target.value,
+                        ),
+                      })
+                    }
+                    className="w-full accent-purple-700"
+                  />
+                  <input
+                    type="number"
+                    min={240}
+                    max={900}
+                    value={Number(
+                      heroSection.content.video_min_height_mobile ??
+                        520,
+                    )}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_min_height_mobile: Math.max(
+                          240,
+                          Math.min(
+                            900,
+                            Number(event.target.value) || 520,
+                          ),
+                        ),
+                      })
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                  />
+                </div>
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="동영상 좌우 중심">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Number(
+                    heroSection.content.video_object_position_x ?? 50,
+                  )}
+                  onChange={(event) =>
+                    props.onUpdateSectionContent(heroSection.id, {
+                      video_object_position_x: Number(
+                        event.target.value,
+                      ),
+                    })
+                  }
+                  className="w-full accent-purple-700"
+                />
+              </Field>
+
+              <Field label="동영상 상하 중심">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Number(
+                    heroSection.content.video_object_position_y ?? 50,
+                  )}
+                  onChange={(event) =>
+                    props.onUpdateSectionContent(heroSection.id, {
+                      video_object_position_y: Number(
+                        event.target.value,
+                      ),
+                    })
+                  }
+                  className="w-full accent-purple-700"
+                />
+              </Field>
+            </div>
+
+            <label className="flex items-center justify-between rounded-xl bg-white p-3">
+              <span className="text-sm font-black text-gray-800">
+                어두운 막과 글씨 표시
+              </span>
+              <input
+                type="checkbox"
+                checked={
+                  heroSection.content.video_overlay_enabled !== false
+                }
+                onChange={(event) =>
+                  props.onUpdateSectionContent(heroSection.id, {
+                    video_overlay_enabled: event.target.checked,
+                  })
+                }
+                className="h-5 w-5 accent-purple-700"
+              />
+            </label>
+
+            {heroSection.content.video_overlay_enabled !== false ? (
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ColorInput
+                    label="어두운 막 색상"
+                    value={String(
+                      heroSection.content.video_overlay_color ||
+                        "#000000",
+                    )}
+                    onChange={(value) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_overlay_color: value,
+                      })
+                    }
+                  />
+
+                  <Field label="어두운 정도">
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={95}
+                        step={1}
+                        value={Math.round(
+                          Math.max(
+                            0,
+                            Math.min(
+                              0.95,
+                              Number(
+                                heroSection.content
+                                  .video_overlay_opacity ?? 0.42,
+                              ),
+                            ),
+                          ) * 100,
+                        )}
+                        onChange={(event) =>
+                          props.onUpdateSectionContent(
+                            heroSection.id,
+                            {
+                              video_overlay_opacity:
+                                Number(event.target.value) / 100,
+                            },
+                          )
+                        }
+                        className="w-full accent-purple-700"
+                      />
+                      <p className="text-right text-xs font-black text-purple-700">
+                        {Math.round(
+                          Number(
+                            heroSection.content
+                              .video_overlay_opacity ?? 0.42,
+                          ) * 100,
+                        )}
+                        %
+                      </p>
+                    </div>
+                  </Field>
+                </div>
+
+                <Field label="작은 윗문구">
+                  <input
+                    value={heroSection.content.subheadline || ""}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        subheadline: event.target.value,
+                      })
+                    }
+                    placeholder="AUTHENTIC KOREAN BBQ"
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                  />
+                </Field>
+
+                <Field label="큰 제목">
+                  <textarea
+                    value={heroSection.content.headline || ""}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        headline: event.target.value,
+                      })
+                    }
+                    placeholder={"WELCOME TO\nTHE ONE"}
+                    rows={3}
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                  />
+                </Field>
+
+                <Field label="설명 문구">
+                  <textarea
+                    value={heroSection.content.description || ""}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        description: event.target.value,
+                      })
+                    }
+                    placeholder="Where Flavor Meets Fire"
+                    rows={3}
+                    className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                  />
+                </Field>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Field label="가로 위치">
+                    <select
+                      value={
+                        heroSection.content.video_content_horizontal ||
+                        "center"
+                      }
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_content_horizontal: event.target
+                            .value as SectionContent["video_content_horizontal"],
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    >
+                      <option value="left">왼쪽</option>
+                      <option value="center">가운데</option>
+                      <option value="right">오른쪽</option>
+                    </select>
+                  </Field>
+
+                  <Field label="세로 위치">
+                    <select
+                      value={
+                        heroSection.content.video_content_vertical ||
+                        "middle"
+                      }
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_content_vertical: event.target
+                            .value as SectionContent["video_content_vertical"],
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    >
+                      <option value="top">위</option>
+                      <option value="middle">가운데</option>
+                      <option value="bottom">아래</option>
+                    </select>
+                  </Field>
+
+                  <Field label="글씨 정렬">
+                    <select
+                      value={
+                        heroSection.content.video_text_align || "center"
+                      }
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_text_align: event.target
+                            .value as TextAlign,
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    >
+                      <option value="left">왼쪽</option>
+                      <option value="center">가운데</option>
+                      <option value="right">오른쪽</option>
+                    </select>
+                  </Field>
+                </div>
+
+                <Field label="글씨 영역 최대 넓이">
+                  <input
+                    type="range"
+                    min={260}
+                    max={1100}
+                    step={10}
+                    value={Number(
+                      heroSection.content.video_content_max_width ?? 820,
+                    )}
+                    onChange={(event) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_content_max_width: Number(
+                          event.target.value,
+                        ),
+                      })
+                    }
+                    className="w-full accent-purple-700"
+                  />
+                </Field>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ColorInput
+                    label="큰 제목 색상"
+                    value={String(
+                      heroSection.content.video_headline_color ||
+                        "#ffffff",
+                    )}
+                    onChange={(value) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_headline_color: value,
+                      })
+                    }
+                  />
+                  <ColorInput
+                    label="설명 색상"
+                    value={String(
+                      heroSection.content.video_description_color ||
+                        "#ffffff",
+                    )}
+                    onChange={(value) =>
+                      props.onUpdateSectionContent(heroSection.id, {
+                        video_description_color: value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Field label="PC 제목 크기">
+                    <input
+                      type="number"
+                      min={22}
+                      max={120}
+                      value={Number(
+                        heroSection.content.video_headline_font_size ??
+                          68,
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_headline_font_size: Number(
+                            event.target.value,
+                          ),
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                    />
+                  </Field>
+
+                  <Field label="모바일 제목 크기">
+                    <input
+                      type="number"
+                      min={18}
+                      max={80}
+                      value={Number(
+                        heroSection.content
+                          .video_headline_mobile_font_size ?? 38,
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_headline_mobile_font_size: Number(
+                            event.target.value,
+                          ),
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                    />
+                  </Field>
+
+                  <Field label="설명 크기">
+                    <input
+                      type="number"
+                      min={11}
+                      max={42}
+                      value={Number(
+                        heroSection.content
+                          .video_description_font_size ?? 18,
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_description_font_size: Number(
+                            event.target.value,
+                          ),
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2"
+                    />
+                  </Field>
+                </div>
+
+                <div className="rounded-2xl border border-purple-200 bg-white p-4">
+                  <p className="text-sm font-black text-gray-900">
+                    동영상 위 버튼
+                  </p>
+
+                  <Field label="버튼 문구">
+                    <input
+                      value={heroSection.content.button_text || ""}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          button_text: event.target.value,
+                        })
+                      }
+                      placeholder="VIEW MENU"
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    />
+                  </Field>
+
+                  <Field label="버튼 링크">
+                    <input
+                      value={heroSection.content.button_url || ""}
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          button_url: event.target.value,
+                        })
+                      }
+                      placeholder="/business/90/website/menu 또는 https://..."
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    />
+                  </Field>
+
+                  <Field label="버튼 모양">
+                    <select
+                      value={
+                        heroSection.content.video_button_style ||
+                        "solid"
+                      }
+                      onChange={(event) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_button_style: event.target
+                            .value as SectionContent["video_button_style"],
+                        })
+                      }
+                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                    >
+                      <option value="solid">채움</option>
+                      <option value="outline">테두리</option>
+                      <option value="pill">둥근 버튼</option>
+                    </select>
+                  </Field>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <ColorInput
+                      label="버튼 배경"
+                      value={String(
+                        heroSection.content
+                          .video_button_background_color || "#ffffff",
+                      )}
+                      onChange={(value) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_button_background_color: value,
+                        })
+                      }
+                    />
+                    <ColorInput
+                      label="버튼 글씨"
+                      value={String(
+                        heroSection.content.video_button_text_color ||
+                          "#111827",
+                      )}
+                      onChange={(value) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_button_text_color: value,
+                        })
+                      }
+                    />
+                    <ColorInput
+                      label="버튼 테두리"
+                      value={String(
+                        heroSection.content
+                          .video_button_border_color || "#ffffff",
+                      )}
+                      onChange={(value) =>
+                        props.onUpdateSectionContent(heroSection.id, {
+                          video_button_border_color: value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-purple-100 p-3 text-xs font-bold leading-5 text-purple-900">
+                  동영상 위 글씨는 별도 오버레이로 표시됩니다. 기존 레이아웃
+                  칸도 그대로 사용할 수 있으므로, 필요하지 않은 기존 제목 칸은
+                  빈칸으로 바꾸거나 삭제하면 됩니다.
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
 
         {selectedCell.type === "phone" ? (
           <button
@@ -14135,7 +16746,17 @@ function RightPanel(props: {
         </Field>
         {heroSection.content.background_type === "image" ? <Field label="배경 사진 URL"><input value={heroSection.content.image_url || ""} onChange={(event) => props.onUpdateSectionContent(heroSection.id, { image_url: event.target.value })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5" /></Field> : null}
         {heroSection.content.background_type === "gradient" || !heroSection.content.background_type ? <div className="mt-4 grid grid-cols-2 gap-3"><ColorInput label="시작색" value={heroSection.content.gradient_from || "#111827"} onChange={(value) => props.onUpdateSectionContent(heroSection.id, { gradient_from: value })} /><ColorInput label="끝색" value={heroSection.content.gradient_to || "#d97706"} onChange={(value) => props.onUpdateSectionContent(heroSection.id, { gradient_to: value })} /></div> : null}
-        {heroSection.content.background_type === "video" ? <Field label="동영상 URL"><input value={heroSection.content.video_url || ""} onChange={(event) => props.onUpdateSectionContent(heroSection.id, { video_url: event.target.value })} className="w-full rounded-xl border border-gray-300 px-3 py-2.5" /></Field> : null}
+        {heroSection.content.background_type === "video" ? (
+          <div className="mt-5 rounded-2xl border border-purple-200 bg-purple-50 p-4">
+            <p className="text-sm font-black text-purple-950">
+              🎬 동영상 Hero가 선택되어 있습니다.
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-purple-700">
+              동영상 URL, 포스터, 글씨와 버튼은 위쪽의
+              “무엇을 넣을까요?” 아래 동영상 Hero 편집기에서 설정합니다.
+            </p>
+          </div>
+        ) : null}
         <p className="mt-6 rounded-2xl bg-blue-50 p-3 text-sm leading-6 text-blue-800">현재 레이어 전체 배경은 여기서 한 번 선택합니다. 각 가로 레이아웃 안의 칸을 클릭하면 세로 칸 나누기·합치기와 내용 편집을 할 수 있습니다. 아래 “레이아웃 추가”를 누르면 새 가로칸이 계속 추가됩니다.</p>
       </div>
     );
@@ -14154,6 +16775,576 @@ function RightPanel(props: {
   );
 }
 
+
+
+
+type UploadedWebsiteVideo = {
+  name: string;
+  path: string;
+  url: string;
+  size?: number | null;
+  created_at?: string | null;
+};
+
+function VideoHeroUploader({
+  businessId,
+  section,
+  onUpdate,
+}: {
+  businessId: string;
+  section: BusinessSection;
+  onUpdate: (patch: Partial<SectionContent>) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [videoLibrary, setVideoLibrary] =
+    useState<UploadedWebsiteVideo[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState("");
+  const [deletingPath, setDeletingPath] = useState("");
+
+  const currentVideoUrl = String(
+    section.content?.video_url || "",
+  ).trim();
+
+  const loadVideoLibrary = useCallback(async () => {
+    setLibraryLoading(true);
+    setLibraryError("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/businesses/${encodeURIComponent(
+          businessId,
+        )}/website/videos`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `동영상 목록 조회 실패 · HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      setVideoLibrary(
+        Array.isArray(result.videos)
+          ? (result.videos as UploadedWebsiteVideo[])
+          : [],
+      );
+    } catch (error) {
+      setLibraryError(
+        error instanceof Error
+          ? error.message
+          : "동영상 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setLibraryLoading(false);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    void loadVideoLibrary();
+  }, [loadVideoLibrary]);
+
+  function validateVideo(file: File) {
+    const allowedTypes = [
+      "video/mp4",
+      "video/webm",
+    ];
+
+    const lowerName = file.name.toLowerCase();
+    const allowedExtension =
+      lowerName.endsWith(".mp4") ||
+      lowerName.endsWith(".webm");
+
+    if (
+      !allowedTypes.includes(file.type) &&
+      !allowedExtension
+    ) {
+      return "MP4 또는 WebM 동영상만 첨부할 수 있습니다.";
+    }
+
+    const maxBytes = 50 * 1024 * 1024;
+
+    if (file.size > maxBytes) {
+      return "동영상은 50MB 이하여야 합니다.";
+    }
+
+    return "";
+  }
+
+  async function uploadVideo(file: File) {
+    const validationError = validateVideo(file);
+
+    if (validationError) {
+      setUploadError(validationError);
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    setUploadError("");
+    setUploadedFileName(file.name);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("kind", "website-video");
+
+    try {
+      const result = await new Promise<Record<string, unknown>>(
+        (resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+
+          xhr.open(
+            "POST",
+            `/api/admin/businesses/${encodeURIComponent(
+              businessId,
+            )}/website/upload`,
+          );
+
+          xhr.withCredentials = true;
+
+          xhr.upload.addEventListener(
+            "progress",
+            (event) => {
+              if (!event.lengthComputable) return;
+
+              setUploadProgress(
+                Math.max(
+                  0,
+                  Math.min(
+                    100,
+                    Math.round(
+                      (event.loaded / event.total) * 100,
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+
+          xhr.addEventListener("load", () => {
+            let parsed: Record<string, unknown> = {};
+
+            try {
+              parsed = xhr.responseText
+                ? JSON.parse(xhr.responseText)
+                : {};
+            } catch {
+              parsed = {};
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(parsed);
+              return;
+            }
+
+            reject(
+              new Error(
+                String(
+                  parsed.error ||
+                    parsed.message ||
+                    `동영상 업로드 실패 · HTTP ${xhr.status}`,
+                ),
+              ),
+            );
+          });
+
+          xhr.addEventListener("error", () => {
+            reject(
+              new Error(
+                "네트워크 문제로 동영상을 업로드하지 못했습니다.",
+              ),
+            );
+          });
+
+          xhr.addEventListener("abort", () => {
+            reject(
+              new Error("동영상 업로드가 취소되었습니다."),
+            );
+          });
+
+          xhr.send(formData);
+        },
+      );
+
+      const videoUrl = String(
+        result.url || result.publicUrl || "",
+      ).trim();
+
+      if (!videoUrl) {
+        throw new Error(
+          "업로드는 완료됐지만 동영상 URL을 받지 못했습니다.",
+        );
+      }
+
+      onUpdate({
+        background_type: "video",
+        video_url: videoUrl,
+        video_overlay_enabled:
+          section.content?.video_overlay_enabled !== false,
+      });
+
+      setUploadProgress(100);
+      await loadVideoLibrary();
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : "동영상 업로드에 실패했습니다.",
+      );
+      setUploadedFileName("");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function useExistingVideo(video: UploadedWebsiteVideo) {
+    onUpdate({
+      background_type: "video",
+      video_url: video.url,
+      video_overlay_enabled:
+        section.content?.video_overlay_enabled !== false,
+    });
+
+    setUploadError("");
+  }
+
+  async function deleteExistingVideo(
+    video: UploadedWebsiteVideo,
+  ) {
+    const isCurrent = currentVideoUrl === video.url;
+
+    const confirmed = window.confirm(
+      `${video.name} 파일을 Storage에서 완전히 삭제할까요?` +
+        (isCurrent
+          ? "\n\n현재 Hero에서 사용 중이므로 연결도 함께 제거됩니다."
+          : ""),
+    );
+
+    if (!confirmed) return;
+
+    setDeletingPath(video.path);
+    setLibraryError("");
+
+    try {
+      const response = await fetch(
+        `/api/admin/businesses/${encodeURIComponent(
+          businessId,
+        )}/website/videos`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            path: video.path,
+          }),
+        },
+      );
+
+      const result = await readApiResponse(response);
+
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `동영상 삭제 실패 · HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      if (isCurrent) {
+        onUpdate({
+          video_url: "",
+        });
+      }
+
+      await loadVideoLibrary();
+    } catch (error) {
+      setLibraryError(
+        error instanceof Error
+          ? error.message
+          : "동영상을 삭제하지 못했습니다.",
+      );
+    } finally {
+      setDeletingPath("");
+    }
+  }
+
+  function removeVideoConnection() {
+    const confirmed = window.confirm(
+      "현재 동영상 Hero 연결만 제거할까요?\n\nStorage의 원본 파일은 그대로 남습니다.",
+    );
+
+    if (!confirmed) return;
+
+    onUpdate({
+      video_url: "",
+    });
+
+    setUploadedFileName("");
+    setUploadProgress(0);
+    setUploadError("");
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border-2 border-dashed border-purple-300 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-gray-950">
+              동영상 파일 첨부
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
+              MP4 또는 WebM · 최대 50MB
+            </p>
+          </div>
+
+          {currentVideoUrl ? (
+            <button
+              type="button"
+              onClick={removeVideoConnection}
+              disabled={uploading}
+              className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50"
+            >
+              연결만 제거
+            </button>
+          ) : null}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/mp4,video/webm,.mp4,.webm"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+
+            if (file) {
+              void uploadVideo(file);
+            }
+
+            event.currentTarget.value = "";
+          }}
+        />
+
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            if (!uploading) setDragging(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            if (!uploading) setDragging(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragging(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+
+            if (uploading) return;
+
+            const file = event.dataTransfer.files?.[0];
+
+            if (file) {
+              void uploadVideo(file);
+            }
+          }}
+          className={`mt-4 flex min-h-[132px] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-6 text-center transition ${
+            dragging
+              ? "border-purple-600 bg-purple-100"
+              : "border-purple-200 bg-purple-50 hover:border-purple-400"
+          } disabled:cursor-wait disabled:opacity-70`}
+        >
+          <span className="text-4xl">
+            {uploading ? "⏳" : "🎬"}
+          </span>
+          <span className="mt-2 text-sm font-black text-purple-950">
+            {uploading
+              ? "동영상을 업로드하는 중입니다..."
+              : currentVideoUrl
+                ? "새 동영상으로 교체"
+                : "동영상 선택 또는 여기에 끌어놓기"}
+          </span>
+          <span className="mt-1 text-xs font-semibold text-purple-600">
+            컴퓨터·휴대폰에서 MP4/WebM 파일 선택
+          </span>
+        </button>
+
+        {uploading || uploadProgress > 0 ? (
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-xs font-black text-gray-600">
+              <span className="truncate">
+                {uploadedFileName || "동영상"}
+              </span>
+              <span>{uploadProgress}%</span>
+            </div>
+
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-purple-100">
+              <div
+                className="h-full rounded-full bg-purple-600 transition-[width] duration-200"
+                style={{
+                  width: `${uploadProgress}%`,
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {uploadError ? (
+          <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">
+            {uploadError}
+          </p>
+        ) : null}
+
+        {currentVideoUrl ? (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-black">
+            <video
+              key={currentVideoUrl}
+              src={currentVideoUrl}
+              poster={
+                String(
+                  section.content?.video_poster_url || "",
+                ) || undefined
+              }
+              controls
+              muted
+              playsInline
+              preload="metadata"
+              className="max-h-[320px] w-full object-contain"
+            />
+
+            <div className="border-t border-white/10 bg-gray-950 px-3 py-2">
+              <p className="truncate text-[11px] font-semibold text-white/70">
+                {currentVideoUrl}
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border border-gray-200 bg-white">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+          <div>
+            <p className="text-sm font-black text-gray-950">
+              기존 업로드 동영상
+            </p>
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              다시 업로드하지 않고 바로 선택할 수 있습니다.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void loadVideoLibrary()}
+            disabled={libraryLoading}
+            className="rounded-full border border-gray-300 bg-white px-3 py-1.5 text-xs font-black text-gray-700 disabled:opacity-50"
+          >
+            {libraryLoading ? "불러오는 중..." : "새로고침"}
+          </button>
+        </div>
+
+        {libraryError ? (
+          <p className="m-4 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+            {libraryError}
+          </p>
+        ) : null}
+
+        {libraryLoading && videoLibrary.length === 0 ? (
+          <div className="p-6 text-center text-sm font-bold text-gray-500">
+            동영상 목록을 불러오는 중입니다...
+          </div>
+        ) : videoLibrary.length === 0 ? (
+          <div className="p-6 text-center text-sm font-bold text-gray-400">
+            아직 업로드한 동영상이 없습니다.
+          </div>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2">
+            {videoLibrary.map((video) => {
+              const selected = currentVideoUrl === video.url;
+
+              return (
+                <div
+                  key={video.path}
+                  className={`overflow-hidden rounded-2xl border ${
+                    selected
+                      ? "border-purple-600 ring-2 ring-purple-100"
+                      : "border-gray-200"
+                  }`}
+                >
+                  <div className="aspect-video bg-black">
+                    <video
+                      src={video.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+
+                  <div className="p-3">
+                    <p className="truncate text-xs font-black text-gray-900">
+                      {video.name}
+                    </p>
+
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => useExistingVideo(video)}
+                        className={`flex-1 rounded-xl px-3 py-2 text-xs font-black ${
+                          selected
+                            ? "bg-purple-100 text-purple-800"
+                            : "bg-purple-700 text-white"
+                        }`}
+                      >
+                        {selected ? "사용 중" : "이 영상 사용"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void deleteExistingVideo(video)
+                        }
+                        disabled={deletingPath === video.path}
+                        className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 disabled:opacity-50"
+                      >
+                        {deletingPath === video.path
+                          ? "삭제 중"
+                          : "삭제"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function LogoImageUploader({
   businessId,
@@ -14204,9 +17395,7 @@ function LogoImageUploader({
         )}/website/upload`,
         {
           method: "POST",
-          headers: {
-            "x-admin-key": adminKey,
-          },
+          credentials: "include",
           body: formData,
         },
       );
@@ -14842,7 +18031,7 @@ function TitleCellEditor({
         )}/website/upload`,
         {
           method: "POST",
-          headers: { "x-admin-key": adminKey },
+          credentials: "include",
           body: formData,
         },
       );
@@ -14887,9 +18076,7 @@ function TitleCellEditor({
       )}/website/images`,
       {
         method: "GET",
-        headers: {
-          "x-admin-key": adminKey,
-        },
+        credentials: "include",
         cache: "no-store",
       },
     );

@@ -215,14 +215,13 @@ export async function POST(
         file.name.replace(/\.[^.]+$/, ""),
       ) || "file";
 
-    const folder =
-      isVideo && kind === "website-video"
-        ? "videos"
-        : isPdf
-          ? "pdf"
-          : kind === "link-page-image"
-            ? "link-pages"
-            : "images";
+    const folder = isVideo
+      ? "videos"
+      : isPdf
+        ? "pdf"
+        : kind === "link-page-image"
+          ? "link-pages"
+          : "images";
 
     const path =
       `${businessId}/${folder}/${Date.now()}-` +

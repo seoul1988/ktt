@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireBusinessApiAccess } from "@/lib/requireBusinessApiAccess";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const dynamic = "force-dynamic";
@@ -52,17 +53,6 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-function unauthorized() {
-  return jsonResponse({ error: "Unauthorized." }, 401);
-}
-
-function isAuthorized(request: NextRequest) {
-  const expectedKey = process.env.WEBSITE_BUILDER_ADMIN_KEY;
-  const receivedKey = request.headers.get("x-admin-key");
-
-  if (!expectedKey || !receivedKey) return false;
-  return receivedKey === expectedKey;
-}
 
 function parseBusinessId(value: string) {
   const id = Number(value);
@@ -336,15 +326,16 @@ async function ensureDefaultSections(
   }
 }
 
-export async function GET(request: NextRequest, context: RouteContext) {
-  if (!isAuthorized(request)) return unauthorized();
-
+export async function GET(_request: NextRequest, context: RouteContext) {
   const { id: rawId } = await context.params;
   const businessId = parseBusinessId(rawId);
 
   if (!businessId) {
     return jsonResponse({ error: "Invalid business ID." }, 400);
   }
+
+  const access = await requireBusinessApiAccess(businessId);
+  if (!access.ok) return access.response;
 
   try {
     const { data: business, error: businessError } = await supabaseAdmin
@@ -396,14 +387,15 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  if (!isAuthorized(request)) return unauthorized();
-
   const { id: rawId } = await context.params;
   const businessId = parseBusinessId(rawId);
 
   if (!businessId) {
     return jsonResponse({ error: "Invalid business ID." }, 400);
   }
+
+  const access = await requireBusinessApiAccess(businessId);
+  if (!access.ok) return access.response;
 
   try {
     const body = await request.json();
