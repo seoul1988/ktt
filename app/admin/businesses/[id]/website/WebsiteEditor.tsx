@@ -132,6 +132,11 @@ type GridCell = {
   button_height_px?: number;
   button_no_wrap?: boolean;
   phone_number?: string;
+  map_title?: string;
+  map_address?: string;
+  map_phone?: string;
+  map_email?: string;
+  map_sns_items?: SnsItem[];
   sns_items?: SnsItem[];
   sns_icon_size_px?: number;
   sns_icon_gap_px?: number;
@@ -413,6 +418,8 @@ const SECTION_LABELS: Record<string, string> = {
   hours: "Business Hours",
   map: "Map",
   contact: "Contact",
+  footer: "Footer",
+  privacy: "Privacy",
 };
 
 function createId(prefix = "cell") {
@@ -1499,6 +1506,100 @@ function getBusinessMapQuery(business: Business) {
   const businessName = String(business.name || "").trim();
 
   return [businessName, address].filter(Boolean).join(", ");
+}
+
+
+function getBusinessContactValue(business: Business, keys: string[]) {
+  for (const key of keys) {
+    const value = business[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function getDefaultLocationSnsItems(business: Business): SnsItem[] {
+  const sources: Array<[SnsPlatform, string[], string]> = [
+    ["facebook", ["facebook_url", "facebook", "facebook_link"], "Facebook"],
+    ["instagram", ["instagram_url", "instagram", "instagram_link"], "Instagram"],
+    ["x", ["x_url", "twitter_url", "x", "twitter"], "X"],
+    ["kakao", ["kakao_id", "kakao_url", "kakaotalk_id"], "KakaoTalk"],
+  ];
+
+  return sources.map(([platform, keys, label]) => ({
+    id: createId("map-sns"),
+    platform,
+    url: getBusinessContactValue(business, keys),
+    label,
+  }));
+}
+
+function normalizeLocationSnsItems(cell: GridCell, business: Business) {
+  const saved = Array.isArray(cell.map_sns_items) && cell.map_sns_items.length
+    ? cell.map_sns_items
+    : getDefaultLocationSnsItems(business);
+
+  const required: SnsPlatform[] = ["facebook", "instagram", "x", "kakao"];
+  return required.map((platform) => {
+    const found = saved.find((item) => item.platform === platform);
+    const label = SNS_PLATFORM_OPTIONS.find((item) => item.value === platform)?.label || platform;
+    return found || { id: createId("map-sns"), platform, url: "", label };
+  });
+}
+
+function normalizeKakaoHref(value: string) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://open.kakao.com/o/${encodeURIComponent(raw.replace(/^@/, ""))}`;
+}
+
+function BusinessLocationSection({
+  business,
+  cell,
+  compact = false,
+}: {
+  business: Business;
+  cell: GridCell;
+  compact?: boolean;
+}) {
+  const address = String(cell.map_address || getBusinessAddress(business)).trim();
+  const phone = String(
+    cell.map_phone || getBusinessContactValue(business, ["phone", "phone_number", "telephone"]),
+  ).trim();
+  const email = String(
+    cell.map_email || getBusinessContactValue(business, ["email", "business_email", "contact_email"]),
+  ).trim();
+  const title = String(cell.map_title || "LOCATION").trim() || "LOCATION";
+  const snsItems = normalizeLocationSnsItems(cell, business).filter((item) => String(item.url || "").trim());
+  const mapBusiness: Business = {
+    ...business,
+    address: address || business.address,
+    street_address: address || business.street_address,
+  };
+
+  return (
+    <div className={`grid h-full min-h-[320px] w-full overflow-hidden rounded-xl bg-white ${compact ? "grid-cols-1" : "grid-cols-[minmax(260px,38%)_1fr]"}`}>
+      <div className="flex min-h-[260px] flex-col justify-center px-6 py-7 sm:px-8">
+        <h2 className="text-2xl font-black tracking-[0.12em] text-gray-950 sm:text-3xl">{title}</h2>
+        <div className="mt-6 space-y-4 text-sm font-semibold leading-6 text-gray-700">
+          {address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>📍</span><span>{address}</span></a> : null}
+          {phone ? <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`} className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>☎</span><span>{phone}</span></a> : null}
+          {email ? <a href={`mailto:${email}`} className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>✉</span><span className="break-all">{email}</span></a> : null}
+        </div>
+        {snsItems.length ? (
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            {snsItems.map((item) => {
+              const href = item.platform === "kakao" ? normalizeKakaoHref(item.url) : normalizeExternalUrl(item.url);
+              return <a key={item.id} href={href} target="_blank" rel="noreferrer" title={item.label || item.platform} className="inline-flex items-center justify-center rounded-full no-underline transition hover:scale-110"><SnsPlatformLogo platform={item.platform} size={30} /></a>;
+            })}
+          </div>
+        ) : null}
+      </div>
+      <div className={`${compact ? "min-h-[300px]" : "min-h-[320px]"} p-1`}>
+        <BusinessLocationMap business={mapBusiness} compact={compact} />
+      </div>
+    </div>
+  );
 }
 
 function BusinessLocationMap({
@@ -4715,6 +4816,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       | "services"
       | "gallery"
       | "contact"
+      | "map"
+      | "footer"
       | "blank",
     customName = "",
   ): BusinessSection {
@@ -4750,6 +4853,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         title: "Contact",
         heading: "Contact",
       },
+      map: {
+        section_type: "map",
+        title: "Map",
+        heading: "LOCATION",
+      },
+      footer: {
+        section_type: "footer",
+        title: "Footer",
+        heading: "Footer",
+      },
       blank: {
         section_type: "custom",
         title: customName.trim() || "New Layer",
@@ -4759,14 +4872,62 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
     const selected = templateMap[template];
     const initialLayout = createEmptyHeroLayout();
-    initialLayout.cells = initialLayout.cells.map((cell, index) =>
-      index === 0
-        ? {
-            ...cell,
-            text: selected.heading,
-          }
-        : cell,
-    );
+    const businessName = String(business?.name || "Company Name").trim() || "Company Name";
+
+    initialLayout.height =
+      template === "footer" ? "small" : template === "map" ? "large" : initialLayout.height;
+    initialLayout.height_px =
+      template === "footer" ? 150 : template === "map" ? 460 : initialLayout.height_px;
+    initialLayout.cells = initialLayout.cells.map((cell, index) => {
+      if (index !== 0) return cell;
+
+      if (template === "map") {
+        return {
+          ...cell,
+          type: "map" as const,
+          text: "LOCATION",
+          map_title: "LOCATION",
+          map_address: getBusinessAddress(business || ({} as Business)),
+          map_phone: getBusinessContactValue(
+            business || ({} as Business),
+            ["phone", "phone_number", "telephone"],
+          ),
+          map_email: getBusinessContactValue(
+            business || ({} as Business),
+            ["email", "business_email", "contact_email"],
+          ),
+          map_sns_items: getDefaultLocationSnsItems(
+            business || ({} as Business),
+          ),
+          background_color: "#ffffff",
+          color: "#111827",
+          text_align: "left" as const,
+          vertical_align: "center" as const,
+        };
+      }
+
+      if (template === "footer") {
+        return {
+          ...cell,
+          type: "text" as const,
+          text: `© 2014 ${businessName}\nPrivacy Policy`,
+          rich_text_html: `<div style="text-align:center"><div>© 2014 ${escapeCellText(
+            businessName,
+          )}</div><div style="margin-top:8px"><a href="#privacy">Privacy Policy</a></div></div>`,
+          color: "#ffffff",
+          background_color: "#111827",
+          font_size: 14,
+          font_weight: "semibold" as const,
+          text_align: "center" as const,
+          vertical_align: "center" as const,
+        };
+      }
+
+      return {
+        ...cell,
+        text: selected.heading,
+      };
+    });
 
     return {
       id: temporaryId,
@@ -4776,7 +4937,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       content: {
         page_type: "home-section",
         background_type: "color",
-        background_color: "#ffffff",
+        background_color: template === "footer" ? "#111827" : "#ffffff",
         grid: initialLayout,
         layouts: [initialLayout],
       },
@@ -4798,6 +4959,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       | "services"
       | "gallery"
       | "contact"
+      | "map"
+      | "footer"
       | "blank",
   ) {
     const cleanLayerName = newLayerName.trim();
@@ -4815,13 +4978,26 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       return;
     }
 
+    if (
+      template === "footer" &&
+      sections.some((section) => section.section_type === "footer")
+    ) {
+      setError("Footer 레이어는 하나만 만들 수 있습니다.");
+      return;
+    }
+
     const baseSection = createLayerSection(template, cleanLayerName);
-    const isCollapsible = newLayerVisibility === "collapsible";
+    const isFooter = template === "footer";
+    const isMap = template === "map";
+    const isCollapsible = isFooter || isMap
+      ? false
+      : newLayerVisibility === "collapsible";
     const previousSection = [...sections]
       .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0))
       .at(-1);
-    const resolvedLayerWidth =
-      newLayerWidth === "inherit"
+    const resolvedLayerWidth = isFooter || isMap
+      ? "full"
+      : newLayerWidth === "inherit"
         ? getSectionWidthMode(previousSection)
         : newLayerWidth;
 
@@ -4850,7 +5026,69 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       },
     };
 
-    setSections((current) => [...current, newSection]);
+    let privacySection: BusinessSection | null = null;
+
+    if (isFooter) {
+      const existingPrivacy = sections.find((section) => {
+        const slug =
+          slugifyMenuValue(String(section.title || section.section_type || "")) ||
+          section.section_type;
+        return slug === "privacy";
+      });
+
+      if (!existingPrivacy) {
+        const privacyBase = createLayerSection("blank", "Privacy");
+        const privacyLayout = normalizeHeroLayouts(privacyBase.content)[0];
+        const privacyTextCell: GridCell = {
+          ...privacyLayout.cells[0],
+          type: "text",
+          text: "Privacy Policy\n\n여기에 개인정보 처리방침을 입력하세요.",
+          rich_text_html:
+            "<h2>Privacy Policy</h2><p>여기에 개인정보 처리방침을 입력하세요.</p>",
+          color: "#111827",
+          background_color: "#ffffff",
+          font_size: 16,
+          font_weight: "normal",
+          text_align: "left",
+          vertical_align: "top",
+        };
+        const privacyLayouts: GridData[] = [
+          {
+            ...privacyLayout,
+            height: "large",
+            height_px: 900,
+            auto_height: true,
+            cells: [privacyTextCell],
+          },
+        ];
+
+        privacySection = {
+          ...privacyBase,
+          id: baseSection.id - 1,
+          section_type: "privacy",
+          title: "Privacy",
+          sort_order: baseSection.sort_order,
+          content: {
+            ...privacyBase.content,
+            grid: privacyLayouts[0],
+            layouts: privacyLayouts,
+            collapsible: true,
+            initially_hidden: true,
+            close_button_enabled: true,
+            scroll_on_open: true,
+            layer_width: "container",
+          },
+        };
+
+        newSection.sort_order = baseSection.sort_order + 1;
+      }
+    }
+
+    setSections((current) =>
+      privacySection
+        ? [...current, privacySection, newSection]
+        : [...current, newSection],
+    );
 
     const firstLayout = normalizeHeroLayouts(newSection.content)[0];
     setSelection({
@@ -4865,9 +5103,15 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     setNewLayerVisibility("normal");
     setNewLayerWidth("container");
     setMessage(
-      isCollapsible
-        ? `"${newSection.title}" 숨김 레이어를 추가했습니다. 링크를 클릭하면 펼쳐집니다.`
-        : `"${newSection.title}" 일반 레이어를 추가했습니다.`,
+      isFooter
+        ? privacySection
+          ? "Footer와 Privacy 숨김 레이어를 추가하고 자동으로 연결했습니다."
+          : "Footer를 추가하고 기존 Privacy 레이어에 자동으로 연결했습니다."
+        : isMap
+          ? "Map 레이어를 추가하고 비즈니스 주소·전화·이메일·SNS와 지도를 자동으로 불러왔습니다."
+        : isCollapsible
+          ? `"${newSection.title}" 숨김 레이어를 추가했습니다. 링크를 클릭하면 펼쳐집니다.`
+          : `"${newSection.title}" 일반 레이어를 추가했습니다.`,
     );
     setError("");
   }
@@ -6420,12 +6664,18 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 ["services", "⭐", "Services"],
                 ["gallery", "🖼", "Gallery"],
                 ["contact", "☎", "Contact"],
+                ["map", "📍", "Map"],
+                ["footer", "©", "Footer"],
               ].map(([value, icon, label]) => {
                 const disabled =
-                  value === "home" &&
-                  sections.some(
-                    (section) => section.section_type === "hero",
-                  );
+                  (value === "home" &&
+                    sections.some(
+                      (section) => section.section_type === "hero",
+                    )) ||
+                  (value === "footer" &&
+                    sections.some(
+                      (section) => section.section_type === "footer",
+                    ));
 
                 return (
                   <button
@@ -6439,7 +6689,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           | "about"
                           | "services"
                           | "gallery"
-                          | "contact",
+                          | "contact"
+                          | "map"
+                          | "footer",
                       )
                     }
                     className="rounded-2xl border border-gray-200 bg-white p-4 text-center hover:border-blue-500 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -10553,8 +10805,9 @@ function CellPreview({
   if (cell.type === "map") {
     return (
       <div className="absolute inset-0 h-full w-full p-1">
-        <BusinessLocationMap
+        <BusinessLocationSection
           business={business}
+          cell={cell}
           compact={previewDevice === "mobile"}
         />
       </div>
@@ -10840,8 +11093,9 @@ function CellPreview({
     if (cell.display_mode === "map-section") {
       return (
         <div className="absolute inset-0 h-full w-full p-1">
-          <BusinessLocationMap
+          <BusinessLocationSection
             business={business}
+            cell={cell}
             compact={previewDevice === "mobile"}
           />
         </div>
@@ -14617,7 +14871,20 @@ function RightPanel(props: {
                                   sns_icon_gap_px:
                                     selectedCell.sns_icon_gap_px || 12,
                                 }
-                              : { type: entry.value },
+                              : entry.value === "map"
+                                ? {
+                                    type: "map",
+                                    map_title: selectedCell.map_title || "LOCATION",
+                                    map_address: selectedCell.map_address || getBusinessAddress(business),
+                                    map_phone:
+                                      selectedCell.map_phone ||
+                                      getBusinessContactValue(business, ["phone", "phone_number", "telephone"]),
+                                    map_email:
+                                      selectedCell.map_email ||
+                                      getBusinessContactValue(business, ["email", "business_email", "contact_email"]),
+                                    map_sns_items: normalizeLocationSnsItems(selectedCell, business),
+                                  }
+                                : { type: entry.value },
                         selection.layoutId,
                       );
                       setCellTypePickerOpen(false);
@@ -15277,6 +15544,41 @@ function RightPanel(props: {
               className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5"
             />
           </Field>
+        ) : null}
+
+        {selectedCell.type === "map" ? (
+          <div className="mt-4 space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <div>
+              <p className="text-sm font-black text-gray-950">LOCATION 정보 편집</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">비워두면 비즈니스에 저장된 정보를 자동으로 사용합니다. 값이 없는 항목은 공개 화면에 표시하지 않습니다.</p>
+            </div>
+            <Field label="타이틀">
+              <input value={selectedCell.map_title || "LOCATION"} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { map_title: event.target.value }, selection.layoutId)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+            </Field>
+            <Field label="주소">
+              <textarea rows={2} value={selectedCell.map_address ?? getBusinessAddress(business)} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { map_address: event.target.value }, selection.layoutId)} placeholder="비워두면 업체 주소 자동 사용" className="w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+            </Field>
+            <Field label="전화번호">
+              <input type="tel" value={selectedCell.map_phone ?? getBusinessContactValue(business, ["phone", "phone_number", "telephone"])} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { map_phone: event.target.value }, selection.layoutId)} placeholder="없으면 표시하지 않음" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+            </Field>
+            <Field label="이메일">
+              <input type="email" value={selectedCell.map_email ?? getBusinessContactValue(business, ["email", "business_email", "contact_email"])} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { map_email: event.target.value }, selection.layoutId)} placeholder="없으면 표시하지 않음" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+            </Field>
+            <div className="space-y-3 rounded-xl border border-blue-100 bg-white p-3">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">SNS</p>
+              {normalizeLocationSnsItems(selectedCell, business).map((item) => {
+                const option = SNS_PLATFORM_OPTIONS.find((entry) => entry.value === item.platform);
+                return (
+                  <Field key={item.platform} label={option?.label || item.platform}>
+                    <input value={item.url || ""} onChange={(event) => {
+                      const nextItems = normalizeLocationSnsItems(selectedCell, business).map((current) => current.platform === item.platform ? { ...current, url: event.target.value } : current);
+                      props.onUpdateCell(area, selectedCell.id, { map_sns_items: nextItems }, selection.layoutId);
+                    }} placeholder={item.platform === "kakao" ? "카카오톡 ID 또는 오픈채팅 URL" : option?.placeholder || "https://..."} className="w-full rounded-xl border border-gray-300 px-3 py-2.5" />
+                  </Field>
+                );
+              })}
+            </div>
+          </div>
         ) : null}
 
         {selectedCell.type === "sns" ? (
