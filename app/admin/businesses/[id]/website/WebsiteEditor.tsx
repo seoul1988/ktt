@@ -58,6 +58,7 @@ type GridCell = {
   mobile_text?: string;
   url?: string;
   image_url?: string;
+  image_size_percent?: number;
   logo_size_px?: number;
   display_mode?:
     | "text"
@@ -4554,20 +4555,64 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           changedCellType === "logo" &&
           Object.prototype.hasOwnProperty.call(patch, "logo_size_px")
         ) {
-          nextSettings.header_logo_size_px = Math.max(
+          const nextLogoSize = Math.max(
             40,
             Math.min(1200, Number(patch.logo_size_px) || 120),
           );
+          const currentHeight = Math.max(
+            48,
+            Number(
+              nextSettings.header_grid?.height_px ||
+                nextSettings.header_height_px ||
+                104,
+            ),
+          );
+          const requiredHeight = Math.min(
+            1200,
+            nextLogoSize + verticalPadding * 2,
+          );
+
+          nextSettings.header_logo_size_px = nextLogoSize;
+          nextSettings.header_height_px = Math.max(
+            currentHeight,
+            requiredHeight,
+          );
+          nextSettings.header_grid = {
+            ...nextHeaderGrid,
+            height_px: Math.max(currentHeight, requiredHeight),
+          };
         }
 
         if (
           changedCellType === "title" &&
           Object.prototype.hasOwnProperty.call(patch, "font_size")
         ) {
-          nextSettings.header_title_font_size_px = Math.max(
+          const nextTitleSize = Math.max(
             10,
             Math.min(160, Number(patch.font_size) || 24),
           );
+          const currentHeight = Math.max(
+            48,
+            Number(
+              nextSettings.header_grid?.height_px ||
+                nextSettings.header_height_px ||
+                104,
+            ),
+          );
+          const requiredHeight = Math.min(
+            1200,
+            Math.ceil(nextTitleSize * 1.35 + verticalPadding * 2),
+          );
+
+          nextSettings.header_title_font_size_px = nextTitleSize;
+          nextSettings.header_height_px = Math.max(
+            currentHeight,
+            requiredHeight,
+          );
+          nextSettings.header_grid = {
+            ...nextHeaderGrid,
+            height_px: Math.max(currentHeight, requiredHeight),
+          };
         }
 
         return {
@@ -9341,7 +9386,7 @@ function ReadOnlyCellContent({
         previewDevice === "mobile" && cell.display_mode === "auto-slider"
           ? "h-auto"
           : "h-full"
-      }`}
+      } ${cell.type === "menu" ? "overflow-hidden" : ""}`}
       style={{
         justifyContent:
           cell.text_align === "left"
@@ -10603,7 +10648,9 @@ function CellPreview({
   );
   const effectiveFontSize =
     area === "header" && cell.type === "title"
-      ? configuredHeaderTitleSize
+      ? previewDevice === "mobile"
+        ? Math.min(configuredHeaderTitleSize, 48)
+        : configuredHeaderTitleSize
       : responsiveFontSize;
   const fontFamily =
     cell.font_family === "serif"
@@ -10651,10 +10698,10 @@ function CellPreview({
       area === "header"
         ? Math.max(24, actualHeaderHeight - headerPadding * 2)
         : requestedLogoSize;
-
-    // 로고 크기 변경은 헤더 높이에 영향을 주지 않습니다.
-    // 지정 크기 그대로 중앙에 배치하고, 헤더보다 크면 헤더 영역에서 잘립니다.
-    const logoSize = requestedLogoSize;
+    const logoSize =
+      area === "header"
+        ? Math.min(requestedLogoSize, availableHeight)
+        : requestedLogoSize;
 
     const homeHref = business.id
       ? `/business/${business.id}/website`
@@ -10664,7 +10711,7 @@ function CellPreview({
       <a
         href={homeHref}
         aria-label={`${business.name || "Business"} 홈으로 이동`}
-        className="relative z-20 block h-full w-full min-h-0 min-w-0 overflow-hidden no-underline"
+        className="relative z-20 flex h-full w-full min-h-0 min-w-0 items-center justify-center overflow-visible no-underline"
         onClick={(event) => {
           if (!business.id) event.preventDefault();
         }}
@@ -10673,27 +10720,23 @@ function CellPreview({
           <img
             src={logo}
             alt={`${business.name || "Business"} Logo`}
-            className="absolute left-1/2 top-1/2 block shrink-0 object-contain object-center"
+            className="block shrink-0 object-contain object-center"
             style={{
               width: `${logoSize}px`,
               height: `${logoSize}px`,
               maxWidth: "none",
-              maxHeight: "none",
-              transform: "translate(-50%, -50%)",
-              transformOrigin: "center center",
+              maxHeight: `${availableHeight}px`,
             }}
           />
         ) : (
           <span
-            className="absolute left-1/2 top-1/2 flex shrink-0 items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
+            className="flex shrink-0 items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
             style={{
               width: `${logoSize}px`,
               height: `${logoSize}px`,
               maxWidth: "none",
-              maxHeight: "none",
+              maxHeight: `${availableHeight}px`,
               fontSize: `${Math.max(10, logoSize / 4)}px`,
-              transform: "translate(-50%, -50%)",
-              transformOrigin: "center center",
             }}
           >
             LOGO
@@ -10709,20 +10752,47 @@ function CellPreview({
 
     const imageHref = normalizeButtonHref(cell.url);
     const imageOpensNewWindow = isExternalButtonHref(imageHref);
+    const imageSize = Math.max(10, Math.min(100, Number(cell.image_size_percent ?? 100)));
+    const horizontal =
+      cell.text_align === "left"
+        ? "flex-start"
+        : cell.text_align === "right"
+          ? "flex-end"
+          : "center";
+    const vertical =
+      cell.vertical_align === "top"
+        ? "flex-start"
+        : cell.vertical_align === "bottom"
+          ? "flex-end"
+          : "center";
+
     const imageElement = (
       <img
         src={cell.image_url}
         alt={cell.text || business.name || "이미지"}
         draggable={false}
-        className="absolute inset-0 block h-full w-full select-none"
+        className="block select-none object-contain"
         style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "50% 50%",
+          width: `${imageSize}%`,
+          height: `${imageSize}%`,
+          maxWidth: "100%",
+          maxHeight: "100%",
+          margin: 0,
+          padding: 0,
+          lineHeight: 0,
         }}
       />
     );
+
+    const imageContainerStyle: React.CSSProperties = {
+      borderRadius: "inherit",
+      display: "flex",
+      justifyContent: horizontal,
+      alignItems: vertical,
+      lineHeight: 0,
+      margin: 0,
+      padding: 0,
+    };
 
     return (
       <>
@@ -10732,8 +10802,8 @@ function CellPreview({
             target={imageOpensNewWindow ? "_blank" : undefined}
             rel={imageOpensNewWindow ? "noreferrer noopener" : undefined}
             aria-label={cell.text || "이미지 링크 열기"}
-            className="absolute inset-0 block cursor-pointer overflow-hidden"
-            style={{ borderRadius: "inherit" }}
+            className="absolute inset-0 cursor-pointer overflow-hidden"
+            style={imageContainerStyle}
           >
             {imageElement}
           </a>
@@ -10746,8 +10816,8 @@ function CellPreview({
               event.stopPropagation();
               setImageLightboxOpen(true);
             }}
-            className="absolute inset-0 block cursor-zoom-in overflow-hidden border-0 bg-transparent p-0"
-            style={{ borderRadius: "inherit" }}
+            className="absolute inset-0 cursor-zoom-in overflow-hidden border-0 bg-transparent"
+            style={imageContainerStyle}
           >
             {imageElement}
           </button>
@@ -10777,10 +10847,8 @@ function CellPreview({
 
                 <img
                   src={cell.image_url}
-                  alt={cell.text || business.name || "크게 보기 이미지"}
-                  draggable={false}
-                  className="block max-h-[94vh] max-w-[96vw] select-none object-contain sm:max-h-[92vh] sm:max-w-[92vw]"
-                  onClick={(event) => event.stopPropagation()}
+                  alt={cell.text || business.name || "이미지 크게 보기"}
+                  className="block max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] object-contain sm:max-h-[calc(100vh-48px)] sm:max-w-[calc(100vw-48px)]"
                 />
               </div>,
               document.body,
@@ -10789,6 +10857,7 @@ function CellPreview({
       </>
     );
   }
+
   if (cell.type === "button") {
     const globalHeight = Number(
       websiteSettings?.header_button_height_px || 46,
@@ -10897,11 +10966,34 @@ function CellPreview({
       return null;
     }
 
+    const menuVerticalStyle: React.CSSProperties =
+      cell.vertical_align === "top"
+        ? {
+            top: 0,
+            bottom: "auto",
+            transform: "none",
+          }
+        : cell.vertical_align === "bottom"
+          ? {
+              top: "auto",
+              bottom: 0,
+              transform: "none",
+            }
+          : {
+              top: "50%",
+              bottom: "auto",
+              transform: "translateY(-50%)",
+            };
+
     return (
       <nav
-        className="flex max-w-full flex-wrap items-center gap-4 font-bold"
+        className="absolute left-0 right-0 z-10 flex max-w-full flex-wrap items-center gap-4 font-bold"
         style={{
-          fontSize: `${Math.max(10, Math.min(40, Number(cell.font_size || 14)))}px`,
+          ...menuVerticalStyle,
+          fontSize: `${Math.max(
+            10,
+            Math.min(40, Number(cell.font_size || 14)),
+          )}px`,
           fontWeight,
           fontFamily,
           justifyContent:
@@ -10911,6 +11003,8 @@ function CellPreview({
                 ? "flex-end"
                 : "center",
           textAlign: cell.text_align || "center",
+          paddingLeft: area === "header" ? "4px" : 0,
+          paddingRight: area === "header" ? "4px" : 0,
         }}
       >
         {items.map((item) => {
@@ -10921,7 +11015,7 @@ function CellPreview({
               key={item.id}
               href={href}
               onClick={(event) => event.stopPropagation()}
-              className="cursor-pointer no-underline transition-opacity hover:opacity-65"
+              className="cursor-pointer whitespace-nowrap no-underline transition-opacity hover:opacity-65"
               style={{ color: cell.color || "inherit" }}
               title={`${item.label || "메뉴"} · ${href}`}
             >
@@ -11294,14 +11388,18 @@ function CellPreview({
     const titleHtml =
       area === "header"
         ? rawTitleHtml
-            .replace(/font-size\s*:\s*[^;"']+;?/gi, "")
-            .replace(/\ssize\s*=\s*(["']).*?\1/gi, "")
-            .replace(/<font\b[^>]*>/gi, "<span>")
-            .replace(/<\/font>/gi, "</span>")
+            .replace(
+              /font-size\s*:\s*[^;"']+;?/gi,
+              "",
+            )
+            .replace(
+              /\ssize\s*=\s*(["']).*?\1/gi,
+              "",
+            )
         : rawTitleHtml;
     return (
       <div
-        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-hidden leading-tight [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_*]:!leading-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
+        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
           color: cell.color || "#111827",
@@ -11568,7 +11666,15 @@ function HeaderSubmenuEditor({
                   max: 1200,
                   key: "header_logo_size_px",
                 },
-               
+                {
+                  label: "제목 글자 크기",
+                  value: Number(
+                    websiteSettings.header_title_font_size_px || 24,
+                  ),
+                  min: 10,
+                  max: 160,
+                  key: "header_title_font_size_px",
+                },
                 {
                   label: "버튼 높이",
                   value: Number(
@@ -11632,15 +11738,38 @@ function HeaderSubmenuEditor({
                       );
 
                       if (control.key === "header_logo_size_px") {
-                        const currentHeaderGrid = normalizeGrid(
-                          websiteSettings.header_grid,
-                          createDefaultHeader(""),
+                        const verticalPadding = Math.max(
+                          0,
+                          Math.min(
+                            48,
+                            Number(
+                              websiteSettings.header_vertical_padding_px || 8,
+                            ),
+                          ),
+                        );
+                        const currentHeight = Math.max(
+                          48,
+                          Number(
+                            currentHeaderGrid.height_px ||
+                              websiteSettings.header_height_px ||
+                              104,
+                          ),
+                        );
+                        const requiredHeight = Math.min(
+                          1200,
+                          nextValue + verticalPadding * 2,
+                        );
+                        const nextHeight = Math.max(
+                          currentHeight,
+                          requiredHeight,
                         );
 
                         onUpdate({
                           header_logo_size_px: nextValue,
+                          header_height_px: nextHeight,
                           header_grid: {
                             ...currentHeaderGrid,
+                            height_px: nextHeight,
                             cells: currentHeaderGrid.cells.map((cell) =>
                               cell.type === "logo"
                                 ? {
@@ -11656,15 +11785,38 @@ function HeaderSubmenuEditor({
                       }
 
                       if (control.key === "header_title_font_size_px") {
-                        const currentHeaderGrid = normalizeGrid(
-                          websiteSettings.header_grid,
-                          createDefaultHeader(""),
+                        const verticalPadding = Math.max(
+                          0,
+                          Math.min(
+                            48,
+                            Number(
+                              websiteSettings.header_vertical_padding_px || 8,
+                            ),
+                          ),
+                        );
+                        const currentHeight = Math.max(
+                          48,
+                          Number(
+                            currentHeaderGrid.height_px ||
+                              websiteSettings.header_height_px ||
+                              104,
+                          ),
+                        );
+                        const requiredHeight = Math.min(
+                          1200,
+                          Math.ceil(nextValue * 1.35 + verticalPadding * 2),
+                        );
+                        const nextHeight = Math.max(
+                          currentHeight,
+                          requiredHeight,
                         );
 
                         onUpdate({
                           header_title_font_size_px: nextValue,
+                          header_height_px: nextHeight,
                           header_grid: {
                             ...currentHeaderGrid,
+                            height_px: nextHeight,
                             cells: currentHeaderGrid.cells.map((cell) =>
                               cell.type === "title"
                                 ? {
@@ -16052,55 +16204,19 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "image" ? (
-          <>
-            <Field label="사진 URL">
-              <input
-                value={selectedCell.image_url || ""}
-                onChange={(event) =>
-                  props.onUpdateCell(
-                    area,
-                    selectedCell.id,
-                    {
-                      image_url: event.target.value,
-                    },
-                    selection.layoutId,
-                  )
-                }
-                placeholder="https://..."
-                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
-              />
-            </Field>
-
-            <Field label="이미지 클릭 링크 · 선택사항">
-              <input
-                value={selectedCell.url || ""}
-                onChange={(event) =>
-                  props.onUpdateCell(
-                    area,
-                    selectedCell.id,
-                    {
-                      url: event.target.value,
-                    },
-                    selection.layoutId,
-                  )
-                }
-                placeholder="비워두면 클릭할 때 이미지를 크게 보여줍니다."
-                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
-              />
-
-              <div
-                className={`mt-2 rounded-xl px-3 py-2 text-xs font-bold leading-5 ${
-                  String(selectedCell.url || "").trim()
-                    ? "bg-blue-50 text-blue-700"
-                    : "bg-emerald-50 text-emerald-700"
-                }`}
-              >
-                {String(selectedCell.url || "").trim()
-                  ? "링크가 있으므로 이미지를 클릭하면 해당 주소로 이동합니다."
-                  : "링크가 없으므로 공개 홈페이지에서 이미지를 클릭하면 크게 보기 모달이 열립니다."}
-              </div>
-            </Field>
-          </>
+          <ImageCellUploader
+            businessId={props.businessId}
+            area={area}
+            cell={selectedCell}
+            onUpdate={(patch) =>
+              props.onUpdateCell(
+                area,
+                selectedCell.id,
+                patch,
+                selection.layoutId,
+              )
+            }
+          />
         ) : null}
 
         {selectedCell.type === "button" ? (
@@ -17943,6 +18059,293 @@ function VideoHeroUploader({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+function ImageCellUploader({
+  businessId,
+  area,
+  cell,
+  onUpdate,
+}: {
+  businessId: string;
+  area: "header" | "hero";
+  cell: GridCell;
+  onUpdate: (patch: Partial<GridCell>) => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  async function uploadImage(file: File) {
+    setUploadError("");
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("이미지 크기는 10MB 이하여야 합니다.");
+      return;
+    }
+
+    const previousImageUrl = String(cell.image_url || "");
+    const previewUrl = URL.createObjectURL(file);
+    onUpdate({
+      image_url: previewUrl,
+      image_size_percent: cell.image_size_percent ?? 100,
+      text_align: cell.text_align || "center",
+      vertical_align: cell.vertical_align || "center",
+    });
+
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("area", area);
+      formData.append("cellId", cell.id);
+
+      const response = await fetch(
+        `/api/admin/businesses/${encodeURIComponent(businessId)}/website/upload`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        },
+      );
+
+      const result = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `이미지 업로드에 실패했습니다. HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      const imageUrl = String(result.url || "").trim();
+      if (!imageUrl) throw new Error("업로드된 이미지 주소를 받지 못했습니다.");
+
+      onUpdate({ image_url: imageUrl });
+      URL.revokeObjectURL(previewUrl);
+    } catch (error) {
+      onUpdate({ image_url: previousImageUrl });
+      URL.revokeObjectURL(previewUrl);
+      setUploadError(
+        error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.",
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function handleFiles(files: FileList | null) {
+    const file = files?.[0];
+    if (file) void uploadImage(file);
+  }
+
+  const imageSize = Math.max(
+    10,
+    Math.min(100, Number(cell.image_size_percent ?? 100)),
+  );
+
+  const positionOptions: Array<{
+    horizontal: TextAlign;
+    vertical: VerticalAlign;
+    label: string;
+  }> = [
+    { horizontal: "left", vertical: "top", label: "왼쪽 위" },
+    { horizontal: "center", vertical: "top", label: "가운데 위" },
+    { horizontal: "right", vertical: "top", label: "오른쪽 위" },
+    { horizontal: "left", vertical: "center", label: "왼쪽 가운데" },
+    { horizontal: "center", vertical: "center", label: "정중앙" },
+    { horizontal: "right", vertical: "center", label: "오른쪽 가운데" },
+    { horizontal: "left", vertical: "bottom", label: "왼쪽 아래" },
+    { horizontal: "center", vertical: "bottom", label: "가운데 아래" },
+    { horizontal: "right", vertical: "bottom", label: "오른쪽 아래" },
+  ];
+
+  return (
+    <div className="mt-5 space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <div>
+        <p className="text-sm font-black text-blue-950">이미지 파일 첨부</p>
+        <p className="mt-1 text-xs font-semibold leading-5 text-blue-700">
+          URL 대신 컴퓨터나 휴대폰에서 이미지를 직접 선택하세요.
+        </p>
+      </div>
+
+      {cell.image_url ? (
+        <div className="flex min-h-36 items-center justify-center overflow-hidden rounded-xl border border-blue-200 bg-white p-3">
+          <img
+            src={cell.image_url}
+            alt="선택한 이미지 미리보기"
+            className="block max-h-44 max-w-full object-contain"
+          />
+        </div>
+      ) : null}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => handleFiles(event.target.files)}
+      />
+
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => fileInputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          setDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          handleFiles(event.dataTransfer.files);
+        }}
+        className={`flex min-h-28 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 text-center transition ${
+          dragging
+            ? "border-blue-700 bg-blue-100"
+            : "border-blue-300 bg-white hover:border-blue-700"
+        } disabled:cursor-wait disabled:opacity-60`}
+      >
+        <span className="text-2xl">{uploading ? "◌" : "▧"}</span>
+        <span className="mt-2 text-sm font-black text-gray-900">
+          {uploading
+            ? "이미지를 업로드하고 있습니다..."
+            : cell.image_url
+              ? "다른 이미지로 교체"
+              : "이미지 파일 선택"}
+        </span>
+        <span className="mt-1 text-xs text-gray-500">
+          클릭하거나 파일을 끌어오세요 · 최대 10MB
+        </span>
+      </button>
+
+      {uploadError ? (
+        <p className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold text-red-700">
+          {uploadError}
+        </p>
+      ) : null}
+
+      <Field label="이미지 크기">
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={10}
+            max={100}
+            step={1}
+            value={imageSize}
+            onChange={(event) =>
+              onUpdate({ image_size_percent: Number(event.target.value) })
+            }
+            className="min-w-0 flex-1 accent-blue-700"
+          />
+          <div className="flex w-24 items-center overflow-hidden rounded-xl border border-blue-300 bg-white">
+            <input
+              type="number"
+              min={10}
+              max={100}
+              value={imageSize}
+              onChange={(event) =>
+                onUpdate({
+                  image_size_percent: Math.max(
+                    10,
+                    Math.min(100, Number(event.target.value) || 10),
+                  ),
+                })
+              }
+              className="w-full px-2 py-2 text-right text-sm font-black outline-none"
+            />
+            <span className="pr-2 text-xs font-bold text-gray-500">%</span>
+          </div>
+        </div>
+      </Field>
+
+      <Field label="이미지 위치">
+        <div className="grid grid-cols-3 gap-2">
+          {positionOptions.map((option) => {
+            const active =
+              (cell.text_align || "center") === option.horizontal &&
+              (cell.vertical_align || "center") === option.vertical;
+            return (
+              <button
+                key={`${option.horizontal}-${option.vertical}`}
+                type="button"
+                title={option.label}
+                aria-label={option.label}
+                onClick={() =>
+                  onUpdate({
+                    text_align: option.horizontal,
+                    vertical_align: option.vertical,
+                  })
+                }
+                className={`flex h-12 items-center justify-center rounded-xl border text-lg font-black ${
+                  active
+                    ? "border-blue-700 bg-blue-700 text-white"
+                    : "border-blue-200 bg-white text-blue-950"
+                }`}
+              >
+                {option.horizontal === "left"
+                  ? option.vertical === "top"
+                    ? "↖"
+                    : option.vertical === "bottom"
+                      ? "↙"
+                      : "←"
+                  : option.horizontal === "right"
+                    ? option.vertical === "top"
+                      ? "↗"
+                      : option.vertical === "bottom"
+                        ? "↘"
+                        : "→"
+                    : option.vertical === "top"
+                      ? "↑"
+                      : option.vertical === "bottom"
+                        ? "↓"
+                        : "●"}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      <Field label="이미지 클릭 링크 · 선택사항">
+        <input
+          value={cell.url || ""}
+          onChange={(event) => onUpdate({ url: event.target.value })}
+          placeholder="비워두면 클릭할 때 이미지를 크게 보여줍니다."
+          className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2.5"
+        />
+      </Field>
+
+      {cell.image_url ? (
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => onUpdate({ image_url: "" })}
+          className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 disabled:opacity-50"
+        >
+          이미지 삭제
+        </button>
+      ) : null}
     </div>
   );
 }
