@@ -207,6 +207,8 @@ type Business = {
   id: number;
   name?: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
+  slider_image_urls?: string[] | null;
   logo_url?: string | null;
   address?: string | null;
   address1?: string | null;
@@ -11142,61 +11144,13 @@ function CellPreview({
       const images = Array.isArray(cell.gallery_images)
         ? cell.gallery_images
         : [];
-      const showSliderText =
-        cell.background_overlay_type === "text" &&
-        Boolean(String(cell.overlay_text || "").trim());
-      const sliderFontFamily =
-        cell.overlay_font_family === "serif"
-          ? "Georgia, 'Times New Roman', serif"
-          : cell.overlay_font_family === "rounded"
-            ? "'Arial Rounded MT Bold', 'Nunito', Arial, sans-serif"
-            : cell.overlay_font_family === "mono"
-              ? "'Courier New', monospace"
-              : "Arial, Helvetica, sans-serif";
-      const sliderFontWeight =
-        cell.font_weight === "normal"
-          ? 400
-          : cell.font_weight === "semibold"
-            ? 600
-            : cell.font_weight === "bold"
-              ? 700
-              : 900;
 
       return images.length ? (
-        <div className="absolute inset-0 h-full w-full overflow-hidden">
-          <AutoImageSlider
-            images={images}
-            autoHeight={cell.slider_auto_height !== false}
-            mobile={previewDevice === "mobile"}
-          />
-
-          {showSliderText ? (
-            <div
-              className={`pointer-events-none absolute inset-0 z-30 flex p-6 ${overlayPositionClasses(
-                cell.overlay_text_horizontal || "center",
-                cell.overlay_text_vertical || "middle",
-              )}`}
-            >
-              <div
-                className="max-w-[92%] whitespace-pre-line leading-tight"
-                style={{
-                  color: cell.color || "#ffffff",
-                  fontSize: `${
-                    previewDevice === "mobile"
-                      ? Math.min(cell.font_size || 36, 28)
-                      : cell.font_size || 36
-                  }px`,
-                  fontWeight: sliderFontWeight,
-                  fontFamily: sliderFontFamily,
-                  textAlign: cell.overlay_text_horizontal || "center",
-                  textShadow: "0 2px 12px rgba(0,0,0,0.72)",
-                }}
-              >
-                {cell.overlay_text}
-              </div>
-            </div>
-          ) : null}
-        </div>
+        <AutoImageSlider
+          images={images}
+          autoHeight={cell.slider_auto_height !== false}
+          mobile={previewDevice === "mobile"}
+        />
       ) : (
         <span className="text-sm font-black opacity-70">
           슬라이드 이미지를 선택해주세요
@@ -18394,27 +18348,42 @@ function TitleCellEditor({
     }
 
     if (nextMode === "auto-slider") {
+      const checkedSliderImages = Array.isArray(business.slider_image_urls)
+        ? business.slider_image_urls
+            .map((url) => String(url || "").trim())
+            .filter(Boolean)
+            .filter((url, index, values) => values.indexOf(url) === index)
+            .slice(0, 10)
+        : [];
+
+      /*
+       * 텍스트 모드에서 다시 자동 슬라이드로 돌아올 때는 이전 셀 상태를
+       * 재사용하지 않고, 비즈니스 이미지 관리에서 체크해 저장한 이미지로
+       * 즉시 복구합니다. display_mode와 gallery_images를 한 번에 갱신해야
+       * 중간 렌더에서 빈 슬라이더가 고정되지 않습니다.
+       */
       onUpdate({
         display_mode: "auto-slider",
-        gallery_images: Array.isArray(cell.gallery_images)
-          ? cell.gallery_images
-          : [],
+        gallery_images: checkedSliderImages,
         slider_auto_height:
           typeof cell.slider_auto_height === "boolean"
             ? cell.slider_auto_height
             : true,
-        background_overlay_type:
-          cell.background_overlay_type === "text"
-            ? "text"
-            : "none",
-        overlay_text: cell.overlay_text || "",
-        overlay_font_family: cell.overlay_font_family || "sans",
-        overlay_text_horizontal: cell.overlay_text_horizontal || "center",
-        overlay_text_vertical: cell.overlay_text_vertical || "middle",
-        color: cell.color || "#ffffff",
-        font_size: cell.font_size || 36,
-        font_weight: cell.font_weight || "black",
       });
+
+      setAvailableImages(
+        Array.isArray(business.image_urls)
+          ? business.image_urls
+              .map((url) => String(url || "").trim())
+              .filter(Boolean)
+          : checkedSliderImages,
+      );
+
+      setImageLoadError(
+        checkedSliderImages.length > 0
+          ? ""
+          : "웹사이트 슬라이드로 체크된 이미지가 없습니다. 비즈니스 이미지 관리에서 사용할 사진을 체크하고 저장하세요.",
+      );
       return;
     }
 
@@ -18653,7 +18622,20 @@ function TitleCellEditor({
 
     setAvailableImages(urls);
 
-    const imagesToPlay = urls.slice(0, 10);
+    const checkedSliderImages = Array.isArray(business.slider_image_urls)
+      ? business.slider_image_urls
+          .map((url) => String(url || "").trim())
+          .filter(Boolean)
+          .filter((url, index, values) => values.indexOf(url) === index)
+          .filter((url) => urls.includes(url))
+          .slice(0, 10)
+      : [];
+
+    const imagesToPlay =
+      requestedMode === "auto-slider"
+        ? checkedSliderImages
+        : urls.slice(0, 10);
+
     const currentImages = Array.isArray(cell.gallery_images)
       ? cell.gallery_images.map((url) => String(url || "").trim()).filter(Boolean)
       : [];
@@ -19896,160 +19878,6 @@ function TitleCellEditor({
                 </span>
               </span>
             </label>
-          ) : null}
-
-          {mode === "auto-slider" ? (
-            <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
-              <div>
-                <p className="text-sm font-black text-violet-950">
-                  슬라이드 이미지 위에 글씨를 넣을까요?
-                </p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-violet-800">
-                  “글씨 넣기”를 선택하면 아래에서 문구와 위치를 바로 설정할 수 있습니다.
-                </p>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdate({
-                      background_overlay_type: "text",
-                      overlay_text:
-                        cell.overlay_text || "이미지 위에 표시할 글씨",
-                      overlay_font_family:
-                        cell.overlay_font_family || "sans",
-                      overlay_text_horizontal:
-                        cell.overlay_text_horizontal || "center",
-                      overlay_text_vertical:
-                        cell.overlay_text_vertical || "middle",
-                      color: cell.color || "#ffffff",
-                      font_size: cell.font_size || 36,
-                      font_weight: cell.font_weight || "black",
-                    })
-                  }
-                  className={`rounded-xl border px-3 py-3 text-sm font-black ${
-                    cell.background_overlay_type === "text"
-                      ? "border-violet-600 bg-violet-600 text-white"
-                      : "border-violet-200 bg-white text-violet-800"
-                  }`}
-                >
-                  글씨 넣기
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdate({
-                      background_overlay_type: "none",
-                    })
-                  }
-                  className={`rounded-xl border px-3 py-3 text-sm font-black ${
-                    cell.background_overlay_type !== "text"
-                      ? "border-gray-700 bg-gray-800 text-white"
-                      : "border-gray-200 bg-white text-gray-700"
-                  }`}
-                >
-                  글씨 없음
-                </button>
-              </div>
-
-              {cell.background_overlay_type === "text" ? (
-                <div className="mt-4 space-y-4 rounded-2xl border border-violet-200 bg-white p-4">
-                  <Field label="슬라이드 위 글씨">
-                    <textarea
-                      rows={3}
-                      value={cell.overlay_text || ""}
-                      onChange={(event) =>
-                        onUpdate({ overlay_text: event.target.value })
-                      }
-                      placeholder="예: 건강한 미소를 위한 맞춤 진료"
-                      className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5"
-                    />
-                  </Field>
-
-                  <Field label={`글씨 크기 · ${cell.font_size || 36}px`}>
-                    <input
-                      type="range"
-                      min="14"
-                      max="80"
-                      value={cell.font_size || 36}
-                      onChange={(event) =>
-                        onUpdate({ font_size: Number(event.target.value) })
-                      }
-                      className="w-full"
-                    />
-                  </Field>
-
-                  <ColorInput
-                    label="글씨 색상"
-                    value={cell.color || "#ffffff"}
-                    onChange={(value) => onUpdate({ color: value })}
-                  />
-
-                  <Field label="폰트">
-                    <select
-                      value={cell.overlay_font_family || "sans"}
-                      onChange={(event) =>
-                        onUpdate({
-                          overlay_font_family:
-                            event.target.value as GridCell["overlay_font_family"],
-                        })
-                      }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
-                    >
-                      <option value="sans">기본 깔끔한 글씨</option>
-                      <option value="serif">고급스러운 명조체</option>
-                      <option value="rounded">부드러운 둥근 글씨</option>
-                      <option value="mono">반듯한 고정폭 글씨</option>
-                    </select>
-                  </Field>
-
-                  <Field label="글씨 위치">
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        ["left", "top", "좌측 상단"],
-                        ["center", "top", "상단 중앙"],
-                        ["right", "top", "우측 상단"],
-                        ["left", "middle", "좌측 중앙"],
-                        ["center", "middle", "정중앙"],
-                        ["right", "middle", "우측 중앙"],
-                        ["left", "bottom", "좌측 하단"],
-                        ["center", "bottom", "하단 중앙"],
-                        ["right", "bottom", "우측 하단"],
-                      ].map(([horizontal, vertical, label]) => {
-                        const active =
-                          (cell.overlay_text_horizontal || "center") ===
-                            horizontal &&
-                          (cell.overlay_text_vertical || "middle") === vertical;
-
-                        return (
-                          <button
-                            key={`${horizontal}-${vertical}`}
-                            type="button"
-                            onClick={() =>
-                              onUpdate({
-                                overlay_text_horizontal:
-                                  horizontal as GridCell["overlay_text_horizontal"],
-                                overlay_text_vertical:
-                                  vertical as GridCell["overlay_text_vertical"],
-                              })
-                            }
-                            className={`rounded-xl border px-2 py-2 text-[11px] font-black ${
-                              active
-                                ? "border-violet-600 bg-violet-600 text-white"
-                                : "border-gray-200 bg-white text-gray-700"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </Field>
-                </div>
-              ) : null}
-            </div>
           ) : null}
 
           <div className="mt-3 rounded-xl bg-blue-50 px-3 py-3 text-xs font-bold leading-5 text-blue-800">

@@ -210,6 +210,191 @@ function isAllowedVideoUrl(url: string) {
   }
 }
 
+
+type WebsiteSliderSyncResult = {
+  updatedSectionCount: number;
+};
+
+function replaceAutoSliderImagesInCells(
+  cells: unknown,
+  sliderImageUrls: string[],
+): { cells: unknown; changed: boolean } {
+  if (!Array.isArray(cells)) {
+    return { cells, changed: false };
+  }
+
+  let changed = false;
+
+  const nextCells = cells.map((rawCell) => {
+    if (!rawCell || typeof rawCell !== "object" || Array.isArray(rawCell)) {
+      return rawCell;
+    }
+
+    const cell = rawCell as Record<string, any>;
+    let nextCell = cell;
+
+    if (cell.display_mode === "auto-slider") {
+      const currentImages = Array.isArray(cell.gallery_images)
+        ? cell.gallery_images.map((value: unknown) => String(value || ""))
+        : [];
+      const imagesChanged =
+        currentImages.length !== sliderImageUrls.length ||
+        currentImages.some(
+          (value: string, index: number) => value !== sliderImageUrls[index],
+        );
+
+      if (imagesChanged) {
+        nextCell = {
+          ...nextCell,
+          gallery_images: [...sliderImageUrls],
+        };
+        changed = true;
+      }
+    }
+
+    if (Array.isArray(cell.child_cells)) {
+      const nested = replaceAutoSliderImagesInCells(
+        cell.child_cells,
+        sliderImageUrls,
+      );
+
+      if (nested.changed) {
+        nextCell = {
+          ...nextCell,
+          child_cells: nested.cells,
+        };
+        changed = true;
+      }
+    }
+
+    return nextCell;
+  });
+
+  return { cells: nextCells, changed };
+}
+
+function replaceAutoSliderImagesInContent(
+  rawContent: unknown,
+  sliderImageUrls: string[],
+): { content: Record<string, any>; changed: boolean } {
+  const content =
+    rawContent && typeof rawContent === "object" && !Array.isArray(rawContent)
+      ? (rawContent as Record<string, any>)
+      : {};
+
+  let nextContent = content;
+  let changed = false;
+
+  if (content.grid && typeof content.grid === "object") {
+    const grid = content.grid as Record<string, any>;
+    const nextGridCells = replaceAutoSliderImagesInCells(
+      grid.cells,
+      sliderImageUrls,
+    );
+
+    if (nextGridCells.changed) {
+      nextContent = {
+        ...nextContent,
+        grid: {
+          ...grid,
+          cells: nextGridCells.cells,
+        },
+      };
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(content.layouts)) {
+    let layoutsChanged = false;
+    const nextLayouts = content.layouts.map((rawLayout: unknown) => {
+      if (
+        !rawLayout ||
+        typeof rawLayout !== "object" ||
+        Array.isArray(rawLayout)
+      ) {
+        return rawLayout;
+      }
+
+      const layout = rawLayout as Record<string, any>;
+      const nextLayoutCells = replaceAutoSliderImagesInCells(
+        layout.cells,
+        sliderImageUrls,
+      );
+
+      if (!nextLayoutCells.changed) return layout;
+
+      layoutsChanged = true;
+      return {
+        ...layout,
+        cells: nextLayoutCells.cells,
+      };
+    });
+
+    if (layoutsChanged) {
+      nextContent = {
+        ...nextContent,
+        layouts: nextLayouts,
+      };
+      changed = true;
+    }
+  }
+
+  return { content: nextContent, changed };
+}
+
+/**
+ * 비즈니스 이미지에서 슬라이드 사용 체크를 저장할 때 웹사이트의 모든
+ * auto-slider 셀도 같은 이미지 목록으로 즉시 갱신합니다.
+ */
+async function syncWebsiteAutoSliderImages(
+  businessId: number,
+  sliderImageUrls: string[],
+): Promise<WebsiteSliderSyncResult> {
+  const normalizedUrls = sliderImageUrls
+    .map((url) => String(url || "").trim())
+    .filter(Boolean)
+    .filter((url, index, values) => values.indexOf(url) === index)
+    .slice(0, 10);
+
+  const { data: sectionRows, error: sectionLoadError } = await supabase
+    .from("business_sections")
+    .select("id,content")
+    .eq("business_id", businessId);
+
+  if (sectionLoadError) {
+    throw new Error(
+      `웹사이트 슬라이드 정보를 불러오지 못했습니다: ${sectionLoadError.message}`,
+    );
+  }
+
+  let updatedSectionCount = 0;
+
+  for (const row of sectionRows || []) {
+    const replaced = replaceAutoSliderImagesInContent(
+      row.content,
+      normalizedUrls,
+    );
+
+    if (!replaced.changed) continue;
+
+    const { error: sectionUpdateError } = await supabase
+      .from("business_sections")
+      .update({ content: replaced.content })
+      .eq("id", row.id)
+      .eq("business_id", businessId);
+
+    if (sectionUpdateError) {
+      throw new Error(
+        `웹사이트 슬라이드 업데이트 오류: ${sectionUpdateError.message}`,
+      );
+    }
+
+    updatedSectionCount += 1;
+  }
+
+  return { updatedSectionCount };
+}
+
 async function optimizeImage(
   file: File,
   maxWidth = 1600,
@@ -1524,6 +1709,9 @@ export default function NewBusinessPage() {
     }
 
     const cleanExternalVideoUrl = externalVideoUrl.trim();
+    const finalSliderImageUrls = imageUrls.filter(
+      (_, index) => photoSliderEnabled[index] === true,
+    );
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
@@ -1540,9 +1728,7 @@ export default function NewBusinessPage() {
         image_urls: imageUrls,
 
         // 체크된 사진만 웹사이트 자동 이미지 슬라이드에 사용합니다.
-        slider_image_urls: imageUrls.filter(
-          (_, index) => photoSliderEnabled[index] === true,
-        ),
+        slider_image_urls: finalSliderImageUrls,
 
         // Uploaded video files only go here.
         video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
@@ -1584,6 +1770,26 @@ export default function NewBusinessPage() {
       if (ownerError) {
         setSaving(false);
         alert(ownerError.message);
+        return;
+      }
+
+      try {
+        const sliderSyncResult = await syncWebsiteAutoSliderImages(
+          Number(business.id),
+          finalSliderImageUrls,
+        );
+
+        console.log(
+          `Website auto-slider sections updated: ${sliderSyncResult.updatedSectionCount}`,
+        );
+      } catch (sliderSyncError) {
+        setSaving(false);
+        console.error("Website auto-slider sync error:", sliderSyncError);
+        alert(
+          sliderSyncError instanceof Error
+            ? sliderSyncError.message
+            : "웹사이트 이미지 슬라이드 자동 업데이트에 실패했습니다.",
+        );
         return;
       }
 
