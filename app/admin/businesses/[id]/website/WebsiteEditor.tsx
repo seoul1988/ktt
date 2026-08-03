@@ -624,6 +624,49 @@ function createEmptyHeroLayout(): GridData {
   };
 }
 
+/**
+ * 사이트를 처음 편집하는 업체에 홈페이지 레이어가 하나도 없으면
+ * 편집기에서 즉시 작업할 수 있도록 기본 Home(hero) 레이어를 만듭니다.
+ * 음수 ID는 아직 서버에 저장되지 않은 새 레이어라는 뜻이며,
+ * 기존 저장 로직이 PATCH 시 새 행으로 처리합니다.
+ */
+function ensureDefaultHomeSection(
+  sections: BusinessSection[],
+  businessId: string | number,
+): BusinessSection[] {
+  const hasHomeSection = sections.some(
+    (section) => section.content?.page_type !== "link-page",
+  );
+
+  if (hasHomeSection) return sections;
+
+  const initialLayout = createDefaultHero();
+  const defaultHomeSection: BusinessSection = {
+    id: -Date.now(),
+    business_id: Number(businessId),
+    section_type: "hero",
+    title: "Home",
+    content: {
+      page_type: "home-section",
+      background_type: "gradient",
+      gradient_from: "#111827",
+      gradient_to: "#d97706",
+      grid: initialLayout,
+      layouts: [initialLayout],
+    },
+    settings: {
+      text_align: "left",
+      overlay: false,
+      overlay_opacity: 0,
+      height: "large",
+    },
+    sort_order: 0,
+    is_visible: true,
+  };
+
+  return [defaultHomeSection, ...sections];
+}
+
 function normalizeSettings(
   settings: WebsiteSettings | null | undefined,
   businessName = "",
@@ -4080,20 +4123,23 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           ),
         };
 
-        const normalizedSections = (payload.sections ?? []).map((section) =>
-          section.section_type === "hero"
-            ? {
-                ...section,
-                content: {
-                  ...(section.content ?? {}),
-                  background_type:
-                    section.content?.background_type ||
-                    (section.content?.image_url ? "image" : "gradient"),
-                  grid: normalizeGrid(section.content?.grid, createDefaultHero()),
-                  layouts: normalizeHeroLayouts(section.content),
-                },
-              }
-            : section,
+        const normalizedSections = ensureDefaultHomeSection(
+          (payload.sections ?? []).map((section) =>
+            section.section_type === "hero"
+              ? {
+                  ...section,
+                  content: {
+                    ...(section.content ?? {}),
+                    background_type:
+                      section.content?.background_type ||
+                      (section.content?.image_url ? "image" : "gradient"),
+                    grid: normalizeGrid(section.content?.grid, createDefaultHero()),
+                    layouts: normalizeHeroLayouts(section.content),
+                  },
+                }
+              : section,
+          ),
+          businessId,
         );
 
         serverSectionIdsRef.current = normalizedSections
@@ -4140,7 +4186,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               localDraft.business.name || "",
             ),
           });
-          setSections(localDraft.sections);
+          const normalizedLocalSections = ensureDefaultHomeSection(
+            localDraft.sections,
+            businessId,
+          );
+          setSections(normalizedLocalSections);
           setLastDraftSavedAt(localDraft.savedAt);
           const localMessage =
             `이전에 중간 저장한 작업을 불러왔습니다. ${formatDraftTime(
@@ -4177,7 +4227,27 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           setLastDraftSavedAt("");
         }
 
-        setSelection({ area: "header" });
+        const initialSections =
+          !useServerData && localDraft
+            ? ensureDefaultHomeSection(localDraft.sections, businessId)
+            : normalizedSections;
+        const initialHomeSection = initialSections.find(
+          (section) => section.content?.page_type !== "link-page",
+        );
+        const initialLayout = initialHomeSection
+          ? normalizeHeroLayouts(initialHomeSection.content)[0]
+          : null;
+
+        setSelection(
+          initialHomeSection
+            ? {
+                area: "hero",
+                sectionId: initialHomeSection.id,
+                layoutId: initialLayout?.id,
+                cellId: initialLayout?.cells[0]?.id,
+              }
+            : { area: "header" },
+        );
         window.setTimeout(() => {
           draftReadyRef.current = true;
         }, 0);
@@ -6254,6 +6324,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
         >
           <div
+            onClickCapture={(event) => {
+              const target = event.target as HTMLElement;
+              const link = target.closest("a");
+
+              // 편집 화면에서는 로고·이미지·메뉴·버튼·전화·SNS 등
+              // 모든 링크 이동을 막고, 셀 선택과 편집만 가능하게 합니다.
+              if (link) {
+                event.preventDefault();
+              }
+            }}
             className={`mx-auto overflow-visible shadow-xl transition-all ${
               device === "mobile"
                 ? "max-w-[430px] rounded-[32px] border-[8px] border-gray-900"
