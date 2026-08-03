@@ -10752,7 +10752,7 @@ function CellPreview({
 
     const imageHref = normalizeButtonHref(cell.url);
     const imageOpensNewWindow = isExternalButtonHref(imageHref);
-    const imageSize = Math.max(10, Math.min(100, Number(cell.image_size_percent ?? 100)));
+    const imageSize = Math.max(10, Math.min(200, Number(cell.image_size_percent ?? 100)));
     const horizontal =
       cell.text_align === "left"
         ? "flex-start"
@@ -10775,8 +10775,8 @@ function CellPreview({
         style={{
           width: `${imageSize}%`,
           height: `${imageSize}%`,
-          maxWidth: "100%",
-          maxHeight: "100%",
+          maxWidth: "none",
+          maxHeight: "none",
           margin: 0,
           padding: 0,
           lineHeight: 0,
@@ -13993,6 +13993,10 @@ function RightPanel(props: {
   const [textEditorImageUploading, setTextEditorImageUploading] = useState(false);
   const [selectedTextEditorImageId, setSelectedTextEditorImageId] = useState("");
   const [selectedTextEditorImageWidth, setSelectedTextEditorImageWidth] = useState(520);
+  const [selectedTextEditorImageHorizontal, setSelectedTextEditorImageHorizontal] =
+    useState<TextAlign>("center");
+  const [selectedTextEditorImageVertical, setSelectedTextEditorImageVertical] =
+    useState<VerticalAlign>("center");
   const [layerBasicSettingsOpen, setLayerBasicSettingsOpen] = useState(true);
   const [layerHeightSettingsOpen, setLayerHeightSettingsOpen] = useState(true);
 
@@ -14129,10 +14133,12 @@ function RightPanel(props: {
       const imageId = createId("text-editor-image");
       const alt = file.name.replace(/\.[^.]+$/, "").replace(/"/g, "");
       insertTextEditorHtmlAtCursor(
-        `<p style="text-align:center;"><span data-text-editor-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
+        `<p data-text-editor-image-row="true" style="display:flex;width:100%;min-height:240px;margin:0;justify-content:center;align-items:center;line-height:0;"><span data-text-editor-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
       );
       setSelectedTextEditorImageId(imageId);
       setSelectedTextEditorImageWidth(520);
+      setSelectedTextEditorImageHorizontal("center");
+      setSelectedTextEditorImageVertical("center");
       requestAnimationFrame(() => {
         const wrapper = textEditorRef.current?.querySelector<HTMLElement>(
           `[data-text-editor-image-id="${imageId}"]`,
@@ -14157,11 +14163,36 @@ function RightPanel(props: {
 
     if (!wrapper || !editor?.contains(wrapper)) {
       setSelectedTextEditorImageId("");
+      setSelectedTextEditorImageHorizontal("center");
+      setSelectedTextEditorImageVertical("center");
       return;
     }
     wrapper.setAttribute("data-selected", "true");
     setSelectedTextEditorImageId(wrapper.dataset.textEditorImageId || "");
-    setSelectedTextEditorImageWidth(Math.max(80, Math.round(wrapper.getBoundingClientRect().width)));
+    setSelectedTextEditorImageWidth(
+      Math.max(80, Math.round(wrapper.getBoundingClientRect().width)),
+    );
+
+    const parent = wrapper.closest<HTMLElement>(
+      '[data-text-editor-image-row="true"], p, div',
+    );
+    const justifyContent = parent?.style.justifyContent || "center";
+    const alignItems = parent?.style.alignItems || "center";
+
+    setSelectedTextEditorImageHorizontal(
+      justifyContent === "flex-start"
+        ? "left"
+        : justifyContent === "flex-end"
+          ? "right"
+          : "center",
+    );
+    setSelectedTextEditorImageVertical(
+      alignItems === "flex-start"
+        ? "top"
+        : alignItems === "flex-end"
+          ? "bottom"
+          : "center",
+    );
   }
 
   function getSelectedTextEditorImage() {
@@ -14181,11 +14212,41 @@ function RightPanel(props: {
     syncEditorHtml();
   }
 
-  function alignSelectedTextEditorImage(align: TextAlign) {
+  function positionSelectedTextEditorImage(
+    horizontal: TextAlign,
+    vertical: VerticalAlign,
+  ) {
     const wrapper = getSelectedTextEditorImage();
     if (!wrapper) return;
-    const parent = wrapper.closest<HTMLElement>("p,div");
-    if (parent) parent.style.textAlign = align;
+
+    const parent =
+      wrapper.closest<HTMLElement>('[data-text-editor-image-row="true"]') ||
+      wrapper.closest<HTMLElement>("p,div");
+
+    if (!parent) return;
+
+    parent.setAttribute("data-text-editor-image-row", "true");
+    parent.style.display = "flex";
+    parent.style.width = "100%";
+    parent.style.minHeight = "240px";
+    parent.style.margin = "0";
+    parent.style.lineHeight = "0";
+    parent.style.textAlign = "initial";
+    parent.style.justifyContent =
+      horizontal === "left"
+        ? "flex-start"
+        : horizontal === "right"
+          ? "flex-end"
+          : "center";
+    parent.style.alignItems =
+      vertical === "top"
+        ? "flex-start"
+        : vertical === "bottom"
+          ? "flex-end"
+          : "center";
+
+    setSelectedTextEditorImageHorizontal(horizontal);
+    setSelectedTextEditorImageVertical(vertical);
     syncEditorHtml();
   }
 
@@ -14196,6 +14257,8 @@ function RightPanel(props: {
     wrapper.remove();
     if (parent && !parent.textContent?.trim() && !parent.querySelector("img")) parent.remove();
     setSelectedTextEditorImageId("");
+    setSelectedTextEditorImageHorizontal("center");
+    setSelectedTextEditorImageVertical("center");
     syncEditorHtml();
   }
 
@@ -16619,10 +16682,59 @@ function RightPanel(props: {
                           onChange={(event) => resizeSelectedTextEditorImage(Number(event.target.value))}
                           className="h-10 w-24 rounded-lg border border-gray-300 px-2 text-center text-sm font-black"
                         />
-                        <button type="button" onClick={() => alignSelectedTextEditorImage("left")} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black">왼쪽</button>
-                        <button type="button" onClick={() => alignSelectedTextEditorImage("center")} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black">가운데</button>
-                        <button type="button" onClick={() => alignSelectedTextEditorImage("right")} className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-black">오른쪽</button>
-                        <button type="button" onClick={deleteSelectedTextEditorImage} className="h-10 rounded-lg bg-red-600 px-3 text-xs font-black text-white">삭제</button>
+                        <div className="w-full">
+                          <p className="mb-2 text-xs font-black text-amber-900">
+                            이미지 위치
+                          </p>
+                          <div className="grid w-[168px] grid-cols-3 gap-1.5">
+                            {(
+                              [
+                                ["left", "top", "↖", "왼쪽 위"],
+                                ["center", "top", "↑", "가운데 위"],
+                                ["right", "top", "↗", "오른쪽 위"],
+                                ["left", "center", "←", "왼쪽 가운데"],
+                                ["center", "center", "◎", "정중앙"],
+                                ["right", "center", "→", "오른쪽 가운데"],
+                                ["left", "bottom", "↙", "왼쪽 아래"],
+                                ["center", "bottom", "↓", "가운데 아래"],
+                                ["right", "bottom", "↘", "오른쪽 아래"],
+                              ] as const
+                            ).map(([horizontal, vertical, icon, label]) => {
+                              const active =
+                                selectedTextEditorImageHorizontal === horizontal &&
+                                selectedTextEditorImageVertical === vertical;
+
+                              return (
+                                <button
+                                  key={`${horizontal}-${vertical}`}
+                                  type="button"
+                                  title={label}
+                                  aria-label={label}
+                                  onClick={() =>
+                                    positionSelectedTextEditorImage(
+                                      horizontal,
+                                      vertical,
+                                    )
+                                  }
+                                  className={`flex h-12 items-center justify-center rounded-lg border text-xl font-black transition ${
+                                    active
+                                      ? "border-amber-700 bg-amber-700 text-white"
+                                      : "border-amber-300 bg-white text-amber-950 hover:bg-amber-50"
+                                  }`}
+                                >
+                                  {icon}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={deleteSelectedTextEditorImage}
+                          className="h-10 rounded-lg bg-red-600 px-3 text-xs font-black text-white"
+                        >
+                          삭제
+                        </button>
                       </div>
                     </div>
                   ) : null}
@@ -18154,7 +18266,7 @@ function ImageCellUploader({
 
   const imageSize = Math.max(
     10,
-    Math.min(100, Number(cell.image_size_percent ?? 100)),
+    Math.min(200, Number(cell.image_size_percent ?? 100)),
   );
 
   const positionOptions: Array<{
@@ -18251,7 +18363,7 @@ function ImageCellUploader({
           <input
             type="range"
             min={10}
-            max={100}
+            max={200}
             step={1}
             value={imageSize}
             onChange={(event) =>
@@ -18263,13 +18375,13 @@ function ImageCellUploader({
             <input
               type="number"
               min={10}
-              max={100}
+              max={200}
               value={imageSize}
               onChange={(event) =>
                 onUpdate({
                   image_size_percent: Math.max(
                     10,
-                    Math.min(100, Number(event.target.value) || 10),
+                    Math.min(200, Number(event.target.value) || 10),
                   ),
                 })
               }
