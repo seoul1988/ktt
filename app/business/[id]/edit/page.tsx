@@ -9,6 +9,7 @@ import {
 } from "@react-google-maps/api";
 import { supabase } from "../../../../lib/supabase";
 import BottomNav from "../../../components/BottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
 
 const GOOGLE_MAP_LIBRARIES: Libraries = ["places"];
 
@@ -539,7 +540,6 @@ export default function EditBusinessPage() {
   const [externalVideoUrl, setExternalVideoUrl] = useState("");
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreview, setNewVideoPreview] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [websiteMenuItems, setWebsiteMenuItems] = useState<WebsiteMenuItem[]>([]);
   const [loadingMenuPrices, setLoadingMenuPrices] = useState(false);
   const [savingMenuPrices, setSavingMenuPrices] = useState(false);
@@ -2009,61 +2009,7 @@ const menuPriceInputRefs =
             Edit Business
           </h1>
 
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              className="flex h-11 w-14 items-center justify-center rounded-full bg-white text-2xl font-black shadow"
-            >
-              ⋯
-            </button>
-
-            {menuOpen && (
-              <div className="absolute right-0 top-12 z-50 w-52 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = isAdmin
-                      ? "/admin/businesses"
-                      : "/owner";
-                  }}
-                  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-                >
-                  {isAdmin ? "Admin Businesses" : "My Business"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = `/business/${businessId}`;
-                  }}
-                  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-                >
-                  View Business
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = "/my-coupons";
-                  }}
-                  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-                >
-                  My Coupons
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = "/profile";
-                  }}
-                  className="block w-full px-4 py-3 text-left hover:bg-gray-100"
-                >
-                  Profile
-                </button>
-              </div>
-            )}
-          </div>
+          <ProfileButton />
         </div>
 
         <div className="rounded-[32px] bg-white p-6 shadow-2xl">
