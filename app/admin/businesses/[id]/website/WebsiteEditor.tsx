@@ -10062,7 +10062,32 @@ function EditableCellContent({ cell, selectedCellId, onSelect, business, accentC
       </div>
     );
   }
-  return <CellPreview cell={cell} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />;
+  return (
+    <div
+      className="flex h-full w-full min-h-0 min-w-0 items-center justify-center"
+      onClickCapture={(event) => {
+        // 편집 화면에서는 로고·이미지·버튼·메뉴 등 내부 링크가 있어도
+        // 절대로 페이지 이동을 실행하지 않고 해당 셀만 선택합니다.
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect(cell.id);
+      }}
+      onAuxClickCapture={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect(cell.id);
+      }}
+    >
+      <CellPreview
+        cell={cell}
+        business={business}
+        accentColor={accentColor}
+        area={area}
+        previewDevice={previewDevice}
+        websiteSettings={websiteSettings}
+      />
+    </div>
+  );
 }
 
 function EditableGrid({
@@ -10318,24 +10343,19 @@ function EditableGrid({
                   : "ring-1 ring-inset ring-white/55 hover:ring-2 hover:ring-blue-400"
               }`}
               style={{
-                // 로고는 저장된 정렬값과 관계없이 항상 셀의 정중앙에 표시합니다.
                 justifyContent:
-                  cell.type === "logo"
-                    ? "center"
-                    : cell.text_align === "left"
-                      ? "flex-start"
-                      : cell.text_align === "right"
-                        ? "flex-end"
-                        : "center",
+                  cell.text_align === "left"
+                    ? "flex-start"
+                    : cell.text_align === "right"
+                      ? "flex-end"
+                      : "center",
                 alignItems:
-                  cell.type === "logo"
-                    ? "center"
-                    : cell.vertical_align === "top"
-                      ? "flex-start"
-                      : cell.vertical_align === "bottom"
-                        ? "flex-end"
-                        : "center",
-                textAlign: cell.type === "logo" ? "center" : cell.text_align || "center",
+                  cell.vertical_align === "top"
+                    ? "flex-start"
+                    : cell.vertical_align === "bottom"
+                      ? "flex-end"
+                      : "center",
+                textAlign: cell.text_align || "center",
                 color: cell.color || (area === "hero" ? "#ffffff" : "#111827"),
                 background:
                   area === "header"
@@ -10343,7 +10363,6 @@ function EditableGrid({
                     : cell.background_color || "transparent",
                 padding:
                   cell.child_cells?.length ||
-                  cell.type === "logo" ||
                   cell.type === "image" ||
                   (cell.type === "title" &&
                     (cell.display_mode === "background-image" ||
@@ -10560,7 +10579,7 @@ function CellPreview({
       <a
         href={homeHref}
         aria-label={`${business.name || "Business"} 홈으로 이동`}
-        className="flex h-full w-full shrink-0 items-center justify-center overflow-visible no-underline"
+        className="inline-flex max-h-full max-w-full shrink-0 items-center justify-center no-underline"
         onClick={(event) => {
           if (!business.id) event.preventDefault();
         }}
@@ -10569,21 +10588,17 @@ function CellPreview({
           <img
             src={logo}
             alt={`${business.name || "Business"} Logo`}
-            className="pointer-events-none block shrink-0 object-contain"
+            className="block max-w-none shrink-0 object-contain"
             style={{
-              // max-width/max-height 100%가 적용되면 셀 크기에 닿은 뒤부터
-              // 슬라이더를 움직여도 로고가 더 이상 커지지 않는 것처럼 보입니다.
-              // 저장된 px 값을 그대로 사용하고 셀 중앙을 기준으로 확대·축소합니다.
               width: `${logoSize}px`,
               height: `${logoSize}px`,
-              maxWidth: "none",
-              maxHeight: "none",
-              objectPosition: "center center",
+              maxWidth: "100%",
+              maxHeight: "100%",
             }}
           />
         ) : (
           <span
-            className="pointer-events-none flex shrink-0 items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
+            className="flex items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
             style={{
               width: `${logoSize}px`,
               height: `${logoSize}px`,
