@@ -1,14 +1,17 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 import { createClient } from "@/lib/supabase/server";
 
 type AccessSuccess = {
   ok: true;
-  userId: string;
+  userId: string | null;
   businessId: number;
   isAdmin: boolean;
+  isOwner: boolean;
+  authSource: "admin-cookie" | "supabase-profile" | "business-owner";
 };
 
 type AccessFailure = {
@@ -16,36 +19,106 @@ type AccessFailure = {
   response: NextResponse;
 };
 
-export type BusinessApiAccess = AccessSuccess | AccessFailure;
+export type BusinessApiAccessResult =
+  | AccessSuccess
+  | AccessFailure;
 
-function jsonError(message: string, status: number) {
-  return NextResponse.json(
-    { error: message },
-    {
-      status,
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-        Pragma: "no-cache",
-        Expires: "0",
+type ProfileRow = {
+  role: string | null;
+};
+
+type OwnerRow = {
+  business_id: number;
+  user_id: string;
+  status: string | null;
+};
+
+function errorResponse(
+  error: string,
+  status: number,
+  extra: Record<string, unknown> = {},
+): AccessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        ok: false,
+        error,
+        ...extra,
       },
-    },
+      {
+        status,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      },
+    ),
+  };
+}
+
+function normalizeRole(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function isAdministratorRole(value: unknown) {
+  const role = normalizeRole(value);
+
+  return (
+    role === "admin" ||
+    role === "administrator" ||
+    role === "super_admin" ||
+    role === "superadmin"
   );
 }
 
 /**
- * API Route 전용 권한 검사입니다.
+ * Website Builder API 공통 접근 검사
  *
- * - admin: 모든 비즈니스 허용
- * - owner: business_owners.status = approved인 자기 비즈니스만 허용
- * - 로그인 안 됨: 401
- * - 권한 없음: 403
+ * 허용 순서:
+ * 1. 기존 관리자 메뉴 로그인 쿠키(ktt_admin)
+ * 2. Supabase 로그인 사용자의 profiles.role 관리자 권한
+ * 3. 해당 업체의 approved 오너
  *
- * Service Role 키는 이후 DB/Storage 작업에만 사용하고,
- * 사용자 인증은 반드시 브라우저의 Supabase 로그인 쿠키로 확인합니다.
+ * 주의:
+ * ktt_admin 쿠키는 관리자 로그인 API에서 HttpOnly/Secure/SameSite로
+ * 안전하게 발급되고 있다는 현재 프로젝트 구조를 기준으로 사용합니다.
  */
 export async function requireBusinessApiAccess(
   businessId: number,
-): Promise<BusinessApiAccess> {
+): Promise<BusinessApiAccessResult> {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
+    return errorResponse("잘못된 business id입니다.", 400, {
+      code: "INVALID_BUSINESS_ID",
+    });
+  }
+
+  /*
+   * 기존 관리자 메뉴는 ktt_admin 쿠키로 관리자 여부를 판정합니다.
+   * Website Builder API에서도 같은 쿠키를 먼저 확인해야
+   * 관리자 메뉴 로그인 상태가 그대로 인정됩니다.
+   */
+  const cookieStore = await cookies();
+  const adminCookieRole = cookieStore.get("ktt_admin")?.value || "";
+
+  if (isAdministratorRole(adminCookieRole)) {
+    return {
+      ok: true,
+      userId: null,
+      businessId,
+      isAdmin: true,
+      isOwner: false,
+      authSource: "admin-cookie",
+    };
+  }
+
+  /*
+   * ktt_admin 쿠키가 없으면 일반 Supabase 로그인/오너 권한을 확인합니다.
+   */
   const supabase = await createClient();
 
   const {
@@ -53,64 +126,81 @@ export async function requireBusinessApiAccess(
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError || !user) {
-    return {
-      ok: false,
-      response: jsonError("로그인이 필요합니다.", 401),
-    };
+  if (userError) {
+    console.error("Business API auth lookup failed:", userError);
+
+    return errorResponse(
+      "로그인 상태를 확인하지 못했습니다.",
+      401,
+      { code: "AUTH_LOOKUP_FAILED" },
+    );
   }
 
-  const { data: profile, error: profileError } = await supabase
+  if (!user) {
+    return errorResponse(
+      "로그인이 필요합니다.",
+      401,
+      { code: "LOGIN_REQUIRED" },
+    );
+  }
+
+  const {
+    data: profile,
+    error: profileError,
+  } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
-    .maybeSingle<{ role: string | null }>();
+    .maybeSingle<ProfileRow>();
 
   if (profileError) {
-    console.error("Failed to load API access profile:", profileError);
-    return {
-      ok: false,
-      response: jsonError("사용자 권한을 확인하지 못했습니다.", 500),
-    };
+    console.error("Business API profile lookup failed:", profileError);
+
+    return errorResponse(
+      "관리자 권한 정보를 확인하지 못했습니다.",
+      500,
+      { code: "PROFILE_LOOKUP_FAILED" },
+    );
   }
 
-  if (profile?.role === "admin") {
+  if (isAdministratorRole(profile?.role)) {
     return {
       ok: true,
       userId: user.id,
       businessId,
       isAdmin: true,
+      isOwner: false,
+      authSource: "supabase-profile",
     };
   }
 
-  if (profile?.role !== "owner") {
-    return {
-      ok: false,
-      response: jsonError("이 작업을 수행할 권한이 없습니다.", 403),
-    };
-  }
-
-  const { data: ownerLink, error: ownerError } = await supabase
+  const {
+    data: ownerLink,
+    error: ownerError,
+  } = await supabase
     .from("business_owners")
-    .select("business_id,status")
-    .eq("user_id", user.id)
+    .select("business_id,user_id,status")
     .eq("business_id", businessId)
+    .eq("user_id", user.id)
     .eq("status", "approved")
-    .maybeSingle<{ business_id: number; status: string | null }>();
+    .maybeSingle<OwnerRow>();
 
   if (ownerError) {
-    console.error("Failed to verify business owner API access:", ownerError);
-    return {
-      ok: false,
-      response: jsonError("비즈니스 권한을 확인하지 못했습니다.", 500),
-    };
+    console.error("Business API owner lookup failed:", ownerError);
+
+    return errorResponse(
+      "비즈니스 권한을 확인하지 못했습니다.",
+      500,
+      { code: "OWNER_LOOKUP_FAILED" },
+    );
   }
 
   if (!ownerLink) {
-    return {
-      ok: false,
-      response: jsonError("승인된 비즈니스 오너만 사용할 수 있습니다.", 403),
-    };
+    return errorResponse(
+      "이 비즈니스를 관리할 권한이 없습니다.",
+      403,
+      { code: "BUSINESS_ACCESS_DENIED" },
+    );
   }
 
   return {
@@ -118,5 +208,7 @@ export async function requireBusinessApiAccess(
     userId: user.id,
     businessId,
     isAdmin: false,
+    isOwner: true,
+    authSource: "business-owner",
   };
 }
