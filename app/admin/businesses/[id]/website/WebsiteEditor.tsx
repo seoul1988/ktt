@@ -845,19 +845,19 @@ function normalizeSettings(
           ],
     header_height_px:
       Number.isFinite(Number(source.header_height_px))
-        ? Math.max(64, Math.min(240, Number(source.header_height_px)))
+        ? Math.max(48, Math.min(1200, Number(source.header_height_px)))
         : 104,
     header_logo_size_px:
       Number.isFinite(Number(source.header_logo_size_px))
-        ? Math.max(24, Math.min(400, Number(source.header_logo_size_px)))
-        : 56,
+        ? Math.max(40, Math.min(1200, Number(source.header_logo_size_px)))
+        : 120,
     header_title_font_size_px:
       Number.isFinite(Number(source.header_title_font_size_px))
-        ? Math.max(14, Math.min(64, Number(source.header_title_font_size_px)))
+        ? Math.max(10, Math.min(160, Number(source.header_title_font_size_px)))
         : 24,
     header_button_height_px:
       Number.isFinite(Number(source.header_button_height_px))
-        ? Math.max(32, Math.min(90, Number(source.header_button_height_px)))
+        ? Math.max(24, Math.min(160, Number(source.header_button_height_px)))
         : 46,
     header_vertical_padding_px:
       Number.isFinite(Number(source.header_vertical_padding_px))
@@ -4542,6 +4542,34 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           nextSettings.app_icon_url = changedLogoUrl;
         }
 
+        const verticalPadding = Math.max(
+          0,
+          Math.min(
+            48,
+            Number(nextSettings.header_vertical_padding_px || 8),
+          ),
+        );
+
+        if (
+          changedCellType === "logo" &&
+          Object.prototype.hasOwnProperty.call(patch, "logo_size_px")
+        ) {
+          nextSettings.header_logo_size_px = Math.max(
+            40,
+            Math.min(1200, Number(patch.logo_size_px) || 120),
+          );
+        }
+
+        if (
+          changedCellType === "title" &&
+          Object.prototype.hasOwnProperty.call(patch, "font_size")
+        ) {
+          nextSettings.header_title_font_size_px = Math.max(
+            10,
+            Math.min(160, Number(patch.font_size) || 24),
+          );
+        }
+
         return {
           ...current,
           website_settings: nextSettings,
@@ -4664,7 +4692,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     layoutId?: string,
   ) {
     const normalizedHeight = Math.round(
-      Math.max(area === "header" ? 64 : 100, Math.min(3000, heightPx)),
+      Math.max(area === "header" ? 48 : 100, Math.min(3000, heightPx)),
     );
 
     if (area === "header") {
@@ -4684,10 +4712,10 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           ...current,
           website_settings: {
             ...settings,
-            header_height_px: Math.min(240, normalizedHeight),
+            header_height_px: Math.min(1200, normalizedHeight),
             header_grid: {
               ...headerGrid,
-              height_px: Math.min(240, normalizedHeight),
+              height_px: Math.min(1200, normalizedHeight),
               center_offset_y_px: 0,
               cells: headerGrid.cells.map((cell) => ({
                 ...cell,
@@ -9480,11 +9508,11 @@ function MobileWebsiteHeader({
                 ...logoCell,
                 logo_size_px: Math.min(
                   Number(
-                    logoCell.logo_size_px ||
-                      websiteSettings?.header_logo_size_px ||
-                      56,
+                    logoCell.logo_size_px ??
+                      websiteSettings?.header_logo_size_px ??
+                      120,
                   ),
-                  62,
+                  Math.max(40, mobileHeight - 16),
                 ),
               }}
               business={business}
@@ -9503,7 +9531,7 @@ function MobileWebsiteHeader({
                 cell={{
                   ...titleCell,
                   text_align: "center",
-                  font_size: Math.min(Number(titleCell.font_size || 20), 20),
+                  font_size: Math.min(Number(websiteSettings?.header_title_font_size_px ?? titleCell.font_size ?? 24), 48),
                   color: mobileTitleColor,
                 }}
                 business={business}
@@ -10208,7 +10236,7 @@ function EditableGrid({
     event.preventDefault();
     event.stopPropagation();
 
-    const minimum = area === "header" ? 96 : 100;
+    const minimum = area === "header" ? 48 : 100;
     const nextHeight = Math.max(
       minimum,
       Math.min(3000, heightDragging.startHeight + event.clientY - heightDragging.startY),
@@ -10325,8 +10353,8 @@ function EditableGrid({
         maxHeight: autoMobileBusinessHours ? undefined : `${localHeight}px`,
         aspectRatio: undefined,
         minHeight: autoMobileBusinessHours
-          ? `${area === "header" ? 96 : 100}px`
-          : `${area === "header" ? 96 : 100}px`,
+          ? `${area === "header" ? 48 : 100}px`
+          : `${area === "header" ? 48 : 100}px`,
         gridTemplateColumns: localWidths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -10560,16 +10588,22 @@ function CellPreview({
   const fontWeight = cell.font_weight === "black" ? 900 : cell.font_weight === "bold" ? 700 : cell.font_weight === "semibold" ? 600 : 400;
   const responsiveFontSize =
     previewDevice === "mobile"
-      ? Math.min(cell.font_size || 16, area === "header" ? 18 : 30)
+      ? Math.min(cell.font_size || 16, area === "header" ? 48 : 30)
       : cell.font_size || 16;
-  const configuredHeaderTitleSize = Number(
-    websiteSettings?.header_title_font_size_px || responsiveFontSize,
+  const configuredHeaderTitleSize = Math.max(
+    10,
+    Math.min(
+      160,
+      Number(
+        websiteSettings?.header_title_font_size_px ??
+          cell.font_size ??
+          responsiveFontSize,
+      ),
+    ),
   );
   const effectiveFontSize =
     area === "header" && cell.type === "title"
-      ? previewDevice === "mobile"
-        ? Math.min(configuredHeaderTitleSize, 22)
-        : configuredHeaderTitleSize
+      ? configuredHeaderTitleSize
       : responsiveFontSize;
   const fontFamily =
     cell.font_family === "serif"
@@ -10583,12 +10617,44 @@ function CellPreview({
 
   if (cell.type === "logo") {
     const logo = cell.image_url || "";
-    const fallbackLogoSize =
+    const requestedLogoSize = Math.max(
+      40,
+      Math.min(
+        1200,
+        Number(
+          websiteSettings?.header_logo_size_px ??
+            cell.logo_size_px ??
+            120,
+        ),
+      ),
+    );
+
+    const actualHeaderHeight = Math.max(
+      48,
+      Math.min(
+        1200,
+        Number(
+          websiteSettings?.header_grid?.height_px ||
+            websiteSettings?.header_height_px ||
+            104,
+        ),
+      ),
+    );
+    const headerPadding = Math.max(
+      0,
+      Math.min(
+        48,
+        Number(websiteSettings?.header_vertical_padding_px || 8),
+      ),
+    );
+    const availableHeight =
       area === "header"
-        ? Number(websiteSettings?.header_logo_size_px || 56)
-        : 120;
-    const configuredLogoSize = Number(cell.logo_size_px || fallbackLogoSize);
-    const logoSize = Math.max(24, Math.min(400, configuredLogoSize));
+        ? Math.max(24, actualHeaderHeight - headerPadding * 2)
+        : requestedLogoSize;
+
+    // 로고 크기 변경은 헤더 높이에 영향을 주지 않습니다.
+    // 지정 크기 그대로 중앙에 배치하고, 헤더보다 크면 헤더 영역에서 잘립니다.
+    const logoSize = requestedLogoSize;
 
     const homeHref = business.id
       ? `/business/${business.id}/website`
@@ -10598,7 +10664,7 @@ function CellPreview({
       <a
         href={homeHref}
         aria-label={`${business.name || "Business"} 홈으로 이동`}
-        className="inline-flex max-h-full max-w-full shrink-0 items-center justify-center no-underline"
+        className="relative z-20 block h-full w-full min-h-0 min-w-0 overflow-hidden no-underline"
         onClick={(event) => {
           if (!business.id) event.preventDefault();
         }}
@@ -10607,21 +10673,27 @@ function CellPreview({
           <img
             src={logo}
             alt={`${business.name || "Business"} Logo`}
-            className="block max-w-none shrink-0 object-contain"
+            className="absolute left-1/2 top-1/2 block shrink-0 object-contain object-center"
             style={{
               width: `${logoSize}px`,
               height: `${logoSize}px`,
-              maxWidth: "100%",
-              maxHeight: "100%",
+              maxWidth: "none",
+              maxHeight: "none",
+              transform: "translate(-50%, -50%)",
+              transformOrigin: "center center",
             }}
           />
         ) : (
           <span
-            className="flex items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
+            className="absolute left-1/2 top-1/2 flex shrink-0 items-center justify-center rounded-full bg-gray-200 font-black text-gray-600"
             style={{
               width: `${logoSize}px`,
               height: `${logoSize}px`,
+              maxWidth: "none",
+              maxHeight: "none",
               fontSize: `${Math.max(10, logoSize / 4)}px`,
+              transform: "translate(-50%, -50%)",
+              transformOrigin: "center center",
             }}
           >
             LOGO
@@ -11216,12 +11288,20 @@ function CellPreview({
       );
     }
 
-    const titleHtml = sanitizeCellRichTextHtml(
+    const rawTitleHtml = sanitizeCellRichTextHtml(
       cell.rich_text_html || escapeCellText(cell.text || business.name || "제목"),
     );
+    const titleHtml =
+      area === "header"
+        ? rawTitleHtml
+            .replace(/font-size\s*:\s*[^;"']+;?/gi, "")
+            .replace(/\ssize\s*=\s*(["']).*?\1/gi, "")
+            .replace(/<font\b[^>]*>/gi, "<span>")
+            .replace(/<\/font>/gi, "</span>")
+        : rawTitleHtml;
     return (
       <div
-        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        className="cell-rich-text flex h-full min-h-0 min-w-0 max-w-full w-full flex-col overflow-hidden leading-tight [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_*]:!leading-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
           color: cell.color || "#111827",
@@ -11472,34 +11552,30 @@ function HeaderSubmenuEditor({
               {[
                 {
                   label: "Header 높이",
-                  value: Number(websiteSettings.header_height_px || 104),
-                  min: 64,
-                  max: 240,
+                  value: Number(
+                    websiteSettings.header_grid?.height_px ||
+                      websiteSettings.header_height_px ||
+                      104,
+                  ),
+                  min: 48,
+                  max: 1200,
                   key: "header_height_px",
                 },
                 {
                   label: "기본 헤더 로고 크기",
-                  value: Number(websiteSettings.header_logo_size_px || 56),
-                  min: 24,
-                  max: 400,
+                  value: Number(websiteSettings.header_logo_size_px || 120),
+                  min: 40,
+                  max: 1200,
                   key: "header_logo_size_px",
                 },
-                {
-                  label: "제목 글자 크기",
-                  value: Number(
-                    websiteSettings.header_title_font_size_px || 24,
-                  ),
-                  min: 14,
-                  max: 64,
-                  key: "header_title_font_size_px",
-                },
+               
                 {
                   label: "버튼 높이",
                   value: Number(
                     websiteSettings.header_button_height_px || 46,
                   ),
-                  min: 32,
-                  max: 90,
+                  min: 24,
+                  max: 160,
                   key: "header_button_height_px",
                 },
                 {
@@ -11545,6 +11621,78 @@ function HeaderSubmenuEditor({
                               ...cell,
                               vertical_align: "center",
                             })),
+                          },
+                        });
+                        return;
+                      }
+
+                      const currentHeaderGrid = normalizeGrid(
+                        websiteSettings.header_grid,
+                        createDefaultHeader(""),
+                      );
+
+                      if (control.key === "header_logo_size_px") {
+                        const currentHeaderGrid = normalizeGrid(
+                          websiteSettings.header_grid,
+                          createDefaultHeader(""),
+                        );
+
+                        onUpdate({
+                          header_logo_size_px: nextValue,
+                          header_grid: {
+                            ...currentHeaderGrid,
+                            cells: currentHeaderGrid.cells.map((cell) =>
+                              cell.type === "logo"
+                                ? {
+                                    ...cell,
+                                    logo_size_px: nextValue,
+                                    vertical_align: "center" as const,
+                                  }
+                                : cell,
+                            ),
+                          },
+                        });
+                        return;
+                      }
+
+                      if (control.key === "header_title_font_size_px") {
+                        const currentHeaderGrid = normalizeGrid(
+                          websiteSettings.header_grid,
+                          createDefaultHeader(""),
+                        );
+
+                        onUpdate({
+                          header_title_font_size_px: nextValue,
+                          header_grid: {
+                            ...currentHeaderGrid,
+                            cells: currentHeaderGrid.cells.map((cell) =>
+                              cell.type === "title"
+                                ? {
+                                    ...cell,
+                                    font_size: nextValue,
+                                    vertical_align: "center" as const,
+                                  }
+                                : cell,
+                            ),
+                          },
+                        });
+                        return;
+                      }
+
+                      if (control.key === "header_button_height_px") {
+                        onUpdate({
+                          header_button_height_px: nextValue,
+                          header_grid: {
+                            ...currentHeaderGrid,
+                            cells: currentHeaderGrid.cells.map((cell) =>
+                              cell.type === "button"
+                                ? {
+                                    ...cell,
+                                    button_height_px: nextValue,
+                                    vertical_align: "center" as const,
+                                  }
+                                : cell,
+                            ),
                           },
                         });
                         return;
@@ -15781,20 +15929,20 @@ function RightPanel(props: {
                 <div className="flex items-center gap-1 rounded-xl border border-gray-300 bg-white px-2">
                   <input
                     type="number"
-                    min={24}
-                    max={400}
+                    min={40}
+                    max={1200}
                     value={Math.round(
                       Number(
-                        selectedCell.logo_size_px ||
+                        selectedCell.logo_size_px ??
                           (area === "header"
-                            ? websiteSettings.header_logo_size_px || 56
-                            : 120),
+                            ? websiteSettings.header_logo_size_px ?? 120
+                            : 180),
                       ),
                     )}
                     onChange={(event) => {
                       const next = Math.max(
-                        24,
-                        Math.min(400, Number(event.target.value) || 24),
+                        40,
+                        Math.min(1200, Number(event.target.value) || 40),
                       );
                       props.onUpdateCell(
                         area,
@@ -15811,18 +15959,18 @@ function RightPanel(props: {
 
               <input
                 type="range"
-                min={24}
-                max={400}
+                min={40}
+                max={1200}
                 step={1}
                 value={Math.max(
-                  24,
+                  40,
                   Math.min(
-                    400,
+                    1200,
                     Number(
-                      selectedCell.logo_size_px ||
+                      selectedCell.logo_size_px ??
                         (area === "header"
-                          ? websiteSettings.header_logo_size_px || 56
-                          : 120),
+                          ? websiteSettings.header_logo_size_px ?? 120
+                          : 180),
                     ),
                   ),
                 )}
@@ -15838,12 +15986,12 @@ function RightPanel(props: {
               />
 
               <div className="mt-2 flex justify-between text-[11px] font-bold text-gray-400">
-                <span>24px</span>
-                <span>400px</span>
+                <span>40px</span>
+                <span>1200px</span>
               </div>
 
               <div className="mt-3 grid grid-cols-4 gap-2">
-                {[60, 100, 150, 220].map((size) => (
+                {[100, 200, 400, 700].map((size) => (
                   <button
                     key={size}
                     type="button"
