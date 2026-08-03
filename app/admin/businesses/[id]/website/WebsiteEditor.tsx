@@ -14653,16 +14653,16 @@ function RightPanel(props: {
               </button>
             </div>
 
-            <VideoHeroUploader
-              businessId={businessId}
-              section={heroSection}
-              onUpdate={(patch) =>
-                props.onUpdateSectionContent(
-                  heroSection.id,
-                  patch,
-                )
-              }
-            />
+           <VideoHeroUploader
+  businessId={props.businessId}
+  section={heroSection}
+  onUpdate={(patch) =>
+    props.onUpdateSectionContent(
+      heroSection.id,
+      patch,
+    )
+  }
+/>
 
             <div className="rounded-xl bg-white p-3">
               <p className="text-xs font-black text-gray-700">
