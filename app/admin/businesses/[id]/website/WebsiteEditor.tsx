@@ -8396,6 +8396,20 @@ export function PublicWebsiteRenderer({
   }, [outerBackgroundColor]);
 
   const normalizedSlug = slugifyMenuValue(pageSlug || "home") || "home";
+
+  // Menu 링크 페이지에서는 모바일 헤더를 고정하지 않습니다.
+  // 일반 menu slug뿐 아니라 Restaurant Menu로 지정된 링크 페이지도 포함합니다.
+  const isMenuPage =
+    normalizedSlug === "menu" ||
+    sections.some(
+      (section) =>
+        section.content?.page_type === "link-page" &&
+        section.content?.link_page_kind === "restaurant-menu" &&
+        slugifyMenuValue(
+          String(section.content?.page_slug || section.title || ""),
+        ) === normalizedSlug,
+    );
+
   const visibleSections = [...sections]
     // 이전 데이터에서 is_visible이 null이어도 공개되도록 false만 제외합니다.
     .filter((section) => section.is_visible !== false)
@@ -8508,7 +8522,7 @@ export function PublicWebsiteRenderer({
       >
         <header
           className={
-            device === "mobile"
+            device === "mobile" && !isMenuPage
               ? "fixed inset-x-0 top-0 z-[1000] w-full overflow-visible shadow-md"
               : "relative z-[100] w-full overflow-visible"
           }
@@ -8535,7 +8549,7 @@ export function PublicWebsiteRenderer({
           </div>
         </header>
 
-        {device === "mobile" ? (
+        {device === "mobile" && !isMenuPage ? (
           <div
             aria-hidden="true"
             className="w-full"
@@ -15418,7 +15432,7 @@ function RightPanel(props: {
           </div>
         ) : null}
 
-        {selectedCell.type === "title" ? (
+        {area !== "header" || selectedCell.type === "title" ? (
           <TitleCellEditor
             businessId={props.businessId}
             adminKey={props.adminKey}
@@ -18017,6 +18031,15 @@ function TitleCellEditor({
       return;
     }
 
+    // 파일을 선택하는 즉시 편집 레이어에 로컬 미리보기를 표시합니다.
+    // 서버 업로드가 끝나면 아래에서 실제 저장 URL로 자동 교체합니다.
+    const previousImageUrl = String(cell.image_url || "");
+    const previewUrl = URL.createObjectURL(file);
+    onUpdate({
+      image_url: previewUrl,
+      display_mode: targetMode,
+    });
+
     setUploading(true);
 
     try {
@@ -18051,7 +18074,14 @@ function TitleCellEditor({
       if (!imageUrl) throw new Error("업로드된 이미지 주소를 받지 못했습니다.");
 
       onUpdate({ image_url: imageUrl, display_mode: targetMode });
+      URL.revokeObjectURL(previewUrl);
     } catch (error) {
+      // 업로드 실패 시 깨진 임시 주소를 남기지 않고 이전 이미지로 복구합니다.
+      onUpdate({
+        image_url: previousImageUrl,
+        display_mode: targetMode,
+      });
+      URL.revokeObjectURL(previewUrl);
       setUploadError(
         error instanceof Error
           ? error.message
@@ -18070,16 +18100,20 @@ function TitleCellEditor({
   setImageLoadError("");
 
   try {
-    const response = await fetch(
-      `/api/admin/businesses/${encodeURIComponent(
-        businessId,
-      )}/website/images`,
-      {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      },
-    );
+    const imageEndpoint =
+      requestedMode === "gallery"
+        ? `/api/owner/businesses/${encodeURIComponent(
+            businessId,
+          )}/gallery`
+        : `/api/admin/businesses/${encodeURIComponent(
+            businessId,
+          )}/website/images`;
+
+    const response = await fetch(imageEndpoint, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
 
     const result = await readApiResponse(response);
 
@@ -18153,7 +18187,9 @@ function TitleCellEditor({
     setImageLoadError(
       error instanceof Error
         ? error.message
-        : "DB 이미지를 불러오지 못했습니다.",
+        : requestedMode === "gallery"
+          ? "갤러리 전용 이미지를 불러오지 못했습니다."
+          : "대표이미지를 불러오지 못했습니다.",
     );
   } finally {
     setLoadingImages(false);
@@ -19261,7 +19297,9 @@ function TitleCellEditor({
                     : "이미지 갤러리"}
               </p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
-                DB 이미지를 불러온 뒤 원하는 사진을 체크하세요.
+                {mode === "gallery"
+                  ? "갤러리 관리에서 별도로 등록한 사진만 불러옵니다. 대표이미지와 섞이지 않습니다."
+                  : "대표이미지 목록에서 슬라이드에 사용할 사진을 선택하세요."}
               </p>
             </div>
             <button
@@ -19278,9 +19316,24 @@ function TitleCellEditor({
 }
               className="shrink-0 rounded-xl bg-gray-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
             >
-              {loadingImages ? "불러오는 중" : "DB 이미지 불러오기"}
+              {loadingImages
+                ? "불러오는 중"
+                : mode === "gallery"
+                  ? "갤러리 이미지 불러오기"
+                  : "대표이미지 불러오기"}
             </button>
           </div>
+
+          {mode === "gallery" ? (
+            <a
+              href={`/owner/business/${businessId}/gallery`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 no-underline"
+            >
+              갤러리 전용 이미지 등록창 열기 →
+            </a>
+          ) : null}
 
           {availableImages.length ? (
             <div className="mt-3 grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
@@ -19317,7 +19370,9 @@ function TitleCellEditor({
             </div>
           ) : (
             <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">
-              DB 이미지 불러오기를 눌러주세요.
+              {mode === "gallery"
+                ? "갤러리 이미지 불러오기를 눌러주세요."
+                : "대표이미지 불러오기를 눌러주세요."}
             </div>
           )}
 
