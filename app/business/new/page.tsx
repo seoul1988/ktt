@@ -429,6 +429,10 @@ export default function NewBusinessPage() {
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 
+  // 각 사진이 웹사이트 자동 이미지 슬라이드에 사용되는지 저장합니다.
+  // 새 사진은 기본적으로 슬라이드에 사용하지 않습니다.
+  const [photoSliderEnabled, setPhotoSliderEnabled] = useState<boolean[]>([]);
+
   const [flipbookAdFiles, setFlipbookAdFiles] = useState<
     Partial<Record<FlipbookAdSize, File>>
   >({});
@@ -1086,6 +1090,10 @@ export default function NewBusinessPage() {
       ...prev,
       ...optimizedFiles.map((file) => URL.createObjectURL(file)),
     ]);
+    setPhotoSliderEnabled((prev) => [
+      ...prev,
+      ...optimizedFiles.map(() => false),
+    ]);
   }
 
   function removePhoto(index: number) {
@@ -1095,6 +1103,16 @@ export default function NewBusinessPage() {
       URL.revokeObjectURL(prev[index]);
       return prev.filter((_, i) => i !== index);
     });
+
+    setPhotoSliderEnabled((prev) =>
+      prev.filter((_, i) => i !== index),
+    );
+  }
+
+  function togglePhotoSlider(index: number) {
+    setPhotoSliderEnabled((prev) =>
+      prev.map((enabled, i) => (i === index ? !enabled : enabled)),
+    );
   }
 
   async function handleFlipbookAdChange(
@@ -1521,6 +1539,11 @@ export default function NewBusinessPage() {
         image_url: imageUrls[0] || "",
         image_urls: imageUrls,
 
+        // 체크된 사진만 웹사이트 자동 이미지 슬라이드에 사용합니다.
+        slider_image_urls: imageUrls.filter(
+          (_, index) => photoSliderEnabled[index] === true,
+        ),
+
         // Uploaded video files only go here.
         video_urls: uploadedVideoUrl ? [uploadedVideoUrl] : [],
 
@@ -1808,6 +1831,10 @@ export default function NewBusinessPage() {
                 <p className="text-xs font-bold text-gray-500">
                   {photoFiles.length}/6 photos selected
                 </p>
+                <p className="mt-1 text-[11px] font-bold leading-4 text-blue-700">
+                  사진마다 “웹사이트 슬라이드”를 체크하세요. 체크된 사진만
+                  자동 이미지 슬라이드에 표시됩니다.
+                </p>
               </div>
 
               <button
@@ -1830,27 +1857,56 @@ export default function NewBusinessPage() {
 
             {photoPreviews.length > 0 && (
               <div className="grid grid-cols-3 gap-2">
-                {photoPreviews.map((preview, index) => (
-                  <div key={preview} className="relative">
-                    <img
-                      src={preview}
-                      alt={`Business preview ${index + 1}`}
-                      className="h-24 w-full rounded-xl object-cover"
-                    />
+                {photoPreviews.map((preview, index) => {
+                  const sliderEnabled =
+                    photoSliderEnabled[index] === true;
 
-                    <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
-                      {index + 1}
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(index)}
-                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
+                  return (
+                    <div
+                      key={preview}
+                      className="overflow-hidden rounded-xl border bg-white"
                     >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                      <div className="relative">
+                        <img
+                          src={preview}
+                          alt={`Business preview ${index + 1}`}
+                          className="h-24 w-full object-cover"
+                        />
+
+                        <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+                          {index + 1}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(index)}
+                          className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white shadow"
+                          aria-label={`사진 ${index + 1} 삭제`}
+                        >
+                          ×
+                        </button>
+                      </div>
+
+                      <label
+                        className={`flex cursor-pointer items-center gap-2 px-2 py-2 text-[11px] font-black ${
+                          sliderEnabled
+                            ? "bg-green-50 text-green-800"
+                            : "bg-gray-50 text-gray-500"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={sliderEnabled}
+                          onChange={() => togglePhotoSlider(index)}
+                          className="h-4 w-4 shrink-0"
+                        />
+                        <span className="leading-4">
+                          웹사이트 슬라이드
+                        </span>
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

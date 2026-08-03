@@ -44,12 +44,14 @@ type BusinessPhotoItem =
       id: string;
       kind: "existing";
       url: string;
+      use_in_slider: boolean;
     }
   | {
       id: string;
       kind: "new";
       url: string;
       file: File;
+      use_in_slider: boolean;
     };
 
 const flipbookAdOptions = [
@@ -87,6 +89,7 @@ type Business = {
   image_url: string | null;
   thumbnail_url?: string | null;
   image_urls?: string[] | null;
+  slider_image_urls?: string[] | null;
   lat?: number | null;
   lng?: number | null;
   tags: string | null;
@@ -650,11 +653,21 @@ const menuPriceInputRefs =
     setTags(b.tags || "");
     setWebsiteUrl(b.website_url || "");
     setInstagramUrl(b.instagram_url || "");
+    const savedSliderImageUrls = Array.isArray(b.slider_image_urls)
+      ? b.slider_image_urls
+      : null;
+
     setPhotoItems(
       images.map((url, index) => ({
         id: `existing-${index}-${url}`,
         kind: "existing" as const,
         url,
+        // 기존 데이터에 slider_image_urls가 아직 없으면 이전 동작을 유지하기 위해
+        // 기존 이미지 전체를 슬라이드용으로 선택합니다.
+        use_in_slider:
+          savedSliderImageUrls === null
+            ? true
+            : savedSliderImageUrls.includes(url),
       })),
     );
     setExistingVideoUrl(
@@ -961,6 +974,8 @@ const menuPriceInputRefs =
         kind: "new" as const,
         url: URL.createObjectURL(file),
         file,
+        // 새 이미지는 사용자가 직접 체크한 경우에만 웹사이트 슬라이드에 사용합니다.
+        use_in_slider: false,
       }));
 
       setPhotoItems((prev) => [...prev, ...newItems]);
@@ -973,6 +988,16 @@ const menuPriceInputRefs =
     } finally {
       setOptimizingPhotos(false);
     }
+  }
+
+  function togglePhotoSliderUsage(photoId: string) {
+    setPhotoItems((prev) =>
+      prev.map((item) =>
+        item.id === photoId
+          ? { ...item, use_in_slider: !item.use_in_slider }
+          : item,
+      ),
+    );
   }
 
   function movePhoto(sourceId: string, targetId: string) {
@@ -1059,6 +1084,12 @@ const menuPriceInputRefs =
       )
       .map((photo) => photo.url);
     const nextMainImage = nextExistingUrls[0] || null;
+    const nextSliderImageUrls = nextItems
+      .filter(
+        (photo): photo is Extract<BusinessPhotoItem, { kind: "existing" }> =>
+          photo.kind === "existing" && photo.use_in_slider,
+      )
+      .map((photo) => photo.url);
 
     try {
       setDeletingPhotoIndex(
@@ -1070,9 +1101,10 @@ const menuPriceInputRefs =
         .update({
           image_urls: nextExistingUrls,
           image_url: nextMainImage,
+          slider_image_urls: nextSliderImageUrls,
         })
         .eq("id", business.id)
-        .select("id,image_url,image_urls")
+        .select("id,image_url,image_urls,slider_image_urls")
         .maybeSingle();
 
       if (dbError) throw dbError;
@@ -1101,6 +1133,7 @@ const menuPriceInputRefs =
         ...business,
         image_urls: updatedBusiness.image_urls || [],
         image_url: updatedBusiness.image_url || null,
+        slider_image_urls: updatedBusiness.slider_image_urls || [],
       });
 
       try {
@@ -1850,14 +1883,23 @@ const menuPriceInputRefs =
       return;
     }
 
-    const finalImageUrls = photoItems
-      .map((item) =>
-        item.kind === "existing"
-          ? item.url
-          : uploadedPhotoUrls.get(item.id) || "",
-      )
-      .filter(Boolean)
+    const resolvedPhotoUrls = photoItems
+      .map((item) => ({
+        id: item.id,
+        url:
+          item.kind === "existing"
+            ? item.url
+            : uploadedPhotoUrls.get(item.id) || "",
+        use_in_slider: item.use_in_slider,
+      }))
+      .filter((item) => Boolean(item.url))
       .slice(0, 6);
+
+    const finalImageUrls = resolvedPhotoUrls.map((item) => item.url);
+    const finalSliderImageUrls = resolvedPhotoUrls
+      .filter((item) => item.use_in_slider)
+      .map((item) => item.url);
+
     const cleanExternalVideoUrl = externalVideoUrl.trim();
 
     const finalUploadedVideoUrl =
@@ -1887,6 +1929,7 @@ const menuPriceInputRefs =
       instagram_url: instagramUrl,
       image_url: finalImageUrls[0] || null,
       image_urls: finalImageUrls,
+      slider_image_urls: finalSliderImageUrls,
       video_urls: finalUploadedVideoUrl ? [finalUploadedVideoUrl] : [],
       external_video_url: finalExternalVideoUrl,
       lat: selectedLat,
@@ -2514,12 +2557,33 @@ const menuPriceInputRefs =
                         : ""
                     }`}
                   >
-                    <img
-                      src={item.url}
-                      alt={`Business photo ${index + 1}`}
-                      draggable={false}
-                      className="h-24 w-full rounded-xl object-cover"
-                    />
+                    <div className="relative">
+                      <img
+                        src={item.url}
+                        alt={`Business photo ${index + 1}`}
+                        draggable={false}
+                        className="h-24 w-full rounded-t-xl object-cover"
+                      />
+
+                      <label
+                        className={`flex cursor-pointer items-center justify-center gap-2 rounded-b-xl border-x border-b px-2 py-2 text-[11px] font-black ${
+                          item.use_in_slider
+                            ? "border-blue-300 bg-blue-50 text-blue-700"
+                            : "border-gray-200 bg-white text-gray-500"
+                        }`}
+                        onClick={(event) => event.stopPropagation()}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onTouchStart={(event) => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.use_in_slider}
+                          onChange={() => togglePhotoSliderUsage(item.id)}
+                          className="h-4 w-4"
+                        />
+                        웹사이트 슬라이드에 사용
+                      </label>
+                    </div>
 
                     {index === 0 && (
                       <span className="absolute left-1 top-1 rounded-full bg-[#C4483A] px-2 py-0.5 text-[9px] font-black text-white shadow">
@@ -2527,7 +2591,7 @@ const menuPriceInputRefs =
                       </span>
                     )}
 
-                    <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
+                    <span className="absolute bottom-10 left-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white">
                       {index + 1}
                     </span>
 
@@ -2540,7 +2604,7 @@ const menuPriceInputRefs =
                       {deletingPhotoIndex === index ? "…" : "×"}
                     </button>
 
-                    <div className="absolute bottom-1 right-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-gray-700 shadow">
+                    <div className="absolute bottom-10 right-1 rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-black text-gray-700 shadow">
                       ↕
                     </div>
                   </div>
@@ -2801,4 +2865,3 @@ const menuPriceInputRefs =
     </main>
   );
 }
-
