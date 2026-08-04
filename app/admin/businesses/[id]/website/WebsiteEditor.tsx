@@ -14295,7 +14295,7 @@ function RightPanel(props: {
   const [selectedTextEditorTableRowHeight, setSelectedTextEditorTableRowHeight] =
     useState(120);
   const [selectedTextEditorTableBorderVisible, setSelectedTextEditorTableBorderVisible] =
-    useState(true);
+    useState(false);
   const [selectedTextEditorTableLeftWidth, setSelectedTextEditorTableLeftWidth] =
     useState(38);
   const [selectedTextEditorTableCellPadding, setSelectedTextEditorTableCellPadding] =
@@ -14380,7 +14380,7 @@ function RightPanel(props: {
     setSelectedTextEditorTableId("");
     setSelectedTextEditorTableWidth(100);
     setSelectedTextEditorTableRowHeight(120);
-    setSelectedTextEditorTableBorderVisible(true);
+    setSelectedTextEditorTableBorderVisible(false);
     setSelectedTextEditorTableLeftWidth(38);
     setSelectedTextEditorTableCellPadding(20);
     setSelectedTextEditorTableVerticalAlign("middle");
@@ -14482,12 +14482,13 @@ function RightPanel(props: {
     const tableId = createId("text-editor-table");
 
     insertTextEditorHtmlAtCursor(
-      `<table data-text-editor-table-id="${tableId}" data-mobile-stack="true" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:12px;margin-right:auto;margin-bottom:12px;margin-left:auto;"><tbody><tr data-profile-top-row="true"><td data-profile-left-cell="true" style="width:38%;min-height:240px;border:1px solid #cbd5e1;padding:20px;vertical-align:middle;text-align:center;">사진과 이름을 넣으세요</td><td data-profile-right-cell="true" style="width:62%;min-height:240px;border:1px solid #cbd5e1;padding:20px;vertical-align:middle;text-align:left;">소개 글을 입력하세요</td></tr><tr data-profile-bottom-row="true"><td style="min-height:120px;border:1px solid #cbd5e1;padding:24px 20px 20px;vertical-align:top;">아래 전체 폭 설명</td><td style="min-height:120px;border:1px solid #cbd5e1;padding:24px 20px 20px;vertical-align:top;">아래 오른쪽 칸</td></tr></tbody></table><p><br></p>`,
+      `<table data-text-editor-table-id="${tableId}" data-mobile-stack="true" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:12px;margin-right:auto;margin-bottom:12px;margin-left:auto;"><tbody><tr data-profile-top-row="true"><td data-profile-left-cell="true" style="width:38%;min-height:240px;border:none;padding:20px;vertical-align:middle;text-align:center;">사진과 이름을 넣으세요</td><td data-profile-right-cell="true" style="width:62%;min-height:240px;border:none;padding:20px;vertical-align:middle;text-align:left;">소개 글을 입력하세요</td></tr><tr data-profile-bottom-row="true"><td style="min-height:120px;border:none;padding:24px 20px 20px;vertical-align:top;">아래 전체 폭 설명</td><td style="min-height:120px;border:none;padding:24px 20px 20px;vertical-align:top;">아래 오른쪽 칸</td></tr></tbody></table><p><br></p>`,
     );
 
     setSelectedTextEditorTableId(tableId);
+    setSelectedTextEditorTableBorderVisible(false);
     setTextEditorMessage(
-      "2×2 표를 넣었습니다. 표 안을 클릭한 뒤 ‘아래 2칸 합치기’를 누르세요.",
+      "2×2 표를 넣었습니다. 테이블 선은 기본적으로 숨겨져 있습니다. 필요할 때만 ‘테이블 선 보이기’를 누르세요.",
     );
 
     requestAnimationFrame(() => {
@@ -14789,7 +14790,9 @@ function RightPanel(props: {
     const newCell = document.createElement("td");
     newCell.style.width = "50%";
     newCell.style.minHeight = "120px";
-    newCell.style.border = "1px solid #cbd5e1";
+    newCell.style.border = selectedTextEditorTableBorderVisible
+      ? "1px solid #cbd5e1"
+      : "none";
     newCell.style.padding = "16px";
     newCell.style.verticalAlign = "top";
     newCell.innerHTML = "아래 오른쪽 칸";
@@ -18252,7 +18255,6 @@ function RightPanel(props: {
                   .text-cell-rich-editor table[data-text-editor-table-id] td {
                     min-width: 0;
                     min-height: 120px;
-                    border: 1px solid #cbd5e1;
                     padding: 16px;
                     vertical-align: top;
                     overflow-wrap: break-word;
