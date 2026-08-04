@@ -20,7 +20,19 @@ type ParsedNews = {
   updated_at: string;
 };
 
-const FEEDS: Array<{ region: Region; source: string; url: string; limit: number }> = [
+type HtmlMetadata = {
+  finalUrl: string;
+  imageUrl: string | null;
+  title: string | null;
+  description: string | null;
+};
+
+const FEEDS: Array<{
+  region: Region;
+  source: string;
+  url: string;
+  limit: number;
+}> = [
   {
     region: "korea",
     source: "매일경제",
@@ -34,6 +46,10 @@ const FEEDS: Array<{ region: Region; source: string; url: string; limit: number 
     limit: 12,
   },
 ];
+
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 function decodeXml(value: string) {
   return value
@@ -50,6 +66,17 @@ function decodeXml(value: string) {
     .trim();
 }
 
+function decodeJavascriptEscapes(value: string) {
+  return value
+    .replace(/\\u0026/gi, "&")
+    .replace(/\\u003d/gi, "=")
+    .replace(/\\u003f/gi, "?")
+    .replace(/\\u002f/gi, "/")
+    .replace(/\\x26/gi, "&")
+    .replace(/\\\//g, "/")
+    .replace(/&amp;/gi, "&");
+}
+
 function stripHtml(value: string) {
   return decodeXml(value)
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -63,6 +90,7 @@ function getTag(block: string, tag: string) {
   const match = block.match(
     new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i"),
   );
+
   return match?.[1] ? decodeXml(match[1]) : "";
 }
 
@@ -70,22 +98,27 @@ function getRssImage(block: string) {
   const media = block.match(
     /<(?:media:content|media:thumbnail)[^>]+url=["']([^"']+)["']/i,
   );
+
   if (media?.[1]) return decodeXml(media[1]);
 
   const enclosure = block.match(
     /<enclosure[^>]+url=["']([^"']+)["'][^>]*>/i,
   );
+
   if (enclosure?.[1]) return decodeXml(enclosure[1]);
 
   const rawDescription = block.match(
     /<description(?:\s[^>]*)?>([\s\S]*?)<\/description>/i,
   )?.[1];
+
   const image = rawDescription?.match(/<img[^>]+src=["']([^"']+)["']/i);
+
   return image?.[1] ? decodeXml(image[1]) : null;
 }
 
 function absoluteUrl(value: string | null, baseUrl: string) {
   if (!value) return null;
+
   try {
     return new URL(value, baseUrl).toString();
   } catch {
@@ -93,9 +126,115 @@ function absoluteUrl(value: string | null, baseUrl: string) {
   }
 }
 
-async function fetchHtmlMetadata(url: string) {
+function getMetaContent(
+  html: string,
+  propertyName: string,
+): string | null {
+  const escaped = propertyName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const match =
+    html.match(
+      new RegExp(
+        `<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["'][^>]*>`,
+        "i",
+      ),
+    ) ||
+    html.match(
+      new RegExp(
+        `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["'][^>]*>`,
+        "i",
+      ),
+    );
+
+  return match?.[1] ? decodeXml(match[1]) : null;
+}
+
+function isGoogleNewsUrl(url: string) {
+  try {
+    return new URL(url).hostname.endsWith("news.google.com");
+  } catch {
+    return false;
+  }
+}
+
+function isBloombergUrl(url: string) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return hostname === "bloomberg.com" || hostname.endsWith(".bloomberg.com");
+  } catch {
+    return false;
+  }
+}
+
+function cleanBloombergUrl(value: string) {
+  let candidate = decodeJavascriptEscapes(decodeXml(value));
+
+  try {
+    candidate = decodeURIComponent(candidate);
+  } catch {
+    // 이미 정상 URL이면 그대로 사용합니다.
+  }
+
+  candidate = candidate
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/[),;\]}]+$/g, "");
+
+  try {
+    const parsed = new URL(candidate);
+
+    parsed.hash = "";
+
+    // 추적용 쿼리는 제거하되 기사에 필요한 쿼리는 유지할 수 있도록
+    // 대표적인 추적 파라미터만 정리합니다.
+    [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_content",
+      "utm_term",
+      "cmpid",
+      "srnd",
+    ].forEach((key) => parsed.searchParams.delete(key));
+
+    return parsed.toString();
+  } catch {
+    return candidate;
+  }
+}
+
+function extractBloombergUrl(html: string) {
+  const normalized = decodeJavascriptEscapes(html);
+
+  const patterns = [
+    /https?:\/\/(?:www\.)?bloomberg\.com\/news\/articles\/[^"'<>\\\s]+/gi,
+    /https?:\/\/(?:www\.)?bloomberg\.com\/[^"'<>\\\s]+/gi,
+    /https%3A%2F%2F(?:www\.)?bloomberg\.com%2F[^"'<>\\\s]+/gi,
+  ];
+
+  for (const pattern of patterns) {
+    const matches = normalized.match(pattern) ?? [];
+
+    for (const match of matches) {
+      const cleaned = cleanBloombergUrl(match);
+
+      if (
+        isBloombergUrl(cleaned) &&
+        !cleaned.includes("/account/") &&
+        !cleaned.includes("/tos") &&
+        !cleaned.includes("/privacy") &&
+        !cleaned.includes("/company/")
+      ) {
+        return cleaned;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function fetchText(url: string, timeoutMs = 7500) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6500);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
@@ -103,50 +242,181 @@ async function fetchHtmlMetadata(url: string) {
       signal: controller.signal,
       cache: "no-store",
       headers: {
-        "user-agent":
-          "Mozilla/5.0 (compatible; KTownTriangleNewsBot/1.0; +https://www.ktowntriangle.com)",
-        accept: "text/html,application/xhtml+xml",
+        "user-agent": USER_AGENT,
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9,ko;q=0.8",
       },
     });
 
-    if (!response.ok) return { finalUrl: url, imageUrl: null };
-
-    const html = await response.text();
-    const finalUrl = response.url || url;
-    const imageMatch =
-      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
-      html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i) ||
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["']/i);
+    if (!response.ok) {
+      return {
+        ok: false,
+        finalUrl: response.url || url,
+        text: "",
+      };
+    }
 
     return {
-      finalUrl,
-      imageUrl: absoluteUrl(imageMatch?.[1] ?? null, finalUrl),
+      ok: true,
+      finalUrl: response.url || url,
+      text: await response.text(),
     };
   } catch {
-    return { finalUrl: url, imageUrl: null };
+    return {
+      ok: false,
+      finalUrl: url,
+      text: "",
+    };
   } finally {
     clearTimeout(timeout);
   }
 }
 
+async function resolvePublisherUrl(url: string, region: Region) {
+  if (region !== "us" || !isGoogleNewsUrl(url)) {
+    return url;
+  }
+
+  const googlePage = await fetchText(url, 7000);
+
+  if (!googlePage.ok) {
+    return url;
+  }
+
+  if (isBloombergUrl(googlePage.finalUrl)) {
+    return cleanBloombergUrl(googlePage.finalUrl);
+  }
+
+  const bloombergUrl = extractBloombergUrl(googlePage.text);
+
+  return bloombergUrl || url;
+}
+
+async function fetchHtmlMetadata(url: string): Promise<HtmlMetadata> {
+  const result = await fetchText(url, 8500);
+
+  if (!result.ok) {
+    return {
+      finalUrl: url,
+      imageUrl: null,
+      title: null,
+      description: null,
+    };
+  }
+
+  const finalUrl = result.finalUrl || url;
+  const html = result.text;
+
+  const image =
+    getMetaContent(html, "og:image") ||
+    getMetaContent(html, "twitter:image:src") ||
+    getMetaContent(html, "twitter:image");
+
+  const title =
+    getMetaContent(html, "og:title") ||
+    getMetaContent(html, "twitter:title");
+
+  const description =
+    getMetaContent(html, "og:description") ||
+    getMetaContent(html, "twitter:description") ||
+    getMetaContent(html, "description");
+
+  return {
+    finalUrl,
+    imageUrl: absoluteUrl(image, finalUrl),
+    title: title ? stripHtml(title) : null,
+    description: description ? stripHtml(description) : null,
+  };
+}
+
 function normalizeDate(value: string) {
   if (!value) return null;
+
   const date = new Date(value);
+
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-async function loadFeed(feed: (typeof FEEDS)[number]): Promise<ParsedNews[]> {
+function isGooglePlaceholderImage(url: string | null) {
+  if (!url) return false;
+
+  const lower = url.toLowerCase();
+
+  return (
+    lower.includes("gnews") ||
+    lower.includes("news.google") ||
+    lower.includes("googleusercontent.com") ||
+    lower.includes("google.com/images")
+  );
+}
+
+async function resolveCandidate(
+  feed: (typeof FEEDS)[number],
+  item: {
+    title: string;
+    articleUrl: string;
+    summary: string | null;
+    source: string;
+    publishedAt: string | null;
+    rssImage: string | null;
+  },
+  now: string,
+): Promise<ParsedNews> {
+  const publisherUrl = await resolvePublisherUrl(
+    item.articleUrl,
+    feed.region,
+  );
+
+  const metadata = await fetchHtmlMetadata(publisherUrl);
+
+  const rssImage = absoluteUrl(item.rssImage, item.articleUrl);
+  const resolvedImage =
+    metadata.imageUrl ||
+    (!isGooglePlaceholderImage(rssImage) ? rssImage : null);
+
+  const resolvedTitle =
+    feed.region === "us" && metadata.title
+      ? metadata.title.replace(/\s+-\s+Bloomberg$/i, "").trim()
+      : item.title;
+
+  const resolvedSummary =
+    feed.region === "us" && metadata.description
+      ? metadata.description.slice(0, 400)
+      : item.summary;
+
+  return {
+    region: feed.region,
+    source: feed.source === "Bloomberg" ? "Bloomberg" : item.source,
+    title: resolvedTitle || item.title,
+    summary: resolvedSummary,
+    article_url:
+      isBloombergUrl(metadata.finalUrl) || feed.region === "korea"
+        ? metadata.finalUrl
+        : publisherUrl,
+    image_url: resolvedImage,
+    published_at: item.publishedAt,
+    fetched_at: now,
+    active: true,
+    updated_at: now,
+  };
+}
+
+async function loadFeed(
+  feed: (typeof FEEDS)[number],
+): Promise<ParsedNews[]> {
   const response = await fetch(feed.url, {
     cache: "no-store",
     headers: {
-      "user-agent":
-        "Mozilla/5.0 (compatible; KTownTriangleNewsBot/1.0; +https://www.ktowntriangle.com)",
+      "user-agent": USER_AGENT,
+      accept: "application/rss+xml,application/xml,text/xml,*/*",
     },
   });
 
   if (!response.ok) {
-    throw new Error(`${feed.source} RSS request failed: ${response.status}`);
+    throw new Error(
+      `${feed.source} RSS request failed: ${response.status}`,
+    );
   }
 
   const xml = await response.text();
@@ -156,14 +426,20 @@ async function loadFeed(feed: (typeof FEEDS)[number]): Promise<ParsedNews[]> {
   const candidates = blocks
     .map((block) => {
       const rawTitle = getTag(block, "title");
-      const title = rawTitle.replace(/\s+-\s+Bloomberg$/i, "").trim();
-      const articleUrl = getTag(block, "link") || getTag(block, "guid");
+      const title = rawTitle
+        .replace(/\s+-\s+Bloomberg$/i, "")
+        .trim();
+
+      const articleUrl =
+        getTag(block, "link") || getTag(block, "guid");
+
       const rawDescription = getTag(block, "description");
-      const summary = stripHtml(rawDescription).slice(0, 400) || null;
+      const summary =
+        stripHtml(rawDescription).slice(0, 400) || null;
+
       const source = getTag(block, "source") || feed.source;
 
       return {
-        block,
         title,
         articleUrl,
         summary,
@@ -173,99 +449,158 @@ async function loadFeed(feed: (typeof FEEDS)[number]): Promise<ParsedNews[]> {
       };
     })
     .filter((item) => item.title && item.articleUrl)
-    // 중복을 제거한 뒤에도 12개를 확보할 수 있도록 여유 있게 읽습니다.
+    // 일부 원문 주소나 이미지 확인이 실패해도 12개를 확보하도록
+    // 최대 24개의 후보를 읽습니다.
     .slice(0, feed.limit * 2);
 
-  const resolved = await Promise.all(
-    candidates.map(async (item) => {
-      const metadata = await fetchHtmlMetadata(item.articleUrl);
-      return {
-        region: feed.region,
-        source: feed.source === "Bloomberg" ? "Bloomberg" : item.source,
-        title: item.title,
-        summary: item.summary,
-        article_url: metadata.finalUrl || item.articleUrl,
-        image_url:
-          absoluteUrl(item.rssImage, item.articleUrl) || metadata.imageUrl || null,
-        published_at: item.publishedAt,
-        fetched_at: now,
-        active: true,
-        updated_at: now,
-      } satisfies ParsedNews;
-    }),
-  );
+  // 외부 사이트에 한 번에 너무 많은 요청을 보내지 않도록
+  // 4개씩 나누어 처리합니다.
+  const resolved: ParsedNews[] = [];
+
+  for (let index = 0; index < candidates.length; index += 4) {
+    const batch = candidates.slice(index, index + 4);
+
+    const batchResults = await Promise.all(
+      batch.map((item) => resolveCandidate(feed, item, now)),
+    );
+
+    resolved.push(...batchResults);
+
+    if (
+      Array.from(
+        new Map(
+          resolved.map((news) => [news.article_url, news]),
+        ).values(),
+      ).length >= feed.limit
+    ) {
+      break;
+    }
+  }
 
   return Array.from(
-    new Map(resolved.map((item) => [item.article_url, item])).values(),
+    new Map(
+      resolved.map((item) => [item.article_url, item]),
+    ).values(),
   ).slice(0, feed.limit);
 }
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
+
   if (!secret) return false;
 
   const authorization = request.headers.get("authorization");
   const querySecret = request.nextUrl.searchParams.get("secret");
-  return authorization === `Bearer ${secret}` || querySecret === secret;
+
+  return (
+    authorization === `Bearer ${secret}` ||
+    querySecret === secret
+  );
 }
 
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 },
+    );
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
     return NextResponse.json(
-      { error: "Missing Supabase server environment variables" },
+      {
+        error:
+          "Missing Supabase server environment variables",
+      },
       { status: 500 },
     );
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const admin = createClient(
+    supabaseUrl,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    },
+  );
 
   try {
-    const settled = await Promise.allSettled(FEEDS.map(loadFeed));
+    const settled = await Promise.allSettled(
+      FEEDS.map(loadFeed),
+    );
+
     const items = settled.flatMap((result) =>
       result.status === "fulfilled" ? result.value : [],
     );
+
     const errors = settled.flatMap((result, index) =>
       result.status === "rejected"
-        ? [`${FEEDS[index].source}: ${String(result.reason)}`]
+        ? [
+            `${FEEDS[index].source}: ${
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason)
+            }`,
+          ]
         : [],
     );
 
     if (items.length === 0) {
       return NextResponse.json(
-        { ok: false, inserted: 0, errors },
+        {
+          ok: false,
+          inserted: 0,
+          errors,
+        },
         { status: 502 },
       );
     }
 
-    // 수집에 성공한 지역만 교체합니다. 한쪽 RSS가 실패해도 다른 쪽과 기존 데이터는 보존됩니다.
     for (const region of ["korea", "us"] as const) {
-      const regionResult = settled[FEEDS.findIndex((feed) => feed.region === region)];
-      if (!regionResult || regionResult.status !== "fulfilled") continue;
+      const feedIndex = FEEDS.findIndex(
+        (feed) => feed.region === region,
+      );
+
+      const regionResult = settled[feedIndex];
+
+      // 해당 지역 수집이 실패하면 기존 DB 내용을 보존합니다.
+      if (
+        !regionResult ||
+        regionResult.status !== "fulfilled"
+      ) {
+        continue;
+      }
 
       const regionItems = regionResult.value.slice(0, 12);
+
       if (regionItems.length === 0) continue;
 
-      // 새 기사부터 upsert하여 페이지가 빈 상태가 되는 시간을 방지합니다.
+      // 최신 뉴스를 먼저 저장하여 페이지가 비는 시간을 방지합니다.
       const { error: upsertError } = await admin
         .from("community_news")
-        .upsert(regionItems, { onConflict: "article_url" });
+        .upsert(regionItems, {
+          onConflict: "article_url",
+        });
 
       if (upsertError) throw upsertError;
 
-      const currentUrls = regionItems.map((item) => item.article_url);
+      const currentUrls = regionItems.map(
+        (item) => item.article_url,
+      );
+
       const currentUrlSet = new Set(currentUrls);
 
-      // 이번에 가져온 최신 12개를 제외한 해당 지역의 모든 기존 기사를 실제 삭제합니다.
-      const { data: existingRows, error: existingRowsError } = await admin
+      const {
+        data: existingRows,
+        error: existingRowsError,
+      } = await admin
         .from("community_news")
         .select("id, article_url")
         .eq("region", region);
@@ -273,7 +608,10 @@ export async function GET(request: NextRequest) {
       if (existingRowsError) throw existingRowsError;
 
       const deleteIds = (existingRows ?? [])
-        .filter((row) => !currentUrlSet.has(row.article_url))
+        .filter(
+          (row) =>
+            !currentUrlSet.has(row.article_url),
+        )
         .map((row) => row.id);
 
       if (deleteIds.length > 0) {
@@ -285,10 +623,12 @@ export async function GET(request: NextRequest) {
         if (deleteError) throw deleteError;
       }
 
-      // 현재 12개는 모두 활성 상태로 맞춥니다.
       const { error: activateError } = await admin
         .from("community_news")
-        .update({ active: true })
+        .update({
+          active: true,
+          updated_at: new Date().toISOString(),
+        })
         .eq("region", region)
         .in("article_url", currentUrls);
 
@@ -298,15 +638,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       saved: items.length,
-      korea: items.filter((item) => item.region === "korea").length,
-      us: items.filter((item) => item.region === "us").length,
+      korea: items.filter(
+        (item) => item.region === "korea",
+      ).length,
+      us: items.filter(
+        (item) => item.region === "us",
+      ).length,
+      bloombergOriginalUrls: items.filter(
+        (item) =>
+          item.region === "us" &&
+          isBloombergUrl(item.article_url),
+      ).length,
+      bloombergImages: items.filter(
+        (item) =>
+          item.region === "us" &&
+          Boolean(item.image_url),
+      ).length,
       errors,
       syncedAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error("sync community news error:", error);
+
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : String(error) },
+      {
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : String(error),
+      },
       { status: 500 },
     );
   }
