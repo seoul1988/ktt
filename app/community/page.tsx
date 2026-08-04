@@ -5,7 +5,7 @@ import ProfileButton from "../components/ProfileButton";
 
 
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
-import InstagramAutoCarousel from "../components/InstagramAutoCarousel";
+import CommunityNewsCarousel from "../components/CommunityNewsCarousel";
 
 
 export const dynamic = "force-dynamic";
@@ -13,17 +13,6 @@ export const revalidate = 0;
 
 export default async function CommunityPage() {
   const today = new Date().toISOString().slice(0, 10);
-  /**
-   * Instagram 게시물은 최초 저장된 posted_at 기준으로
-   * 최근 72시간 이내의 게시물만 Community에 표시합니다.
-   *
-   * Sync를 다시 실행해도 같은 게시물이라면 posted_at은 유지되고
-   * fetched_at만 갱신되므로, 3일이 지나면 자동으로 숨겨집니다.
-   */
-  const instagramCutoff = new Date(
-    Date.now() - 3 * 24 * 60 * 60 * 1000,
-  ).toISOString();
-
   const { data: events, error: eventsError } = await supabase
     .from("community_events")
     .select("*")
@@ -48,52 +37,56 @@ export default async function CommunityPage() {
     console.error("community deals error:", dealsError);
   }
 
-  const { data: instagramPosts, error: instagramError } = await supabase
-    .from("business_instagram_posts")
-    .select(`
-      id,
-      stored_image_url,
-      instagram_post_url,
-      posted_at,
-      fetched_at,
-      business:businesses(
-        id,
-        name
-      )
-    `)
-    .eq("status", "active")
-    .not("stored_image_url", "is", null)
-    .not("instagram_post_url", "is", null)
-    .not("posted_at", "is", null)
-    .gte("posted_at", instagramCutoff)
-    .order("posted_at", { ascending: false, nullsFirst: false })
-    .limit(100);
+  const newsSelect =
+    "id, region, source, title, summary, article_url, image_url, published_at";
 
-  if (instagramError) {
-    console.error("community instagram error:", instagramError);
+  const [
+    { data: koreaNewsData, error: koreaNewsError },
+    { data: usNewsData, error: usNewsError },
+  ] = await Promise.all([
+    supabase
+      .from("community_news")
+      .select(newsSelect)
+      .eq("region", "korea")
+      .eq("active", true)
+      .order("published_at", {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .limit(12),
+
+    supabase
+      .from("community_news")
+      .select(newsSelect)
+      .eq("region", "us")
+      .eq("active", true)
+      .order("published_at", {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .limit(12),
+  ]);
+
+  if (koreaNewsError) {
+    console.error("community korea news error:", {
+      message: koreaNewsError.message,
+      details: koreaNewsError.details,
+      hint: koreaNewsError.hint,
+      code: koreaNewsError.code,
+    });
   }
 
- const latestInstagramPosts = Array.from(
-  new Map(
-    (instagramPosts ?? []).map((post: any) => {
-      const business = Array.isArray(post.business)
-        ? post.business[0]
-        : post.business;
+  if (usNewsError) {
+    console.error("community us news error:", {
+      message: usNewsError.message,
+      details: usNewsError.details,
+      hint: usNewsError.hint,
+      code: usNewsError.code,
+    });
+  }
 
-      return [business?.id ?? post.id, post];
-    }),
-  ).values(),
-);
-
-for (let i = latestInstagramPosts.length - 1; i > 0; i--) {
-  const j = Math.floor(Math.random() * (i + 1));
-  [latestInstagramPosts[i], latestInstagramPosts[j]] = [
-    latestInstagramPosts[j],
-    latestInstagramPosts[i],
-  ];
-}
-
-const displayedInstagramPosts = latestInstagramPosts.slice(0, 12);
+  const koreaNews = koreaNewsData ?? [];
+  const usNews = usNewsData ?? [];
 
   const { data: allBusinesses } = await supabase
     .from("businesses")
@@ -227,8 +220,11 @@ const displayedInstagramPosts = latestInstagramPosts.slice(0, 12);
 </div>
 </div>
 
-        {/* Today's Instagram */}
-        <InstagramAutoCarousel posts={latestInstagramPosts as any[]} />
+        {/* Korea / US News */}
+        <CommunityNewsCarousel
+          koreaNews={koreaNews as any[]}
+          usNews={usNews as any[]}
+        />
 
         {/* Upcoming Events */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">

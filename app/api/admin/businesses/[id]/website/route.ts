@@ -407,11 +407,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? body.business
         : {};
 
-    const sectionsInput: SectionInput[] = Array.isArray(body?.sections)
+    const rawSections: SectionInput[] = Array.isArray(body?.sections)
       ? body.sections
       : [];
 
     const replaceSections = body?.replace_sections === true;
+    const saveRequestId = String(
+      body?.save_request_id ||
+        request.headers.get("x-website-save-request-id") ||
+        "",
+    ).trim();
 
     const explicitDeletedIds = Array.isArray(body?.deleted_section_ids)
       ? body.deleted_section_ids
@@ -475,6 +480,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
           {
             error:
               "This custom domain is already connected to another business.",
+            conflict_type: "custom_domain",
+            custom_domain: customDomain,
           },
           409,
         );
@@ -489,6 +496,261 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return jsonResponse({ error: "Invalid website status." }, 400);
     }
 
+    /*
+     * 요청에 들어온 레이어를 먼저 정규화합니다.
+     * sort_order가 중복되면 DB의 unique constraint와 충돌할 수 있으므로
+     * 배열 순서대로 1, 2, 3...으로 다시 지정합니다.
+     */
+    const sectionsInput = rawSections
+      .filter((section) => {
+        const sectionType = String(section.section_type || "").trim();
+        return Boolean(sectionType);
+      })
+      .map((section, index) => ({
+        ...section,
+        sort_order: index + 1,
+        is_visible: section.is_visible !== false,
+        content: normalizeObject(section.content),
+        settings: normalizeObject(section.settings),
+      }));
+
+    /*
+     * 현재 DB 상태를 저장 전에 한 번 읽습니다.
+     * 존재하지 않는 양수 ID는 UPDATE 409로 중단하지 않고 새 레이어로 INSERT합니다.
+     */
+    const { data: existingRows, error: existingRowsError } =
+      await supabaseAdmin
+        .from("business_sections")
+        .select(
+          "id,business_id,section_type,title,content,settings,sort_order,is_visible",
+        )
+        .eq("business_id", businessId)
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
+
+    if (existingRowsError) {
+      return jsonResponse(
+        {
+          error: existingRowsError.message,
+          code: existingRowsError.code,
+        },
+        500,
+      );
+    }
+
+    const existingIds = new Set(
+      (existingRows ?? [])
+        .map((row) => Number(row.id))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    );
+
+    /*
+     * 삭제는 저장 맨 마지막에 실행합니다.
+     * 이전 코드는 먼저 DELETE한 뒤 UPDATE/INSERT 중 하나가 실패하면
+     * 일부 레이어가 이미 사라진 상태로 끝났습니다.
+     */
+    const requestedExistingIds = sectionsInput
+      .map((section) => Number(section.id))
+      .filter(
+        (id) =>
+          Number.isInteger(id) &&
+          id > 0 &&
+          existingIds.has(id),
+      );
+
+    const missingServerIds = replaceSections
+      ? Array.from(existingIds).filter(
+          (id) => !requestedExistingIds.includes(id),
+        )
+      : [];
+
+    const idsToDelete = Array.from(
+      new Set([...explicitDeletedIds, ...missingServerIds]),
+    ).filter((id) => existingIds.has(id));
+
+    let updatedCount = 0;
+    let insertedCount = 0;
+    const insertedClientKeys: string[] = [];
+    const warnings: string[] = [];
+
+    /*
+     * 기존 row의 sort_order unique 충돌을 피하기 위해 먼저 임시 큰 값으로 이동합니다.
+     * 예: 1번과 2번 레이어의 순서를 맞바꿀 때 순차 UPDATE하면 중복 충돌이 날 수 있습니다.
+     */
+    const rowsToUpdate = sectionsInput.filter((section) => {
+      const sectionId = Number(section.id);
+      return (
+        Number.isInteger(sectionId) &&
+        sectionId > 0 &&
+        existingIds.has(sectionId)
+      );
+    });
+
+    for (let index = 0; index < rowsToUpdate.length; index += 1) {
+      const sectionId = Number(rowsToUpdate[index].id);
+      const temporaryOrder = 1_000_000 + index;
+
+      const { error: temporaryOrderError } = await supabaseAdmin
+        .from("business_sections")
+        .update({ sort_order: temporaryOrder })
+        .eq("id", sectionId)
+        .eq("business_id", businessId);
+
+      if (temporaryOrderError) {
+        return jsonResponse(
+          {
+            error:
+              `레이어 임시 정렬 저장 실패: ${temporaryOrderError.message}`,
+            code: temporaryOrderError.code,
+            section_id: sectionId,
+            save_request_id: saveRequestId || null,
+          },
+          500,
+        );
+      }
+    }
+
+    /*
+     * 기존 레이어 UPDATE / 새 레이어 INSERT
+     * DB에서 사라진 양수 ID는 409로 전체 저장을 중단하지 않고 INSERT로 복구합니다.
+     */
+    for (const section of sectionsInput) {
+      const sectionId = Number(section.id);
+      const sectionType = String(section.section_type || "").trim();
+      const content = normalizeObject(section.content);
+      const clientSaveKey = String(
+        content.client_save_key || "",
+      ).trim();
+
+      const sectionPatch = {
+        section_type: sectionType,
+        title: String(section.title ?? "").trim() || null,
+        content,
+        settings: normalizeObject(section.settings),
+        sort_order: Number(section.sort_order) || 0,
+        is_visible: section.is_visible !== false,
+      };
+
+      const canUpdateExisting =
+        Number.isInteger(sectionId) &&
+        sectionId > 0 &&
+        existingIds.has(sectionId);
+
+      if (canUpdateExisting) {
+        const { data: updatedRows, error: sectionError } =
+          await supabaseAdmin
+            .from("business_sections")
+            .update(sectionPatch)
+            .eq("id", sectionId)
+            .eq("business_id", businessId)
+            .select("id");
+
+        if (sectionError) {
+          console.error("Website builder section PATCH failed:", {
+            sectionId,
+            ...sectionError,
+          });
+
+          return jsonResponse(
+            {
+              error: sectionError.message,
+              code: sectionError.code,
+              section_id: sectionId,
+              section_type: sectionType,
+              save_request_id: saveRequestId || null,
+            },
+            500,
+          );
+        }
+
+        if (!updatedRows || updatedRows.length === 0) {
+          warnings.push(
+            `기존 레이어 ID ${sectionId}가 없어 새 레이어로 다시 저장했습니다.`,
+          );
+        } else {
+          updatedCount += 1;
+          continue;
+        }
+      } else if (
+        Number.isInteger(sectionId) &&
+        sectionId > 0
+      ) {
+        warnings.push(
+          `서버에 없는 레이어 ID ${sectionId}를 새 레이어로 복구했습니다.`,
+        );
+      }
+
+      const { data: insertedRows, error: insertError } =
+        await supabaseAdmin
+          .from("business_sections")
+          .insert({
+            business_id: businessId,
+            ...sectionPatch,
+          })
+          .select("id,content");
+
+      if (insertError) {
+        console.error("Website builder section INSERT failed:", {
+          sectionType,
+          ...insertError,
+        });
+
+        return jsonResponse(
+          {
+            error: insertError.message,
+            code: insertError.code,
+            section_type: sectionType,
+            client_save_key: clientSaveKey || null,
+            save_request_id: saveRequestId || null,
+          },
+          500,
+        );
+      }
+
+      if (!insertedRows || insertedRows.length === 0) {
+        return jsonResponse(
+          {
+            error: `새 레이어 ${sectionType}를 INSERT했지만 반환된 row가 없습니다.`,
+            section_type: sectionType,
+            client_save_key: clientSaveKey || null,
+            save_request_id: saveRequestId || null,
+          },
+          500,
+        );
+      }
+
+      if (clientSaveKey) insertedClientKeys.push(clientSaveKey);
+      insertedCount += 1;
+    }
+
+    /*
+     * UPDATE/INSERT가 모두 성공한 뒤에만 삭제합니다.
+     */
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabaseAdmin
+        .from("business_sections")
+        .delete()
+        .eq("business_id", businessId)
+        .in("id", idsToDelete);
+
+      if (deleteError) {
+        console.error("Website builder section DELETE failed:", deleteError);
+        return jsonResponse(
+          {
+            error: deleteError.message,
+            code: deleteError.code,
+            deleted_section_ids: idsToDelete,
+            save_request_id: saveRequestId || null,
+          },
+          500,
+        );
+      }
+    }
+
+    /*
+     * 비즈니스 설정은 레이어 저장이 끝난 다음 저장합니다.
+     * 레이어 저장 실패 시 business만 새 값으로 바뀌는 현상을 줄입니다.
+     */
     const businessPatch: Record<string, unknown> = {
       website_enabled: Boolean(businessInput.website_enabled),
       website_status: websiteStatus,
@@ -511,174 +773,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (businessError) {
       console.error("Website builder business PATCH failed:", businessError);
       return jsonResponse(
-        { error: businessError.message, code: businessError.code },
+        {
+          error: businessError.message,
+          code: businessError.code,
+          save_request_id: saveRequestId || null,
+        },
         500,
       );
     }
 
     /*
-     * 현재 왼쪽 Layers 목록에 포함된 기존 DB ID입니다.
-     * 음수 ID나 ID가 없는 항목은 아직 DB에 없는 새 레이어입니다.
-     */
-    const currentExistingIds = sectionsInput
-      .map((section) => Number(section.id))
-      .filter(
-        (sectionId) =>
-          Number.isInteger(sectionId) && sectionId > 0,
-      );
-
-    /*
-     * replace_sections=true이면 현재 요청에 없는 기존 레이어를 모두 삭제합니다.
-     * 이렇게 해야 왼쪽 Layers에서 삭제한 Gallery, Services, Policy 등이
-     * 다음 접속 때 다시 나타나지 않습니다.
-     */
-    let missingServerIds: number[] = [];
-
-    if (replaceSections) {
-      const { data: existingRows, error: existingRowsError } =
-        await supabaseAdmin
-          .from("business_sections")
-          .select("id")
-          .eq("business_id", businessId);
-
-      if (existingRowsError) {
-        return jsonResponse(
-          {
-            error: existingRowsError.message,
-            code: existingRowsError.code,
-          },
-          500,
-        );
-      }
-
-      missingServerIds = (existingRows ?? [])
-        .map((row) => Number(row.id))
-        .filter(
-          (sectionId) =>
-            Number.isInteger(sectionId) &&
-            sectionId > 0 &&
-            !currentExistingIds.includes(sectionId),
-        );
-    }
-
-    const idsToDelete = Array.from(
-      new Set([...explicitDeletedIds, ...missingServerIds]),
-    );
-
-    if (idsToDelete.length > 0) {
-      const { error: deleteError } = await supabaseAdmin
-        .from("business_sections")
-        .delete()
-        .eq("business_id", businessId)
-        .in("id", idsToDelete);
-
-      if (deleteError) {
-        console.error("Website builder section DELETE failed:", deleteError);
-        return jsonResponse(
-          {
-            error: deleteError.message,
-            code: deleteError.code,
-            deleted_section_ids: idsToDelete,
-          },
-          500,
-        );
-      }
-    }
-
-    let updatedCount = 0;
-    let insertedCount = 0;
-
-    for (const section of sectionsInput) {
-      const sectionId = Number(section.id);
-      const sectionType = String(section.section_type || "").trim();
-      const sortOrder = Number(section.sort_order);
-
-      if (!sectionType) continue;
-
-      const sectionPatch = {
-        section_type: sectionType,
-        title: String(section.title ?? "").trim() || null,
-        content: normalizeObject(section.content),
-        settings: normalizeObject(section.settings),
-        sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
-        is_visible: section.is_visible !== false,
-      };
-
-      if (Number.isInteger(sectionId) && sectionId > 0) {
-        const { data: updatedRows, error: sectionError } =
-          await supabaseAdmin
-            .from("business_sections")
-            .update(sectionPatch)
-            .eq("id", sectionId)
-            .eq("business_id", businessId)
-            .select("id");
-
-        if (sectionError) {
-          console.error("Website builder section PATCH failed:", {
-            sectionId,
-            ...sectionError,
-          });
-
-          return jsonResponse(
-            {
-              error: sectionError.message,
-              code: sectionError.code,
-              section_id: sectionId,
-            },
-            500,
-          );
-        }
-
-        if (!updatedRows || updatedRows.length === 0) {
-          return jsonResponse(
-            {
-              error:
-                `Section ${sectionId} was not found for business ${businessId}.`,
-              section_id: sectionId,
-            },
-            409,
-          );
-        }
-
-        updatedCount += 1;
-        continue;
-      }
-
-      /*
-       * 새 레이어만 INSERT합니다.
-       * 저장 후 아래에서 DB 데이터를 다시 읽어 실제 양수 ID를 반환합니다.
-       * 프론트는 반드시 반환된 sections로 상태를 교체해야 다음 저장 때
-       * 같은 새 레이어가 다시 INSERT되지 않습니다.
-       */
-      const { error: insertError } = await supabaseAdmin
-        .from("business_sections")
-        .insert({
-          business_id: businessId,
-          ...sectionPatch,
-        });
-
-      if (insertError) {
-        console.error("Website builder section INSERT failed:", {
-          sectionType,
-          ...insertError,
-        });
-
-        return jsonResponse(
-          {
-            error: insertError.message,
-            code: insertError.code,
-            section_type: sectionType,
-          },
-          500,
-        );
-      }
-
-      insertedCount += 1;
-    }
-
-    /*
-     * 기본 레이어 자동 재생성은 하지 않습니다.
-     * 사용자가 삭제한 레이어는 삭제된 상태 그대로 유지합니다.
+     * 최종 DB 상태를 다시 읽고 요청한 client_save_key가 모두 존재하는지 검증합니다.
      */
     const { data: savedSections, error: savedSectionsError } =
       await supabaseAdmin
@@ -695,6 +800,46 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         {
           error: savedSectionsError.message,
           code: savedSectionsError.code,
+          save_request_id: saveRequestId || null,
+        },
+        500,
+      );
+    }
+
+    const savedClientKeys = new Set(
+      (savedSections ?? []).map((section) =>
+        String(
+          normalizeObject(section.content).client_save_key || "",
+        ).trim(),
+      ),
+    );
+
+    const requestedClientKeys = sectionsInput
+      .map((section) =>
+        String(
+          normalizeObject(section.content).client_save_key || "",
+        ).trim(),
+      )
+      .filter(Boolean);
+
+    const missingClientKeys = requestedClientKeys.filter(
+      (key) => !savedClientKeys.has(key),
+    );
+
+    if (
+      (savedSections ?? []).length !== sectionsInput.length ||
+      missingClientKeys.length > 0
+    ) {
+      return jsonResponse(
+        {
+          error:
+            "저장 후 DB 검증 결과가 요청과 일치하지 않습니다.",
+          sent_section_count: sectionsInput.length,
+          saved_section_count: (savedSections ?? []).length,
+          missing_client_save_keys: missingClientKeys,
+          save_request_id: saveRequestId || null,
+          warnings,
+          sections: savedSections ?? [],
         },
         500,
       );
@@ -703,14 +848,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return jsonResponse({
       ok: true,
       business_id: businessId,
+      save_request_id: saveRequestId || null,
       updated_sections: updatedCount,
       inserted_sections: insertedCount,
       deleted_sections: idsToDelete.length,
       deleted_section_ids: idsToDelete,
+      inserted_client_save_keys: insertedClientKeys,
+      warnings,
       sections: savedSections ?? [],
     });
   } catch (error) {
     console.error("Website builder PATCH unexpected error:", error);
-    return jsonResponse({ error: getErrorMessage(error) }, 500);
+    return jsonResponse(
+      {
+        error: getErrorMessage(error),
+      },
+      500,
+    );
   }
 }
+

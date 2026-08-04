@@ -125,6 +125,7 @@ type GridCell = {
   color?: string;
   background_color?: string;
   font_size?: number;
+  line_height?: number;
   font_family?: "sans" | "serif" | "rounded" | "mono";
   font_weight?: "normal" | "semibold" | "bold" | "black" | "600";
   font_style?: "normal" | "italic";
@@ -137,6 +138,7 @@ type GridCell = {
   map_address?: string;
   map_phone?: string;
   map_email?: string;
+  map_info_background_color?: string;
   map_sns_items?: SnsItem[];
   sns_items?: SnsItem[];
   sns_icon_size_px?: number;
@@ -207,6 +209,7 @@ type WebsiteSettings = {
   header_height_px?: number;
   header_logo_size_px?: number;
   header_title_font_size_px?: number;
+  header_menu_font_size_px?: number;
   header_button_height_px?: number;
   header_vertical_padding_px?: number;
   header_submenu_height_px?: number;
@@ -439,6 +442,68 @@ function createId(prefix = "cell") {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function scrollEditorLayoutToTop(layoutId: string) {
+  if (typeof window === "undefined" || !layoutId) return;
+
+  const run = () => {
+    const target = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-editor-layout-id]"),
+    ).find((element) => element.dataset.editorLayoutId === layoutId);
+
+    if (!target) return;
+
+    // window가 아니라 내부 편집 영역이 스크롤되는 구조도 함께 처리합니다.
+    let parent: HTMLElement | null = target.parentElement;
+    let scrollParent: HTMLElement | null = null;
+
+    while (parent) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const canScroll =
+        (overflowY === "auto" || overflowY === "scroll") &&
+        parent.scrollHeight > parent.clientHeight + 2;
+
+      if (canScroll) {
+        scrollParent = parent;
+        break;
+      }
+
+      parent = parent.parentElement;
+    }
+
+    const topOffset = 76;
+
+    if (scrollParent) {
+      const parentRect = scrollParent.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const nextTop =
+        scrollParent.scrollTop +
+        (targetRect.top - parentRect.top) -
+        topOffset;
+
+      scrollParent.scrollTo({
+        top: Math.max(0, nextTop),
+        behavior: "auto",
+      });
+      return;
+    }
+
+    const nextTop =
+      window.scrollY + target.getBoundingClientRect().top - topOffset;
+
+    window.scrollTo({
+      top: Math.max(0, nextTop),
+      behavior: "auto",
+    });
+  };
+
+  // selection 반영과 DOM 재렌더링이 끝난 뒤 두 번 확인합니다.
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(run);
+  });
+  window.setTimeout(run, 80);
+}
+
 function defaultCell(
   type: CellType = "empty",
   text = "",
@@ -452,6 +517,7 @@ function defaultCell(
     color: "#111827",
     background_color: "transparent",
     font_size: type === "title" ? 24 : 16,
+    line_height: type === "title" ? 1.2 : 1.6,
     font_family: "sans",
     font_weight: type === "title" ? "black" : "semibold",
     text_align: "center",
@@ -483,6 +549,26 @@ function mapCellRecursive(
     }
     return cell;
   });
+}
+
+function mapHeaderMenuCells(
+  cells: GridCell[],
+  fontSize: number,
+): GridCell[] {
+  const nextSize = Math.max(10, Math.min(80, fontSize));
+
+  return cells.map((cell) => ({
+    ...cell,
+    ...(cell.type === "menu"
+      ? {
+          font_size: nextSize,
+          vertical_align: "center" as const,
+        }
+      : {}),
+    child_cells: Array.isArray(cell.child_cells)
+      ? mapHeaderMenuCells(cell.child_cells, nextSize)
+      : cell.child_cells,
+  }));
 }
 
 function createDefaultHeader(businessName: string): GridData {
@@ -910,6 +996,10 @@ function normalizeSettings(
       Number.isFinite(Number(source.header_title_font_size_px))
         ? Math.max(10, Math.min(160, Number(source.header_title_font_size_px)))
         : 24,
+    header_menu_font_size_px:
+      Number.isFinite(Number(source.header_menu_font_size_px))
+        ? Math.max(10, Math.min(80, Number(source.header_menu_font_size_px)))
+        : 14,
     header_button_height_px:
       Number.isFinite(Number(source.header_button_height_px))
         ? Math.max(24, Math.min(160, Number(source.header_button_height_px)))
@@ -1670,6 +1760,7 @@ function BusinessLocationSection({
     cell.map_email || getBusinessContactValue(business, ["email", "business_email", "contact_email"]),
   ).trim();
   const title = String(cell.map_title || "LOCATION").trim() || "LOCATION";
+  const infoBackgroundColor = String(cell.map_info_background_color || "#ffffff");
   const snsItems = normalizeLocationSnsItems(cell, business).filter((item) => String(item.url || "").trim());
   const mapBusiness: Business = {
     ...business,
@@ -1679,21 +1770,40 @@ function BusinessLocationSection({
 
   return (
     <div className={`grid h-full min-h-[320px] w-full overflow-hidden rounded-xl bg-white ${compact ? "grid-cols-1" : "grid-cols-[minmax(260px,38%)_1fr]"}`}>
-      <div className="flex min-h-[260px] flex-col justify-center px-6 py-7 sm:px-8">
-        <h2 className="text-2xl font-black tracking-[0.12em] text-gray-950 sm:text-3xl">{title}</h2>
-        <div className="mt-6 space-y-4 text-sm font-semibold leading-6 text-gray-700">
-          {address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>📍</span><span>{address}</span></a> : null}
-          {phone ? <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`} className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>☎</span><span>{phone}</span></a> : null}
-          {email ? <a href={`mailto:${email}`} className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>✉</span><span className="break-all">{email}</span></a> : null}
-        </div>
-        {snsItems.length ? (
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            {snsItems.map((item) => {
-              const href = item.platform === "kakao" ? normalizeKakaoHref(item.url) : normalizeExternalUrl(item.url);
-              return <a key={item.id} href={href} target="_blank" rel="noreferrer" title={item.label || item.platform} className="inline-flex items-center justify-center rounded-full no-underline transition hover:scale-110"><SnsPlatformLogo platform={item.platform} size={30} /></a>;
-            })}
-          </div>
-        ) : null}
+      <div
+        className="flex min-h-[260px] flex-col justify-center px-6 py-7 sm:px-8"
+        style={{ backgroundColor: infoBackgroundColor }}
+      >
+        {String(cell.rich_text_html || cell.text || "").trim() ? (
+          <div
+            className="website-rich-text max-w-full overflow-x-auto text-sm leading-relaxed text-gray-700"
+            dangerouslySetInnerHTML={{
+              __html: prepareRichTextHtmlForDevice(
+                sanitizeCellRichTextHtml(
+                  cell.rich_text_html || escapeCellText(cell.text || ""),
+                ),
+                compact ? "mobile" : "desktop",
+              ),
+            }}
+          />
+        ) : (
+          <>
+            <h2 className="text-2xl font-black tracking-[0.12em] text-gray-950 sm:text-3xl">{title}</h2>
+            <div className="mt-6 space-y-4 text-sm font-semibold leading-6 text-gray-700">
+              {address ? <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>📍</span><span>{address}</span></a> : null}
+              {phone ? <a href={`tel:${phone.replace(/[^0-9+]/g, "")}`} className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>☎</span><span>{phone}</span></a> : null}
+              {email ? <a href={`mailto:${email}`} className="flex gap-3 text-inherit no-underline hover:text-blue-700"><span>✉</span><span className="break-all">{email}</span></a> : null}
+            </div>
+            {snsItems.length ? (
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                {snsItems.map((item) => {
+                  const href = item.platform === "kakao" ? normalizeKakaoHref(item.url) : normalizeExternalUrl(item.url);
+                  return <a key={item.id} href={href} target="_blank" rel="noreferrer" title={item.label || item.platform} className="inline-flex items-center justify-center rounded-full no-underline transition hover:scale-110"><SnsPlatformLogo platform={item.platform} size={30} /></a>;
+                })}
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
       <div className={`${compact ? "min-h-[300px]" : "min-h-[320px]"} p-1`}>
         <BusinessLocationMap business={mapBusiness} compact={compact} />
@@ -3949,6 +4059,52 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     [heroSection],
   );
 
+  /*
+   * 편집 캔버스 전용 임시 표시 순서입니다.
+   * 선택한 레이어/레이아웃을 작업하기 쉽게 맨 위에 보여주기만 하며,
+   * sections, sort_order, content.layouts 원본 배열은 절대 변경하지 않습니다.
+   * 따라서 작업 미리보기, 서버 저장, 게시 및 공개 홈페이지는 항상
+   * 원래 저장 순서 그대로 렌더링됩니다.
+   */
+  const editorDisplayedHomeSections = useMemo(() => {
+    const indexed = homeSections.map((section, index) => ({ section, index }));
+
+    if (selection.area !== "hero" || !selection.sectionId) return indexed;
+
+    const selectedIndex = indexed.findIndex(
+      (item) => item.section.id === selection.sectionId,
+    );
+
+    if (selectedIndex <= 0) return indexed;
+
+    const selectedItem = indexed[selectedIndex];
+    return [
+      selectedItem,
+      ...indexed.filter((_, index) => index !== selectedIndex),
+    ];
+  }, [homeSections, selection.area, selection.sectionId]);
+
+  const editorDisplayedHeroLayouts = useMemo(() => {
+    const indexed = heroLayouts.map((layout, layoutIndex) => ({
+      layout,
+      layoutIndex,
+    }));
+
+    if (selection.area !== "hero" || !selection.layoutId) return indexed;
+
+    const selectedIndex = indexed.findIndex(
+      (item) => item.layout.id === selection.layoutId,
+    );
+
+    if (selectedIndex <= 0) return indexed;
+
+    const selectedItem = indexed[selectedIndex];
+    return [
+      selectedItem,
+      ...indexed.filter((_, index) => index !== selectedIndex),
+    ];
+  }, [heroLayouts, selection.area, selection.layoutId]);
+
   const selectedCell = useMemo(() => {
     if (!selection.cellId) return null;
 
@@ -3987,6 +4143,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     [selection.sectionId, sections],
   );
 
+  /* 선택 상태가 외부 동작으로 바뀐 경우에도 선택 레이아웃을 위로 맞춥니다. */
   const createServerEntryBackup = useCallback(
     async (
       serverBusiness: Business,
@@ -4641,6 +4798,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       layoutId: layout.id,
       cellId,
     });
+
   }
 
   function updateCell(
@@ -6364,7 +6522,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       ) : null}
 
       <div className="grid min-h-[calc(100vh-65px)] lg:grid-cols-[220px_minmax(0,1fr)_330px]">
-        <aside className="border-r border-gray-200 bg-white p-4">
+        <aside className="border-r border-gray-200 bg-white p-4 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start lg:overflow-y-auto lg:overscroll-contain">
           <div className="flex items-center justify-between px-2">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">
               Layers
@@ -6390,7 +6548,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               <p className="mt-1 text-sm font-black">Header</p>
             </button>
 
-            {homeSections.map((section, index) => {
+            {editorDisplayedHomeSections.map(({ section, index }) => {
               const isHero = section.section_type === "hero";
               const active =
                 selection.area === "hero" &&
@@ -6708,7 +6866,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     </div>
                   ) : null}
 
-                  {heroLayouts.map((layout, layoutIndex) => {
+                  {editorDisplayedHeroLayouts.map(({ layout, layoutIndex }) => {
                     const layoutSelected =
                       selection.area === "hero" &&
                       selection.layoutId === layout.id;
@@ -6726,6 +6884,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     return (
                     <div
                       key={layout.id}
+                      data-editor-layout-id={layout.id}
                       role="button"
                       tabIndex={0}
                       onClick={(event) => {
@@ -6825,7 +6984,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           </div>
         </section>
 
-        <aside className="border-l border-gray-200 bg-white p-4 lg:p-5">
+        <aside className="border-l border-gray-200 bg-white p-4 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:p-5">
           <RightPanel
             selection={selection}
             selectedCell={selectedCell}
@@ -7308,6 +7467,21 @@ function HeaderSubmenu({
 }) {
   const [mobileSubmenuOpen, setMobileSubmenuOpen] = useState(false);
 
+  const submenuHeight = Math.max(
+    40,
+    Math.min(
+      120,
+      Number(websiteSettings.header_submenu_height_px ?? 56),
+    ),
+  );
+  const submenuFontSize = Math.max(
+    11,
+    Math.min(
+      30,
+      Number(websiteSettings.header_submenu_font_size_px ?? 14),
+    ),
+  );
+
   if (!websiteSettings.header_submenu_enabled) return null;
 
   // 모바일에서는 헤더 안의 햄버거 메뉴가 메뉴/전화/주문 버튼을 한 번에 보여줍니다.
@@ -7335,20 +7509,24 @@ function HeaderSubmenu({
         editable ? "ring-2 ring-inset ring-blue-400/40" : ""
       }`}
       style={{
+        height: `${submenuHeight}px`,
+        minHeight: `${submenuHeight}px`,
+        maxHeight: `${submenuHeight}px`,
         backgroundColor: String(
           websiteSettings.header_submenu_background_color || "#000000",
         ),
         color: String(
           websiteSettings.header_submenu_text_color || "#ffffff",
         ),
+        overflow: "visible",
       }}
     >
       <div
         className="mx-auto flex max-w-5xl items-center justify-center gap-8 px-4"
         style={{
-          minHeight: `${Number(
-            websiteSettings.header_submenu_height_px || 56,
-          )}px`,
+          height: `${submenuHeight}px`,
+          minHeight: `${submenuHeight}px`,
+          maxHeight: `${submenuHeight}px`,
         }}
       >
         {visibleItems.map((item) => {
@@ -7364,9 +7542,9 @@ function HeaderSubmenu({
                 }}
                 className="flex items-center gap-1 whitespace-nowrap px-2 font-medium transition hover:opacity-70"
                 style={{
-                  fontSize: `${Number(
-                    websiteSettings.header_submenu_font_size_px || 14,
-                  )}px`,
+                  fontSize: `${submenuFontSize}px`,
+                  lineHeight: 1,
+                  minHeight: `${submenuHeight}px`,
                 }}
               >
                 <span>{item.label || "Menu"}</span>
@@ -7401,8 +7579,9 @@ function HeaderSubmenu({
                         color: "inherit",
                         fontSize: `${Math.max(
                           11,
-                          Number(websiteSettings.header_submenu_font_size_px || 14) - 1,
+                          submenuFontSize - 1,
                         )}px`,
+                        lineHeight: 1.25,
                       }}
                     >
                       {child.label || "Submenu"}
@@ -10861,6 +11040,87 @@ function normalizePhoneHref(value: unknown) {
   return `tel:${hasLeadingPlus ? "+" : ""}${digits}`;
 }
 
+function prepareRichTextHtmlForDevice(
+  html: string,
+  previewDevice: "desktop" | "mobile" | undefined,
+) {
+  if (previewDevice !== "mobile") return html;
+
+  function mergeTagStyle(
+    tag: string,
+    attributes: string,
+    mobileStyle: string,
+  ) {
+    const styleMatch = attributes.match(/\sstyle=(["'])(.*?)\1/i);
+    const savedStyle = styleMatch?.[2] || "";
+    const cleanAttributes = attributes.replace(
+      /\sstyle=(["'])(.*?)\1/i,
+      "",
+    );
+
+    return `<${tag}${cleanAttributes} style="${savedStyle};${mobileStyle}">`;
+  }
+
+  let result = html;
+
+  /*
+   * 기존 style 속성을 남긴 채 style을 하나 더 붙이면 브라우저가 첫 번째
+   * min-height를 유지할 수 있습니다. 기존 style을 제거한 뒤 하나로 합쳐
+   * 모바일에서 불필요한 큰 빈 공간이 생기지 않게 합니다.
+   */
+  result = result.replace(
+    /<table([^>]*data-text-editor-table-id[^>]*)>/gi,
+    (_match, attributes: string) =>
+      mergeTagStyle(
+        "table",
+        attributes,
+        "display:block;width:100%;max-width:100%;height:auto;min-height:0;table-layout:auto;border-collapse:collapse;",
+      ),
+  );
+
+  result = result.replace(
+    /<(tbody|tr)([^>]*)>/gi,
+    (_match, tag: string, attributes: string) =>
+      mergeTagStyle(
+        tag,
+        attributes,
+        "display:block;width:100%;max-width:100%;height:auto;min-height:0;",
+      ),
+  );
+
+  result = result.replace(
+    /<td([^>]*)>/gi,
+    (_match, attributes: string) =>
+      mergeTagStyle(
+        "td",
+        attributes,
+        "display:block;width:100% !important;max-width:100% !important;height:auto !important;min-height:0 !important;box-sizing:border-box;padding:12px;",
+      ),
+  );
+
+  result = result.replace(
+    /<span([^>]*data-text-editor-image-id[^>]*)>/gi,
+    (_match, attributes: string) =>
+      mergeTagStyle(
+        "span",
+        attributes,
+        "display:block;width:min(100%,320px);max-width:320px;height:auto;min-height:0;margin-left:auto;margin-right:auto;resize:none;overflow:visible;line-height:0;",
+      ),
+  );
+
+  result = result.replace(
+    /<img([^>]*)>/gi,
+    (_match, attributes: string) =>
+      mergeTagStyle(
+        "img",
+        attributes,
+        "display:block;width:100%;max-width:100%;height:auto !important;min-height:0;object-fit:contain;margin:0;",
+      ),
+  );
+
+  return result;
+}
+
 function CellPreview({
   cell,
   business,
@@ -10929,7 +11189,12 @@ function CellPreview({
         : cell.font_family === "mono"
           ? "'Courier New', monospace"
           : "Arial, Helvetica, sans-serif";
-  const commonStyle = { fontSize: `${effectiveFontSize}px`, fontWeight, fontFamily };
+  const commonStyle = {
+    fontSize: `${effectiveFontSize}px`,
+    fontWeight,
+    fontFamily,
+    lineHeight: Math.max(0.8, Math.min(3, Number(cell.line_height ?? 1.6))),
+  };
 
   if (cell.type === "logo") {
     const logo = cell.image_url || "";
@@ -11274,7 +11539,16 @@ function CellPreview({
           ...menuVerticalStyle,
           fontSize: `${Math.max(
             10,
-            Math.min(40, Number(cell.font_size || 14)),
+            Math.min(
+              80,
+              Number(
+                area === "header"
+                  ? websiteSettings?.header_menu_font_size_px ??
+                      cell.font_size ??
+                      14
+                  : cell.font_size ?? 14,
+              ),
+            ),
           )}px`,
           fontWeight,
           fontFamily,
@@ -11298,7 +11572,11 @@ function CellPreview({
               href={href}
               onClick={(event) => event.stopPropagation()}
               className="cursor-pointer whitespace-nowrap no-underline transition-opacity hover:opacity-65"
-              style={{ color: cell.color || "inherit" }}
+              style={{
+                color: cell.color || "inherit",
+                fontSize: "inherit",
+                lineHeight: 1.15,
+              }}
               title={`${item.label || "메뉴"} · ${href}`}
             >
               {item.label || "메뉴"}
@@ -11667,7 +11945,7 @@ function CellPreview({
     const rawTitleHtml = sanitizeCellRichTextHtml(
       cell.rich_text_html || escapeCellText(cell.text || business.name || "제목"),
     );
-    const titleHtml =
+    const titleHtml = prepareRichTextHtmlForDevice(
       area === "header"
         ? rawTitleHtml
             .replace(
@@ -11678,14 +11956,16 @@ function CellPreview({
               /\ssize\s*=\s*(["']).*?\1/gi,
               "",
             )
-        : rawTitleHtml;
+        : rawTitleHtml,
+      previewDevice,
+    );
     return (
       <div
-        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible leading-tight [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
+        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
           color: cell.color || "#111827",
-          width: "fit-content",
+          width: previewDevice === "mobile" ? "100%" : "fit-content",
           height: "fit-content",
           maxWidth: "100%",
           flex: "0 0 auto",
@@ -11702,16 +11982,19 @@ function CellPreview({
     );
   }
   if (cell.type === "text") {
-    const textHtml = sanitizeCellRichTextHtml(
-      cell.rich_text_html || escapeCellText(cell.text || "내용을 입력하세요"),
+    const textHtml = prepareRichTextHtmlForDevice(
+      sanitizeCellRichTextHtml(
+        cell.rich_text_html || escapeCellText(cell.text || "내용을 입력하세요"),
+      ),
+      previewDevice,
     );
     return (
       <div
-        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible whitespace-pre-wrap leading-relaxed [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible whitespace-pre-wrap [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
           color: cell.color || "#111827",
-          width: "fit-content",
+          width: previewDevice === "mobile" ? "100%" : "fit-content",
           height: "fit-content",
           maxWidth: "100%",
           flex: "0 0 auto",
@@ -11924,7 +12207,7 @@ function HeaderSubmenuEditor({
               Header 크기 조절
             </p>
             <p className="mt-0.5 text-xs text-gray-500">
-              높이 · 로고 · 제목 · 버튼 · 상하 여백
+              높이 · 로고 · 메뉴 글자 · 제목 · 버튼 · 상하 여백
             </p>
           </div>
           <span
@@ -11957,6 +12240,15 @@ function HeaderSubmenuEditor({
                   min: 40,
                   max: 1200,
                   key: "header_logo_size_px",
+                },
+                {
+                  label: "헤더 메뉴 글자 크기",
+                  value: Number(
+                    websiteSettings.header_menu_font_size_px ?? 14,
+                  ),
+                  min: 10,
+                  max: 80,
+                  key: "header_menu_font_size_px",
                 },
                 {
                   label: "제목 글자 크기",
@@ -11999,7 +12291,28 @@ function HeaderSubmenuEditor({
                     type="range"
                     min={control.min}
                     max={control.max}
+                    step={1}
                     value={control.value}
+                    onInput={(event) => {
+                      if (control.key !== "header_menu_font_size_px") return;
+
+                      const nextValue = Number(event.currentTarget.value);
+                      const currentHeaderGrid = normalizeGrid(
+                        websiteSettings.header_grid,
+                        createDefaultHeader(""),
+                      );
+
+                      onUpdate({
+                        header_menu_font_size_px: nextValue,
+                        header_grid: {
+                          ...currentHeaderGrid,
+                          cells: mapHeaderMenuCells(
+                            currentHeaderGrid.cells,
+                            nextValue,
+                          ),
+                        },
+                      });
+                    }}
                     onChange={(event) => {
                       const nextValue = Number(event.target.value);
 
@@ -12028,6 +12341,20 @@ function HeaderSubmenuEditor({
                         websiteSettings.header_grid,
                         createDefaultHeader(""),
                       );
+
+                      if (control.key === "header_menu_font_size_px") {
+                        onUpdate({
+                          header_menu_font_size_px: nextValue,
+                          header_grid: {
+                            ...currentHeaderGrid,
+                            cells: mapHeaderMenuCells(
+                              currentHeaderGrid.cells,
+                              nextValue,
+                            ),
+                          },
+                        });
+                        return;
+                      }
 
                       if (control.key === "header_logo_size_px") {
                         const verticalPadding = Math.max(
@@ -12211,24 +12538,64 @@ function HeaderSubmenuEditor({
                 </span>
                 <span className="text-xs font-bold text-blue-700">
                   {Number(
-                    websiteSettings.header_submenu_height_px || 56,
+                    websiteSettings.header_submenu_height_px ?? 56,
                   )}px
                 </span>
               </div>
-              <input
-                type="range"
-                min="40"
-                max="120"
-                value={Number(
-                  websiteSettings.header_submenu_height_px || 56,
-                )}
-                onChange={(event) =>
-                  onUpdate({
-                    header_submenu_height_px: Number(event.target.value),
-                  })
-                }
-                className="mt-2 w-full"
-              />
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={40}
+                  max={120}
+                  step={1}
+                  value={Math.max(
+                    40,
+                    Math.min(
+                      120,
+                      Number(
+                        websiteSettings.header_submenu_height_px ?? 56,
+                      ),
+                    ),
+                  )}
+                  onInput={(event) =>
+                    onUpdate({
+                      header_submenu_height_px: Number(
+                        event.currentTarget.value,
+                      ),
+                    })
+                  }
+                  onChange={(event) =>
+                    onUpdate({
+                      header_submenu_height_px: Number(event.target.value),
+                    })
+                  }
+                  className="min-w-0 flex-1 accent-blue-600"
+                />
+                <input
+                  type="number"
+                  min={40}
+                  max={120}
+                  step={1}
+                  value={Math.max(
+                    40,
+                    Math.min(
+                      120,
+                      Number(
+                        websiteSettings.header_submenu_height_px ?? 56,
+                      ),
+                    ),
+                  )}
+                  onChange={(event) =>
+                    onUpdate({
+                      header_submenu_height_px: Math.max(
+                        40,
+                        Math.min(120, Number(event.target.value) || 40),
+                      ),
+                    })
+                  }
+                  className="h-9 w-20 rounded-lg border border-gray-300 bg-white px-2 text-center text-xs font-black"
+                />
+              </div>
             </label>
 
             <label className="block">
@@ -12238,24 +12605,64 @@ function HeaderSubmenuEditor({
                 </span>
                 <span className="text-xs font-bold text-blue-700">
                   {Number(
-                    websiteSettings.header_submenu_font_size_px || 14,
+                    websiteSettings.header_submenu_font_size_px ?? 14,
                   )}px
                 </span>
               </div>
-              <input
-                type="range"
-                min="11"
-                max="30"
-                value={Number(
-                  websiteSettings.header_submenu_font_size_px || 14,
-                )}
-                onChange={(event) =>
-                  onUpdate({
-                    header_submenu_font_size_px: Number(event.target.value),
-                  })
-                }
-                className="mt-2 w-full"
-              />
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="range"
+                  min={11}
+                  max={30}
+                  step={1}
+                  value={Math.max(
+                    11,
+                    Math.min(
+                      30,
+                      Number(
+                        websiteSettings.header_submenu_font_size_px ?? 14,
+                      ),
+                    ),
+                  )}
+                  onInput={(event) =>
+                    onUpdate({
+                      header_submenu_font_size_px: Number(
+                        event.currentTarget.value,
+                      ),
+                    })
+                  }
+                  onChange={(event) =>
+                    onUpdate({
+                      header_submenu_font_size_px: Number(event.target.value),
+                    })
+                  }
+                  className="min-w-0 flex-1 accent-blue-600"
+                />
+                <input
+                  type="number"
+                  min={11}
+                  max={30}
+                  step={1}
+                  value={Math.max(
+                    11,
+                    Math.min(
+                      30,
+                      Number(
+                        websiteSettings.header_submenu_font_size_px ?? 14,
+                      ),
+                    ),
+                  )}
+                  onChange={(event) =>
+                    onUpdate({
+                      header_submenu_font_size_px: Math.max(
+                        11,
+                        Math.min(30, Number(event.target.value) || 11),
+                      ),
+                    })
+                  }
+                  className="h-9 w-20 rounded-lg border border-gray-300 bg-white px-2 text-center text-xs font-black"
+                />
+              </div>
             </label>
           </div>
 
@@ -14254,9 +14661,18 @@ function RightPanel(props: {
   const [phoneEditorOpen, setPhoneEditorOpen] = useState(false);
   const [snsEditorOpen, setSnsEditorOpen] = useState(false);
   const [textEditorOpen, setTextEditorOpen] = useState(false);
+  const [mapEditorOpen, setMapEditorOpen] = useState(false);
+  const [mapEditorTitle, setMapEditorTitle] = useState("LOCATION");
+  const [mapEditorAddress, setMapEditorAddress] = useState("");
+  const [mapEditorPhone, setMapEditorPhone] = useState("");
+  const [mapEditorEmail, setMapEditorEmail] = useState("");
+  const [mapEditorInfoBackgroundColor, setMapEditorInfoBackgroundColor] = useState("#ffffff");
+  const [mapEditorSnsItems, setMapEditorSnsItems] = useState<SnsItem[]>([]);
   const [textEditorHtml, setTextEditorHtml] = useState("");
   const [selectionFontSize, setSelectionFontSize] = useState(24);
+  const [selectionLineHeight, setSelectionLineHeight] = useState(1.6);
   const [inputFontSize, setInputFontSize] = useState(24);
+  const [inputLineHeight, setInputLineHeight] = useState(1.6);
   const [inputFontFamily, setInputFontFamily] = useState<GridCell["font_family"]>("sans");
   const [inputFontWeight, setInputFontWeight] = useState<GridCell["font_weight"]>("normal");
   const [inputFontStyle, setInputFontStyle] = useState<"normal" | "italic">("normal");
@@ -14306,7 +14722,21 @@ function RightPanel(props: {
     useState(24);
   const [selectedTextEditorTableMobileStack, setSelectedTextEditorTableMobileStack] =
     useState(true);
+
   const [selectedTextColor, setSelectedTextColor] = useState("#111827");
+
+  // 텍스트 편집기 가로 구분선
+  const [selectedTextEditorDividerId, setSelectedTextEditorDividerId] =
+    useState("");
+  const [selectedDividerWidth, setSelectedDividerWidth] = useState(100);
+  const [selectedDividerThickness, setSelectedDividerThickness] = useState(1);
+  const [selectedDividerColor, setSelectedDividerColor] = useState("#d1d5db");
+  const [selectedDividerTopMargin, setSelectedDividerTopMargin] = useState(32);
+  const [selectedDividerBottomMargin, setSelectedDividerBottomMargin] =
+    useState(32);
+  const [selectedDividerStyle, setSelectedDividerStyle] =
+    useState<"solid" | "dashed" | "dotted" | "double">("solid");
+
   const [layerBasicSettingsOpen, setLayerBasicSettingsOpen] = useState(true);
   const [layerHeightSettingsOpen, setLayerHeightSettingsOpen] = useState(true);
 
@@ -14344,14 +14774,170 @@ function RightPanel(props: {
     updateSelectedLayout({ layout_width_mode: mode });
   }
 
+  function buildMapCellEditorHtml(cell: GridCell) {
+    const title = String(cell.map_title || "LOCATION").trim() || "LOCATION";
+    const address = String(
+      cell.map_address ?? getBusinessAddress(business),
+    ).trim();
+    const phone = String(
+      cell.map_phone ??
+        getBusinessContactValue(business, [
+          "phone",
+          "phone_number",
+          "telephone",
+        ]),
+    ).trim();
+    const email = String(
+      cell.map_email ??
+        getBusinessContactValue(business, [
+          "email",
+          "business_email",
+          "contact_email",
+        ]),
+    ).trim();
+    const snsItems = normalizeLocationSnsItems(cell, business).filter((item) =>
+      String(item.url || "").trim(),
+    );
+
+    const rows: string[] = [];
+
+    if (address) {
+      rows.push(
+        `<p style="margin:0 0 14px;display:flex;gap:10px;align-items:flex-start;"><span aria-hidden="true">📍</span><span>${escapeCellText(address)}</span></p>`,
+      );
+    }
+
+    if (phone) {
+      const phoneHref = phone.replace(/[^0-9+]/g, "");
+      rows.push(
+        `<p style="margin:0 0 14px;display:flex;gap:10px;align-items:flex-start;"><span aria-hidden="true">☎</span><a href="tel:${escapeTextEditorAttribute(phoneHref)}" style="color:inherit;text-decoration:none;">${escapeCellText(phone)}</a></p>`,
+      );
+    }
+
+    if (email) {
+      rows.push(
+        `<p style="margin:0 0 14px;display:flex;gap:10px;align-items:flex-start;"><span aria-hidden="true">✉</span><a href="mailto:${escapeTextEditorAttribute(email)}" style="color:inherit;text-decoration:none;word-break:break-all;">${escapeCellText(email)}</a></p>`,
+      );
+    }
+
+    const snsHtml = snsItems
+      .map((item) => {
+        const label =
+          item.label ||
+          SNS_PLATFORM_OPTIONS.find((option) => option.value === item.platform)
+            ?.label ||
+          item.platform;
+        const href =
+          item.platform === "kakao"
+            ? normalizeKakaoHref(item.url)
+            : normalizeExternalUrl(item.url);
+
+        return `<a href="${escapeTextEditorAttribute(href)}" target="_blank" rel="noreferrer" style="display:inline-flex;align-items:center;margin:0 10px 8px 0;font-weight:700;text-decoration:none;color:inherit;">${escapeCellText(label)}</a>`;
+      })
+      .join("");
+
+    return sanitizeCellRichTextHtml(
+      `<div data-map-content-template="true"><h2 style="margin:0 0 22px;font-size:30px;font-weight:900;letter-spacing:0.12em;">${escapeCellText(title)}</h2><div style="font-size:14px;line-height:1.6;">${rows.join("")}</div>${snsHtml ? `<div style="margin-top:22px;">${snsHtml}</div>` : ""}</div>`,
+    );
+  }
+
+  function getSelectedCellEditorHtml(cell: GridCell | null) {
+    if (!cell) return "";
+
+    const savedHtml = sanitizeCellRichTextHtml(
+      typeof cell.rich_text_html === "string" ? cell.rich_text_html : "",
+    );
+    const savedHtmlText = richTextToPlainText(savedHtml)
+      .replace(/\u00a0/g, " ")
+      .trim();
+
+    // 실제 내용이 들어 있는 HTML은 서식까지 그대로 편집기로 가져옵니다.
+    if (savedHtmlText || /<(img|table|hr|a|div|p|span|br)\b/i.test(savedHtml)) {
+      return savedHtml;
+    }
+
+    // 지도 레이어는 제목·주소·전화·이메일·SNS가 각각 별도 필드에 저장됩니다.
+    // 저장된 rich text가 없을 때 현재 지도 레이어의 값을 편집 가능한 HTML로 변환합니다.
+    if (cell.type === "map") {
+      return buildMapCellEditorHtml(cell);
+    }
+
+    // 예전에 일반 text 필드로만 저장된 레이어도 편집기에서 바로 수정할 수 있게 합니다.
+    return escapeCellText(String(cell.text || ""));
+  }
+
+  function openMapEditor() {
+    if (!selectedCell || selectedCell.type !== "map") return;
+
+    setMapEditorTitle(String(selectedCell.map_title || "LOCATION"));
+    setMapEditorAddress(
+      String(selectedCell.map_address ?? getBusinessAddress(business)),
+    );
+    setMapEditorPhone(
+      String(
+        selectedCell.map_phone ??
+          getBusinessContactValue(business, [
+            "phone",
+            "phone_number",
+            "telephone",
+          ]),
+      ),
+    );
+    setMapEditorEmail(
+      String(
+        selectedCell.map_email ??
+          getBusinessContactValue(business, [
+            "email",
+            "business_email",
+            "contact_email",
+          ]),
+      ),
+    );
+    setMapEditorInfoBackgroundColor(
+      String(selectedCell.map_info_background_color || "#ffffff"),
+    );
+    setMapEditorSnsItems(
+      normalizeLocationSnsItems(selectedCell, business).map((item) => ({
+        ...item,
+      })),
+    );
+    setMapEditorOpen(true);
+  }
+
+  function saveMapEditor() {
+    if (!selectedCell || selectedCell.type !== "map") return;
+
+    props.onUpdateCell(
+      selection.area as "header" | "hero",
+      selectedCell.id,
+      {
+        map_title: mapEditorTitle,
+        map_address: mapEditorAddress,
+        map_phone: mapEditorPhone,
+        map_email: mapEditorEmail,
+        map_info_background_color: mapEditorInfoBackgroundColor,
+        map_sns_items: mapEditorSnsItems,
+      },
+      selection.layoutId,
+    );
+
+    setMapEditorOpen(false);
+  }
+
   function openTextEditor() {
-    const initialHtml = selectedCell?.rich_text_html
-      ? sanitizeCellRichTextHtml(selectedCell.rich_text_html)
-      : escapeCellText(selectedCell?.text || "");
+    if (!selectedCell) return;
+
+    const initialHtml = getSelectedCellEditorHtml(selectedCell);
 
     setTextEditorHtml(initialHtml);
     setSelectionFontSize(selectedCell?.font_size || 24);
     setInputFontSize(selectedCell?.font_size || 24);
+    setInputLineHeight(
+      Math.max(0.8, Math.min(3, Number(selectedCell?.line_height ?? 1.6))),
+    );
+    setSelectionLineHeight(
+      Math.max(0.8, Math.min(3, Number(selectedCell?.line_height ?? 1.6))),
+    );
     setInputFontFamily(selectedCell?.font_family || "sans");
     setInputFontWeight(selectedCell?.font_weight || "normal");
     setInputFontStyle(selectedCell?.font_style || "normal");
@@ -14379,14 +14965,25 @@ function RightPanel(props: {
     setSelectedTextEditorImageWidth(520);
     setSelectedTextEditorTableId("");
     setSelectedTextEditorTableWidth(100);
-    setSelectedTextEditorTableRowHeight(120);
+    setSelectedTextEditorTableRowHeight(180);
     setSelectedTextEditorTableBorderVisible(false);
     setSelectedTextEditorTableLeftWidth(38);
     setSelectedTextEditorTableCellPadding(20);
     setSelectedTextEditorTableVerticalAlign("middle");
     setSelectedTextEditorTableBottomTopPadding(24);
     setSelectedTextEditorTableMobileStack(true);
+
+
     setSelectedTextColor(selectedCell?.color || "#111827");
+
+    setSelectedTextEditorDividerId("");
+    setSelectedDividerWidth(100);
+    setSelectedDividerThickness(1);
+    setSelectedDividerColor("#d1d5db");
+    setSelectedDividerTopMargin(32);
+    setSelectedDividerBottomMargin(32);
+    setSelectedDividerStyle("solid");
+
     savedTextRangeRef.current = null;
     textEditorInitializedRef.current = false;
     setTextEditorOpen(true);
@@ -14411,16 +15008,29 @@ function RightPanel(props: {
   }, [selectedCell]);
 
   useEffect(() => {
-    if (!textEditorOpen || !textEditorRef.current) return;
-    if (textEditorInitializedRef.current) return;
+    if (!textEditorOpen || textEditorInitializedRef.current) return;
 
-    textEditorRef.current.innerHTML = textEditorHtml;
-    textEditorInitializedRef.current = true;
+    const frameId = window.requestAnimationFrame(() => {
+      const editor = textEditorRef.current;
+      if (!editor) return;
 
-    window.setTimeout(() => {
-      textEditorRef.current?.focus();
-    }, 0);
-  }, [textEditorOpen, textEditorHtml]);
+      // Portal이 실제 DOM에 붙은 뒤 현재 선택 레이어의 저장 내용을 강제로 주입합니다.
+      // 이전에 열었던 다른 레이어의 내용이 남거나 빈 편집창으로 열리는 것을 막습니다.
+      editor.innerHTML = textEditorHtml;
+      textEditorInitializedRef.current = true;
+      editor.focus();
+
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      const selectionObject = window.getSelection();
+      selectionObject?.removeAllRanges();
+      selectionObject?.addRange(range);
+      savedTextRangeRef.current = range.cloneRange();
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [textEditorOpen, textEditorHtml, selectedCell?.id]);
 
   async function uploadTextEditorImage(file: File) {
     const compressed = await compressLinkPageImage(file);
@@ -14478,11 +15088,202 @@ function RightPanel(props: {
     syncEditorHtml();
   }
 
+  function insertTextEditorDivider() {
+    const dividerId = createId("text-editor-divider");
+
+    insertTextEditorHtmlAtCursor(
+      `<hr data-text-editor-divider-id="${dividerId}" contenteditable="false" style="display:block;width:100%;height:0;border-top-width:1px;border-right-width:0;border-bottom-width:0;border-left-width:0;border-top-style:solid;border-top-color:#d1d5db;margin-top:32px;margin-right:auto;margin-bottom:32px;margin-left:auto;" /><p><br></p>`,
+    );
+
+    setSelectedTextEditorDividerId(dividerId);
+    setSelectedDividerWidth(100);
+    setSelectedDividerThickness(1);
+    setSelectedDividerColor("#d1d5db");
+    setSelectedDividerTopMargin(32);
+    setSelectedDividerBottomMargin(32);
+    setSelectedDividerStyle("solid");
+    setTextEditorMessage(
+      "가로 구분선을 넣었습니다. 선을 클릭하면 너비·두께·색상·여백을 조절할 수 있습니다.",
+    );
+
+    requestAnimationFrame(() => {
+      const divider = textEditorRef.current?.querySelector<HTMLElement>(
+        `[data-text-editor-divider-id="${dividerId}"]`,
+      );
+      divider?.setAttribute("data-selected", "true");
+    });
+  }
+
+  function selectTextEditorDivider(target: EventTarget | null) {
+    const element =
+      target instanceof HTMLElement
+        ? target
+        : target instanceof Node
+          ? target.parentElement
+          : null;
+
+    const divider = element?.closest<HTMLElement>(
+      "[data-text-editor-divider-id]",
+    );
+
+    textEditorRef.current
+      ?.querySelectorAll<HTMLElement>(
+        '[data-text-editor-divider-id][data-selected="true"]',
+      )
+      .forEach((item) => item.removeAttribute("data-selected"));
+
+    if (!divider) {
+      setSelectedTextEditorDividerId("");
+      return;
+    }
+
+    divider.setAttribute("data-selected", "true");
+    setSelectedTextEditorDividerId(
+      divider.getAttribute("data-text-editor-divider-id") || "",
+    );
+
+    const width = Number.parseFloat(divider.style.width || "100");
+    const thickness = Number.parseFloat(
+      divider.style.borderTopWidth || "1",
+    );
+    const topMargin = Number.parseFloat(divider.style.marginTop || "32");
+    const bottomMargin = Number.parseFloat(
+      divider.style.marginBottom || "32",
+    );
+
+    setSelectedDividerWidth(
+      Number.isFinite(width) ? Math.max(10, Math.min(100, width)) : 100,
+    );
+    setSelectedDividerThickness(
+      Number.isFinite(thickness)
+        ? Math.max(1, Math.min(20, thickness))
+        : 1,
+    );
+    setSelectedDividerColor(divider.style.borderTopColor || "#d1d5db");
+    setSelectedDividerTopMargin(
+      Number.isFinite(topMargin)
+        ? Math.max(0, Math.min(160, topMargin))
+        : 32,
+    );
+    setSelectedDividerBottomMargin(
+      Number.isFinite(bottomMargin)
+        ? Math.max(0, Math.min(160, bottomMargin))
+        : 32,
+    );
+
+    const style = divider.style.borderTopStyle;
+    setSelectedDividerStyle(
+      style === "dashed" ||
+        style === "dotted" ||
+        style === "double"
+        ? style
+        : "solid",
+    );
+  }
+
+  function getSelectedTextEditorDivider() {
+    if (!selectedTextEditorDividerId) return null;
+
+    return (
+      textEditorRef.current?.querySelector<HTMLElement>(
+        `[data-text-editor-divider-id="${selectedTextEditorDividerId}"]`,
+      ) || null
+    );
+  }
+
+  function updateTextEditorDivider(
+    patch: {
+      width?: number;
+      thickness?: number;
+      color?: string;
+      topMargin?: number;
+      bottomMargin?: number;
+      style?: "solid" | "dashed" | "dotted" | "double";
+    },
+  ) {
+    const divider = getSelectedTextEditorDivider();
+    if (!divider) {
+      setTextEditorMessage("먼저 편집창 안의 가로 구분선을 클릭하세요.");
+      return;
+    }
+
+    if (typeof patch.width === "number") {
+      const value = Math.max(10, Math.min(100, patch.width));
+      divider.style.width = `${value}%`;
+      divider.style.marginLeft = "auto";
+      divider.style.marginRight = "auto";
+      setSelectedDividerWidth(value);
+    }
+
+    if (typeof patch.thickness === "number") {
+      const value = Math.max(1, Math.min(20, patch.thickness));
+      divider.style.borderTopWidth = `${value}px`;
+      setSelectedDividerThickness(value);
+    }
+
+    if (typeof patch.color === "string") {
+      divider.style.borderTopColor = patch.color;
+      setSelectedDividerColor(patch.color);
+    }
+
+    if (typeof patch.topMargin === "number") {
+      const value = Math.max(0, Math.min(160, patch.topMargin));
+      divider.style.marginTop = `${value}px`;
+      setSelectedDividerTopMargin(value);
+    }
+
+    if (typeof patch.bottomMargin === "number") {
+      const value = Math.max(0, Math.min(160, patch.bottomMargin));
+      divider.style.marginBottom = `${value}px`;
+      setSelectedDividerBottomMargin(value);
+    }
+
+    if (patch.style) {
+      divider.style.borderTopStyle = patch.style;
+      setSelectedDividerStyle(patch.style);
+    }
+
+    syncEditorHtml();
+  }
+
+  function deleteTextEditorDivider() {
+    const divider = getSelectedTextEditorDivider();
+    if (!divider) return;
+
+    divider.remove();
+    setSelectedTextEditorDividerId("");
+    syncEditorHtml();
+    setTextEditorMessage("가로 구분선을 삭제했습니다.");
+  }
+
+  function insertTextEditorOneByTwoTable() {
+    const tableId = createId("text-editor-table");
+
+    insertTextEditorHtmlAtCursor(
+      `<table data-text-editor-table-id="${tableId}" data-mobile-stack="true" data-table-border-visible="false" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:12px;margin-right:auto;margin-bottom:12px;margin-left:auto;"><tbody><tr><td style="width:50%;min-height:180px;border:none;padding:20px;vertical-align:top;">왼쪽 칸</td><td style="width:50%;min-height:180px;border:none;padding:20px;vertical-align:top;">오른쪽 칸</td></tr></tbody></table><p><br></p>`,
+    );
+
+    setSelectedTextEditorTableId(tableId);
+    setSelectedTextEditorTableWidth(100);
+    setSelectedTextEditorTableRowHeight(120);
+    setSelectedTextEditorTableBorderVisible(false);
+    setTextEditorMessage(
+      "1×2 테이블을 넣었습니다. 왼쪽과 오른쪽 칸에 사진·이름·소개 글을 자유롭게 넣으세요.",
+    );
+
+    requestAnimationFrame(() => {
+      const table = textEditorRef.current?.querySelector<HTMLElement>(
+        `[data-text-editor-table-id="${tableId}"]`,
+      );
+      table?.setAttribute("data-selected", "true");
+    });
+  }
+
   function insertTextEditorTwoByTwoTable() {
     const tableId = createId("text-editor-table");
 
     insertTextEditorHtmlAtCursor(
-      `<table data-text-editor-table-id="${tableId}" data-mobile-stack="true" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:12px;margin-right:auto;margin-bottom:12px;margin-left:auto;"><tbody><tr data-profile-top-row="true"><td data-profile-left-cell="true" style="width:38%;min-height:240px;border:none;padding:20px;vertical-align:middle;text-align:center;">사진과 이름을 넣으세요</td><td data-profile-right-cell="true" style="width:62%;min-height:240px;border:none;padding:20px;vertical-align:middle;text-align:left;">소개 글을 입력하세요</td></tr><tr data-profile-bottom-row="true"><td style="min-height:120px;border:none;padding:24px 20px 20px;vertical-align:top;">아래 전체 폭 설명</td><td style="min-height:120px;border:none;padding:24px 20px 20px;vertical-align:top;">아래 오른쪽 칸</td></tr></tbody></table><p><br></p>`,
+      `<table data-text-editor-table-id="${tableId}" data-mobile-stack="true" data-table-border-visible="false" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:12px;margin-right:auto;margin-bottom:12px;margin-left:auto;"><tbody><tr data-profile-top-row="true"><td data-profile-left-cell="true" style="width:38%;min-height:240px;border:none;padding:20px;vertical-align:middle;text-align:center;">사진과 이름을 넣으세요</td><td data-profile-right-cell="true" style="width:62%;min-height:240px;border:none;padding:20px;vertical-align:middle;text-align:left;">소개 글을 입력하세요</td></tr><tr data-profile-bottom-row="true"><td style="min-height:120px;border:none;padding:24px 20px 20px;vertical-align:top;">아래 전체 폭 설명</td><td style="min-height:120px;border:none;padding:24px 20px 20px;vertical-align:top;">아래 오른쪽 칸</td></tr></tbody></table><p><br></p>`,
     );
 
     setSelectedTextEditorTableId(tableId);
@@ -14539,9 +15340,16 @@ function RightPanel(props: {
         : 120,
     );
 
+    const savedBorderVisible =
+      table.getAttribute("data-table-border-visible");
+
     const borderValue = firstCell?.style.border || "";
     setSelectedTextEditorTableBorderVisible(
-      borderValue !== "none" && borderValue !== "0px",
+      savedBorderVisible === "true" ||
+        (savedBorderVisible === null &&
+          borderValue !== "none" &&
+          borderValue !== "0px" &&
+          borderValue !== ""),
     );
 
     const topRow = table.rows[0];
@@ -14620,14 +15428,41 @@ function RightPanel(props: {
 
   function updateSelectedTextEditorTableBorderVisible(visible: boolean) {
     const table = getSelectedTextEditorTable();
-    if (!table) return;
+
+    if (!table) {
+      setTextEditorMessage("먼저 편집창 안의 테이블을 클릭하세요.");
+      return;
+    }
+
+    table.setAttribute(
+      "data-table-border-visible",
+      visible ? "true" : "false",
+    );
 
     table.querySelectorAll<HTMLTableCellElement>("td").forEach((cell) => {
-      cell.style.border = visible ? "1px solid #cbd5e1" : "none";
+      cell.style.borderTopStyle = visible ? "solid" : "none";
+      cell.style.borderRightStyle = visible ? "solid" : "none";
+      cell.style.borderBottomStyle = visible ? "solid" : "none";
+      cell.style.borderLeftStyle = visible ? "solid" : "none";
+
+      cell.style.borderTopWidth = visible ? "1px" : "0px";
+      cell.style.borderRightWidth = visible ? "1px" : "0px";
+      cell.style.borderBottomWidth = visible ? "1px" : "0px";
+      cell.style.borderLeftWidth = visible ? "1px" : "0px";
+
+      cell.style.borderTopColor = visible ? "#94a3b8" : "transparent";
+      cell.style.borderRightColor = visible ? "#94a3b8" : "transparent";
+      cell.style.borderBottomColor = visible ? "#94a3b8" : "transparent";
+      cell.style.borderLeftColor = visible ? "#94a3b8" : "transparent";
     });
 
     setSelectedTextEditorTableBorderVisible(visible);
     syncEditorHtml();
+    setTextEditorMessage(
+      visible
+        ? "테이블 선을 표시했습니다."
+        : "테이블 선을 숨겼습니다.",
+    );
   }
 
   function updateSelectedTextEditorTableLeftWidth(value: number) {
@@ -14790,8 +15625,11 @@ function RightPanel(props: {
     const newCell = document.createElement("td");
     newCell.style.width = "50%";
     newCell.style.minHeight = "120px";
-    newCell.style.border = selectedTextEditorTableBorderVisible
-      ? "1px solid #cbd5e1"
+    const borderVisible =
+      table.getAttribute("data-table-border-visible") === "true";
+
+    newCell.style.border = borderVisible
+      ? "1px solid #94a3b8"
       : "none";
     newCell.style.padding = "16px";
     newCell.style.verticalAlign = "top";
@@ -14972,10 +15810,334 @@ function RightPanel(props: {
     }
   }
 
+  function cleanExternalEditorHtml(html: string, plainText = "") {
+    if (typeof window === "undefined") {
+      return plainText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\r?\n/g, "<br>");
+    }
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(
+      html || plainText.replace(/\r?\n/g, "<br>"),
+      "text/html",
+    );
+
+    doc.querySelectorAll("script, style, link, meta, iframe, object, embed").forEach((node) => node.remove());
+
+    const allowedTags = new Set([
+      "P", "DIV", "BR", "H1", "H2", "H3", "H4", "H5", "H6",
+      "UL", "OL", "LI", "BLOCKQUOTE", "STRONG", "B", "EM", "I", "U",
+      "TABLE", "TBODY", "THEAD", "TFOOT", "TR", "TD", "TH",
+      "IMG", "A", "HR", "SPAN",
+    ]);
+
+    Array.from(doc.body.querySelectorAll("*")).forEach((element) => {
+      if (!allowedTags.has(element.tagName)) {
+        element.replaceWith(...Array.from(element.childNodes));
+        return;
+      }
+
+      const keep: Record<string, string> = {};
+      if (element instanceof HTMLAnchorElement && element.href) keep.href = element.getAttribute("href") || "";
+      if (element instanceof HTMLImageElement) {
+        keep.src = element.getAttribute("src") || "";
+        keep.alt = element.getAttribute("alt") || "";
+      }
+      if (element instanceof HTMLTableCellElement) {
+        const colspan = element.getAttribute("colspan");
+        const rowspan = element.getAttribute("rowspan");
+        if (colspan) keep.colspan = colspan;
+        if (rowspan) keep.rowspan = rowspan;
+      }
+
+      Array.from(element.attributes).forEach((attribute) => element.removeAttribute(attribute.name));
+      Object.entries(keep).forEach(([name, value]) => {
+        if (value) element.setAttribute(name, value);
+      });
+
+      if (/^(P|DIV|H1|H2|H3|H4|H5|H6|LI|BLOCKQUOTE)$/.test(element.tagName)) {
+        const item = element as HTMLElement;
+        item.style.margin = "0";
+        item.style.padding = "0";
+        item.style.lineHeight = "inherit";
+        item.style.fontFamily = "inherit";
+        item.style.fontSize = "inherit";
+        item.style.color = "inherit";
+      }
+
+      if (element instanceof HTMLTableElement) {
+        element.style.width = "100%";
+        element.style.maxWidth = "100%";
+        element.style.tableLayout = "fixed";
+        element.style.borderCollapse = "collapse";
+      }
+
+      if (element instanceof HTMLTableCellElement) {
+        element.style.minWidth = "0";
+        element.style.verticalAlign = "top";
+      }
+
+      if (element instanceof HTMLImageElement) {
+        element.style.maxWidth = "100%";
+        element.style.height = "auto";
+      }
+    });
+
+    return doc.body.innerHTML;
+  }
+
+  function insertCleanHtmlAtTextCursor(html: string) {
+    const editor = textEditorRef.current;
+    if (!editor) return;
+
+    editor.focus({ preventScroll: true });
+    const selectionObject = window.getSelection();
+    const range =
+      selectionObject &&
+      selectionObject.rangeCount > 0 &&
+      editor.contains(selectionObject.getRangeAt(0).commonAncestorContainer)
+        ? selectionObject.getRangeAt(0)
+        : null;
+
+    if (!range) {
+      editor.insertAdjacentHTML("beforeend", html);
+      syncEditorHtml();
+      return;
+    }
+
+    range.deleteContents();
+    const fragment = range.createContextualFragment(html);
+    const lastNode = fragment.lastChild;
+    range.insertNode(fragment);
+
+    if (lastNode && selectionObject) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      selectionObject.removeAllRanges();
+      selectionObject.addRange(range);
+      savedTextRangeRef.current = range.cloneRange();
+    }
+
+    syncEditorHtml();
+  }
+
+  function handleCleanTextEditorPaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const clipboardHtml = event.clipboardData.getData("text/html");
+    const clipboardText = event.clipboardData.getData("text/plain");
+    const cleaned = cleanExternalEditorHtml(clipboardHtml, clipboardText);
+    insertCleanHtmlAtTextCursor(cleaned);
+    applyEditorBaseLineHeight(inputLineHeight);
+    setTextEditorMessage("외부 웹사이트의 글꼴·크기·줄간격·여백 속성을 제거해서 붙여넣었습니다.");
+  }
+
+  function resetTextEditorHtmlCompletely(html: string) {
+    if (typeof window === "undefined") return html;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    doc
+      .querySelectorAll("script, style, link, meta, iframe, object, embed, svg")
+      .forEach((node) => node.remove());
+
+    const allowedTags = new Set([
+      "P", "DIV", "BR", "UL", "OL", "LI", "BLOCKQUOTE",
+      "TABLE", "TBODY", "THEAD", "TFOOT", "TR", "TD", "TH",
+      "IMG", "A", "HR",
+    ]);
+
+    // 제목·span·굵게·기울임 등은 태그 자체를 풀어 일반 본문으로 만듭니다.
+    Array.from(doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6,span,strong,b,em,i,u,font,small,big,mark"))
+      .forEach((element) => element.replaceWith(...Array.from(element.childNodes)));
+
+    Array.from(doc.body.querySelectorAll("*")).forEach((element) => {
+      if (!allowedTags.has(element.tagName)) {
+        element.replaceWith(...Array.from(element.childNodes));
+        return;
+      }
+
+      const keep: Record<string, string> = {};
+
+      if (element instanceof HTMLAnchorElement) {
+        const href = element.getAttribute("href") || "";
+        if (href) keep.href = href;
+      }
+
+      if (element instanceof HTMLImageElement) {
+        const src = element.getAttribute("src") || "";
+        const alt = element.getAttribute("alt") || "";
+        if (src) keep.src = src;
+        if (alt) keep.alt = alt;
+      }
+
+      if (element instanceof HTMLTableCellElement) {
+        const colspan = element.getAttribute("colspan");
+        const rowspan = element.getAttribute("rowspan");
+        if (colspan) keep.colspan = colspan;
+        if (rowspan) keep.rowspan = rowspan;
+      }
+
+      // 편집기 자체 이미지·표·구분선을 다시 선택하기 위한 내부 식별값만 보존합니다.
+      Array.from(element.attributes).forEach((attribute) => {
+        if (
+          attribute.name.startsWith("data-text-editor-") ||
+          attribute.name.startsWith("data-table-") ||
+          attribute.name === "data-selected"
+        ) {
+          keep[attribute.name] = attribute.value;
+        }
+      });
+
+      // style, class, id, dir, lang, width, height 등 기존 속성을 전부 제거합니다.
+      Array.from(element.attributes).forEach((attribute) => {
+        element.removeAttribute(attribute.name);
+      });
+
+      Object.entries(keep).forEach(([name, value]) => {
+        if (value) element.setAttribute(name, value);
+      });
+    });
+
+    // 텍스트가 없는 빈 문단·빈 DIV는 완전히 제거합니다.
+    doc.body
+      .querySelectorAll<HTMLElement>("p,div,li,blockquote")
+      .forEach((element) => {
+        if (
+          element.closest("[data-text-editor-image-row='true']") ||
+          element.closest("table") ||
+          element.querySelector("img,table,hr,[data-text-editor-image-id]")
+        ) {
+          return;
+        }
+
+        const text = (element.textContent || "")
+          .replace(/\u00a0/g, " ")
+          .trim();
+        const hasVisibleElement = Boolean(element.querySelector("img,table,hr,a"));
+
+        if (!text && !hasVisibleElement) element.remove();
+      });
+
+    // 모든 위치의 연속 BR을 하나로 줄이고 맨 앞·뒤의 BR은 제거합니다.
+    const collapseBreaks = (parent: ParentNode) => {
+      let previousWasBreak = false;
+      Array.from(parent.childNodes).forEach((node) => {
+        const isBreak = node instanceof HTMLBRElement;
+        if (isBreak && previousWasBreak) {
+          node.remove();
+          return;
+        }
+        previousWasBreak = isBreak;
+        if (node instanceof HTMLElement) collapseBreaks(node);
+      });
+    };
+    collapseBreaks(doc.body);
+
+    while (doc.body.firstChild instanceof HTMLBRElement) {
+      doc.body.firstChild.remove();
+    }
+    while (doc.body.lastChild instanceof HTMLBRElement) {
+      doc.body.lastChild.remove();
+    }
+
+    return doc.body.innerHTML;
+  }
+
+  function clearAllTextEditorFormatting() {
+    const editor = textEditorRef.current;
+    if (!editor) return;
+
+    editor.innerHTML = resetTextEditorHtmlCompletely(editor.innerHTML);
+    normalizeTextEditorParagraphSpacing(editor);
+    applyEditorBaseLineHeight(inputLineHeight);
+    syncEditorHtml();
+    setTextEditorMessage(
+      "전체 리셋 완료: 외부 style·class·글꼴·크기·색상·배경·줄간격·여백·정렬 속성을 모두 제거했습니다.",
+    );
+  }
+
   function syncEditorHtml() {
     const editor = textEditorRef.current;
     if (!editor) return;
     setTextEditorHtml(editor.innerHTML);
+  }
+
+  function normalizeTextEditorParagraphSpacing(editor: HTMLElement) {
+    const blockSelector =
+      "p, div:not([data-text-editor-image-row='true']):not([data-text-editor-divider-id]), h1, h2, h3, h4, h5, h6, li, blockquote";
+
+    // 외부 웹사이트에서 들어온 빈 문단·빈 DIV·연속 BR은 line-height와 별개로
+    // 큰 공백을 만듭니다. 이미지/표/구분선 영역은 유지하고 텍스트 빈 줄만 제거합니다.
+    editor.querySelectorAll<HTMLElement>(blockSelector).forEach((element) => {
+      if (
+        element.closest("[data-text-editor-image-row='true']") ||
+        element.closest("table") ||
+        element.querySelector("img, table, hr, [data-text-editor-image-id]")
+      ) {
+        return;
+      }
+
+      const normalizedText = (element.textContent || "")
+        .replace(/\u00a0/g, " ")
+        .trim();
+      const onlyBreaks = Array.from(element.childNodes).every((node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return !(node.textContent || "").replace(/\u00a0/g, " ").trim();
+        }
+        return node instanceof HTMLBRElement;
+      });
+
+      if (!normalizedText && onlyBreaks) {
+        element.remove();
+      }
+    });
+
+    // 최상위에 연속으로 들어온 BR도 한 개를 초과하면 제거합니다.
+    let previousWasBreak = false;
+    Array.from(editor.childNodes).forEach((node) => {
+      const isBreak = node instanceof HTMLBRElement;
+      if (isBreak && previousWasBreak) {
+        node.remove();
+        return;
+      }
+      previousWasBreak = isBreak;
+    });
+  }
+
+  function applyEditorBaseLineHeight(nextValue: number) {
+    const next = Math.max(0.8, Math.min(3, Number(nextValue) || 1.6));
+    setInputLineHeight(next);
+
+    const editor = textEditorRef.current;
+    if (!editor) return;
+
+    normalizeTextEditorParagraphSpacing(editor);
+
+    editor.style.setProperty("line-height", String(next), "important");
+    editor.style.setProperty("--text-editor-line-height", String(next));
+
+    editor
+      .querySelectorAll<HTMLElement>(
+        "p, div:not([data-text-editor-image-row='true']):not([data-text-editor-divider-id]), h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote, span",
+      )
+      .forEach((element) => {
+        if (
+          element.closest("[data-text-editor-image-row='true']") ||
+          element.closest("table")
+        ) return;
+
+        element.style.setProperty("margin-top", "0", "important");
+        element.style.setProperty("margin-bottom", "0", "important");
+        element.style.setProperty("padding-top", "0", "important");
+        element.style.setProperty("padding-bottom", "0", "important");
+        element.style.setProperty("line-height", String(next), "important");
+      });
+
+    syncEditorHtml();
   }
 
   function runRichTextCommand(command: string, value?: string) {
@@ -14987,7 +16149,10 @@ function RightPanel(props: {
     rememberTextSelection();
   }
 
-  function applyInlineStyle(styleName: "fontSize" | "fontFamily" | "color", value: string) {
+  function applyInlineStyle(
+    styleName: "fontSize" | "fontFamily" | "color" | "lineHeight",
+    value: string,
+  ) {
     if (!restoreTextSelection()) return;
 
     const editor = textEditorRef.current;
@@ -15024,6 +16189,12 @@ function RightPanel(props: {
   function applySelectedFontSize(size: number) {
     setSelectionFontSize(size);
     applyInlineStyle("fontSize", `${size}px`);
+  }
+
+  function applySelectedLineHeight(value: number) {
+    const next = Math.max(0.8, Math.min(3, value));
+    setSelectionLineHeight(next);
+    applyInlineStyle("lineHeight", String(next));
   }
 
   function applySelectedFontFamily(fontFamily: string) {
@@ -15736,6 +16907,7 @@ function RightPanel(props: {
         rich_text_html: html,
         text: plainText,
         font_size: inputFontSize,
+        line_height: inputLineHeight,
         font_family: inputFontFamily,
         font_weight: inputFontWeight,
         font_style: inputFontStyle,
@@ -16762,13 +17934,17 @@ function RightPanel(props: {
             <span aria-hidden="true">☎</span>
             전화번호 입력·수정
           </button>
-        ) : selectedCell.type === "text" ? (
+        ) : area === "header" && selectedCell.type === "text" ? (
           <button
             type="button"
-            onClick={openTextEditor}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              openTextEditor();
+            }}
             className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700"
           >
-            텍스트 편집
+            모달 편집
           </button>
         ) : selectedCell.type !== "empty" &&
         selectedCell.type !== "logo" &&
@@ -16792,7 +17968,32 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "map" ? (
-          <div className="mt-4 space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  openMapEditor();
+                }}
+                className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700"
+              >
+                지도 정보 편집
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  openTextEditor();
+                }}
+                className="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-violet-700"
+              >
+                텍스트·이미지 편집
+              </button>
+            </div>
+            <div className="mt-4 space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
             <div>
               <p className="text-sm font-black text-gray-950">LOCATION 정보 편집</p>
               <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">비워두면 비즈니스에 저장된 정보를 자동으로 사용합니다. 값이 없는 항목은 공개 화면에 표시하지 않습니다.</p>
@@ -16806,8 +18007,37 @@ function RightPanel(props: {
             <Field label="전화번호">
               <input type="tel" value={selectedCell.map_phone ?? getBusinessContactValue(business, ["phone", "phone_number", "telephone"])} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { map_phone: event.target.value }, selection.layoutId)} placeholder="없으면 표시하지 않음" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
             </Field>
-            <Field label="이메일">
-              <input type="email" value={selectedCell.map_email ?? getBusinessContactValue(business, ["email", "business_email", "contact_email"])} onChange={(event) => props.onUpdateCell(area, selectedCell.id, { map_email: event.target.value }, selection.layoutId)} placeholder="없으면 표시하지 않음" className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+            <Field label="왼쪽 정보 영역 배경색">
+              <div className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white p-2">
+                <input
+                  type="color"
+                  value={selectedCell.map_info_background_color || "#ffffff"}
+                  onChange={(event) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      { map_info_background_color: event.target.value },
+                      selection.layoutId,
+                    )
+                  }
+                  className="h-10 w-14 cursor-pointer rounded-lg border border-gray-200 bg-white p-1"
+                  aria-label="지도 왼쪽 정보 영역 배경색"
+                />
+                <input
+                  type="text"
+                  value={selectedCell.map_info_background_color || "#ffffff"}
+                  onChange={(event) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      { map_info_background_color: event.target.value },
+                      selection.layoutId,
+                    )
+                  }
+                  className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm"
+                  placeholder="#ffffff"
+                />
+              </div>
             </Field>
             <div className="space-y-3 rounded-xl border border-blue-100 bg-white p-3">
               <p className="text-xs font-black uppercase tracking-wide text-blue-700">SNS</p>
@@ -16823,7 +18053,8 @@ function RightPanel(props: {
                 );
               })}
             </div>
-          </div>
+            </div>
+          </>
         ) : null}
 
         {selectedCell.type === "sns" ? (
@@ -17299,6 +18530,98 @@ function RightPanel(props: {
           </div>
         </Field>
 
+        {mapEditorOpen &&
+        selectedCell.type === "map" &&
+        typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[10060] flex items-center justify-center bg-black/65 p-3 sm:p-6"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) setMapEditorOpen(false);
+                }}
+              >
+                <div
+                  className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Map Editor</p>
+                      <h3 className="mt-1 text-xl font-black text-gray-950">지도 본문 편집</h3>
+                      <p className="mt-1 text-xs font-semibold text-gray-500">현재 레이어에 입력된 값을 불러왔습니다. 수정 후 저장하세요.</p>
+                    </div>
+                    <button type="button" onClick={() => setMapEditorOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200" aria-label="지도 편집창 닫기">×</button>
+                  </div>
+
+                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
+                    <Field label="타이틀">
+                      <input value={mapEditorTitle} onChange={(event) => setMapEditorTitle(event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+                    </Field>
+                    <Field label="주소">
+                      <textarea rows={3} value={mapEditorAddress} onChange={(event) => setMapEditorAddress(event.target.value)} className="w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+                    </Field>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="전화번호">
+                        <input type="tel" value={mapEditorPhone} onChange={(event) => setMapEditorPhone(event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+                      </Field>
+                      <Field label="이메일">
+                        <input type="email" value={mapEditorEmail} onChange={(event) => setMapEditorEmail(event.target.value)} className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5" />
+                      </Field>
+                    </div>
+                    <Field label="왼쪽 정보 영역 배경색">
+                      <div className="flex items-center gap-3 rounded-xl border border-gray-300 bg-white p-2">
+                        <input
+                          type="color"
+                          value={mapEditorInfoBackgroundColor}
+                          onChange={(event) => setMapEditorInfoBackgroundColor(event.target.value)}
+                          className="h-10 w-14 cursor-pointer rounded-lg border border-gray-200 bg-white p-1"
+                          aria-label="지도 왼쪽 정보 영역 배경색"
+                        />
+                        <input
+                          type="text"
+                          value={mapEditorInfoBackgroundColor}
+                          onChange={(event) => setMapEditorInfoBackgroundColor(event.target.value)}
+                          className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm"
+                          placeholder="#ffffff"
+                        />
+                      </div>
+                    </Field>
+                    <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                      <p className="text-xs font-black uppercase tracking-wide text-blue-700">SNS</p>
+                      {mapEditorSnsItems.map((item) => {
+                        const option = SNS_PLATFORM_OPTIONS.find((entry) => entry.value === item.platform);
+                        return (
+                          <Field key={item.platform} label={option?.label || item.platform}>
+                            <input
+                              value={item.url || ""}
+                              onChange={(event) =>
+                                setMapEditorSnsItems((current) =>
+                                  current.map((snsItem) =>
+                                    snsItem.platform === item.platform
+                                      ? { ...snsItem, url: event.target.value }
+                                      : snsItem,
+                                  ),
+                                )
+                              }
+                              placeholder={item.platform === "kakao" ? "카카오톡 ID 또는 오픈채팅 URL" : option?.placeholder || "https://..."}
+                              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                            />
+                          </Field>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 border-t border-gray-200 bg-gray-50 px-5 py-4 sm:px-6">
+                    <button type="button" onClick={() => setMapEditorOpen(false)} className="rounded-xl border border-gray-300 bg-white px-5 py-3 text-sm font-black text-gray-700">취소</button>
+                    <button type="button" onClick={saveMapEditor} className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-black text-white hover:bg-blue-700">저장</button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
         {phoneEditorOpen && typeof document !== "undefined"
           ? createPortal(
               <div className="fixed inset-0 z-[10050] flex items-center justify-center bg-black/65 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setPhoneEditorOpen(false); }}>
@@ -17341,7 +18664,9 @@ function RightPanel(props: {
             )
           : null}
 
-        {(selectedCell.type === "text" || selectedCell.type === "title") &&
+        {(selectedCell.type === "text" ||
+          selectedCell.type === "title" ||
+          selectedCell.type === "map") &&
         textEditorOpen &&
         typeof document !== "undefined"
           ? createPortal(
@@ -17359,10 +18684,18 @@ function RightPanel(props: {
               <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-7">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
-                    {selectedCell.type === "title" ? "Title Editor" : "Text Editor"}
+                    {selectedCell.type === "title"
+                      ? "Title Editor"
+                      : selectedCell.type === "map"
+                        ? "Map Content Editor"
+                        : "Text Editor"}
                   </p>
                   <h3 className="mt-1 text-xl font-black text-gray-950">
-                    {selectedCell.type === "title" ? "제목 편집" : "텍스트 편집"}
+                    {selectedCell.type === "title"
+                      ? "제목 편집"
+                      : selectedCell.type === "map"
+                        ? "지도 레이어 텍스트·이미지 편집"
+                        : "텍스트 편집"}
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
                     글자를 블록 지정한 다음 크기·폰트·색상·링크·정렬을 적용하세요.
@@ -17476,6 +18809,219 @@ function RightPanel(props: {
                   ) : null}
                 </div>
 
+                <div className="mb-4 rounded-2xl border border-slate-300 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-600">
+                        Divider
+                      </p>
+                      <h4 className="mt-1 text-base font-black text-slate-950">
+                        가로 구분선
+                      </h4>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-700">
+                        커서 위치에 구분선을 넣고 너비·두께·색상·여백을 조절합니다.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        rememberTextSelection();
+                      }}
+                      onClick={insertTextEditorDivider}
+                      className="rounded-xl bg-slate-800 px-4 py-3 text-sm font-black text-white hover:bg-slate-900"
+                    >
+                      ─ 가로 구분선 넣기
+                    </button>
+                  </div>
+
+                  {selectedTextEditorDividerId ? (
+                    <div className="mt-4 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 lg:grid-cols-2">
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            선 너비
+                          </label>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-800">
+                            {selectedDividerWidth}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={10}
+                          max={100}
+                          step={1}
+                          value={selectedDividerWidth}
+                          onChange={(event) =>
+                            updateTextEditorDivider({
+                              width: Number(event.target.value),
+                            })
+                          }
+                          className="mt-3 w-full accent-slate-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            선 두께
+                          </label>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-800">
+                            {selectedDividerThickness}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={1}
+                          max={20}
+                          step={1}
+                          value={selectedDividerThickness}
+                          onChange={(event) =>
+                            updateTextEditorDivider({
+                              thickness: Number(event.target.value),
+                            })
+                          }
+                          className="mt-3 w-full accent-slate-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            위 여백
+                          </label>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-800">
+                            {selectedDividerTopMargin}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={160}
+                          step={2}
+                          value={selectedDividerTopMargin}
+                          onChange={(event) =>
+                            updateTextEditorDivider({
+                              topMargin: Number(event.target.value),
+                            })
+                          }
+                          className="mt-3 w-full accent-slate-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            아래 여백
+                          </label>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-800">
+                            {selectedDividerBottomMargin}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={160}
+                          step={2}
+                          value={selectedDividerBottomMargin}
+                          onChange={(event) =>
+                            updateTextEditorDivider({
+                              bottomMargin: Number(event.target.value),
+                            })
+                          }
+                          className="mt-3 w-full accent-slate-700"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-xs font-black text-gray-700">
+                          선 색상
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={selectedDividerColor}
+                            onChange={(event) =>
+                              updateTextEditorDivider({
+                                color: event.target.value,
+                              })
+                            }
+                            className="h-10 w-14 rounded-xl border border-slate-300 bg-white p-1"
+                          />
+                          <input
+                            value={selectedDividerColor}
+                            onChange={(event) =>
+                              setSelectedDividerColor(event.target.value)
+                            }
+                            onBlur={() =>
+                              updateTextEditorDivider({
+                                color: selectedDividerColor,
+                              })
+                            }
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-xs font-black uppercase"
+                          />
+                        </div>
+                      </div>
+
+                      <Field label="선 모양">
+                        <select
+                          value={selectedDividerStyle}
+                          onChange={(event) =>
+                            updateTextEditorDivider({
+                              style: event.target.value as
+                                | "solid"
+                                | "dashed"
+                                | "dotted"
+                                | "double",
+                            })
+                          }
+                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold"
+                        >
+                          <option value="solid">실선</option>
+                          <option value="dashed">긴 점선</option>
+                          <option value="dotted">점선</option>
+                          <option value="double">이중선</option>
+                        </select>
+                      </Field>
+
+                      <div className="lg:col-span-2">
+                        <div className="rounded-xl bg-slate-50 px-4 py-6">
+                          <hr
+                            style={{
+                              width: `${selectedDividerWidth}%`,
+                              borderTopWidth: `${selectedDividerThickness}px`,
+                              borderTopStyle: selectedDividerStyle,
+                              borderTopColor: selectedDividerColor,
+                              borderRightWidth: 0,
+                              borderBottomWidth: 0,
+                              borderLeftWidth: 0,
+                              marginTop: `${selectedDividerTopMargin}px`,
+                              marginRight: "auto",
+                              marginBottom: `${selectedDividerBottomMargin}px`,
+                              marginLeft: "auto",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-2">
+                        <button
+                          type="button"
+                          onClick={deleteTextEditorDivider}
+                          className="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white hover:bg-red-700"
+                        >
+                          구분선 삭제
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs font-bold text-slate-700">
+                      편집창에서 구분선을 클릭하면 상세 조절 메뉴가 나타납니다.
+                    </p>
+                  )}
+                </div>
+
                 <div className="mb-4 rounded-2xl border border-cyan-300 bg-cyan-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -17483,14 +19029,26 @@ function RightPanel(props: {
                         Table
                       </p>
                       <h4 className="mt-1 text-base font-black text-cyan-950">
-                        2×2 표 만들기
+                        간단한 테이블 만들기
                       </h4>
                       <p className="mt-1 text-xs font-semibold leading-5 text-cyan-800">
-                        2×2 표를 넣은 뒤 아래쪽 두 칸만 하나로 합칠 수 있습니다.
+                        1×2 두 칸 테이블 또는 2×2 테이블을 선택해서 넣을 수 있습니다.
                       </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          rememberTextSelection();
+                        }}
+                        onClick={insertTextEditorOneByTwoTable}
+                        className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white hover:bg-emerald-800"
+                      >
+                        ＋ 1×2 표
+                      </button>
+
                       <button
                         type="button"
                         onMouseDown={(event) => {
@@ -17505,7 +19063,10 @@ function RightPanel(props: {
 
                       <button
                         type="button"
-                        disabled={!selectedTextEditorTableId}
+                        disabled={
+                          !selectedTextEditorTableId ||
+                          getSelectedTextEditorTable()?.rows.length !== 2
+                        }
                         onClick={mergeBottomTwoTextEditorTableCells}
                         className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                       >
@@ -17514,7 +19075,10 @@ function RightPanel(props: {
 
                       <button
                         type="button"
-                        disabled={!selectedTextEditorTableId}
+                        disabled={
+                          !selectedTextEditorTableId ||
+                          getSelectedTextEditorTable()?.rows.length !== 2
+                        }
                         onClick={splitBottomTextEditorTableCell}
                         className="rounded-xl border border-cyan-400 bg-white px-4 py-3 text-sm font-black text-cyan-800 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
                       >
@@ -17523,15 +19087,26 @@ function RightPanel(props: {
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-cyan-300 bg-white p-2">
-                    <div className="min-h-12 rounded border border-cyan-300 p-2 text-center text-xs font-black text-cyan-900">
-                      위 왼쪽
+                  <div className="mt-3 grid gap-3">
+                    <div className="grid grid-cols-2 gap-1 rounded-xl border border-emerald-300 bg-white p-2">
+                      <div className="min-h-12 rounded border border-emerald-300 p-2 text-center text-xs font-black text-emerald-900">
+                        왼쪽 칸
+                      </div>
+                      <div className="min-h-12 rounded border border-emerald-300 p-2 text-center text-xs font-black text-emerald-900">
+                        오른쪽 칸
+                      </div>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-1 rounded-xl border border-cyan-300 bg-white p-2">
+                      <div className="min-h-12 rounded border border-cyan-300 p-2 text-center text-xs font-black text-cyan-900">
+                        위 왼쪽
+                      </div>
                     <div className="min-h-12 rounded border border-cyan-300 p-2 text-center text-xs font-black text-cyan-900">
                       위 오른쪽
                     </div>
-                    <div className="col-span-2 min-h-12 rounded border border-blue-400 bg-blue-50 p-2 text-center text-xs font-black text-blue-900">
-                      아래 두 칸 합치기
+                      <div className="col-span-2 min-h-12 rounded border border-blue-400 bg-blue-50 p-2 text-center text-xs font-black text-blue-900">
+                        아래 두 칸 합치기
+                      </div>
                     </div>
                   </div>
 
@@ -17965,6 +19540,43 @@ function RightPanel(props: {
                       </div>
                     </div>
 
+                    <div className="min-w-[250px] flex-[2] rounded-xl border border-blue-200 bg-white p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-black text-gray-700">
+                          블록 지정 줄간격
+                        </span>
+                        <span className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-black text-blue-800">
+                          {selectionLineHeight.toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={0.8}
+                          max={3}
+                          step={0.1}
+                          value={selectionLineHeight}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) =>
+                            applySelectedLineHeight(Number(event.target.value))
+                          }
+                          className="min-w-0 flex-1 accent-blue-600"
+                        />
+                        <input
+                          type="number"
+                          min={0.8}
+                          max={3}
+                          step={0.1}
+                          value={selectionLineHeight}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) =>
+                            applySelectedLineHeight(Number(event.target.value))
+                          }
+                          className="h-9 w-20 rounded-lg border border-blue-300 px-2 text-center text-xs font-black"
+                        />
+                      </div>
+                    </div>
+
                     <label className="min-w-[150px] flex-1">
                       <span className="mb-1 block text-[11px] font-black text-gray-600">선택 글자 폰트</span>
                       <select
@@ -18203,6 +19815,40 @@ function RightPanel(props: {
                     width: 100%;
                     margin-left: 0;
                     margin-right: 0;
+                    margin-top: 0 !important;
+                    margin-bottom: 0 !important;
+                    line-height: var(--text-editor-line-height, 1.6) !important;
+                  }
+
+                  .text-cell-rich-editor > p,
+                  .text-cell-rich-editor > div:not([data-text-editor-image-row="true"]),
+                  .text-cell-rich-editor > h1,
+                  .text-cell-rich-editor > h2,
+                  .text-cell-rich-editor > h3,
+                  .text-cell-rich-editor > h4,
+                  .text-cell-rich-editor > h5,
+                  .text-cell-rich-editor > h6,
+                  .text-cell-rich-editor > ul,
+                  .text-cell-rich-editor > ol {
+                    margin-top: 0 !important;
+                    margin-bottom: 0 !important;
+                    line-height: var(--text-editor-line-height, 1.6) !important;
+                  }
+
+                  .cell-rich-text > p,
+                  .cell-rich-text > div:not([data-text-editor-image-row="true"]),
+                  .cell-rich-text > h1,
+                  .cell-rich-text > h2,
+                  .cell-rich-text > h3,
+                  .cell-rich-text > h4,
+                  .cell-rich-text > h5,
+                  .cell-rich-text > h6,
+                  .cell-rich-text > ul,
+                  .cell-rich-text > ol,
+                  .cell-rich-text > blockquote {
+                    margin-top: 0 !important;
+                    margin-bottom: 0 !important;
+                    line-height: inherit;
                   }
 
                   .text-cell-rich-editor [data-text-editor-image-id] {
@@ -18245,6 +19891,15 @@ function RightPanel(props: {
                     pointer-events: none;
                   }
 
+                  .text-cell-rich-editor [data-text-editor-divider-id] {
+                    cursor: pointer;
+                  }
+
+                  .text-cell-rich-editor [data-text-editor-divider-id][data-selected="true"] {
+                    outline: 3px solid rgba(71, 85, 105, .3);
+                    outline-offset: 5px;
+                  }
+
                   .text-cell-rich-editor table[data-text-editor-table-id] {
                     width: 100%;
                     max-width: 100% !important;
@@ -18259,6 +19914,32 @@ function RightPanel(props: {
                     vertical-align: top;
                     overflow-wrap: break-word;
                     word-break: normal;
+                  }
+
+                  .text-cell-rich-editor table[data-text-editor-table-id][data-table-border-visible="true"] td {
+                    border-width: 1px !important;
+                    border-style: solid !important;
+                    border-color: #94a3b8 !important;
+                  }
+
+                  .text-cell-rich-editor table[data-text-editor-table-id][data-table-border-visible="false"] td {
+                    border-width: 0 !important;
+                    border-style: none !important;
+                    border-color: transparent !important;
+                  }
+
+                  @media (max-width: 640px) {
+                    .cell-rich-text table[data-text-editor-table-id],
+                    .cell-rich-text table[data-text-editor-table-id] tbody,
+                    .cell-rich-text table[data-text-editor-table-id] tr,
+                    .cell-rich-text table[data-text-editor-table-id] td {
+                      height: auto !important;
+                      min-height: 0 !important;
+                    }
+
+                    .cell-rich-text table[data-text-editor-table-id] td > p:last-child {
+                      margin-bottom: 0 !important;
+                    }
                   }
 
                   .text-cell-rich-editor table[data-text-editor-table-id][data-selected="true"] {
@@ -18300,15 +19981,31 @@ function RightPanel(props: {
                   }
                 `}</style>
 
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+                  <p className="text-xs font-bold text-amber-900">
+                    다른 웹사이트에서 복사한 글의 외부 속성을 자동 제거합니다. 아래 완전 리셋은 style·class·글꼴·크기·색상·배경·줄간격·여백·정렬을 모두 지웁니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={clearAllTextEditorFormatting}
+                    className="rounded-lg bg-amber-500 px-3 py-2 text-xs font-black text-white hover:bg-amber-600"
+                  >
+                    모든 속성 완전 리셋
+                  </button>
+                </div>
+
                 <div
+                  key={`text-editor-${selection.area}-${selection.layoutId || "header"}-${selectedCell.id}`}
                   ref={textEditorRef}
                   contentEditable
                   suppressContentEditableWarning
                   autoFocus
                   onInput={syncEditorHtml}
+                  onPaste={handleCleanTextEditorPaste}
                   onClick={(event) => {
                     selectTextEditorImage(event.target);
                     selectTextEditorTable(event.target);
+                    selectTextEditorDivider(event.target);
                   }}
                   onMouseUp={() => { rememberTextSelection(); syncEditorHtml(); }}
                   onKeyUp={rememberTextSelection}
@@ -18334,6 +20031,8 @@ function RightPanel(props: {
                             : "Arial, Helvetica, sans-serif",
                     fontStyle: inputFontStyle,
                     textDecoration: inputTextDecoration,
+                    lineHeight: inputLineHeight,
+                    ["--text-editor-line-height" as string]: String(inputLineHeight),
                     color: inputColor,
                     backgroundColor: inputBackgroundColor,
                     textAlign: inputTextAlign,
@@ -18393,6 +20092,36 @@ function RightPanel(props: {
                           {inputFontSize}px
                         </span>
                       </div>
+                    </Field>
+
+                    <Field label="입력 글씨 기본 줄간격">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={0.8}
+                          max={3}
+                          step={0.1}
+                          value={inputLineHeight}
+                          onChange={(event) =>
+                            applyEditorBaseLineHeight(Number(event.target.value))
+                          }
+                          className="min-w-0 flex-1 accent-blue-600"
+                        />
+                        <input
+                          type="number"
+                          min={0.8}
+                          max={3}
+                          step={0.1}
+                          value={inputLineHeight}
+                          onChange={(event) =>
+                            applyEditorBaseLineHeight(Number(event.target.value))
+                          }
+                          className="h-10 w-20 rounded-lg border border-gray-300 bg-white px-2 text-center text-sm font-black"
+                        />
+                      </div>
+                      <p className="mt-2 text-[11px] font-semibold text-gray-500">
+                        외부 글의 빈 문단과 문단 여백도 함께 정리합니다. 1.0은 촘촘하게, 1.6은 일반 본문입니다.
+                      </p>
                     </Field>
 
                     <p className="mt-4 text-xs font-black text-gray-600">입력 글씨 모양</p>
@@ -20496,46 +22225,9 @@ function TitleCellEditor({
   const overlayControlsOpen = activeControlStep === 2;
 
   /*
-   * 자동 이미지 슬라이드가 선택된 동안 현재 비즈니스 이미지 목록을
-   * 주기적으로 다시 확인합니다. 다른 관리 화면에서 기존 이미지를 삭제하거나
-   * 새 이미지를 등록해도 새로고침 없이 슬라이드가 자동으로 바뀝니다.
+   * 대표이미지와 갤러리 이미지는 자동으로 조회하지 않습니다.
+   * 사용자가 아래의 불러오기 버튼을 눌렀을 때만 서버에서 가져옵니다.
    */
-  useEffect(() => {
-    if (mode !== "auto-slider" || !businessId || !adminKey) return;
-
-    let cancelled = false;
-
-    const refreshBusinessSliderImages = async () => {
-      if (cancelled || document.visibilityState === "hidden") return;
-      await loadSavedImages("auto-slider");
-    };
-
-    void refreshBusinessSliderImages();
-
-    const timer = window.setInterval(() => {
-      void refreshBusinessSliderImages();
-    }, 4000);
-
-    const handleFocus = () => {
-      void refreshBusinessSliderImages();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void refreshBusinessSliderImages();
-      }
-    };
-
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [mode, businessId, adminKey]);
 
   return (
     <div className="mt-5">
@@ -20545,14 +22237,13 @@ function TitleCellEditor({
           onChange={(event) => {
             const nextMode = event.target.value as SectionMode;
             chooseMode(nextMode);
-            if (
-              (nextMode === "auto-slider" ||
-                nextMode === "image-scroll" ||
-                nextMode === "gallery") &&
-              availableImages.length === 0
-            ) {
-              void loadSavedImages(nextMode);
-            }
+
+            /*
+             * 모드를 선택하는 것만으로는 이미지를 가져오지 않습니다.
+             * 아래의 '대표이미지 불러오기' 또는
+             * '갤러리 이미지 불러오기' 버튼을 눌렀을 때만 조회합니다.
+             */
+            setImageLoadError("");
           }}
           className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 font-bold text-gray-900"
         >
@@ -20572,10 +22263,14 @@ function TitleCellEditor({
         <Field label="제목 글자">
           <button
             type="button"
-            onClick={onOpenTextEditor}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenTextEditor();
+            }}
             className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700"
           >
-            본문 편집
+            모달 편집
           </button>
         </Field>
       ) : null}
@@ -21566,22 +23261,22 @@ function TitleCellEditor({
               </p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
                 {mode === "gallery"
-                  ? "갤러리 관리에서 별도로 등록한 사진만 불러옵니다. 대표이미지와 섞이지 않습니다."
-                  : "대표이미지 목록에서 슬라이드에 사용할 사진을 선택하세요."}
+                  ? "자동으로 가져오지 않습니다. 버튼을 누르면 갤러리 관리에 등록한 사진만 불러옵니다."
+                  : "자동으로 가져오지 않습니다. 대표이미지 불러오기 버튼을 누른 뒤 사용할 사진을 선택하세요."}
               </p>
             </div>
             <button
               type="button"
               disabled={loadingImages}
-              onClick={() =>
-  void loadSavedImages(
-    mode === "gallery"
-      ? "gallery"
-      : mode === "image-scroll"
-        ? "image-scroll"
-        : "auto-slider",
-  )
-}
+              onClick={() => {
+                void loadSavedImages(
+                  mode === "gallery"
+                    ? "gallery"
+                    : mode === "image-scroll"
+                      ? "image-scroll"
+                      : "auto-slider",
+                );
+              }}
               className="shrink-0 rounded-xl bg-gray-950 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
             >
               {loadingImages
