@@ -160,6 +160,16 @@ type GridData = {
 
   // 긴 약관·Privacy Policy처럼 내용 길이에 따라 자동으로 늘어나는 레이어
   auto_height?: boolean;
+
+  // 같은 레이어 안의 각 가로 레이아웃마다 너비를 따로 저장합니다.
+  layout_width_mode?: "full" | "container";
+
+  // 각 레이아웃에만 적용되는 개별 테두리 설정
+  layout_border_enabled?: boolean;
+  layout_border_width?: number;
+  layout_border_color?: string;
+  layout_border_style?: "solid" | "dashed" | "dotted" | "double";
+  layout_border_radius?: number;
 };
 
 type WebsiteSettings = {
@@ -499,6 +509,7 @@ function createDefaultHero(): GridData {
   return {
     id: createId("layout"),
     height: "large",
+    layout_width_mode: "full",
     cells: [
       {
         ...defaultCell("title", "당신의 아름다움을 디자인합니다", 4),
@@ -593,6 +604,48 @@ function normalizeGrid(value: unknown, fallback: GridData): GridData {
       typeof raw.auto_height === "boolean"
         ? raw.auto_height
         : Boolean(fallback.auto_height),
+    layout_width_mode:
+      raw.layout_width_mode === "full"
+        ? "full"
+        : raw.layout_width_mode === "container"
+          ? "container"
+          : fallback.layout_width_mode || "container",
+    layout_border_enabled:
+      typeof raw.layout_border_enabled === "boolean"
+        ? raw.layout_border_enabled
+        : Boolean(fallback.layout_border_enabled),
+    layout_border_width: Math.max(
+      0,
+      Math.min(
+        20,
+        Number(
+          raw.layout_border_width ??
+            fallback.layout_border_width ??
+            1,
+        ),
+      ),
+    ),
+    layout_border_color:
+      typeof raw.layout_border_color === "string"
+        ? raw.layout_border_color
+        : fallback.layout_border_color || "#111827",
+    layout_border_style:
+      raw.layout_border_style === "dashed" ||
+      raw.layout_border_style === "dotted" ||
+      raw.layout_border_style === "double"
+        ? raw.layout_border_style
+        : fallback.layout_border_style || "solid",
+    layout_border_radius: Math.max(
+      0,
+      Math.min(
+        80,
+        Number(
+          raw.layout_border_radius ??
+            fallback.layout_border_radius ??
+            0,
+        ),
+      ),
+    ),
     cells: normalizedCells,
   };
 }
@@ -612,6 +665,7 @@ function createEmptyHeroLayout(): GridData {
   return {
     id: createId("layout"),
     height: "medium",
+    layout_width_mode: "container",
     cells: [
       {
         ...defaultCell("title", "새 제목을 입력하세요", 4),
@@ -1762,29 +1816,72 @@ function BusinessLocationMap({
   );
 }
 
-function backgroundStyle(section: BusinessSection) {
+function backgroundStyle(
+  section: BusinessSection,
+  outerBackgroundColor = "#e5e7eb",
+) {
   const content = section.content ?? {};
-  const type = content.background_type || (content.image_url ? "image" : "gradient");
+  const type =
+    content.background_type || (content.image_url ? "image" : "gradient");
 
   if (type === "image" && content.image_url) {
     return {
       backgroundImage: `linear-gradient(rgba(0,0,0,0.38), rgba(0,0,0,0.38)), url(${content.image_url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
+      backgroundColor: outerBackgroundColor,
+    };
+  }
+
+  if (type === "video") {
+    return {
+      background: outerBackgroundColor,
     };
   }
 
   if (type === "color") {
-    return { background: content.background_color || "#111827" };
-  }
+    const savedColor = String(content.background_color || "").trim();
 
-  if (type === "gradient") {
     return {
-      background: `linear-gradient(135deg, ${content.gradient_from || "#111827"}, ${content.gradient_to || "#d97706"})`,
+      background: savedColor || outerBackgroundColor,
     };
   }
 
-  return { background: "#111827" };
+  if (type === "gradient") {
+    const gradientFrom = String(
+      content.gradient_from || "#111827",
+    ).toLowerCase();
+    const gradientTo = String(
+      content.gradient_to || "#d97706",
+    ).toLowerCase();
+
+    /*
+     * 새 Home 레이어를 만들 때 자동으로 들어가는 기본 그라데이션은
+     * 사용자가 선택한 '페이지 전체 배경색'을 가려서는 안 됩니다.
+     * 모바일 보기 전환 후에도 이 기본색이 다시 나타나지 않도록,
+     * 자동 기본값인 경우에는 바깥 배경색을 사용합니다.
+     *
+     * 사용자가 기본값이 아닌 그라데이션 색을 직접 지정한 경우에는
+     * 기존처럼 해당 그라데이션을 유지합니다.
+     */
+    const isGeneratedDefaultGradient =
+      gradientFrom === "#111827" &&
+      gradientTo === "#d97706";
+
+    if (isGeneratedDefaultGradient) {
+      return {
+        background: outerBackgroundColor,
+      };
+    }
+
+    return {
+      background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`,
+    };
+  }
+
+  return {
+    background: outerBackgroundColor,
+  };
 }
 
 
@@ -2146,6 +2243,35 @@ function getSectionBorderStyle(
   };
 }
 
+function getLayoutBorderStyle(
+  layout: GridData | null | undefined,
+): React.CSSProperties {
+  const enabled = layout?.layout_border_enabled === true;
+  const width = Math.max(
+    0,
+    Math.min(20, Number(layout?.layout_border_width ?? 1)),
+  );
+  const radius = Math.max(
+    0,
+    Math.min(80, Number(layout?.layout_border_radius ?? 0)),
+  );
+  const style =
+    layout?.layout_border_style === "dashed" ||
+    layout?.layout_border_style === "dotted" ||
+    layout?.layout_border_style === "double"
+      ? layout.layout_border_style
+      : "solid";
+
+  return {
+    boxSizing: "border-box",
+    borderStyle: enabled && width > 0 ? style : "none",
+    borderWidth: enabled && width > 0 ? `${width}px` : "0px",
+    borderColor: String(layout?.layout_border_color || "#111827"),
+    borderRadius: `${radius}px`,
+    overflow: "hidden",
+  };
+}
+
 function getSectionWidthStyle(
   section: BusinessSection | null | undefined,
   useViewportWidth = false,
@@ -2164,7 +2290,10 @@ function getSectionWidthStyle(
       width: "100%",
       maxWidth: "none",
       minWidth: 0,
-      margin: 0,
+      marginTop: 0,
+      marginRight: 0,
+      marginBottom: 0,
+      marginLeft: 0,
       padding: 0,
       outline: 0,
       overflow: "hidden",
@@ -6484,10 +6613,18 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               <LinkPageContent section={heroSection} editable />
             ) : selection.area === "hero" && heroSection ? (
               <div
-                className={`${getSectionWidthClass(heroSection)} overflow-hidden`}
+                className="relative w-full max-w-none overflow-hidden"
                 style={{
-                  ...backgroundStyle(heroSection),
-                  ...getSectionWidthStyle(heroSection),
+                  ...backgroundStyle(heroSection, outerBackgroundColor),
+                  display: "block",
+                  width: "100%",
+                  maxWidth: "none",
+                  minWidth: 0,
+                  marginTop: 0,
+                  marginRight: 0,
+                  marginBottom: "4px",
+                  marginLeft: 0,
+                  padding: 0,
                   minHeight: getVideoSectionMinHeight(
                     heroSection,
                     device,
@@ -6548,11 +6685,20 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           selectLayout();
                         }
                       }}
-                      className={`relative rounded-2xl transition ${
+                      className={`relative transition ${
+                        layout.layout_width_mode === "full"
+                          ? "w-full max-w-none"
+                          : "mx-auto w-full max-w-[1120px]"
+                      } ${
                         layoutSelected
                           ? "ring-4 ring-blue-500/30"
                           : "hover:ring-2 hover:ring-blue-300/40"
                       }`}
+                      style={{
+                        ...getLayoutBorderStyle(layout),
+                        marginBottom:
+                          layoutIndex < heroLayouts.length - 1 ? "4px" : 0,
+                      }}
                     >
                       <button
                         type="button"
@@ -7748,7 +7894,10 @@ function BusinessWebsiteBanners({
       style={{
         width: "100vw",
         height: "100dvh",
-        margin: 0,
+        marginTop: 0,
+        marginRight: 0,
+        marginBottom: 0,
+        marginLeft: 0,
         padding: 0,
       }}
     >
@@ -7766,7 +7915,10 @@ function BusinessWebsiteBanners({
                 : "768px",
           maxHeight: "calc(100dvh - 32px)",
           transform: "translate(-50%, -50%)",
-          margin: 0,
+          marginTop: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          marginLeft: 0,
           padding: 0,
           overflow: "visible",
         }}
@@ -7869,6 +8021,10 @@ function CurrentWebsitePreview({
     sortedSections.find((section) => section.section_type === "hero") ??
     sortedSections.find(isHomeLikeSection) ??
     null;
+  const outerBackgroundColor = String(
+    websiteSettings.outer_background_color || "#e5e7eb",
+  );
+
   const headerGrid = normalizeGrid(
     websiteSettings.header_grid,
     createDefaultHeader(business.name || ""),
@@ -7995,8 +8151,9 @@ function CurrentWebsitePreview({
             <div
               className={getSectionWidthClass(heroSection)}
               style={{
-                ...backgroundStyle(heroSection),
+                ...backgroundStyle(heroSection, outerBackgroundColor),
                 ...getSectionWidthStyle(heroSection),
+                marginBottom: "4px",
                 minHeight: getVideoSectionMinHeight(
                   heroSection,
                   device,
@@ -8012,17 +8169,30 @@ function CurrentWebsitePreview({
               />
 
               <div className="relative z-10">
-                {heroLayouts.map((layout) => (
-                  <ReadOnlyGrid
+                {heroLayouts.map((layout, layoutIndex) => (
+                  <div
                     key={layout.id}
-                    area="hero"
-                    grid={layout}
-                    business={business}
-                    accentColor={String(
-                      websiteSettings.accent_color || "#d97706",
-                    )}
-                    previewDevice={device}
-                  />
+                    className={
+                      layout.layout_width_mode === "full"
+                        ? "w-full max-w-none"
+                        : "mx-auto w-full max-w-[1120px]"
+                    }
+                    style={{
+                      ...getLayoutBorderStyle(layout),
+                      marginBottom:
+                        layoutIndex < heroLayouts.length - 1 ? "4px" : 0,
+                    }}
+                  >
+                    <ReadOnlyGrid
+                      area="hero"
+                      grid={layout}
+                      business={business}
+                      accentColor={String(
+                        websiteSettings.accent_color || "#d97706",
+                      )}
+                      previewDevice={device}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -8066,7 +8236,10 @@ function CurrentWebsitePreview({
                     key={section.id}
                     id={isCollapsible ? sectionSlug : undefined}
                     className={getSectionWidthClass(section)}
-                    style={getSectionWidthStyle(section)}
+                    style={{
+                      ...getSectionWidthStyle(section),
+                      marginBottom: "4px",
+                    }}
                   >
                     {isCollapsible &&
                     section.content?.close_button_enabled !== false ? (
@@ -8927,7 +9100,10 @@ export function PublicWebsiteRenderer({
           width: "100vw",
           maxWidth: "100vw",
           minWidth: 0,
-          margin: 0,
+          marginTop: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          marginLeft: 0,
           padding: 0,
           transform: "translateX(-50%)",
           boxSizing: "border-box",
@@ -9018,8 +9194,9 @@ export function PublicWebsiteRenderer({
             }
             className={getSectionWidthClass(heroSection)}
             style={{
-              ...backgroundStyle(heroSection),
+              ...backgroundStyle(heroSection, outerBackgroundColor),
               ...getSectionWidthStyle(heroSection, true),
+              marginBottom: "4px",
               minHeight: getVideoSectionMinHeight(
                 heroSection,
                 device,
@@ -9033,17 +9210,30 @@ export function PublicWebsiteRenderer({
             />
 
             <div className="relative z-10">
-              {layouts.map((layout) => (
-                <ReadOnlyGrid
+              {layouts.map((layout, layoutIndex) => (
+                <div
                   key={layout.id}
-                  area="hero"
-                  grid={layout}
-                  business={business}
-                  accentColor={String(
-                    websiteSettings.accent_color || "#d97706",
-                  )}
-                  previewDevice={device}
-                />
+                  className={
+                    layout.layout_width_mode === "full"
+                      ? "w-full max-w-none"
+                      : "mx-auto w-full max-w-[1120px]"
+                  }
+                  style={{
+                    ...getLayoutBorderStyle(layout),
+                    marginBottom:
+                      layoutIndex < layouts.length - 1 ? "4px" : 0,
+                  }}
+                >
+                  <ReadOnlyGrid
+                    area="hero"
+                    grid={layout}
+                    business={business}
+                    accentColor={String(
+                      websiteSettings.accent_color || "#d97706",
+                    )}
+                    previewDevice={device}
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -9081,7 +9271,10 @@ export function PublicWebsiteRenderer({
                 getSectionWidthMode(section) === "full" ? "true" : undefined
               }
               className={getSectionWidthClass(section)}
-              style={getSectionWidthStyle(section, true)}
+              style={{
+                ...getSectionWidthStyle(section, true),
+                marginBottom: "4px",
+              }}
             >
               {isCollapsible &&
               section.content?.close_button_enabled !== false ? (
@@ -9911,7 +10104,10 @@ function ReadOnlyGrid({
             lineHeight: cellContainsDisplayMode(cell, "image-scroll")
               ? 0
               : undefined,
-            margin: 0,
+            marginTop: 0,
+            marginRight: 0,
+            marginBottom: 0,
+            marginLeft: 0,
             minHeight: isMobileContentGrid
               ? cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
@@ -10785,7 +10981,10 @@ function CellPreview({
           maxHeight: "none",
           flexShrink: 0,
           objectFit: "contain",
-          margin: 0,
+          marginTop: 0,
+          marginRight: 0,
+          marginBottom: 0,
+          marginLeft: 0,
           padding: 0,
           lineHeight: 0,
         }}
@@ -10803,7 +11002,10 @@ function CellPreview({
       justifyContent: horizontal,
       alignItems: vertical,
       lineHeight: 0,
-      margin: 0,
+      marginTop: 0,
+      marginRight: 0,
+      marginBottom: 0,
+      marginLeft: 0,
       padding: 0,
     };
 
@@ -11345,7 +11547,10 @@ function CellPreview({
       return images.length ? (
         <div
           className="absolute inset-0 block h-full w-full overflow-hidden"
-          style={{ margin: 0, padding: 0, lineHeight: 0 }}
+          style={{ marginTop: 0,
+ marginRight: 0,
+ marginBottom: 0,
+ marginLeft: 0, padding: 0, lineHeight: 0 }}
         >
           <HorizontalImageScroll
             images={images}
@@ -14023,6 +14228,40 @@ function RightPanel(props: {
   const [layerBasicSettingsOpen, setLayerBasicSettingsOpen] = useState(true);
   const [layerHeightSettingsOpen, setLayerHeightSettingsOpen] = useState(true);
 
+  const selectedLayout = useMemo(() => {
+    if (!heroSection || selection.area !== "hero") return null;
+
+    return (
+      normalizeHeroLayouts(heroSection.content).find(
+        (layout) => layout.id === selection.layoutId,
+      ) || normalizeHeroLayouts(heroSection.content)[0] || null
+    );
+  }, [heroSection, selection.area, selection.layoutId]);
+
+  function updateSelectedLayout(
+    patch: Partial<GridData>,
+  ) {
+    if (!heroSection || !selectedLayout) return;
+
+    const layouts = normalizeHeroLayouts(heroSection.content);
+    const nextLayouts = layouts.map((layout) =>
+      layout.id === selectedLayout.id
+        ? { ...layout, ...patch }
+        : layout,
+    );
+
+    props.onUpdateSectionContent(heroSection.id, {
+      layouts: nextLayouts,
+      grid: nextLayouts[0],
+    });
+  }
+
+  function updateSelectedLayoutWidthMode(
+    mode: "full" | "container",
+  ) {
+    updateSelectedLayout({ layout_width_mode: mode });
+  }
+
   function openTextEditor() {
     const initialHtml = selectedCell?.rich_text_html
       ? sanitizeCellRichTextHtml(selectedCell.rich_text_html)
@@ -14705,21 +14944,30 @@ function RightPanel(props: {
             </p>
 
             <div className="mt-4 border-t border-violet-200 pt-4">
-              <p className="text-sm font-black text-violet-950">레이어 너비</p>
-              <p className="mt-1 text-xs leading-5 text-violet-700">
-                이미지 배너는 전체 화면, 글이나 메뉴는 기본 레이어 크기가 보기 좋습니다.
+              <p className="text-sm font-black text-violet-950">
+                현재 레이아웃 너비
               </p>
+              <p className="mt-1 text-xs leading-5 text-violet-700">
+                같은 레이어 안에서도 레이아웃마다 전체 화면 또는 기본 크기를 따로 선택합니다.
+              </p>
+
+              <div className="mt-3 rounded-xl bg-violet-50 px-3 py-2 text-xs font-black text-violet-900">
+                현재 선택: 레이아웃{" "}
+                {Math.max(
+                  0,
+                  normalizeHeroLayouts(heroSection?.content).findIndex(
+                    (layout) => layout.id === selection.layoutId,
+                  ),
+                ) + 1}
+              </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    props.onUpdateSectionContent(section.id, {
-                      layer_width: "full",
-                    })
-                  }
-                  className={`rounded-xl border px-3 py-3 text-left ${
-                    getSectionWidthMode(section) === "full"
+                  disabled={!selectedLayout}
+                  onClick={() => updateSelectedLayoutWidthMode("full")}
+                  className={`rounded-xl border px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                    selectedLayout?.layout_width_mode === "full"
                       ? "border-blue-600 bg-white ring-2 ring-blue-100"
                       : "border-violet-200 bg-white/70"
                   }`}
@@ -14728,19 +14976,16 @@ function RightPanel(props: {
                     전체 화면
                   </span>
                   <span className="mt-1 block text-[10px] leading-4 text-gray-500">
-                    브라우저 좌우 끝까지
+                    이 레이아웃만 좌우 끝까지
                   </span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() =>
-                    props.onUpdateSectionContent(section.id, {
-                      layer_width: "container",
-                    })
-                  }
-                  className={`rounded-xl border px-3 py-3 text-left ${
-                    getSectionWidthMode(section) === "container"
+                  disabled={!selectedLayout}
+                  onClick={() => updateSelectedLayoutWidthMode("container")}
+                  className={`rounded-xl border px-3 py-3 text-left disabled:cursor-not-allowed disabled:opacity-50 ${
+                    selectedLayout?.layout_width_mode !== "full"
                       ? "border-blue-600 bg-white ring-2 ring-blue-100"
                       : "border-violet-200 bg-white/70"
                   }`}
@@ -14749,7 +14994,7 @@ function RightPanel(props: {
                     기본 크기
                   </span>
                   <span className="mt-1 block text-[10px] leading-4 text-gray-500">
-                    현재 1120px 레이아웃
+                    이 레이아웃만 최대 1120px
                   </span>
                 </button>
               </div>
@@ -14759,18 +15004,44 @@ function RightPanel(props: {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-black text-violet-950">
-                    레이어 테두리
+                    {selection.area === "hero"
+                      ? "현재 레이아웃 테두리"
+                      : "레이어 테두리"}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-violet-700">
-                    공개 웹과 미리보기에 같은 테두리가 적용됩니다.
+                    {selection.area === "hero"
+                      ? "현재 선택한 레이아웃에만 테두리가 적용됩니다. 다른 레이아웃에는 영향을 주지 않습니다."
+                      : "공개 웹과 미리보기에 같은 테두리가 적용됩니다."}
                   </p>
                 </div>
 
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-violet-300 bg-white px-3 py-2 text-xs font-black text-violet-900">
                   <input
                     type="checkbox"
-                    checked={section.content?.layer_border_enabled === true}
-                    onChange={(event) =>
+                    disabled={selection.area === "hero" && !selectedLayout}
+                    checked={
+                      selection.area === "hero"
+                        ? selectedLayout?.layout_border_enabled === true
+                        : section.content?.layer_border_enabled === true
+                    }
+                    onChange={(event) => {
+                      if (selection.area === "hero") {
+                        updateSelectedLayout({
+                          layout_border_enabled: event.target.checked,
+                          layout_border_width:
+                            Number(selectedLayout?.layout_border_width) || 1,
+                          layout_border_color:
+                            String(
+                              selectedLayout?.layout_border_color || "#111827",
+                            ),
+                          layout_border_style:
+                            selectedLayout?.layout_border_style || "solid",
+                          layout_border_radius:
+                            Number(selectedLayout?.layout_border_radius) || 0,
+                        });
+                        return;
+                      }
+
                       props.onUpdateSectionContent(section.id, {
                         layer_border_enabled: event.target.checked,
                         layer_border_width:
@@ -14783,15 +15054,17 @@ function RightPanel(props: {
                           section.content?.layer_border_style || "solid",
                         layer_border_radius:
                           Number(section.content?.layer_border_radius) || 0,
-                      })
-                    }
+                      });
+                    }}
                     className="h-4 w-4 accent-violet-700"
                   />
                   사용
                 </label>
               </div>
 
-              {section.content?.layer_border_enabled === true ? (
+              {(selection.area === "hero"
+                ? selectedLayout?.layout_border_enabled === true
+                : section.content?.layer_border_enabled === true) ? (
                 <div className="mt-4 space-y-4 rounded-2xl border border-violet-200 bg-white p-4">
                   <div>
                     <div className="flex items-center justify-between gap-3">
@@ -14803,7 +15076,11 @@ function RightPanel(props: {
                           0,
                           Math.min(
                             20,
-                            Number(section.content?.layer_border_width || 1),
+                            Number(
+                              selection.area === "hero"
+                                ? selectedLayout?.layout_border_width || 1
+                                : section.content?.layer_border_width || 1,
+                            ),
                           ),
                         )}
                         px
@@ -14819,64 +15096,74 @@ function RightPanel(props: {
                         0,
                         Math.min(
                           20,
-                          Number(section.content?.layer_border_width || 1),
-                        ),
-                      )}
-                      onChange={(event) =>
-                        props.onUpdateSectionContent(section.id, {
-                          layer_border_width: Number(event.target.value),
-                        })
-                      }
-                      className="mt-3 w-full accent-violet-700"
-                    />
-
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      value={Math.max(
-                        0,
-                        Math.min(
-                          20,
-                          Number(section.content?.layer_border_width || 1),
-                        ),
-                      )}
-                      onChange={(event) =>
-                        props.onUpdateSectionContent(section.id, {
-                          layer_border_width: Math.max(
-                            0,
-                            Math.min(20, Number(event.target.value) || 0),
+                          Number(
+                            selection.area === "hero"
+                              ? selectedLayout?.layout_border_width || 1
+                              : section.content?.layer_border_width || 1,
                           ),
-                        })
-                      }
-                      className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm font-bold"
+                        ),
+                      )}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (selection.area === "hero") {
+                          updateSelectedLayout({
+                            layout_border_width: value,
+                          });
+                        } else {
+                          props.onUpdateSectionContent(section.id, {
+                            layer_border_width: value,
+                          });
+                        }
+                      }}
+                      className="mt-3 w-full accent-violet-700"
                     />
                   </div>
 
                   <ColorInput
                     label="테두리 색상"
                     value={String(
-                      section.content?.layer_border_color || "#111827",
+                      selection.area === "hero"
+                        ? selectedLayout?.layout_border_color || "#111827"
+                        : section.content?.layer_border_color || "#111827",
                     )}
-                    onChange={(value) =>
-                      props.onUpdateSectionContent(section.id, {
-                        layer_border_color: value,
-                      })
-                    }
+                    onChange={(value) => {
+                      if (selection.area === "hero") {
+                        updateSelectedLayout({
+                          layout_border_color: value,
+                        });
+                      } else {
+                        props.onUpdateSectionContent(section.id, {
+                          layer_border_color: value,
+                        });
+                      }
+                    }}
                   />
 
                   <Field label="테두리 모양">
                     <select
-                      value={String(
-                        section.content?.layer_border_style || "solid",
-                      )}
-                      onChange={(event) =>
-                        props.onUpdateSectionContent(section.id, {
-                          layer_border_style: event.target
-                            .value as SectionContent["layer_border_style"],
-                        })
+                      value={
+                        selection.area === "hero"
+                          ? selectedLayout?.layout_border_style || "solid"
+                          : section.content?.layer_border_style || "solid"
                       }
-                      className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
+                      onChange={(event) => {
+                        const value = event.target.value as
+                          | "solid"
+                          | "dashed"
+                          | "dotted"
+                          | "double";
+
+                        if (selection.area === "hero") {
+                          updateSelectedLayout({
+                            layout_border_style: value,
+                          });
+                        } else {
+                          props.onUpdateSectionContent(section.id, {
+                            layer_border_style: value,
+                          });
+                        }
+                      }}
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
                     >
                       <option value="solid">실선</option>
                       <option value="dashed">긴 점선</option>
@@ -14895,7 +15182,11 @@ function RightPanel(props: {
                           0,
                           Math.min(
                             80,
-                            Number(section.content?.layer_border_radius || 0),
+                            Number(
+                              selection.area === "hero"
+                                ? selectedLayout?.layout_border_radius || 0
+                                : section.content?.layer_border_radius || 0,
+                            ),
                           ),
                         )}
                         px
@@ -14911,21 +15202,36 @@ function RightPanel(props: {
                         0,
                         Math.min(
                           80,
-                          Number(section.content?.layer_border_radius || 0),
+                          Number(
+                            selection.area === "hero"
+                              ? selectedLayout?.layout_border_radius || 0
+                              : section.content?.layer_border_radius || 0,
+                          ),
                         ),
                       )}
-                      onChange={(event) =>
-                        props.onUpdateSectionContent(section.id, {
-                          layer_border_radius: Number(event.target.value),
-                        })
-                      }
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        if (selection.area === "hero") {
+                          updateSelectedLayout({
+                            layout_border_radius: value,
+                          });
+                        } else {
+                          props.onUpdateSectionContent(section.id, {
+                            layer_border_radius: value,
+                          });
+                        }
+                      }}
                       className="mt-3 w-full accent-violet-700"
                     />
                   </div>
 
                   <div
                     className="h-16 w-full bg-gray-50"
-                    style={getSectionBorderStyle(section)}
+                    style={
+                      selection.area === "hero"
+                        ? getLayoutBorderStyle(selectedLayout)
+                        : getSectionBorderStyle(section)
+                    }
                   />
                 </div>
               ) : null}
@@ -18744,7 +19050,10 @@ function HorizontalImageScroll({
         height: "100%",
         minHeight: 0,
         maxHeight: "100%",
-        margin: 0,
+        marginTop: 0,
+        marginRight: 0,
+        marginBottom: 0,
+        marginLeft: 0,
         padding: 0,
         borderRadius: "inherit",
         lineHeight: 0,
