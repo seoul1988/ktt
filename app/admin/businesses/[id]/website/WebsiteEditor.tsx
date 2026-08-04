@@ -2240,6 +2240,9 @@ function getSectionBorderStyle(
     borderWidth: enabled && width > 0 ? `${width}px` : "0px",
     borderColor: String(content.layer_border_color || "#111827"),
     borderRadius: `${radius}px`,
+    overflow: "hidden",
+    backgroundClip: "padding-box",
+    isolation: "isolate",
   };
 }
 
@@ -2269,7 +2272,53 @@ function getLayoutBorderStyle(
     borderColor: String(layout?.layout_border_color || "#111827"),
     borderRadius: `${radius}px`,
     overflow: "hidden",
+    backgroundClip: "padding-box",
+    isolation: "isolate",
+    position: "relative",
+    clipPath: radius > 0 ? `inset(0 round ${radius}px)` : undefined,
+    WebkitClipPath: radius > 0 ? `inset(0 round ${radius}px)` : undefined,
+    contain: "paint",
+    transform: "translateZ(0)",
   };
+}
+
+function LayoutBorderOverlay({
+  layout,
+}: {
+  layout: GridData | null | undefined;
+}) {
+  if (layout?.layout_border_enabled !== true) return null;
+
+  const width = Math.max(
+    0,
+    Math.min(20, Number(layout.layout_border_width ?? 1)),
+  );
+  if (width <= 0) return null;
+
+  const radius = Math.max(
+    0,
+    Math.min(80, Number(layout.layout_border_radius ?? 0)),
+  );
+  const style =
+    layout.layout_border_style === "dashed" ||
+    layout.layout_border_style === "dotted" ||
+    layout.layout_border_style === "double"
+      ? layout.layout_border_style
+      : "solid";
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-[80]"
+      style={{
+        boxSizing: "border-box",
+        borderStyle: style,
+        borderWidth: `${width}px`,
+        borderColor: String(layout.layout_border_color || "#111827"),
+        borderRadius: `${radius}px`,
+      }}
+    />
+  );
 }
 
 function getSectionWidthStyle(
@@ -2290,10 +2339,7 @@ function getSectionWidthStyle(
       width: "100%",
       maxWidth: "none",
       minWidth: 0,
-      marginTop: 0,
-      marginRight: 0,
-      marginBottom: 0,
-      marginLeft: 0,
+      margin: 0,
       padding: 0,
       outline: 0,
       overflow: "hidden",
@@ -6583,7 +6629,17 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 ),
               }}
             >
-              <EditableGrid
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "inherit",
+                  overflow: "hidden",
+                  clipPath: "inherit",
+                  WebkitClipPath: "inherit",
+                }}
+              >
+                <EditableGrid
                 area="header"
                 grid={headerGrid}
                 selectedCellId={selection.area === "header" ? selection.cellId : undefined}
@@ -6599,6 +6655,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   updateGridHeight("header", heightPx)
                 }
               />
+              </div>
 
 
               <HeaderSubmenu
@@ -6620,10 +6677,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   width: "100%",
                   maxWidth: "none",
                   minWidth: 0,
-                  marginTop: 0,
-                  marginRight: 0,
-                  marginBottom: "4px",
-                  marginLeft: 0,
+                  margin: 0,
                   padding: 0,
                   minHeight: getVideoSectionMinHeight(
                     heroSection,
@@ -6694,12 +6748,10 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           ? "ring-4 ring-blue-500/30"
                           : "hover:ring-2 hover:ring-blue-300/40"
                       }`}
-                      style={{
-                        ...getLayoutBorderStyle(layout),
-                        marginBottom:
-                          layoutIndex < heroLayouts.length - 1 ? "4px" : 0,
-                      }}
+                      style={getLayoutBorderStyle(layout)}
                     >
+                      <LayoutBorderOverlay layout={layout} />
+
                       <button
                         type="button"
                         onClick={(event) => {
@@ -7894,10 +7946,7 @@ function BusinessWebsiteBanners({
       style={{
         width: "100vw",
         height: "100dvh",
-        marginTop: 0,
-        marginRight: 0,
-        marginBottom: 0,
-        marginLeft: 0,
+        margin: 0,
         padding: 0,
       }}
     >
@@ -7915,10 +7964,7 @@ function BusinessWebsiteBanners({
                 : "768px",
           maxHeight: "calc(100dvh - 32px)",
           transform: "translate(-50%, -50%)",
-          marginTop: 0,
-          marginRight: 0,
-          marginBottom: 0,
-          marginLeft: 0,
+          margin: 0,
           padding: 0,
           overflow: "visible",
         }}
@@ -8153,7 +8199,6 @@ function CurrentWebsitePreview({
               style={{
                 ...backgroundStyle(heroSection, outerBackgroundColor),
                 ...getSectionWidthStyle(heroSection),
-                marginBottom: "4px",
                 minHeight: getVideoSectionMinHeight(
                   heroSection,
                   device,
@@ -8169,7 +8214,7 @@ function CurrentWebsitePreview({
               />
 
               <div className="relative z-10">
-                {heroLayouts.map((layout, layoutIndex) => (
+                {heroLayouts.map((layout) => (
                   <div
                     key={layout.id}
                     className={
@@ -8177,13 +8222,19 @@ function CurrentWebsitePreview({
                         ? "w-full max-w-none"
                         : "mx-auto w-full max-w-[1120px]"
                     }
-                    style={{
-                      ...getLayoutBorderStyle(layout),
-                      marginBottom:
-                        layoutIndex < heroLayouts.length - 1 ? "4px" : 0,
-                    }}
+                    style={getLayoutBorderStyle(layout)}
                   >
-                    <ReadOnlyGrid
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: "inherit",
+                        overflow: "hidden",
+                        clipPath: "inherit",
+                        WebkitClipPath: "inherit",
+                      }}
+                    >
+                      <ReadOnlyGrid
                       area="hero"
                       grid={layout}
                       business={business}
@@ -8192,6 +8243,8 @@ function CurrentWebsitePreview({
                       )}
                       previewDevice={device}
                     />
+                    </div>
+                    <LayoutBorderOverlay layout={layout} />
                   </div>
                 ))}
               </div>
@@ -8236,10 +8289,7 @@ function CurrentWebsitePreview({
                     key={section.id}
                     id={isCollapsible ? sectionSlug : undefined}
                     className={getSectionWidthClass(section)}
-                    style={{
-                      ...getSectionWidthStyle(section),
-                      marginBottom: "4px",
-                    }}
+                    style={getSectionWidthStyle(section)}
                   >
                     {isCollapsible &&
                     section.content?.close_button_enabled !== false ? (
@@ -9100,10 +9150,7 @@ export function PublicWebsiteRenderer({
           width: "100vw",
           maxWidth: "100vw",
           minWidth: 0,
-          marginTop: 0,
-          marginRight: 0,
-          marginBottom: 0,
-          marginLeft: 0,
+          margin: 0,
           padding: 0,
           transform: "translateX(-50%)",
           boxSizing: "border-box",
@@ -9196,7 +9243,6 @@ export function PublicWebsiteRenderer({
             style={{
               ...backgroundStyle(heroSection, outerBackgroundColor),
               ...getSectionWidthStyle(heroSection, true),
-              marginBottom: "4px",
               minHeight: getVideoSectionMinHeight(
                 heroSection,
                 device,
@@ -9210,7 +9256,7 @@ export function PublicWebsiteRenderer({
             />
 
             <div className="relative z-10">
-              {layouts.map((layout, layoutIndex) => (
+              {layouts.map((layout) => (
                 <div
                   key={layout.id}
                   className={
@@ -9218,21 +9264,28 @@ export function PublicWebsiteRenderer({
                       ? "w-full max-w-none"
                       : "mx-auto w-full max-w-[1120px]"
                   }
-                  style={{
-                    ...getLayoutBorderStyle(layout),
-                    marginBottom:
-                      layoutIndex < layouts.length - 1 ? "4px" : 0,
-                  }}
+                  style={getLayoutBorderStyle(layout)}
                 >
-                  <ReadOnlyGrid
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "inherit",
+                      overflow: "hidden",
+                      clipPath: "inherit",
+                      WebkitClipPath: "inherit",
+                    }}
+                  >
+                    <ReadOnlyGrid
                     area="hero"
                     grid={layout}
                     business={business}
                     accentColor={String(
                       websiteSettings.accent_color || "#d97706",
                     )}
-                    previewDevice={device}
-                  />
+                    previewDevice={device}                    />
+                  </div>
+                    <LayoutBorderOverlay layout={layout} />
                 </div>
               ))}
             </div>
@@ -9271,10 +9324,7 @@ export function PublicWebsiteRenderer({
                 getSectionWidthMode(section) === "full" ? "true" : undefined
               }
               className={getSectionWidthClass(section)}
-              style={{
-                ...getSectionWidthStyle(section, true),
-                marginBottom: "4px",
-              }}
+              style={getSectionWidthStyle(section, true)}
             >
               {isCollapsible &&
               section.content?.close_button_enabled !== false ? (
@@ -10104,10 +10154,7 @@ function ReadOnlyGrid({
             lineHeight: cellContainsDisplayMode(cell, "image-scroll")
               ? 0
               : undefined,
-            marginTop: 0,
-            marginRight: 0,
-            marginBottom: 0,
-            marginLeft: 0,
+            margin: 0,
             minHeight: isMobileContentGrid
               ? cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
@@ -10257,15 +10304,41 @@ function PreviewSection({
 
       {hasLayoutContent ? (
         <div className="w-full">
-          {sectionLayouts.map((layout) => (
-            <ReadOnlyGrid
+          {sectionLayouts.map((layout, layoutIndex) => (
+            <div
               key={layout.id}
-              area="hero"
-              grid={layout}
-              business={business}
-              accentColor={accentColor}
-              previewDevice={previewDevice}
-            />
+              className={
+                layout.layout_width_mode === "full"
+                  ? "relative w-full max-w-none"
+                  : "relative mx-auto w-full max-w-[1120px]"
+              }
+              style={{
+                ...getLayoutBorderStyle(layout),
+                marginBottom:
+                  layoutIndex < sectionLayouts.length - 1 ? "4px" : 0,
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "inherit",
+                  overflow: "hidden",
+                  clipPath: "inherit",
+                  WebkitClipPath: "inherit",
+                }}
+              >
+                <ReadOnlyGrid
+                  area="hero"
+                  grid={layout}
+                  business={business}
+                  accentColor={accentColor}
+                  previewDevice={previewDevice}
+                />
+              </div>
+
+              <LayoutBorderOverlay layout={layout} />
+            </div>
           ))}
         </div>
       ) : null}
@@ -10981,10 +11054,7 @@ function CellPreview({
           maxHeight: "none",
           flexShrink: 0,
           objectFit: "contain",
-          marginTop: 0,
-          marginRight: 0,
-          marginBottom: 0,
-          marginLeft: 0,
+          margin: 0,
           padding: 0,
           lineHeight: 0,
         }}
@@ -11002,10 +11072,7 @@ function CellPreview({
       justifyContent: horizontal,
       alignItems: vertical,
       lineHeight: 0,
-      marginTop: 0,
-      marginRight: 0,
-      marginBottom: 0,
-      marginLeft: 0,
+      margin: 0,
       padding: 0,
     };
 
@@ -11547,10 +11614,7 @@ function CellPreview({
       return images.length ? (
         <div
           className="absolute inset-0 block h-full w-full overflow-hidden"
-          style={{ marginTop: 0,
- marginRight: 0,
- marginBottom: 0,
- marginLeft: 0, padding: 0, lineHeight: 0 }}
+          style={{ margin: 0, padding: 0, lineHeight: 0 }}
         >
           <HorizontalImageScroll
             images={images}
@@ -14225,6 +14289,24 @@ function RightPanel(props: {
     useState<TextAlign>("center");
   const [selectedTextEditorImageVertical, setSelectedTextEditorImageVertical] =
     useState<VerticalAlign>("center");
+  const [selectedTextEditorTableId, setSelectedTextEditorTableId] = useState("");
+  const [selectedTextEditorTableWidth, setSelectedTextEditorTableWidth] =
+    useState(100);
+  const [selectedTextEditorTableRowHeight, setSelectedTextEditorTableRowHeight] =
+    useState(120);
+  const [selectedTextEditorTableBorderVisible, setSelectedTextEditorTableBorderVisible] =
+    useState(true);
+  const [selectedTextEditorTableLeftWidth, setSelectedTextEditorTableLeftWidth] =
+    useState(38);
+  const [selectedTextEditorTableCellPadding, setSelectedTextEditorTableCellPadding] =
+    useState(20);
+  const [selectedTextEditorTableVerticalAlign, setSelectedTextEditorTableVerticalAlign] =
+    useState<"top" | "middle" | "bottom">("middle");
+  const [selectedTextEditorTableBottomTopPadding, setSelectedTextEditorTableBottomTopPadding] =
+    useState(24);
+  const [selectedTextEditorTableMobileStack, setSelectedTextEditorTableMobileStack] =
+    useState(true);
+  const [selectedTextColor, setSelectedTextColor] = useState("#111827");
   const [layerBasicSettingsOpen, setLayerBasicSettingsOpen] = useState(true);
   const [layerHeightSettingsOpen, setLayerHeightSettingsOpen] = useState(true);
 
@@ -14295,6 +14377,16 @@ function RightPanel(props: {
     setTextEditorMessage("");
     setSelectedTextEditorImageId("");
     setSelectedTextEditorImageWidth(520);
+    setSelectedTextEditorTableId("");
+    setSelectedTextEditorTableWidth(100);
+    setSelectedTextEditorTableRowHeight(120);
+    setSelectedTextEditorTableBorderVisible(true);
+    setSelectedTextEditorTableLeftWidth(38);
+    setSelectedTextEditorTableCellPadding(20);
+    setSelectedTextEditorTableVerticalAlign("middle");
+    setSelectedTextEditorTableBottomTopPadding(24);
+    setSelectedTextEditorTableMobileStack(true);
+    setSelectedTextColor(selectedCell?.color || "#111827");
     savedTextRangeRef.current = null;
     textEditorInitializedRef.current = false;
     setTextEditorOpen(true);
@@ -14384,6 +14476,327 @@ function RightPanel(props: {
       editor.insertAdjacentHTML("beforeend", html);
     }
     syncEditorHtml();
+  }
+
+  function insertTextEditorTwoByTwoTable() {
+    const tableId = createId("text-editor-table");
+
+    insertTextEditorHtmlAtCursor(
+      `<table data-text-editor-table-id="${tableId}" data-mobile-stack="true" style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:12px;margin-right:auto;margin-bottom:12px;margin-left:auto;"><tbody><tr data-profile-top-row="true"><td data-profile-left-cell="true" style="width:38%;min-height:240px;border:1px solid #cbd5e1;padding:20px;vertical-align:middle;text-align:center;">사진과 이름을 넣으세요</td><td data-profile-right-cell="true" style="width:62%;min-height:240px;border:1px solid #cbd5e1;padding:20px;vertical-align:middle;text-align:left;">소개 글을 입력하세요</td></tr><tr data-profile-bottom-row="true"><td style="min-height:120px;border:1px solid #cbd5e1;padding:24px 20px 20px;vertical-align:top;">아래 전체 폭 설명</td><td style="min-height:120px;border:1px solid #cbd5e1;padding:24px 20px 20px;vertical-align:top;">아래 오른쪽 칸</td></tr></tbody></table><p><br></p>`,
+    );
+
+    setSelectedTextEditorTableId(tableId);
+    setTextEditorMessage(
+      "2×2 표를 넣었습니다. 표 안을 클릭한 뒤 ‘아래 2칸 합치기’를 누르세요.",
+    );
+
+    requestAnimationFrame(() => {
+      const table = textEditorRef.current?.querySelector<HTMLElement>(
+        `[data-text-editor-table-id="${tableId}"]`,
+      );
+      table?.setAttribute("data-selected", "true");
+    });
+  }
+
+  function selectTextEditorTable(target: EventTarget | null) {
+    const element =
+      target instanceof HTMLElement ? target : target instanceof Node ? target.parentElement : null;
+    const table = element?.closest<HTMLTableElement>(
+      "table[data-text-editor-table-id]",
+    );
+
+    textEditorRef.current
+      ?.querySelectorAll<HTMLElement>(
+        "table[data-text-editor-table-id][data-selected='true']",
+      )
+      .forEach((item) => item.removeAttribute("data-selected"));
+
+    if (!table) {
+      setSelectedTextEditorTableId("");
+      return;
+    }
+
+    table.setAttribute("data-selected", "true");
+    setSelectedTextEditorTableId(
+      table.getAttribute("data-text-editor-table-id") || "",
+    );
+
+    const savedWidth = Number(
+      String(table.style.width || "100").replace("%", ""),
+    );
+    setSelectedTextEditorTableWidth(
+      Number.isFinite(savedWidth) ? Math.max(30, Math.min(100, savedWidth)) : 100,
+    );
+
+    const firstCell = table.querySelector<HTMLTableCellElement>("td");
+    const savedHeight = Number(
+      String(firstCell?.style.minHeight || "120").replace("px", ""),
+    );
+    setSelectedTextEditorTableRowHeight(
+      Number.isFinite(savedHeight)
+        ? Math.max(60, Math.min(600, savedHeight))
+        : 120,
+    );
+
+    const borderValue = firstCell?.style.border || "";
+    setSelectedTextEditorTableBorderVisible(
+      borderValue !== "none" && borderValue !== "0px",
+    );
+
+    const topRow = table.rows[0];
+    const leftCell = topRow?.cells[0];
+    const bottomRow = table.rows[table.rows.length - 1];
+    const bottomCell = bottomRow?.cells[0];
+
+    const leftWidth = Number(
+      String(leftCell?.style.width || "38").replace("%", ""),
+    );
+    setSelectedTextEditorTableLeftWidth(
+      Number.isFinite(leftWidth)
+        ? Math.max(20, Math.min(70, leftWidth))
+        : 38,
+    );
+
+    const padding = Number.parseFloat(leftCell?.style.padding || "20");
+    setSelectedTextEditorTableCellPadding(
+      Number.isFinite(padding)
+        ? Math.max(0, Math.min(60, padding))
+        : 20,
+    );
+
+    const verticalAlign = leftCell?.style.verticalAlign;
+    setSelectedTextEditorTableVerticalAlign(
+      verticalAlign === "top" || verticalAlign === "bottom"
+        ? verticalAlign
+        : "middle",
+    );
+
+    const bottomPaddingTop = Number.parseFloat(
+      bottomCell?.style.paddingTop || "24",
+    );
+    setSelectedTextEditorTableBottomTopPadding(
+      Number.isFinite(bottomPaddingTop)
+        ? Math.max(0, Math.min(100, bottomPaddingTop))
+        : 24,
+    );
+
+    setSelectedTextEditorTableMobileStack(
+      table.getAttribute("data-mobile-stack") !== "false",
+    );
+  }
+
+  function getSelectedTextEditorTable() {
+    if (!selectedTextEditorTableId) return null;
+
+    return textEditorRef.current?.querySelector<HTMLTableElement>(
+      `table[data-text-editor-table-id="${selectedTextEditorTableId}"]`,
+    ) || null;
+  }
+
+  function updateSelectedTextEditorTableWidth(value: number) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    const next = Math.max(30, Math.min(100, value));
+    table.style.width = `${next}%`;
+    table.style.marginLeft = "auto";
+    table.style.marginRight = "auto";
+    setSelectedTextEditorTableWidth(next);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableRowHeight(value: number) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    const next = Math.max(60, Math.min(600, value));
+    table.querySelectorAll<HTMLTableCellElement>("td").forEach((cell) => {
+      cell.style.minHeight = `${next}px`;
+    });
+    setSelectedTextEditorTableRowHeight(next);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableBorderVisible(visible: boolean) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    table.querySelectorAll<HTMLTableCellElement>("td").forEach((cell) => {
+      cell.style.border = visible ? "1px solid #cbd5e1" : "none";
+    });
+
+    setSelectedTextEditorTableBorderVisible(visible);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableLeftWidth(value: number) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    const next = Math.max(20, Math.min(70, value));
+    const topRow = table.rows[0];
+    if (!topRow || topRow.cells.length < 2) return;
+
+    topRow.cells[0].style.width = `${next}%`;
+    topRow.cells[1].style.width = `${100 - next}%`;
+    topRow.cells[0].setAttribute("data-profile-left-cell", "true");
+    topRow.cells[1].setAttribute("data-profile-right-cell", "true");
+
+    setSelectedTextEditorTableLeftWidth(next);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableCellPadding(value: number) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    const next = Math.max(0, Math.min(60, value));
+    table.querySelectorAll<HTMLTableCellElement>("td").forEach((cell) => {
+      cell.style.paddingLeft = `${next}px`;
+      cell.style.paddingRight = `${next}px`;
+      if (!cell.closest("tr")?.hasAttribute("data-profile-bottom-row")) {
+        cell.style.paddingTop = `${next}px`;
+        cell.style.paddingBottom = `${next}px`;
+      }
+    });
+
+    const bottomRow = table.querySelector<HTMLTableRowElement>(
+      "tr[data-profile-bottom-row='true']",
+    );
+    Array.from(bottomRow?.cells || []).forEach((cell) => {
+      cell.style.paddingBottom = `${next}px`;
+    });
+
+    setSelectedTextEditorTableCellPadding(next);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableVerticalAlign(
+    value: "top" | "middle" | "bottom",
+  ) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    const topRow = table.rows[0];
+    Array.from(topRow?.cells || []).forEach((cell) => {
+      cell.style.verticalAlign = value;
+    });
+
+    setSelectedTextEditorTableVerticalAlign(value);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableBottomTopPadding(value: number) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    const next = Math.max(0, Math.min(100, value));
+    const bottomRow =
+      table.querySelector<HTMLTableRowElement>(
+        "tr[data-profile-bottom-row='true']",
+      ) || table.rows[table.rows.length - 1];
+
+    Array.from(bottomRow?.cells || []).forEach((cell) => {
+      cell.style.paddingTop = `${next}px`;
+    });
+
+    setSelectedTextEditorTableBottomTopPadding(next);
+    syncEditorHtml();
+  }
+
+  function updateSelectedTextEditorTableMobileStack(enabled: boolean) {
+    const table = getSelectedTextEditorTable();
+    if (!table) return;
+
+    table.setAttribute("data-mobile-stack", enabled ? "true" : "false");
+    setSelectedTextEditorTableMobileStack(enabled);
+    syncEditorHtml();
+  }
+
+  function mergeBottomTwoTextEditorTableCells() {
+    const table = getSelectedTextEditorTable();
+
+    if (!table) {
+      setTextEditorMessage("먼저 편집창 안의 2×2 표를 클릭하세요.");
+      return;
+    }
+
+    const rows = Array.from(table.rows);
+    const bottomRow = rows[rows.length - 1];
+    bottomRow?.setAttribute("data-profile-bottom-row", "true");
+
+    if (!bottomRow) {
+      setTextEditorMessage("표의 아래 행을 찾지 못했습니다.");
+      return;
+    }
+
+    if (bottomRow.cells.length === 1 && bottomRow.cells[0].colSpan === 2) {
+      setTextEditorMessage("아래 두 칸은 이미 합쳐져 있습니다.");
+      return;
+    }
+
+    if (bottomRow.cells.length < 2) {
+      setTextEditorMessage("합칠 수 있는 아래쪽 두 칸이 없습니다.");
+      return;
+    }
+
+    const leftCell = bottomRow.cells[0];
+    const rightCell = bottomRow.cells[1];
+    const leftHtml = leftCell.innerHTML.trim();
+    const rightHtml = rightCell.innerHTML.trim();
+
+    leftCell.colSpan = 2;
+    leftCell.style.width = "100%";
+    leftCell.style.paddingTop = `${selectedTextEditorTableBottomTopPadding}px`;
+    leftCell.style.paddingLeft = `${selectedTextEditorTableCellPadding}px`;
+    leftCell.style.paddingRight = `${selectedTextEditorTableCellPadding}px`;
+    leftCell.style.paddingBottom = `${selectedTextEditorTableCellPadding}px`;
+    leftCell.innerHTML =
+      leftHtml && rightHtml
+        ? `${leftHtml}<div><br></div>${rightHtml}`
+        : leftHtml || rightHtml || "합쳐진 아래 칸";
+
+    rightCell.remove();
+    syncEditorHtml();
+    setTextEditorMessage("아래쪽 두 칸을 하나로 합쳤습니다.");
+  }
+
+  function splitBottomTextEditorTableCell() {
+    const table = getSelectedTextEditorTable();
+
+    if (!table) {
+      setTextEditorMessage("먼저 편집창 안의 표를 클릭하세요.");
+      return;
+    }
+
+    const rows = Array.from(table.rows);
+    const bottomRow = rows[rows.length - 1];
+    const mergedCell = bottomRow?.cells[0];
+
+    if (
+      !bottomRow ||
+      bottomRow.cells.length !== 1 ||
+      !mergedCell ||
+      mergedCell.colSpan !== 2
+    ) {
+      setTextEditorMessage("아래쪽 칸이 합쳐진 상태가 아닙니다.");
+      return;
+    }
+
+    mergedCell.colSpan = 1;
+    mergedCell.style.width = "50%";
+
+    const newCell = document.createElement("td");
+    newCell.style.width = "50%";
+    newCell.style.minHeight = "120px";
+    newCell.style.border = "1px solid #cbd5e1";
+    newCell.style.padding = "16px";
+    newCell.style.verticalAlign = "top";
+    newCell.innerHTML = "아래 오른쪽 칸";
+
+    bottomRow.appendChild(newCell);
+    syncEditorHtml();
+    setTextEditorMessage("합쳐진 아래 칸을 다시 두 칸으로 나눴습니다.");
   }
 
   async function handleTextEditorImageFile(file: File | undefined) {
@@ -17060,6 +17473,275 @@ function RightPanel(props: {
                   ) : null}
                 </div>
 
+                <div className="mb-4 rounded-2xl border border-cyan-300 bg-cyan-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-cyan-700">
+                        Table
+                      </p>
+                      <h4 className="mt-1 text-base font-black text-cyan-950">
+                        2×2 표 만들기
+                      </h4>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-cyan-800">
+                        2×2 표를 넣은 뒤 아래쪽 두 칸만 하나로 합칠 수 있습니다.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          rememberTextSelection();
+                        }}
+                        onClick={insertTextEditorTwoByTwoTable}
+                        className="rounded-xl bg-cyan-700 px-4 py-3 text-sm font-black text-white hover:bg-cyan-800"
+                      >
+                        ＋ 2×2 표
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!selectedTextEditorTableId}
+                        onClick={mergeBottomTwoTextEditorTableCells}
+                        className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        아래 2칸 합치기
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={!selectedTextEditorTableId}
+                        onClick={splitBottomTextEditorTableCell}
+                        className="rounded-xl border border-cyan-400 bg-white px-4 py-3 text-sm font-black text-cyan-800 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        아래칸 다시 나누기
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl border border-cyan-300 bg-white p-2">
+                    <div className="min-h-12 rounded border border-cyan-300 p-2 text-center text-xs font-black text-cyan-900">
+                      위 왼쪽
+                    </div>
+                    <div className="min-h-12 rounded border border-cyan-300 p-2 text-center text-xs font-black text-cyan-900">
+                      위 오른쪽
+                    </div>
+                    <div className="col-span-2 min-h-12 rounded border border-blue-400 bg-blue-50 p-2 text-center text-xs font-black text-blue-900">
+                      아래 두 칸 합치기
+                    </div>
+                  </div>
+
+                  {selectedTextEditorTableId ? (
+                    <div className="mt-4 grid gap-4 rounded-2xl border border-cyan-200 bg-white p-4 lg:grid-cols-2">
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            테이블 너비
+                          </label>
+                          <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-black text-cyan-800">
+                            {selectedTextEditorTableWidth}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={30}
+                          max={100}
+                          step={1}
+                          value={selectedTextEditorTableWidth}
+                          onChange={(event) =>
+                            updateSelectedTextEditorTableWidth(
+                              Number(event.target.value),
+                            )
+                          }
+                          className="mt-3 w-full accent-cyan-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            칸 최소 높이
+                          </label>
+                          <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-black text-cyan-800">
+                            {selectedTextEditorTableRowHeight}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={60}
+                          max={600}
+                          step={10}
+                          value={selectedTextEditorTableRowHeight}
+                          onChange={(event) =>
+                            updateSelectedTextEditorTableRowHeight(
+                              Number(event.target.value),
+                            )
+                          }
+                          className="mt-3 w-full accent-cyan-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            왼쪽 사진 칸 너비
+                          </label>
+                          <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-black text-cyan-800">
+                            {selectedTextEditorTableLeftWidth}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={20}
+                          max={70}
+                          step={1}
+                          value={selectedTextEditorTableLeftWidth}
+                          onChange={(event) =>
+                            updateSelectedTextEditorTableLeftWidth(
+                              Number(event.target.value),
+                            )
+                          }
+                          className="mt-3 w-full accent-cyan-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            셀 안쪽 여백
+                          </label>
+                          <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-black text-cyan-800">
+                            {selectedTextEditorTableCellPadding}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={60}
+                          step={2}
+                          value={selectedTextEditorTableCellPadding}
+                          onChange={(event) =>
+                            updateSelectedTextEditorTableCellPadding(
+                              Number(event.target.value),
+                            )
+                          }
+                          className="mt-3 w-full accent-cyan-700"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between gap-3">
+                          <label className="text-xs font-black text-gray-700">
+                            아래 합친 칸 위 여백
+                          </label>
+                          <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-black text-cyan-800">
+                            {selectedTextEditorTableBottomTopPadding}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={2}
+                          value={selectedTextEditorTableBottomTopPadding}
+                          onChange={(event) =>
+                            updateSelectedTextEditorTableBottomTopPadding(
+                              Number(event.target.value),
+                            )
+                          }
+                          className="mt-3 w-full accent-cyan-700"
+                        />
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-black text-gray-700">
+                          위쪽 두 칸 세로 정렬
+                        </p>
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          {(
+                            [
+                              ["top", "위"],
+                              ["middle", "가운데"],
+                              ["bottom", "아래"],
+                            ] as const
+                          ).map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() =>
+                                updateSelectedTextEditorTableVerticalAlign(value)
+                              }
+                              className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                                selectedTextEditorTableVerticalAlign === value
+                                  ? "border-cyan-700 bg-cyan-700 text-white"
+                                  : "border-gray-300 bg-white text-gray-700"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-2 rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+                        <label className="flex cursor-pointer items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedTextEditorTableMobileStack}
+                            onChange={(event) =>
+                              updateSelectedTextEditorTableMobileStack(
+                                event.target.checked,
+                              )
+                            }
+                            className="mt-1 h-4 w-4 accent-cyan-700"
+                          />
+                          <span>
+                            <span className="block text-xs font-black text-cyan-950">
+                              모바일에서 사진 → 소개 글 → 아래 설명 순서로 세로 배치
+                            </span>
+                            <span className="mt-1 block text-[11px] font-semibold leading-5 text-cyan-800">
+                              PC에서는 사진과 소개 글이 나란히 유지되고 휴대폰에서만 한 칸씩 내려옵니다.
+                            </span>
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="lg:col-span-2">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateSelectedTextEditorTableBorderVisible(true)
+                            }
+                            className={`rounded-xl border px-4 py-2 text-xs font-black ${
+                              selectedTextEditorTableBorderVisible
+                                ? "border-cyan-700 bg-cyan-700 text-white"
+                                : "border-gray-300 bg-white text-gray-700"
+                            }`}
+                          >
+                            테이블 선 보이기
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateSelectedTextEditorTableBorderVisible(false)
+                            }
+                            className={`rounded-xl border px-4 py-2 text-xs font-black ${
+                              !selectedTextEditorTableBorderVisible
+                                ? "border-cyan-700 bg-cyan-700 text-white"
+                                : "border-gray-300 bg-white text-gray-700"
+                            }`}
+                          >
+                            테이블 선 숨기기
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
                 <div className="mb-4 grid gap-3 lg:grid-cols-2">
                   <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -17244,19 +17926,41 @@ function RightPanel(props: {
                   </p>
 
                   <div className="flex flex-wrap items-end gap-2">
-                    <label className="min-w-[130px] flex-1">
-                      <span className="mb-1 block text-[11px] font-black text-gray-600">선택 글자 크기</span>
-                      <select
-                        value={selectionFontSize}
-                        onMouseDown={rememberTextSelection}
-                        onChange={(event) => applySelectedFontSize(Number(event.target.value))}
-                        className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
-                      >
-                        {[12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 56, 64, 72, 84, 96].map((size) => (
-                          <option key={size} value={size}>{size}px</option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="min-w-[260px] flex-[2] rounded-xl border border-blue-200 bg-white p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-black text-gray-700">
+                          블록 지정 글자 크기
+                        </span>
+                        <span className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-black text-blue-800">
+                          {selectionFontSize}px
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={8}
+                          max={120}
+                          step={1}
+                          value={selectionFontSize}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) =>
+                            applySelectedFontSize(Number(event.target.value))
+                          }
+                          className="min-w-0 flex-1 accent-blue-600"
+                        />
+                        <input
+                          type="number"
+                          min={8}
+                          max={120}
+                          value={selectionFontSize}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) =>
+                            applySelectedFontSize(Number(event.target.value))
+                          }
+                          className="h-9 w-20 rounded-lg border border-blue-300 px-2 text-center text-xs font-black"
+                        />
+                      </div>
+                    </div>
 
                     <label className="min-w-[150px] flex-1">
                       <span className="mb-1 block text-[11px] font-black text-gray-600">선택 글자 폰트</span>
@@ -17273,15 +17977,31 @@ function RightPanel(props: {
                       </select>
                     </label>
 
-                    <label>
-                      <span className="mb-1 block text-[11px] font-black text-gray-600">선택 색상</span>
-                      <input
-                        type="color"
-                        value={inputColor}
-                        onMouseDown={rememberTextSelection}
-                        onChange={(event) => applySelectedColor(event.target.value)}
-                        className="h-10 w-14 rounded-xl border border-gray-300 bg-white p-1"
-                      />
+                    <label className="min-w-[150px] rounded-xl border border-blue-200 bg-white p-2.5">
+                      <span className="mb-1 block text-[11px] font-black text-gray-700">
+                        블록 지정 글자 색
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={selectedTextColor}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) => {
+                            setSelectedTextColor(event.target.value);
+                            applySelectedColor(event.target.value);
+                          }}
+                          className="h-9 w-11 rounded-lg border border-blue-300 bg-white p-1"
+                        />
+                        <input
+                          value={selectedTextColor}
+                          onMouseDown={rememberTextSelection}
+                          onChange={(event) =>
+                            setSelectedTextColor(event.target.value)
+                          }
+                          onBlur={() => applySelectedColor(selectedTextColor)}
+                          className="h-9 min-w-0 flex-1 rounded-lg border border-blue-300 px-2 text-xs font-black uppercase"
+                        />
+                      </div>
                     </label>
 
                     <label>
@@ -17522,6 +18242,52 @@ function RightPanel(props: {
                     pointer-events: none;
                   }
 
+                  .text-cell-rich-editor table[data-text-editor-table-id] {
+                    width: 100%;
+                    max-width: 100% !important;
+                    border-collapse: collapse;
+                    table-layout: fixed;
+                  }
+
+                  .text-cell-rich-editor table[data-text-editor-table-id] td {
+                    min-width: 0;
+                    min-height: 120px;
+                    border: 1px solid #cbd5e1;
+                    padding: 16px;
+                    vertical-align: top;
+                    overflow-wrap: break-word;
+                    word-break: normal;
+                  }
+
+                  .text-cell-rich-editor table[data-text-editor-table-id][data-selected="true"] {
+                    outline: 3px solid rgba(8, 145, 178, .42);
+                    outline-offset: 3px;
+                  }
+
+                  @media (max-width: 640px) {
+                    .text-cell-rich-editor table[data-text-editor-table-id] {
+                      table-layout: auto;
+                    }
+
+                    .text-cell-rich-editor table[data-text-editor-table-id] td {
+                      padding-left: 10px !important;
+                      padding-right: 10px !important;
+                    }
+
+                    .text-cell-rich-editor table[data-text-editor-table-id][data-mobile-stack="true"],
+                    .text-cell-rich-editor table[data-text-editor-table-id][data-mobile-stack="true"] tbody,
+                    .text-cell-rich-editor table[data-text-editor-table-id][data-mobile-stack="true"] tr {
+                      display: block;
+                      width: 100% !important;
+                    }
+
+                    .text-cell-rich-editor table[data-text-editor-table-id][data-mobile-stack="true"] td {
+                      display: block;
+                      width: 100% !important;
+                      max-width: 100% !important;
+                    }
+                  }
+
                   .text-cell-rich-editor [data-mobile-recovered="true"],
                   .text-cell-rich-editor [data-mobile-recovered="true"] * {
                     min-width: 0 !important;
@@ -17538,7 +18304,10 @@ function RightPanel(props: {
                   suppressContentEditableWarning
                   autoFocus
                   onInput={syncEditorHtml}
-                  onClick={(event) => selectTextEditorImage(event.target)}
+                  onClick={(event) => {
+                    selectTextEditorImage(event.target);
+                    selectTextEditorTable(event.target);
+                  }}
                   onMouseUp={() => { rememberTextSelection(); syncEditorHtml(); }}
                   onKeyUp={rememberTextSelection}
                   onBlur={rememberTextSelection}
@@ -19050,10 +19819,7 @@ function HorizontalImageScroll({
         height: "100%",
         minHeight: 0,
         maxHeight: "100%",
-        marginTop: 0,
-        marginRight: 0,
-        marginBottom: 0,
-        marginLeft: 0,
+        margin: 0,
         padding: 0,
         borderRadius: "inherit",
         lineHeight: 0,
