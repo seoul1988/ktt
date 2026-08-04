@@ -349,21 +349,8 @@ function isGooglePlaceholderImage(url: string | null) {
     lower.includes("googleusercontent.com") ||
     lower.includes("gstatic.com") ||
     lower.includes("google.com/images") ||
-    lower.includes("google_news") ||
-    lower.includes("/news.google.")
+    lower.includes("google_news")
   );
-}
-
-function cleanNewsTitle(value: string, region: Region) {
-  const cleaned = stripHtml(value)
-    .replace(/\s+-\s+Bloomberg$/i, "")
-    .replace(/^Google News$/i, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (cleaned) return cleaned;
-
-  return region === "us" ? "Bloomberg News" : "최신 뉴스";
 }
 
 async function resolveCandidate(
@@ -378,98 +365,78 @@ async function resolveCandidate(
   },
   now: string,
 ): Promise<ParsedNews> {
-  const publisherUrl = await resolvePublisherUrl(
-    item.articleUrl,
-    feed.region,
-  );
-
-  const resolvedToBloomberg =
-    feed.region === "us" && isBloombergUrl(publisherUrl);
-
   /*
-   * 미국 뉴스는 실제 Bloomberg 원문 주소를 찾았을 때만
-   * 원문 페이지의 메타데이터를 사용합니다.
+   * 미국 뉴스:
+   * - Google News RSS 링크는 그대로 저장합니다.
+   * - 사용자가 클릭하면 Google News가 Bloomberg 원문으로 연결합니다.
+   * - Google News 페이지의 og:title / og:image는 읽지 않습니다.
+   * - 제목은 RSS에 들어 있는 Bloomberg 기사 제목을 사용합니다.
    *
-   * Google News 주소가 그대로 남아 있으면 Google News 페이지의
-   * og:title, og:image, description을 절대 읽지 않습니다.
+   * 한국 뉴스:
+   * - 매일경제 원문 페이지에서 대표 이미지와 메타데이터를 읽습니다.
    */
-  const metadata =
-    feed.region === "korea" || resolvedToBloomberg
-      ? await fetchHtmlMetadata(publisherUrl)
-      : {
-          finalUrl: publisherUrl,
-          imageUrl: null,
-          title: null,
-          description: null,
-        };
+  if (feed.region === "us") {
+    const rssImage = absoluteUrl(
+      item.rssImage,
+      item.articleUrl,
+    );
+
+    const cleanTitle = item.title
+      .replace(/\s+-\s+Bloomberg$/i, "")
+      .replace(/^Google News$/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return {
+      region: "us",
+      source: "Bloomberg",
+      title: cleanTitle || "Bloomberg News",
+      summary: item.summary,
+      article_url: item.articleUrl,
+      image_url:
+        rssImage && !isGooglePlaceholderImage(rssImage)
+          ? rssImage
+          : null,
+      published_at: item.publishedAt,
+      fetched_at: now,
+      active: true,
+      updated_at: now,
+    };
+  }
+
+  const metadata = await fetchHtmlMetadata(
+    item.articleUrl,
+  );
 
   const rssImage = absoluteUrl(
     item.rssImage,
     item.articleUrl,
   );
 
-  const rssTitle = cleanNewsTitle(
-    item.title,
-    feed.region,
-  );
+  const imageCandidate =
+    metadata.imageUrl || rssImage;
 
-  const metadataTitle =
-    metadata.title &&
-    !/^Google News$/i.test(metadata.title.trim())
-      ? cleanNewsTitle(metadata.title, feed.region)
+  const resolvedImage =
+    imageCandidate &&
+    !isGooglePlaceholderImage(imageCandidate)
+      ? imageCandidate
       : null;
 
   const resolvedTitle =
-    feed.region === "us"
-      ? resolvedToBloomberg && metadataTitle
-        ? metadataTitle
-        : rssTitle
-      : metadataTitle || rssTitle;
-
-  const resolvedSummary =
-    feed.region === "us"
-      ? resolvedToBloomberg && metadata.description
-        ? metadata.description.slice(0, 400)
-        : item.summary
-      : metadata.description
-        ? metadata.description.slice(0, 400)
-        : item.summary;
-
-  let resolvedImage: string | null = null;
-
-  if (feed.region === "korea") {
-    const candidateImage =
-      metadata.imageUrl || rssImage;
-
-    resolvedImage =
-      candidateImage &&
-      !isGooglePlaceholderImage(candidateImage)
-        ? candidateImage
-        : null;
-  } else if (resolvedToBloomberg) {
-    resolvedImage =
-      metadata.imageUrl &&
-      !isGooglePlaceholderImage(metadata.imageUrl)
-        ? metadata.imageUrl
-        : null;
-  }
-
-  const resolvedArticleUrl =
-    resolvedToBloomberg
-      ? cleanBloombergUrl(
-          metadata.finalUrl || publisherUrl,
-        )
-      : publisherUrl;
+    metadata.title &&
+    !/^Google News$/i.test(metadata.title.trim())
+      ? metadata.title.trim()
+      : item.title.trim();
 
   return {
-    region: feed.region,
-    source:
-      feed.region === "us"
-        ? "Bloomberg"
-        : item.source || feed.source,
-    title: resolvedTitle,
-    summary: resolvedSummary,
-    article_url: resolvedArticleUrl,
+    region: "korea",
+    source: item.source || feed.source,
+    title: resolvedTitle || "최신 뉴스",
+    summary:
+      metadata.description?.slice(0, 400) ||
+      item.summary,
+    article_url:
+      metadata.finalUrl || item.articleUrl,
     image_url: resolvedImage,
     published_at: item.publishedAt,
     fetched_at: now,
@@ -501,7 +468,9 @@ async function loadFeed(
   const candidates = blocks
     .map((block) => {
       const rawTitle = getTag(block, "title");
-      const title = cleanNewsTitle(rawTitle, feed.region);
+      const title = rawTitle
+        .replace(/\s+-\s+Bloomberg$/i, "")
+        .trim();
 
       const articleUrl =
         getTag(block, "link") || getTag(block, "guid");
@@ -552,20 +521,7 @@ async function loadFeed(
 
   return Array.from(
     new Map(
-      resolved
-        .filter((item) => {
-          if (!item.title) return false;
-
-          if (
-            item.region === "us" &&
-            /^Google News$/i.test(item.title.trim())
-          ) {
-            return false;
-          }
-
-          return true;
-        })
-        .map((item) => [item.article_url, item]),
+      resolved.map((item) => [item.article_url, item]),
     ).values(),
   ).slice(0, feed.limit);
 }
@@ -730,25 +686,23 @@ export async function GET(request: NextRequest) {
       us: items.filter(
         (item) => item.region === "us",
       ).length,
-      bloombergOriginalUrls: items.filter(
-        (item) =>
-          item.region === "us" &&
-          isBloombergUrl(item.article_url),
+      bloombergLinks: items.filter(
+        (item) => item.region === "us",
       ).length,
       bloombergImages: items.filter(
         (item) =>
           item.region === "us" &&
           Boolean(item.image_url),
       ).length,
-      googlePlaceholderImages: items.filter(
-        (item) =>
-          item.region === "us" &&
-          isGooglePlaceholderImage(item.image_url),
-      ).length,
       googleNewsTitles: items.filter(
         (item) =>
           item.region === "us" &&
           /^Google News$/i.test(item.title.trim()),
+      ).length,
+      googlePlaceholderImages: items.filter(
+        (item) =>
+          item.region === "us" &&
+          isGooglePlaceholderImage(item.image_url),
       ).length,
       errors,
       syncedAt: new Date().toISOString(),
