@@ -53,6 +53,9 @@ export default function NewEventPage() {
   const [videoUrl, setVideoUrl] = useState("");
   const [registrationUrl, setRegistrationUrl] = useState("");
 
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPreview, setPdfPreview] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [optimizingImage, setOptimizingImage] = useState(false);
 
@@ -193,6 +196,37 @@ export default function NewEventPage() {
     setVideoPreview("");
   }
 
+
+  function handlePdf(file: File | null) {
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      alert("PDF 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (file.size > 30 * 1024 * 1024) {
+      alert("PDF 파일은 30MB 이하만 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (pdfPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(pdfPreview);
+    }
+
+    setPdfFile(file);
+    setPdfPreview(URL.createObjectURL(file));
+  }
+
+  function removePdf() {
+    if (pdfPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(pdfPreview);
+    }
+
+    setPdfFile(null);
+    setPdfPreview("");
+  }
+
   async function uploadFile(file: File, bucket: string, folder: string) {
     const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
     const fileName = `${folder}/${Date.now()}-${Math.random()
@@ -278,8 +312,12 @@ export default function NewEventPage() {
       if (videoPreview.startsWith("blob:")) {
         URL.revokeObjectURL(videoPreview);
       }
+
+      if (pdfPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfPreview);
+      }
     };
-  }, [imagePreview, videoPreview]);
+  }, [imagePreview, videoPreview, pdfPreview]);
 
   function setRegistrationMode(value: boolean) {
     setCollectAttendees(value);
@@ -401,6 +439,7 @@ export default function NewEventPage() {
 
       let uploadedImageUrl = "";
       let uploadedVideoUrl = "";
+      let uploadedPdfUrl = "";
 
       if (imageFile) {
         uploadedImageUrl = await uploadFile(
@@ -418,6 +457,14 @@ export default function NewEventPage() {
         );
       }
 
+      if (pdfFile) {
+        uploadedPdfUrl = await uploadFile(
+          pdfFile,
+          "event-pdfs",
+          "pdfs"
+        );
+      }
+
       const { data: insertedEvent, error } = await supabase
         .from("event_requests")
         .insert({
@@ -431,6 +478,9 @@ export default function NewEventPage() {
           video_url: uploadedVideoUrl || null,
           external_video_url: normalizedVideoUrl || null,
           registration_url: normalizedRegistrationUrl || null,
+
+          pdf_url: uploadedPdfUrl || null,
+          pdf_name: pdfFile?.name || null,
 
           event_date: eventDateObject.toISOString(),
           location: location.trim() || null,
@@ -849,6 +899,66 @@ export default function NewEventPage() {
                 >
                   Delete Image
                 </button>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+              <div>
+                <span className="block text-sm font-black text-[#C4483A]">
+                  Event PDF
+                </span>
+                <span className="mt-1 block text-[11px] font-bold text-red-600">
+                  PDF only · Maximum 30MB
+                </span>
+              </div>
+
+              <label className="cursor-pointer rounded-full bg-[#C4483A] px-4 py-2 text-xs font-black text-white shadow">
+                {pdfFile ? "Replace" : "Upload PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    handlePdf(file);
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {pdfFile && (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                <div className="flex items-center justify-between gap-3 border-b bg-gray-50 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-[#172033]">
+                      {pdfFile.name}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-gray-500">
+                      {(pdfFile.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={removePdf}
+                    className="shrink-0 rounded-full bg-red-500 px-3 py-2 text-xs font-black text-white"
+                  >
+                    Delete
+                  </button>
+                </div>
+
+                {pdfPreview && (
+                  <iframe
+                    src={`${pdfPreview}#page=1&toolbar=0&navpanes=0`}
+                    title="PDF Preview"
+                    className="h-[420px] w-full bg-gray-100"
+                  />
+                )}
               </div>
             )}
           </div>
