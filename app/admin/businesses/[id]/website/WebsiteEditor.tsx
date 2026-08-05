@@ -13623,9 +13623,27 @@ function HeaderSubmenuEditor({
   const [submenuSettingsOpen, setSubmenuSettingsOpen] = useState(true);
   const [openMenuItemIds, setOpenMenuItemIds] = useState<string[]>([]);
 
-  const items = Array.isArray(websiteSettings.header_submenu_items)
+  type HeaderMenuItem = NonNullable<WebsiteSettings["header_submenu_items"]>[number];
+  type HeaderMenuChild = NonNullable<HeaderMenuItem["children"]>[number];
+
+  const savedItems = Array.isArray(websiteSettings.header_submenu_items)
     ? websiteSettings.header_submenu_items
     : [];
+
+  // 메뉴 추가·삭제 결과를 부모 상태 반영 전에도 즉시 화면에 보여줍니다.
+  const [items, setItems] = useState<HeaderMenuItem[]>(savedItems);
+
+  useEffect(() => {
+    setItems(savedItems);
+  }, [websiteSettings.header_submenu_items]);
+
+  function commitItems(nextItems: HeaderMenuItem[]) {
+    setItems(nextItems);
+    onUpdate({
+      header_submenu_enabled: true,
+      header_submenu_items: nextItems,
+    });
+  }
 
   const safeSections = Array.isArray(sections) ? sections : [];
 
@@ -13651,9 +13669,6 @@ function HeaderSubmenuEditor({
       };
     })
     .filter((section) => Boolean(section.value));
-
-  type HeaderMenuItem = NonNullable<WebsiteSettings["header_submenu_items"]>[number];
-  type HeaderMenuChild = NonNullable<HeaderMenuItem["children"]>[number];
 
   function makeMenuUrl(
     targetType: "section" | "page",
@@ -13689,11 +13704,11 @@ function HeaderSubmenuEditor({
     itemId: string,
     patch: Partial<HeaderMenuItem>,
   ) {
-    onUpdate({
-      header_submenu_items: items.map((item) =>
+    commitItems(
+      items.map((item) =>
         item.id === itemId ? normalizeEditedItem(item, patch) : item,
       ),
-    });
+    );
   }
 
   function updateChild(
@@ -13701,8 +13716,8 @@ function HeaderSubmenuEditor({
     childId: string,
     patch: Partial<HeaderMenuChild>,
   ) {
-    onUpdate({
-      header_submenu_items: items.map((item) => {
+    commitItems(
+      items.map((item) => {
         if (item.id !== parentId) return item;
 
         return {
@@ -13714,28 +13729,52 @@ function HeaderSubmenuEditor({
           ),
         };
       }),
-    });
+    );
+  }
+
+  function createMainMenuItem(): HeaderMenuItem {
+    const firstSection = sectionOptions[0];
+
+    return {
+      id: createId("submenu"),
+      label: "New Menu",
+      url: firstSection ? `#${firstSection.value}` : "#home",
+      target_type: "section",
+      target_value: firstSection?.value || "home",
+      children: [],
+    };
   }
 
   function addItem() {
-    const firstSection = sectionOptions[0];
+    const newItem = createMainMenuItem();
 
-    onUpdate({
-      header_submenu_items: [
-        ...items,
-        {
-          id: createId("submenu"),
-          label: "New Menu",
-          url: firstSection ? `#${firstSection.value}` : "#home",
-          target_type: "section",
-          target_value: firstSection?.value || "home",
-          children: [],
-        },
-      ],
-    });
+    setSubmenuSettingsOpen(true);
+    commitItems([...items, newItem]);
+
+    setOpenMenuItemIds((current) =>
+      current.includes(newItem.id) ? current : [...current, newItem.id],
+    );
+  }
+
+  function addItemAfter(itemId: string) {
+    const newItem = createMainMenuItem();
+    setSubmenuSettingsOpen(true);
+    const currentIndex = items.findIndex((item) => item.id === itemId);
+    const insertIndex = currentIndex >= 0 ? currentIndex + 1 : items.length;
+
+    commitItems([
+      ...items.slice(0, insertIndex),
+      newItem,
+      ...items.slice(insertIndex),
+    ]);
+
+    setOpenMenuItemIds((current) =>
+      current.includes(newItem.id) ? current : [...current, newItem.id],
+    );
   }
 
   function addChild(parentId: string) {
+    setSubmenuSettingsOpen(true);
     const firstSection = sectionOptions[0];
     const child: HeaderMenuChild = {
       id: createId("submenu-child"),
@@ -13745,13 +13784,13 @@ function HeaderSubmenuEditor({
       target_value: firstSection?.value || "home",
     };
 
-    onUpdate({
-      header_submenu_items: items.map((item) =>
+    commitItems(
+      items.map((item) =>
         item.id === parentId
           ? { ...item, children: [...(item.children || []), child] }
           : item,
       ),
-    });
+    );
 
     setOpenMenuItemIds((current) =>
       current.includes(parentId) ? current : [...current, parentId],
@@ -13759,15 +13798,13 @@ function HeaderSubmenuEditor({
   }
 
   function removeItem(itemId: string) {
-    onUpdate({
-      header_submenu_items: items.filter((item) => item.id !== itemId),
-    });
+    commitItems(items.filter((item) => item.id !== itemId));
     setOpenMenuItemIds((current) => current.filter((id) => id !== itemId));
   }
 
   function removeChild(parentId: string, childId: string) {
-    onUpdate({
-      header_submenu_items: items.map((item) =>
+    commitItems(
+      items.map((item) =>
         item.id === parentId
           ? {
               ...item,
@@ -13777,7 +13814,7 @@ function HeaderSubmenuEditor({
             }
           : item,
       ),
-    });
+    );
   }
 
   function toggleItemOpen(itemId: string) {
@@ -14285,6 +14322,22 @@ function HeaderSubmenuEditor({
             />
           </div>
 
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black text-blue-950">메인 메뉴</p>
+              <p className="mt-0.5 text-[10px] font-bold text-blue-700">
+                현재 {items.length}개 · 추가하면 아래에 즉시 표시됩니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addItem}
+              className="shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white shadow-sm hover:bg-blue-700"
+            >
+              + 메인 메뉴 추가
+            </button>
+          </div>
+
           <div className="mt-4 space-y-3">
             {items.map((item, index) => {
               const children = Array.isArray(item.children) ? item.children : [];
@@ -14460,6 +14513,25 @@ function HeaderSubmenuEditor({
                       {renderTargetEditor(item, (patch) =>
                         updateItem(item.id, patch as Partial<HeaderMenuItem>)
                       )}
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => addItemAfter(item.id)}
+                          className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-black text-blue-700 hover:border-blue-400 hover:bg-blue-100"
+                        >
+                          + 메인 메뉴 추가
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={items.length <= 1}
+                          onClick={() => removeItem(item.id)}
+                          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-black text-red-600 hover:border-red-400 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          메인 메뉴 삭제
+                        </button>
+                      </div>
 
                       <div className="mt-4 border-t border-gray-200 pt-4">
                         <div className="flex items-center justify-between gap-2">
@@ -25751,7 +25823,24 @@ function MenuCellEditor({
   onUpdate: (patch: Partial<GridCell>) => void;
   onShowImageGuide?: () => void;
 }) {
-  const items = normalizeMenuItems(cell);
+  /*
+   * 메뉴 추가 버튼을 누른 즉시 오른쪽 편집 목록과 미리보기에 표시되도록
+   * 메뉴 목록을 로컬 상태로도 관리합니다. 부모 저장 상태 반영을 기다리지
+   * 않고 먼저 화면을 갱신한 뒤 onUpdate로 실제 셀 데이터에 저장합니다.
+   */
+  const [items, setItems] = useState<
+    NonNullable<GridCell["menu_items"]>
+  >(() => normalizeMenuItems(cell));
+
+  const externalMenuSignature = JSON.stringify({
+    cellId: cell.id,
+    menuItems: cell.menu_items || [],
+    text: cell.text || "",
+  });
+
+  useEffect(() => {
+    setItems(normalizeMenuItems(cell));
+  }, [externalMenuSignature]);
 
   const sectionOptions = [...(Array.isArray(sections) ? sections : [])]
     .filter(
@@ -25799,10 +25888,33 @@ function MenuCellEditor({
       };
     });
 
+    // 화면부터 즉시 갱신합니다.
+    setItems(nextItems);
+
+    // 그 다음 실제 편집기 셀 데이터에 저장합니다.
     onUpdate({
       menu_mode: "text",
       menu_items: nextItems,
       text: nextItems.map((item) => item.label).join(", "),
+    });
+  }
+
+  function addMainMenu(afterIndex: number) {
+    const newItem = createMenuItem(`새 메뉴 ${items.length + 1}`);
+
+    updateItems((current) => [
+      ...current.slice(0, afterIndex + 1),
+      newItem,
+      ...current.slice(afterIndex + 1),
+    ]);
+
+    // 새 메뉴 카드가 만들어진 다음 설정 패널 안에서 바로 보이게 이동합니다.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(`[data-main-menu-id="${newItem.id}"]`)
+          ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      });
     });
   }
 
@@ -25871,23 +25983,11 @@ function MenuCellEditor({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-black text-gray-800">메뉴</p>
-          <p className="mt-1 text-xs text-gray-500">
-            이름과 이동 방식만 선택하세요.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            updateItems((current) => [...current, createMenuItem("새 메뉴")])
-          }
-          className="shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
-        >
-          + 추가
-        </button>
+      <div>
+        <p className="text-sm font-black text-gray-800">메뉴</p>
+        <p className="mt-1 text-xs text-gray-500">
+          이름과 이동 방식을 선택한 뒤, 아래 버튼에서 메뉴를 추가하거나 삭제하세요.
+        </p>
       </div>
 
       <div className="mt-3 space-y-2">
@@ -25897,6 +25997,7 @@ function MenuCellEditor({
           return (
             <div
               key={item.id}
+              data-main-menu-id={item.id}
               className="rounded-2xl border border-gray-200 bg-gray-50 p-3"
             >
               <div className="flex items-center gap-2">
@@ -25936,7 +26037,7 @@ function MenuCellEditor({
                 </button>
               </div>
 
-              <div className="mt-2 grid grid-cols-[1fr_1fr_auto] gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() =>
@@ -25992,6 +26093,17 @@ function MenuCellEditor({
                   별도 페이지
                 </button>
 
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => addMainMenu(index)}
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-black text-blue-700 hover:border-blue-400 hover:bg-blue-100"
+                >
+                  + 메뉴 추가
+                </button>
+
                 <button
                   type="button"
                   disabled={items.length <= 1}
@@ -26000,9 +26112,9 @@ function MenuCellEditor({
                       current.filter((entry) => entry.id !== item.id),
                     )
                   }
-                  className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 disabled:opacity-30"
+                  className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-black text-red-600 hover:border-red-400 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
                 >
-                  삭제
+                  메뉴 삭제
                 </button>
               </div>
 
