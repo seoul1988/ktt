@@ -67,6 +67,11 @@ type GridCell = {
   image_url?: string;
   image_size_percent?: number;
   image_fit?: "scale" | "width" | "cover";
+  /** 이미지 셀 안에서 마우스로 이동한 가로/세로 위치(%) */
+  image_position_x?: number;
+  image_position_y?: number;
+  /** URL이 있어도 링크 이동을 켜거나 끌 수 있습니다. */
+  link_enabled?: boolean;
   popup_enabled?: boolean;
   popup_image_url?: string;
   popup_title?: string;
@@ -605,6 +610,8 @@ const DEVICE_VISUAL_CELL_KEYS = new Set<keyof GridCell>([
   "vertical_align",
   "image_size_percent",
   "image_fit",
+  "image_position_x",
+  "image_position_y",
   "logo_size_px",
   "button_width_px",
   "button_height_px",
@@ -7498,6 +7505,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 websiteSettings={websiteSettings}
                 previewDevice={device}
                 onSelect={(cellId) => setSelection({ area: "header", cellId })}
+                onUpdateCell={(cellId, patch) =>
+                  updateCell("header", cellId, patch)
+                }
                 onResizeWidths={(widths) =>
                   updateGridWidths("header", widths)
                 }
@@ -7657,6 +7667,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         websiteSettings={websiteSettings}
                         onSelect={(cellId) =>
                           selectHeroCell(layout, cellId)
+                        }
+                        onUpdateCell={(cellId, patch) =>
+                          updateCell("hero", cellId, patch, layout.id)
                         }
                         onResizeWidths={(widths) =>
                           updateGridWidths("hero", widths, layout.id)
@@ -11426,9 +11439,87 @@ function PreviewSection({
   );
 }
 
-function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes, onResizeNestedHeight, onMergeNested }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; onResizeNestedHeight?: (parentCellId: string, heightPx: number) => void; onMergeNested?: (cellId: string) => void; }) {
+function EditableCellContent({ cell, selectedCellId, onSelect, onUpdateCell, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes, onResizeNestedHeight, onMergeNested }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; onUpdateCell?: (cellId: string, patch: Partial<GridCell>) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; onResizeNestedHeight?: (parentCellId: string, heightPx: number) => void; onMergeNested?: (cellId: string) => void; }) {
   const selectionHostRef = useRef<HTMLDivElement>(null);
+  const imageDragHostRef = useRef<HTMLElement | null>(null);
+  const suppressImageClickRef = useRef(false);
+  const imageDragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startPositionX: number;
+    startPositionY: number;
+    moved: boolean;
+  } | null>(null);
   const [selectionMenu, setSelectionMenu] = useState<{ left: number; top: number } | null>(null);
+  const [imageDragPosition, setImageDragPosition] = useState(() => ({
+    x: Number(cell.image_position_x || 0),
+    y: Number(cell.image_position_y || 0),
+  }));
+  const [imageDragging, setImageDragging] = useState(false);
+
+  useEffect(() => {
+    if (imageDragging) return;
+    setImageDragPosition({
+      x: Number(cell.image_position_x || 0),
+      y: Number(cell.image_position_y || 0),
+    });
+  }, [cell.id, cell.image_position_x, cell.image_position_y, imageDragging]);
+
+  const startImageDrag = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    if (cell.type !== "image" || !cell.image_url) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect(cell.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    imageDragHostRef.current = event.currentTarget;
+    imageDragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPositionX: Number(cell.image_position_x || 0),
+      startPositionY: Number(cell.image_position_y || 0),
+      moved: false,
+    };
+    setImageDragging(true);
+  }, [cell.id, cell.image_position_x, cell.image_position_y, cell.image_url, cell.type, onSelect]);
+
+  const moveImageDrag = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const drag = imageDragStateRef.current;
+    const host = imageDragHostRef.current;
+    if (!drag || !host || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = host.getBoundingClientRect();
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) drag.moved = true;
+
+    const nextX = Math.max(-100, Math.min(100, drag.startPositionX + (deltaX / Math.max(1, rect.width)) * 100));
+    const nextY = Math.max(-100, Math.min(100, drag.startPositionY + (deltaY / Math.max(1, rect.height)) * 100));
+    setImageDragPosition({ x: nextX, y: nextY });
+  }, []);
+
+  const stopImageDrag = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const drag = imageDragStateRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // 이미 캡처가 해제된 경우 무시합니다.
+    }
+    suppressImageClickRef.current = drag.moved;
+    imageDragStateRef.current = null;
+    imageDragHostRef.current = null;
+    setImageDragging(false);
+    onUpdateCell?.(cell.id, {
+      image_position_x: imageDragPosition.x,
+      image_position_y: imageDragPosition.y,
+    });
+  }, [cell.id, imageDragPosition.x, imageDragPosition.y, onUpdateCell]);
 
   const checkSelectedText = useCallback(() => {
     if (cell.type !== "text" && cell.type !== "title") {
@@ -12018,6 +12109,7 @@ function EditableGrid({
   websiteSettings,
   previewDevice = "desktop",
   onSelect,
+  onUpdateCell,
   onResizeWidths,
   onResizeHeight,
   onResizeNestedSizes,
@@ -12032,6 +12124,7 @@ function EditableGrid({
   websiteSettings?: WebsiteSettings;
   previewDevice?: "desktop" | "mobile";
   onSelect: (cellId: string) => void;
+  onUpdateCell: (cellId: string, patch: Partial<GridCell>) => void;
   onResizeWidths: (widths: Record<string, number>) => void;
   onResizeHeight: (heightPx: number) => void;
   // 중첩 칸의 드래그 비율을 상위 상태까지 저장해 편집 화면과 미리보기가 동일하게 보이도록 합니다.
@@ -12295,9 +12388,7 @@ function EditableGrid({
               ? "#000000"
               : gridFrameBackgroundColor
             : undefined,
-        minHeight: autoMobileBusinessHours
-          ? `${area === "header" ? 48 : 40}px`
-          : `${area === "header" ? 48 : 40}px`,
+        minHeight: "40px",
         gridTemplateColumns: localWidths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -12381,6 +12472,7 @@ function EditableGrid({
                 cell={cell}
                 selectedCellId={selectedCellId}
                 onSelect={onSelect}
+                onUpdateCell={onUpdateCell}
                 business={business}
                 accentColor={accentColor}
                 area={area}
@@ -12791,7 +12883,8 @@ function CellPreview({
       return <span className="text-sm font-bold opacity-70">이미지</span>;
     }
 
-    const imageHref = normalizeButtonHref(cell.url);
+    const linkEnabled = cell.link_enabled !== false;
+    const imageHref = linkEnabled ? normalizeButtonHref(cell.url) : "";
     const imageOpensNewWindow = isExternalButtonHref(imageHref);
     const popupEnabled = cell.popup_enabled === true;
     const displayImageUrl = String(cell.image_url || "").trim();
@@ -12861,6 +12954,9 @@ function CellPreview({
           margin: 0,
           padding: 0,
           lineHeight: 0,
+          transform: `translate(${imageDragPosition.x}%, ${imageDragPosition.y}%)`,
+          transition: imageDragging ? "none" : "transform 120ms ease-out",
+          pointerEvents: "none",
         }}
       />
     );
@@ -12889,9 +12985,17 @@ function CellPreview({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              if (suppressImageClickRef.current) {
+                suppressImageClickRef.current = false;
+                return;
+              }
               if (lightboxImageUrl) setImageLightboxOpen(true);
             }}
-            className="absolute inset-0 cursor-zoom-in overflow-hidden border-0 bg-transparent"
+            onPointerDown={startImageDrag}
+            onPointerMove={moveImageDrag}
+            onPointerUp={stopImageDrag}
+            onPointerCancel={stopImageDrag}
+            className={`absolute inset-0 touch-none overflow-hidden border-0 bg-transparent ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
             style={imageContainerStyle}
           >
             {imageElement}
@@ -12902,7 +13006,18 @@ function CellPreview({
             target={imageOpensNewWindow ? "_blank" : undefined}
             rel={imageOpensNewWindow ? "noreferrer noopener" : undefined}
             aria-label={cell.text || "이미지 링크 열기"}
-            className="absolute inset-0 cursor-pointer overflow-hidden"
+            onPointerDown={startImageDrag}
+            onPointerMove={moveImageDrag}
+            onPointerUp={stopImageDrag}
+            onPointerCancel={stopImageDrag}
+            onClick={(event) => {
+              if (imageDragging || suppressImageClickRef.current) {
+                event.preventDefault();
+                event.stopPropagation();
+                suppressImageClickRef.current = false;
+              }
+            }}
+            className={`absolute inset-0 touch-none overflow-hidden ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
             style={imageContainerStyle}
           >
             {imageElement}
@@ -12914,14 +13029,28 @@ function CellPreview({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              if (suppressImageClickRef.current) {
+                suppressImageClickRef.current = false;
+                return;
+              }
               setImageLightboxOpen(true);
             }}
-            className="absolute inset-0 cursor-zoom-in overflow-hidden border-0 bg-transparent"
+            onPointerDown={startImageDrag}
+            onPointerMove={moveImageDrag}
+            onPointerUp={stopImageDrag}
+            onPointerCancel={stopImageDrag}
+            className={`absolute inset-0 touch-none overflow-hidden border-0 bg-transparent ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
             style={imageContainerStyle}
           >
             {imageElement}
           </button>
         )}
+
+        {selectedCellId === cell.id ? (
+          <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/75 px-3 py-1.5 text-[10px] font-black text-white shadow">
+            이미지를 마우스로 드래그해 위치 이동
+          </div>
+        ) : null}
 
         {imageLightboxOpen && typeof document !== "undefined"
           ? createPortal(
@@ -23302,18 +23431,72 @@ function ImageCellUploader({
               </button>
             ) : null}
           </div>
-        ) : cell.url ? (
-          <div className="mt-4">
+        ) : (
+          <div className="mt-4 space-y-3 rounded-xl border border-blue-200 bg-white p-3">
+            <label className="flex cursor-pointer items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-gray-900">이미지 링크</p>
+                <p className="mt-1 text-xs font-semibold text-gray-500">
+                  편집할 때 링크로 자꾸 이동하면 끄고, 공개할 때만 다시 켤 수 있습니다.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={cell.link_enabled !== false}
+                onChange={(event) => onUpdate({ link_enabled: event.target.checked })}
+                className="h-5 w-5 accent-blue-600"
+              />
+            </label>
+
             <Field label="이동할 링크">
               <input
                 value={cell.url || ""}
                 onChange={(event) => onUpdate({ url: event.target.value })}
                 placeholder="https://... 또는 /menu"
-                className="w-full rounded-xl border border-violet-300 bg-white px-3 py-2.5"
+                disabled={cell.link_enabled === false}
+                className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2.5 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
               />
             </Field>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onUpdate({ link_enabled: true })}
+                className={`rounded-xl px-3 py-2.5 text-sm font-black ${
+                  cell.link_enabled !== false
+                    ? "bg-blue-600 text-white"
+                    : "border border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                링크 켜기
+              </button>
+              <button
+                type="button"
+                onClick={() => onUpdate({ link_enabled: false })}
+                className={`rounded-xl px-3 py-2.5 text-sm font-black ${
+                  cell.link_enabled === false
+                    ? "bg-gray-900 text-white"
+                    : "border border-gray-300 bg-white text-gray-700"
+                }`}
+              >
+                링크 끄기
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                onUpdate({
+                  image_position_x: 0,
+                  image_position_y: 0,
+                })
+              }
+              className="w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm font-black text-blue-800"
+            >
+              이미지 위치 가운데로 초기화
+            </button>
           </div>
-        ) : null}
+        )}
       </div>
 
       {cell.image_url ? (
