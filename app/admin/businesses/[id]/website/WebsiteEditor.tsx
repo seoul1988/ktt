@@ -11601,7 +11601,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, onUpdateCell, bus
       onImagePointerDown={startImageDrag}
       onImagePointerMove={moveImageDrag}
       onImagePointerUp={stopImageDrag}
-      isSelected={isSelected}
+      isSelected={selectedCellId === cell.id}
     />
   );
 }
@@ -13086,7 +13086,7 @@ function CellPreview({
           </button>
         )}
 
-        {selectedCellId === cell.id ? (
+        {isSelected ? (
           <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/75 px-3 py-1.5 text-[10px] font-black text-white shadow">
             이미지를 마우스로 드래그해 위치 이동
           </div>
