@@ -7048,7 +7048,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
       {layerAddOpen ? (
         <div
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/55 px-4"
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/55 p-2 sm:p-4"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               setLayerAddOpen(false);
@@ -7057,8 +7057,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             }
           }}
         >
-          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
+          <div className="flex max-h-[calc(100dvh-16px)] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:max-h-[88vh]">
+            <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
                   Add Layer
@@ -7082,9 +7083,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               >
                 ×
               </button>
+              </div>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 sm:p-4">
               <p className="text-sm font-black text-gray-950">
                 이 레이어를 어떻게 사용할까요?
               </p>
@@ -7129,7 +7132,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               </div>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
               <p className="text-sm font-black text-gray-950">
                 레이어 너비
               </p>
@@ -7191,7 +7194,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               </div>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {[
                 ["home", "🏠", "Home"],
                 ["about", "👤", "About"],
@@ -7228,7 +7231,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           | "footer",
                       )
                     }
-                    className="rounded-2xl border border-gray-200 bg-white p-4 text-center hover:border-blue-500 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="rounded-2xl border border-gray-200 bg-white p-3 text-center hover:border-blue-500 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <span className="block text-3xl">{icon}</span>
                     <span className="mt-2 block text-sm font-black text-gray-900">
@@ -7244,7 +7247,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               })}
             </div>
 
-            <div className="mt-5 rounded-2xl bg-gray-50 p-4">
+            <div className="mt-4 rounded-2xl bg-gray-50 p-3 sm:p-4">
               <p className="text-sm font-black text-gray-800">
                 빈 레이어 직접 만들기
               </p>
@@ -7268,9 +7271,24 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               </div>
             </div>
 
-            <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-xs leading-5 text-amber-900">
+            <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-xs leading-5 text-amber-900 sm:p-4">
               새 레이어를 만든 뒤 반드시 <strong>서버 저장</strong>을 눌러야
               데이터베이스에 최종 저장됩니다.
+            </div>
+            </div>
+
+            <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setLayerAddOpen(false);
+                  setNewLayerVisibility("normal");
+                  setNewLayerWidth("container");
+                }}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-black text-gray-700 hover:bg-gray-50"
+              >
+                닫기
+              </button>
             </div>
           </div>
         </div>

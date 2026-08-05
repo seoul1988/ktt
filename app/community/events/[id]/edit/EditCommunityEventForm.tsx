@@ -65,6 +65,11 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState(event.video_url || "");
   const [videoUrl, setVideoUrl] = useState(event.external_video_url || "");
+
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfName, setPdfName] = useState(event.pdf_name || "");
+  const [pdfUrl, setPdfUrl] = useState(event.pdf_url || "");
+  const [pdfRemoved, setPdfRemoved] = useState(false);
   const [registrationUrl, setRegistrationUrl] = useState(
     event.registration_url || ""
   );
@@ -248,6 +253,37 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
     setVideoPreview(URL.createObjectURL(file));
   }
 
+  function handlePdf(file: File | null) {
+    if (!file) return;
+
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
+
+    if (!isPdf) {
+      alert("Please select a PDF file.");
+      return;
+    }
+
+    const maxSize = 20 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      alert("The PDF file is too large. Please upload a file under 20MB.");
+      return;
+    }
+
+    setPdfFile(file);
+    setPdfName(file.name);
+    setPdfRemoved(false);
+  }
+
+  function removePdf() {
+    setPdfFile(null);
+    setPdfName("");
+    setPdfUrl("");
+    setPdfRemoved(true);
+  }
+
   async function uploadFile(file: File, bucket: string, folder: string) {
     const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
     const fileName = `${folder}/${Date.now()}-${Math.random()
@@ -335,8 +371,11 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
     try {
       const previousImageUrl = event.image_url || null;
+      const previousPdfUrl = event.pdf_url || null;
       let uploadedImageUrl = imageRemoved ? null : previousImageUrl;
       let uploadedVideoUrl = event.video_url || null;
+      let uploadedPdfUrl = pdfRemoved ? null : previousPdfUrl;
+      let uploadedPdfName = pdfRemoved ? null : event.pdf_name || null;
 
       if (imageFile) {
         uploadedImageUrl = await uploadFile(
@@ -354,6 +393,15 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
         );
       }
 
+      if (pdfFile) {
+        uploadedPdfUrl = await uploadFile(
+          pdfFile,
+          "event-pdfs",
+          "pdfs"
+        );
+        uploadedPdfName = pdfFile.name;
+      }
+
       const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
       const { error } = await supabase
@@ -364,6 +412,8 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
 
           image_url: uploadedImageUrl,
           video_url: uploadedVideoUrl,
+          pdf_name: uploadedPdfName,
+          pdf_url: uploadedPdfUrl,
           external_video_url: normalizedVideoUrl || null,
           registration_url: normalizedRegistrationUrl || null,
 
@@ -401,6 +451,13 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
         (imageRemoved || (imageFile && uploadedImageUrl !== previousImageUrl))
       ) {
         await deleteStorageFile(previousImageUrl, "event-images");
+      }
+
+      if (
+        previousPdfUrl &&
+        (pdfRemoved || (pdfFile && uploadedPdfUrl !== previousPdfUrl))
+      ) {
+        await deleteStorageFile(previousPdfUrl, "event-pdfs");
       }
 
       router.push(`/community/events/${event.id}`);
@@ -749,6 +806,85 @@ export default function EditCommunityEventForm({ event }: { event: any }) {
                 controls
                 className="mt-3 h-48 w-full rounded-2xl object-cover"
               />
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#C46A2B]">
+                Event PDF
+              </span>
+
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
+                {pdfName ? "Replace PDF" : "Upload PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    handlePdf(file);
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <p className="mt-2 text-xs font-bold text-blue-600">
+              PDF files up to 20MB are supported. The attachment will appear on
+              the event detail page after saving.
+            </p>
+
+            {pdfName ? (
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-600 text-xl text-white">
+                    PDF
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-black text-[#172033]">
+                      {pdfName}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-gray-500">
+                      {pdfFile
+                        ? `${(pdfFile.size / 1024 / 1024).toFixed(2)} MB · New file`
+                        : "Current attached PDF"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {pdfUrl && !pdfFile ? (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl bg-[#172033] px-3 py-3 text-center text-xs font-black text-white"
+                    >
+                      View Current PDF
+                    </a>
+                  ) : (
+                    <div className="rounded-xl bg-white px-3 py-3 text-center text-xs font-black text-gray-500">
+                      Save to view
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={removePdf}
+                    className="rounded-xl bg-red-500 px-3 py-3 text-xs font-black text-white"
+                  >
+                    Delete PDF
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-400">
+                No PDF attached
+              </div>
             )}
           </div>
 
