@@ -146,6 +146,8 @@ type GridCell = {
   text_align?: TextAlign;
   vertical_align?: VerticalAlign;
   child_cells?: GridCell[];
+  child_direction?: "row" | "column";
+  size_percent?: number;
 };
 
 type GridData = {
@@ -5013,6 +5015,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               ];
 
           const usedChildIds = new Set<string>();
+          const childSize = 100 / safeCount;
           const nextChildren = Array.from({ length: safeCount }, (_, index) => {
             const source = base[index] || defaultCell("empty", "", 1);
             const sourceId = String(source.id || "");
@@ -5027,6 +5030,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               id: childId,
               span: 1,
               width_percent: undefined,
+              size_percent: childSize,
             };
           });
 
@@ -5035,9 +5039,110 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             type: "empty",
             text: "",
             image_url: undefined,
+            child_direction: "column",
             child_cells: nextChildren,
           };
         }),
+      }),
+      layoutId,
+    );
+  }
+
+  function setSelectedCellColumnCount(
+    area: "header" | "hero",
+    cellId: string,
+    columnCount: number,
+    layoutId?: string,
+  ) {
+    const safeCount = Math.max(1, Math.min(4, Math.round(columnCount)));
+
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: mapCellRecursive(grid.cells, cellId, (cell) => {
+          const existing = cell.child_cells || [];
+
+          if (safeCount === 1) {
+            if (!existing.length) return cell;
+            const hasExtraContent = existing.slice(1).some(
+              (item) => item.type !== "empty" || Boolean(String(item.text || "").trim()) || Boolean(item.image_url),
+            );
+            if (hasExtraContent && !window.confirm("1칸으로 합치면 오른쪽 칸의 내용이 삭제됩니다. 계속할까요?")) {
+              return cell;
+            }
+            const first = existing[0];
+            return first
+              ? { ...first, id: cell.id, width_percent: cell.width_percent, span: cell.span, size_percent: cell.size_percent }
+              : { ...cell, child_cells: undefined, child_direction: undefined };
+          }
+
+          const base =
+            existing.length && cell.child_direction === "row"
+              ? existing
+              : [
+                  {
+                    ...cell,
+                    id: createId("cell"),
+                    span: 1,
+                    width_percent: undefined,
+                    size_percent: undefined,
+                    child_cells: undefined,
+                    child_direction: undefined,
+                  },
+                ];
+
+          const usedChildIds = new Set<string>();
+          const size = 100 / safeCount;
+          const nextChildren = Array.from({ length: safeCount }, (_, index) => {
+            const source = base[index] || defaultCell("empty", "", 1);
+            const sourceId = String(source.id || "");
+            const needsNewId = !sourceId || sourceId === cell.id || usedChildIds.has(sourceId);
+            const childId = needsNewId ? createId("cell") : sourceId;
+            usedChildIds.add(childId);
+            return {
+              ...source,
+              id: childId,
+              span: 1,
+              width_percent: undefined,
+              size_percent: size,
+            };
+          });
+
+          return {
+            ...cell,
+            type: "empty",
+            text: "",
+            image_url: undefined,
+            child_direction: "row",
+            child_cells: nextChildren,
+          };
+        }),
+      }),
+      layoutId,
+    );
+  }
+
+  function updateNestedCellSizes(
+    area: "header" | "hero",
+    parentCellId: string,
+    sizes: Record<string, number>,
+    layoutId?: string,
+  ) {
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: mapCellRecursive(grid.cells, parentCellId, (cell) => ({
+          ...cell,
+          child_cells: (cell.child_cells || []).map((child) => ({
+            ...child,
+            size_percent:
+              typeof sizes[child.id] === "number"
+                ? sizes[child.id]
+                : child.size_percent,
+          })),
+        })),
       }),
       layoutId,
     );
@@ -6812,6 +6917,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 onResizeHeight={(heightPx) =>
                   updateGridHeight("header", heightPx)
                 }
+                onResizeNestedSizes={(parentCellId, sizes) =>
+                  updateNestedCellSizes("header", parentCellId, sizes)
+                }
               />
               </div>
 
@@ -6961,6 +7069,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         onResizeHeight={(heightPx) =>
                           updateGridHeight("hero", heightPx, layout.id)
                         }
+                        onResizeNestedSizes={(parentCellId, sizes) =>
+                          updateNestedCellSizes("hero", parentCellId, sizes, layout.id)
+                        }
                       />
                     </div>
                     );
@@ -7003,6 +7114,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             onSetGridColumns={setGridColumnCount}
             onSetGridRows={setGridRowCount}
             onSetSelectedCellRows={setSelectedCellRowCount}
+            onSetSelectedCellColumns={setSelectedCellColumnCount}
             gridRowCount={heroLayouts.length}
             gridColumnCount={
               selection.area === "header"
@@ -8232,6 +8344,54 @@ function CurrentWebsitePreview({
         return;
       }
 
+      const layerSlug = slugifyMenuValue(targetUrl.hash.replace(/^#/, ""));
+
+      if (layerSlug) {
+        const matchingLayer = sections.find((section) => {
+          const sectionSlug =
+            slugifyMenuValue(
+              String(section.title || section.section_type || ""),
+            ) || section.section_type;
+
+          return (
+            section.content?.page_type !== "link-page" &&
+            section.content?.collapsible === true &&
+            sectionSlug === layerSlug
+          );
+        });
+
+        if (matchingLayer) {
+          event.preventDefault();
+          event.stopPropagation();
+          setPreviewPageSlug("");
+          setOpenedPreviewLayerIds((current) =>
+            current.length === 1 && current[0] === matchingLayer.id
+              ? []
+              : [matchingLayer.id],
+          );
+
+          window.setTimeout(() => {
+            const previewRoot = previewScrollRef.current;
+            const targetElement = previewRoot?.querySelector<HTMLElement>(
+              `#${CSS.escape(layerSlug)}`,
+            );
+
+            if (previewRoot && targetElement) {
+              const rootRect = previewRoot.getBoundingClientRect();
+              const targetRect = targetElement.getBoundingClientRect();
+              previewRoot.scrollTo({
+                top: Math.max(
+                  0,
+                  previewRoot.scrollTop + targetRect.top - rootRect.top - 16,
+                ),
+                behavior: "smooth",
+              });
+            }
+          }, 80);
+          return;
+        }
+      }
+
       const basePath = `/business/${business.id}/website`;
       if (targetUrl.origin !== window.location.origin || !targetUrl.pathname.startsWith(basePath)) return;
 
@@ -8246,7 +8406,7 @@ function CurrentWebsitePreview({
 
     document.addEventListener("click", handleLinkedPagePreview);
     return () => document.removeEventListener("click", handleLinkedPagePreview);
-  }, [business.id]);
+  }, [business.id, sections]);
 
   const previewLinkPage = sections.find((section) => {
     if (section.content?.page_type !== "link-page") return false;
@@ -9080,11 +9240,7 @@ export function PublicWebsiteRenderer({
 
       if (!matchingSection?.content?.collapsible) return;
 
-      setOpenedLayerIds((current) =>
-  current.includes(matchingSection.id)
-    ? current.filter((id) => id !== matchingSection.id)
-    : [...current, matchingSection.id],
-);
+      setOpenedLayerIds([matchingSection.id]);
 
       window.setTimeout(() => {
         document.getElementById(layerSlug)?.scrollIntoView({
@@ -9096,11 +9252,18 @@ export function PublicWebsiteRenderer({
 
     function handleLayerLinkClick(event: MouseEvent) {
       const target = event.target as HTMLElement | null;
-      const anchorElement = target?.closest("a[href^='#']") as HTMLAnchorElement | null;
+      const anchorElement = target?.closest("a[href]") as HTMLAnchorElement | null;
       if (!anchorElement) return;
 
-      const rawHash = anchorElement.getAttribute("href") || "";
-      const layerSlug = slugifyMenuValue(rawHash.replace(/^#/, ""));
+      const rawHref = anchorElement.getAttribute("href") || "";
+      let targetUrl: URL;
+      try {
+        targetUrl = new URL(rawHref, window.location.href);
+      } catch {
+        return;
+      }
+
+      const layerSlug = slugifyMenuValue(targetUrl.hash.replace(/^#/, ""));
       if (!layerSlug) return;
 
       const matchingSection = sections.find((section) => {
@@ -9120,9 +9283,9 @@ export function PublicWebsiteRenderer({
       event.preventDefault();
 
       setOpenedLayerIds((current) =>
-        current.includes(matchingSection.id)
-          ? current
-          : [...current, matchingSection.id],
+        current.length === 1 && current[0] === matchingSection.id
+          ? []
+          : [matchingSection.id],
       );
 
       window.setTimeout(() => {
@@ -9789,29 +9952,36 @@ function ReadOnlyCellContent({
   previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings;
 }) {
   if (cell.child_cells?.length) {
+    const direction = cell.child_direction === "row" ? "row" : "column";
+    const rawSizes = cell.child_cells.map((child) => Number(child.size_percent));
+    const validSizes = rawSizes.every((value) => Number.isFinite(value) && value >= 5);
+    const total = validSizes ? rawSizes.reduce((sum, value) => sum + value, 0) || 100 : 100;
+    const sizes = validSizes
+      ? rawSizes.map((value) => (value / total) * 100)
+      : cell.child_cells.map(() => 100 / cell.child_cells!.length);
+    const template = sizes.map((size) => `${Math.max(1, size)}fr`).join(" ");
+
     return (
       <div
-        className={`grid w-full gap-0 ${previewDevice === "mobile" ? "h-auto" : "h-full"}`}
-        style={{
-          gridTemplateRows:
-            previewDevice === "mobile"
-              ? `repeat(${cell.child_cells.length}, auto)`
-              : `repeat(${cell.child_cells.length}, minmax(0, 1fr))`,
-        }}
+        className={`grid w-full gap-0 ${previewDevice === "mobile" && direction === "column" ? "h-auto" : "h-full"}`}
+        style={
+          direction === "row"
+            ? { gridTemplateColumns: template }
+            : { gridTemplateRows: previewDevice === "mobile" ? `repeat(${cell.child_cells.length}, auto)` : template }
+        }
       >
         {cell.child_cells.map((child) => (
           <div
             key={child.id}
-            className="relative flex min-w-0 overflow-hidden"
+            className="relative flex min-h-0 min-w-0 overflow-hidden"
             style={{
-              minHeight:
-                previewDevice === "mobile"
-                  ? cellContainsDisplayMode(child, "auto-slider")
-                    ? 0
-                    : "180px"
-                  : 0,
-              aspectRatio: undefined,
-              justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center", alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center", textAlign: child.text_align || "center", color: child.color || (area === "hero" ? "#ffffff" : "#111827"), background: area === "header" ? "transparent" : child.background_color || "transparent", padding: child.type === "image" || child.display_mode === "auto-slider" ? 0 : "12px"
+              minHeight: previewDevice === "mobile" && direction === "column" ? (cellContainsDisplayMode(child, "auto-slider") ? 0 : "180px") : 0,
+              justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center",
+              alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center",
+              textAlign: child.text_align || "center",
+              color: child.color || (area === "hero" ? "#ffffff" : "#111827"),
+              background: area === "header" ? "transparent" : child.background_color || "transparent",
+              padding: child.child_cells?.length || child.type === "image" || child.display_mode === "auto-slider" ? 0 : "12px",
             }}
           >
             <ReadOnlyCellContent cell={child} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
@@ -10569,7 +10739,7 @@ function PreviewSection({
   );
 }
 
-function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; }) {
+function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; }) {
   const selectionHostRef = useRef<HTMLDivElement>(null);
   const [selectionMenu, setSelectionMenu] = useState<{ left: number; top: number } | null>(null);
 
@@ -10624,21 +10794,173 @@ function EditableCellContent({ cell, selectedCellId, onSelect, business, accentC
 
   if (cell.child_cells?.length) {
     return (
-      <div className="grid h-full w-full gap-1" style={{ gridTemplateRows: `repeat(${cell.child_cells.length}, minmax(0, 1fr))` }}>
-        {cell.child_cells.map((child, index) => {
-          const selected = selectedCellId === child.id;
-          return (
-            <div key={child.id} role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); onSelect(child.id); }} className={`relative flex min-h-0 min-w-0 overflow-hidden rounded-lg border-2 border-dashed p-2 ${selected ? "border-purple-600 bg-purple-50/20 ring-2 ring-purple-500/20" : "border-white/50 hover:border-purple-400"}`} style={{ justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center", alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center", textAlign: child.text_align || "center", color: child.color || (area === "hero" ? "#ffffff" : "#111827"), background: area === "header" ? "transparent" : child.background_color || "transparent" }}>
-              <span className="absolute left-1 top-1 z-20 rounded bg-purple-700/85 px-1.5 py-0.5 text-[9px] font-black text-white">안쪽 {index + 1}</span>
-              <EditableCellContent cell={child} selectedCellId={selectedCellId} onSelect={onSelect} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
-              {child.type === "empty" && !child.child_cells?.length ? <span className="text-xs font-bold opacity-70">+ 내용 추가</span> : null}
-            </div>
-          );
-        })}
-      </div>
+      <NestedEditableCells
+        parentCell={cell}
+        selectedCellId={selectedCellId}
+        onSelect={onSelect}
+        business={business}
+        accentColor={accentColor}
+        area={area}
+        previewDevice={previewDevice}
+        websiteSettings={websiteSettings}
+        onResizeSizes={onResizeNestedSizes}
+      />
     );
   }
   return <CellPreview cell={cell} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />;
+}
+
+
+function NestedEditableCells({
+  parentCell,
+  selectedCellId,
+  onSelect,
+  business,
+  accentColor,
+  area,
+  previewDevice,
+  websiteSettings,
+  onResizeSizes,
+}: {
+  parentCell: GridCell;
+  selectedCellId?: string;
+  onSelect: (cellId: string) => void;
+  business: Business;
+  accentColor: string;
+  area: "header" | "hero";
+  previewDevice: "desktop" | "mobile";
+  websiteSettings?: WebsiteSettings;
+  onResizeSizes?: (parentCellId: string, sizes: Record<string, number>) => void;
+}) {
+  const children = parentCell.child_cells || [];
+  const direction = parentCell.child_direction === "row" ? "row" : "column";
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [sizes, setSizes] = useState<number[]>(() => {
+    const raw = children.map((child) => Number(child.size_percent));
+    const valid = raw.every((value) => Number.isFinite(value) && value >= 5);
+    if (valid) {
+      const total = raw.reduce((sum, value) => sum + value, 0) || 100;
+      return raw.map((value) => (value / total) * 100);
+    }
+    return children.map(() => 100 / Math.max(1, children.length));
+  });
+  const [drag, setDrag] = useState<{ index: number; start: number; first: number; second: number } | null>(null);
+
+  useEffect(() => {
+    if (drag) return;
+    const raw = children.map((child) => Number(child.size_percent));
+    const valid = raw.every((value) => Number.isFinite(value) && value >= 5);
+    if (valid) {
+      const total = raw.reduce((sum, value) => sum + value, 0) || 100;
+      setSizes(raw.map((value) => (value / total) * 100));
+    } else {
+      setSizes(children.map(() => 100 / Math.max(1, children.length)));
+    }
+  }, [children, drag]);
+
+  function begin(event: React.PointerEvent<HTMLButtonElement>, index: number) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({
+      index,
+      start: direction === "row" ? event.clientX : event.clientY,
+      first: sizes[index],
+      second: sizes[index + 1],
+    });
+  }
+
+  function move(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!drag || !hostRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = hostRef.current.getBoundingClientRect();
+    const length = direction === "row" ? rect.width : rect.height;
+    if (length <= 0) return;
+    const point = direction === "row" ? event.clientX : event.clientY;
+    const delta = ((point - drag.start) / length) * 100;
+    const pair = drag.first + drag.second;
+    const min = 8;
+    const first = Math.max(min, Math.min(pair - min, drag.first + delta));
+    const second = pair - first;
+    setSizes((current) => current.map((value, index) => index === drag.index ? first : index === drag.index + 1 ? second : value));
+  }
+
+  function end(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!drag) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    const next: Record<string, number> = {};
+    children.forEach((child, index) => { next[child.id] = sizes[index]; });
+    onResizeSizes?.(parentCell.id, next);
+    setDrag(null);
+  }
+
+  const template = sizes.map((size) => `${Math.max(1, size)}fr`).join(" ");
+
+  return (
+    <div
+      ref={hostRef}
+      className="grid h-full w-full min-h-0 min-w-0 gap-0"
+      style={direction === "row" ? { gridTemplateColumns: template } : { gridTemplateRows: template }}
+    >
+      {children.map((child, index) => {
+        const selected = selectedCellId === child.id;
+        const hasNext = index < children.length - 1;
+        return (
+          <div
+            key={child.id}
+            role="button"
+            tabIndex={0}
+            onClick={(event) => { event.stopPropagation(); onSelect(child.id); }}
+            className={`relative flex min-h-0 min-w-0 overflow-visible border-2 border-dashed ${selected ? "border-purple-600 bg-purple-50/20 ring-2 ring-purple-500/20" : "border-white/50 hover:border-purple-400"}`}
+            style={{
+              justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center",
+              alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center",
+              textAlign: child.text_align || "center",
+              color: child.color || (area === "hero" ? "#ffffff" : "#111827"),
+              background: area === "header" ? "transparent" : child.background_color || "transparent",
+              padding: child.child_cells?.length || child.type === "image" ? 0 : "8px",
+            }}
+          >
+            <span className="absolute left-1 top-1 z-30 rounded bg-purple-700/85 px-1.5 py-0.5 text-[9px] font-black text-white">
+              {direction === "row" ? `좌우 ${index + 1}` : `상하 ${index + 1}`} · {Math.round(sizes[index] || 0)}%
+            </span>
+            <EditableCellContent
+              cell={child}
+              selectedCellId={selectedCellId}
+              onSelect={onSelect}
+              business={business}
+              accentColor={accentColor}
+              area={area}
+              previewDevice={previewDevice}
+              websiteSettings={websiteSettings}
+              onResizeNestedSizes={onResizeSizes}
+            />
+            {child.type === "empty" && !child.child_cells?.length ? <span className="text-xs font-bold opacity-70">+ 내용 추가</span> : null}
+            {hasNext ? (
+              <button
+                type="button"
+                aria-label={direction === "row" ? "안쪽 칸 너비 조절" : "안쪽 칸 높이 조절"}
+                onPointerDown={(event) => begin(event, index)}
+                onPointerMove={move}
+                onPointerUp={end}
+                onPointerCancel={end}
+                onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                className={`absolute z-50 flex touch-none items-center justify-center ${direction === "row" ? "-right-3 top-0 h-full w-6 cursor-col-resize" : "-bottom-3 left-0 h-6 w-full cursor-row-resize"}`}
+              >
+                <span className={`${direction === "row" ? "h-full w-[3px]" : "h-[3px] w-full"} absolute rounded-full bg-orange-500`} />
+                <span className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 border-orange-500 bg-white text-sm font-black text-orange-600 shadow-lg">
+                  {direction === "row" ? "↔" : "↕"}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function EditableGrid({
@@ -10652,6 +10974,7 @@ function EditableGrid({
   onSelect,
   onResizeWidths,
   onResizeHeight,
+  onResizeNestedSizes,
 }: {
   area: "header" | "hero";
   grid: GridData;
@@ -10663,6 +10986,7 @@ function EditableGrid({
   onSelect: (cellId: string) => void;
   onResizeWidths: (widths: Record<string, number>) => void;
   onResizeHeight: (heightPx: number) => void;
+  onResizeNestedSizes: (parentCellId: string, sizes: Record<string, number>) => void;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [localWidths, setLocalWidths] = useState<number[]>(() =>
@@ -14662,6 +14986,7 @@ function RightPanel(props: {
   onSetGridColumns: (area: "header" | "hero", columnCount: number, layoutId?: string) => void;
   onSetGridRows: (rowCount: number) => void;
   onSetSelectedCellRows: (area: "header" | "hero", cellId: string, rowCount: number, layoutId?: string) => void;
+  onSetSelectedCellColumns: (area: "header" | "hero", cellId: string, columnCount: number, layoutId?: string) => void;
   gridRowCount: number;
   gridColumnCount: number;
   onDuplicateCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
@@ -20284,9 +20609,32 @@ function RightPanel(props: {
                 type="button"
                 onClick={() => props.onSetSelectedCellRows(area, selectedCell.id, count, selection.layoutId)}
                 className={`rounded-xl border px-3 py-3 text-sm font-black transition ${
-                  (selectedCell.child_cells?.length || 1) === count
+                  selectedCell.child_direction !== "row" && (selectedCell.child_cells?.length || 1) === count
                     ? "border-purple-600 bg-purple-600 text-white"
                     : "border-gray-300 bg-white text-gray-700 hover:border-purple-500 hover:text-purple-700"
+                }`}
+              >
+                {count}칸
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-gray-200 pt-5">
+          <p className="text-sm font-black text-gray-900">선택한 칸 안에서 좌·우로 나누기</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">
+            위·아래로 나눈 뒤 위쪽 칸이나 아래쪽 칸만 선택하여 다시 좌우로 나눌 수 있습니다.
+          </p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map((count) => (
+              <button
+                key={count}
+                type="button"
+                onClick={() => props.onSetSelectedCellColumns(area, selectedCell.id, count, selection.layoutId)}
+                className={`rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  selectedCell.child_direction === "row" && (selectedCell.child_cells?.length || 1) === count
+                    ? "border-orange-600 bg-orange-600 text-white"
+                    : "border-gray-300 bg-white text-gray-700 hover:border-orange-500 hover:text-orange-700"
                 }`}
               >
                 {count}칸

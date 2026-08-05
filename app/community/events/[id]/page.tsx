@@ -288,6 +288,15 @@ export default async function CommunityEventDetailPage({
     event.registration_url,
   );
 
+  const pdfUrl = normalizeExternalUrl(event.pdf_url);
+  const pdfName =
+    String(event.pdf_name || "").trim() ||
+    `${String(event.title || "event").trim() || "event"}.pdf`;
+
+  const pdfPreviewUrl = pdfUrl
+    ? `${pdfUrl}#page=1&view=FitH&toolbar=0&navpanes=0`
+    : "";
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
@@ -305,7 +314,40 @@ export default async function CommunityEventDetailPage({
           </div>
         </div>
 
-        {event.image_url && (
+        {pdfUrl ? (
+          <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
+            <div className="overflow-hidden rounded-[20px] bg-[#ECE8E2]">
+              <iframe
+                src={pdfPreviewUrl}
+                title={`${event.title || "Community Event"} PDF preview`}
+                className="h-[68vh] min-h-[520px] w-full bg-white"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 p-2 pt-3">
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-12 items-center justify-center rounded-2xl bg-[#172033] px-3 py-3 text-center text-sm font-black text-white"
+              >
+                원본 PDF 보기
+              </a>
+
+              <a
+                href={pdfUrl}
+                download={pdfName}
+                className="flex min-h-12 items-center justify-center rounded-2xl bg-[#C46A2B] px-3 py-3 text-center text-sm font-black text-white"
+              >
+                PDF 다운로드
+              </a>
+            </div>
+
+            <p className="truncate px-3 pb-3 text-center text-xs font-bold text-[#6B6257]">
+              {pdfName}
+            </p>
+          </div>
+        ) : event.image_url ? (
           <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
             <div className="overflow-hidden rounded-[20px]">
               <ImageModal
@@ -314,7 +356,7 @@ export default async function CommunityEventDetailPage({
               />
             </div>
           </div>
-        )}
+        ) : null}
 
         <div className="flex items-start justify-between gap-3">
           <h1 className="min-w-0 flex-1 text-3xl font-black leading-tight">
