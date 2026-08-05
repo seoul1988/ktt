@@ -57,7 +57,7 @@ const FEEDS: FeedDefinition[] = [
     region: "korea",
     source: "매일경제",
     url: "https://www.mk.co.kr/rss/30000001/",
-    candidateLimit: 20,
+    candidateLimit: 80,
   },
 
   // MarketWatch 직접 RSS
@@ -346,6 +346,200 @@ async function fetchArticleMetadata(
       description: null,
     };
   }
+}
+
+const KOREA_US_ECONOMY_STRONG_KEYWORDS = [
+  "미국",
+  "미 증시",
+  "미국 증시",
+  "뉴욕증시",
+  "월가",
+  "나스닥",
+  "다우",
+  "s&p500",
+  "s&p 500",
+  "연준",
+  "fed",
+  "fomc",
+  "파월",
+  "미 국채",
+  "미국채",
+  "미 재무부",
+  "미국 경제",
+  "미국 고용",
+  "미국 물가",
+  "미국 소비자물가",
+  "미국 생산자물가",
+  "미국 gdp",
+  "미국 금리",
+  "미 기준금리",
+  "달러",
+  "뉴욕",
+];
+
+const KOREA_US_ECONOMY_COMPANY_KEYWORDS = [
+  "엔비디아",
+  "애플",
+  "마이크로소프트",
+  "테슬라",
+  "아마존",
+  "메타",
+  "구글",
+  "알파벳",
+  "팔란티어",
+  "오픈ai",
+  "openai",
+  "amd",
+  "인텔",
+  "브로드컴",
+  "퀄컴",
+  "넷플릭스",
+  "월마트",
+  "코스트코",
+  "보잉",
+  "스페이스x",
+];
+
+const KOREA_ECONOMY_CONTEXT_KEYWORDS = [
+  "경제",
+  "증시",
+  "주가",
+  "주식",
+  "금리",
+  "채권",
+  "국채",
+  "환율",
+  "달러",
+  "실적",
+  "매출",
+  "이익",
+  "투자",
+  "시장",
+  "인플레이션",
+  "물가",
+  "고용",
+  "관세",
+  "무역",
+  "수출",
+  "반도체",
+  "ai",
+  "기업",
+];
+
+function normalizeKeywordText(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function includesAnyKeyword(
+  text: string,
+  keywords: string[],
+) {
+  return keywords.some((keyword) =>
+    text.includes(keyword.toLowerCase()),
+  );
+}
+
+function getKoreaUsEconomyScore(
+  title: string,
+  summary: string | null,
+) {
+  const normalizedTitle =
+    normalizeKeywordText(title);
+
+  const normalizedSummary =
+    normalizeKeywordText(summary ?? "");
+
+  let score = 0;
+
+  for (
+    const keyword of
+    KOREA_US_ECONOMY_STRONG_KEYWORDS
+  ) {
+    const normalizedKeyword =
+      keyword.toLowerCase();
+
+    if (
+      normalizedTitle.includes(
+        normalizedKeyword,
+      )
+    ) {
+      score += 5;
+    }
+
+    if (
+      normalizedSummary.includes(
+        normalizedKeyword,
+      )
+    ) {
+      score += 2;
+    }
+  }
+
+  const companyInTitle = includesAnyKeyword(
+    normalizedTitle,
+    KOREA_US_ECONOMY_COMPANY_KEYWORDS,
+  );
+
+  const companyInSummary = includesAnyKeyword(
+    normalizedSummary,
+    KOREA_US_ECONOMY_COMPANY_KEYWORDS,
+  );
+
+  const economyContext =
+    includesAnyKeyword(
+      `${normalizedTitle} ${normalizedSummary}`,
+      KOREA_ECONOMY_CONTEXT_KEYWORDS,
+    );
+
+  if (companyInTitle && economyContext) {
+    score += 4;
+  } else if (
+    companyInSummary &&
+    economyContext
+  ) {
+    score += 2;
+  }
+
+  return score;
+}
+
+function filterKoreaUsEconomyNews(
+  items: ParsedNews[],
+) {
+  return items
+    .map((item) => ({
+      item,
+      usEconomyScore:
+        getKoreaUsEconomyScore(
+          item.title,
+          item.summary,
+        ),
+    }))
+    /*
+     * 제목에 강한 미국 경제 키워드가 있거나,
+     * 미국 기업명과 경제 문맥이 함께 있어야 통과합니다.
+     */
+    .filter(
+      ({ usEconomyScore }) =>
+        usEconomyScore >= 4,
+    )
+    .sort((a, b) => {
+      const dateDifference =
+        sortNewest(a.item, b.item);
+
+      if (dateDifference !== 0) {
+        return dateDifference;
+      }
+
+      return (
+        b.usEconomyScore -
+        a.usEconomyScore
+      );
+    })
+    .map(({ item }) => item);
 }
 
 async function loadFeed(
@@ -918,14 +1112,19 @@ export async function GET(
           : [],
     );
 
-    const koreaItems = successful
-      .filter(
-        (result) =>
-          result.feed.region === "korea",
+    const koreaItems =
+      filterKoreaUsEconomyNews(
+        successful
+          .filter(
+            (result) =>
+              result.feed.region === "korea",
+          )
+          .flatMap(
+            (result) => result.items,
+          ),
       )
-      .flatMap((result) => result.items)
-      .sort(sortNewest)
-      .slice(0, NEWS_LIMIT);
+        .sort(sortNewest)
+        .slice(0, NEWS_LIMIT);
 
     const rawUsItems = Array.from(
       new Map(
@@ -1019,6 +1218,10 @@ export async function GET(
       ok: true,
       korea: koreaResult,
       us: usResult,
+      koreaFilter: {
+        topic: "US economy",
+        saved: koreaItems.length,
+      },
       usSources: usSourceCounts,
       usImages: {
         available:
