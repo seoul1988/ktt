@@ -10835,55 +10835,92 @@ function NestedEditableCells({
   const children = parentCell.child_cells || [];
   const direction = parentCell.child_direction === "row" ? "row" : "column";
   const hostRef = useRef<HTMLDivElement>(null);
-  const [sizes, setSizes] = useState<number[]>(() => {
+  const getNormalizedSizes = useCallback(() => {
     const raw = children.map((child) => Number(child.size_percent));
-    const valid = raw.every((value) => Number.isFinite(value) && value >= 5);
+    const valid =
+      raw.length === children.length &&
+      raw.every((value) => Number.isFinite(value) && value >= 5);
+
     if (valid) {
       const total = raw.reduce((sum, value) => sum + value, 0) || 100;
       return raw.map((value) => (value / total) * 100);
     }
+
     return children.map(() => 100 / Math.max(1, children.length));
-  });
-  const [drag, setDrag] = useState<{ index: number; start: number; first: number; second: number } | null>(null);
+  }, [children]);
+
+  const [sizes, setSizes] = useState<number[]>(getNormalizedSizes);
+  const sizesRef = useRef<number[]>(sizes);
+  const [drag, setDrag] = useState<{
+    index: number;
+    start: number;
+    first: number;
+    second: number;
+  } | null>(null);
+  const dragRef = useRef<typeof drag>(null);
+
+  const childSizeSignature = children
+    .map((child) => `${child.id}:${Number(child.size_percent) || 0}`)
+    .join("|");
 
   useEffect(() => {
-    if (drag) return;
-    const raw = children.map((child) => Number(child.size_percent));
-    const valid = raw.every((value) => Number.isFinite(value) && value >= 5);
-    if (valid) {
-      const total = raw.reduce((sum, value) => sum + value, 0) || 100;
-      setSizes(raw.map((value) => (value / total) * 100));
-    } else {
-      setSizes(children.map(() => 100 / Math.max(1, children.length)));
-    }
-  }, [children, drag]);
+    sizesRef.current = sizes;
+  }, [sizes]);
+
+  useEffect(() => {
+    dragRef.current = drag;
+  }, [drag]);
+
+  useEffect(() => {
+    // 이미지 URL·텍스트처럼 칸 내용만 바뀌었을 때는 현재 드래그 크기를
+    // 다시 50:50으로 초기화하지 않습니다. 저장된 비율 자체가 바뀐 경우에만
+    // 로컬 크기를 동기화합니다.
+    if (dragRef.current) return;
+    const next = getNormalizedSizes();
+    sizesRef.current = next;
+    setSizes(next);
+  }, [childSizeSignature, getNormalizedSizes]);
 
   function begin(event: React.PointerEvent<HTMLButtonElement>, index: number) {
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    setDrag({
+    const nextDrag = {
       index,
       start: direction === "row" ? event.clientX : event.clientY,
-      first: sizes[index],
-      second: sizes[index + 1],
-    });
+      first: sizesRef.current[index],
+      second: sizesRef.current[index + 1],
+    };
+    dragRef.current = nextDrag;
+    setDrag(nextDrag);
   }
 
   function move(event: React.PointerEvent<HTMLButtonElement>) {
-    if (!drag || !hostRef.current) return;
+    const activeDrag = dragRef.current;
+    if (!activeDrag || !hostRef.current) return;
     event.preventDefault();
     event.stopPropagation();
     const rect = hostRef.current.getBoundingClientRect();
     const length = direction === "row" ? rect.width : rect.height;
     if (length <= 0) return;
     const point = direction === "row" ? event.clientX : event.clientY;
-    const delta = ((point - drag.start) / length) * 100;
-    const pair = drag.first + drag.second;
+    const delta = ((point - activeDrag.start) / length) * 100;
+    const pair = activeDrag.first + activeDrag.second;
     const min = 8;
-    const first = Math.max(min, Math.min(pair - min, drag.first + delta));
+    const first = Math.max(
+      min,
+      Math.min(pair - min, activeDrag.first + delta),
+    );
     const second = pair - first;
-    setSizes((current) => current.map((value, index) => index === drag.index ? first : index === drag.index + 1 ? second : value));
+    const nextSizes = sizesRef.current.map((value, index) =>
+      index === activeDrag.index
+        ? first
+        : index === activeDrag.index + 1
+          ? second
+          : value,
+    );
+    sizesRef.current = nextSizes;
+    setSizes(nextSizes);
   }
 
   function end(event: React.PointerEvent<HTMLButtonElement>) {
@@ -10891,9 +10928,13 @@ function NestedEditableCells({
     event.preventDefault();
     event.stopPropagation();
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    const finalSizes = sizesRef.current;
     const next: Record<string, number> = {};
-    children.forEach((child, index) => { next[child.id] = sizes[index]; });
+    children.forEach((child, index) => {
+      next[child.id] = finalSizes[index];
+    });
     onResizeSizes?.(parentCell.id, next);
+    dragRef.current = null;
     setDrag(null);
   }
 
