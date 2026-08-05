@@ -153,6 +153,8 @@ type GridCell = {
   child_cells?: GridCell[];
   child_direction?: "row" | "column";
   size_percent?: number;
+  /** 세로로 나눈 안쪽 테이블 전체 높이 */
+  nested_height_px?: number;
 };
 
 type GridData = {
@@ -5170,6 +5172,27 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     );
   }
 
+
+  function updateNestedCellHeight(
+    area: "header" | "hero",
+    parentCellId: string,
+    heightPx: number,
+    layoutId?: string,
+  ) {
+    const safeHeight = Math.max(60, Math.min(1800, Math.round(heightPx)));
+    updateGrid(
+      area,
+      (grid) => ({
+        ...grid,
+        cells: mapCellRecursive(grid.cells, parentCellId, (cell) => ({
+          ...cell,
+          nested_height_px: safeHeight,
+        })),
+      }),
+      layoutId,
+    );
+  }
+
   function updateGridWidths(
     area: "header" | "hero",
     widths: Record<string, number>,
@@ -6942,6 +6965,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 onResizeNestedSizes={(parentCellId, sizes) =>
                   updateNestedCellSizes("header", parentCellId, sizes)
                 }
+                onResizeNestedHeight={(parentCellId, heightPx) =>
+                  updateNestedCellHeight("header", parentCellId, heightPx)
+                }
               />
               </div>
 
@@ -7093,6 +7119,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         }
                         onResizeNestedSizes={(parentCellId, sizes) =>
                           updateNestedCellSizes("hero", parentCellId, sizes, layout.id)
+                        }
+                        onResizeNestedHeight={(parentCellId, heightPx) =>
+                          updateNestedCellHeight("hero", parentCellId, heightPx, layout.id)
                         }
                       />
                     </div>
@@ -9982,14 +10011,38 @@ function ReadOnlyCellContent({
       ? rawSizes.map((value) => (value / total) * 100)
       : cell.child_cells.map(() => 100 / cell.child_cells!.length);
     const template = sizes.map((size) => `minmax(0, ${Math.max(0.01, size)}fr)`).join(" ");
+    const savedNestedHeight = Number(cell.nested_height_px);
+    const hasSavedNestedHeight =
+      Number.isFinite(savedNestedHeight) && savedNestedHeight > 0;
 
     return (
       <div
-        className={`grid w-full gap-0 ${previewDevice === "mobile" && direction === "column" ? "h-auto" : "h-full"}`}
+        className={`grid w-full min-h-0 gap-0 ${
+          direction === "row" || !hasSavedNestedHeight
+            ? "h-full"
+            : "self-start"
+        }`}
         style={
           direction === "row"
             ? { gridTemplateColumns: template }
-            : { gridTemplateRows: previewDevice === "mobile" ? `repeat(${cell.child_cells.length}, auto)` : template }
+            : {
+                /*
+                 * 모바일에서도 데스크톱과 동일한 저장 비율을 사용합니다.
+                 * auto 행으로 바꾸지 않으므로 제목칸·빈칸·버거칸 높이가
+                 * 모바일에서 임의로 커지지 않습니다.
+                 */
+                gridTemplateRows: template,
+                /*
+                 * 높이를 직접 저장한 바깥 테이블만 px 높이를 사용합니다.
+                 * 이미지+제목처럼 그 안에 다시 나눈 하위 테이블은
+                 * 240px로 고정하지 않고 부모 칸 높이 100%를 채웁니다.
+                 */
+                height: hasSavedNestedHeight
+                  ? `${savedNestedHeight}px`
+                  : "100%",
+                minHeight: 0,
+                maxHeight: hasSavedNestedHeight ? "1800px" : "100%",
+              }
         }
       >
         {cell.child_cells.map((child, index) => {
@@ -9999,9 +10052,11 @@ function ReadOnlyCellContent({
           return (
           <div
             key={child.id}
-            className="relative flex min-h-0 min-w-0 overflow-hidden"
+            className="relative flex h-full min-h-0 min-w-0 overflow-hidden"
             style={{
-              minHeight: previewDevice === "mobile" && direction === "column" ? (cellContainsDisplayMode(child, "auto-slider") ? 0 : "180px") : 0,
+              height: "100%",
+              // 모바일에서도 저장된 행 비율을 그대로 사용하므로 강제 최소 높이를 두지 않습니다.
+              minHeight: 0,
               justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center",
               alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center",
               textAlign: child.text_align || "center",
@@ -10025,7 +10080,7 @@ function ReadOnlyCellContent({
   }
   return (
     <div
-      className={`relative flex w-full min-w-0 ${
+      className={`relative flex w-full min-h-0 min-w-0 ${
         previewDevice === "mobile" && cell.display_mode === "auto-slider"
           ? "h-auto"
           : "h-full"
@@ -10444,11 +10499,20 @@ function ReadOnlyGrid({
         cell.display_mode === "auto-slider" ||
         cell.display_mode === "gallery",
     );
-  const mobileShouldAutoStack = isMobileContentGrid && !isVisualOnlyLayer;
+  const hasNestedTable = grid.cells.some(
+    (cell) => Array.isArray(cell.child_cells) && cell.child_cells.length > 0,
+  );
+
+  /*
+   * 중첩 테이블이 있는 레이어는 좁은 미리보기에서도 편집 화면과 같은
+   * 행·열 구조와 비율을 유지합니다.
+   */
+  const mobileShouldAutoStack =
+    isMobileContentGrid && !isVisualOnlyLayer && !hasNestedTable;
 
   // 일반 콘텐츠는 모바일에서 세로로 쌓지만, 이미지·슬라이더 전용 레이어는
   // 저장된 레이어 높이를 그대로 사용합니다.
-  const renderedCells = isMobileContentGrid
+  const renderedCells = isMobileContentGrid && !hasNestedTable
     ? grid.cells.filter(
         (cell) =>
           cell.type !== "empty" ||
@@ -10508,8 +10572,8 @@ function ReadOnlyGrid({
                 previewDevice === "mobile" && area === "header"
                   ? mobileHeaderHeight
                   : area === "header"
-                    ? 96
-                    : 100
+                    ? 48
+                    : 40
               }px`,
         height:
           mobileShouldAutoStack || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
@@ -10522,9 +10586,15 @@ function ReadOnlyGrid({
         // 자동 비율은 모바일에서만 사용합니다. 데스크톱에서는 저장한 레이어 높이를
         // 정확히 따르므로 330px로 지정하면 이미지도 330px 안에서만 보입니다.
         aspectRatio: undefined,
-        gridTemplateColumns: isMobileContentGrid
-          ? "minmax(0, 1fr)"
-          : widths.map((width) => `${Math.max(width, 1)}fr`).join(" "),
+        // 콘텐츠 레이어의 칸은 레이어 외곽에 딱 붙이지 않고
+        // 상·하·좌·우 4px 안쪽에서 시작합니다.
+        // border-box를 사용해 4px 여백 때문에 레이어 크기가 커지지 않게 합니다.
+        boxSizing: "border-box",
+        padding: area === "hero" ? "4px" : undefined,
+        gridTemplateColumns:
+          isMobileContentGrid && !hasNestedTable
+            ? "minmax(0, 1fr)"
+            : widths.map((width) => `${Math.max(width, 1)}fr`).join(" "),
       }}
     >
       {renderedCells.map((cell) => (
@@ -10557,14 +10627,15 @@ function ReadOnlyGrid({
               ? 0
               : undefined,
             margin: 0,
-            minHeight: isMobileContentGrid
-              ? cellContainsDisplayMode(cell, "auto-slider")
+            /*
+             * 편집 화면과 동일하게 저장된 레이어·테이블 높이를 사용합니다.
+             * 좁은 미리보기라고 해서 일반 칸을 220px로 강제로 늘리지 않습니다.
+             */
+            minHeight:
+              isMobileContentGrid &&
+              cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
-                : cellContainsDisplayMode(cell, "business-hours") ||
-                    cellContainsDisplayMode(cell, "restaurant-menu")
-                  ? undefined
-                  : "220px"
-              : undefined,
+                : 0,
             height:
               isMobileContentGrid &&
               cellContainsDisplayMode(cell, "auto-slider")
@@ -10595,12 +10666,10 @@ function ReadOnlyGrid({
             padding:
               cell.child_cells?.length ||
               cell.type === "image" ||
+              cell.display_mode === "restaurant-menu" ||
               (cell.type === "title" &&
                 (cell.display_mode === "background-image" ||
-                  cell.display_mode === "service-card" ||
-                  cell.display_mode === "auto-slider" ||
-                  cell.display_mode === "image-scroll" ||
-                  cell.display_mode === "gallery"))
+                  cell.display_mode === "service-card"))
                 ? 0
                 : previewDevice === "mobile" && area === "header"
                   ? "4px"
@@ -10774,7 +10843,7 @@ function PreviewSection({
   );
 }
 
-function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; }) {
+function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes, onResizeNestedHeight }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; onResizeNestedHeight?: (parentCellId: string, heightPx: number) => void; }) {
   const selectionHostRef = useRef<HTMLDivElement>(null);
   const [selectionMenu, setSelectionMenu] = useState<{ left: number; top: number } | null>(null);
 
@@ -10839,6 +10908,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, business, accentC
         previewDevice={previewDevice}
         websiteSettings={websiteSettings}
         onResizeSizes={onResizeNestedSizes}
+        onResizeHeight={onResizeNestedHeight}
       />
     );
   }
@@ -10856,6 +10926,7 @@ function NestedEditableCells({
   previewDevice,
   websiteSettings,
   onResizeSizes,
+  onResizeHeight,
 }: {
   parentCell: GridCell;
   selectedCellId?: string;
@@ -10866,10 +10937,50 @@ function NestedEditableCells({
   previewDevice: "desktop" | "mobile";
   websiteSettings?: WebsiteSettings;
   onResizeSizes?: (parentCellId: string, sizes: Record<string, number>) => void;
+  onResizeHeight?: (parentCellId: string, heightPx: number) => void;
 }) {
   const children = parentCell.child_cells || [];
   const direction = parentCell.child_direction === "row" ? "row" : "column";
+  const savedNestedHeight = Number(parentCell.nested_height_px);
+  const [nestedHeight, setNestedHeight] = useState<number | null>(
+    Number.isFinite(savedNestedHeight) && savedNestedHeight > 0 ? savedNestedHeight : null,
+  );
+  const heightDragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
+  const initializedNestedHeightRef = useRef(false);
   const hostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (heightDragRef.current) return;
+    const next = Number(parentCell.nested_height_px);
+
+    if (Number.isFinite(next) && next > 0) {
+      initializedNestedHeightRef.current = true;
+      setNestedHeight(next);
+      return;
+    }
+
+    /*
+     * 저장된 테이블 높이가 없는 기존 데이터는 처음 보이는 높이를 한 번만 측정해
+     * nested_height_px로 저장합니다. 이후 레이어 높이가 바뀌더라도 테이블 높이는
+     * 더 이상 100%로 따라가지 않고 독립적으로 유지됩니다.
+     */
+    if (initializedNestedHeightRef.current) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      if (initializedNestedHeightRef.current) return;
+
+      const measured = Math.round(
+        hostRef.current?.getBoundingClientRect().height || 0,
+      );
+      const initialHeight = Math.max(80, Math.min(1800, measured || 240));
+
+      initializedNestedHeightRef.current = true;
+      setNestedHeight(initialHeight);
+      onResizeHeight?.(parentCell.id, initialHeight);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [onResizeHeight, parentCell.id, parentCell.nested_height_px]);
   const dragRef = useRef<{
     pointerId: number;
     index: number;
@@ -11031,6 +11142,56 @@ function NestedEditableCells({
     document.body.style.userSelect = "none";
   }
 
+  useEffect(() => {
+    function move(event: PointerEvent) {
+      const active = heightDragRef.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      event.preventDefault();
+      const next = Math.max(60, Math.min(1800, active.startHeight + event.clientY - active.startY));
+      setNestedHeight(next);
+      onResizeHeight?.(parentCell.id, next);
+    }
+    function end(event: PointerEvent) {
+      const active = heightDragRef.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      event.preventDefault();
+      heightDragRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", end, { passive: false });
+    window.addEventListener("pointercancel", end, { passive: false });
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+  }, [onResizeHeight, parentCell.id]);
+
+  function beginHeightResize(event: React.PointerEvent<HTMLButtonElement>) {
+    if (direction !== "column") return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.nativeEvent.stopImmediatePropagation();
+
+    const hostHeight =
+      hostRef.current?.getBoundingClientRect().height ||
+      nestedHeight ||
+      240;
+
+    heightDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight: hostHeight,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+  }
+
   const template = sizes
     .map((size) => `minmax(0, ${Math.max(0.01, size)}fr)`)
     .join(" ");
@@ -11038,13 +11199,34 @@ function NestedEditableCells({
   return (
     <div
       ref={hostRef}
-      className="relative z-20 grid h-full w-full min-h-0 min-w-0 gap-0 overflow-visible"
+      className={`relative z-20 grid w-full min-h-0 min-w-0 gap-0 overflow-visible ${
+        direction === "row" ? "h-full" : "self-start"
+      }`}
       style={
         direction === "row"
           ? { gridTemplateColumns: template }
-          : { gridTemplateRows: template }
+          : {
+              gridTemplateRows: template,
+              /*
+               * 세로 테이블 높이는 레이어 높이와 완전히 분리합니다.
+               * 100%를 사용하지 않으므로 레이어가 늘거나 줄어도 테이블은 그대로입니다.
+               */
+              height: `${Math.max(80, nestedHeight ?? 240)}px`,
+              minHeight: "80px",
+              maxHeight: "1800px",
+              flex: "0 0 auto",
+            }
       }
     >
+      {/*
+       * 중첩 테이블 전체 외곽 가이드입니다.
+       * 선택 여부와 관계없이 항상 보이며, 클릭·드래그 이벤트는 통과시킵니다.
+       */}
+      <div
+        className="pointer-events-none absolute inset-0 z-[190] border-2 border-dashed border-orange-400"
+        aria-hidden="true"
+      />
+
       {children.map((child, index) => {
         const selected = selectedCellId === child.id;
         const hasNext = index < children.length - 1;
@@ -11065,7 +11247,7 @@ function NestedEditableCells({
             className={`relative z-10 flex min-h-0 min-w-0 overflow-visible border-2 border-dashed ${
               selected
                 ? "border-purple-600 bg-purple-50/20 ring-2 ring-purple-500/20"
-                : "border-white/50 hover:border-purple-400"
+                : "border-orange-300/90 hover:border-purple-400"
             }`}
             style={{
               justifyContent:
@@ -11152,6 +11334,35 @@ function NestedEditableCells({
           </div>
         );
       })}
+
+      {direction === "column" ? (
+        <>
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-[195] border-b-2 border-dashed border-orange-400"
+            aria-hidden="true"
+          />
+
+          <button
+          type="button"
+          aria-label="안쪽 테이블 전체 높이 조절"
+          title="테이블 높이만 조절합니다. 레이어 높이는 변경되지 않습니다."
+          onPointerDown={beginHeightResize}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          className="absolute bottom-[20px] left-[72%] z-[30000] flex h-12 w-12 -translate-x-1/2 touch-none cursor-ns-resize items-center justify-center select-none"
+          style={{
+            pointerEvents: "auto",
+            isolation: "isolate",
+          }}
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-orange-500 bg-white text-lg font-black text-orange-600 shadow-xl ring-4 ring-white">
+            ↕
+          </span>
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -11168,6 +11379,7 @@ function EditableGrid({
   onResizeWidths,
   onResizeHeight,
   onResizeNestedSizes,
+  onResizeNestedHeight,
 }: {
   area: "header" | "hero";
   grid: GridData;
@@ -11181,6 +11393,7 @@ function EditableGrid({
   onResizeHeight: (heightPx: number) => void;
   // 중첩 칸의 드래그 비율을 상위 상태까지 저장해 편집 화면과 미리보기가 동일하게 보이도록 합니다.
   onResizeNestedSizes: (parentCellId: string, sizes: Record<string, number>) => void;
+  onResizeNestedHeight: (parentCellId: string, heightPx: number) => void;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [localWidths, setLocalWidths] = useState<number[]>(() =>
@@ -11248,7 +11461,7 @@ function EditableGrid({
   const sliderAutoHeight =
     autoSliderCells.length > 0 &&
     autoSliderCells.every((cell) => cell.slider_auto_height !== false);
-  const heightClass = area === "header" ? "min-h-[96px]" : "min-h-[100px]";
+  const heightClass = area === "header" ? "min-h-[48px]" : "min-h-[40px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -11266,7 +11479,9 @@ function EditableGrid({
     event.preventDefault();
     event.stopPropagation();
 
-    const minimum = area === "header" ? 48 : 100;
+    // 일반 레이어는 40px까지 줄일 수 있어 글씨가 하단 경계를 따라
+    // 계속 위로 이동할 수 있습니다. 헤더는 기존 최소 높이를 유지합니다.
+    const minimum = area === "header" ? 48 : 40;
     const nextHeight = Math.max(
       minimum,
       Math.min(3000, heightDragging.startHeight + event.clientY - heightDragging.startY),
@@ -11382,9 +11597,13 @@ function EditableGrid({
             : `${localHeight}px`,
         maxHeight: autoMobileBusinessHours ? undefined : `${localHeight}px`,
         aspectRatio: undefined,
+        // 칸 나누기 영역을 레이어 테두리에 딱 맞추지 않고
+        // 사방 4px 안쪽으로 띄웁니다.
+        boxSizing: "border-box",
+        padding: area === "hero" ? "4px" : undefined,
         minHeight: autoMobileBusinessHours
-          ? `${area === "header" ? 48 : 100}px`
-          : `${area === "header" ? 48 : 100}px`,
+          ? `${area === "header" ? 48 : 40}px`
+          : `${area === "header" ? 48 : 40}px`,
         gridTemplateColumns: localWidths
           .map((width) => `${Math.max(width, 1)}fr`)
           .join(" "),
@@ -11410,7 +11629,7 @@ function EditableGrid({
                   onSelect(cell.id);
                 }
               }}
-              className={`group relative flex ${autoMobileBusinessHours && (cellContainsDisplayMode(cell, "business-hours") || cellContainsDisplayMode(cell, "restaurant-menu")) ? "h-auto" : "h-full"} min-h-[70px] w-full overflow-visible transition ${
+              className={`group relative flex ${autoMobileBusinessHours && (cellContainsDisplayMode(cell, "business-hours") || cellContainsDisplayMode(cell, "restaurant-menu")) ? "h-auto min-h-[70px]" : "h-full min-h-0"} w-full overflow-visible transition ${
                 selected
                   ? isLogo
                     ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
@@ -11469,6 +11688,7 @@ function EditableGrid({
                 previewDevice={previewDevice}
                 websiteSettings={websiteSettings}
                 onResizeNestedSizes={onResizeNestedSizes}
+                onResizeNestedHeight={onResizeNestedHeight}
               />
 
               {cell.type === "empty" && !cell.child_cells?.length ? (
@@ -11554,7 +11774,7 @@ function EditableGrid({
           onPointerMove={moveHeightDragging}
           onPointerUp={stopHeightDragging}
           onPointerCancel={stopHeightDragging}
-          className={`absolute inset-x-0 bottom-0 z-[9999] flex h-11 touch-none cursor-ns-resize items-end justify-center bg-transparent pb-1 select-none ${
+          className={`absolute left-1 right-1 bottom-1 z-[9999] flex h-7 touch-none cursor-ns-resize items-end justify-center bg-transparent select-none ${
             heightDragging ? "text-blue-700" : "text-blue-600"
           }`}
           style={{
@@ -11569,7 +11789,7 @@ function EditableGrid({
             }`}
           />
           <span
-            className={`pointer-events-none relative z-10 inline-flex h-8 min-w-[170px] items-center justify-center rounded-full border-2 bg-white px-4 text-xs font-black shadow-2xl ${
+            className={`pointer-events-none relative z-10 inline-flex h-6 min-w-[150px] items-center justify-center rounded-full border-2 bg-white px-3 text-[11px] font-black shadow-2xl ${
               heightDragging
                 ? "border-blue-700 text-blue-700 ring-4 ring-blue-500/25"
                 : "border-blue-500 text-blue-700"
