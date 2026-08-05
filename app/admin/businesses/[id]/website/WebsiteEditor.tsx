@@ -11587,7 +11587,22 @@ function EditableCellContent({ cell, selectedCellId, onSelect, onUpdateCell, bus
       />
     );
   }
-  return <CellPreview cell={cell} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />;
+  return (
+    <CellPreview
+      cell={cell}
+      business={business}
+      accentColor={accentColor}
+      area={area}
+      previewDevice={previewDevice}
+      websiteSettings={websiteSettings}
+      imageDragPosition={imageDragPosition}
+      imageDragging={imageDragging}
+      suppressImageClickRef={suppressImageClickRef}
+      onImagePointerDown={startImageDrag}
+      onImagePointerMove={moveImageDrag}
+      onImagePointerUp={stopImageDrag}
+    />
+  );
 }
 
 
@@ -12727,6 +12742,12 @@ function CellPreview({
   area,
   previewDevice,
   websiteSettings,
+  imageDragPosition: controlledImageDragPosition,
+  imageDragging = false,
+  suppressImageClickRef: controlledSuppressImageClickRef,
+  onImagePointerDown,
+  onImagePointerMove,
+  onImagePointerUp,
 }: {
   cell: GridCell;
   business: Business;
@@ -12734,9 +12755,25 @@ function CellPreview({
   area: "header" | "hero";
   previewDevice?: "desktop" | "mobile";
   websiteSettings?: WebsiteSettings;
+  imageDragPosition?: { x: number; y: number };
+  imageDragging?: boolean;
+  suppressImageClickRef?: React.MutableRefObject<boolean>;
+  onImagePointerDown?: (event: React.PointerEvent<HTMLElement>) => void;
+  onImagePointerMove?: (event: React.PointerEvent<HTMLElement>) => void;
+  onImagePointerUp?: (event: React.PointerEvent<HTMLElement>) => void;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const localSuppressImageClickRef = useRef(false);
+  const suppressImageClickRef =
+    controlledSuppressImageClickRef ?? localSuppressImageClickRef;
+  const imageDragPosition = controlledImageDragPosition ?? {
+    x: Number(cell.image_position_x || 0),
+    y: Number(cell.image_position_y || 0),
+  };
+  const startImageDrag = onImagePointerDown;
+  const moveImageDrag = onImagePointerMove;
+  const stopImageDrag = onImagePointerUp;
 
   useEffect(() => {
     if (!imageLightboxOpen) return;
@@ -12991,10 +13028,10 @@ function CellPreview({
               }
               if (lightboxImageUrl) setImageLightboxOpen(true);
             }}
-            onPointerDown={startImageDrag}
-            onPointerMove={moveImageDrag}
-            onPointerUp={stopImageDrag}
-            onPointerCancel={stopImageDrag}
+            onPointerDown={startImageDrag ?? undefined}
+            onPointerMove={moveImageDrag ?? undefined}
+            onPointerUp={stopImageDrag ?? undefined}
+            onPointerCancel={stopImageDrag ?? undefined}
             className={`absolute inset-0 touch-none overflow-hidden border-0 bg-transparent ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
             style={imageContainerStyle}
           >
@@ -13006,10 +13043,10 @@ function CellPreview({
             target={imageOpensNewWindow ? "_blank" : undefined}
             rel={imageOpensNewWindow ? "noreferrer noopener" : undefined}
             aria-label={cell.text || "이미지 링크 열기"}
-            onPointerDown={startImageDrag}
-            onPointerMove={moveImageDrag}
-            onPointerUp={stopImageDrag}
-            onPointerCancel={stopImageDrag}
+            onPointerDown={startImageDrag ?? undefined}
+            onPointerMove={moveImageDrag ?? undefined}
+            onPointerUp={stopImageDrag ?? undefined}
+            onPointerCancel={stopImageDrag ?? undefined}
             onClick={(event) => {
               if (imageDragging || suppressImageClickRef.current) {
                 event.preventDefault();
@@ -13035,10 +13072,10 @@ function CellPreview({
               }
               setImageLightboxOpen(true);
             }}
-            onPointerDown={startImageDrag}
-            onPointerMove={moveImageDrag}
-            onPointerUp={stopImageDrag}
-            onPointerCancel={stopImageDrag}
+            onPointerDown={startImageDrag ?? undefined}
+            onPointerMove={moveImageDrag ?? undefined}
+            onPointerUp={stopImageDrag ?? undefined}
+            onPointerCancel={stopImageDrag ?? undefined}
             className={`absolute inset-0 touch-none overflow-hidden border-0 bg-transparent ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
             style={imageContainerStyle}
           >
