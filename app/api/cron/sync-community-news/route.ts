@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 type Region = "korea" | "us";
 
@@ -25,6 +25,33 @@ type HtmlMetadata = {
   imageUrl: string | null;
   title: string | null;
   description: string | null;
+};
+
+type TranslationInput = {
+  article_url: string;
+  title: string;
+  summary: string | null;
+};
+
+type TranslationOutput = {
+  article_url: string;
+  title: string;
+  summary: string | null;
+};
+
+type MicrolinkMedia = {
+  url?: string | null;
+};
+
+type MicrolinkPayload = {
+  status?: string;
+  data?: {
+    url?: string | null;
+    title?: string | null;
+    description?: string | null;
+    image?: MicrolinkMedia | string | null;
+  };
+  message?: string;
 };
 
 const FEEDS: Array<{
@@ -526,6 +553,493 @@ async function loadFeed(
   ).slice(0, feed.limit);
 }
 
+async function fetchMicrolinkMetadata(
+  articleUrl: string,
+): Promise<{
+  articleUrl: string | null;
+  imageUrl: string | null;
+  title: string | null;
+  description: string | null;
+} | null> {
+  /*
+   * 무료 플랜:
+   *   https://api.microlink.io
+   *   API 키 없이 하루 25회까지 사용할 수 있습니다.
+   *
+   * 유료 API 키가 환경변수에 있으면:
+   *   https://pro.microlink.io
+   *   x-api-key 헤더를 자동으로 사용합니다.
+   */
+  const apiKey = process.env.MICROLINK_API_KEY;
+  const endpoint = new URL(
+    apiKey
+      ? "https://pro.microlink.io"
+      : "https://api.microlink.io",
+  );
+
+  endpoint.searchParams.set("url", articleUrl);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    20000,
+  );
+
+  try {
+    const headers: Record<string, string> = {
+      accept: "application/json",
+    };
+
+    if (apiKey) {
+      headers["x-api-key"] = apiKey;
+    }
+
+    const response = await fetch(endpoint, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers,
+    });
+
+    const payload =
+      (await response.json().catch(() => null)) as
+        | MicrolinkPayload
+        | null;
+
+    if (
+      !response.ok ||
+      payload?.status !== "success" ||
+      !payload.data
+    ) {
+      console.error(
+        "Microlink metadata error:",
+        payload?.message ||
+          `HTTP ${response.status}`,
+      );
+
+      return null;
+    }
+
+    const rawImage = payload.data.image;
+
+    const imageUrl =
+      typeof rawImage === "string"
+        ? rawImage
+        : rawImage?.url || null;
+
+    return {
+      articleUrl:
+        payload.data.url || articleUrl,
+      imageUrl:
+        imageUrl &&
+        !isGooglePlaceholderImage(imageUrl)
+          ? imageUrl
+          : null,
+      title:
+        payload.data.title &&
+        !/^Google News$/i.test(
+          payload.data.title.trim(),
+        )
+          ? payload.data.title.trim()
+          : null,
+      description:
+        payload.data.description?.trim() ||
+        null,
+    };
+  } catch (error) {
+    console.error(
+      "Microlink metadata request failed:",
+      error instanceof Error
+        ? error.message
+        : String(error),
+    );
+
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function enrichUsImages(
+  admin: ReturnType<typeof createClient>,
+  items: ParsedNews[],
+) {
+  if (items.length === 0) {
+    return {
+      items,
+      reused: 0,
+      fetched: 0,
+      failed: 0,
+    };
+  }
+
+  const urls = items.map(
+    (item) => item.article_url,
+  );
+
+  const {
+    data: existingRows,
+    error: existingError,
+  } = await admin
+    .from("community_news")
+    .select(
+      "article_url, image_url",
+    )
+    .eq("region", "us")
+    .in("article_url", urls);
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const existingImageMap = new Map(
+    (existingRows ?? [])
+      .filter(
+        (row) =>
+          row.image_url &&
+          !isGooglePlaceholderImage(
+            String(row.image_url),
+          ),
+      )
+      .map((row) => [
+        String(row.article_url),
+        String(row.image_url),
+      ]),
+  );
+
+  let reused = 0;
+  let fetched = 0;
+  let failed = 0;
+
+  const output: ParsedNews[] = [];
+
+  /*
+   * Microlink 무료 사용량을 아끼기 위해:
+   * - DB에 이미지가 있으면 절대 다시 호출하지 않습니다.
+   * - 새 기사 또는 이미지가 없는 기사만 호출합니다.
+   * - 동시에 2개씩만 처리합니다.
+   */
+  for (
+    let index = 0;
+    index < items.length;
+    index += 2
+  ) {
+    const batch = items.slice(
+      index,
+      index + 2,
+    );
+
+    const resolved = await Promise.all(
+      batch.map(async (item) => {
+        const existingImage =
+          existingImageMap.get(
+            item.article_url,
+          );
+
+        if (existingImage) {
+          reused += 1;
+
+          return {
+            ...item,
+            image_url: existingImage,
+          };
+        }
+
+        const metadata =
+          await fetchMicrolinkMetadata(
+            item.article_url,
+          );
+
+        if (
+          metadata?.imageUrl &&
+          !isGooglePlaceholderImage(
+            metadata.imageUrl,
+          )
+        ) {
+          fetched += 1;
+
+          return {
+            ...item,
+            image_url: metadata.imageUrl,
+          };
+        }
+
+        failed += 1;
+        return item;
+      }),
+    );
+
+    output.push(...resolved);
+  }
+
+  return {
+    items: output,
+    reused,
+    fetched,
+    failed,
+  };
+}
+
+function containsKorean(value: string | null | undefined) {
+  return Boolean(value && /[가-힣]/.test(value));
+}
+
+function extractOpenAIText(payload: any) {
+  if (typeof payload?.output_text === "string") {
+    return payload.output_text;
+  }
+
+  const parts: string[] = [];
+
+  for (const output of payload?.output ?? []) {
+    for (const content of output?.content ?? []) {
+      if (
+        content?.type === "output_text" &&
+        typeof content?.text === "string"
+      ) {
+        parts.push(content.text);
+      }
+    }
+  }
+
+  return parts.join("\n").trim();
+}
+
+function parseTranslationJson(value: string): TranslationOutput[] {
+  const cleaned = value
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const parsed = JSON.parse(cleaned);
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Translation response is not an array");
+  }
+
+  return parsed
+    .map((item) => ({
+      article_url: String(item?.article_url ?? "").trim(),
+      title: String(item?.title ?? "").trim(),
+      summary:
+        item?.summary === null || item?.summary === undefined
+          ? null
+          : String(item.summary).trim(),
+    }))
+    .filter(
+      (item) =>
+        item.article_url &&
+        item.title,
+    );
+}
+
+async function translateToKorean(
+  items: TranslationInput[],
+): Promise<TranslationOutput[]> {
+  if (items.length === 0) return [];
+
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is missing");
+  }
+
+  const model =
+    process.env.OPENAI_TRANSLATION_MODEL ||
+    "gpt-5-mini";
+
+  const response = await fetch(
+    "https://api.openai.com/v1/responses",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        input: [
+          {
+            role: "system",
+            content:
+              "You translate Bloomberg business news into natural Korean. " +
+              "Return JSON only. Do not add facts or opinions. " +
+              "Keep company and product names recognizable. " +
+              "Use concise Korean financial-news wording. " +
+              "Keep each title under about 55 Korean characters. " +
+              "Translate summaries faithfully and keep each summary under 220 Korean characters.",
+          },
+          {
+            role: "user",
+            content:
+              "Translate every item below into Korean. " +
+              "Return one JSON array with the same article_url values and this exact shape: " +
+              '[{"article_url":"...","title":"...","summary":"... or null"}].\n\n' +
+              JSON.stringify(items),
+          },
+        ],
+      }),
+      cache: "no-store",
+    },
+  );
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const message =
+      payload?.error?.message ||
+      `OpenAI translation failed: HTTP ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  const outputText = extractOpenAIText(payload);
+
+  if (!outputText) {
+    throw new Error("OpenAI translation returned empty output");
+  }
+
+  return parseTranslationJson(outputText);
+}
+
+async function translateNewUsItems(
+  admin: ReturnType<typeof createClient>,
+  items: ParsedNews[],
+) {
+  if (items.length === 0) {
+    return {
+      items,
+      translated: 0,
+      reused: 0,
+      warning: null as string | null,
+    };
+  }
+
+  const urls = items.map((item) => item.article_url);
+
+  const {
+    data: existingRows,
+    error: existingError,
+  } = await admin
+    .from("community_news")
+    .select("article_url, title, summary")
+    .eq("region", "us")
+    .in("article_url", urls);
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const existingMap = new Map(
+    (existingRows ?? []).map((row) => [
+      String(row.article_url),
+      {
+        title: String(row.title ?? ""),
+        summary:
+          row.summary === null ||
+          row.summary === undefined
+            ? null
+            : String(row.summary),
+      },
+    ]),
+  );
+
+  const reusedUrls = new Set<string>();
+
+  const pending: TranslationInput[] = [];
+
+  for (const item of items) {
+    const existing = existingMap.get(
+      item.article_url,
+    );
+
+    if (
+      existing &&
+      containsKorean(existing.title)
+    ) {
+      reusedUrls.add(item.article_url);
+      continue;
+    }
+
+    pending.push({
+      article_url: item.article_url,
+      title: item.title,
+      summary: item.summary,
+    });
+  }
+
+  let translatedMap = new Map<
+    string,
+    TranslationOutput
+  >();
+
+  let warning: string | null = null;
+
+  if (pending.length > 0) {
+    try {
+      const translated =
+        await translateToKorean(pending);
+
+      translatedMap = new Map(
+        translated.map((item) => [
+          item.article_url,
+          item,
+        ]),
+      );
+    } catch (error) {
+      warning =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      console.error(
+        "community news translation error:",
+        warning,
+      );
+    }
+  }
+
+  const merged = items.map((item) => {
+    const existing = existingMap.get(
+      item.article_url,
+    );
+
+    if (
+      existing &&
+      containsKorean(existing.title)
+    ) {
+      return {
+        ...item,
+        title: existing.title,
+        summary: existing.summary,
+      };
+    }
+
+    const translated = translatedMap.get(
+      item.article_url,
+    );
+
+    if (!translated) {
+      return item;
+    }
+
+    return {
+      ...item,
+      title:
+        translated.title || item.title,
+      summary:
+        translated.summary ?? item.summary,
+    };
+  });
+
+  return {
+    items: merged,
+    translated: translatedMap.size,
+    reused: reusedUrls.size,
+    warning,
+  };
+}
+
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
 
@@ -578,9 +1092,30 @@ export async function GET(request: NextRequest) {
       FEEDS.map(loadFeed),
     );
 
-    const items = settled.flatMap((result) =>
+    const rawItems = settled.flatMap((result) =>
       result.status === "fulfilled" ? result.value : [],
     );
+
+    const usImages =
+      await enrichUsImages(
+        admin,
+        rawItems.filter(
+          (item) => item.region === "us",
+        ),
+      );
+
+    const usTranslation =
+      await translateNewUsItems(
+        admin,
+        usImages.items,
+      );
+
+    const items = [
+      ...rawItems.filter(
+        (item) => item.region === "korea",
+      ),
+      ...usTranslation.items,
+    ];
 
     const errors = settled.flatMap((result, index) =>
       result.status === "rejected"
@@ -620,7 +1155,13 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      const regionItems = regionResult.value.slice(0, 12);
+      /*
+       * Cloudflare/Microlink 이미지 보강과 OpenAI 번역을 마친
+       * 최종 items 배열을 DB에 저장합니다.
+       */
+      const regionItems = items
+        .filter((item) => item.region === region)
+        .slice(0, 12);
 
       if (regionItems.length === 0) continue;
 
@@ -704,6 +1245,16 @@ export async function GET(request: NextRequest) {
           item.region === "us" &&
           isGooglePlaceholderImage(item.image_url),
       ).length,
+      images: {
+        fetchedFromMicrolink: usImages.fetched,
+        reusedFromDatabase: usImages.reused,
+        failed: usImages.failed,
+      },
+      translation: {
+        translated: usTranslation.translated,
+        reused: usTranslation.reused,
+        warning: usTranslation.warning,
+      },
       errors,
       syncedAt: new Date().toISOString(),
     });
