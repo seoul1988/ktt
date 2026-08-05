@@ -20,6 +20,11 @@ type ParsedNews = {
   updated_at: string;
 };
 
+type ExistingNewsImageRow = {
+  article_url: string;
+  image_url: string | null;
+};
+
 type HtmlMetadata = {
   finalUrl: string;
   imageUrl: string | null;
@@ -39,20 +44,6 @@ type TranslationOutput = {
   summary: string | null;
 };
 
-type MicrolinkMedia = {
-  url?: string | null;
-};
-
-type MicrolinkPayload = {
-  status?: string;
-  data?: {
-    url?: string | null;
-    title?: string | null;
-    description?: string | null;
-    image?: MicrolinkMedia | string | null;
-  };
-  message?: string;
-};
 
 const FEEDS: Array<{
   region: Region;
@@ -553,8 +544,100 @@ async function loadFeed(
   ).slice(0, feed.limit);
 }
 
-async function fetchMicrolinkMetadata(
-  articleUrl: string,
+
+function isLikelyBloombergArticleUrl(value: string | null | undefined) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+
+    return (
+      (host === "bloomberg.com" ||
+        host.endsWith(".bloomberg.com")) &&
+      url.pathname.includes("/news/articles/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function extractBloombergArticleUrlFromHtml(html: string) {
+  const normalized = decodeJavascriptEscapes(html);
+
+  const patterns = [
+    /https?:\/\/(?:www\.)?bloomberg\.com\/news\/articles\/[^"'<>\\\s]+/gi,
+    /https%3A%2F%2F(?:www\.)?bloomberg\.com%2Fnews%2Farticles%2F[^"'<>\\\s]+/gi,
+  ];
+
+  for (const pattern of patterns) {
+    const matches = normalized.match(pattern) ?? [];
+
+    for (const raw of matches) {
+      const cleaned = cleanBloombergUrl(raw);
+
+      if (isLikelyBloombergArticleUrl(cleaned)) {
+        return cleaned;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function fetchDirectHtml(
+  url: string,
+  timeoutMs = 12000,
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    timeoutMs,
+  );
+
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      cache: "no-store",
+      headers: {
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+          "AppleWebKit/537.36 (KHTML, like Gecko) " +
+          "Chrome/124.0.0.0 Safari/537.36",
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
+        referer: "https://www.google.com/",
+      },
+    });
+
+    const html = await response.text().catch(() => "");
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      finalUrl: response.url || url,
+      html,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      finalUrl: url,
+      html: "",
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function resolveBloombergMetadataDirect(
+  googleNewsUrl: string,
 ): Promise<{
   articleUrl: string | null;
   imageUrl: string | null;
@@ -562,101 +645,135 @@ async function fetchMicrolinkMetadata(
   description: string | null;
 } | null> {
   /*
-   * 무료 플랜:
-   *   https://api.microlink.io
-   *   API 키 없이 하루 25회까지 사용할 수 있습니다.
-   *
-   * 유료 API 키가 환경변수에 있으면:
-   *   https://pro.microlink.io
-   *   x-api-key 헤더를 자동으로 사용합니다.
+   * 1) Google News 중계 링크를 브라우저처럼 요청합니다.
+   * 2) 최종 URL 또는 HTML 안에서 Bloomberg 원문 URL을 찾습니다.
+   * 3) Bloomberg 원문을 다시 요청해 og:image를 읽습니다.
    */
-  const apiKey = process.env.MICROLINK_API_KEY;
-  const endpoint = new URL(
-    apiKey
-      ? "https://pro.microlink.io"
-      : "https://api.microlink.io",
+  const googleResult = await fetchDirectHtml(
+    googleNewsUrl,
+    12000,
   );
 
-  endpoint.searchParams.set("url", articleUrl);
+  let articleUrl: string | null = null;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    20000,
-  );
+  if (
+    isLikelyBloombergArticleUrl(
+      googleResult.finalUrl,
+    )
+  ) {
+    articleUrl = cleanBloombergUrl(
+      googleResult.finalUrl,
+    );
+  }
 
-  try {
-    const headers: Record<string, string> = {
-      accept: "application/json",
-    };
-
-    if (apiKey) {
-      headers["x-api-key"] = apiKey;
-    }
-
-    const response = await fetch(endpoint, {
-      cache: "no-store",
-      signal: controller.signal,
-      headers,
-    });
-
-    const payload =
-      (await response.json().catch(() => null)) as
-        | MicrolinkPayload
-        | null;
-
-    if (
-      !response.ok ||
-      payload?.status !== "success" ||
-      !payload.data
-    ) {
-      console.error(
-        "Microlink metadata error:",
-        payload?.message ||
-          `HTTP ${response.status}`,
+  if (!articleUrl && googleResult.html) {
+    articleUrl =
+      extractBloombergArticleUrlFromHtml(
+        googleResult.html,
       );
+  }
 
-      return null;
-    }
-
-    const rawImage = payload.data.image;
-
-    const imageUrl =
-      typeof rawImage === "string"
-        ? rawImage
-        : rawImage?.url || null;
-
-    return {
-      articleUrl:
-        payload.data.url || articleUrl,
-      imageUrl:
-        imageUrl &&
-        !isGooglePlaceholderImage(imageUrl)
-          ? imageUrl
-          : null,
-      title:
-        payload.data.title &&
-        !/^Google News$/i.test(
-          payload.data.title.trim(),
-        )
-          ? payload.data.title.trim()
-          : null,
-      description:
-        payload.data.description?.trim() ||
-        null,
-    };
-  } catch (error) {
+  if (!articleUrl) {
     console.error(
-      "Microlink metadata request failed:",
-      error instanceof Error
-        ? error.message
-        : String(error),
+      "Bloomberg direct URL resolution failed:",
+      {
+        status: googleResult.status,
+        googleNewsUrl,
+      },
     );
 
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
+
+  const articleResult = await fetchDirectHtml(
+    articleUrl,
+    15000,
+  );
+
+  if (!articleResult.ok || !articleResult.html) {
+    console.error(
+      "Bloomberg direct fetch failed:",
+      {
+        status: articleResult.status,
+        articleUrl,
+      },
+    );
+
+    return {
+      articleUrl,
+      imageUrl: null,
+      title: null,
+      description: null,
+    };
+  }
+
+  const finalArticleUrl =
+    isLikelyBloombergArticleUrl(
+      articleResult.finalUrl,
+    )
+      ? cleanBloombergUrl(
+          articleResult.finalUrl,
+        )
+      : articleUrl;
+
+  const image =
+    getMetaContent(
+      articleResult.html,
+      "og:image",
+    ) ||
+    getMetaContent(
+      articleResult.html,
+      "twitter:image:src",
+    ) ||
+    getMetaContent(
+      articleResult.html,
+      "twitter:image",
+    );
+
+  const title =
+    getMetaContent(
+      articleResult.html,
+      "og:title",
+    ) ||
+    getMetaContent(
+      articleResult.html,
+      "twitter:title",
+    );
+
+  const description =
+    getMetaContent(
+      articleResult.html,
+      "og:description",
+    ) ||
+    getMetaContent(
+      articleResult.html,
+      "twitter:description",
+    ) ||
+    getMetaContent(
+      articleResult.html,
+      "description",
+    );
+
+  return {
+    articleUrl: finalArticleUrl,
+    imageUrl:
+      image &&
+      !isGooglePlaceholderImage(image)
+        ? absoluteUrl(
+            image,
+            finalArticleUrl,
+          )
+        : null,
+    title:
+      title &&
+      !/^Google News$/i.test(title.trim())
+        ? stripHtml(title)
+        : null,
+    description:
+      description
+        ? stripHtml(description)
+        : null,
+  };
 }
 
 async function enrichUsImages(
@@ -691,18 +808,21 @@ async function enrichUsImages(
     throw existingError;
   }
 
-  const existingImageMap = new Map(
-    (existingRows ?? [])
+  const typedExistingRows =
+    (existingRows ?? []) as ExistingNewsImageRow[];
+
+  const existingImageMap = new Map<string, string>(
+    typedExistingRows
       .filter(
         (row) =>
-          row.image_url &&
+          Boolean(row.image_url) &&
           !isGooglePlaceholderImage(
-            String(row.image_url),
+            row.image_url,
           ),
       )
       .map((row) => [
-        String(row.article_url),
-        String(row.image_url),
+        row.article_url,
+        row.image_url as string,
       ]),
   );
 
@@ -713,10 +833,9 @@ async function enrichUsImages(
   const output: ParsedNews[] = [];
 
   /*
-   * Microlink 무료 사용량을 아끼기 위해:
-   * - DB에 이미지가 있으면 절대 다시 호출하지 않습니다.
-   * - 새 기사 또는 이미지가 없는 기사만 호출합니다.
-   * - 동시에 2개씩만 처리합니다.
+   * 같은 기사에 이미지가 이미 있으면 재사용합니다.
+   * 이미지가 없는 기사만 직접 원문 메타데이터를 조회합니다.
+   * 외부 서버 부담을 줄이기 위해 동시에 2개씩 처리합니다.
    */
   for (
     let index = 0;
@@ -745,16 +864,11 @@ async function enrichUsImages(
         }
 
         const metadata =
-          await fetchMicrolinkMetadata(
+          await resolveBloombergMetadataDirect(
             item.article_url,
           );
 
-        if (
-          metadata?.imageUrl &&
-          !isGooglePlaceholderImage(
-            metadata.imageUrl,
-          )
-        ) {
+        if (metadata?.imageUrl) {
           fetched += 1;
 
           return {
@@ -764,6 +878,7 @@ async function enrichUsImages(
         }
 
         failed += 1;
+
         return item;
       }),
     );
@@ -1155,10 +1270,6 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      /*
-       * Cloudflare/Microlink 이미지 보강과 OpenAI 번역을 마친
-       * 최종 items 배열을 DB에 저장합니다.
-       */
       const regionItems = items
         .filter((item) => item.region === region)
         .slice(0, 12);
@@ -1246,7 +1357,7 @@ export async function GET(request: NextRequest) {
           isGooglePlaceholderImage(item.image_url),
       ).length,
       images: {
-        fetchedFromMicrolink: usImages.fetched,
+        fetchedDirectly: usImages.fetched,
         reusedFromDatabase: usImages.reused,
         failed: usImages.failed,
       },
