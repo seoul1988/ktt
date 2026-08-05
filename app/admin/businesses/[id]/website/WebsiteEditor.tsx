@@ -59,6 +59,11 @@ type GridCell = {
   url?: string;
   image_url?: string;
   image_size_percent?: number;
+  image_fit?: "scale" | "width" | "cover";
+  popup_enabled?: boolean;
+  popup_image_url?: string;
+  popup_title?: string;
+  popup_max_width_px?: number;
   logo_size_px?: number;
   display_mode?:
     | "text"
@@ -551,6 +556,23 @@ function mapCellRecursive(
     }
     return cell;
   });
+}
+
+/**
+ * 세로로 나눈 아래쪽 칸은 경계선을 움직일 때 콘텐츠의 윗면이
+ * 경계선을 그대로 따라가야 합니다. 이미지와 그 안의 중첩 칸을
+ * 위쪽에 고정하여, 칸을 위로 넓힐 때 내용이 반대로 아래로 밀려
+ * 보이는 현상을 막습니다. 저장 데이터는 변경하지 않고 렌더링에만
+ * 적용하므로 사용자가 지정한 실제 정렬값은 그대로 유지됩니다.
+ */
+function anchorNestedContentToTop(cell: GridCell): GridCell {
+  return {
+    ...cell,
+    ...(cell.type === "image" ? { vertical_align: "top" as const } : {}),
+    child_cells: Array.isArray(cell.child_cells)
+      ? cell.child_cells.map(anchorNestedContentToTop)
+      : cell.child_cells,
+  };
 }
 
 function mapHeaderMenuCells(
@@ -9959,7 +9981,7 @@ function ReadOnlyCellContent({
     const sizes = validSizes
       ? rawSizes.map((value) => (value / total) * 100)
       : cell.child_cells.map(() => 100 / cell.child_cells!.length);
-    const template = sizes.map((size) => `${Math.max(1, size)}fr`).join(" ");
+    const template = sizes.map((size) => `minmax(0, ${Math.max(0.01, size)}fr)`).join(" ");
 
     return (
       <div
@@ -9970,7 +9992,11 @@ function ReadOnlyCellContent({
             : { gridTemplateRows: previewDevice === "mobile" ? `repeat(${cell.child_cells.length}, auto)` : template }
         }
       >
-        {cell.child_cells.map((child) => (
+        {cell.child_cells.map((child, index) => {
+          // 공개 화면에서도 편집기와 같은 저장된 위치를 사용합니다.
+          const renderedChild = child;
+
+          return (
           <div
             key={child.id}
             className="relative flex min-h-0 min-w-0 overflow-hidden"
@@ -9981,12 +10007,19 @@ function ReadOnlyCellContent({
               textAlign: child.text_align || "center",
               color: child.color || (area === "hero" ? "#ffffff" : "#111827"),
               background: area === "header" ? "transparent" : child.background_color || "transparent",
-              padding: child.child_cells?.length || child.type === "image" || child.display_mode === "auto-slider" ? 0 : "12px",
+              padding:
+                child.child_cells?.length ||
+                child.type === "image" ||
+                child.display_mode === "auto-slider" ||
+                child.display_mode === "restaurant-menu"
+                  ? 0
+                  : "12px",
             }}
           >
-            <ReadOnlyCellContent cell={child} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
+            <ReadOnlyCellContent cell={renderedChild} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   }
@@ -10427,11 +10460,13 @@ function ReadOnlyGrid({
     : grid.cells;
   const autoContentHeight =
     area !== "header" && Boolean(grid.auto_height);
+  // 모바일 영업시간만 내용 높이에 맞춰 자동으로 늘립니다.
+  // restaurant-menu는 저장된 레이어 높이를 정확히 따라야 하므로
+  // 자동 높이 대상에서 제외하고 내부 스크롤로 표시합니다.
   const autoMobileBusinessHours =
     previewDevice === "mobile" &&
     area !== "header" &&
-    gridContainsDisplayMode(grid, "business-hours") ||
-    gridContainsDisplayMode(grid, "restaurant-menu");
+    gridContainsDisplayMode(grid, "business-hours");
   const autoSliderCells = getCellsByDisplayMode(
     grid.cells,
     "auto-slider",
@@ -10835,11 +10870,20 @@ function NestedEditableCells({
   const children = parentCell.child_cells || [];
   const direction = parentCell.child_direction === "row" ? "row" : "column";
   const hostRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    index: number;
+    start: number;
+    first: number;
+    second: number;
+  } | null>(null);
+  const saveFrameRef = useRef<number | null>(null);
+
   const getNormalizedSizes = useCallback(() => {
     const raw = children.map((child) => Number(child.size_percent));
     const valid =
       raw.length === children.length &&
-      raw.every((value) => Number.isFinite(value) && value >= 5);
+      raw.every((value) => Number.isFinite(value) && value >= 3);
 
     if (valid) {
       const total = raw.reduce((sum, value) => sum + value, 0) || 100;
@@ -10851,125 +10895,211 @@ function NestedEditableCells({
 
   const [sizes, setSizes] = useState<number[]>(getNormalizedSizes);
   const sizesRef = useRef<number[]>(sizes);
-  const [drag, setDrag] = useState<{
-    index: number;
-    start: number;
-    first: number;
-    second: number;
-  } | null>(null);
-  const dragRef = useRef<typeof drag>(null);
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const childSizeSignature = children
     .map((child) => `${child.id}:${Number(child.size_percent) || 0}`)
     .join("|");
+
+  const persistSizes = useCallback(
+    (values: number[]) => {
+      if (!onResizeSizes) return;
+      const next: Record<string, number> = {};
+      children.forEach((child, index) => {
+        next[child.id] = Math.max(3, Number(values[index] ?? 0));
+      });
+      onResizeSizes(parentCell.id, next);
+    },
+    [children, onResizeSizes, parentCell.id],
+  );
+
+  const schedulePersist = useCallback(
+    (values: number[]) => {
+      if (saveFrameRef.current !== null) {
+        window.cancelAnimationFrame(saveFrameRef.current);
+      }
+      const snapshot = [...values];
+      saveFrameRef.current = window.requestAnimationFrame(() => {
+        saveFrameRef.current = null;
+        persistSizes(snapshot);
+      });
+    },
+    [persistSizes],
+  );
 
   useEffect(() => {
     sizesRef.current = sizes;
   }, [sizes]);
 
   useEffect(() => {
-    dragRef.current = drag;
-  }, [drag]);
-
-  useEffect(() => {
-    // 이미지 URL·텍스트처럼 칸 내용만 바뀌었을 때는 현재 드래그 크기를
-    // 다시 50:50으로 초기화하지 않습니다. 저장된 비율 자체가 바뀐 경우에만
-    // 로컬 크기를 동기화합니다.
+    // 드래그 중에는 서버/부모 상태 재렌더링이 들어와도 현재 손잡이 위치를 유지합니다.
     if (dragRef.current) return;
     const next = getNormalizedSizes();
     sizesRef.current = next;
     setSizes(next);
   }, [childSizeSignature, getNormalizedSizes]);
 
+  useEffect(() => {
+    return () => {
+      if (saveFrameRef.current !== null) {
+        window.cancelAnimationFrame(saveFrameRef.current);
+      }
+    };
+  }, []);
+
+  const finishDrag = useCallback(() => {
+    if (!dragRef.current) return;
+    const finalSizes = [...sizesRef.current];
+    dragRef.current = null;
+    setDraggingIndex(null);
+    persistSizes(finalSizes);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+  }, [persistSizes]);
+
+  useEffect(() => {
+    function handlePointerMove(event: PointerEvent) {
+      const active = dragRef.current;
+      const host = hostRef.current;
+      if (!active || !host || event.pointerId !== active.pointerId) return;
+
+      event.preventDefault();
+      const rect = host.getBoundingClientRect();
+      const length = direction === "row" ? rect.width : rect.height;
+      if (!Number.isFinite(length) || length < 20) return;
+
+      const point = direction === "row" ? event.clientX : event.clientY;
+      const delta = ((point - active.start) / length) * 100;
+      const pairTotal = active.first + active.second;
+
+      // 아주 작은 칸도 만들 수 있지만 완전히 사라지지는 않게 3% 또는 24px을 보장합니다.
+      const minByPixel = (24 / length) * 100;
+      const min = Math.max(3, Math.min(18, minByPixel));
+      const first = Math.max(min, Math.min(pairTotal - min, active.first + delta));
+      const second = pairTotal - first;
+
+      const nextSizes = sizesRef.current.map((value, index) =>
+        index === active.index
+          ? first
+          : index === active.index + 1
+            ? second
+            : value,
+      );
+
+      sizesRef.current = nextSizes;
+      setSizes(nextSizes);
+      // 놓는 순간 값이 되돌아가지 않도록 드래그 중에도 실제 레이어 데이터에 반영합니다.
+      schedulePersist(nextSizes);
+    }
+
+    function handlePointerUp(event: PointerEvent) {
+      const active = dragRef.current;
+      if (!active || event.pointerId !== active.pointerId) return;
+      event.preventDefault();
+      finishDrag();
+    }
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", handlePointerUp, { passive: false });
+    window.addEventListener("pointercancel", handlePointerUp, { passive: false });
+    window.addEventListener("blur", finishDrag);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("blur", finishDrag);
+    };
+  }, [direction, finishDrag, schedulePersist]);
+
   function begin(event: React.PointerEvent<HTMLButtonElement>, index: number) {
     event.preventDefault();
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const nextDrag = {
+
+    const current = sizesRef.current;
+    if (!current[index] || !current[index + 1]) return;
+
+    dragRef.current = {
+      pointerId: event.pointerId,
       index,
       start: direction === "row" ? event.clientX : event.clientY,
-      first: sizesRef.current[index],
-      second: sizesRef.current[index + 1],
+      first: current[index],
+      second: current[index + 1],
     };
-    dragRef.current = nextDrag;
-    setDrag(nextDrag);
+    setDraggingIndex(index);
+    document.body.style.cursor = direction === "row" ? "col-resize" : "row-resize";
+    document.body.style.userSelect = "none";
   }
 
-  function move(event: React.PointerEvent<HTMLButtonElement>) {
-    const activeDrag = dragRef.current;
-    if (!activeDrag || !hostRef.current) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = hostRef.current.getBoundingClientRect();
-    const length = direction === "row" ? rect.width : rect.height;
-    if (length <= 0) return;
-    const point = direction === "row" ? event.clientX : event.clientY;
-    const delta = ((point - activeDrag.start) / length) * 100;
-    const pair = activeDrag.first + activeDrag.second;
-    const min = 8;
-    const first = Math.max(
-      min,
-      Math.min(pair - min, activeDrag.first + delta),
-    );
-    const second = pair - first;
-    const nextSizes = sizesRef.current.map((value, index) =>
-      index === activeDrag.index
-        ? first
-        : index === activeDrag.index + 1
-          ? second
-          : value,
-    );
-    sizesRef.current = nextSizes;
-    setSizes(nextSizes);
-  }
-
-  function end(event: React.PointerEvent<HTMLButtonElement>) {
-    if (!drag) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-    const finalSizes = sizesRef.current;
-    const next: Record<string, number> = {};
-    children.forEach((child, index) => {
-      next[child.id] = finalSizes[index];
-    });
-    onResizeSizes?.(parentCell.id, next);
-    dragRef.current = null;
-    setDrag(null);
-  }
-
-  const template = sizes.map((size) => `${Math.max(1, size)}fr`).join(" ");
+  const template = sizes
+    .map((size) => `minmax(0, ${Math.max(0.01, size)}fr)`)
+    .join(" ");
 
   return (
     <div
       ref={hostRef}
-      className="grid h-full w-full min-h-0 min-w-0 gap-0"
-      style={direction === "row" ? { gridTemplateColumns: template } : { gridTemplateRows: template }}
+      className="relative z-20 grid h-full w-full min-h-0 min-w-0 gap-0 overflow-visible"
+      style={
+        direction === "row"
+          ? { gridTemplateColumns: template }
+          : { gridTemplateRows: template }
+      }
     >
       {children.map((child, index) => {
         const selected = selectedCellId === child.id;
         const hasNext = index < children.length - 1;
+        const isDragging = draggingIndex === index;
+        // 중첩 칸 크기를 바꿔도 사용자가 저장한 세로 정렬값을 그대로 유지합니다.
+        // 이전처럼 두 번째 이후 칸을 강제로 top 정렬하면 버거 위치가 갑자기 움직입니다.
+        const renderedChild = child;
+
         return (
           <div
             key={child.id}
             role="button"
             tabIndex={0}
-            onClick={(event) => { event.stopPropagation(); onSelect(child.id); }}
-            className={`relative flex min-h-0 min-w-0 overflow-visible border-2 border-dashed ${selected ? "border-purple-600 bg-purple-50/20 ring-2 ring-purple-500/20" : "border-white/50 hover:border-purple-400"}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect(child.id);
+            }}
+            className={`relative z-10 flex min-h-0 min-w-0 overflow-visible border-2 border-dashed ${
+              selected
+                ? "border-purple-600 bg-purple-50/20 ring-2 ring-purple-500/20"
+                : "border-white/50 hover:border-purple-400"
+            }`}
             style={{
-              justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center",
-              alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center",
+              justifyContent:
+                child.text_align === "left"
+                  ? "flex-start"
+                  : child.text_align === "right"
+                    ? "flex-end"
+                    : "center",
+              alignItems:
+                child.vertical_align === "top"
+                  ? "flex-start"
+                  : child.vertical_align === "bottom"
+                    ? "flex-end"
+                    : "center",
               textAlign: child.text_align || "center",
               color: child.color || (area === "hero" ? "#ffffff" : "#111827"),
-              background: area === "header" ? "transparent" : child.background_color || "transparent",
-              padding: child.child_cells?.length || child.type === "image" ? 0 : "8px",
+              background:
+                area === "header"
+                  ? "transparent"
+                  : child.background_color || "transparent",
+              padding:
+                child.child_cells?.length ||
+                child.type === "image" ||
+                child.display_mode === "restaurant-menu"
+                  ? 0
+                  : "8px",
             }}
           >
-            <span className="absolute left-1 top-1 z-30 rounded bg-purple-700/85 px-1.5 py-0.5 text-[9px] font-black text-white">
+            <span className="pointer-events-none absolute left-1 top-1 z-30 rounded bg-purple-700/85 px-1.5 py-0.5 text-[9px] font-black text-white">
               {direction === "row" ? `좌우 ${index + 1}` : `상하 ${index + 1}`} · {Math.round(sizes[index] || 0)}%
             </span>
+
             <EditableCellContent
-              cell={child}
+              cell={renderedChild}
               selectedCellId={selectedCellId}
               onSelect={onSelect}
               business={business}
@@ -10979,20 +11109,42 @@ function NestedEditableCells({
               websiteSettings={websiteSettings}
               onResizeNestedSizes={onResizeSizes}
             />
-            {child.type === "empty" && !child.child_cells?.length ? <span className="text-xs font-bold opacity-70">+ 내용 추가</span> : null}
+
+            {child.type === "empty" && !child.child_cells?.length ? (
+              <span className="pointer-events-none text-xs font-bold opacity-70">+ 내용 추가</span>
+            ) : null}
+
             {hasNext ? (
               <button
                 type="button"
-                aria-label={direction === "row" ? "안쪽 칸 너비 조절" : "안쪽 칸 높이 조절"}
+                aria-label={
+                  direction === "row"
+                    ? "안쪽 칸 너비 조절"
+                    : "안쪽 칸 높이 조절"
+                }
                 onPointerDown={(event) => begin(event, index)}
-                onPointerMove={move}
-                onPointerUp={end}
-                onPointerCancel={end}
-                onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                className={`absolute z-50 flex touch-none items-center justify-center ${direction === "row" ? "-right-3 top-0 h-full w-6 cursor-col-resize" : "-bottom-3 left-0 h-6 w-full cursor-row-resize"}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                className={`absolute z-[200] flex touch-none items-center justify-center select-none ${
+                  direction === "row"
+                    ? "-right-3 top-0 h-full w-6 cursor-col-resize"
+                    : "-bottom-4 left-0 h-8 w-full cursor-row-resize"
+                }`}
               >
-                <span className={`${direction === "row" ? "h-full w-[3px]" : "h-[3px] w-full"} absolute rounded-full bg-orange-500`} />
-                <span className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 border-orange-500 bg-white text-sm font-black text-orange-600 shadow-lg">
+                <span
+                  className={`absolute rounded-full ${
+                    isDragging ? "bg-red-500" : "bg-orange-500"
+                  } ${direction === "row" ? "h-full w-1" : "h-1 w-full"}`}
+                />
+                <span
+                  className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-white text-base font-black shadow-lg ${
+                    isDragging
+                      ? "border-red-500 text-red-600"
+                      : "border-orange-500 text-orange-600"
+                  }`}
+                >
                   {direction === "row" ? "↔" : "↕"}
                 </span>
               </button>
@@ -11027,6 +11179,7 @@ function EditableGrid({
   onSelect: (cellId: string) => void;
   onResizeWidths: (widths: Record<string, number>) => void;
   onResizeHeight: (heightPx: number) => void;
+  // 중첩 칸의 드래그 비율을 상위 상태까지 저장해 편집 화면과 미리보기가 동일하게 보이도록 합니다.
   onResizeNestedSizes: (parentCellId: string, sizes: Record<string, number>) => void;
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
@@ -11082,11 +11235,12 @@ function EditableGrid({
     // 저장 전의 이전 높이로 다시 초기화될 수 있습니다.
   }, [grid.height_px, grid.height, area, defaultHeight]);
 
+  // restaurant-menu가 있더라도 레이어 높이를 자동으로 늘리지 않습니다.
+  // 사용자가 아래 높이 핸들을 움직이면 버거칸도 같은 높이로 줄어듭니다.
   const autoMobileBusinessHours =
-    (previewDevice === "mobile" &&
-      area !== "header" &&
-      gridContainsDisplayMode(grid, "business-hours")) ||
-    gridContainsDisplayMode(grid, "restaurant-menu");
+    previewDevice === "mobile" &&
+    area !== "header" &&
+    gridContainsDisplayMode(grid, "business-hours");
   const autoSliderCells = getCellsByDisplayMode(
     grid.cells,
     "auto-slider",
@@ -11287,6 +11441,7 @@ function EditableGrid({
                 padding:
                   cell.child_cells?.length ||
                   cell.type === "image" ||
+                  cell.display_mode === "restaurant-menu" ||
                   (cell.type === "title" &&
                     (cell.display_mode === "background-image" ||
                       cell.display_mode === "service-card"))
@@ -11313,6 +11468,7 @@ function EditableGrid({
                 area={area}
                 previewDevice={previewDevice}
                 websiteSettings={websiteSettings}
+                onResizeNestedSizes={onResizeNestedSizes}
               />
 
               {cell.type === "empty" && !cell.child_cells?.length ? (
@@ -11392,19 +11548,36 @@ function EditableGrid({
       {area === "hero" && !autoMobileBusinessHours ? (
         <button
           type="button"
-          title="드래그하면 이미지 중심을 유지한 채 위·아래가 동일하게 잘립니다"
+          aria-label="레이어 상하 높이 조절"
+          title="이 바를 위아래로 드래그하여 레이어 높이를 조절합니다"
           onPointerDown={startHeightDragging}
           onPointerMove={moveHeightDragging}
           onPointerUp={stopHeightDragging}
           onPointerCancel={stopHeightDragging}
-          className={`absolute -bottom-3 left-1/2 z-[80] flex h-7 w-24 -translate-x-1/2 touch-none cursor-ns-resize items-center justify-center rounded-full border-2 bg-white shadow-lg transition ${
-            heightDragging
-              ? "border-blue-600 text-blue-700 ring-4 ring-blue-500/20"
-              : "border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-700"
+          className={`absolute inset-x-0 bottom-0 z-[9999] flex h-11 touch-none cursor-ns-resize items-end justify-center bg-transparent pb-1 select-none ${
+            heightDragging ? "text-blue-700" : "text-blue-600"
           }`}
+          style={{
+            visibility: "visible",
+            opacity: 1,
+            pointerEvents: "auto",
+          }}
         >
-          <span className="mr-1 text-sm font-black">↕</span>
-          <span className="text-[10px] font-black">{localHeight}px · 가운데 자르기</span>
+          <span
+            className={`pointer-events-none absolute inset-x-0 bottom-0 h-[5px] shadow-[0_-2px_8px_rgba(37,99,235,0.35)] ${
+              heightDragging ? "bg-blue-700" : "bg-blue-500"
+            }`}
+          />
+          <span
+            className={`pointer-events-none relative z-10 inline-flex h-8 min-w-[170px] items-center justify-center rounded-full border-2 bg-white px-4 text-xs font-black shadow-2xl ${
+              heightDragging
+                ? "border-blue-700 text-blue-700 ring-4 ring-blue-500/25"
+                : "border-blue-500 text-blue-700"
+            }`}
+          >
+            <span className="mr-2 text-lg leading-none">↕</span>
+            높이 조절 · {localHeight}px
+          </span>
         </button>
       ) : null}
     </div>
@@ -11669,7 +11842,15 @@ function CellPreview({
 
     const imageHref = normalizeButtonHref(cell.url);
     const imageOpensNewWindow = isExternalButtonHref(imageHref);
-    const imageSize = Math.max(10, Math.min(200, Number(cell.image_size_percent ?? 100)));
+    const popupEnabled = cell.popup_enabled === true;
+    const popupImageUrl = String(cell.popup_image_url || cell.image_url || "").trim();
+    const popupTitle = String(cell.popup_title || cell.text || "이미지 상세").trim();
+    const popupMaxWidth = Math.max(320, Math.min(1800, Number(cell.popup_max_width_px || 1200)));
+    const imageSize = Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100)));
+    const imageFit =
+      cell.image_fit === "width" || cell.image_fit === "cover"
+        ? cell.image_fit
+        : "scale";
     const horizontal =
       cell.text_align === "left"
         ? "flex-start"
@@ -11696,12 +11877,20 @@ function CellPreview({
            * 높이를 기준으로 원본 비율을 유지하면 이미지 실제 폭만 차지하므로
            * 왼쪽·가운데·오른쪽 정렬이 정상적으로 작동합니다.
            */
-          width: "auto",
-          height: `${imageSize}%`,
-          maxWidth: "none",
-          maxHeight: "none",
+          width:
+            imageFit === "width" || imageFit === "cover"
+              ? "100%"
+              : "auto",
+          height:
+            imageFit === "cover"
+              ? "100%"
+              : imageFit === "width"
+                ? "auto"
+                : `${imageSize}%`,
+          maxWidth: imageFit === "width" ? "100%" : "none",
+          maxHeight: imageFit === "width" ? "100%" : "none",
           flexShrink: 0,
-          objectFit: "contain",
+          objectFit: imageFit === "cover" ? "cover" : "contain",
           margin: 0,
           padding: 0,
           lineHeight: 0,
@@ -11726,7 +11915,21 @@ function CellPreview({
 
     return (
       <>
-        {imageHref ? (
+        {popupEnabled ? (
+          <button
+            type="button"
+            aria-label={popupTitle || "팝업 이미지 열기"}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (popupImageUrl) setImageLightboxOpen(true);
+            }}
+            className="absolute inset-0 cursor-zoom-in overflow-hidden border-0 bg-transparent"
+            style={imageContainerStyle}
+          >
+            {imageElement}
+          </button>
+        ) : imageHref ? (
           <a
             href={imageHref}
             target={imageOpensNewWindow ? "_blank" : undefined}
@@ -11758,7 +11961,7 @@ function CellPreview({
               <div
                 role="dialog"
                 aria-modal="true"
-                aria-label="이미지 크게 보기"
+                aria-label={popupEnabled ? popupTitle : "이미지 크게 보기"}
                 className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-3 sm:p-6"
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) {
@@ -11775,11 +11978,23 @@ function CellPreview({
                   ×
                 </button>
 
-                <img
-                  src={cell.image_url}
-                  alt={cell.text || business.name || "이미지 크게 보기"}
-                  className="block max-h-[calc(100vh-24px)] max-w-[calc(100vw-24px)] object-contain sm:max-h-[calc(100vh-48px)] sm:max-w-[calc(100vw-48px)]"
-                />
+                <div
+                  className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+                  style={{ maxWidth: `${popupEnabled ? popupMaxWidth : 1600}px` }}
+                >
+                  {popupEnabled && popupTitle ? (
+                    <div className="shrink-0 border-b border-gray-200 bg-white px-5 py-4 pr-16">
+                      <h2 className="text-lg font-black text-gray-950">{popupTitle}</h2>
+                    </div>
+                  ) : null}
+                  <div className="min-h-0 flex-1 overflow-y-auto bg-white p-2 sm:p-4">
+                    <img
+                      src={popupEnabled ? popupImageUrl : cell.image_url}
+                      alt={popupEnabled ? popupTitle : cell.text || business.name || "이미지 크게 보기"}
+                      className="mx-auto block h-auto w-full object-contain"
+                    />
+                  </div>
+                </div>
               </div>,
               document.body,
             )
@@ -12040,8 +12255,11 @@ function CellPreview({
   if (cell.type === "title") {
     if (cell.display_mode === "restaurant-menu") {
       return (
-        <div className={`${previewDevice === "mobile" ? "relative h-auto min-h-[520px] w-full overflow-visible" : "absolute inset-0 h-full w-full overflow-y-auto"} rounded-[10px] bg-white`}>
-          <RestaurantMenuDisplay businessId={business.id} compact={previewDevice === "mobile"} />
+        <div className="absolute inset-0 h-full min-h-0 w-full overflow-y-auto overscroll-contain rounded-[10px] bg-white">
+          <RestaurantMenuDisplay
+            businessId={business.id}
+            compact={previewDevice === "mobile"}
+          />
         </div>
       );
     }
@@ -21447,9 +21665,29 @@ function ImageCellUploader({
   onUpdate: (patch: Partial<GridCell>) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const popupFileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [popupUploading, setPopupUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [draftImageSize, setDraftImageSize] = useState(() =>
+    Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100))),
+  );
+
+  useEffect(() => {
+    setDraftImageSize(
+      Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100))),
+    );
+  }, [cell.id, cell.image_size_percent]);
+
+  const commitImageSize = useCallback(
+    (value: number) => {
+      const nextValue = Math.max(10, Math.min(500, Number(value) || 10));
+      setDraftImageSize(nextValue);
+      onUpdate({ image_size_percent: nextValue });
+    },
+    [onUpdate],
+  );
 
   async function uploadImage(file: File) {
     setUploadError("");
@@ -21468,7 +21706,8 @@ function ImageCellUploader({
     const previewUrl = URL.createObjectURL(file);
     onUpdate({
       image_url: previewUrl,
-      image_size_percent: cell.image_size_percent ?? 100,
+      image_size_percent: cell.image_size_percent ?? draftImageSize,
+      image_fit: cell.image_fit || "scale",
       text_align: cell.text_align || "center",
       vertical_align: cell.vertical_align || "center",
     });
@@ -21523,10 +21762,64 @@ function ImageCellUploader({
     if (file) void uploadImage(file);
   }
 
-  const imageSize = Math.max(
-    10,
-    Math.min(200, Number(cell.image_size_percent ?? 100)),
-  );
+  async function uploadPopupImage(file: File) {
+    setUploadError("");
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("팝업에는 이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("팝업 이미지 크기는 10MB 이하여야 합니다.");
+      return;
+    }
+
+    const previousUrl = String(cell.popup_image_url || "");
+    const previewUrl = URL.createObjectURL(file);
+    onUpdate({ popup_enabled: true, popup_image_url: previewUrl });
+    setPopupUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("area", `${area}-popup`);
+      formData.append("cellId", `${cell.id}-popup`);
+
+      const response = await fetch(
+        `/api/admin/businesses/${encodeURIComponent(businessId)}/website/upload`,
+        { method: "POST", credentials: "include", body: formData },
+      );
+
+      const result = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(String(result.error || result.message || `팝업 이미지 업로드에 실패했습니다. HTTP ${response.status}`));
+      }
+
+      const imageUrl = String(result.url || "").trim();
+      if (!imageUrl) throw new Error("업로드된 팝업 이미지 주소를 받지 못했습니다.");
+      onUpdate({ popup_enabled: true, popup_image_url: imageUrl });
+      URL.revokeObjectURL(previewUrl);
+    } catch (error) {
+      onUpdate({ popup_image_url: previousUrl });
+      URL.revokeObjectURL(previewUrl);
+      setUploadError(error instanceof Error ? error.message : "팝업 이미지 업로드에 실패했습니다.");
+    } finally {
+      setPopupUploading(false);
+      if (popupFileInputRef.current) popupFileInputRef.current.value = "";
+    }
+  }
+
+  function handlePopupFiles(files: FileList | null) {
+    const file = files?.[0];
+    if (file) void uploadPopupImage(file);
+  }
+
+  const imageSize = draftImageSize;
+  const imageFit =
+    cell.image_fit === "width" || cell.image_fit === "cover"
+      ? cell.image_fit
+      : "scale";
 
   const positionOptions: Array<{
     horizontal: TextAlign;
@@ -21617,39 +21910,69 @@ function ImageCellUploader({
         </p>
       ) : null}
 
-      <Field label="이미지 크기">
-        <div className="flex items-center gap-3">
-          <input
-            type="range"
-            min={10}
-            max={200}
-            step={1}
-            value={imageSize}
-            onChange={(event) =>
-              onUpdate({ image_size_percent: Number(event.target.value) })
-            }
-            className="min-w-0 flex-1 accent-blue-700"
-          />
-          <div className="flex w-24 items-center overflow-hidden rounded-xl border border-blue-300 bg-white">
-            <input
-              type="number"
-              min={10}
-              max={200}
-              value={imageSize}
-              onChange={(event) =>
+      <Field label="이미지 표시 방식">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { value: "scale", label: "크기 조절" },
+            { value: "width", label: "칸 너비 맞춤" },
+            { value: "cover", label: "칸 꽉 채움" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() =>
                 onUpdate({
-                  image_size_percent: Math.max(
-                    10,
-                    Math.min(200, Number(event.target.value) || 10),
-                  ),
+                  image_fit: option.value as "scale" | "width" | "cover",
                 })
               }
-              className="w-full px-2 py-2 text-right text-sm font-black outline-none"
-            />
-            <span className="pr-2 text-xs font-bold text-gray-500">%</span>
-          </div>
+              className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
+                imageFit === option.value
+                  ? "border-blue-700 bg-blue-700 text-white"
+                  : "border-blue-200 bg-white text-blue-950"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
+        <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+          가로로 긴 메뉴 이미지는 ‘칸 너비 맞춤’을 선택하세요.
+        </p>
       </Field>
+
+      {imageFit === "scale" ? (
+        <Field label="이미지 크기">
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={10}
+              max={500}
+              step={1}
+              value={imageSize}
+              onChange={(event) =>
+                commitImageSize(Number(event.target.value))
+              }
+              onPointerUp={() => commitImageSize(imageSize)}
+              onKeyUp={() => commitImageSize(imageSize)}
+              className="min-w-0 flex-1 accent-blue-700"
+            />
+            <div className="flex w-24 items-center overflow-hidden rounded-xl border border-blue-300 bg-white">
+              <input
+                type="number"
+                min={10}
+                max={500}
+                value={imageSize}
+                onChange={(event) =>
+                  commitImageSize(Number(event.target.value))
+                }
+                onBlur={() => commitImageSize(imageSize)}
+                className="w-full px-2 py-2 text-right text-sm font-black outline-none"
+              />
+              <span className="pr-2 text-xs font-bold text-gray-500">%</span>
+            </div>
+          </div>
+        </Field>
+      ) : null}
 
       <Field label="이미지 위치">
         <div className="grid grid-cols-3 gap-2">
@@ -21698,14 +22021,123 @@ function ImageCellUploader({
         </div>
       </Field>
 
-      <Field label="이미지 클릭 링크 · 선택사항">
-        <input
-          value={cell.url || ""}
-          onChange={(event) => onUpdate({ url: event.target.value })}
-          placeholder="비워두면 클릭할 때 이미지를 크게 보여줍니다."
-          className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2.5"
-        />
-      </Field>
+      <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+        <p className="text-sm font-black text-violet-950">이미지 클릭 동작</p>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            { value: "zoom", label: "원본 크게 보기" },
+            { value: "link", label: "링크 이동" },
+            { value: "popup", label: "팝업 모달" },
+          ].map((option) => {
+            const active =
+              option.value === "popup"
+                ? cell.popup_enabled === true
+                : option.value === "link"
+                  ? cell.popup_enabled !== true && Boolean(cell.url)
+                  : cell.popup_enabled !== true && !cell.url;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  if (option.value === "popup") onUpdate({ popup_enabled: true, url: "" });
+                  else if (option.value === "link") onUpdate({ popup_enabled: false });
+                  else onUpdate({ popup_enabled: false, url: "" });
+                }}
+                className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
+                  active
+                    ? "border-violet-700 bg-violet-700 text-white"
+                    : "border-violet-200 bg-white text-violet-950"
+                }`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {cell.popup_enabled ? (
+          <div className="mt-4 space-y-3">
+            <input
+              ref={popupFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(event) => handlePopupFiles(event.target.files)}
+            />
+
+            {cell.popup_image_url ? (
+              <div className="overflow-hidden rounded-xl border border-violet-200 bg-white p-2">
+                <img
+                  src={cell.popup_image_url}
+                  alt="팝업 이미지 미리보기"
+                  className="mx-auto block max-h-48 max-w-full object-contain"
+                />
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              disabled={popupUploading}
+              onClick={() => popupFileInputRef.current?.click()}
+              className="w-full rounded-xl border border-violet-300 bg-white px-4 py-3 text-sm font-black text-violet-950 disabled:opacity-60"
+            >
+              {popupUploading
+                ? "팝업 이미지를 업로드하고 있습니다..."
+                : cell.popup_image_url
+                  ? "팝업 이미지 교체"
+                  : "팝업 이미지 업로드"}
+            </button>
+
+            <Field label="팝업 제목">
+              <input
+                value={cell.popup_title || ""}
+                onChange={(event) => onUpdate({ popup_title: event.target.value })}
+                placeholder="예: Burger Options"
+                className="w-full rounded-xl border border-violet-300 bg-white px-3 py-2.5"
+              />
+            </Field>
+
+            <Field label="팝업 최대 너비">
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={320}
+                  max={1800}
+                  step={20}
+                  value={Math.max(320, Math.min(1800, Number(cell.popup_max_width_px || 1200)))}
+                  onChange={(event) => onUpdate({ popup_max_width_px: Number(event.target.value) })}
+                  className="min-w-0 flex-1 accent-violet-700"
+                />
+                <span className="w-20 text-right text-sm font-black text-violet-950">
+                  {Math.max(320, Math.min(1800, Number(cell.popup_max_width_px || 1200)))}px
+                </span>
+              </div>
+            </Field>
+
+            {cell.popup_image_url ? (
+              <button
+                type="button"
+                onClick={() => onUpdate({ popup_image_url: "" })}
+                className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700"
+              >
+                팝업 이미지 삭제
+              </button>
+            ) : null}
+          </div>
+        ) : cell.url ? (
+          <div className="mt-4">
+            <Field label="이동할 링크">
+              <input
+                value={cell.url || ""}
+                onChange={(event) => onUpdate({ url: event.target.value })}
+                placeholder="https://... 또는 /menu"
+                className="w-full rounded-xl border border-violet-300 bg-white px-3 py-2.5"
+              />
+            </Field>
+          </div>
+        ) : null}
+      </div>
 
       {cell.image_url ? (
         <button
