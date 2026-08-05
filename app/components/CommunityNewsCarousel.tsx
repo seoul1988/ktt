@@ -569,7 +569,7 @@ export default function CommunityNewsCarousel({
 
       {selectedNews ? (
         <div
-          className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/65 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
+          className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto overscroll-contain bg-black/65 px-3 pb-[calc(env(safe-area-inset-bottom)+12px)] pt-[calc(env(safe-area-inset-top)+12px)] backdrop-blur-[2px] sm:items-center sm:p-5"
           role="dialog"
           aria-modal="true"
           aria-label={
@@ -585,102 +585,106 @@ export default function CommunityNewsCarousel({
             }
           }}
         >
-          <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-[28px] bg-white shadow-2xl sm:max-w-lg sm:rounded-[28px]">
+          <div className="relative flex max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-24px)] w-full max-w-lg flex-col overflow-hidden rounded-[24px] bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-[28px]">
             <button
               type="button"
               onClick={() =>
                 setSelectedNews(null)
               }
-              className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-xl font-black text-white shadow-lg"
+              className="absolute right-3 top-3 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-xl font-black text-white shadow-lg"
               aria-label="닫기"
             >
               ×
             </button>
 
-            <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#E9EDF3]">
-              {selectedNews.image_url ? (
-                <img
-                  src={
-                    selectedNews.image_url
-                  }
-                  alt={
-                    selectedNews.title ||
-                    "News"
-                  }
-                  className="absolute inset-0 block"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition:
-                      "center",
-                  }}
-                  onError={(event) => {
-                    event.currentTarget.style.display =
-                      "none";
-
-                    const fallback =
-                      event.currentTarget
-                        .nextElementSibling as HTMLElement | null;
-
-                    if (fallback) {
-                      fallback.style.display =
-                        "flex";
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden bg-[#E9EDF3]">
+                {selectedNews.image_url ? (
+                  <img
+                    src={
+                      selectedNews.image_url
                     }
-                  }}
-                />
-              ) : null}
+                    alt={
+                      selectedNews.title ||
+                      "News"
+                    }
+                    className="absolute inset-0 block"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition:
+                        "center",
+                    }}
+                    onError={(event) => {
+                      event.currentTarget.style.display =
+                        "none";
 
-              <div
-                className="absolute inset-0 h-full w-full items-center justify-center"
-                style={{
-                  display:
-                    selectedNews.image_url
-                      ? "none"
-                      : "flex",
-                }}
-              >
-                <NewsFallback
-                  region={
-                    selectedNews.region ===
-                    "us"
-                      ? "us"
-                      : "korea"
-                  }
-                />
+                      const fallback =
+                        event.currentTarget
+                          .nextElementSibling as HTMLElement | null;
+
+                      if (fallback) {
+                        fallback.style.display =
+                          "flex";
+                      }
+                    }}
+                  />
+                ) : null}
+
+                <div
+                  className="absolute inset-0 h-full w-full items-center justify-center"
+                  style={{
+                    display:
+                      selectedNews.image_url
+                        ? "none"
+                        : "flex",
+                  }}
+                >
+                  <NewsFallback
+                    region={
+                      selectedNews.region ===
+                      "us"
+                        ? "us"
+                        : "korea"
+                    }
+                  />
+                </div>
+
+                <div className="absolute bottom-3 left-3 rounded-full bg-black/75 px-3 py-1.5 text-[11px] font-black text-white">
+                  {selectedNews.source ||
+                    "News"}
+                </div>
               </div>
 
-              <div className="absolute bottom-3 left-3 rounded-full bg-black/75 px-3 py-1.5 text-[11px] font-black text-white">
-                {selectedNews.source ||
-                  "News"}
+              <div className="p-5 pb-6 sm:p-6">
+                <p className="text-xs font-normal text-[#8A93A3]">
+                  {formatModalDate(
+                    selectedNews.published_at,
+                  )}
+                </p>
+
+                <h3 className="mt-2 text-[22px] font-bold leading-[1.35] text-[#172033]">
+                  {selectedNews.title ||
+                    "Latest News"}
+                </h3>
+
+                {selectedNews.summary ? (
+                  <p className="mt-4 whitespace-pre-line text-[15px] font-normal leading-7 text-[#4E5968]">
+                    {selectedNews.summary}
+                  </p>
+                ) : (
+                  <p className="mt-4 text-sm font-medium leading-6 text-[#7A8493]">
+                    요약 내용이 없습니다.
+                    원문에서 자세한 내용을
+                    확인해 주세요.
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="p-5 sm:p-6">
-              <p className="text-xs font-normal text-[#8A93A3]">
-                {formatModalDate(
-                  selectedNews.published_at,
-                )}
-              </p>
-
-              <h3 className="mt-2 text-[22px] font-bold leading-[1.35] text-[#172033]">
-                {selectedNews.title ||
-                  "Latest News"}
-              </h3>
-
-              {selectedNews.summary ? (
-                <p className="mt-4 whitespace-pre-line text-[15px] font-normal leading-7 text-[#4E5968]">
-                  {selectedNews.summary}
-                </p>
-              ) : (
-                <p className="mt-4 text-sm font-medium leading-6 text-[#7A8493]">
-                  요약 내용이 없습니다.
-                  원문에서 자세한 내용을
-                  확인해 주세요.
-                </p>
-              )}
-
-              <div className="mt-6 flex gap-3">
+            <div className="shrink-0 border-t border-[#E6EAF0] bg-white/95 p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] backdrop-blur sm:pb-4">
+              <div className="flex gap-3">
                 <button
                   type="button"
                   onClick={() =>

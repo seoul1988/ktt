@@ -53,6 +53,13 @@ type GridCell = {
   type: CellType;
   span: number;
   width_percent?: number;
+  /** 모바일에서만 사용하는 최상위 칸 너비 */
+  mobile_width_percent?: number;
+  /**
+   * 모바일에서만 사용하는 레이아웃 보정값.
+   * 콘텐츠·URL·색상·글꼴 종류는 공통값으로 유지합니다.
+   */
+  mobile_overrides?: Partial<GridCell>;
   text?: string;
   rich_text_html?: string;
   mobile_text?: string;
@@ -153,8 +160,12 @@ type GridCell = {
   child_cells?: GridCell[];
   child_direction?: "row" | "column";
   size_percent?: number;
+  /** 모바일에서만 사용하는 중첩 칸 비율 */
+  mobile_size_percent?: number;
   /** 세로로 나눈 안쪽 테이블 전체 높이 */
   nested_height_px?: number;
+  /** 모바일에서만 사용하는 중첩 테이블 전체 높이 */
+  mobile_nested_height_px?: number;
 };
 
 type GridData = {
@@ -162,6 +173,8 @@ type GridData = {
   cells: GridCell[];
   height?: "small" | "medium" | "large";
   height_px?: number;
+  /** 모바일에서만 사용하는 레이어 높이 */
+  mobile_height_px?: number;
 
   /**
    * 높이 조절 시 레이어 중심을 유지하기 위한 세로 위치값입니다.
@@ -577,6 +590,136 @@ function anchorNestedContentToTop(cell: GridCell): GridCell {
   };
 }
 
+/*
+ * 모바일에서는 콘텐츠를 다시 만드는 것이 아니라 데스크톱 완성본을
+ * 기준으로 크기와 위치만 보정합니다.
+ *
+ * 아래 속성만 mobile_overrides에 저장되고,
+ * 글 내용·이미지 URL·버튼 링크·색상·글꼴 종류·굵기·스타일 등은
+ * 데스크톱과 모바일이 동일한 공통값을 사용합니다.
+ */
+const DEVICE_VISUAL_CELL_KEYS = new Set<keyof GridCell>([
+  "font_size",
+  "line_height",
+  "text_align",
+  "vertical_align",
+  "image_size_percent",
+  "image_fit",
+  "logo_size_px",
+  "button_width_px",
+  "button_height_px",
+  "button_no_wrap",
+  "sns_icon_size_px",
+  "sns_icon_gap_px",
+  "overlay_text_horizontal",
+  "overlay_text_vertical",
+  "overlay_button_horizontal",
+  "overlay_button_vertical",
+]);
+
+function resolveCellForDevice(
+  cell: GridCell | null,
+  device: "desktop" | "mobile",
+): GridCell | null {
+  if (!cell) return null;
+
+  const savedMobileOverrides =
+    device === "mobile" &&
+    cell.mobile_overrides &&
+    typeof cell.mobile_overrides === "object"
+      ? cell.mobile_overrides
+      : {};
+
+  /*
+   * 이전 버전에서 모바일 전용으로 저장됐던 색상·글꼴·내용 관련 값은
+   * 더 이상 사용하지 않습니다. 현재 허용된 레이아웃 보정값만 읽습니다.
+   */
+  const overrides = Object.fromEntries(
+    Object.entries(savedMobileOverrides).filter(([rawKey]) =>
+      DEVICE_VISUAL_CELL_KEYS.has(rawKey as keyof GridCell),
+    ),
+  ) as Partial<GridCell>;
+
+  const resolved: GridCell = {
+    ...cell,
+    ...overrides,
+    width_percent:
+      device === "mobile"
+        ? Number(cell.mobile_width_percent ?? cell.width_percent)
+        : cell.width_percent,
+    size_percent:
+      device === "mobile"
+        ? Number(cell.mobile_size_percent ?? cell.size_percent)
+        : cell.size_percent,
+    nested_height_px:
+      device === "mobile"
+        ? Number(cell.mobile_nested_height_px ?? cell.nested_height_px)
+        : cell.nested_height_px,
+  };
+
+  resolved.child_cells = Array.isArray(cell.child_cells)
+    ? cell.child_cells
+        .map((child) => resolveCellForDevice(child, device))
+        .filter((child): child is GridCell => Boolean(child))
+    : cell.child_cells;
+
+  return resolved;
+}
+
+function resolveGridForDevice(
+  grid: GridData,
+  device: "desktop" | "mobile",
+): GridData {
+  return {
+    ...grid,
+    height_px:
+      device === "mobile"
+        ? Number(grid.mobile_height_px ?? grid.height_px)
+        : grid.height_px,
+    cells: grid.cells
+      .map((cell) => resolveCellForDevice(cell, device))
+      .filter((cell): cell is GridCell => Boolean(cell)),
+  };
+}
+
+function applyCellPatchForDevice(
+  cell: GridCell,
+  patch: Partial<GridCell>,
+  device: "desktop" | "mobile",
+): GridCell {
+  if (device === "desktop") {
+    return { ...cell, ...patch };
+  }
+
+  const globalPatch: Partial<GridCell> = {};
+  const visualPatch: Partial<GridCell> = {};
+
+  for (const [rawKey, value] of Object.entries(patch)) {
+    const key = rawKey as keyof GridCell;
+
+    if (DEVICE_VISUAL_CELL_KEYS.has(key)) {
+      (visualPatch as Record<string, unknown>)[rawKey] = value;
+    } else {
+      (globalPatch as Record<string, unknown>)[rawKey] = value;
+    }
+  }
+
+  const cleanedMobileOverrides = Object.fromEntries(
+    Object.entries(cell.mobile_overrides || {}).filter(([rawKey]) =>
+      DEVICE_VISUAL_CELL_KEYS.has(rawKey as keyof GridCell),
+    ),
+  ) as Partial<GridCell>;
+
+  return {
+    ...cell,
+    ...globalPatch,
+    mobile_overrides: {
+      ...cleanedMobileOverrides,
+      ...visualPatch,
+    },
+  };
+}
+
 function mapHeaderMenuCells(
   cells: GridCell[],
   fontSize: number,
@@ -712,6 +855,11 @@ function normalizeGrid(value: unknown, fallback: GridData): GridData {
       Number.isFinite(savedHeightPx) && savedHeightPx > 0
         ? savedHeightPx
         : fallback.height_px,
+    mobile_height_px:
+      Number.isFinite(Number(raw.mobile_height_px)) &&
+      Number(raw.mobile_height_px) > 0
+        ? Number(raw.mobile_height_px)
+        : fallback.mobile_height_px,
     auto_height:
       typeof raw.auto_height === "boolean"
         ? raw.auto_height
@@ -2374,12 +2522,89 @@ function getSectionBorderStyle(
     boxSizing: "border-box",
     borderStyle: enabled && width > 0 ? style : "none",
     borderWidth: enabled && width > 0 ? `${width}px` : "0px",
-    borderColor: String(content.layer_border_color || "#111827"),
+    borderColor: enabled
+      ? String(content.layer_border_color || "#111827")
+      : "transparent",
     borderRadius: `${radius}px`,
     overflow: "hidden",
     backgroundClip: "padding-box",
     isolation: "isolate",
   };
+}
+
+function normalizeVisibleBackgroundColor(value: unknown) {
+  const color = String(value || "").trim();
+
+  if (
+    !color ||
+    color.toLowerCase() === "transparent" ||
+    color.toLowerCase() === "rgba(0, 0, 0, 0)" ||
+    color.toLowerCase() === "rgba(0,0,0,0)"
+  ) {
+    return "";
+  }
+
+  return color;
+}
+
+function collectGridBackgroundColors(
+  cells: GridCell[],
+  result: string[] = [],
+) {
+  for (const cell of cells) {
+    const color = normalizeVisibleBackgroundColor(cell.background_color);
+
+    if (color) {
+      result.push(color);
+    }
+
+    if (Array.isArray(cell.child_cells) && cell.child_cells.length > 0) {
+      collectGridBackgroundColors(cell.child_cells, result);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 사용자가 레이아웃 테두리를 직접 켜지 않았다면, 4px 안쪽 여백과
+ * 투명 칸 사이에 보이는 색은 레이아웃의 실제 바탕색과 같아야 합니다.
+ *
+ * 중첩 칸까지 확인해 가장 많이 사용된 배경색을 선택하고,
+ * 배경색이 전혀 없으면 페이지 전체 배경색을 사용합니다.
+ */
+function getGridFrameBackgroundColor(
+  layout: GridData | null | undefined,
+  fallbackColor = "#ffffff",
+) {
+  if (!layout) return fallbackColor;
+
+  if (layout.layout_border_enabled === true) {
+    return String(layout.layout_border_color || fallbackColor);
+  }
+
+  const colors = collectGridBackgroundColors(layout.cells || []);
+  if (!colors.length) return fallbackColor;
+
+  const counts = new Map<string, number>();
+
+  for (const color of colors) {
+    const key = color.toLowerCase();
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  let selected = colors[0];
+  let selectedCount = 0;
+
+  for (const color of colors) {
+    const count = counts.get(color.toLowerCase()) || 0;
+    if (count > selectedCount) {
+      selected = color;
+      selectedCount = count;
+    }
+  }
+
+  return selected || fallbackColor;
 }
 
 function getLayoutBorderStyle(
@@ -2405,7 +2630,9 @@ function getLayoutBorderStyle(
     boxSizing: "border-box",
     borderStyle: enabled && width > 0 ? style : "none",
     borderWidth: enabled && width > 0 ? `${width}px` : "0px",
-    borderColor: String(layout?.layout_border_color || "#111827"),
+    borderColor: enabled
+      ? String(layout?.layout_border_color || "#111827")
+      : "transparent",
     borderRadius: `${radius}px`,
     overflow: "hidden",
     backgroundClip: "padding-box",
@@ -4866,10 +5093,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             currentHeaderGrid.cells,
             cellId,
             (cell) => {
-              const nextCell = {
-                ...cell,
-                ...patch,
-              };
+              const nextCell = applyCellPatchForDevice(
+                cell,
+                patch,
+                device,
+              );
 
               changedCellType = nextCell.type;
 
@@ -4987,10 +5215,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        cells: mapCellRecursive(grid.cells, cellId, (cell) => ({
-          ...cell,
-          ...patch,
-        })),
+        cells: mapCellRecursive(grid.cells, cellId, (cell) =>
+          applyCellPatchForDevice(cell, patch, device),
+        ),
       }),
       layoutId,
     );
@@ -5147,6 +5374,144 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     );
   }
 
+  function updateNestedSiblingSizes(
+    cells: GridCell[],
+    parentCellId: string,
+    sizes: Record<string, number>,
+  ): GridCell[] {
+    const sourceIndex = cells.findIndex((cell) => cell.id === parentCellId);
+
+    if (sourceIndex >= 0) {
+      const source = cells[sourceIndex];
+      const sourceChildren = source.child_cells || [];
+      const sourceDirection =
+        source.child_direction === "row" ? "row" : "column";
+
+      const percentages = sourceChildren.map((child) =>
+        Number(
+          typeof sizes[child.id] === "number"
+            ? sizes[child.id]
+            : device === "mobile"
+              ? child.mobile_size_percent ?? child.size_percent
+              : child.size_percent,
+        ),
+      );
+
+      return cells.map((cell) => {
+        const childCells = cell.child_cells || [];
+        const direction =
+          cell.child_direction === "row" ? "row" : "column";
+
+        const belongsToSameCardRow =
+          sourceDirection === "column" &&
+          direction === "column" &&
+          sourceChildren.length > 0 &&
+          childCells.length === sourceChildren.length;
+
+        if (!belongsToSameCardRow) {
+          return cell.id === parentCellId
+            ? {
+                ...cell,
+                child_cells: childCells.map((child) => {
+                  const nextSize =
+                    typeof sizes[child.id] === "number"
+                      ? sizes[child.id]
+                      : device === "mobile"
+                        ? child.mobile_size_percent ?? child.size_percent
+                        : child.size_percent;
+
+                  return device === "mobile"
+                    ? { ...child, mobile_size_percent: nextSize }
+                    : { ...child, size_percent: nextSize };
+                }),
+              }
+            : cell;
+        }
+
+        return {
+          ...cell,
+          child_cells: childCells.map((child, index) => {
+            const nextSize = Math.max(
+              3,
+              Number(
+                percentages[index] ??
+                  (device === "mobile"
+                    ? child.mobile_size_percent ?? child.size_percent
+                    : child.size_percent) ??
+                  0,
+              ),
+            );
+
+            return device === "mobile"
+              ? { ...child, mobile_size_percent: nextSize }
+              : { ...child, size_percent: nextSize };
+          }),
+        };
+      });
+    }
+
+    return cells.map((cell) =>
+      cell.child_cells?.length
+        ? {
+            ...cell,
+            child_cells: updateNestedSiblingSizes(
+              cell.child_cells,
+              parentCellId,
+              sizes,
+            ),
+          }
+        : cell,
+    );
+  }
+
+  function updateNestedSiblingHeight(
+    cells: GridCell[],
+    parentCellId: string,
+    heightPx: number,
+  ): GridCell[] {
+    const sourceIndex = cells.findIndex((cell) => cell.id === parentCellId);
+
+    if (sourceIndex >= 0) {
+      const source = cells[sourceIndex];
+      const sourceChildren = source.child_cells || [];
+      const sourceDirection =
+        source.child_direction === "row" ? "row" : "column";
+
+      return cells.map((cell) => {
+        const direction =
+          cell.child_direction === "row" ? "row" : "column";
+        const childCells = cell.child_cells || [];
+
+        const belongsToSameCardRow =
+          sourceDirection === "column" &&
+          direction === "column" &&
+          sourceChildren.length > 0 &&
+          childCells.length === sourceChildren.length;
+
+        if (!belongsToSameCardRow && cell.id !== parentCellId) {
+          return cell;
+        }
+
+        return device === "mobile"
+          ? { ...cell, mobile_nested_height_px: heightPx }
+          : { ...cell, nested_height_px: heightPx };
+      });
+    }
+
+    return cells.map((cell) =>
+      cell.child_cells?.length
+        ? {
+            ...cell,
+            child_cells: updateNestedSiblingHeight(
+              cell.child_cells,
+              parentCellId,
+              heightPx,
+            ),
+          }
+        : cell,
+    );
+  }
+
   function updateNestedCellSizes(
     area: "header" | "hero",
     parentCellId: string,
@@ -5157,16 +5522,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        cells: mapCellRecursive(grid.cells, parentCellId, (cell) => ({
-          ...cell,
-          child_cells: (cell.child_cells || []).map((child) => ({
-            ...child,
-            size_percent:
-              typeof sizes[child.id] === "number"
-                ? sizes[child.id]
-                : child.size_percent,
-          })),
-        })),
+        /*
+         * 같은 가로 줄에 있는 카드들의 이미지/제목 비율을 한 번의
+         * 상태 업데이트로 동시에 변경합니다. 여러 setState 호출이
+         * 서로 덮어쓰는 문제를 막습니다.
+         */
+        cells: updateNestedSiblingSizes(
+          grid.cells,
+          parentCellId,
+          sizes,
+        ),
       }),
       layoutId,
     );
@@ -5184,10 +5549,15 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        cells: mapCellRecursive(grid.cells, parentCellId, (cell) => ({
-          ...cell,
-          nested_height_px: safeHeight,
-        })),
+        /*
+         * 같은 줄의 카드 높이도 한 번에 저장해 세 카드가 완전히
+         * 같은 높이로 움직이게 합니다.
+         */
+        cells: updateNestedSiblingHeight(
+          grid.cells,
+          parentCellId,
+          safeHeight,
+        ),
       }),
       layoutId,
     );
@@ -5202,13 +5572,24 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        cells: grid.cells.map((cell) => ({
-          ...cell,
-          width_percent:
+        cells: grid.cells.map((cell) => {
+          const nextWidth =
             typeof widths[cell.id] === "number"
               ? widths[cell.id]
-              : cell.width_percent,
-        })),
+              : device === "mobile"
+                ? cell.mobile_width_percent ?? cell.width_percent
+                : cell.width_percent;
+
+          return device === "mobile"
+            ? {
+                ...cell,
+                mobile_width_percent: nextWidth,
+              }
+            : {
+                ...cell,
+                width_percent: nextWidth,
+              };
+        }),
       }),
       layoutId,
     );
@@ -5258,34 +5639,145 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
     updateGrid(
       area,
-      (grid) => ({
-        ...grid,
-        height_px: normalizedHeight,
-        center_offset_y_px: 0,
-      }),
+      (grid) =>
+        device === "mobile"
+          ? {
+              ...grid,
+              mobile_height_px: normalizedHeight,
+              center_offset_y_px: 0,
+            }
+          : {
+              ...grid,
+              height_px: normalizedHeight,
+              center_offset_y_px: 0,
+            },
       layoutId,
     );
   }
 
-  function mergeCell(area: "header" | "hero", cellId: string, layoutId?: string) {
-    updateGrid(area, (grid) => {
-      const index = grid.cells.findIndex((cell) => cell.id === cellId);
-      if (index < 0 || index >= grid.cells.length - 1) return grid;
+  function mergeCellInTree(
+    cells: GridCell[],
+    cellId: string,
+    topLevel = false,
+  ): { cells: GridCell[]; merged: boolean } {
+    const index = cells.findIndex((cell) => cell.id === cellId);
 
-      const current = grid.cells[index];
-      const next = grid.cells[index + 1];
-      if (current.span + next.span > 4) return grid;
+    if (index >= 0) {
+      if (index >= cells.length - 1) return { cells, merged: false };
 
-      const cells = [...grid.cells];
-      cells.splice(index, 2, {
+      const current = cells[index];
+      const next = cells[index + 1];
+
+      if (
+        topLevel &&
+        Number(current.span || 1) + Number(next.span || 1) > 4
+      ) {
+        return { cells, merged: false };
+      }
+
+      const currentWidth = Number(
+        current.width_percent || (current.span / 4) * 100,
+      );
+      const nextWidth = Number(
+        next.width_percent || (next.span / 4) * 100,
+      );
+
+      const mergedCell: GridCell = {
         ...current,
-        span: current.span + next.span,
-        width_percent:
-          Number(current.width_percent || 0) +
-          Number(next.width_percent || 0),
-      });
-      return { ...grid, cells };
-    }, layoutId);
+        span: topLevel
+          ? Math.min(
+              4,
+              Number(current.span || 1) + Number(next.span || 1),
+            )
+          : current.span,
+        width_percent: topLevel
+          ? currentWidth + nextWidth
+          : current.width_percent,
+        mobile_width_percent: topLevel
+          ? Number(
+              current.mobile_width_percent ?? currentWidth,
+            ) +
+            Number(next.mobile_width_percent ?? nextWidth)
+          : current.mobile_width_percent,
+        size_percent: topLevel
+          ? current.size_percent
+          : Number(current.size_percent || 0) +
+            Number(next.size_percent || 0),
+        mobile_size_percent: topLevel
+          ? current.mobile_size_percent
+          : Number(
+              current.mobile_size_percent ??
+                current.size_percent ??
+                0,
+            ) +
+            Number(
+              next.mobile_size_percent ??
+                next.size_percent ??
+                0,
+            ),
+      };
+
+      const nextCells = [...cells];
+      nextCells.splice(index, 2, mergedCell);
+      return { cells: nextCells, merged: true };
+    }
+
+    for (let i = 0; i < cells.length; i += 1) {
+      const cell = cells[i];
+      if (!cell.child_cells?.length) continue;
+
+      const nested = mergeCellInTree(cell.child_cells, cellId, false);
+      if (!nested.merged) continue;
+
+      const nextCells = [...cells];
+
+      if (nested.cells.length === 1) {
+        const only = nested.cells[0];
+        nextCells[i] = {
+          ...only,
+          id: cell.id,
+          span: cell.span,
+          width_percent: cell.width_percent,
+          mobile_width_percent: cell.mobile_width_percent,
+          size_percent: cell.size_percent,
+          mobile_size_percent: cell.mobile_size_percent,
+          nested_height_px: undefined,
+          mobile_nested_height_px: undefined,
+        };
+      } else {
+        nextCells[i] = {
+          ...cell,
+          child_cells: nested.cells,
+        };
+      }
+
+      return { cells: nextCells, merged: true };
+    }
+
+    return { cells, merged: false };
+  }
+
+  function mergeCell(
+    area: "header" | "hero",
+    cellId: string,
+    layoutId?: string,
+  ) {
+    updateGrid(
+      area,
+      (grid) => {
+        const result = mergeCellInTree(grid.cells, cellId, true);
+
+        if (!result.merged) {
+          window.alert(
+            "합칠 다음 칸이 없습니다. 왼쪽 칸 또는 위쪽 칸에서 합치기를 눌러주세요.",
+          );
+          return grid;
+        }
+
+        return { ...grid, cells: result.cells };
+      },
+      layoutId,
+    );
   }
 
   function splitCell(area: "header" | "hero", cellId: string, layoutId?: string) {
@@ -6274,8 +6766,30 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
           <div className="flex items-center gap-2">
             <div className="hidden rounded-full bg-gray-100 p-1 sm:flex">
-              <button type="button" onClick={() => setDevice("desktop")} className={`rounded-full px-3 py-1.5 text-xs font-bold ${device === "desktop" ? "bg-white shadow-sm" : "text-gray-500"}`}>Desktop</button>
-              <button type="button" onClick={() => setDevice("mobile")} className={`rounded-full px-3 py-1.5 text-xs font-bold ${device === "mobile" ? "bg-white shadow-sm" : "text-gray-500"}`}>Mobile</button>
+              <button
+                type="button"
+                onClick={() => setDevice("desktop")}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                  device === "desktop"
+                    ? "bg-white shadow-sm"
+                    : "text-gray-500"
+                }`}
+                title="콘텐츠와 기본 디자인을 완성합니다."
+              >
+                Desktop
+              </button>
+              <button
+                type="button"
+                onClick={() => setDevice("mobile")}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                  device === "mobile"
+                    ? "bg-white shadow-sm"
+                    : "text-gray-500"
+                }`}
+                title="데스크톱 완성본을 기준으로 크기와 위치만 보정합니다."
+              >
+                Mobile
+              </button>
             </div>
             <button
               type="button"
@@ -6911,8 +7425,36 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
         <section
           className="min-w-0 overflow-auto p-4 sm:p-6 lg:p-8"
-          style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
+          style={{
+            backgroundColor: String(
+              websiteSettings.outer_background_color || "#e5e7eb",
+            ),
+          }}
         >
+          <div
+            className={`mx-auto mb-3 rounded-xl border px-4 py-3 text-xs font-bold leading-5 ${
+              device === "mobile"
+                ? "border-blue-200 bg-blue-50 text-blue-800"
+                : "border-gray-200 bg-white text-gray-700"
+            }`}
+          >
+            {device === "mobile" ? (
+              <>
+                <span className="font-black">모바일 맞춤 모드</span>
+                {" · "}
+                데스크톱에서 만든 콘텐츠를 그대로 사용하며 레이어 높이,
+                칸 비율, 글자·이미지 크기와 위치만 모바일에 별도로 저장됩니다.
+              </>
+            ) : (
+              <>
+                <span className="font-black">데스크톱 기본 작업</span>
+                {" · "}
+                콘텐츠, 이미지, 링크, 색상과 기본 디자인을 먼저 완성하세요.
+                마지막에 Mobile로 전환해 필요한 부분만 맞추면 됩니다.
+              </>
+            )}
+          </div>
+
           <div
             className={`mx-auto overflow-visible shadow-xl transition-all ${
               device === "mobile"
@@ -6967,6 +7509,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 }
                 onResizeNestedHeight={(parentCellId, heightPx) =>
                   updateNestedCellHeight("header", parentCellId, heightPx)
+                }
+                onMergeNested={(cellId) =>
+                  mergeCell("header", cellId)
                 }
               />
               </div>
@@ -7108,6 +7653,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         }
                         business={business}
                         accentColor={String(websiteSettings.accent_color)}
+                        previewDevice={device}
+                        websiteSettings={websiteSettings}
                         onSelect={(cellId) =>
                           selectHeroCell(layout, cellId)
                         }
@@ -7122,6 +7669,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         }
                         onResizeNestedHeight={(parentCellId, heightPx) =>
                           updateNestedCellHeight("hero", parentCellId, heightPx, layout.id)
+                        }
+                        onMergeNested={(cellId) =>
+                          mergeCell("hero", cellId, layout.id)
                         }
                       />
                     </div>
@@ -7149,7 +7699,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         <aside className="border-l border-gray-200 bg-white p-4 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:p-5">
           <RightPanel
             selection={selection}
-            selectedCell={selectedCell}
+            selectedCell={resolveCellForDevice(selectedCell, device)}
             selectedSection={selectedSection}
             heroSection={heroSection}
             business={business}
@@ -7181,7 +7731,15 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 ? Number(
                     heroLayouts.find(
                       (layout) => layout.id === selection.layoutId,
-                    )?.height_px || 560,
+                    )?.[
+                      device === "mobile"
+                        ? "mobile_height_px"
+                        : "height_px"
+                    ] ||
+                      heroLayouts.find(
+                        (layout) => layout.id === selection.layoutId,
+                      )?.height_px ||
+                      560,
                   )
                 : selection.area === "header"
                   ? Number(headerGrid.height_px || 104)
@@ -10052,11 +10610,16 @@ function ReadOnlyCellContent({
           return (
           <div
             key={child.id}
-            className="relative flex h-full min-h-0 min-w-0 overflow-hidden"
+            className="relative flex min-h-0 min-w-0 overflow-hidden"
             style={{
-              height: "100%",
-              // 모바일에서도 저장된 행 비율을 그대로 사용하므로 강제 최소 높이를 두지 않습니다.
+              /*
+               * 편집기와 동일하게 CSS Grid가 계산한 자기 행 높이를 사용합니다.
+               * h-full과 height:100%를 주면 각 칸이 테이블 전체 높이가 되어
+               * 제목·노란칸·버거칸 위치가 서로 어긋납니다.
+               */
               minHeight: 0,
+              alignSelf: "stretch",
+              justifySelf: "stretch",
               justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center",
               alignItems: child.vertical_align === "top" ? "flex-start" : child.vertical_align === "bottom" ? "flex-end" : "center",
               textAlign: child.text_align || "center",
@@ -10066,9 +10629,10 @@ function ReadOnlyCellContent({
                 child.child_cells?.length ||
                 child.type === "image" ||
                 child.display_mode === "auto-slider" ||
+                child.display_mode === "map-section" ||
                 child.display_mode === "restaurant-menu"
                   ? 0
-                  : "12px",
+                  : "8px",
             }}
           >
             <ReadOnlyCellContent cell={renderedChild} business={business} accentColor={accentColor} area={area} previewDevice={previewDevice} websiteSettings={websiteSettings} />
@@ -10084,7 +10648,7 @@ function ReadOnlyCellContent({
         previewDevice === "mobile" && cell.display_mode === "auto-slider"
           ? "h-auto"
           : "h-full"
-      } ${cell.type === "menu" ? "overflow-hidden" : ""}`}
+      } overflow-hidden`}
       style={{
         justifyContent:
           cell.text_align === "left"
@@ -10444,10 +11008,24 @@ function ReadOnlyGrid({
   previewDevice: "desktop" | "mobile";
   websiteSettings?: WebsiteSettings;
 }) {
+  const deviceGrid = resolveGridForDevice(grid, previewDevice);
+  const hasAutoSlider = gridContainsDisplayMode(
+    deviceGrid,
+    "auto-slider",
+  );
+  const gridFrameBackgroundColor = getGridFrameBackgroundColor(
+    deviceGrid,
+    String(
+      area === "header"
+        ? websiteSettings?.header_background_color || "#ffffff"
+        : websiteSettings?.outer_background_color || "#ffffff",
+    ),
+  );
+
   if (area === "header" && previewDevice === "mobile") {
     return (
       <MobileWebsiteHeader
-        grid={grid}
+        grid={deviceGrid}
         business={business}
         accentColor={accentColor}
         websiteSettings={websiteSettings}
@@ -10458,18 +11036,18 @@ function ReadOnlyGrid({
   const defaultHeight =
     area === "header"
       ? Number(websiteSettings?.header_height_px || 104)
-      : grid.height === "small"
+      : deviceGrid.height === "small"
         ? 300
-        : grid.height === "medium"
+        : deviceGrid.height === "medium"
           ? 430
           : 560;
-  const savedWidths = grid.cells.map((cell) =>
+  const savedWidths = deviceGrid.cells.map((cell) =>
     Number(cell.width_percent || (cell.span / 4) * 100),
   );
 
   const widths =
     previewDevice === "mobile" && area === "header"
-      ? grid.cells.map((cell) => {
+      ? deviceGrid.cells.map((cell) => {
           if (cell.type === "logo") return 25;
           if (cell.type === "title") return 44;
           if (cell.type === "menu") return 1;
@@ -10482,38 +11060,34 @@ function ReadOnlyGrid({
   const savedHeight =
     area === "header"
       ? defaultHeight
-      : Number(grid.height_px || defaultHeight);
+      : Number(deviceGrid.height_px || defaultHeight);
   const isMobileContentGrid = previewDevice === "mobile" && area !== "header";
   const isVisualOnlyLayer =
     area !== "header" &&
-    grid.cells.some(
+    deviceGrid.cells.some(
       (cell) =>
         cell.type === "image" ||
         cell.display_mode === "auto-slider" ||
         cell.display_mode === "gallery",
     ) &&
-    grid.cells.every(
+    deviceGrid.cells.every(
       (cell) =>
         cell.type === "empty" ||
         cell.type === "image" ||
         cell.display_mode === "auto-slider" ||
         cell.display_mode === "gallery",
     );
-  const hasNestedTable = grid.cells.some(
+  const hasNestedTable = deviceGrid.cells.some(
     (cell) => Array.isArray(cell.child_cells) && cell.child_cells.length > 0,
   );
 
-  /*
-   * 중첩 테이블이 있는 레이어는 좁은 미리보기에서도 편집 화면과 같은
-   * 행·열 구조와 비율을 유지합니다.
-   */
   const mobileShouldAutoStack =
     isMobileContentGrid && !isVisualOnlyLayer && !hasNestedTable;
 
   // 일반 콘텐츠는 모바일에서 세로로 쌓지만, 이미지·슬라이더 전용 레이어는
   // 저장된 레이어 높이를 그대로 사용합니다.
   const renderedCells = isMobileContentGrid && !hasNestedTable
-    ? grid.cells.filter(
+    ? deviceGrid.cells.filter(
         (cell) =>
           cell.type !== "empty" ||
           Boolean(cell.child_cells?.length) ||
@@ -10521,18 +11095,18 @@ function ReadOnlyGrid({
           Boolean(String(cell.text || "").trim()) ||
           Boolean(cell.image_url),
       )
-    : grid.cells;
+    : deviceGrid.cells;
   const autoContentHeight =
-    area !== "header" && Boolean(grid.auto_height);
+    area !== "header" && Boolean(deviceGrid.auto_height);
   // 모바일 영업시간만 내용 높이에 맞춰 자동으로 늘립니다.
   // restaurant-menu는 저장된 레이어 높이를 정확히 따라야 하므로
   // 자동 높이 대상에서 제외하고 내부 스크롤로 표시합니다.
   const autoMobileBusinessHours =
     previewDevice === "mobile" &&
     area !== "header" &&
-    gridContainsDisplayMode(grid, "business-hours");
+    gridContainsDisplayMode(deviceGrid, "business-hours");
   const autoSliderCells = getCellsByDisplayMode(
-    grid.cells,
+    deviceGrid.cells,
     "auto-slider",
   );
   const sliderAutoHeight =
@@ -10590,7 +11164,18 @@ function ReadOnlyGrid({
         // 상·하·좌·우 4px 안쪽에서 시작합니다.
         // border-box를 사용해 4px 여백 때문에 레이어 크기가 커지지 않게 합니다.
         boxSizing: "border-box",
-        padding: area === "hero" ? "4px" : undefined,
+        padding:
+          area === "hero" && !hasAutoSlider ? "4px" : 0,
+        /*
+         * 자동 슬라이더는 이미지가 레이어 끝까지 붙도록 바깥 여백을
+         * 만들지 않습니다.
+         */
+        backgroundColor:
+          area === "hero"
+            ? hasAutoSlider
+              ? "#000000"
+              : gridFrameBackgroundColor
+            : undefined,
         gridTemplateColumns:
           isMobileContentGrid && !hasNestedTable
             ? "minmax(0, 1fr)"
@@ -10627,10 +11212,6 @@ function ReadOnlyGrid({
               ? 0
               : undefined,
             margin: 0,
-            /*
-             * 편집 화면과 동일하게 저장된 레이어·테이블 높이를 사용합니다.
-             * 좁은 미리보기라고 해서 일반 칸을 220px로 강제로 늘리지 않습니다.
-             */
             minHeight:
               isMobileContentGrid &&
               cellContainsDisplayMode(cell, "auto-slider")
@@ -10662,10 +11243,12 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : cell.background_color || "transparent",
+                : normalizeVisibleBackgroundColor(cell.background_color) ||
+                  gridFrameBackgroundColor,
             padding:
               cell.child_cells?.length ||
               cell.type === "image" ||
+              cellContainsDisplayMode(cell, "auto-slider") ||
               cell.display_mode === "restaurant-menu" ||
               (cell.type === "title" &&
                 (cell.display_mode === "background-image" ||
@@ -10843,7 +11426,7 @@ function PreviewSection({
   );
 }
 
-function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes, onResizeNestedHeight }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; onResizeNestedHeight?: (parentCellId: string, heightPx: number) => void; }) {
+function EditableCellContent({ cell, selectedCellId, onSelect, business, accentColor, area, previewDevice, websiteSettings, onResizeNestedSizes, onResizeNestedHeight, onMergeNested }: { cell: GridCell; selectedCellId?: string; onSelect: (cellId: string) => void; business: Business; accentColor: string; area: "header" | "hero"; previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings; onResizeNestedSizes?: (parentCellId: string, sizes: Record<string, number>) => void; onResizeNestedHeight?: (parentCellId: string, heightPx: number) => void; onMergeNested?: (cellId: string) => void; }) {
   const selectionHostRef = useRef<HTMLDivElement>(null);
   const [selectionMenu, setSelectionMenu] = useState<{ left: number; top: number } | null>(null);
 
@@ -10898,7 +11481,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, business, accentC
 
   if (cell.child_cells?.length) {
     return (
-      <NestedEditableCells
+      <NestedEditableCellsV2
         parentCell={cell}
         selectedCellId={selectedCellId}
         onSelect={onSelect}
@@ -10909,6 +11492,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, business, accentC
         websiteSettings={websiteSettings}
         onResizeSizes={onResizeNestedSizes}
         onResizeHeight={onResizeNestedHeight}
+        onMergeNested={onMergeNested}
       />
     );
   }
@@ -10916,7 +11500,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, business, accentC
 }
 
 
-function NestedEditableCells({
+function NestedEditableCellsV2({
   parentCell,
   selectedCellId,
   onSelect,
@@ -10927,6 +11511,7 @@ function NestedEditableCells({
   websiteSettings,
   onResizeSizes,
   onResizeHeight,
+  onMergeNested,
 }: {
   parentCell: GridCell;
   selectedCellId?: string;
@@ -10938,6 +11523,7 @@ function NestedEditableCells({
   websiteSettings?: WebsiteSettings;
   onResizeSizes?: (parentCellId: string, sizes: Record<string, number>) => void;
   onResizeHeight?: (parentCellId: string, heightPx: number) => void;
+  onMergeNested?: (cellId: string) => void;
 }) {
   const children = parentCell.child_cells || [];
   const direction = parentCell.child_direction === "row" ? "row" : "column";
@@ -11009,7 +11595,10 @@ function NestedEditableCells({
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
   const childSizeSignature = children
-    .map((child) => `${child.id}:${Number(child.size_percent) || 0}`)
+    .map((child) => {
+      const value = Number(child.size_percent) || 0;
+      return `${child.id}:${value.toFixed(4)}`;
+    })
     .join("|");
 
   const persistSizes = useCallback(
@@ -11045,10 +11634,41 @@ function NestedEditableCells({
   useEffect(() => {
     // 드래그 중에는 서버/부모 상태 재렌더링이 들어와도 현재 손잡이 위치를 유지합니다.
     if (dragRef.current) return;
-    const next = getNormalizedSizes();
+
+    const raw = children.map((child) => Number(child.size_percent));
+    const valid =
+      raw.length === children.length &&
+      raw.every((value) => Number.isFinite(value) && value >= 3);
+
+    const next = valid
+      ? (() => {
+          const total =
+            raw.reduce((sum, value) => sum + value, 0) || 100;
+          return raw.map((value) => (value / total) * 100);
+        })()
+      : children.map(
+          () => 100 / Math.max(1, children.length),
+        );
+
+    const current = sizesRef.current;
+    const unchanged =
+      current.length === next.length &&
+      current.every(
+        (value, index) =>
+          Math.abs(value - Number(next[index] ?? 0)) < 0.0001,
+      );
+
+    if (unchanged) return;
+
     sizesRef.current = next;
     setSizes(next);
-  }, [childSizeSignature, getNormalizedSizes]);
+    /*
+     * 의존성은 문자열 한 개로 영구 고정합니다.
+     * 함수 참조는 의존성에 넣지 않아 Fast Refresh 중 배열 크기가
+     * 1개와 2개 사이에서 바뀌는 경고를 방지합니다.
+     */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [childSizeSignature]);
 
   useEffect(() => {
     return () => {
@@ -11280,6 +11900,26 @@ function NestedEditableCells({
               {direction === "row" ? `좌우 ${index + 1}` : `상하 ${index + 1}`} · {Math.round(sizes[index] || 0)}%
             </span>
 
+            {hasNext && onMergeNested ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onSelect(child.id);
+                  onMergeNested(child.id);
+                }}
+                className="absolute right-2 top-2 z-[260] rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-black text-white shadow-lg hover:bg-blue-700"
+                title={
+                  direction === "row"
+                    ? "오른쪽 칸과 합치기"
+                    : "아래쪽 칸과 합치기"
+                }
+              >
+                {direction === "row" ? "↔ 합치기" : "↕ 합치기"}
+              </button>
+            ) : null}
+
             <EditableCellContent
               cell={renderedChild}
               selectedCellId={selectedCellId}
@@ -11290,6 +11930,8 @@ function NestedEditableCells({
               previewDevice={previewDevice}
               websiteSettings={websiteSettings}
               onResizeNestedSizes={onResizeSizes}
+              onResizeNestedHeight={onResizeHeight}
+              onMergeNested={onMergeNested}
             />
 
             {child.type === "empty" && !child.child_cells?.length ? (
@@ -11380,6 +12022,7 @@ function EditableGrid({
   onResizeHeight,
   onResizeNestedSizes,
   onResizeNestedHeight,
+  onMergeNested,
 }: {
   area: "header" | "hero";
   grid: GridData;
@@ -11394,10 +12037,26 @@ function EditableGrid({
   // 중첩 칸의 드래그 비율을 상위 상태까지 저장해 편집 화면과 미리보기가 동일하게 보이도록 합니다.
   onResizeNestedSizes: (parentCellId: string, sizes: Record<string, number>) => void;
   onResizeNestedHeight: (parentCellId: string, heightPx: number) => void;
+  onMergeNested: (cellId: string) => void;
 }) {
+  const deviceGrid = resolveGridForDevice(grid, previewDevice);
+  const hasAutoSlider = gridContainsDisplayMode(
+    deviceGrid,
+    "auto-slider",
+  );
+  const gridFrameBackgroundColor = getGridFrameBackgroundColor(
+    deviceGrid,
+    String(
+      area === "header"
+        ? websiteSettings?.header_background_color || "#ffffff"
+        : websiteSettings?.outer_background_color || "#ffffff",
+    ),
+  );
   const gridRef = useRef<HTMLDivElement>(null);
   const [localWidths, setLocalWidths] = useState<number[]>(() =>
-    grid.cells.map((cell) => Number(cell.width_percent || (cell.span / 4) * 100)),
+    deviceGrid.cells.map((cell) =>
+      Number(cell.width_percent || (cell.span / 4) * 100),
+    ),
   );
   const [dragging, setDragging] = useState<{
     index: number;
@@ -11410,30 +12069,58 @@ function EditableGrid({
   const defaultHeight =
     area === "header"
       ? Number(websiteSettings?.header_height_px || 104)
-      : grid.height === "small"
+      : deviceGrid.height === "small"
         ? 300
-        : grid.height === "medium"
+        : deviceGrid.height === "medium"
           ? 430
           : 560;
   const [localHeight, setLocalHeight] = useState(
-    area === "header" ? defaultHeight : Number(grid.height_px || defaultHeight),
+    area === "header" ? defaultHeight : Number(deviceGrid.height_px || defaultHeight),
   );
   const [heightDragging, setHeightDragging] = useState<{
     startY: number;
     startHeight: number;
   } | null>(null);
   const latestHeightRef = useRef(
-    area === "header" ? defaultHeight : Number(grid.height_px || defaultHeight),
+    area === "header" ? defaultHeight : Number(deviceGrid.height_px || defaultHeight),
   );
+
+  const deviceWidthSignature = deviceGrid.cells
+    .map((cell) => {
+      const width = Number(
+        cell.width_percent || (cell.span / 4) * 100,
+      );
+      return `${cell.id}:${width.toFixed(4)}`;
+    })
+    .join("|");
 
   useEffect(() => {
     if (dragging) return;
-    setLocalWidths(
-      grid.cells.map((cell) =>
-        Number(cell.width_percent || (cell.span / 4) * 100),
-      ),
+
+    const nextWidths = deviceGrid.cells.map((cell) =>
+      Number(cell.width_percent || (cell.span / 4) * 100),
     );
-  }, [grid.cells, dragging]);
+
+    setLocalWidths((current) => {
+      const unchanged =
+        current.length === nextWidths.length &&
+        current.every(
+          (value, index) =>
+            Math.abs(
+              value - Number(nextWidths[index] ?? 0),
+            ) < 0.0001,
+        );
+
+      return unchanged ? current : nextWidths;
+    });
+
+    /*
+     * deviceGrid.cells는 resolveGridForDevice() 때문에 렌더링마다
+     * 새 배열이 됩니다. 배열 자체를 의존성으로 사용하지 않고,
+     * 실제 셀 ID와 너비로 만든 문자열만 사용합니다.
+     */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceWidthSignature, dragging]);
 
   useEffect(() => {
     if (heightDragging) return;
@@ -11441,21 +12128,21 @@ function EditableGrid({
     const nextHeight =
       area === "header"
         ? defaultHeight
-        : Number(grid.height_px || defaultHeight);
+        : Number(deviceGrid.height_px || defaultHeight);
     latestHeightRef.current = nextHeight;
     setLocalHeight(nextHeight);
     // heightDragging을 의존성에 넣으면 마우스를 놓는 순간
     // 저장 전의 이전 높이로 다시 초기화될 수 있습니다.
-  }, [grid.height_px, grid.height, area, defaultHeight]);
+  }, [deviceGrid.height_px, grid.height, area, defaultHeight]);
 
   // restaurant-menu가 있더라도 레이어 높이를 자동으로 늘리지 않습니다.
   // 사용자가 아래 높이 핸들을 움직이면 버거칸도 같은 높이로 줄어듭니다.
   const autoMobileBusinessHours =
     previewDevice === "mobile" &&
     area !== "header" &&
-    gridContainsDisplayMode(grid, "business-hours");
+    gridContainsDisplayMode(deviceGrid, "business-hours");
   const autoSliderCells = getCellsByDisplayMode(
-    grid.cells,
+    deviceGrid.cells,
     "auto-slider",
   );
   const sliderAutoHeight =
@@ -11513,7 +12200,7 @@ function EditableGrid({
     index: number,
     cellId: string,
   ) {
-    if (index >= grid.cells.length - 1) return;
+    if (index >= deviceGrid.cells.length - 1) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -11577,7 +12264,7 @@ function EditableGrid({
     }
 
     const widths: Record<string, number> = {};
-    grid.cells.forEach((cell, index) => {
+    deviceGrid.cells.forEach((cell, index) => {
       widths[cell.id] = localWidths[index];
     });
 
@@ -11600,7 +12287,14 @@ function EditableGrid({
         // 칸 나누기 영역을 레이어 테두리에 딱 맞추지 않고
         // 사방 4px 안쪽으로 띄웁니다.
         boxSizing: "border-box",
-        padding: area === "hero" ? "4px" : undefined,
+        padding:
+          area === "hero" && !hasAutoSlider ? "4px" : 0,
+        backgroundColor:
+          area === "hero"
+            ? hasAutoSlider
+              ? "#000000"
+              : gridFrameBackgroundColor
+            : undefined,
         minHeight: autoMobileBusinessHours
           ? `${area === "header" ? 48 : 40}px`
           : `${area === "header" ? 48 : 40}px`,
@@ -11609,11 +12303,11 @@ function EditableGrid({
           .join(" "),
       }}
     >
-      {grid.cells.map((cell, index) => {
+      {deviceGrid.cells.map((cell, index) => {
         const selected = selectedCellId === cell.id;
         const isDragging = dragging?.cellId === cell.id;
         const isLogo = cell.type === "logo";
-        const hasRightNeighbor = index < grid.cells.length - 1;
+        const hasRightNeighbor = index < deviceGrid.cells.length - 1;
         const handleColor = isLogo ? "red" : "blue";
         const visibleWidth = Math.round(localWidths[index] || 0);
 
@@ -11634,7 +12328,9 @@ function EditableGrid({
                   ? isLogo
                     ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
                     : "bg-blue-50/15 ring-2 ring-inset ring-blue-600"
-                  : "ring-1 ring-inset ring-white/55 hover:ring-2 hover:ring-blue-400"
+                  : cellContainsDisplayMode(cell, "auto-slider")
+                    ? "ring-0 hover:ring-2 hover:ring-blue-400"
+                    : "ring-1 ring-inset ring-white/55 hover:ring-2 hover:ring-blue-400"
               }`}
               style={{
                 justifyContent:
@@ -11656,10 +12352,13 @@ function EditableGrid({
                 background:
                   area === "header"
                     ? "transparent"
-                    : cell.background_color || "transparent",
+                    : normalizeVisibleBackgroundColor(cell.background_color) ||
+                      gridFrameBackgroundColor,
                 padding:
                   cell.child_cells?.length ||
                   cell.type === "image" ||
+                  cellContainsDisplayMode(cell, "auto-slider") ||
+                  cell.display_mode === "map-section" ||
                   cell.display_mode === "restaurant-menu" ||
                   (cell.type === "title" &&
                     (cell.display_mode === "background-image" ||
@@ -11689,6 +12388,7 @@ function EditableGrid({
                 websiteSettings={websiteSettings}
                 onResizeNestedSizes={onResizeNestedSizes}
                 onResizeNestedHeight={onResizeNestedHeight}
+                onMergeNested={onMergeNested}
               />
 
               {cell.type === "empty" && !cell.child_cells?.length ? (
@@ -11897,6 +12597,37 @@ function prepareRichTextHtmlForDevice(
   return result;
 }
 
+function RichTextImagePopup({ html, className, style }: { html: string; className?: string; style?: React.CSSProperties }) {
+  const [popup, setPopup] = useState<{ url: string; title: string; maxWidth: number } | null>(null);
+  useEffect(() => {
+    if (!popup) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setPopup(null); };
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKey); };
+  }, [popup]);
+  return <>
+    <div className={className} style={style} onClick={(event) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const wrapper = target?.closest<HTMLElement>('[data-image-popup="true"]');
+      if (!wrapper) return;
+      const url = String(wrapper.getAttribute("data-image-popup-url") || "").trim();
+      if (!url) return;
+      event.preventDefault(); event.stopPropagation();
+      setPopup({ url, title: String(wrapper.getAttribute("data-image-popup-title") || ""), maxWidth: Math.max(320, Math.min(1800, Number(wrapper.getAttribute("data-image-popup-width") || 1200))) });
+    }} dangerouslySetInnerHTML={{ __html: html }} />
+    {popup && typeof document !== "undefined" ? createPortal(
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-[2147483000] flex items-center justify-center bg-black/90 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setPopup(null); }}>
+        <button type="button" onClick={() => setPopup(null)} className="fixed right-3 top-3 z-[2147483001] flex h-11 w-11 items-center justify-center rounded-full bg-black/65 text-3xl text-white" aria-label="팝업 닫기">×</button>
+        <div className="max-h-[92dvh] w-full overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ maxWidth: `${popup.maxWidth}px` }}>
+          {popup.title ? <div className="border-b border-gray-200 px-5 py-4 pr-16 text-lg font-black text-gray-950">{popup.title}</div> : null}
+          <div className="max-h-[82dvh] overflow-auto p-3 sm:p-5"><img src={popup.url} alt={popup.title || "이미지 팝업"} className="mx-auto block h-auto max-w-full object-contain" /></div>
+        </div>
+      </div>, document.body) : null}
+  </>;
+}
+
 function CellPreview({
   cell,
   business,
@@ -12063,9 +12794,25 @@ function CellPreview({
     const imageHref = normalizeButtonHref(cell.url);
     const imageOpensNewWindow = isExternalButtonHref(imageHref);
     const popupEnabled = cell.popup_enabled === true;
-    const popupImageUrl = String(cell.popup_image_url || cell.image_url || "").trim();
-    const popupTitle = String(cell.popup_title || cell.text || "이미지 상세").trim();
-    const popupMaxWidth = Math.max(320, Math.min(1800, Number(cell.popup_max_width_px || 1200)));
+    const displayImageUrl = String(cell.image_url || "").trim();
+    /*
+     * 화면에 보이는 이미지는 image_url,
+     * 클릭 후 모달에 표시되는 이미지는 popup_image_url을 사용합니다.
+     * 팝업 이미지를 따로 등록하지 않은 경우에만 화면 이미지를 대신 사용합니다.
+     */
+    const popupImageUrl = String(
+      cell.popup_image_url || displayImageUrl,
+    ).trim();
+    const lightboxImageUrl = popupEnabled
+      ? popupImageUrl
+      : displayImageUrl;
+    const popupTitle = String(
+      cell.popup_title || cell.text || "이미지 상세",
+    ).trim();
+    const popupMaxWidth = Math.max(
+      320,
+      Math.min(1800, Number(cell.popup_max_width_px || 1200)),
+    );
     const imageSize = Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100)));
     const imageFit =
       cell.image_fit === "width" || cell.image_fit === "cover"
@@ -12086,7 +12833,7 @@ function CellPreview({
 
     const imageElement = (
       <img
-        src={cell.image_url}
+        src={displayImageUrl}
         alt={cell.text || business.name || "이미지"}
         draggable={false}
         className="block select-none object-contain"
@@ -12142,7 +12889,7 @@ function CellPreview({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              if (popupImageUrl) setImageLightboxOpen(true);
+              if (lightboxImageUrl) setImageLightboxOpen(true);
             }}
             className="absolute inset-0 cursor-zoom-in overflow-hidden border-0 bg-transparent"
             style={imageContainerStyle}
@@ -12209,8 +12956,14 @@ function CellPreview({
                   ) : null}
                   <div className="min-h-0 flex-1 overflow-y-auto bg-white p-2 sm:p-4">
                     <img
-                      src={popupEnabled ? popupImageUrl : cell.image_url}
-                      alt={popupEnabled ? popupTitle : cell.text || business.name || "이미지 크게 보기"}
+                      src={lightboxImageUrl}
+                      alt={
+                        popupEnabled
+                          ? popupTitle
+                          : cell.text ||
+                            business.name ||
+                            "이미지 크게 보기"
+                      }
                       className="mx-auto block h-auto w-full object-contain"
                     />
                   </div>
@@ -12461,15 +13214,25 @@ function CellPreview({
     );
   }
   if (cell.type === "map") {
-    return (
-      <div className="absolute inset-0 h-full w-full p-1">
-        <BusinessLocationSection
-          business={business}
-          cell={cell}
-          compact={previewDevice === "mobile"}
-        />
-      </div>
-    );
+      const customAddress = String(
+        cell.map_address || getBusinessAddress(business),
+      ).trim();
+
+      const mapBusiness: Business = {
+        ...business,
+        address: customAddress || business.address,
+        street_address:
+          customAddress || business.street_address,
+      };
+
+      return (
+        <div className="absolute inset-0 h-full w-full p-0">
+          <BusinessLocationMap
+            business={mapBusiness}
+            compact={previewDevice === "mobile"}
+          />
+        </div>
+      );
   }
   if (cell.type === "hours") return <span className="whitespace-pre-line text-sm font-semibold">{cell.text || "Mon–Fri 9:00 AM–6:00 PM"}</span>;
   if (cell.type === "title") {
@@ -12752,11 +13515,21 @@ function CellPreview({
     }
 
     if (cell.display_mode === "map-section") {
+      const customAddress = String(
+        cell.map_address || getBusinessAddress(business),
+      ).trim();
+
+      const mapBusiness: Business = {
+        ...business,
+        address: customAddress || business.address,
+        street_address:
+          customAddress || business.street_address,
+      };
+
       return (
-        <div className="absolute inset-0 h-full w-full p-1">
-          <BusinessLocationSection
-            business={business}
-            cell={cell}
+        <div className="absolute inset-0 h-full w-full p-0">
+          <BusinessLocationMap
+            business={mapBusiness}
             compact={previewDevice === "mobile"}
           />
         </div>
@@ -12781,7 +13554,8 @@ function CellPreview({
       previewDevice,
     );
     return (
-      <div
+      <RichTextImagePopup
+        html={titleHtml}
         className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
@@ -12798,7 +13572,6 @@ function CellPreview({
                 : "center",
           textAlign: cell.text_align || "center",
         }}
-        dangerouslySetInnerHTML={{ __html: titleHtml }}
       />
     );
   }
@@ -12810,7 +13583,8 @@ function CellPreview({
       previewDevice,
     );
     return (
-      <div
+      <RichTextImagePopup
+        html={textHtml}
         className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible whitespace-pre-wrap [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
         style={{
           ...commonStyle,
@@ -12827,7 +13601,6 @@ function CellPreview({
                 : "center",
           textAlign: cell.text_align || "center",
         }}
-        dangerouslySetInnerHTML={{ __html: textHtml }}
       />
     );
   }
@@ -15504,9 +16277,14 @@ function RightPanel(props: {
   const [inputTextAlign, setInputTextAlign] = useState<TextAlign>("left");
   const [inputVerticalAlign, setInputVerticalAlign] = useState<VerticalAlign>("top");
   const [textLinkType, setTextLinkType] = useState<
-    "section" | "page" | "external"
+    "section" | "page" | "external" | "image-popup"
   >("section");
   const [textLinkValue, setTextLinkValue] = useState("");
+  const [textPopupImageUrl, setTextPopupImageUrl] = useState("");
+  const [textPopupTitle, setTextPopupTitle] = useState("");
+  const [textPopupMaxWidth, setTextPopupMaxWidth] = useState(1200);
+  const [textPopupUploading, setTextPopupUploading] = useState(false);
+  const textPopupImageInputRef = useRef<HTMLInputElement>(null);
   const [textInsertPhone, setTextInsertPhone] = useState("");
   const [textInsertPhoneLabel, setTextInsertPhoneLabel] = useState("Call Us");
   const [textInsertSnsPlatform, setTextInsertSnsPlatform] = useState<SnsPlatform>("instagram");
@@ -16531,6 +17309,14 @@ function RightPanel(props: {
           ? "bottom"
           : "center",
     );
+    setTextPopupImageUrl(wrapper.getAttribute("data-image-popup-url") || "");
+    setTextPopupTitle(wrapper.getAttribute("data-image-popup-title") || "");
+    setTextPopupMaxWidth(
+      Math.max(
+        320,
+        Math.min(1800, Number(wrapper.getAttribute("data-image-popup-width") || 1200)),
+      ),
+    );
   }
 
   function getSelectedTextEditorImage() {
@@ -16538,6 +17324,67 @@ function RightPanel(props: {
     return textEditorRef.current?.querySelector<HTMLElement>(
       `[data-text-editor-image-id="${selectedTextEditorImageId}"]`,
     ) || null;
+  }
+
+  async function uploadSelectedTextPopupImage(file: File | undefined) {
+    if (!file || !selectedTextEditorImageId) return;
+    if (!file.type.startsWith("image/")) {
+      setTextEditorMessage("팝업에는 이미지 파일만 등록할 수 있습니다.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setTextEditorMessage("팝업 이미지 크기는 10MB 이하여야 합니다.");
+      return;
+    }
+    setTextPopupUploading(true);
+    setTextEditorMessage("");
+    try {
+      const url = await uploadTextEditorImage(file);
+      setTextPopupImageUrl(url);
+      setTextEditorMessage("팝업 이미지를 업로드했습니다. 팝업 적용을 눌러주세요.");
+    } catch (error) {
+      setTextEditorMessage(error instanceof Error ? error.message : "팝업 이미지 업로드에 실패했습니다.");
+    } finally {
+      setTextPopupUploading(false);
+      if (textPopupImageInputRef.current) textPopupImageInputRef.current.value = "";
+    }
+  }
+
+  function applyPopupToSelectedTextEditorImage() {
+    const wrapper = getSelectedTextEditorImage();
+    if (!wrapper) {
+      setTextEditorMessage("먼저 편집창 안의 이미지를 클릭하세요.");
+      return;
+    }
+    if (!textPopupImageUrl.trim()) {
+      setTextEditorMessage("팝업으로 표시할 이미지를 먼저 업로드하세요.");
+      return;
+    }
+    wrapper.setAttribute("data-image-popup", "true");
+    wrapper.setAttribute("data-image-popup-url", textPopupImageUrl.trim());
+    wrapper.setAttribute("data-image-popup-title", textPopupTitle.trim());
+    wrapper.setAttribute("data-image-popup-width", String(Math.max(320, Math.min(1800, textPopupMaxWidth))));
+    wrapper.style.cursor = "zoom-in";
+    syncEditorHtml();
+    setTextEditorMessage("선택한 이미지에 이미지 팝업을 적용했습니다.");
+  }
+
+  function removePopupFromSelectedTextEditorImage() {
+    const wrapper = getSelectedTextEditorImage();
+    if (!wrapper) {
+      setTextEditorMessage("먼저 편집창 안의 이미지를 클릭하세요.");
+      return;
+    }
+    wrapper.removeAttribute("data-image-popup");
+    wrapper.removeAttribute("data-image-popup-url");
+    wrapper.removeAttribute("data-image-popup-title");
+    wrapper.removeAttribute("data-image-popup-width");
+    wrapper.style.removeProperty("cursor");
+    setTextPopupImageUrl("");
+    setTextPopupTitle("");
+    setTextPopupMaxWidth(1200);
+    syncEditorHtml();
+    setTextEditorMessage("선택한 이미지의 팝업을 제거했습니다.");
   }
 
   function resizeSelectedTextEditorImage(width: number) {
@@ -17192,6 +18039,10 @@ function RightPanel(props: {
     .filter((option) => Boolean(option.value));
 
   function applyTextLink() {
+    if (textLinkType === "image-popup") {
+      applyPopupToSelectedTextEditorImage();
+      return;
+    }
     const rawLinkValue = textLinkValue.trim();
     const href =
       textLinkType === "external"
@@ -20494,20 +21345,13 @@ function RightPanel(props: {
                     </p>
 
                     <div className="flex flex-wrap items-end gap-2">
-                      <label className="min-w-[125px]">
-                        <span className="mb-1 block text-[11px] font-black text-gray-600">
-                          링크 종류
-                        </span>
+                      <label className="min-w-[145px]">
+                        <span className="mb-1 block text-[11px] font-black text-gray-600">링크 종류</span>
                         <select
                           value={textLinkType}
                           onMouseDown={rememberTextSelection}
                           onChange={(event) => {
-                            setTextLinkType(
-                              event.target.value as
-                                | "section"
-                                | "page"
-                                | "external",
-                            );
+                            setTextLinkType(event.target.value as "section" | "page" | "external" | "image-popup");
                             setTextLinkValue("");
                             setTextEditorMessage("");
                           }}
@@ -20516,76 +21360,48 @@ function RightPanel(props: {
                           <option value="section">레이어 링크</option>
                           <option value="page">페이지 링크</option>
                           <option value="external">다른 사이트 링크</option>
+                          <option value="image-popup">이미지 팝업</option>
                         </select>
                       </label>
 
-                      <label className="min-w-[220px] flex-1">
-                        <span className="mb-1 block text-[11px] font-black text-gray-600">
-                          {textLinkType === "section"
-                            ? "이동할 레이어"
-                            : textLinkType === "page"
-                              ? "이동할 페이지"
-                              : "외부 사이트 주소"}
-                        </span>
+                      {textLinkType !== "image-popup" ? (
+                        <label className="min-w-[220px] flex-1">
+                          <span className="mb-1 block text-[11px] font-black text-gray-600">
+                            {textLinkType === "section" ? "이동할 레이어" : textLinkType === "page" ? "이동할 페이지" : "외부 사이트 주소"}
+                          </span>
+                          {textLinkType === "external" ? (
+                            <input type="url" value={textLinkValue} onMouseDown={rememberTextSelection} onChange={(event) => setTextLinkValue(event.target.value)} placeholder="예: https://squareup.com/gift/..." className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold" />
+                          ) : (
+                            <select value={textLinkValue} onMouseDown={rememberTextSelection} onChange={(event) => setTextLinkValue(event.target.value)} className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold">
+                              <option value="">{textLinkType === "section" ? "레이어를 선택하세요" : "페이지를 선택하세요"}</option>
+                              {(textLinkType === "section" ? textSectionLinkOptions : textPageLinkOptions).map((option) => (
+                                <option key={`${textLinkType}-${option.value}`} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          )}
+                        </label>
+                      ) : (
+                        <div className="min-w-[340px] flex-1 rounded-xl border border-violet-300 bg-white p-3">
+                          <p className="text-xs font-black text-violet-950">선택한 이미지에 연결할 팝업</p>
+                          <p className="mt-1 text-[11px] font-semibold text-violet-700">아래 편집창에서 이미지를 먼저 클릭하세요.</p>
+                          <input ref={textPopupImageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void uploadSelectedTextPopupImage(event.target.files?.[0])} />
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr_120px]">
+                            <button type="button" disabled={textPopupUploading || !selectedTextEditorImageId} onClick={() => textPopupImageInputRef.current?.click()} className="h-10 rounded-lg bg-violet-600 px-3 text-xs font-black text-white disabled:opacity-50">
+                              {textPopupUploading ? "업로드 중..." : textPopupImageUrl ? "팝업 이미지 교체" : "팝업 이미지 업로드"}
+                            </button>
+                            <input value={textPopupTitle} onChange={(event) => setTextPopupTitle(event.target.value)} placeholder="팝업 제목" className="h-10 rounded-lg border border-gray-300 px-3 text-sm font-bold" />
+                            <input type="number" min={320} max={1800} value={textPopupMaxWidth} onChange={(event) => setTextPopupMaxWidth(Math.max(320, Math.min(1800, Number(event.target.value) || 1200)))} className="h-10 rounded-lg border border-gray-300 px-3 text-sm font-bold" title="팝업 최대 너비(px)" />
+                          </div>
+                          {textPopupImageUrl ? <div className="mt-3 flex h-28 items-center justify-center overflow-hidden rounded-lg border border-violet-200 bg-violet-50 p-2"><img src={textPopupImageUrl} alt="팝업 이미지 미리보기" className="block max-h-full max-w-full object-contain" /></div> : null}
+                        </div>
+                      )}
 
-                        {textLinkType === "external" ? (
-                          <input
-                            type="url"
-                            value={textLinkValue}
-                            onMouseDown={rememberTextSelection}
-                            onChange={(event) => setTextLinkValue(event.target.value)}
-                            placeholder="예: https://squareup.com/gift/..."
-                            className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
-                          />
-                        ) : (
-                          <select
-                            value={textLinkValue}
-                            onMouseDown={rememberTextSelection}
-                            onChange={(event) => setTextLinkValue(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
-                          >
-                            <option value="">
-                              {textLinkType === "section"
-                                ? "레이어를 선택하세요"
-                                : "페이지를 선택하세요"}
-                            </option>
-                            {(textLinkType === "section"
-                              ? textSectionLinkOptions
-                              : textPageLinkOptions
-                            ).map((option) => (
-                              <option
-                                key={`${textLinkType}-${option.value}`}
-                                value={option.value}
-                              >
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </label>
-
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          rememberTextSelection();
-                        }}
-                        onClick={applyTextLink}
-                        className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700"
-                      >
-                        링크 적용
+                      <button type="button" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={applyTextLink} className="h-10 rounded-xl bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700">
+                        {textLinkType === "image-popup" ? "팝업 적용" : "링크 적용"}
                       </button>
 
-                      <button
-                        type="button"
-                        onMouseDown={(event) => {
-                          event.preventDefault();
-                          rememberTextSelection();
-                        }}
-                        onClick={removeTextLink}
-                        className="h-10 rounded-xl border border-blue-300 bg-white px-4 text-xs font-black text-blue-700 hover:bg-blue-100"
-                      >
-                        링크 제거
+                      <button type="button" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={textLinkType === "image-popup" ? removePopupFromSelectedTextEditorImage : removeTextLink} className="h-10 rounded-xl border border-blue-300 bg-white px-4 text-xs font-black text-blue-700 hover:bg-blue-100">
+                        {textLinkType === "image-popup" ? "팝업 제거" : "링크 제거"}
                       </button>
                     </div>
 
@@ -20605,6 +21421,10 @@ function RightPanel(props: {
                 </div>
 
                 <style>{`
+                  .text-cell-rich-editor [data-image-popup="true"] {
+                    cursor: zoom-in;
+                  }
+
                   .text-cell-rich-editor a {
                     color: #2563eb;
                     text-decoration: underline;
@@ -21171,7 +21991,7 @@ function RightPanel(props: {
         ) : null}
 
         <div className="mt-5 grid grid-cols-2 gap-2 border-t border-gray-200 pt-5">
-          <ActionButton label="칸 합치기" onClick={() => props.onMergeCell(area, selectedCell.id, selection.layoutId)} />
+          <ActionButton label="다음 칸과 합치기" onClick={() => props.onMergeCell(area, selectedCell.id, selection.layoutId)} />
           <ActionButton label="칸 나누기" onClick={() => props.onSplitCell(area, selectedCell.id, selection.layoutId)} />
           <ActionButton label="복사" onClick={() => props.onDuplicateCell(area, selectedCell.id, selection.layoutId)} />
           <ActionButton label="비우기" danger onClick={() => props.onClearCell(area, selectedCell.id, selection.layoutId)} />
@@ -21996,8 +22816,12 @@ function ImageCellUploader({
     }
 
     const previousUrl = String(cell.popup_image_url || "");
+    const previousEnabled = cell.popup_enabled === true;
     const previewUrl = URL.createObjectURL(file);
-    onUpdate({ popup_enabled: true, popup_image_url: previewUrl });
+    onUpdate({
+      popup_enabled: true,
+      popup_image_url: previewUrl,
+    });
     setPopupUploading(true);
 
     try {
@@ -22021,7 +22845,10 @@ function ImageCellUploader({
       onUpdate({ popup_enabled: true, popup_image_url: imageUrl });
       URL.revokeObjectURL(previewUrl);
     } catch (error) {
-      onUpdate({ popup_image_url: previousUrl });
+      onUpdate({
+        popup_enabled: previousEnabled,
+        popup_image_url: previousUrl,
+      });
       URL.revokeObjectURL(previewUrl);
       setUploadError(error instanceof Error ? error.message : "팝업 이미지 업로드에 실패했습니다.");
     } finally {
@@ -22277,7 +23104,17 @@ function ImageCellUploader({
         </div>
 
         {cell.popup_enabled ? (
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-3 rounded-2xl border border-violet-300 bg-violet-50 p-4">
+            <div>
+              <p className="text-sm font-black text-violet-950">
+                클릭 후 표시할 팝업 이미지
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-violet-700">
+                위의 화면용 이미지와 다른 이미지를 등록할 수 있습니다.
+                팝업 이미지를 등록하지 않으면 화면용 이미지가 크게 표시됩니다.
+              </p>
+            </div>
+
             <input
               ref={popupFileInputRef}
               type="file"
@@ -22286,15 +23123,58 @@ function ImageCellUploader({
               onChange={(event) => handlePopupFiles(event.target.files)}
             />
 
-            {cell.popup_image_url ? (
-              <div className="overflow-hidden rounded-xl border border-violet-200 bg-white p-2">
-                <img
-                  src={cell.popup_image_url}
-                  alt="팝업 이미지 미리보기"
-                  className="mx-auto block max-h-48 max-w-full object-contain"
-                />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="overflow-hidden rounded-xl border border-blue-200 bg-white p-2">
+                <p className="mb-2 text-center text-[10px] font-black text-blue-700">
+                  화면에 보이는 이미지
+                </p>
+                <div className="flex h-32 items-center justify-center overflow-hidden">
+                  {cell.image_url ? (
+                    <img
+                      src={cell.image_url}
+                      alt="화면용 이미지"
+                      className="block max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs font-bold text-gray-400">
+                      이미지 없음
+                    </span>
+                  )}
+                </div>
               </div>
-            ) : null}
+
+              <div className="overflow-hidden rounded-xl border border-violet-200 bg-white p-2">
+                <p className="mb-2 text-center text-[10px] font-black text-violet-700">
+                  클릭하면 뜨는 이미지
+                </p>
+                <div className="flex h-32 items-center justify-center overflow-hidden">
+                  {cell.popup_image_url ? (
+                    <img
+                      src={cell.popup_image_url}
+                      alt="팝업 이미지 미리보기"
+                      className="block max-h-full max-w-full object-contain"
+                    />
+                  ) : cell.image_url ? (
+                    <div className="relative h-full w-full">
+                      <img
+                        src={cell.image_url}
+                        alt="화면 이미지 대체 표시"
+                        className="block h-full w-full object-contain opacity-40"
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center px-2 text-center text-[10px] font-black text-violet-800">
+                        팝업 이미지 미등록
+                        <br />
+                        화면 이미지 사용
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-bold text-gray-400">
+                      이미지 없음
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <button
               type="button"
@@ -22305,8 +23185,8 @@ function ImageCellUploader({
               {popupUploading
                 ? "팝업 이미지를 업로드하고 있습니다..."
                 : cell.popup_image_url
-                  ? "팝업 이미지 교체"
-                  : "팝업 이미지 업로드"}
+                  ? "클릭 후 이미지 교체"
+                  : "클릭 후 이미지 업로드"}
             </button>
 
             <Field label="팝업 제목">
@@ -22338,10 +23218,15 @@ function ImageCellUploader({
             {cell.popup_image_url ? (
               <button
                 type="button"
-                onClick={() => onUpdate({ popup_image_url: "" })}
+                onClick={() =>
+                  onUpdate({
+                    popup_image_url: "",
+                    popup_enabled: true,
+                  })
+                }
                 className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700"
               >
-                팝업 이미지 삭제
+                별도 팝업 이미지 삭제 · 화면 이미지 사용
               </button>
             ) : null}
           </div>
@@ -22748,6 +23633,12 @@ function AutoImageSlider({
         maxHeight: autoHeight ? "none" : "100%",
         aspectRatio: autoHeight ? String(imageAspectRatio) : undefined,
         borderRadius: "inherit",
+        margin: 0,
+        padding: 0,
+        border: 0,
+        outline: "none",
+        boxShadow: "none",
+        lineHeight: 0,
       }}
       onTouchStart={(event) => {
         touchStartX.current = event.touches[0]?.clientX ?? null;
@@ -22795,8 +23686,13 @@ function AutoImageSlider({
               height: "100%",
               maxWidth: "none",
               maxHeight: "none",
-              objectFit: autoHeight ? "contain" : "cover",
+              objectFit: "cover",
               objectPosition: "50% 50%",
+              margin: 0,
+              padding: 0,
+              border: 0,
+              outline: "none",
+              display: "block",
             }}
           />
         </div>
@@ -22967,6 +23863,34 @@ function TitleCellEditor({
         gallery_images: Array.isArray(cell.gallery_images)
           ? cell.gallery_images
           : [],
+      });
+      return;
+    }
+
+    if (nextMode === "map-section") {
+      /*
+       * 지도 선택 시 LOCATION/주소/전화번호 복합 레이아웃이나
+       * 자동 1×2 구조를 만들지 않습니다.
+       * 현재 선택한 칸 전체를 지도 한 칸으로 초기화합니다.
+       */
+      onUpdate({
+        type: "title",
+        display_mode: "map-section",
+        text: "",
+        rich_text_html: "",
+        mobile_text: "",
+        image_url: undefined,
+        child_cells: undefined,
+        child_direction: undefined,
+        nested_height_px: undefined,
+        mobile_nested_height_px: undefined,
+        map_title: undefined,
+        map_phone: undefined,
+        map_email: undefined,
+        map_info_background_color: undefined,
+        map_sns_items: undefined,
+        background_color: "transparent",
+        vertical_align: "center",
       });
       return;
     }
@@ -24561,11 +25485,11 @@ function TitleCellEditor({
             업체 주소 자동 지도
           </p>
           <p className="mt-1 text-xs leading-5 text-gray-600">
-            비즈니스에 저장된 주소 또는 위도·경도를 자동으로 가져와
-            레이아웃과 공개 페이지에 Google 지도를 표시합니다.
+            현재 선택한 칸 전체에 Google 지도만 표시합니다.
+            LOCATION 제목, 주소, 전화번호 영역은 추가하지 않습니다.
           </p>
           <p className="mt-2 text-[11px] font-bold text-blue-700">
-            지도 안에는 업체명, 주소, Directions 버튼이 함께 표시됩니다.
+            다른 내용과 함께 배치하려면 먼저 칸을 나눈 뒤 원하는 칸에 지도를 넣으세요.
           </p>
         </div>
       ) : null}
