@@ -11601,6 +11601,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, onUpdateCell, bus
       onImagePointerDown={startImageDrag}
       onImagePointerMove={moveImageDrag}
       onImagePointerUp={stopImageDrag}
+      isSelected={isSelected}
     />
   );
 }
@@ -12748,6 +12749,7 @@ function CellPreview({
   onImagePointerDown,
   onImagePointerMove,
   onImagePointerUp,
+  isSelected = false,
 }: {
   cell: GridCell;
   business: Business;
@@ -12761,6 +12763,7 @@ function CellPreview({
   onImagePointerDown?: (event: React.PointerEvent<HTMLElement>) => void;
   onImagePointerMove?: (event: React.PointerEvent<HTMLElement>) => void;
   onImagePointerUp?: (event: React.PointerEvent<HTMLElement>) => void;
+  isSelected?: boolean;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
