@@ -25,6 +25,12 @@ type ExistingNewsImageRow = {
   image_url: string | null;
 };
 
+type ExistingTranslationRow = {
+  article_url: string;
+  title: string | null;
+  summary: string | null;
+};
+
 type HtmlMetadata = {
   finalUrl: string;
   imageUrl: string | null;
@@ -1045,16 +1051,21 @@ async function translateNewUsItems(
     throw existingError;
   }
 
-  const existingMap = new Map(
-    (existingRows ?? []).map((row) => [
-      String(row.article_url),
+  const typedTranslationRows =
+    (existingRows ?? []) as ExistingTranslationRow[];
+
+  const existingMap = new Map<
+    string,
+    {
+      title: string;
+      summary: string | null;
+    }
+  >(
+    typedTranslationRows.map((row) => [
+      row.article_url,
       {
-        title: String(row.title ?? ""),
-        summary:
-          row.summary === null ||
-          row.summary === undefined
-            ? null
-            : String(row.summary),
+        title: row.title ?? "",
+        summary: row.summary,
       },
     ]),
   );
