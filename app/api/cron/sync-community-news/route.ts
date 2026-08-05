@@ -31,6 +31,10 @@ type ExistingTranslationRow = {
   summary: string | null;
 };
 
+type CommunityNewsAdminClient = {
+  from: (table: string) => any;
+};
+
 type HtmlMetadata = {
   finalUrl: string;
   imageUrl: string | null;
@@ -783,7 +787,7 @@ async function resolveBloombergMetadataDirect(
 }
 
 async function enrichUsImages(
-  admin: ReturnType<typeof createClient>,
+  admin: CommunityNewsAdminClient,
   items: ParsedNews[],
 ) {
   if (items.length === 0) {
@@ -1024,7 +1028,7 @@ async function translateToKorean(
 }
 
 async function translateNewUsItems(
-  admin: ReturnType<typeof createClient>,
+  admin: CommunityNewsAdminClient,
   items: ParsedNews[],
 ) {
   if (items.length === 0) {
