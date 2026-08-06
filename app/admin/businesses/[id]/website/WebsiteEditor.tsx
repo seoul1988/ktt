@@ -5191,6 +5191,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         );
 
         if (
+          device === "desktop" &&
           changedCellType === "logo" &&
           Object.prototype.hasOwnProperty.call(patch, "logo_size_px")
         ) {
@@ -7771,6 +7772,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
         <aside className="border-l border-gray-200 bg-white p-4 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:p-5">
           <RightPanel
+            editorDevice={device}
             selection={selection}
             selectedCell={resolveCellForDevice(selectedCell, device)}
             selectedSection={selectedSection}
@@ -8264,6 +8266,42 @@ function getMobileButtonText(cell: GridCell) {
   }
 
   return desktopText;
+}
+
+function getMobileHeaderHeight(
+  websiteSettings: WebsiteSettings | null | undefined,
+) {
+  const desktopHeaderHeight = Math.max(
+    48,
+    Math.min(
+      1200,
+      Number(
+        websiteSettings?.header_grid?.height_px ||
+          websiteSettings?.header_height_px ||
+          104,
+      ),
+    ),
+  );
+
+  const submenuHeight =
+    websiteSettings?.header_submenu_enabled === true
+      ? Math.max(
+          40,
+          Math.min(
+            120,
+            Number(websiteSettings?.header_submenu_height_px ?? 56),
+          ),
+        )
+      : 0;
+
+  /*
+   * Header 아래 메뉴 줄은 모바일에서 표시하지 않으므로,
+   * 데스크톱 헤더 높이에 포함된 서브메뉴 두께를 모바일 높이에서 뺍니다.
+   */
+  return Math.max(
+    56,
+    Math.min(240, desktopHeaderHeight - submenuHeight),
+  );
 }
 
 function HeaderSubmenu({
@@ -10246,13 +10284,7 @@ export function PublicWebsiteRenderer({
             aria-hidden="true"
             className="w-full"
             style={{
-              height: `${Math.max(
-                76,
-                Math.min(
-                  Number(websiteSettings.header_height_px || 104),
-                  240,
-                ),
-              )}px`,
+              height: `${getMobileHeaderHeight(websiteSettings)}px`,
             }}
           />
         ) : null}
@@ -10846,10 +10878,7 @@ function MobileWebsiteHeader({
   // 상단 서브메뉴 설정값을 이용해 모바일 메뉴가 반드시 표시되게 합니다.
   const menuItems = gridMenuItems.length > 0 ? gridMenuItems : submenuItems;
 
-  const mobileHeight = Math.max(
-    76,
-    Math.min(Number(websiteSettings?.header_height_px || 104), 240),
-  );
+  const mobileHeight = getMobileHeaderHeight(websiteSettings);
   const headerBackgroundColor = String(
     websiteSettings?.header_background_color || "#ffffff",
   );
@@ -12932,8 +12961,8 @@ function CellPreview({
       Math.min(
         1200,
         Number(
-          websiteSettings?.header_logo_size_px ??
-            cell.logo_size_px ??
+          cell.logo_size_px ??
+            websiteSettings?.header_logo_size_px ??
             120,
         ),
       ),
@@ -14129,7 +14158,7 @@ function HeaderSubmenuEditor({
                   key: "header_height_px",
                 },
                 {
-                  label: "기본 헤더 로고 크기",
+                  label: "데스크탑 헤더 로고 크기",
                   value: Number(websiteSettings.header_logo_size_px || 120),
                   min: 40,
                   max: 1200,
@@ -16554,6 +16583,7 @@ function LinkPageEditor({
 }
 
 function RightPanel(props: {
+  editorDevice: "desktop" | "mobile";
   selection: Selection;
   selectedCell: GridCell | null;
   selectedSection: BusinessSection | null;
@@ -20231,9 +20261,15 @@ function RightPanel(props: {
             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-black text-gray-900">로고 크기</p>
+                  <p className="text-sm font-black text-gray-900">
+                    {props.editorDevice === "mobile"
+                      ? "폰 로고 크기"
+                      : "데스크탑 로고 크기"}
+                  </p>
                   <p className="mt-1 text-xs font-semibold text-gray-500">
-                    슬라이더나 숫자를 사용해 자유롭게 조절하세요.
+                    {props.editorDevice === "mobile"
+                      ? "폰에서만 사용하는 크기로 저장됩니다. 데스크탑 로고 크기는 바뀌지 않습니다."
+                      : "데스크탑에서만 사용하는 크기로 저장됩니다. 폰 로고 크기는 별도로 조절하세요."}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 rounded-xl border border-gray-300 bg-white px-2">
