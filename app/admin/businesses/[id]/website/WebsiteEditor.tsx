@@ -9282,6 +9282,7 @@ function CurrentWebsitePreview({
               style={{
                 ...backgroundStyle(heroSection, outerBackgroundColor),
                 ...getSectionWidthStyle(heroSection),
+                marginBottom: "6px",
                 minHeight: getVideoSectionMinHeight(
                   heroSection,
                   device,
@@ -9297,13 +9298,17 @@ function CurrentWebsitePreview({
               />
 
               <div className="relative z-10">
-                {heroLayouts.map((layout) => (
+                {heroLayouts.map((layout, layoutIndex) => (
                   <div
                     key={layout.id}
                     className={
                       getLayoutWidthClass(layout)
                     }
-                    style={getLayoutBorderStyle(layout)}
+                    style={{
+                      ...getLayoutBorderStyle(layout),
+                      marginBottom:
+                        layoutIndex < heroLayouts.length - 1 ? "6px" : 0,
+                    }}
                   >
                     <div
                       style={{
@@ -9345,7 +9350,7 @@ function CurrentWebsitePreview({
                   section.id !== heroSection?.id &&
                   !isHomeLikeSection(section),
               )
-              .map((section) => {
+              .map((section, sectionIndex, visibleSections) => {
                 const isCollapsible = Boolean(
                   section.content?.collapsible,
                 );
@@ -9370,7 +9375,11 @@ function CurrentWebsitePreview({
                     key={section.id}
                     id={isCollapsible ? sectionSlug : undefined}
                     className={getSectionWidthClass(section)}
-                    style={getSectionWidthStyle(section)}
+                    style={{
+                      ...getSectionWidthStyle(section),
+                      marginBottom:
+                        sectionIndex < visibleSections.length - 1 ? "6px" : 0,
+                    }}
                   >
                     {isCollapsible &&
                     section.content?.close_button_enabled !== false ? (
@@ -10327,6 +10336,7 @@ export function PublicWebsiteRenderer({
             style={{
               ...backgroundStyle(heroSection, outerBackgroundColor),
               ...getSectionWidthStyle(heroSection, true),
+              marginBottom: remainingSections.length > 0 ? "6px" : 0,
               minHeight: getVideoSectionMinHeight(
                 heroSection,
                 device,
@@ -10340,11 +10350,15 @@ export function PublicWebsiteRenderer({
             />
 
             <div className="relative z-10">
-              {layouts.map((layout) => (
+              {layouts.map((layout, layoutIndex) => (
                 <div
                   key={layout.id}
                   className={getLayoutWidthClass(layout)}
-                  style={getLayoutBorderStyle(layout)}
+                  style={{
+                    ...getLayoutBorderStyle(layout),
+                    marginBottom:
+                      layoutIndex < layouts.length - 1 ? "6px" : 0,
+                  }}
                 >
                   <div
                     style={{
@@ -10382,7 +10396,7 @@ export function PublicWebsiteRenderer({
           </section>
         )}
 
-        {remainingSections.map((section) => {
+        {remainingSections.map((section, sectionIndex) => {
           const isCollapsible = Boolean(section.content?.collapsible);
           const isOpen =
             !isCollapsible ||
@@ -10404,7 +10418,11 @@ export function PublicWebsiteRenderer({
                 getSectionWidthMode(section) === "full" ? "true" : undefined
               }
               className={getSectionWidthClass(section)}
-              style={getSectionWidthStyle(section, true)}
+              style={{
+                ...getSectionWidthStyle(section, true),
+                marginBottom:
+                  sectionIndex < remainingSections.length - 1 ? "6px" : 0,
+              }}
             >
               {isCollapsible &&
               section.content?.close_button_enabled !== false ? (
@@ -11479,7 +11497,7 @@ function PreviewSection({
               style={{
                 ...getLayoutBorderStyle(layout),
                 marginBottom:
-                  layoutIndex < sectionLayouts.length - 1 ? "4px" : 0,
+                  layoutIndex < sectionLayouts.length - 1 ? "6px" : 0,
               }}
             >
               <div
