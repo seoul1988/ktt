@@ -535,27 +535,46 @@ function getKoreaUsEconomyScore(
 function selectDiversifiedKoreaNews(
   items: ParsedNews[],
 ) {
+  const scoredItems = items
+    .filter(
+      (item) =>
+        item.region === "korea" &&
+        Boolean(item.article_url) &&
+        Boolean(item.title),
+    )
+    .map((item) => ({
+      item,
+      score: getKoreaUsEconomyScore(
+        item.title,
+        item.summary,
+      ),
+    }))
+    // 미국·미국 증시·연준·미국 기업과 경제 문맥이 확인된 기사만 통과합니다.
+    .filter(({ score }) => score >= 4)
+    .sort((a, b) => {
+      const dateDifference =
+        sortNewest(a.item, b.item);
+
+      if (dateDifference !== 0) {
+        return dateDifference;
+      }
+
+      return b.score - a.score;
+    });
+
   const uniqueItems = Array.from(
     new Map(
-      items
-        .filter(
-          (item) =>
-            item.region === "korea" &&
-            Boolean(item.article_url) &&
-            Boolean(item.title),
-        )
-        .sort(sortNewest)
-        .map((item) => [
-          item.article_url,
-          item,
-        ]),
+      scoredItems.map(({ item }) => [
+        item.article_url,
+        item,
+      ]),
     ).values(),
   );
 
   const selected: ParsedNews[] = [];
   const sourceCounts = new Map<string, number>();
 
-  // 먼저 언론사별 상한을 적용해 한 언론사의 기사만 도배되는 것을 막습니다.
+  // 미국 관련 경제 기사 중에서도 특정 언론사만 도배되지 않게 제한합니다.
   for (const item of uniqueItems) {
     const count =
       sourceCounts.get(item.source) ?? 0;
@@ -566,24 +585,6 @@ function selectDiversifiedKoreaNews(
 
     selected.push(item);
     sourceCounts.set(item.source, count + 1);
-
-    if (selected.length >= NEWS_LIMIT) {
-      return selected;
-    }
-  }
-
-  // 일부 RSS가 실패해 12개를 못 채운 경우에는 남은 최신 기사로 채웁니다.
-  const selectedUrls = new Set(
-    selected.map((item) => item.article_url),
-  );
-
-  for (const item of uniqueItems) {
-    if (selectedUrls.has(item.article_url)) {
-      continue;
-    }
-
-    selected.push(item);
-    selectedUrls.add(item.article_url);
 
     if (selected.length >= NEWS_LIMIT) {
       break;
@@ -1048,7 +1049,7 @@ async function replaceRegionNews(
   } = await admin
     .from("community_news")
     .select(
-      "id, article_url, published_at, fetched_at, updated_at",
+      "id, article_url, title, summary, source, published_at, fetched_at, updated_at",
     )
     .eq("region", region);
 
@@ -1057,6 +1058,9 @@ async function replaceRegionNews(
   const rows = (existingRows ?? []) as Array<{
     id: number | string;
     article_url: string;
+    title: string | null;
+    summary: string | null;
+    source: string | null;
     published_at: string | null;
     fetched_at: string | null;
     updated_at: string | null;
@@ -1079,16 +1083,35 @@ async function replaceRegionNews(
       : 0;
   };
 
-  const sortedRows = [...rows].sort(
+  const eligibleRows =
+    region === "korea"
+      ? rows.filter(
+          (row) =>
+            getKoreaUsEconomyScore(
+              row.title ?? "",
+              row.summary,
+            ) >= 4,
+        )
+      : rows;
+
+  const sortedRows = [...eligibleRows].sort(
     (a, b) => getRowTime(b) - getRowTime(a),
   );
 
-  // 최신 12개는 유지하고, 13번째 이후의 오래된 기사만 삭제합니다.
+  // 한국 뉴스는 미국 관련 경제 기사만, 미국 뉴스는 최신 기사만 12개 유지합니다.
   const retainedRows =
     sortedRows.slice(0, NEWS_LIMIT);
 
-  const deleteIds = sortedRows
-    .slice(NEWS_LIMIT)
+  const retainedIdSet = new Set(
+    retainedRows.map((row) => String(row.id)),
+  );
+
+  // 미국 관련 경제가 아닌 기존 한국 기사와 12개 초과분을 삭제합니다.
+  const deleteIds = rows
+    .filter(
+      (row) =>
+        !retainedIdSet.has(String(row.id)),
+    )
     .map((row) => row.id);
 
   if (deleteIds.length > 0) {
@@ -1319,9 +1342,10 @@ export async function GET(
       korea: koreaResult,
       us: usResult,
       koreaSelection: {
-        mode: "diversified-latest",
+        mode: "us-economy-only",
         limit: NEWS_LIMIT,
         perSourceLimit: KOREA_SOURCE_LIMIT,
+        minimumScore: 4,
         saved: koreaItems.length,
         sources: koreaItems.reduce<Record<string, number>>(
           (counts, item) => {
