@@ -583,27 +583,15 @@ function isVisualCell(cell: GridCell): boolean {
  * 에디터와 공개 미리보기 모두 페이지의 실제 가로폭을 사용합니다.
  * 일반 텍스트/카드 레이아웃은 저장된 container/full 설정을 그대로 유지합니다.
  */
-function cellRequestsFullWidthImage(cell: GridCell): boolean {
-  if (Array.isArray(cell.child_cells) && cell.child_cells.length > 0) {
-    return cell.child_cells.some(cellRequestsFullWidthImage);
-  }
-
-  if (cell.type !== "image") return false;
-
-  const fit = normalizeImageFit(cell.image_fit);
-  return fit === "width" || fit === "cover" || fit === "fill";
-}
-
 function shouldUseFullWidthLayout(layout: GridData): boolean {
   if (layout.layout_width_mode === "full") return true;
   if (!layout.cells.length || !layout.cells.every(isVisualCell)) return false;
 
-  /*
-   * 이미지가 최상위 칸이 아니라 중첩 칸 안에 있어도 전체 폭 여부를
-   * 재귀적으로 확인합니다. 기존 코드는 최상위 image 셀만 검사하여
-   * 저장 후 미리보기와 공개 화면에서 1120px 컨테이너로 돌아갔습니다.
-   */
-  return layout.cells.some(cellRequestsFullWidthImage);
+  return layout.cells.some((cell) => {
+    if (cell.type !== "image") return false;
+    const fit = normalizeImageFit(cell.image_fit);
+    return fit === "width" || fit === "cover" || fit === "fill";
+  });
 }
 
 function getLayoutWidthClass(layout: GridData) {
@@ -2551,26 +2539,6 @@ function VideoOverlayContent({
   );
 }
 
-function sectionHasFullWidthImageLayout(
-  section: BusinessSection | null | undefined,
-): boolean {
-  if (!section?.content) return false;
-
-  const rawLayouts = Array.isArray(section.content.layouts)
-    ? section.content.layouts
-    : section.content.grid
-      ? [section.content.grid]
-      : [];
-
-  return rawLayouts.some((layout) => {
-    if (!layout || typeof layout !== "object" || !Array.isArray(layout.cells)) {
-      return false;
-    }
-
-    return shouldUseFullWidthLayout(layout as GridData);
-  });
-}
-
 function getSectionWidthMode(
   section: BusinessSection | null | undefined,
 ): "full" | "container" {
@@ -2578,20 +2546,14 @@ function getSectionWidthMode(
     section?.content?.layer_width ||
     section?.settings?.layer_width;
 
-  if (savedWidth === "full") return "full";
-
-  /*
-   * 레이어 자체가 container로 저장되어 있어도 그 안의 이미지 전용
-   * 레이아웃이 칸 너비 맞춤/채우기이면 섹션 래퍼도 전체 폭으로 엽니다.
-   */
-  return sectionHasFullWidthImageLayout(section) ? "full" : "container";
+  return savedWidth === "full" ? "full" : "container";
 }
 
 function getSectionWidthClass(
   section: BusinessSection | null | undefined,
 ) {
   return getSectionWidthMode(section) === "full"
-    ? "relative w-full max-w-none"
+    ? "relative max-w-none"
     : "relative mx-auto w-full max-w-[1120px]";
 }
 
