@@ -565,8 +565,9 @@ function normalizeImageFit(value: unknown): ImageFitMode {
 }
 
 /**
- * 같은 Storage 주소를 다시 사용해도 이전 이미지 캐시가 열리지 않도록
- * 이미지 URL에 교체 시각을 버전값으로 추가합니다.
+ * 같은 Storage 경로에 이미지를 교체하면 공개 URL이 이전과 동일할 수 있습니다.
+ * 브라우저/CDN 캐시 때문에 교체 전 이미지가 다시 보이는 것을 막기 위해
+ * 저장할 URL에 버전 쿼리를 붙입니다.
  */
 function withImageCacheVersion(url: string, version = Date.now()) {
   const raw = String(url || "").trim();
@@ -12791,55 +12792,19 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
   return <>
     <div className={className} style={style} onClick={(event) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
-      const popupTarget =
-        target?.closest<HTMLElement>('[data-image-popup="true"]') ||
-        target?.closest<HTMLElement>('[data-image-popup-url]');
-
-      if (!popupTarget) return;
-
-      const clickedImage =
-        target?.closest<HTMLImageElement>("img") ||
-        popupTarget.querySelector<HTMLImageElement>("img");
-
-      // 팝업 전용 URL은 이미지와 래퍼 양쪽에 저장합니다.
-      // 화면에 보이는 원본 img.src는 절대로 팝업 URL로 사용하지 않습니다.
-      const url = String(
-        clickedImage?.getAttribute("data-image-popup-url") ||
-        popupTarget.getAttribute("data-image-popup-url") ||
-        "",
-      ).trim();
-
+      const wrapper = target?.closest<HTMLElement>('[data-image-popup="true"]');
+      if (!wrapper) return;
+      const url = String(wrapper.getAttribute("data-image-popup-url") || "").trim();
       if (!url) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      setPopup({
-        url,
-        title: String(
-          clickedImage?.getAttribute("data-image-popup-title") ||
-          popupTarget.getAttribute("data-image-popup-title") ||
-          "",
-        ),
-        maxWidth: Math.max(
-          320,
-          Math.min(
-            1800,
-            Number(
-              clickedImage?.getAttribute("data-image-popup-width") ||
-              popupTarget.getAttribute("data-image-popup-width") ||
-              1200,
-            ),
-          ),
-        ),
-      });
+      event.preventDefault(); event.stopPropagation();
+      setPopup({ url, title: String(wrapper.getAttribute("data-image-popup-title") || ""), maxWidth: Math.max(320, Math.min(1800, Number(wrapper.getAttribute("data-image-popup-width") || 1200))) });
     }} dangerouslySetInnerHTML={{ __html: html }} />
     {popup && typeof document !== "undefined" ? createPortal(
       <div role="dialog" aria-modal="true" className="fixed inset-0 z-[2147483000] flex items-center justify-center bg-black/90 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setPopup(null); }}>
         <button type="button" onClick={() => setPopup(null)} className="fixed right-3 top-3 z-[2147483001] flex h-11 w-11 items-center justify-center rounded-full bg-black/65 text-3xl text-white" aria-label="팝업 닫기">×</button>
         <div className="max-h-[92dvh] w-full overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ maxWidth: `${popup.maxWidth}px` }}>
           {popup.title ? <div className="border-b border-gray-200 px-5 py-4 pr-16 text-lg font-black text-gray-950">{popup.title}</div> : null}
-          <div className="max-h-[82dvh] overflow-auto p-3 sm:p-5"><img key={popup.url} src={popup.url} alt={popup.title || "이미지 팝업"} className="mx-auto block h-auto max-w-full object-contain" /></div>
+          <div className="max-h-[82dvh] overflow-auto p-3 sm:p-5"><img src={popup.url} alt={popup.title || "이미지 팝업"} className="mx-auto block h-auto max-w-full object-contain" /></div>
         </div>
       </div>, document.body) : null}
   </>;
@@ -13238,6 +13203,7 @@ function CellPreview({
                   ) : null}
                   <div className="min-h-0 flex-1 overflow-y-auto bg-white p-2 sm:p-4">
                     <img
+                      key={lightboxImageUrl}
                       src={lightboxImageUrl}
                       alt={
                         popupEnabled
@@ -17663,28 +17629,12 @@ function RightPanel(props: {
           ? "bottom"
           : "center",
     );
-    const selectedImage = wrapper.querySelector<HTMLImageElement>("img");
-    setTextPopupImageUrl(
-      selectedImage?.getAttribute("data-image-popup-url") ||
-      wrapper.getAttribute("data-image-popup-url") ||
-      "",
-    );
-    setTextPopupTitle(
-      selectedImage?.getAttribute("data-image-popup-title") ||
-      wrapper.getAttribute("data-image-popup-title") ||
-      "",
-    );
+    setTextPopupImageUrl(wrapper.getAttribute("data-image-popup-url") || "");
+    setTextPopupTitle(wrapper.getAttribute("data-image-popup-title") || "");
     setTextPopupMaxWidth(
       Math.max(
         320,
-        Math.min(
-          1800,
-          Number(
-            selectedImage?.getAttribute("data-image-popup-width") ||
-            wrapper.getAttribute("data-image-popup-width") ||
-            1200,
-          ),
-        ),
+        Math.min(1800, Number(wrapper.getAttribute("data-image-popup-width") || 1200)),
       ),
     );
   }
@@ -17709,9 +17659,8 @@ function RightPanel(props: {
     setTextPopupUploading(true);
     setTextEditorMessage("");
     try {
-      const uploadedUrl = await uploadTextEditorImage(file);
-      const popupUrl = withImageCacheVersion(uploadedUrl);
-      setTextPopupImageUrl(popupUrl);
+      const url = await uploadTextEditorImage(file);
+      setTextPopupImageUrl(url);
       setTextEditorMessage("팝업 이미지를 업로드했습니다. 팝업 적용을 눌러주세요.");
     } catch (error) {
       setTextEditorMessage(error instanceof Error ? error.message : "팝업 이미지 업로드에 실패했습니다.");
@@ -17731,29 +17680,11 @@ function RightPanel(props: {
       setTextEditorMessage("팝업으로 표시할 이미지를 먼저 업로드하세요.");
       return;
     }
-    const popupUrl = textPopupImageUrl.trim();
-    const popupTitle = textPopupTitle.trim();
-    const popupWidth = String(
-      Math.max(320, Math.min(1800, textPopupMaxWidth)),
-    );
-    const image = wrapper.querySelector<HTMLImageElement>("img");
-
     wrapper.setAttribute("data-image-popup", "true");
-    wrapper.setAttribute("data-image-popup-url", popupUrl);
-    wrapper.setAttribute("data-image-popup-title", popupTitle);
-    wrapper.setAttribute("data-image-popup-width", popupWidth);
+    wrapper.setAttribute("data-image-popup-url", textPopupImageUrl.trim());
+    wrapper.setAttribute("data-image-popup-title", textPopupTitle.trim());
+    wrapper.setAttribute("data-image-popup-width", String(Math.max(320, Math.min(1800, textPopupMaxWidth))));
     wrapper.style.cursor = "zoom-in";
-
-    // 실제 클릭 대상인 img에도 팝업 전용 주소를 저장합니다.
-    // 이 값은 화면 이미지의 src와 완전히 별개입니다.
-    if (image) {
-      image.setAttribute("data-image-popup", "true");
-      image.setAttribute("data-image-popup-url", popupUrl);
-      image.setAttribute("data-image-popup-title", popupTitle);
-      image.setAttribute("data-image-popup-width", popupWidth);
-      image.style.cursor = "zoom-in";
-    }
-
     syncEditorHtml();
     setTextEditorMessage("선택한 이미지에 이미지 팝업을 적용했습니다.");
   }
@@ -17764,21 +17695,11 @@ function RightPanel(props: {
       setTextEditorMessage("먼저 편집창 안의 이미지를 클릭하세요.");
       return;
     }
-    const image = wrapper.querySelector<HTMLImageElement>("img");
-
     wrapper.removeAttribute("data-image-popup");
     wrapper.removeAttribute("data-image-popup-url");
     wrapper.removeAttribute("data-image-popup-title");
     wrapper.removeAttribute("data-image-popup-width");
     wrapper.style.removeProperty("cursor");
-
-    if (image) {
-      image.removeAttribute("data-image-popup");
-      image.removeAttribute("data-image-popup-url");
-      image.removeAttribute("data-image-popup-title");
-      image.removeAttribute("data-image-popup-width");
-      image.style.removeProperty("cursor");
-    }
     setTextPopupImageUrl("");
     setTextPopupTitle("");
     setTextPopupMaxWidth(1200);
@@ -23239,9 +23160,18 @@ function ImageCellUploader({
         throw new Error(String(result.error || result.message || `팝업 이미지 업로드에 실패했습니다. HTTP ${response.status}`));
       }
 
-      const imageUrl = String(result.url || "").trim();
-      if (!imageUrl) throw new Error("업로드된 팝업 이미지 주소를 받지 못했습니다.");
-      onUpdate({ popup_enabled: true, popup_image_url: imageUrl });
+      const uploadedUrl = String(result.url || "").trim();
+      if (!uploadedUrl) {
+        throw new Error("업로드된 팝업 이미지 주소를 받지 못했습니다.");
+      }
+
+      // 같은 파일 경로를 덮어써도 이전 버거 이미지가 캐시에서 나오지 않도록
+      // 매 업로드마다 새로운 버전값을 URL에 저장합니다.
+      const popupImageUrl = withImageCacheVersion(uploadedUrl);
+      onUpdate({
+        popup_enabled: true,
+        popup_image_url: popupImageUrl,
+      });
       URL.revokeObjectURL(previewUrl);
     } catch (error) {
       onUpdate({
