@@ -51,13 +51,39 @@ type AdminClient = {
 };
 
 const NEWS_LIMIT = 12;
+const KOREA_SOURCE_LIMIT = 6;
 
 const FEEDS: FeedDefinition[] = [
+  // 한국 뉴스: 매일경제와 한국경제의 여러 공식 RSS를 조합합니다.
   {
     region: "korea",
     source: "매일경제",
     url: "https://www.mk.co.kr/rss/30000001/",
-    candidateLimit: 80,
+    candidateLimit: 30,
+  },
+  {
+    region: "korea",
+    source: "매일경제",
+    url: "https://www.mk.co.kr/rss/30100041/",
+    candidateLimit: 30,
+  },
+  {
+    region: "korea",
+    source: "한국경제",
+    url: "https://www.hankyung.com/feed/all-news",
+    candidateLimit: 30,
+  },
+  {
+    region: "korea",
+    source: "한국경제",
+    url: "https://www.hankyung.com/feed/economy",
+    candidateLimit: 30,
+  },
+  {
+    region: "korea",
+    source: "한국경제",
+    url: "https://www.hankyung.com/feed/international",
+    candidateLimit: 30,
   },
 
   // MarketWatch 직접 RSS
@@ -506,40 +532,65 @@ function getKoreaUsEconomyScore(
   return score;
 }
 
-function filterKoreaUsEconomyNews(
+function selectDiversifiedKoreaNews(
   items: ParsedNews[],
 ) {
-  return items
-    .map((item) => ({
-      item,
-      usEconomyScore:
-        getKoreaUsEconomyScore(
-          item.title,
-          item.summary,
-        ),
-    }))
-    /*
-     * 제목에 강한 미국 경제 키워드가 있거나,
-     * 미국 기업명과 경제 문맥이 함께 있어야 통과합니다.
-     */
-    .filter(
-      ({ usEconomyScore }) =>
-        usEconomyScore >= 4,
-    )
-    .sort((a, b) => {
-      const dateDifference =
-        sortNewest(a.item, b.item);
+  const uniqueItems = Array.from(
+    new Map(
+      items
+        .filter(
+          (item) =>
+            item.region === "korea" &&
+            Boolean(item.article_url) &&
+            Boolean(item.title),
+        )
+        .sort(sortNewest)
+        .map((item) => [
+          item.article_url,
+          item,
+        ]),
+    ).values(),
+  );
 
-      if (dateDifference !== 0) {
-        return dateDifference;
-      }
+  const selected: ParsedNews[] = [];
+  const sourceCounts = new Map<string, number>();
 
-      return (
-        b.usEconomyScore -
-        a.usEconomyScore
-      );
-    })
-    .map(({ item }) => item);
+  // 먼저 언론사별 상한을 적용해 한 언론사의 기사만 도배되는 것을 막습니다.
+  for (const item of uniqueItems) {
+    const count =
+      sourceCounts.get(item.source) ?? 0;
+
+    if (count >= KOREA_SOURCE_LIMIT) {
+      continue;
+    }
+
+    selected.push(item);
+    sourceCounts.set(item.source, count + 1);
+
+    if (selected.length >= NEWS_LIMIT) {
+      return selected;
+    }
+  }
+
+  // 일부 RSS가 실패해 12개를 못 채운 경우에는 남은 최신 기사로 채웁니다.
+  const selectedUrls = new Set(
+    selected.map((item) => item.article_url),
+  );
+
+  for (const item of uniqueItems) {
+    if (selectedUrls.has(item.article_url)) {
+      continue;
+    }
+
+    selected.push(item);
+    selectedUrls.add(item.article_url);
+
+    if (selected.length >= NEWS_LIMIT) {
+      break;
+    }
+  }
+
+  return selected;
 }
 
 async function loadFeed(
@@ -958,19 +1009,29 @@ async function replaceRegionNews(
   region: Region,
   items: ParsedNews[],
 ) {
-  const regionItems = items
-    .filter(
-      (item) => item.region === region,
-    )
-    .slice(0, NEWS_LIMIT);
+  const regionItems = Array.from(
+    new Map(
+      items
+        .filter(
+          (item) => item.region === region,
+        )
+        .sort(sortNewest)
+        .map((item) => [
+          item.article_url,
+          item,
+        ]),
+    ).values(),
+  ).slice(0, NEWS_LIMIT);
 
   if (regionItems.length === 0) {
     return {
       saved: 0,
       deleted: 0,
+      retained: 0,
     };
   }
 
+  // 기존 기사를 먼저 지우지 않고 새 기사부터 저장합니다.
   const { error: upsertError } =
     await admin
       .from("community_news")
@@ -980,18 +1041,15 @@ async function replaceRegionNews(
 
   if (upsertError) throw upsertError;
 
-  const currentUrlSet = new Set(
-    regionItems.map(
-      (item) => item.article_url,
-    ),
-  );
-
+  // 저장 후 DB의 기존 기사와 새 기사를 함께 최신순으로 정렬합니다.
   const {
     data: existingRows,
     error: existingError,
   } = await admin
     .from("community_news")
-    .select("id, article_url")
+    .select(
+      "id, article_url, published_at, fetched_at, updated_at",
+    )
     .eq("region", region);
 
   if (existingError) throw existingError;
@@ -999,13 +1057,38 @@ async function replaceRegionNews(
   const rows = (existingRows ?? []) as Array<{
     id: number | string;
     article_url: string;
+    published_at: string | null;
+    fetched_at: string | null;
+    updated_at: string | null;
   }>;
 
-  const deleteIds = rows
-    .filter(
-      (row) =>
-        !currentUrlSet.has(row.article_url),
-    )
+  const getRowTime = (
+    row: (typeof rows)[number],
+  ) => {
+    const value =
+      row.published_at ||
+      row.fetched_at ||
+      row.updated_at;
+
+    if (!value) return 0;
+
+    const timestamp = new Date(value).getTime();
+
+    return Number.isFinite(timestamp)
+      ? timestamp
+      : 0;
+  };
+
+  const sortedRows = [...rows].sort(
+    (a, b) => getRowTime(b) - getRowTime(a),
+  );
+
+  // 최신 12개는 유지하고, 13번째 이후의 오래된 기사만 삭제합니다.
+  const retainedRows =
+    sortedRows.slice(0, NEWS_LIMIT);
+
+  const deleteIds = sortedRows
+    .slice(NEWS_LIMIT)
     .map((row) => row.id);
 
   if (deleteIds.length > 0) {
@@ -1018,9 +1101,28 @@ async function replaceRegionNews(
     if (deleteError) throw deleteError;
   }
 
+  const retainedUrls = retainedRows.map(
+    (row) => row.article_url,
+  );
+
+  if (retainedUrls.length > 0) {
+    const { error: activateError } =
+      await admin
+        .from("community_news")
+        .update({
+          active: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("region", region)
+        .in("article_url", retainedUrls);
+
+    if (activateError) throw activateError;
+  }
+
   return {
     saved: regionItems.length,
     deleted: deleteIds.length,
+    retained: retainedRows.length,
   };
 }
 
@@ -1113,7 +1215,7 @@ export async function GET(
     );
 
     const koreaItems =
-      filterKoreaUsEconomyNews(
+      selectDiversifiedKoreaNews(
         successful
           .filter(
             (result) =>
@@ -1122,9 +1224,7 @@ export async function GET(
           .flatMap(
             (result) => result.items,
           ),
-      )
-        .sort(sortNewest)
-        .slice(0, NEWS_LIMIT);
+      );
 
     const rawUsItems = Array.from(
       new Map(
@@ -1218,9 +1318,19 @@ export async function GET(
       ok: true,
       korea: koreaResult,
       us: usResult,
-      koreaFilter: {
-        topic: "US economy",
+      koreaSelection: {
+        mode: "diversified-latest",
+        limit: NEWS_LIMIT,
+        perSourceLimit: KOREA_SOURCE_LIMIT,
         saved: koreaItems.length,
+        sources: koreaItems.reduce<Record<string, number>>(
+          (counts, item) => {
+            counts[item.source] =
+              (counts[item.source] ?? 0) + 1;
+            return counts;
+          },
+          {},
+        ),
       },
       usSources: usSourceCounts,
       usImages: {
