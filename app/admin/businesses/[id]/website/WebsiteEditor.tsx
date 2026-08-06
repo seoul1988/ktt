@@ -9155,7 +9155,10 @@ function CurrentWebsitePreview({
   const heroLayouts = normalizeHeroLayouts(heroSection?.content);
 
   return (
-    <div className="fixed inset-0 z-[120] flex flex-col overflow-hidden bg-[#e5e7eb]">
+    <div
+      className="fixed inset-0 z-[120] flex flex-col overflow-hidden"
+      style={{ backgroundColor: outerBackgroundColor }}
+    >
       <div className="flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
@@ -9205,8 +9208,12 @@ function CurrentWebsitePreview({
 
       <div
         ref={previewScrollRef}
-        className="min-h-0 flex-1 overflow-auto p-0"
-        style={{ backgroundColor: String(websiteSettings.outer_background_color || "#e5e7eb") }}
+        className="relative min-h-0 flex-1 overflow-auto p-0"
+        style={{
+          backgroundColor: outerBackgroundColor,
+          ...({ "--public-page-background": outerBackgroundColor } as React.CSSProperties),
+          backgroundImage: "none",
+        }}
       >
         <div
           className={`mx-auto shadow-2xl transition-all ${
@@ -9216,9 +9223,8 @@ function CurrentWebsitePreview({
           }`}
           style={{
             overflow: device === "mobile" ? "visible" : "hidden",
-            backgroundColor: String(
-              websiteSettings.outer_background_color || "#e5e7eb",
-            ),
+            backgroundColor: outerBackgroundColor,
+            minHeight: device === "desktop" ? "100%" : undefined,
           }}
         >
           <div
@@ -10216,6 +10222,10 @@ export function PublicWebsiteRenderer({
         [data-public-website-root] [data-full-width-layer] {
           border-right: 0 !important;
         }
+
+        [data-public-website-root] {
+          background: var(--public-page-background, #e5e7eb) !important;
+        }
       `}</style>
 
       <main
@@ -10233,7 +10243,9 @@ export function PublicWebsiteRenderer({
           transform: "translateX(-50%)",
           boxSizing: "border-box",
           backgroundColor: outerBackgroundColor,
+          backgroundImage: "none",
           overflowX: "clip",
+          isolation: "isolate",
         }}
       >
       <div
