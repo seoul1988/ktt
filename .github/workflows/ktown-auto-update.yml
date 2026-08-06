@@ -2,16 +2,15 @@ name: KTown Triangle Auto Update
 
 on:
   schedule:
-    # 매시간 7분에 실행합니다.
-    # GitHub Actions의 정각 혼잡과 실행 지연을 줄이기 위해 7분으로 설정
+    # 매시간 7분에 실행
     - cron: "7 * * * *"
 
   # GitHub Actions 화면에서 수동 실행
   workflow_dispatch:
 
 concurrency:
-  group: ktown-triangle-auto-update
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # =========================================================
@@ -21,7 +20,7 @@ jobs:
   community-news:
     name: Update Korea and US News
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - name: Call Community News API
@@ -29,9 +28,9 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ -z "$CRON_SECRET" ]; then
+          if [ -z "${CRON_SECRET:-}" ]; then
             echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
             exit 1
           fi
@@ -41,10 +40,11 @@ jobs:
           curl \
             --fail-with-body \
             --show-error \
-            --silent \
             --location \
-            --connect-timeout 30 \
-            --max-time 300 \
+            --connect-timeout 15 \
+            --max-time 120 \
+            --retry 1 \
+            --retry-delay 5 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
             "https://www.ktowntriangle.com/api/cron/sync-community-news"
@@ -59,7 +59,7 @@ jobs:
   todays-korea:
     name: Update Celebrity News
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - name: Call Today's Korea API
@@ -67,9 +67,9 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ -z "$CRON_SECRET" ]; then
+          if [ -z "${CRON_SECRET:-}" ]; then
             echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
             exit 1
           fi
@@ -79,10 +79,11 @@ jobs:
           curl \
             --fail-with-body \
             --show-error \
-            --silent \
             --location \
-            --connect-timeout 30 \
-            --max-time 300 \
+            --connect-timeout 15 \
+            --max-time 120 \
+            --retry 1 \
+            --retry-delay 5 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
             "https://www.ktowntriangle.com/api/todays-korea/update"
@@ -92,36 +93,36 @@ jobs:
 
   # =========================================================
   # Google Ratings
-  # 미국 동부시간 매일 밤 12시대에 한 번만 실행
+  # 미국 동부시간 매일 밤 12시대 예약 실행에서만 실행
+  # 수동 실행 시에는 실행하지 않음
   # =========================================================
   google-ratings:
     name: Update Google Ratings
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 7
 
     steps:
       - name: Check Google Ratings schedule
         id: ratings-time
         shell: bash
         run: |
+          set -euo pipefail
+
+          EVENT_NAME="${{ github.event_name }}"
           ET_DATE=$(TZ=America/New_York date +%Y-%m-%d)
           ET_HOUR=$(TZ=America/New_York date +%-H)
           ET_MINUTE=$(TZ=America/New_York date +%-M)
 
+          echo "Event: ${EVENT_NAME}"
           echo "Eastern date: ${ET_DATE}"
           echo "Current Eastern Time: ${ET_HOUR}:${ET_MINUTE}"
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "schedule" ] && [ "$ET_HOUR" = "0" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Manual run: Google Ratings update will run."
-
-          elif [ "$ET_HOUR" = "0" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Midnight Eastern Time: Google Ratings update will run."
-
+            echo "Scheduled midnight run: Google Ratings will run."
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Google Ratings update will be skipped."
+            echo "Google Ratings will be skipped."
           fi
 
       - name: Call Google Ratings API
@@ -130,9 +131,9 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ -z "$CRON_SECRET" ]; then
+          if [ -z "${CRON_SECRET:-}" ]; then
             echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
             exit 1
           fi
@@ -142,10 +143,11 @@ jobs:
           curl \
             --fail-with-body \
             --show-error \
-            --silent \
             --location \
-            --connect-timeout 30 \
-            --max-time 900 \
+            --connect-timeout 20 \
+            --max-time 300 \
+            --retry 1 \
+            --retry-delay 10 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
             "https://www.ktowntriangle.com/api/update-google-ratings"
@@ -157,5 +159,6 @@ jobs:
         if: steps.ratings-time.outputs.should_run != 'true'
         shell: bash
         run: |
-          echo "Google Ratings only runs once during the midnight hour."
-          echo "Schedule: 12:07 AM Eastern Time."
+          echo "Google Ratings was skipped."
+          echo "It runs only during the scheduled 12:07 AM Eastern workflow."
+          echo "Manual Run workflow does not update Google Ratings."
