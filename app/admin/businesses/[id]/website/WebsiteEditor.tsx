@@ -66,7 +66,7 @@ type GridCell = {
   url?: string;
   image_url?: string;
   image_size_percent?: number;
-  image_fit?: "scale" | "width" | "cover";
+  image_fit?: "scale" | "width" | "contain" | "cover" | "fill";
   /** 이미지 셀 안에서 마우스로 이동한 가로/세로 위치(%) */
   image_position_x?: number;
   image_position_y?: number;
@@ -552,6 +552,66 @@ function defaultCell(
   };
 }
 
+type ImageFitMode = NonNullable<GridCell["image_fit"]>;
+
+function normalizeImageFit(value: unknown): ImageFitMode {
+  return value === "scale" ||
+    value === "width" ||
+    value === "contain" ||
+    value === "cover" ||
+    value === "fill"
+    ? value
+    : "width";
+}
+
+function isVisualCell(cell: GridCell): boolean {
+  if (Array.isArray(cell.child_cells) && cell.child_cells.length > 0) {
+    return cell.child_cells.every(isVisualCell);
+  }
+
+  return (
+    cell.type === "empty" ||
+    cell.type === "image" ||
+    cell.display_mode === "auto-slider" ||
+    cell.display_mode === "gallery" ||
+    cell.display_mode === "image-scroll"
+  );
+}
+
+/**
+ * 이미지 전용 레이아웃에서 "칸 너비 맞춤" 또는 "칸 꽉 채움"을 사용하면
+ * 에디터와 공개 미리보기 모두 페이지의 실제 가로폭을 사용합니다.
+ * 일반 텍스트/카드 레이아웃은 저장된 container/full 설정을 그대로 유지합니다.
+ */
+function cellRequestsFullWidthImage(cell: GridCell): boolean {
+  if (Array.isArray(cell.child_cells) && cell.child_cells.length > 0) {
+    return cell.child_cells.some(cellRequestsFullWidthImage);
+  }
+
+  if (cell.type !== "image") return false;
+
+  const fit = normalizeImageFit(cell.image_fit);
+  return fit === "width" || fit === "cover" || fit === "fill";
+}
+
+function shouldUseFullWidthLayout(layout: GridData): boolean {
+  if (layout.layout_width_mode === "full") return true;
+  if (!layout.cells.length || !layout.cells.every(isVisualCell)) return false;
+
+  /*
+   * 이미지가 최상위 칸이 아니라 중첩 칸 안에 있어도 전체 폭 여부를
+   * 재귀적으로 확인합니다. 기존 코드는 최상위 image 셀만 검사하여
+   * 저장 후 미리보기와 공개 화면에서 1120px 컨테이너로 돌아갔습니다.
+   */
+  return layout.cells.some(cellRequestsFullWidthImage);
+}
+
+function getLayoutWidthClass(layout: GridData) {
+  return shouldUseFullWidthLayout(layout)
+    ? "w-full max-w-none"
+    : "mx-auto w-full max-w-[1120px]";
+}
+
 function findCellRecursive(cells: GridCell[], cellId: string): GridCell | null {
   for (const cell of cells) {
     if (cell.id === cellId) return cell;
@@ -814,6 +874,10 @@ function normalizeGrid(value: unknown, fallback: GridData): GridData {
       type: normalizedType,
       span,
     };
+
+    if (normalizedType === "image") {
+      normalizedCell.image_fit = normalizeImageFit(cell.image_fit);
+    }
 
     if (normalizedType === "menu") {
       normalizedCell.menu_mode =
@@ -2487,6 +2551,26 @@ function VideoOverlayContent({
   );
 }
 
+function sectionHasFullWidthImageLayout(
+  section: BusinessSection | null | undefined,
+): boolean {
+  if (!section?.content) return false;
+
+  const rawLayouts = Array.isArray(section.content.layouts)
+    ? section.content.layouts
+    : section.content.grid
+      ? [section.content.grid]
+      : [];
+
+  return rawLayouts.some((layout) => {
+    if (!layout || typeof layout !== "object" || !Array.isArray(layout.cells)) {
+      return false;
+    }
+
+    return shouldUseFullWidthLayout(layout as GridData);
+  });
+}
+
 function getSectionWidthMode(
   section: BusinessSection | null | undefined,
 ): "full" | "container" {
@@ -2494,14 +2578,20 @@ function getSectionWidthMode(
     section?.content?.layer_width ||
     section?.settings?.layer_width;
 
-  return savedWidth === "full" ? "full" : "container";
+  if (savedWidth === "full") return "full";
+
+  /*
+   * 레이어 자체가 container로 저장되어 있어도 그 안의 이미지 전용
+   * 레이아웃이 칸 너비 맞춤/채우기이면 섹션 래퍼도 전체 폭으로 엽니다.
+   */
+  return sectionHasFullWidthImageLayout(section) ? "full" : "container";
 }
 
 function getSectionWidthClass(
   section: BusinessSection | null | undefined,
 ) {
   return getSectionWidthMode(section) === "full"
-    ? "relative max-w-none"
+    ? "relative w-full max-w-none"
     : "relative mx-auto w-full max-w-[1120px]";
 }
 
@@ -7610,9 +7700,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                         }
                       }}
                       className={`relative transition ${
-                        layout.layout_width_mode === "full"
-                          ? "w-full max-w-none"
-                          : "mx-auto w-full max-w-[1120px]"
+                        getLayoutWidthClass(layout)
                       } ${
                         layoutSelected
                           ? "ring-4 ring-blue-500/30"
@@ -9197,9 +9285,7 @@ function CurrentWebsitePreview({
                   <div
                     key={layout.id}
                     className={
-                      layout.layout_width_mode === "full"
-                        ? "w-full max-w-none"
-                        : "mx-auto w-full max-w-[1120px]"
+                      getLayoutWidthClass(layout)
                     }
                     style={getLayoutBorderStyle(layout)}
                   >
@@ -10241,11 +10327,7 @@ export function PublicWebsiteRenderer({
               {layouts.map((layout) => (
                 <div
                   key={layout.id}
-                  className={
-                    layout.layout_width_mode === "full"
-                      ? "w-full max-w-none"
-                      : "mx-auto w-full max-w-[1120px]"
-                  }
+                  className={getLayoutWidthClass(layout)}
                   style={getLayoutBorderStyle(layout)}
                 >
                   <div
@@ -11178,7 +11260,9 @@ function ReadOnlyGrid({
         // border-box를 사용해 4px 여백 때문에 레이어 크기가 커지지 않게 합니다.
         boxSizing: "border-box",
         padding:
-          area === "hero" && !hasAutoSlider ? "4px" : 0,
+          area === "hero" && !hasAutoSlider && !deviceGrid.cells.every(isVisualCell)
+            ? "4px"
+            : 0,
         /*
          * 자동 슬라이더는 이미지가 레이어 끝까지 붙도록 바깥 여백을
          * 만들지 않습니다.
@@ -11256,8 +11340,10 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : normalizeVisibleBackgroundColor(cell.background_color) ||
-                  gridFrameBackgroundColor,
+                : cell.type === "image"
+                  ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
+                  : normalizeVisibleBackgroundColor(cell.background_color) ||
+                    gridFrameBackgroundColor,
             padding:
               cell.child_cells?.length ||
               cell.type === "image" ||
@@ -11370,14 +11456,12 @@ function PreviewSection({
       ) : null}
 
       {hasLayoutContent ? (
-        <div className="w-full">
+        <div className="w-full max-w-none px-0">
           {sectionLayouts.map((layout, layoutIndex) => (
             <div
               key={layout.id}
               className={
-                layout.layout_width_mode === "full"
-                  ? "relative w-full max-w-none"
-                  : "relative mx-auto w-full max-w-[1120px]"
+                `relative ${getLayoutWidthClass(layout)}`
               }
               style={{
                 ...getLayoutBorderStyle(layout),
@@ -12718,12 +12802,46 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
   return <>
     <div className={className} style={style} onClick={(event) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
-      const wrapper = target?.closest<HTMLElement>('[data-image-popup="true"]');
-      if (!wrapper) return;
-      const url = String(wrapper.getAttribute("data-image-popup-url") || "").trim();
+      const popupTarget =
+        target?.closest<HTMLElement>('[data-image-popup="true"]') ||
+        target?.closest<HTMLElement>("[data-image-popup-url]");
+
+      if (!popupTarget) return;
+
+      const clickedImage =
+        target?.closest<HTMLImageElement>("img") ||
+        popupTarget.querySelector<HTMLImageElement>("img");
+
+      const url = String(
+        clickedImage?.getAttribute("data-image-popup-url") ||
+        popupTarget.getAttribute("data-image-popup-url") ||
+        "",
+      ).trim();
+
       if (!url) return;
-      event.preventDefault(); event.stopPropagation();
-      setPopup({ url, title: String(wrapper.getAttribute("data-image-popup-title") || ""), maxWidth: Math.max(320, Math.min(1800, Number(wrapper.getAttribute("data-image-popup-width") || 1200))) });
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      setPopup({
+        url,
+        title: String(
+          clickedImage?.getAttribute("data-image-popup-title") ||
+          popupTarget.getAttribute("data-image-popup-title") ||
+          "",
+        ),
+        maxWidth: Math.max(
+          320,
+          Math.min(
+            1800,
+            Number(
+              clickedImage?.getAttribute("data-image-popup-width") ||
+              popupTarget.getAttribute("data-image-popup-width") ||
+              1200,
+            ),
+          ),
+        ),
+      });
     }} dangerouslySetInnerHTML={{ __html: html }} />
     {popup && typeof document !== "undefined" ? createPortal(
       <div role="dialog" aria-modal="true" className="fixed inset-0 z-[2147483000] flex items-center justify-center bg-black/90 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setPopup(null); }}>
@@ -12947,10 +13065,7 @@ function CellPreview({
       Math.min(1800, Number(cell.popup_max_width_px || 1200)),
     );
     const imageSize = Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100)));
-    const imageFit =
-      cell.image_fit === "width" || cell.image_fit === "cover"
-        ? cell.image_fit
-        : "scale";
+    const imageFit = normalizeImageFit(cell.image_fit);
     const horizontal =
       cell.text_align === "left"
         ? "flex-start"
@@ -12969,32 +13084,38 @@ function CellPreview({
         src={displayImageUrl}
         alt={cell.text || business.name || "이미지"}
         draggable={false}
-        className="block select-none object-contain"
+        className="block select-none"
         style={{
-          /*
-           * 가로·세로를 동시에 %로 주면 이미지 요소 자체가 셀 전체 폭을
-           * 차지하여 justifyContent를 바꿔도 좌우 이동 공간이 없어집니다.
-           * 높이를 기준으로 원본 비율을 유지하면 이미지 실제 폭만 차지하므로
-           * 왼쪽·가운데·오른쪽 정렬이 정상적으로 작동합니다.
-           */
           width:
-            imageFit === "width" || imageFit === "cover"
-              ? "100%"
-              : "auto",
+            imageFit === "scale"
+              ? "auto"
+              : "100%",
           height:
-            imageFit === "cover"
-              ? "100%"
-              : imageFit === "width"
-                ? "auto"
-                : `${imageSize}%`,
-          maxWidth: imageFit === "width" ? "100%" : "none",
-          maxHeight: imageFit === "width" ? "100%" : "none",
+            imageFit === "width"
+              ? "auto"
+              : imageFit === "scale"
+                ? `${imageSize}%`
+                : "100%",
+          maxWidth: imageFit === "scale" ? "none" : "100%",
+          maxHeight:
+            imageFit === "width" || imageFit === "scale"
+              ? "none"
+              : "100%",
           flexShrink: 0,
-          objectFit: imageFit === "cover" ? "cover" : "contain",
+          objectFit:
+            imageFit === "cover"
+              ? "cover"
+              : imageFit === "fill"
+                ? "fill"
+                : "contain",
+          objectPosition: `${Math.max(0, Math.min(100, 50 + imageDragPosition.x))}% ${Math.max(0, Math.min(100, 50 + imageDragPosition.y))}%`,
           margin: 0,
           padding: 0,
           lineHeight: 0,
-          transform: `translate(${imageDragPosition.x}%, ${imageDragPosition.y}%)`,
+          transform:
+            imageFit === "scale"
+              ? `translate(${imageDragPosition.x}%, ${imageDragPosition.y}%)`
+              : undefined,
           transition: imageDragging ? "none" : "transform 120ms ease-out",
           pointerEvents: "none",
         }}
@@ -13014,6 +13135,7 @@ function CellPreview({
       lineHeight: 0,
       margin: 0,
       padding: 0,
+      overflow: "hidden",
     };
 
     return (
@@ -16494,6 +16616,7 @@ function RightPanel(props: {
 }) {
   const { selection, selectedCell, selectedSection, heroSection, business, websiteSettings } = props;
   const [cellTypePickerOpen, setCellTypePickerOpen] = useState(false);
+  const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [phoneEditorOpen, setPhoneEditorOpen] = useState(false);
   const [snsEditorOpen, setSnsEditorOpen] = useState(false);
   const [textEditorOpen, setTextEditorOpen] = useState(false);
@@ -17601,13 +17724,32 @@ function RightPanel(props: {
       setTextEditorMessage("팝업으로 표시할 이미지를 먼저 업로드하세요.");
       return;
     }
+    const popupUrl = textPopupImageUrl.trim();
+    const popupTitle = textPopupTitle.trim();
+    const popupWidth = String(
+      Math.max(320, Math.min(1800, textPopupMaxWidth)),
+    );
+    const image = wrapper.querySelector<HTMLImageElement>("img");
+
     wrapper.setAttribute("data-image-popup", "true");
-    wrapper.setAttribute("data-image-popup-url", textPopupImageUrl.trim());
-    wrapper.setAttribute("data-image-popup-title", textPopupTitle.trim());
-    wrapper.setAttribute("data-image-popup-width", String(Math.max(320, Math.min(1800, textPopupMaxWidth))));
+    wrapper.setAttribute("data-image-popup-url", popupUrl);
+    wrapper.setAttribute("data-image-popup-title", popupTitle);
+    wrapper.setAttribute("data-image-popup-width", popupWidth);
     wrapper.style.cursor = "zoom-in";
-    syncEditorHtml();
-    setTextEditorMessage("선택한 이미지에 이미지 팝업을 적용했습니다.");
+
+    if (image) {
+      image.setAttribute("data-image-popup", "true");
+      image.setAttribute("data-image-popup-url", popupUrl);
+      image.setAttribute("data-image-popup-title", popupTitle);
+      image.setAttribute("data-image-popup-width", popupWidth);
+      image.style.cursor = "zoom-in";
+    }
+
+    // CurrentWebsitePreview가 읽는 sections 상태까지 즉시 갱신합니다.
+    syncEditorHtml(true);
+    setTextEditorMessage(
+      "선택한 이미지에 이미지 팝업을 적용했습니다. 작업 미리보기에도 즉시 반영되었습니다.",
+    );
   }
 
   function removePopupFromSelectedTextEditorImage() {
@@ -17616,16 +17758,29 @@ function RightPanel(props: {
       setTextEditorMessage("먼저 편집창 안의 이미지를 클릭하세요.");
       return;
     }
+    const image = wrapper.querySelector<HTMLImageElement>("img");
+
     wrapper.removeAttribute("data-image-popup");
     wrapper.removeAttribute("data-image-popup-url");
     wrapper.removeAttribute("data-image-popup-title");
     wrapper.removeAttribute("data-image-popup-width");
     wrapper.style.removeProperty("cursor");
+
+    if (image) {
+      image.removeAttribute("data-image-popup");
+      image.removeAttribute("data-image-popup-url");
+      image.removeAttribute("data-image-popup-title");
+      image.removeAttribute("data-image-popup-width");
+      image.style.removeProperty("cursor");
+    }
+
     setTextPopupImageUrl("");
     setTextPopupTitle("");
     setTextPopupMaxWidth(1200);
-    syncEditorHtml();
-    setTextEditorMessage("선택한 이미지의 팝업을 제거했습니다.");
+    syncEditorHtml(true);
+    setTextEditorMessage(
+      "선택한 이미지의 팝업을 제거했습니다. 작업 미리보기에도 즉시 반영되었습니다.",
+    );
   }
 
   function resizeSelectedTextEditorImage(width: number) {
@@ -17970,10 +18125,29 @@ function RightPanel(props: {
     );
   }
 
-  function syncEditorHtml() {
+  function syncEditorHtml(commitToLayout = false) {
     const editor = textEditorRef.current;
     if (!editor) return;
-    setTextEditorHtml(editor.innerHTML);
+
+    const html = sanitizeCellRichTextHtml(editor.innerHTML);
+    setTextEditorHtml(html);
+
+    /*
+     * 작업 미리보기(CurrentWebsitePreview)는 편집창 DOM이 아니라
+     * 상위 sections 상태를 읽습니다. 팝업 이미지처럼 즉시 확인해야 하는
+     * 변경은 상위 레이아웃 상태에도 바로 반영합니다.
+     */
+    if (commitToLayout && selectedCell) {
+      props.onUpdateCell(
+        selection.area as "header" | "hero",
+        selectedCell.id,
+        {
+          rich_text_html: html,
+          text: richTextToPlainText(html),
+        },
+        selection.layoutId,
+      );
+    }
   }
 
   function normalizeTextEditorParagraphSpacing(editor: HTMLElement) {
@@ -19055,7 +19229,7 @@ function RightPanel(props: {
 
           {cellTypePickerOpen ? (
             <div className="border-t border-gray-200 p-3">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {area !== "header" && heroSection ? (
                   <button
                     type="button"
@@ -19165,6 +19339,53 @@ function RightPanel(props: {
                     key={entry.value}
                     type="button"
                     onClick={() => {
+                      if (entry.value === "image") {
+                        /*
+                         * 이미지 셀로 전환할 때 기존 이미지 크기와 팝업 설정을
+                         * 절대로 초기화하지 않습니다. 이미지 전용 모달을 바로
+                         * 열어 화면 이미지와 클릭 후 이미지를 한 곳에서 설정합니다.
+                         */
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          {
+                            type: "image",
+                            image_fit: normalizeImageFit(
+                              selectedCell.image_fit,
+                            ),
+                            image_size_percent:
+                              Number(
+                                selectedCell.image_size_percent ?? 100,
+                              ),
+                            text_align:
+                              selectedCell.text_align || "center",
+                            vertical_align:
+                              selectedCell.vertical_align || "center",
+                            popup_enabled:
+                              selectedCell.popup_enabled === true,
+                            popup_image_url:
+                              selectedCell.popup_image_url || "",
+                            popup_title:
+                              selectedCell.popup_title || "",
+                            popup_max_width_px:
+                              Math.max(
+                                320,
+                                Math.min(
+                                  1800,
+                                  Number(
+                                    selectedCell.popup_max_width_px ??
+                                      1200,
+                                  ),
+                                ),
+                              ),
+                          },
+                          selection.layoutId,
+                        );
+                        setCellTypePickerOpen(false);
+                        setImageEditorOpen(true);
+                        return;
+                      }
+
                       props.onUpdateCell(
                         area,
                         selectedCell.id,
@@ -20157,19 +20378,37 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "image" ? (
-          <ImageCellUploader
-            businessId={props.businessId}
-            area={area}
-            cell={selectedCell}
-            onUpdate={(patch) =>
-              props.onUpdateCell(
-                area,
-                selectedCell.id,
-                patch,
-                selection.layoutId,
-              )
-            }
-          />
+          <>
+            <button
+              type="button"
+              onClick={() => setImageEditorOpen(true)}
+              className="mt-4 flex w-full items-center justify-between rounded-2xl border-2 border-violet-300 bg-violet-50 px-4 py-3 text-left hover:border-violet-500"
+            >
+              <div>
+                <p className="text-sm font-black text-violet-950">
+                  이미지 및 팝업 설정
+                </p>
+                <p className="mt-1 text-xs font-semibold text-violet-700">
+                  화면 이미지, 크기, 위치와 클릭 후 팝업 이미지를 한 번에 설정합니다.
+                </p>
+              </div>
+              <span className="text-xl font-black text-violet-700">↗</span>
+            </button>
+
+            <ImageCellUploader
+              businessId={props.businessId}
+              area={area}
+              cell={selectedCell}
+              onUpdate={(patch) =>
+                props.onUpdateCell(
+                  area,
+                  selectedCell.id,
+                  patch,
+                  selection.layoutId,
+                )
+              }
+            />
+          </>
         ) : null}
 
         {selectedCell.type === "button" ? (
@@ -20443,6 +20682,79 @@ function RightPanel(props: {
             })}
           </div>
         </Field>
+
+        {imageEditorOpen &&
+        selectedCell.type === "image" &&
+        typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[10070] flex items-center justify-center bg-black/70 p-3 sm:p-6"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) {
+                    setImageEditorOpen(false);
+                  }
+                }}
+              >
+                <div
+                  className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                  onMouseDown={(event) => event.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">
+                        Image Editor
+                      </p>
+                      <h3 className="mt-1 text-xl font-black text-gray-950">
+                        이미지 및 팝업 설정
+                      </h3>
+                      <p className="mt-1 text-xs font-semibold text-gray-500">
+                        화면에 보이는 이미지와 클릭 후 표시할 이미지를 같은 창에서 설정합니다.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setImageEditorOpen(false)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200"
+                      aria-label="이미지 편집창 닫기"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 px-4 py-5 sm:px-6">
+                    <ImageCellUploader
+                      businessId={props.businessId}
+                      area={area}
+                      cell={selectedCell}
+                      onUpdate={(patch) =>
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          patch,
+                          selection.layoutId,
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:px-6">
+                    <p className="text-xs font-semibold text-gray-500">
+                      화면 이미지를 다시 업로드해도 기존 팝업 설정은 유지됩니다.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setImageEditorOpen(false)}
+                      className="rounded-xl bg-violet-700 px-6 py-3 text-sm font-black text-white hover:bg-violet-800"
+                    >
+                      완료
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
 
         {mapEditorOpen &&
         selectedCell.type === "map" &&
@@ -22988,7 +23300,7 @@ function ImageCellUploader({
     onUpdate({
       image_url: previewUrl,
       image_size_percent: cell.image_size_percent ?? draftImageSize,
-      image_fit: cell.image_fit || "scale",
+      image_fit: normalizeImageFit(cell.image_fit),
       text_align: cell.text_align || "center",
       vertical_align: cell.vertical_align || "center",
     });
@@ -23104,10 +23416,7 @@ function ImageCellUploader({
   }
 
   const imageSize = draftImageSize;
-  const imageFit =
-    cell.image_fit === "width" || cell.image_fit === "cover"
-      ? cell.image_fit
-      : "scale";
+  const imageFit = normalizeImageFit(cell.image_fit);
 
   const positionOptions: Array<{
     horizontal: TextAlign;
@@ -23201,16 +23510,18 @@ function ImageCellUploader({
       <Field label="이미지 표시 방식">
         <div className="grid grid-cols-3 gap-2">
           {[
-            { value: "scale", label: "크기 조절" },
-            { value: "width", label: "칸 너비 맞춤" },
+            { value: "width", label: "가로 맞춤" },
+            { value: "contain", label: "전체 보기" },
             { value: "cover", label: "칸 꽉 채움" },
+            { value: "scale", label: "직접 크기" },
+            { value: "fill", label: "늘여 맞춤" },
           ].map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() =>
                 onUpdate({
-                  image_fit: option.value as "scale" | "width" | "cover",
+                  image_fit: option.value as ImageFitMode,
                 })
               }
               className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
@@ -23224,7 +23535,7 @@ function ImageCellUploader({
           ))}
         </div>
         <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
-          가로로 긴 메뉴 이미지는 ‘칸 너비 맞춤’을 선택하세요.
+          기본은 ‘가로 맞춤’입니다. 원본 전체가 꼭 보여야 하면 ‘전체 보기’, 배경처럼 빈틈없이 채우려면 ‘칸 꽉 채움’을 선택하세요.
         </p>
       </Field>
 
