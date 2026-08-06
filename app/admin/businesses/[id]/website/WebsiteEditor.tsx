@@ -18288,7 +18288,7 @@ function RightPanel(props: {
   }
 
   async function uploadSelectedTextPopupImage(file: File | undefined) {
-    if (!file || !selectedTextEditorImageId) return;
+    if (!file) return;
     if (!file.type.startsWith("image/")) {
       setTextEditorMessage("팝업에는 이미지 파일만 등록할 수 있습니다.");
       return;
@@ -18309,6 +18309,154 @@ function RightPanel(props: {
       setTextPopupUploading(false);
       if (textPopupImageInputRef.current) textPopupImageInputRef.current.value = "";
     }
+  }
+
+  function hasSavedTextSelection() {
+    const editor = textEditorRef.current;
+    const savedRange = savedTextRangeRef.current;
+    return Boolean(
+      editor &&
+        savedRange &&
+        !savedRange.collapsed &&
+        editor.contains(savedRange.commonAncestorContainer),
+    );
+  }
+
+  function applyPopupToSelectedText() {
+    if (!textPopupImageUrl.trim()) {
+      setTextEditorMessage("팝업으로 표시할 이미지를 먼저 업로드하세요.");
+      return false;
+    }
+
+    if (!restoreTextSelection()) {
+      setTextEditorMessage(
+        "먼저 편집창에서 팝업을 적용할 글씨를 블록 지정하세요.",
+      );
+      return false;
+    }
+
+    const editor = textEditorRef.current;
+    const selectionObject = window.getSelection();
+
+    if (
+      !editor ||
+      !selectionObject ||
+      selectionObject.rangeCount === 0 ||
+      selectionObject.isCollapsed
+    ) {
+      setTextEditorMessage(
+        "먼저 편집창에서 팝업을 적용할 글씨를 블록 지정하세요.",
+      );
+      return false;
+    }
+
+    const range = selectionObject.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) {
+      setTextEditorMessage("편집창 안의 글씨를 선택하세요.");
+      return false;
+    }
+
+    const popupElement = document.createElement("span");
+    const popupUrl = textPopupImageUrl.trim();
+    const popupTitle = textPopupTitle.trim();
+    const popupWidth = String(
+      Math.max(320, Math.min(1800, textPopupMaxWidth)),
+    );
+
+    popupElement.setAttribute("data-image-popup", "true");
+    popupElement.setAttribute("data-image-popup-url", popupUrl);
+    popupElement.setAttribute("data-image-popup-title", popupTitle);
+    popupElement.setAttribute("data-image-popup-width", popupWidth);
+    popupElement.setAttribute("role", "button");
+    popupElement.setAttribute("tabindex", "0");
+    popupElement.style.setProperty("cursor", "zoom-in");
+    popupElement.style.setProperty("text-decoration", "underline");
+    popupElement.style.setProperty("text-decoration-style", "dotted");
+    popupElement.style.setProperty("text-underline-offset", "3px");
+
+    try {
+      const fragment = range.extractContents();
+      popupElement.appendChild(fragment);
+      range.insertNode(popupElement);
+
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(popupElement);
+      selectionObject.removeAllRanges();
+      selectionObject.addRange(nextRange);
+      savedTextRangeRef.current = nextRange.cloneRange();
+
+      editor.normalize();
+      syncEditorHtml(true);
+      setTextEditorMessage(
+        "선택한 글씨에 이미지 팝업을 적용했습니다.",
+      );
+      return true;
+    } catch {
+      setTextEditorMessage("선택한 글씨에 팝업을 적용하지 못했습니다.");
+      return false;
+    }
+  }
+
+  function removePopupFromSelectedText() {
+    if (!restoreTextSelection()) return false;
+
+    const editor = textEditorRef.current;
+    const selectionObject = window.getSelection();
+    if (!editor || !selectionObject || selectionObject.rangeCount === 0) {
+      return false;
+    }
+
+    const range = selectionObject.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return false;
+
+    let node: Node | null = range.commonAncestorContainer;
+    let popupElement: HTMLElement | null =
+      node instanceof HTMLElement
+        ? node.closest<HTMLElement>('[data-image-popup="true"]')
+        : node.parentElement?.closest<HTMLElement>(
+            '[data-image-popup="true"]',
+          ) || null;
+
+    if (!popupElement) {
+      const selectedFragment = range.cloneContents();
+      const selectedPopup =
+        selectedFragment.querySelector?.<HTMLElement>(
+          '[data-image-popup="true"]',
+        ) || null;
+
+      if (selectedPopup) {
+        const popupUrl = selectedPopup.getAttribute("data-image-popup-url");
+        if (popupUrl) {
+          popupElement =
+            Array.from(
+              editor.querySelectorAll<HTMLElement>(
+                '[data-image-popup="true"]',
+              ),
+            ).find(
+              (element) =>
+                element.getAttribute("data-image-popup-url") === popupUrl &&
+                range.intersectsNode(element),
+            ) || null;
+        }
+      }
+    }
+
+    if (!popupElement || !editor.contains(popupElement)) return false;
+
+    const parent = popupElement.parentNode;
+    if (!parent) return false;
+
+    while (popupElement.firstChild) {
+      parent.insertBefore(popupElement.firstChild, popupElement);
+    }
+    popupElement.remove();
+    editor.normalize();
+    syncEditorHtml(true);
+    setTextPopupImageUrl("");
+    setTextPopupTitle("");
+    setTextPopupMaxWidth(1200);
+    setTextEditorMessage("선택한 글씨의 이미지 팝업을 제거했습니다.");
+    return true;
   }
 
   function applyPopupToSelectedTextEditorImage() {
@@ -19052,7 +19200,11 @@ function RightPanel(props: {
 
   function applyTextLink() {
     if (textLinkType === "image-popup") {
-      applyPopupToSelectedTextEditorImage();
+      if (hasSavedTextSelection()) {
+        applyPopupToSelectedText();
+      } else {
+        applyPopupToSelectedTextEditorImage();
+      }
       return;
     }
     const rawLinkValue = textLinkValue.trim();
@@ -19131,6 +19283,11 @@ function RightPanel(props: {
     } catch {
       setTextEditorMessage("선택한 글씨에 링크를 적용하지 못했습니다.");
     }
+  }
+
+  function removeSelectedTextPopupOrImagePopup() {
+    if (hasSavedTextSelection() && removePopupFromSelectedText()) return;
+    removePopupFromSelectedTextEditorImage();
   }
 
   function removeTextLink() {
@@ -22532,7 +22689,7 @@ function RightPanel(props: {
                           <option value="section">레이어 링크</option>
                           <option value="page">페이지 링크</option>
                           <option value="external">다른 사이트 링크</option>
-                          <option value="image-popup">이미지 팝업</option>
+                          <option value="image-popup">팝업 이미지 열기</option>
                         </select>
                       </label>
 
@@ -22554,11 +22711,22 @@ function RightPanel(props: {
                         </label>
                       ) : (
                         <div className="min-w-[340px] flex-1 rounded-xl border border-violet-300 bg-white p-3">
-                          <p className="text-xs font-black text-violet-950">선택한 이미지에 연결할 팝업</p>
-                          <p className="mt-1 text-[11px] font-semibold text-violet-700">아래 편집창에서 이미지를 먼저 클릭하세요.</p>
+                          <p className="text-xs font-black text-violet-950">선택한 글씨 또는 이미지에 연결할 팝업</p>
+                          <p className="mt-1 text-[11px] font-semibold text-violet-700">
+                            글씨는 먼저 블록 지정하고, 이미지는 편집창에서 클릭하세요.
+                          </p>
                           <input ref={textPopupImageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => void uploadSelectedTextPopupImage(event.target.files?.[0])} />
                           <div className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr_120px]">
-                            <button type="button" disabled={textPopupUploading || !selectedTextEditorImageId} onClick={() => textPopupImageInputRef.current?.click()} className="h-10 rounded-lg bg-violet-600 px-3 text-xs font-black text-white disabled:opacity-50">
+                            <button
+                              type="button"
+                              disabled={textPopupUploading}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                rememberTextSelection();
+                              }}
+                              onClick={() => textPopupImageInputRef.current?.click()}
+                              className="h-10 rounded-lg bg-violet-600 px-3 text-xs font-black text-white disabled:opacity-50"
+                            >
                               {textPopupUploading ? "업로드 중..." : textPopupImageUrl ? "팝업 이미지 교체" : "팝업 이미지 업로드"}
                             </button>
                             <input value={textPopupTitle} onChange={(event) => setTextPopupTitle(event.target.value)} placeholder="팝업 제목" className="h-10 rounded-lg border border-gray-300 px-3 text-sm font-bold" />
@@ -22572,7 +22740,11 @@ function RightPanel(props: {
                         {textLinkType === "image-popup" ? "팝업 적용" : "링크 적용"}
                       </button>
 
-                      <button type="button" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={textLinkType === "image-popup" ? removePopupFromSelectedTextEditorImage : removeTextLink} className="h-10 rounded-xl border border-blue-300 bg-white px-4 text-xs font-black text-blue-700 hover:bg-blue-100">
+                      <button type="button" onMouseDown={(event) => { event.preventDefault(); rememberTextSelection(); }} onClick={
+                        textLinkType === "image-popup"
+                          ? removeSelectedTextPopupOrImagePopup
+                          : removeTextLink
+                      } className="h-10 rounded-xl border border-blue-300 bg-white px-4 text-xs font-black text-blue-700 hover:bg-blue-100">
                         {textLinkType === "image-popup" ? "팝업 제거" : "링크 제거"}
                       </button>
                     </div>
@@ -22595,6 +22767,12 @@ function RightPanel(props: {
                 <style>{`
                   .text-cell-rich-editor [data-image-popup="true"] {
                     cursor: zoom-in;
+                  }
+
+                  .text-cell-rich-editor span[data-image-popup="true"] {
+                    text-decoration-line: underline;
+                    text-decoration-style: dotted;
+                    text-underline-offset: 3px;
                   }
 
                   .text-cell-rich-editor a {
