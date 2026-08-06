@@ -4249,6 +4249,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  // 링크 페이지 카드의 "미리보기"를 눌렀을 때 서버 저장 여부와 관계없이
+  // 현재 브라우저 메모리의 sections 상태에서 해당 페이지를 바로 엽니다.
+  const [previewInitialPageSlug, setPreviewInitialPageSlug] = useState("");
   const [menuImportOpen, setMenuImportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -6908,7 +6911,26 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             </button>
             <button
               type="button"
-              onClick={() => setPreviewOpen(true)}
+              onClick={() => {
+                // 상단 작업 미리보기는 현재 선택된 링크 페이지를 우선 열고,
+                // Home/일반 레이어를 선택한 상태라면 홈페이지부터 엽니다.
+                const selectedSection =
+                  selection.area === "hero"
+                    ? sections.find((section) => section.id === selection.sectionId)
+                    : null;
+                const selectedSlug =
+                  selectedSection?.content?.page_type === "link-page"
+                    ? slugifyMenuValue(
+                        String(
+                          selectedSection.content?.page_slug ||
+                            selectedSection.title ||
+                            "",
+                        ),
+                      )
+                    : "";
+                setPreviewInitialPageSlug(selectedSlug);
+                setPreviewOpen(true);
+              }}
               className="rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-black text-blue-700 hover:bg-blue-100"
             >
               작업 미리보기
@@ -7469,14 +7491,39 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     >
                       {section.is_visible ? "숨기기" : "보이기"}
                     </button>
-                    <a
-                      href={`/business/${businessId}/website/${pageSlug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-lg bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 서버에 저장하지 않은 음수 ID 페이지도 현재 sections 상태를
+                        // CurrentWebsitePreview에 전달하므로 즉시 확인할 수 있습니다.
+                        setPreviewInitialPageSlug(pageSlug);
+                        setPreviewOpen(true);
+                      }}
+                      className="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700 hover:bg-blue-100"
+                      title="서버 저장 없이 현재 작업 내용을 확인합니다."
                     >
-                      열기
-                    </a>
+                      미리보기
+                    </button>
+                    {section.id > 0 ? (
+                      <a
+                        href={`/business/${businessId}/website/${pageSlug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700 hover:bg-violet-100"
+                        title="서버에 저장된 실제 공개 페이지를 새 창에서 엽니다."
+                      >
+                        공개
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="cursor-not-allowed rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700 opacity-80"
+                        title="아직 서버에 저장하지 않은 새 페이지입니다. 미리보기로 확인하세요."
+                      >
+                        저장 전
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => deleteSection(section.id)}
@@ -7495,7 +7542,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             <p className="mt-2 text-xs leading-5 text-gray-500">
               레이어를 선택하면 가운데에는 선택한 레이어만 표시됩니다.
               ↑↓로 순서를 바꾸고, 숨기기 또는 🗑 버튼으로 관리할 수 있습니다.
-              전체 홈페이지는 위의 작업 미리보기에서 확인하세요.
+              링크 페이지의 미리보기는 서버 저장 없이 현재 작업 상태를 보여줍니다. 공개 버튼은 서버에 저장된 페이지에만 표시됩니다.
             </p>
           </div>
         </aside>
@@ -7605,7 +7652,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               />
             </div>
 
-            {selection.area === "hero" && heroSection?.content?.page_type === "link-page" ? (
+            {selection.area === "hero" &&
+            heroSection?.content?.page_type === "link-page" &&
+            heroSection.content?.link_page_kind === "restaurant-menu" ? (
               <LinkPageContent section={heroSection} editable />
             ) : selection.area === "hero" && heroSection ? (
               <div
@@ -8114,7 +8163,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   새 페이지 만들기
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-gray-500">
-                  일반 페이지 또는 DB 메뉴가 자동으로 표시되는 주문용 메뉴 페이지를 만듭니다.
+                  일반 페이지는 공용 헤더와 메뉴를 유지하고 본문만 기존 레이어 에디터로 작성합니다. Restaurant Menu는 DB 메뉴를 자동 표시합니다.
                 </p>
               </div>
               <button
@@ -8140,7 +8189,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 >
                   <span className="block text-lg">📄</span>
                   <span className="mt-1 block text-sm font-black text-gray-950">일반 페이지</span>
-                  <span className="mt-1 block text-[11px] leading-4 text-gray-500">HTML, 사진, PDF를 직접 편집</span>
+                  <span className="mt-1 block text-[11px] leading-4 text-gray-500">공용 헤더·메뉴 아래 본문을 레이어 에디터로 작성</span>
                 </button>
                 <button
                   type="button"
@@ -8197,8 +8246,28 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           sections={sections}
           websiteSettings={websiteSettings}
           device={device}
+          initialPageSlug={
+            previewInitialPageSlug ||
+            (selection.area === "hero"
+              ? slugifyMenuValue(
+                  String(
+                    sections.find((section) => section.id === selection.sectionId)
+                      ?.content?.page_type === "link-page"
+                      ? sections.find((section) => section.id === selection.sectionId)
+                          ?.content?.page_slug ||
+                          sections.find((section) => section.id === selection.sectionId)
+                            ?.title ||
+                          ""
+                      : "",
+                  ),
+                )
+              : "")
+          }
           onDeviceChange={setDevice}
-          onClose={() => setPreviewOpen(false)}
+          onClose={() => {
+            setPreviewOpen(false);
+            setPreviewInitialPageSlug("");
+          }}
         />
       ) : null}
 
@@ -9030,6 +9099,7 @@ function CurrentWebsitePreview({
   sections,
   websiteSettings,
   device,
+  initialPageSlug = "",
   onDeviceChange,
   onClose,
 }: {
@@ -9037,11 +9107,14 @@ function CurrentWebsitePreview({
   sections: BusinessSection[];
   websiteSettings: WebsiteSettings;
   device: "desktop" | "mobile";
+  initialPageSlug?: string;
   onDeviceChange: (device: "desktop" | "mobile") => void;
   onClose: () => void;
 }) {
   const [openedPreviewLayerIds, setOpenedPreviewLayerIds] = useState<number[]>([]);
-  const [previewPageSlug, setPreviewPageSlug] = useState("");
+  const [previewPageSlug, setPreviewPageSlug] = useState(() =>
+    slugifyMenuValue(initialPageSlug),
+  );
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -9051,8 +9124,8 @@ function CurrentWebsitePreview({
      * 숨김 레이어를 자동으로 펼치는 현상을 막습니다.
      */
     setOpenedPreviewLayerIds([]);
-    setPreviewPageSlug("");
-  }, [sections]);
+    setPreviewPageSlug(slugifyMenuValue(initialPageSlug));
+  }, [sections, initialPageSlug]);
 
 
   useEffect(() => {
@@ -9271,16 +9344,79 @@ function CurrentWebsitePreview({
           />
 
           {previewLinkPage ? (
-            <div
-              className="relative min-h-[60vh]"
-              style={{
-                backgroundColor: String(
-                  websiteSettings.outer_background_color || "#e5e7eb",
-                ),
-              }}
-            >
-              <LinkPageContent section={previewLinkPage} previewDevice={device} />
-            </div>
+            previewLinkPage.content?.link_page_kind === "restaurant-menu" ? (
+              <div
+                className="relative min-h-[60vh]"
+                style={{
+                  backgroundColor: String(
+                    websiteSettings.outer_background_color || "#e5e7eb",
+                  ),
+                }}
+              >
+                <LinkPageContent section={previewLinkPage} previewDevice={device} />
+              </div>
+            ) : (
+              <section
+                id={slugifyMenuValue(
+                  String(
+                    previewLinkPage.content?.page_slug ||
+                      previewLinkPage.title ||
+                      "page",
+                  ),
+                )}
+                className={getSectionWidthClass(previewLinkPage)}
+                style={{
+                  ...backgroundStyle(previewLinkPage, outerBackgroundColor),
+                  ...getSectionWidthStyle(previewLinkPage),
+                  minHeight: getVideoSectionMinHeight(previewLinkPage, device),
+                }}
+              >
+                <VideoBackgroundLayer section={previewLinkPage} />
+                <VideoOverlayContent
+                  section={previewLinkPage}
+                  previewDevice={device}
+                  editorPreview
+                />
+
+                <div className="relative z-10">
+                  {normalizeHeroLayouts(previewLinkPage.content).map(
+                    (layout, layoutIndex, pageLayouts) => (
+                      <div
+                        key={layout.id}
+                        className={getLayoutWidthClass(layout)}
+                        style={{
+                          ...getLayoutBorderStyle(layout),
+                          marginBottom:
+                            layoutIndex < pageLayouts.length - 1 ? "6px" : 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            borderRadius: "inherit",
+                            overflow: "hidden",
+                            clipPath: "inherit",
+                            WebkitClipPath: "inherit",
+                          }}
+                        >
+                          <ReadOnlyGrid
+                            area="hero"
+                            grid={layout}
+                            business={business}
+                            accentColor={String(
+                              websiteSettings.accent_color || "#d97706",
+                            )}
+                            previewDevice={device}
+                          />
+                        </div>
+                        <LayoutBorderOverlay layout={layout} />
+                      </div>
+                    ),
+                  )}
+                </div>
+              </section>
+            )
           ) : (
             <>
           {heroSection ? (
@@ -10322,7 +10458,8 @@ export function PublicWebsiteRenderer({
           previewDevice={device}
         />
 
-        {heroSection?.content?.page_type === "link-page" ? (
+        {heroSection?.content?.page_type === "link-page" &&
+        heroSection.content?.link_page_kind === "restaurant-menu" ? (
           <section
             id={normalizedSlug}
             style={{
@@ -10690,6 +10827,65 @@ function SnsPlatformLogo({
   );
 }
 
+
+function getMobileNestedCellMinimumWidth(cell: GridCell): number {
+  if (cell.child_cells?.length) return 220;
+
+  if (
+    cell.type === "text" ||
+    cell.type === "title" ||
+    cell.type === "button" ||
+    cell.type === "phone" ||
+    cell.type === "menu" ||
+    cell.type === "hours" ||
+    cell.type === "map"
+  ) {
+    return 240;
+  }
+
+  if (
+    cell.type === "image" ||
+    cell.type === "logo" ||
+    cell.display_mode === "auto-slider" ||
+    cell.display_mode === "gallery" ||
+    cell.display_mode === "image-scroll"
+  ) {
+    return 150;
+  }
+
+  return 180;
+}
+
+/**
+ * 휴대폰에서 중첩 좌우 칸을 무조건 세로로 바꾸지 않습니다.
+ * 각 칸의 저장 비율로 예상 너비를 계산하여 읽을 수 있는 공간이 충분하면
+ * 좌우 배치를 유지하고, 하나라도 너무 좁으면 전체를 세로로 쌓습니다.
+ */
+function shouldStackNestedCellsOnMobile(
+  children: GridCell[],
+  direction: "row" | "column",
+  availableWidth = 430,
+): boolean {
+  if (direction !== "row" || children.length <= 1) return false;
+
+  const rawSizes = children.map((child) => Number(child.size_percent));
+  const hasValidSizes = rawSizes.every(
+    (size) => Number.isFinite(size) && size >= 3,
+  );
+  const total = hasValidSizes
+    ? rawSizes.reduce((sum, size) => sum + size, 0) || 100
+    : 100;
+
+  return children.some((child, index) => {
+    const percent = hasValidSizes
+      ? (rawSizes[index] / total) * 100
+      : 100 / children.length;
+    const estimatedWidth = (availableWidth * percent) / 100;
+
+    return estimatedWidth < getMobileNestedCellMinimumWidth(child);
+  });
+}
+
 function ReadOnlyCellContent({
   cell, business, accentColor, area, previewDevice, websiteSettings,
 }: {
@@ -10697,7 +10893,21 @@ function ReadOnlyCellContent({
   previewDevice: "desktop" | "mobile"; websiteSettings?: WebsiteSettings;
 }) {
   if (cell.child_cells?.length) {
-    const direction = cell.child_direction === "row" ? "row" : "column";
+    const originalDirection =
+      cell.child_direction === "row" ? "row" : "column";
+    const mobileAvailableWidth = 430;
+    const shouldStackNestedMobile =
+      previewDevice === "mobile" &&
+      area !== "header" &&
+      shouldStackNestedCellsOnMobile(
+        cell.child_cells,
+        originalDirection,
+        mobileAvailableWidth,
+      );
+
+    const direction = shouldStackNestedMobile
+      ? "column"
+      : originalDirection;
     const rawSizes = cell.child_cells.map((child) => Number(child.size_percent));
     const validSizes = rawSizes.every((value) => Number.isFinite(value) && value >= 5);
     const total = validSizes ? rawSizes.reduce((sum, value) => sum + value, 0) || 100 : 100;
@@ -10717,26 +10927,25 @@ function ReadOnlyCellContent({
             : "self-start"
         }`}
         style={
-          direction === "row"
-            ? { gridTemplateColumns: template }
-            : {
-                /*
-                 * 모바일에서도 데스크톱과 동일한 저장 비율을 사용합니다.
-                 * auto 행으로 바꾸지 않으므로 제목칸·빈칸·버거칸 높이가
-                 * 모바일에서 임의로 커지지 않습니다.
-                 */
-                gridTemplateRows: template,
-                /*
-                 * 높이를 직접 저장한 바깥 테이블만 px 높이를 사용합니다.
-                 * 이미지+제목처럼 그 안에 다시 나눈 하위 테이블은
-                 * 240px로 고정하지 않고 부모 칸 높이 100%를 채웁니다.
-                 */
-                height: hasSavedNestedHeight
-                  ? `${savedNestedHeight}px`
-                  : "100%",
+          shouldStackNestedMobile
+            ? {
+                gridTemplateColumns: "minmax(0, 1fr)",
+                gridTemplateRows: "none",
+                gridAutoRows: "auto",
+                height: "auto",
                 minHeight: 0,
-                maxHeight: hasSavedNestedHeight ? "1800px" : "100%",
+                maxHeight: "none",
               }
+            : direction === "row"
+              ? { gridTemplateColumns: template }
+              : {
+                  gridTemplateRows: template,
+                  height: hasSavedNestedHeight
+                    ? `${savedNestedHeight}px`
+                    : "100%",
+                  minHeight: 0,
+                  maxHeight: hasSavedNestedHeight ? "1800px" : "100%",
+                }
         }
       >
         {cell.child_cells.map((child, index) => {
@@ -10753,7 +10962,16 @@ function ReadOnlyCellContent({
                * h-full과 height:100%를 주면 각 칸이 테이블 전체 높이가 되어
                * 제목·노란칸·버거칸 위치가 서로 어긋납니다.
                */
-              minHeight: 0,
+              minHeight: shouldStackNestedMobile
+                ? renderedChild.type === "image"
+                  ? 0
+                  : "160px"
+                : 0,
+              height: shouldStackNestedMobile ? "auto" : undefined,
+              aspectRatio:
+                shouldStackNestedMobile && renderedChild.type === "image"
+                  ? "1 / 1"
+                  : undefined,
               alignSelf: "stretch",
               justifySelf: "stretch",
               justifyContent: child.text_align === "left" ? "flex-start" : child.text_align === "right" ? "flex-end" : "center",
@@ -11215,17 +11433,15 @@ function ReadOnlyGrid({
    * 내려서 한 칸씩 표시합니다. 데스크톱 저장 비율과 데이터는 바꾸지 않고
    * 모바일 렌더링 방식만 반응형으로 전환합니다.
    */
-  const estimatedMobileContentWidth = 430;
-  const minimumReadableCellWidth = 240;
+  /*
+   * 모바일에서는 가로로 나눈 콘텐츠 레이어를 항상 셀별 1열로 표시합니다.
+   * 데스크톱의 좌우 배치는 유지하되 휴대폰에서는 저장된 셀 순서대로
+   * 이미지 → 설명 또는 설명 → 이미지가 각각 전체 폭으로 이어집니다.
+   */
   const shouldStackMobileCells =
     previewDevice === "mobile" &&
     area !== "header" &&
-    renderedCells.length > 1 &&
-    widths.some(
-      (width) =>
-        (estimatedMobileContentWidth * Math.max(0, Number(width))) / 100 <
-        minimumReadableCellWidth,
-    );
+    renderedCells.length > 1;
 
   const autoContentHeight =
     area !== "header" && Boolean(deviceGrid.auto_height);
@@ -11372,23 +11588,21 @@ function ReadOnlyGrid({
             minHeight: shouldStackMobileCells
               ? cell.type === "image"
                 ? 0
-                : `${Math.max(240, Math.min(displayHeight, 620))}px`
+                : "160px"
               : isMobileContentGrid &&
                   cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
                 : 0,
             height: shouldStackMobileCells
-              ? cell.type === "image"
-                ? "auto"
-                : `${Math.max(240, Math.min(displayHeight, 620))}px`
+              ? "auto"
               : isMobileContentGrid &&
                   cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
                 : undefined,
-            // 세로형 포스터 이미지는 휴대폰 전체 폭에서 원본 비율에 가깝게 표시합니다.
+            // 모바일 분할 레이어의 이미지는 독립된 정사각형 셀로 표시합니다.
             aspectRatio:
               shouldStackMobileCells && cell.type === "image"
-                ? "3 / 4"
+                ? "1 / 1"
                 : undefined,
             justifyContent:
               cell.text_align === "left"
@@ -11788,7 +12002,22 @@ function NestedEditableCellsV2({
   onMergeNested?: (cellId: string) => void;
 }) {
   const children = parentCell.child_cells || [];
-  const direction = parentCell.child_direction === "row" ? "row" : "column";
+  const originalDirection =
+    parentCell.child_direction === "row" ? "row" : "column";
+  const [availableNestedWidth, setAvailableNestedWidth] = useState(430);
+
+  const shouldStackNestedMobile =
+    previewDevice === "mobile" &&
+    area !== "header" &&
+    shouldStackNestedCellsOnMobile(
+      children,
+      originalDirection,
+      availableNestedWidth,
+    );
+
+  const direction = shouldStackNestedMobile
+    ? "column"
+    : originalDirection;
   const savedNestedHeight = Number(parentCell.nested_height_px);
   const [nestedHeight, setNestedHeight] = useState<number | null>(
     Number.isFinite(savedNestedHeight) && savedNestedHeight > 0 ? savedNestedHeight : null,
@@ -11796,6 +12025,29 @@ function NestedEditableCellsV2({
   const heightDragRef = useRef<{ pointerId: number; startY: number; startHeight: number } | null>(null);
   const initializedNestedHeightRef = useRef(false);
   const hostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (previewDevice !== "mobile") return;
+
+    const host = hostRef.current;
+    if (!host) return;
+
+    const updateWidth = () => {
+      const measured = Math.round(host.getBoundingClientRect().width || 0);
+      if (measured > 0) setAvailableNestedWidth(measured);
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateWidth);
+      return () => window.removeEventListener("resize", updateWidth);
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [previewDevice]);
 
   useEffect(() => {
     if (heightDragRef.current) return;
@@ -12085,19 +12337,25 @@ function NestedEditableCellsV2({
         direction === "row" ? "h-full" : "self-start"
       }`}
       style={
-        direction === "row"
-          ? { gridTemplateColumns: template }
-          : {
-              gridTemplateRows: template,
-              /*
-               * 세로 테이블 높이는 레이어 높이와 완전히 분리합니다.
-               * 100%를 사용하지 않으므로 레이어가 늘거나 줄어도 테이블은 그대로입니다.
-               */
-              height: `${Math.max(80, nestedHeight ?? 240)}px`,
-              minHeight: "80px",
-              maxHeight: "1800px",
+        shouldStackNestedMobile
+          ? {
+              gridTemplateColumns: "minmax(0, 1fr)",
+              gridTemplateRows: "none",
+              gridAutoRows: "auto",
+              height: "auto",
+              minHeight: 0,
+              maxHeight: "none",
               flex: "0 0 auto",
             }
+          : direction === "row"
+            ? { gridTemplateColumns: template }
+            : {
+                gridTemplateRows: template,
+                height: `${Math.max(80, nestedHeight ?? 240)}px`,
+                minHeight: "80px",
+                maxHeight: "1800px",
+                flex: "0 0 auto",
+              }
       }
     >
       {/*
@@ -12132,6 +12390,17 @@ function NestedEditableCellsV2({
                 : "border-orange-300/90 hover:border-purple-400"
             }`}
             style={{
+              width: shouldStackNestedMobile ? "100%" : undefined,
+              minHeight: shouldStackNestedMobile
+                ? child.type === "image"
+                  ? 0
+                  : "160px"
+                : 0,
+              height: shouldStackNestedMobile ? "auto" : undefined,
+              aspectRatio:
+                shouldStackNestedMobile && child.type === "image"
+                  ? "1 / 1"
+                  : undefined,
               justifyContent:
                 child.text_align === "left"
                   ? "flex-start"
@@ -12200,7 +12469,7 @@ function NestedEditableCellsV2({
               <span className="pointer-events-none text-xs font-bold opacity-70">+ 내용 추가</span>
             ) : null}
 
-            {hasNext ? (
+            {!shouldStackNestedMobile && hasNext ? (
               <button
                 type="button"
                 aria-label={
@@ -12239,7 +12508,7 @@ function NestedEditableCellsV2({
         );
       })}
 
-      {direction === "column" ? (
+      {direction === "column" && !shouldStackNestedMobile ? (
         <>
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[195] border-b-2 border-dashed border-orange-400"
@@ -12412,6 +12681,13 @@ function EditableGrid({
   const sliderAutoHeight =
     autoSliderCells.length > 0 &&
     autoSliderCells.every((cell) => cell.slider_auto_height !== false);
+
+  // 모바일 편집 화면에서도 분할 레이어를 셀별 한 줄로 표시합니다.
+  const shouldStackMobileEditorCells =
+    previewDevice === "mobile" &&
+    area !== "header" &&
+    deviceGrid.cells.length > 1;
+
   const heightClass = area === "header" ? "min-h-[48px]" : "min-h-[40px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
@@ -12543,10 +12819,13 @@ function EditableGrid({
       className={`relative grid gap-0 overflow-hidden ${heightClass}`}
       style={{
         height:
-          autoMobileBusinessHours
+          autoMobileBusinessHours || shouldStackMobileEditorCells
             ? "auto"
             : `${localHeight}px`,
-        maxHeight: autoMobileBusinessHours ? undefined : `${localHeight}px`,
+        maxHeight:
+          autoMobileBusinessHours || shouldStackMobileEditorCells
+            ? undefined
+            : `${localHeight}px`,
         aspectRatio: undefined,
         // 칸 나누기 영역을 레이어 테두리에 딱 맞추지 않고
         // 사방 4px 안쪽으로 띄웁니다.
@@ -12560,21 +12839,42 @@ function EditableGrid({
               : gridFrameBackgroundColor
             : undefined,
         minHeight: "40px",
-        gridTemplateColumns: localWidths
-          .map((width) => `${Math.max(width, 1)}fr`)
-          .join(" "),
+        gridTemplateColumns: shouldStackMobileEditorCells
+          ? "minmax(0, 1fr)"
+          : localWidths
+              .map((width) => `${Math.max(width, 1)}fr`)
+              .join(" "),
+        gridAutoRows: shouldStackMobileEditorCells ? "auto" : undefined,
       }}
     >
       {deviceGrid.cells.map((cell, index) => {
         const selected = selectedCellId === cell.id;
         const isDragging = dragging?.cellId === cell.id;
         const isLogo = cell.type === "logo";
-        const hasRightNeighbor = index < deviceGrid.cells.length - 1;
+        const hasRightNeighbor =
+          !shouldStackMobileEditorCells &&
+          index < deviceGrid.cells.length - 1;
         const handleColor = isLogo ? "red" : "blue";
         const visibleWidth = Math.round(localWidths[index] || 0);
 
         return (
-          <div key={cell.id} className="relative h-full min-w-0">
+          <div
+            key={cell.id}
+            className={`relative min-w-0 ${
+              shouldStackMobileEditorCells ? "h-auto" : "h-full"
+            }`}
+            style={{
+              minHeight: shouldStackMobileEditorCells
+                ? cell.type === "image"
+                  ? 0
+                  : "160px"
+                : undefined,
+              aspectRatio:
+                shouldStackMobileEditorCells && cell.type === "image"
+                  ? "1 / 1"
+                  : undefined,
+            }}
+          >
             <div
               role="button"
               tabIndex={0}
@@ -14298,6 +14598,51 @@ function HeaderSubmenuEditor({
     );
   }
 
+  function moveItem(itemId: string, direction: "up" | "down") {
+    const currentIndex = items.findIndex((item) => item.id === itemId);
+    if (currentIndex < 0) return;
+
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= items.length) return;
+
+    const nextItems = [...items];
+    [nextItems[currentIndex], nextItems[targetIndex]] = [
+      nextItems[targetIndex],
+      nextItems[currentIndex],
+    ];
+    commitItems(nextItems);
+  }
+
+  function moveChild(
+    parentId: string,
+    childId: string,
+    direction: "up" | "down",
+  ) {
+    commitItems(
+      items.map((item) => {
+        if (item.id !== parentId) return item;
+
+        const children = [...(item.children || [])];
+        const currentIndex = children.findIndex(
+          (child) => child.id === childId,
+        );
+        if (currentIndex < 0) return item;
+
+        const targetIndex =
+          direction === "up" ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= children.length) return item;
+
+        [children[currentIndex], children[targetIndex]] = [
+          children[targetIndex],
+          children[currentIndex],
+        ];
+
+        return { ...item, children };
+      }),
+    );
+  }
+
   function toggleItemOpen(itemId: string) {
     setOpenMenuItemIds((current) =>
       current.includes(itemId)
@@ -14959,6 +15304,29 @@ function HeaderSubmenuEditor({
                       </p>
                     </div>
 
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => moveItem(item.id, "up")}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-black text-gray-700 disabled:cursor-not-allowed disabled:opacity-25"
+                        aria-label={`${item.label || "메뉴"} 위로 이동`}
+                        title="위로 이동"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === items.length - 1}
+                        onClick={() => moveItem(item.id, "down")}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-sm font-black text-gray-700 disabled:cursor-not-allowed disabled:opacity-25"
+                        aria-label={`${item.label || "메뉴"} 아래로 이동`}
+                        title="아래로 이동"
+                      >
+                        ↓
+                      </button>
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => addChild(item.id)}
@@ -15049,6 +15417,32 @@ function HeaderSubmenuEditor({
                                     placeholder={`하위 메뉴 ${childIndex + 1}`}
                                     className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold"
                                   />
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={childIndex === 0}
+                                      onClick={() =>
+                                        moveChild(item.id, child.id, "up")
+                                      }
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-black text-blue-700 disabled:cursor-not-allowed disabled:opacity-25"
+                                      aria-label={`${child.label || "하위 메뉴"} 위로 이동`}
+                                      title="위로 이동"
+                                    >
+                                      ↑
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={childIndex === children.length - 1}
+                                      onClick={() =>
+                                        moveChild(item.id, child.id, "down")
+                                      }
+                                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-white text-xs font-black text-blue-700 disabled:cursor-not-allowed disabled:opacity-25"
+                                      aria-label={`${child.label || "하위 메뉴"} 아래로 이동`}
+                                      title="아래로 이동"
+                                    >
+                                      ↓
+                                    </button>
+                                  </div>
                                   <button
                                     type="button"
                                     onClick={() => removeChild(item.id, child.id)}
@@ -19217,7 +19611,10 @@ function RightPanel(props: {
     setTextEditorOpen(false);
   }
 
-  if (selectedSection?.content?.page_type === "link-page") {
+  if (
+    selectedSection?.content?.page_type === "link-page" &&
+    selectedSection.content?.link_page_kind === "restaurant-menu"
+  ) {
     return (
       <LinkPageEditor
         section={selectedSection}
@@ -19233,8 +19630,21 @@ function RightPanel(props: {
 
   if ((selection.area === "header" || selection.area === "hero") && selectedCell) {
     const area = selection.area;
+    const isLayerBasedLinkPage =
+      area === "hero" &&
+      selectedSection?.content?.page_type === "link-page" &&
+      selectedSection.content?.link_page_kind !== "restaurant-menu";
+
     return (
       <div>
+        {isLayerBasedLinkPage ? (
+          <div className="mb-4 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
+            <p className="text-sm font-black text-violet-950">빈 페이지 본문 편집</p>
+            <p className="mt-1 text-[11px] font-bold leading-5 text-violet-700">
+              공용 헤더와 메뉴는 그대로 사용하고, 이 페이지의 본문 레이아웃만 현재 오른쪽 에디터로 수정합니다.
+            </p>
+          </div>
+        ) : null}
         {area === "hero" && heroSection
           ? renderLayerNameEditor(heroSection)
           : null}
