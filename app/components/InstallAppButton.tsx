@@ -267,7 +267,11 @@ export default function InstallAppButton({
      * 비즈니스별 저장 키만 확인합니다.
      */
     if (businessId) {
-      return getSavedInstalledState();
+      return (
+        displayModeStandalone ||
+        iosStandalone ||
+        getSavedInstalledState()
+      );
     }
 
     return (
@@ -413,12 +417,10 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * beforeinstallprompt가 발생했다는 것은 브라우저가 현재 앱을
-       * 설치할 수 있다고 판단했다는 뜻이므로 오래된 설치 기록을
-       * 해제합니다.
+       * 같은 도메인의 메인 앱 또는 브라우저 상태 때문에
+       * beforeinstallprompt가 다시 발생할 수 있습니다.
+       * 이미 저장된 비즈니스 앱 설치 상태는 여기서 지우지 않습니다.
        */
-      saveInstalledState(false);
-      setIsInstalled(false);
       setHasCheckedInstallState(true);
 
       try {
