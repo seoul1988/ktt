@@ -564,6 +564,29 @@ function normalizeImageFit(value: unknown): ImageFitMode {
     : "width";
 }
 
+/**
+ * 같은 Storage 주소를 다시 사용해도 이전 이미지 캐시가 열리지 않도록
+ * 이미지 URL에 교체 시각을 버전값으로 추가합니다.
+ */
+function withImageCacheVersion(url: string, version = Date.now()) {
+  const raw = String(url || "").trim();
+  if (!raw || raw.startsWith("blob:") || raw.startsWith("data:")) return raw;
+
+  try {
+    const parsed = new URL(
+      raw,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost",
+    );
+    parsed.searchParams.set("v", String(version));
+
+    if (/^https?:\/\//i.test(raw)) return parsed.toString();
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    const separator = raw.includes("?") ? "&" : "?";
+    return `${raw}${separator}v=${version}`;
+  }
+}
+
 function isVisualCell(cell: GridCell): boolean {
   if (Array.isArray(cell.child_cells) && cell.child_cells.length > 0) {
     return cell.child_cells.every(isVisualCell);
@@ -10289,7 +10312,11 @@ export function PublicWebsiteRenderer({
               {layouts.map((layout) => (
                 <div
                   key={layout.id}
-                  className={getLayoutWidthClass(layout)}
+                  className={
+                    layout.layout_width_mode === "full"
+                      ? "w-full max-w-none"
+                      : "mx-auto w-full max-w-[1120px]"
+                  }
                   style={getLayoutBorderStyle(layout)}
                 >
                   <div
@@ -11418,7 +11445,7 @@ function PreviewSection({
       ) : null}
 
       {hasLayoutContent ? (
-        <div className="w-full max-w-none px-0">
+        <div className="w-full">
           {sectionLayouts.map((layout, layoutIndex) => (
             <div
               key={layout.id}
@@ -12766,7 +12793,7 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
       const target = event.target instanceof HTMLElement ? event.target : null;
       const popupTarget =
         target?.closest<HTMLElement>('[data-image-popup="true"]') ||
-        target?.closest<HTMLElement>("[data-image-popup-url]");
+        target?.closest<HTMLElement>('[data-image-popup-url]');
 
       if (!popupTarget) return;
 
@@ -12774,6 +12801,8 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
         target?.closest<HTMLImageElement>("img") ||
         popupTarget.querySelector<HTMLImageElement>("img");
 
+      // 팝업 전용 URL은 이미지와 래퍼 양쪽에 저장합니다.
+      // 화면에 보이는 원본 img.src는 절대로 팝업 URL로 사용하지 않습니다.
       const url = String(
         clickedImage?.getAttribute("data-image-popup-url") ||
         popupTarget.getAttribute("data-image-popup-url") ||
@@ -12810,7 +12839,7 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
         <button type="button" onClick={() => setPopup(null)} className="fixed right-3 top-3 z-[2147483001] flex h-11 w-11 items-center justify-center rounded-full bg-black/65 text-3xl text-white" aria-label="팝업 닫기">×</button>
         <div className="max-h-[92dvh] w-full overflow-hidden rounded-2xl bg-white shadow-2xl" style={{ maxWidth: `${popup.maxWidth}px` }}>
           {popup.title ? <div className="border-b border-gray-200 px-5 py-4 pr-16 text-lg font-black text-gray-950">{popup.title}</div> : null}
-          <div className="max-h-[82dvh] overflow-auto p-3 sm:p-5"><img src={popup.url} alt={popup.title || "이미지 팝업"} className="mx-auto block h-auto max-w-full object-contain" /></div>
+          <div className="max-h-[82dvh] overflow-auto p-3 sm:p-5"><img key={popup.url} src={popup.url} alt={popup.title || "이미지 팝업"} className="mx-auto block h-auto max-w-full object-contain" /></div>
         </div>
       </div>, document.body) : null}
   </>;
@@ -16578,7 +16607,6 @@ function RightPanel(props: {
 }) {
   const { selection, selectedCell, selectedSection, heroSection, business, websiteSettings } = props;
   const [cellTypePickerOpen, setCellTypePickerOpen] = useState(false);
-  const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [phoneEditorOpen, setPhoneEditorOpen] = useState(false);
   const [snsEditorOpen, setSnsEditorOpen] = useState(false);
   const [textEditorOpen, setTextEditorOpen] = useState(false);
@@ -17635,12 +17663,28 @@ function RightPanel(props: {
           ? "bottom"
           : "center",
     );
-    setTextPopupImageUrl(wrapper.getAttribute("data-image-popup-url") || "");
-    setTextPopupTitle(wrapper.getAttribute("data-image-popup-title") || "");
+    const selectedImage = wrapper.querySelector<HTMLImageElement>("img");
+    setTextPopupImageUrl(
+      selectedImage?.getAttribute("data-image-popup-url") ||
+      wrapper.getAttribute("data-image-popup-url") ||
+      "",
+    );
+    setTextPopupTitle(
+      selectedImage?.getAttribute("data-image-popup-title") ||
+      wrapper.getAttribute("data-image-popup-title") ||
+      "",
+    );
     setTextPopupMaxWidth(
       Math.max(
         320,
-        Math.min(1800, Number(wrapper.getAttribute("data-image-popup-width") || 1200)),
+        Math.min(
+          1800,
+          Number(
+            selectedImage?.getAttribute("data-image-popup-width") ||
+            wrapper.getAttribute("data-image-popup-width") ||
+            1200,
+          ),
+        ),
       ),
     );
   }
@@ -17665,8 +17709,9 @@ function RightPanel(props: {
     setTextPopupUploading(true);
     setTextEditorMessage("");
     try {
-      const url = await uploadTextEditorImage(file);
-      setTextPopupImageUrl(url);
+      const uploadedUrl = await uploadTextEditorImage(file);
+      const popupUrl = withImageCacheVersion(uploadedUrl);
+      setTextPopupImageUrl(popupUrl);
       setTextEditorMessage("팝업 이미지를 업로드했습니다. 팝업 적용을 눌러주세요.");
     } catch (error) {
       setTextEditorMessage(error instanceof Error ? error.message : "팝업 이미지 업로드에 실패했습니다.");
@@ -17699,6 +17744,8 @@ function RightPanel(props: {
     wrapper.setAttribute("data-image-popup-width", popupWidth);
     wrapper.style.cursor = "zoom-in";
 
+    // 실제 클릭 대상인 img에도 팝업 전용 주소를 저장합니다.
+    // 이 값은 화면 이미지의 src와 완전히 별개입니다.
     if (image) {
       image.setAttribute("data-image-popup", "true");
       image.setAttribute("data-image-popup-url", popupUrl);
@@ -17707,11 +17754,8 @@ function RightPanel(props: {
       image.style.cursor = "zoom-in";
     }
 
-    // CurrentWebsitePreview가 읽는 sections 상태까지 즉시 갱신합니다.
-    syncEditorHtml(true);
-    setTextEditorMessage(
-      "선택한 이미지에 이미지 팝업을 적용했습니다. 작업 미리보기에도 즉시 반영되었습니다.",
-    );
+    syncEditorHtml();
+    setTextEditorMessage("선택한 이미지에 이미지 팝업을 적용했습니다.");
   }
 
   function removePopupFromSelectedTextEditorImage() {
@@ -17735,14 +17779,11 @@ function RightPanel(props: {
       image.removeAttribute("data-image-popup-width");
       image.style.removeProperty("cursor");
     }
-
     setTextPopupImageUrl("");
     setTextPopupTitle("");
     setTextPopupMaxWidth(1200);
-    syncEditorHtml(true);
-    setTextEditorMessage(
-      "선택한 이미지의 팝업을 제거했습니다. 작업 미리보기에도 즉시 반영되었습니다.",
-    );
+    syncEditorHtml();
+    setTextEditorMessage("선택한 이미지의 팝업을 제거했습니다.");
   }
 
   function resizeSelectedTextEditorImage(width: number) {
@@ -18087,29 +18128,10 @@ function RightPanel(props: {
     );
   }
 
-  function syncEditorHtml(commitToLayout = false) {
+  function syncEditorHtml() {
     const editor = textEditorRef.current;
     if (!editor) return;
-
-    const html = sanitizeCellRichTextHtml(editor.innerHTML);
-    setTextEditorHtml(html);
-
-    /*
-     * 작업 미리보기(CurrentWebsitePreview)는 편집창 DOM이 아니라
-     * 상위 sections 상태를 읽습니다. 팝업 이미지처럼 즉시 확인해야 하는
-     * 변경은 상위 레이아웃 상태에도 바로 반영합니다.
-     */
-    if (commitToLayout && selectedCell) {
-      props.onUpdateCell(
-        selection.area as "header" | "hero",
-        selectedCell.id,
-        {
-          rich_text_html: html,
-          text: richTextToPlainText(html),
-        },
-        selection.layoutId,
-      );
-    }
+    setTextEditorHtml(editor.innerHTML);
   }
 
   function normalizeTextEditorParagraphSpacing(editor: HTMLElement) {
@@ -19301,53 +19323,6 @@ function RightPanel(props: {
                     key={entry.value}
                     type="button"
                     onClick={() => {
-                      if (entry.value === "image") {
-                        /*
-                         * 이미지 셀로 전환할 때 기존 이미지 크기와 팝업 설정을
-                         * 절대로 초기화하지 않습니다. 이미지 전용 모달을 바로
-                         * 열어 화면 이미지와 클릭 후 이미지를 한 곳에서 설정합니다.
-                         */
-                        props.onUpdateCell(
-                          area,
-                          selectedCell.id,
-                          {
-                            type: "image",
-                            image_fit: normalizeImageFit(
-                              selectedCell.image_fit,
-                            ),
-                            image_size_percent:
-                              Number(
-                                selectedCell.image_size_percent ?? 100,
-                              ),
-                            text_align:
-                              selectedCell.text_align || "center",
-                            vertical_align:
-                              selectedCell.vertical_align || "center",
-                            popup_enabled:
-                              selectedCell.popup_enabled === true,
-                            popup_image_url:
-                              selectedCell.popup_image_url || "",
-                            popup_title:
-                              selectedCell.popup_title || "",
-                            popup_max_width_px:
-                              Math.max(
-                                320,
-                                Math.min(
-                                  1800,
-                                  Number(
-                                    selectedCell.popup_max_width_px ??
-                                      1200,
-                                  ),
-                                ),
-                              ),
-                          },
-                          selection.layoutId,
-                        );
-                        setCellTypePickerOpen(false);
-                        setImageEditorOpen(true);
-                        return;
-                      }
-
                       props.onUpdateCell(
                         area,
                         selectedCell.id,
@@ -20340,37 +20315,19 @@ function RightPanel(props: {
         ) : null}
 
         {selectedCell.type === "image" ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setImageEditorOpen(true)}
-              className="mt-4 flex w-full items-center justify-between rounded-2xl border-2 border-violet-300 bg-violet-50 px-4 py-3 text-left hover:border-violet-500"
-            >
-              <div>
-                <p className="text-sm font-black text-violet-950">
-                  이미지 및 팝업 설정
-                </p>
-                <p className="mt-1 text-xs font-semibold text-violet-700">
-                  화면 이미지, 크기, 위치와 클릭 후 팝업 이미지를 한 번에 설정합니다.
-                </p>
-              </div>
-              <span className="text-xl font-black text-violet-700">↗</span>
-            </button>
-
-            <ImageCellUploader
-              businessId={props.businessId}
-              area={area}
-              cell={selectedCell}
-              onUpdate={(patch) =>
-                props.onUpdateCell(
-                  area,
-                  selectedCell.id,
-                  patch,
-                  selection.layoutId,
-                )
-              }
-            />
-          </>
+          <ImageCellUploader
+            businessId={props.businessId}
+            area={area}
+            cell={selectedCell}
+            onUpdate={(patch) =>
+              props.onUpdateCell(
+                area,
+                selectedCell.id,
+                patch,
+                selection.layoutId,
+              )
+            }
+          />
         ) : null}
 
         {selectedCell.type === "button" ? (
@@ -20644,79 +20601,6 @@ function RightPanel(props: {
             })}
           </div>
         </Field>
-
-        {imageEditorOpen &&
-        selectedCell.type === "image" &&
-        typeof document !== "undefined"
-          ? createPortal(
-              <div
-                className="fixed inset-0 z-[10070] flex items-center justify-center bg-black/70 p-3 sm:p-6"
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget) {
-                    setImageEditorOpen(false);
-                  }
-                }}
-              >
-                <div
-                  className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-600">
-                        Image Editor
-                      </p>
-                      <h3 className="mt-1 text-xl font-black text-gray-950">
-                        이미지 및 팝업 설정
-                      </h3>
-                      <p className="mt-1 text-xs font-semibold text-gray-500">
-                        화면에 보이는 이미지와 클릭 후 표시할 이미지를 같은 창에서 설정합니다.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setImageEditorOpen(false)}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200"
-                      aria-label="이미지 편집창 닫기"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 px-4 py-5 sm:px-6">
-                    <ImageCellUploader
-                      businessId={props.businessId}
-                      area={area}
-                      cell={selectedCell}
-                      onUpdate={(patch) =>
-                        props.onUpdateCell(
-                          area,
-                          selectedCell.id,
-                          patch,
-                          selection.layoutId,
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:px-6">
-                    <p className="text-xs font-semibold text-gray-500">
-                      화면 이미지를 다시 업로드해도 기존 팝업 설정은 유지됩니다.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setImageEditorOpen(false)}
-                      className="rounded-xl bg-violet-700 px-6 py-3 text-sm font-black text-white hover:bg-violet-800"
-                    >
-                      완료
-                    </button>
-                  </div>
-                </div>
-              </div>,
-              document.body,
-            )
-          : null}
 
         {mapEditorOpen &&
         selectedCell.type === "map" &&
