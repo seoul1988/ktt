@@ -11188,40 +11188,38 @@ function ReadOnlyGrid({
       ? defaultHeight
       : Number(deviceGrid.height_px || defaultHeight);
   const isMobileContentGrid = previewDevice === "mobile" && area !== "header";
-  const isVisualOnlyLayer =
-    area !== "header" &&
-    deviceGrid.cells.some(
-      (cell) =>
-        cell.type === "image" ||
-        cell.display_mode === "auto-slider" ||
-        cell.display_mode === "gallery",
-    ) &&
-    deviceGrid.cells.every(
-      (cell) =>
-        cell.type === "empty" ||
-        cell.type === "image" ||
-        cell.display_mode === "auto-slider" ||
-        cell.display_mode === "gallery",
-    );
   const hasNestedTable = deviceGrid.cells.some(
     (cell) => Array.isArray(cell.child_cells) && cell.child_cells.length > 0,
   );
 
-  const mobileShouldAutoStack =
-    isMobileContentGrid && !isVisualOnlyLayer && !hasNestedTable;
+  /*
+   * 모바일 공개 미리보기에서도 편집기에 저장한 칸 수와 너비를 그대로 사용합니다.
+   * 이전 코드는 일반 콘텐츠 레이어를 모바일에서 강제로 1열로 바꾸고 빈 칸까지
+   * 제거했기 때문에, 모바일 편집기의 48:52 같은 구성이 공개 미리보기에서는
+   * 위아래로 쌓였습니다. 이제 최상위 칸은 mobile_width_percent(없으면
+   * width_percent)를 그대로 사용하며 자동 줄바꿈·자동 쌓기를 하지 않습니다.
+   */
+  const renderedCells = deviceGrid.cells;
 
-  // 일반 콘텐츠는 모바일에서 세로로 쌓지만, 이미지·슬라이더 전용 레이어는
-  // 저장된 레이어 높이를 그대로 사용합니다.
-  const renderedCells = isMobileContentGrid && !hasNestedTable
-    ? deviceGrid.cells.filter(
-        (cell) =>
-          cell.type !== "empty" ||
-          Boolean(cell.child_cells?.length) ||
-          Boolean(cell.display_mode) ||
-          Boolean(String(cell.text || "").trim()) ||
-          Boolean(cell.image_url),
-      )
-    : deviceGrid.cells;
+  /*
+   * 휴대폰 폭에서 두 칸 이상을 그대로 옆으로 압축하면 이미지가 잘리고
+   * 글자 영역도 지나치게 좁아집니다. 실제 모바일 콘텐츠 폭(약 430px)을
+   * 기준으로 각 칸이 최소 240px를 확보하지 못하면 자동으로 다음 줄로
+   * 내려서 한 칸씩 표시합니다. 데스크톱 저장 비율과 데이터는 바꾸지 않고
+   * 모바일 렌더링 방식만 반응형으로 전환합니다.
+   */
+  const estimatedMobileContentWidth = 430;
+  const minimumReadableCellWidth = 240;
+  const shouldStackMobileCells =
+    previewDevice === "mobile" &&
+    area !== "header" &&
+    renderedCells.length > 1 &&
+    widths.some(
+      (width) =>
+        (estimatedMobileContentWidth * Math.max(0, Number(width))) / 100 <
+        minimumReadableCellWidth,
+    );
+
   const autoContentHeight =
     area !== "header" && Boolean(deviceGrid.auto_height);
   // 모바일 영업시간만 내용 높이에 맞춰 자동으로 늘립니다.
@@ -11276,11 +11274,17 @@ function ReadOnlyGrid({
                     : 40
               }px`,
         height:
-          mobileShouldAutoStack || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
+          sliderAutoHeight ||
+          autoMobileBusinessHours ||
+          autoContentHeight ||
+          shouldStackMobileCells
             ? "auto"
             : `${displayHeight}px`,
         maxHeight:
-          mobileShouldAutoStack || sliderAutoHeight || autoMobileBusinessHours || autoContentHeight
+          sliderAutoHeight ||
+          autoMobileBusinessHours ||
+          autoContentHeight ||
+          shouldStackMobileCells
             ? undefined
             : `${displayHeight}px`,
         // 자동 비율은 모바일에서만 사용합니다. 데스크톱에서는 저장한 레이어 높이를
@@ -11304,13 +11308,30 @@ function ReadOnlyGrid({
               ? "#000000"
               : gridFrameBackgroundColor
             : undefined,
-        gridTemplateColumns:
-          isMobileContentGrid && !hasNestedTable
-            ? "minmax(0, 1fr)"
-            : widths.map((width) => `${Math.max(width, 1)}fr`).join(" "),
+        // 데스크톱과 모바일 모두 저장된 칸 비율을 그대로 사용합니다.
+        // 모바일에서는 resolveGridForDevice()가 mobile_width_percent를
+        // width_percent로 치환하므로 편집 화면과 공개 미리보기의 비율이 같습니다.
+        gridTemplateColumns: shouldStackMobileCells
+          ? "minmax(0, 1fr)"
+          : widths
+              .map((width) => `minmax(0, ${Math.max(width, 1)}fr)`)
+              .join(" "),
+        gridAutoRows: shouldStackMobileCells ? "auto" : undefined,
       }}
     >
-      {renderedCells.map((cell) => (
+      {renderedCells.map((cell) => {
+        const stackedCell =
+          shouldStackMobileCells && cell.type === "image"
+            ? {
+                ...cell,
+                // 한 칸 전체 폭으로 내려온 이미지는 잘리지 않도록 전체 표시합니다.
+                image_fit: "contain" as const,
+                image_position_x: 0,
+                image_position_y: 0,
+              }
+            : cell;
+
+        return (
         <div
           key={cell.id}
           className={`relative min-h-0 min-w-0 ${
@@ -11324,9 +11345,10 @@ function ReadOnlyGrid({
                   : "flex overflow-hidden"
           }`}
           style={{
-            // 가로로 나뉜 레이어도 폰에서는 각 칸을 한 화면 폭으로 하나씩 표시합니다.
-            // 자동 슬라이드는 16:9 높이만 사용해 이미지 밑의 빈 공간을 없앱니다.
-            width: isMobileContentGrid ? "100%" : undefined,
+            // 모바일에서도 편집기에 저장한 가로 비율을 유지합니다.
+            // 각 셀에 width:100%를 주면 CSS Grid 열보다 넓어져 아래로 밀릴 수
+            // 있으므로 셀 너비는 Grid가 결정하도록 둡니다.
+            width: undefined,
             maxWidth: "100%",
             boxSizing: "border-box",
             overflow:
@@ -11340,17 +11362,27 @@ function ReadOnlyGrid({
               ? 0
               : undefined,
             margin: 0,
-            minHeight:
-              isMobileContentGrid &&
-              cellContainsDisplayMode(cell, "auto-slider")
+            minHeight: shouldStackMobileCells
+              ? cell.type === "image"
+                ? 0
+                : `${Math.max(240, Math.min(displayHeight, 620))}px`
+              : isMobileContentGrid &&
+                  cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
                 : 0,
-            height:
-              isMobileContentGrid &&
-              cellContainsDisplayMode(cell, "auto-slider")
+            height: shouldStackMobileCells
+              ? cell.type === "image"
+                ? "auto"
+                : `${Math.max(240, Math.min(displayHeight, 620))}px`
+              : isMobileContentGrid &&
+                  cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
                 : undefined,
-            aspectRatio: undefined,
+            // 세로형 포스터 이미지는 휴대폰 전체 폭에서 원본 비율에 가깝게 표시합니다.
+            aspectRatio:
+              shouldStackMobileCells && cell.type === "image"
+                ? "3 / 4"
+                : undefined,
             justifyContent:
               cell.text_align === "left"
                 ? "flex-start"
@@ -11394,7 +11426,7 @@ function ReadOnlyGrid({
           }}
         >
           <ReadOnlyCellContent
-            cell={cell}
+            cell={stackedCell}
             business={business}
             accentColor={accentColor}
             area={area}
@@ -11402,7 +11434,8 @@ function ReadOnlyGrid({
             websiteSettings={websiteSettings}
           />
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
