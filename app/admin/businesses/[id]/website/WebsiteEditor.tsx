@@ -38,6 +38,12 @@ type GalleryImageItem = {
   title: string;
 };
 
+type VideoCarouselItem = {
+  id: string;
+  url: string;
+  title: string;
+};
+
 type ImageHotspot = {
   id: string;
   label?: string;
@@ -114,6 +120,7 @@ type GridCell = {
     | "background-image"
     | "auto-slider"
     | "gallery"
+    | "video-carousel"
     | "map-section"
     | "image-scroll"
     | "service-card"
@@ -124,6 +131,10 @@ type GridCell = {
   gallery_items?: GalleryImageItem[];
   /** 데스크톱 갤러리 열 수: 2, 4, 6 */
   gallery_columns?: 2 | 4 | 6;
+  /** 동영상 링크 목록: 개수 제한 없음 */
+  video_items?: VideoCarouselItem[];
+  /** 한 화면에 표시할 동영상 수: 1~6 */
+  video_columns?: 1 | 2 | 3 | 4 | 5 | 6;
   slider_auto_height?: boolean;
   image_scroll_speed?: number;
   image_scroll_direction?: "left" | "right";
@@ -609,6 +620,7 @@ function isVisualCell(cell: GridCell): boolean {
     cell.type === "image" ||
     cell.display_mode === "auto-slider" ||
     cell.display_mode === "gallery" ||
+    cell.display_mode === "video-carousel" ||
     cell.display_mode === "image-scroll"
   );
 }
@@ -12996,6 +13008,7 @@ function EditableGrid({
 
               {cell.type === "empty" &&
               cell.display_mode !== "gallery" &&
+              cell.display_mode !== "video-carousel" &&
               !cell.child_cells?.length ? (
                 <span
                   className={`text-sm font-bold ${
@@ -13397,6 +13410,212 @@ function normalizeGalleryItems(cell: GridCell): GalleryImageItem[] {
     }))
     .filter((item) => /^https?:\/\//i.test(item.url))
     .slice(0, 12);
+}
+
+
+function normalizeVideoItems(cell: GridCell): VideoCarouselItem[] {
+  return Array.isArray(cell.video_items)
+    ? cell.video_items
+        .map((item, index) => ({
+          id:
+            typeof item?.id === "string" && item.id
+              ? item.id
+              : `video-${index}-${String(item?.url || "").slice(-18)}`,
+          url: String(item?.url || "").trim(),
+          title: String(item?.title || ""),
+        }))
+        .filter((item) => /^https?:\/\//i.test(item.url))
+    : [];
+}
+
+function getVideoEmbedInfo(rawUrl: string):
+  | { kind: "youtube"; src: string }
+  | { kind: "vimeo"; src: string }
+  | { kind: "direct"; src: string }
+  | { kind: "iframe"; src: string } {
+  const value = String(rawUrl || "").trim();
+
+  try {
+    const url = new URL(value);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+
+    if (host === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0] || "";
+      if (id) {
+        return {
+          kind: "youtube",
+          src: `https://www.youtube.com/embed/${encodeURIComponent(id)}`,
+        };
+      }
+    }
+
+    if (
+      host === "youtube.com" ||
+      host === "m.youtube.com" ||
+      host === "youtube-nocookie.com"
+    ) {
+      const pathParts = url.pathname.split("/").filter(Boolean);
+      const id =
+        url.searchParams.get("v") ||
+        (pathParts[0] === "shorts" || pathParts[0] === "embed"
+          ? pathParts[1]
+          : "");
+
+      if (id) {
+        return {
+          kind: "youtube",
+          src: `https://www.youtube.com/embed/${encodeURIComponent(id)}`,
+        };
+      }
+    }
+
+    if (host === "vimeo.com" || host === "player.vimeo.com") {
+      const id = url.pathname
+        .split("/")
+        .filter(Boolean)
+        .find((part) => /^\d+$/.test(part));
+
+      if (id) {
+        return {
+          kind: "vimeo",
+          src: `https://player.vimeo.com/video/${id}`,
+        };
+      }
+    }
+
+    if (/\.(mp4|webm|ogg)(?:$|[?#])/i.test(value)) {
+      return { kind: "direct", src: value };
+    }
+
+    return { kind: "iframe", src: value };
+  } catch {
+    return { kind: "iframe", src: value };
+  }
+}
+
+function VideoCarousel({
+  cell,
+  mobile = false,
+}: {
+  cell: GridCell;
+  mobile?: boolean;
+}) {
+  const items = normalizeVideoItems(cell);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  const savedColumns =
+    cell.video_columns === 1 ||
+    cell.video_columns === 2 ||
+    cell.video_columns === 3 ||
+    cell.video_columns === 4 ||
+    cell.video_columns === 5 ||
+    cell.video_columns === 6
+      ? cell.video_columns
+      : 1;
+
+  const visibleColumns = mobile
+    ? Math.min(savedColumns, 2)
+    : savedColumns;
+
+  const gap = 12;
+  const basis = `calc((100% - ${(visibleColumns - 1) * gap}px) / ${visibleColumns})`;
+
+  const scrollByPage = (direction: -1 | 1) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    scroller.scrollBy({
+      left: direction * Math.max(240, scroller.clientWidth * 0.92),
+      behavior: "smooth",
+    });
+  };
+
+  if (items.length === 0) {
+    return (
+      <span className="text-sm font-black opacity-70">
+        동영상 링크를 추가해주세요
+      </span>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <div
+        ref={scrollerRef}
+        className="flex h-full w-full snap-x snap-mandatory gap-3 overflow-x-auto overflow-y-hidden scroll-smooth px-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {items.map((item, index) => {
+          const embed = getVideoEmbedInfo(item.url);
+
+          return (
+            <article
+              key={item.id || `${item.url}-${index}`}
+              className="min-w-0 shrink-0 snap-start overflow-hidden rounded-2xl border border-gray-200 bg-black shadow-sm"
+              style={{ flexBasis: basis }}
+            >
+              <div className="aspect-video w-full bg-black">
+                {embed.kind === "direct" ? (
+                  <video
+                    src={embed.src}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <iframe
+                    src={embed.src}
+                    title={item.title || `동영상 ${index + 1}`}
+                    loading="lazy"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="h-full w-full border-0"
+                  />
+                )}
+              </div>
+
+              {item.title ? (
+                <div className="bg-white px-3 py-2.5">
+                  <p className="truncate text-sm font-black text-gray-950">
+                    {item.title}
+                  </p>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+
+      {items.length > visibleColumns ? (
+        <>
+          <button
+            type="button"
+            aria-label="이전 동영상"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              scrollByPage(-1);
+            }}
+            className="absolute left-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/70 text-3xl text-white shadow-lg hover:bg-black"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            aria-label="다음 동영상"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              scrollByPage(1);
+            }}
+            className="absolute right-2 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/70 text-3xl text-white shadow-lg hover:bg-black"
+          >
+            ›
+          </button>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 function ImageGalleryGrid({
@@ -14739,6 +14958,15 @@ function CellPreview({
     if (cell.display_mode === "gallery") {
       return (
         <ImageGalleryGrid
+          cell={cell}
+          mobile={previewDevice === "mobile"}
+        />
+      );
+    }
+
+    if (cell.display_mode === "video-carousel") {
+      return (
+        <VideoCarousel
           cell={cell}
           mobile={previewDevice === "mobile"}
         />
@@ -26550,6 +26778,7 @@ function TitleCellEditor({
     | "auto-slider"
     | "image-scroll"
     | "gallery"
+    | "video-carousel"
     | "map-section"
     | "service-card"
     | "business-hours"
@@ -26560,6 +26789,7 @@ function TitleCellEditor({
     cell.display_mode === "auto-slider" ||
     cell.display_mode === "image-scroll" ||
     cell.display_mode === "gallery" ||
+    cell.display_mode === "video-carousel" ||
     cell.display_mode === "map-section" ||
     cell.display_mode === "service-card" ||
     cell.display_mode === "business-hours" ||
@@ -26577,10 +26807,14 @@ function TitleCellEditor({
   const [imageLoadError, setImageLoadError] = useState("");
   const [availableImages, setAvailableImages] = useState<string[]>([]);
   const [galleryEditorOpen, setGalleryEditorOpen] = useState(false);
+  const [videoEditorOpen, setVideoEditorOpen] = useState(false);
+  const [videoUrlInput, setVideoUrlInput] = useState("");
+  const [videoTitleInput, setVideoTitleInput] = useState("");
+  const [videoEditorError, setVideoEditorError] = useState("");
   const [activeControlStep, setActiveControlStep] = useState<1 | 2 | null>(1);
 
   useEffect(() => {
-    if (!galleryEditorOpen) return;
+    if (!galleryEditorOpen && !videoEditorOpen) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -26588,6 +26822,7 @@ function TitleCellEditor({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setGalleryEditorOpen(false);
+        setVideoEditorOpen(false);
       }
     };
 
@@ -26597,7 +26832,7 @@ function TitleCellEditor({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [galleryEditorOpen]);
+  }, [galleryEditorOpen, videoEditorOpen]);
 
   function chooseMode(nextMode: SectionMode) {
     if (nextMode === "image-scroll") {
@@ -26651,6 +26886,26 @@ function TitleCellEditor({
           ? ""
           : "웹사이트 슬라이드로 체크된 이미지가 없습니다. 비즈니스 이미지 관리에서 사용할 사진을 체크하고 저장하세요.",
       );
+      return;
+    }
+
+    if (nextMode === "video-carousel") {
+      onUpdate({
+        type: "title",
+        child_cells: [],
+        display_mode: "video-carousel",
+        video_items: normalizeVideoItems(cell),
+        video_columns:
+          cell.video_columns === 1 ||
+          cell.video_columns === 2 ||
+          cell.video_columns === 3 ||
+          cell.video_columns === 4 ||
+          cell.video_columns === 5 ||
+          cell.video_columns === 6
+            ? cell.video_columns
+            : 1,
+      });
+      setVideoEditorOpen(true);
       return;
     }
 
@@ -27169,6 +27424,55 @@ function TitleCellEditor({
     }
   }
 
+  function saveVideoItems(items: VideoCarouselItem[]) {
+    onUpdate({
+      type: "title",
+      child_cells: [],
+      display_mode: "video-carousel",
+      video_items: items.filter((item) => /^https?:\/\//i.test(item.url)),
+    });
+  }
+
+  function addVideoItem() {
+    const url = videoUrlInput.trim();
+    const title = videoTitleInput.trim();
+
+    if (!/^https?:\/\//i.test(url)) {
+      setVideoEditorError("http:// 또는 https://로 시작하는 동영상 링크를 입력하세요.");
+      return;
+    }
+
+    saveVideoItems([
+      ...normalizeVideoItems(cell),
+      {
+        id: createId("video"),
+        url,
+        title,
+      },
+    ]);
+
+    setVideoUrlInput("");
+    setVideoTitleInput("");
+    setVideoEditorError("");
+  }
+
+  function updateVideoItem(
+    id: string,
+    patch: Partial<VideoCarouselItem>,
+  ) {
+    saveVideoItems(
+      normalizeVideoItems(cell).map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
+  function removeVideoItem(id: string) {
+    saveVideoItems(
+      normalizeVideoItems(cell).filter((item) => item.id !== id),
+    );
+  }
+
   function handleFiles(files: FileList | null) {
     const file = files?.[0];
     if (file) void uploadBackgroundImage(file);
@@ -27213,6 +27517,7 @@ function TitleCellEditor({
           <option value="auto-slider">🎞 자동 이미지 슬라이드</option>
           <option value="image-scroll">↔ 옆으로 흐르는 이미지</option>
           <option value="gallery">📸 이미지 갤러리</option>
+          <option value="video-carousel">🎬 동영상 넣기</option>
           <option value="map-section">🗺 지도</option>
           <option value="business-hours">🕒 비즈니스시간 입력</option>
         </select>
@@ -28030,6 +28335,283 @@ function TitleCellEditor({
         </>
       ) : null}
 
+
+      {mode === "video-carousel" ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setVideoEditorOpen(true)}
+            className="mt-4 flex w-full items-center justify-between rounded-2xl border-2 border-violet-300 bg-violet-50 px-4 py-4 text-left hover:border-violet-600 hover:bg-violet-100"
+          >
+            <span>
+              <span className="block text-sm font-black text-violet-950">
+                동영상 편집
+              </span>
+              <span className="mt-1 block text-xs font-semibold leading-5 text-violet-800">
+                링크 추가·삭제와 한 화면 표시 개수를 팝업에서 설정합니다.
+              </span>
+            </span>
+            <span className="rounded-full bg-violet-700 px-3 py-2 text-xs font-black text-white">
+              열기
+            </span>
+          </button>
+
+          {videoEditorOpen && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="동영상 편집"
+                  className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/65 p-2 sm:p-5"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) {
+                      setVideoEditorOpen(false);
+                    }
+                  }}
+                >
+                  <div className="flex max-h-[95dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                    <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6">
+                      <div>
+                        <h2 className="text-lg font-black text-gray-950 sm:text-xl">
+                          동영상 편집
+                        </h2>
+                        <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+                          링크 개수 제한 없음 · 한 화면에 1~6개 표시
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="동영상 편집창 닫기"
+                        onClick={() => setVideoEditorOpen(false)}
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-3xl font-light text-gray-700 hover:bg-gray-200"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                      <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+                        <aside className="space-y-4">
+                          <div className="rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
+                            <p className="text-sm font-black text-violet-950">
+                              한 화면 표시 개수
+                            </p>
+                            <p className="mt-1 text-xs font-semibold leading-5 text-violet-800">
+                              1개는 전체 너비, 2개는 반씩, 최대 6개까지 한 줄에 표시합니다.
+                            </p>
+
+                            <div className="mt-4 grid grid-cols-3 gap-2">
+                              {([1, 2, 3, 4, 5, 6] as const).map((count) => (
+                                <button
+                                  key={count}
+                                  type="button"
+                                  onClick={() =>
+                                    onUpdate({ video_columns: count })
+                                  }
+                                  className={`rounded-xl border px-3 py-3 text-sm font-black ${
+                                    (cell.video_columns ?? 1) === count
+                                      ? "border-violet-700 bg-violet-700 text-white"
+                                      : "border-violet-200 bg-white text-violet-950"
+                                  }`}
+                                >
+                                  {count}개
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-sm font-black text-gray-950">
+                              동영상 링크 추가
+                            </p>
+                            <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
+                              YouTube, Shorts, Vimeo, MP4/WebM 링크를 사용할 수 있습니다.
+                            </p>
+
+                            <label className="mt-4 block text-xs font-black text-gray-700">
+                              동영상 링크
+                            </label>
+                            <input
+                              type="url"
+                              value={videoUrlInput}
+                              onChange={(event) => {
+                                setVideoUrlInput(event.target.value);
+                                setVideoEditorError("");
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  addVideoItem();
+                                }
+                              }}
+                              placeholder="https://www.youtube.com/watch?v=..."
+                              className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm font-semibold"
+                            />
+
+                            <label className="mt-3 block text-xs font-black text-gray-700">
+                              제목(선택)
+                            </label>
+                            <input
+                              type="text"
+                              value={videoTitleInput}
+                              onChange={(event) =>
+                                setVideoTitleInput(event.target.value)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  addVideoItem();
+                                }
+                              }}
+                              placeholder="동영상 제목"
+                              className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-3 text-sm font-semibold"
+                            />
+
+                            {videoEditorError ? (
+                              <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+                                {videoEditorError}
+                              </p>
+                            ) : null}
+
+                            <button
+                              type="button"
+                              onClick={addVideoItem}
+                              className="mt-4 w-full rounded-xl bg-violet-700 px-4 py-3 text-sm font-black text-white"
+                            >
+                              동영상 추가
+                            </button>
+                          </div>
+                        </aside>
+
+                        <section className="min-w-0">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-black text-gray-950">
+                                등록된 동영상
+                              </p>
+                              <p className="mt-1 text-xs font-semibold text-gray-500">
+                                총 {normalizeVideoItems(cell).length}개 · 개수 제한 없음
+                              </p>
+                            </div>
+                            {normalizeVideoItems(cell).length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => saveVideoItems([])}
+                                className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                              >
+                                전체 삭제
+                              </button>
+                            ) : null}
+                          </div>
+
+                          {normalizeVideoItems(cell).length > 0 ? (
+                            <div className="space-y-3">
+                              {normalizeVideoItems(cell).map((item, index) => {
+                                const embed = getVideoEmbedInfo(item.url);
+
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="grid gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:grid-cols-[220px_minmax(0,1fr)]"
+                                  >
+                                    <div className="aspect-video overflow-hidden rounded-xl bg-black">
+                                      {embed.kind === "direct" ? (
+                                        <video
+                                          src={embed.src}
+                                          controls
+                                          preload="metadata"
+                                          className="h-full w-full object-contain"
+                                        />
+                                      ) : (
+                                        <iframe
+                                          src={embed.src}
+                                          title={item.title || `동영상 ${index + 1}`}
+                                          loading="lazy"
+                                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                          allowFullScreen
+                                          className="h-full w-full border-0"
+                                        />
+                                      )}
+                                    </div>
+
+                                    <div className="min-w-0">
+                                      <label className="block text-xs font-black text-gray-700">
+                                        동영상 {index + 1} 제목
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={item.title}
+                                        onChange={(event) =>
+                                          updateVideoItem(item.id, {
+                                            title: event.target.value,
+                                          })
+                                        }
+                                        placeholder="동영상 제목"
+                                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold"
+                                      />
+
+                                      <label className="mt-3 block text-xs font-black text-gray-700">
+                                        링크
+                                      </label>
+                                      <input
+                                        type="url"
+                                        value={item.url}
+                                        onChange={(event) =>
+                                          updateVideoItem(item.id, {
+                                            url: event.target.value,
+                                          })
+                                        }
+                                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold"
+                                      />
+
+                                      <button
+                                        type="button"
+                                        onClick={() => removeVideoItem(item.id)}
+                                        className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700"
+                                      >
+                                        삭제
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="flex min-h-[360px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                              <div>
+                                <div className="text-4xl">🎬</div>
+                                <p className="mt-3 text-sm font-black text-gray-700">
+                                  등록된 동영상이 없습니다.
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-gray-500">
+                                  왼쪽에서 동영상 링크를 입력하고 추가하세요.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </section>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
+                      <span className="text-xs font-bold text-gray-500">
+                        총 {normalizeVideoItems(cell).length}개 · 한 화면 {(cell.video_columns ?? 1)}개
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setVideoEditorOpen(false)}
+                        className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white"
+                      >
+                        편집 완료
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body,
+              )
+            : null}
+        </>
+      ) : null}
 
       {usesDbImages ? (
         <div className="mt-4">
