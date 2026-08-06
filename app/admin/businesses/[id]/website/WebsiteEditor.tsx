@@ -31,6 +31,21 @@ type OverlayButton = {
   full_width?: boolean;
 };
 
+type ImageHotspot = {
+  id: string;
+  label?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  action: "link" | "popup" | "layer";
+  url?: string;
+  popup_image_url?: string;
+  popup_title?: string;
+  popup_max_width_px?: number;
+  visible_outline?: boolean;
+};
+
 type SnsPlatform =
   | "facebook"
   | "instagram"
@@ -76,6 +91,8 @@ type GridCell = {
   popup_image_url?: string;
   popup_title?: string;
   popup_max_width_px?: number;
+  image_hotspots?: ImageHotspot[];
+  image_overlay_enabled?: boolean;
   /** 휴대폰에서 이미지가 터치 가능함을 알려주는 움직이는 아이콘 */
   click_hint_enabled?: boolean;
   click_hint_icon?: "pointer" | "arrow" | "plus" | "zoom";
@@ -1809,19 +1826,24 @@ function overlayPositionClasses(
   horizontal: "left" | "center" | "right" = "center",
   vertical: "top" | "middle" | "bottom" = "middle",
 ) {
+  /*
+   * flex-direction 기본값은 row이므로
+   * 가로 위치는 justify-content, 세로 위치는 align-items로 지정해야 합니다.
+   * 이전에는 두 축이 서로 바뀌어 왼쪽/오른쪽과 위/아래 선택이 맞지 않았습니다.
+   */
   const horizontalClass =
     horizontal === "left"
-      ? "items-start"
+      ? "justify-start"
       : horizontal === "right"
-        ? "items-end"
-        : "items-center";
+        ? "justify-end"
+        : "justify-center";
 
   const verticalClass =
     vertical === "top"
-      ? "justify-start"
+      ? "items-start"
       : vertical === "bottom"
-        ? "justify-end"
-        : "justify-center";
+        ? "items-end"
+        : "items-center";
 
   return `${horizontalClass} ${verticalClass}`;
 }
@@ -1841,7 +1863,14 @@ function createOverlayButton(index = 0): OverlayButton {
 }
 
 function normalizeOverlayButtons(cell: GridCell): OverlayButton[] {
-  if (Array.isArray(cell.overlay_buttons) && cell.overlay_buttons.length > 0) {
+  /*
+   * overlay_buttons가 아직 한 번도 저장되지 않은 기존 셀(undefined)에는
+   * 기본 버튼 하나를 보여줍니다.
+   *
+   * 사용자가 마지막 버튼까지 삭제하여 빈 배열([])을 저장한 경우에는
+   * 그 상태를 그대로 유지해야 버튼이 다시 생기지 않습니다.
+   */
+  if (Array.isArray(cell.overlay_buttons)) {
     return cell.overlay_buttons.map((button, index) => ({
       ...createOverlayButton(index),
       ...button,
@@ -13303,6 +13332,33 @@ function MobileImageClickHint({
   );
 }
 
+function normalizeImageHotspots(cell: GridCell): ImageHotspot[] {
+  const raw = Array.isArray(cell.image_hotspots) ? cell.image_hotspots : [];
+  return raw.slice(0, 20).map((item, index) => ({
+    id: typeof item?.id === "string" && item.id ? item.id : createId(`hotspot-${index}`),
+    label: typeof item?.label === "string" ? item.label : `영역 ${index + 1}`,
+    x: Math.max(0, Math.min(97, Number(item?.x) || 0)),
+    y: Math.max(0, Math.min(97, Number(item?.y) || 0)),
+    width: Math.max(3, Math.min(100, Number(item?.width) || 20)),
+    height: Math.max(3, Math.min(100, Number(item?.height) || 20)),
+    action: item?.action === "popup" || item?.action === "layer" ? item.action : "link",
+    url: typeof item?.url === "string" ? item.url : "",
+    popup_image_url: typeof item?.popup_image_url === "string" ? item.popup_image_url : "",
+    popup_title: typeof item?.popup_title === "string" ? item.popup_title : "",
+    popup_max_width_px: Math.max(320, Math.min(1800, Number(item?.popup_max_width_px) || 1200)),
+    visible_outline: item?.visible_outline === true,
+  }));
+}
+
+function getImageHotspotHref(hotspot: ImageHotspot) {
+  const raw = String(hotspot.url || "").trim();
+  if (!raw) return "#";
+  if (hotspot.action === "layer") {
+    return raw.startsWith("#") ? raw : `#${slugifyMenuValue(raw)}`;
+  }
+  return normalizeButtonHref(raw);
+}
+
 function CellPreview({
   cell,
   business,
@@ -13334,6 +13390,7 @@ function CellPreview({
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const [openedImageHotspot, setOpenedImageHotspot] = useState<ImageHotspot | null>(null);
   const [imageClickHintStopped, setImageClickHintStopped] = useState(false);
   const localSuppressImageClickRef = useRef(false);
   const suppressImageClickRef =
@@ -13524,6 +13581,7 @@ function CellPreview({
       320,
       Math.min(1800, Number(cell.popup_max_width_px || 1200)),
     );
+    const imageHotspots = normalizeImageHotspots(cell);
     const stopClickHintAfterTap = () => {
       if (cell.click_hint_stop_after_tap !== false) {
         setImageClickHintStopped(true);
@@ -13606,6 +13664,143 @@ function CellPreview({
       touchAction: canDragImage ? "none" : "pan-y",
       WebkitUserSelect: canDragImage ? "none" : "auto",
     };
+
+    const regularImageOverlay = (
+      <>
+        {cell.image_overlay_enabled && cell.overlay_text ? (
+          <div
+            className={`pointer-events-none absolute inset-0 z-30 flex p-4 sm:p-6 ${overlayPositionClasses(
+              cell.overlay_text_horizontal ?? "center",
+              cell.overlay_text_vertical ?? "middle",
+            )}`}
+          >
+            <div
+              className="max-w-[92%] whitespace-pre-line px-3 py-2 leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+              style={{
+                color: cell.color || "#ffffff",
+                backgroundColor:
+                  cell.background_color && cell.background_color !== "transparent"
+                    ? cell.background_color
+                    : "transparent",
+                fontSize: `${previewDevice === "mobile"
+                  ? Math.min(Number(cell.font_size) || 34, 26)
+                  : Number(cell.font_size) || 34}px`,
+                fontWeight:
+                  cell.font_weight === "normal"
+                    ? 400
+                    : cell.font_weight === "semibold" || cell.font_weight === "600"
+                      ? 600
+                      : cell.font_weight === "bold"
+                        ? 700
+                        : 900,
+                textAlign: cell.overlay_text_horizontal ?? "center",
+                borderRadius:
+                  cell.background_color && cell.background_color !== "transparent"
+                    ? "12px"
+                    : 0,
+              }}
+            >
+              {cell.overlay_text}
+            </div>
+          </div>
+        ) : null}
+
+        {cell.image_overlay_enabled && normalizeOverlayButtons(cell).length ? (
+          <div
+            className={`absolute inset-0 z-40 flex p-4 sm:p-6 ${overlayPositionClasses(
+              cell.overlay_button_horizontal ?? "center",
+              cell.overlay_button_vertical ?? "bottom",
+            )}`}
+          >
+            <div
+              className={`flex max-w-[96%] ${
+                (cell.overlay_button_direction ?? "row") === "row"
+                  ? "flex-row flex-wrap"
+                  : "flex-col"
+              }`}
+              style={{ gap: `${cell.overlay_button_gap ?? 10}px` }}
+            >
+              {normalizeOverlayButtons(cell).map((button) => {
+                const radius =
+                  button.style === "square"
+                    ? "4px"
+                    : button.style === "pill"
+                      ? "9999px"
+                      : "12px";
+                const href = normalizeButtonHref(button.url || "#");
+                const external = isExternalButtonHref(href);
+                return (
+                  <a
+                    key={button.id}
+                    href={href}
+                    target={external ? "_blank" : undefined}
+                    rel={external ? "noreferrer noopener" : undefined}
+                    onClick={(event) => event.stopPropagation()}
+                    className="inline-flex shrink-0 items-center justify-center px-4 font-black shadow-lg"
+                    style={{
+                      minWidth: `${Math.max(60, Number(cell.overlay_button_width) || 140)}px`,
+                      minHeight: `${Math.max(30, Number(button.height) || 44)}px`,
+                      backgroundColor:
+                        button.style === "outline"
+                          ? "transparent"
+                          : button.background_color || "#111827",
+                      color: button.text_color || "#ffffff",
+                      border:
+                        button.style === "outline"
+                          ? `2px solid ${button.background_color || "#111827"}`
+                          : "none",
+                      borderRadius: radius,
+                      fontSize: `${Math.max(10, Number(button.font_size) || 15)}px`,
+                    }}
+                  >
+                    {button.text || "버튼"}
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {imageHotspots.map((hotspot) => {
+          const hotspotStyle: CSSProperties = {
+            left: `${hotspot.x}%`,
+            top: `${hotspot.y}%`,
+            width: `${hotspot.width}%`,
+            height: `${hotspot.height}%`,
+            border: hotspot.visible_outline
+              ? "2px dashed rgba(255,255,255,0.95)"
+              : "2px solid transparent",
+            background: hotspot.visible_outline
+              ? "rgba(59,130,246,0.18)"
+              : "transparent",
+          };
+
+          return hotspot.action === "popup" ? (
+            <button
+              key={hotspot.id}
+              type="button"
+              className="absolute z-50 cursor-zoom-in"
+              style={hotspotStyle}
+              aria-label={hotspot.label || "이미지 영역 팝업"}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setOpenedImageHotspot(hotspot);
+              }}
+            />
+          ) : (
+            <a
+              key={hotspot.id}
+              href={getImageHotspotHref(hotspot)}
+              className="absolute z-50"
+              style={hotspotStyle}
+              aria-label={hotspot.label || "이미지 영역 링크"}
+              onClick={(event) => event.stopPropagation()}
+            />
+          );
+        })}
+      </>
+    );
 
     return (
       <>
@@ -13693,6 +13888,8 @@ function CellPreview({
           </button>
         )}
 
+        {regularImageOverlay}
+
         <MobileImageClickHint
           cell={cell}
           stopped={imageClickHintStopped}
@@ -13703,6 +13900,54 @@ function CellPreview({
             이미지를 마우스로 드래그해 위치 이동
           </div>
         ) : null}
+
+        {openedImageHotspot?.popup_image_url &&
+        typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[11000] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+                onMouseDown={(event) => {
+                  if (event.target === event.currentTarget) {
+                    setOpenedImageHotspot(null);
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenedImageHotspot(null)}
+                  className="fixed right-3 top-3 z-[11001] flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-3xl text-white"
+                >
+                  ×
+                </button>
+                <div
+                  className="relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-2xl bg-white"
+                  style={{
+                    maxWidth: `${Math.max(
+                      320,
+                      Math.min(
+                        1800,
+                        Number(openedImageHotspot.popup_max_width_px) || 1200,
+                      ),
+                    )}px`,
+                  }}
+                >
+                  {openedImageHotspot.popup_title ? (
+                    <div className="border-b px-5 py-4 pr-16 text-lg font-black">
+                      {openedImageHotspot.popup_title}
+                    </div>
+                  ) : null}
+                  <div className="min-h-0 flex-1 overflow-auto bg-black p-2">
+                    <img
+                      src={openedImageHotspot.popup_image_url}
+                      alt={openedImageHotspot.popup_title || "팝업 이미지"}
+                      className="mx-auto block max-h-[86dvh] max-w-full object-contain"
+                    />
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
 
         {imageLightboxOpen && typeof document !== "undefined"
           ? createPortal(
@@ -14241,6 +14486,14 @@ function CellPreview({
           images={images}
           autoHeight={cell.slider_auto_height !== false}
           mobile={previewDevice === "mobile"}
+          overlayText={cell.overlay_text || ""}
+          overlayColor={cell.color || "#ffffff"}
+          overlayFontSize={cell.font_size ?? 38}
+          overlayFontFamily={cell.font_family ?? "sans"}
+          overlayFontWeight={cell.font_weight ?? "black"}
+          overlayHorizontal={cell.overlay_text_horizontal ?? "center"}
+          overlayVertical={cell.overlay_text_vertical ?? "middle"}
+          overlayBackgroundColor={cell.background_color || "transparent"}
         />
       ) : (
         <span className="text-sm font-black opacity-70">
@@ -24056,6 +24309,9 @@ function ImageCellUploader({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const popupFileInputRef = useRef<HTMLInputElement>(null);
+  const hotspotPopupInputRef = useRef<HTMLInputElement>(null);
+  const [selectedHotspotId, setSelectedHotspotId] = useState("");
+  const [hotspotPopupUploading, setHotspotPopupUploading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [popupUploading, setPopupUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -24231,24 +24487,287 @@ function ImageCellUploader({
     { horizontal: "right", vertical: "bottom", label: "오른쪽 아래" },
   ];
 
+  const imageHotspots = normalizeImageHotspots(cell);
+  const selectedHotspot =
+    imageHotspots.find((item) => item.id === selectedHotspotId) ||
+    imageHotspots[0] ||
+    null;
+
+  function saveHotspots(next: ImageHotspot[]) {
+    onUpdate({ image_hotspots: next.slice(0, 20) });
+  }
+
+  function addHotspotAt(x = 35, y = 35) {
+    const item: ImageHotspot = {
+      id: createId("hotspot"),
+      label: `영역 ${imageHotspots.length + 1}`,
+      x: Math.max(0, Math.min(78, x)),
+      y: Math.max(0, Math.min(82, y)),
+      width: 22,
+      height: 18,
+      action: "link",
+      url: "",
+      popup_image_url: "",
+      popup_title: "",
+      popup_max_width_px: 1200,
+      visible_outline: false,
+    };
+    saveHotspots([...imageHotspots, item]);
+    setSelectedHotspotId(item.id);
+  }
+
+  function updateHotspot(id: string, patch: Partial<ImageHotspot>) {
+    saveHotspots(
+      imageHotspots.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
+  function deleteHotspot(id: string) {
+    saveHotspots(imageHotspots.filter((item) => item.id !== id));
+    setSelectedHotspotId("");
+  }
+
+  async function uploadHotspotPopup(file: File | undefined) {
+    if (!file || !selectedHotspot) return;
+    if (!file.type.startsWith("image/")) {
+      setUploadError("팝업에는 이미지 파일만 사용할 수 있습니다.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("이미지 크기는 10MB 이하여야 합니다.");
+      return;
+    }
+
+    setHotspotPopupUploading(true);
+    setUploadError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("area", area);
+      formData.append("cellId", `${cell.id}-${selectedHotspot.id}`);
+
+      const response = await fetch(
+        `/api/admin/businesses/${businessId}/website/upload`,
+        { method: "POST", body: formData },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(String(result.error || result.message || "이미지 업로드 실패"));
+      }
+
+      const url = String(
+        result.url ||
+          result.publicUrl ||
+          result.public_url ||
+          result.image_url ||
+          "",
+      );
+      if (!url) throw new Error("업로드 URL을 받지 못했습니다.");
+
+      updateHotspot(selectedHotspot.id, {
+        popup_image_url: url,
+        action: "popup",
+      });
+    } catch (error) {
+      setUploadError(
+        error instanceof Error ? error.message : "팝업 이미지 업로드 실패",
+      );
+    } finally {
+      setHotspotPopupUploading(false);
+    }
+  }
+
   return (
-    <div className="mt-5 space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-      <div>
+    <div className="mt-5 grid min-h-0 gap-5 lg:grid-cols-[minmax(360px,1.05fr)_minmax(340px,0.95fr)]">
+      <div className="min-h-0 space-y-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 lg:sticky lg:top-0 lg:self-start">
+        <div>
         <p className="text-sm font-black text-blue-950">이미지 파일 첨부</p>
         <p className="mt-1 text-xs font-semibold leading-5 text-blue-700">
           URL 대신 컴퓨터나 휴대폰에서 이미지를 직접 선택하세요.
         </p>
       </div>
 
-      {cell.image_url ? (
-        <div className="flex min-h-36 items-center justify-center overflow-hidden rounded-xl border border-blue-200 bg-white p-3">
-          <img
-            src={cell.image_url}
-            alt="선택한 이미지 미리보기"
-            className="block max-h-44 max-w-full object-contain"
-          />
-        </div>
-      ) : null}
+        {cell.image_url ? (
+          <div>
+            <p className="mb-2 text-xs font-black text-blue-950">
+              실시간 이미지 미리보기
+            </p>
+            <p className="mb-3 text-[11px] font-semibold leading-5 text-blue-700">
+              글씨와 버튼은 입력 즉시 표시됩니다. 이미지의 특정 위치를 클릭하면
+              그 자리에 링크 영역이 생성됩니다.
+            </p>
+
+            <div
+              className="relative aspect-square w-full overflow-hidden rounded-xl border-2 border-blue-300 bg-white shadow-sm"
+              onClick={(event) => {
+                const target = event.target as HTMLElement;
+                if (target.closest("[data-image-preview-control='true']")) return;
+
+                const rect = event.currentTarget.getBoundingClientRect();
+                const x = ((event.clientX - rect.left) / rect.width) * 100;
+                const y = ((event.clientY - rect.top) / rect.height) * 100;
+                addHotspotAt(x - 11, y - 9);
+              }}
+            >
+              <img
+                src={cell.image_url}
+                alt="선택한 이미지 실시간 미리보기"
+                draggable={false}
+                className={`absolute inset-0 h-full w-full select-none ${
+                  imageFit === "cover"
+                    ? "object-cover"
+                    : imageFit === "fill"
+                      ? "object-fill"
+                      : "object-contain"
+                }`}
+                style={{
+                  objectPosition: `${cell.image_position_x ?? 50}% ${
+                    cell.image_position_y ?? 50
+                  }%`,
+                }}
+              />
+
+              {cell.image_overlay_enabled && cell.overlay_text ? (
+                <div
+                  className={`pointer-events-none absolute inset-0 z-20 flex p-4 ${overlayPositionClasses(
+                    cell.overlay_text_horizontal ?? "center",
+                    cell.overlay_text_vertical ?? "middle",
+                  )}`}
+                >
+                  <div
+                    className="max-w-[92%] whitespace-pre-line px-3 py-2 leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+                    style={{
+                      color: cell.color || "#ffffff",
+                      backgroundColor:
+                        cell.background_color &&
+                        cell.background_color !== "transparent"
+                          ? cell.background_color
+                          : "transparent",
+                      fontSize: `${Math.max(
+                        12,
+                        Math.min(72, Number(cell.font_size) || 34),
+                      )}px`,
+                      fontWeight:
+                        cell.font_weight === "normal"
+                          ? 400
+                          : cell.font_weight === "semibold" ||
+                              cell.font_weight === "600"
+                            ? 600
+                            : cell.font_weight === "bold"
+                              ? 700
+                              : 900,
+                      textAlign: cell.overlay_text_horizontal ?? "center",
+                      borderRadius:
+                        cell.background_color &&
+                        cell.background_color !== "transparent"
+                          ? "12px"
+                          : 0,
+                    }}
+                  >
+                    {cell.overlay_text}
+                  </div>
+                </div>
+              ) : null}
+
+              {cell.image_overlay_enabled &&
+              normalizeOverlayButtons(cell).length ? (
+                <div
+                  className={`absolute inset-0 z-30 flex p-4 ${overlayPositionClasses(
+                    cell.overlay_button_horizontal ?? "center",
+                    cell.overlay_button_vertical ?? "bottom",
+                  )}`}
+                >
+                  <div
+                    className={`flex max-w-[96%] ${
+                      (cell.overlay_button_direction ?? "row") === "row"
+                        ? "flex-row flex-wrap"
+                        : "flex-col"
+                    }`}
+                    style={{ gap: `${cell.overlay_button_gap ?? 10}px` }}
+                  >
+                    {normalizeOverlayButtons(cell).map((button) => (
+                      <div
+                        key={button.id}
+                        data-image-preview-control="true"
+                        className="inline-flex items-center justify-center px-4 font-black shadow-lg"
+                        style={{
+                          minWidth: `${Math.max(
+                            60,
+                            Number(cell.overlay_button_width) || 120,
+                          )}px`,
+                          minHeight: `${Math.max(
+                            30,
+                            Number(button.height) || 44,
+                          )}px`,
+                          backgroundColor:
+                            button.style === "outline"
+                              ? "transparent"
+                              : button.background_color || "#111827",
+                          color: button.text_color || "#ffffff",
+                          border:
+                            button.style === "outline"
+                              ? `2px solid ${
+                                  button.background_color || "#111827"
+                                }`
+                              : "none",
+                          borderRadius:
+                            button.style === "square"
+                              ? "4px"
+                              : button.style === "pill"
+                                ? "9999px"
+                                : "12px",
+                          fontSize: `${Math.max(
+                            10,
+                            Number(button.font_size) || 15,
+                          )}px`,
+                        }}
+                      >
+                        {button.text || "버튼"}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {imageHotspots.map((hotspot, index) => (
+                <button
+                  key={hotspot.id}
+                  type="button"
+                  data-image-preview-control="true"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedHotspotId(hotspot.id);
+                  }}
+                  className={`absolute z-40 flex items-center justify-center border-2 text-[11px] font-black ${
+                    selectedHotspot?.id === hotspot.id
+                      ? "border-yellow-400 bg-yellow-300/45 text-black"
+                      : "border-cyan-500 bg-cyan-300/25 text-cyan-950"
+                  }`}
+                  style={{
+                    left: `${hotspot.x}%`,
+                    top: `${hotspot.y}%`,
+                    width: `${hotspot.width}%`,
+                    height: `${hotspot.height}%`,
+                  }}
+                  title={hotspot.label || `영역 ${index + 1}`}
+                >
+                  {index + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-white text-center">
+            <div>
+              <div className="text-4xl">▧</div>
+              <p className="mt-2 text-sm font-black text-gray-800">
+                이미지를 먼저 업로드하세요
+              </p>
+            </div>
+          </div>
+        )}
 
       <input
         ref={fileInputRef}
@@ -24298,13 +24817,22 @@ function ImageCellUploader({
         </span>
       </button>
 
-      {uploadError ? (
-        <p className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold text-red-700">
-          {uploadError}
-        </p>
-      ) : null}
+        {uploadError ? (
+          <p className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold text-red-700">
+            {uploadError}
+          </p>
+        ) : null}
+      </div>
 
-      <Field label="이미지 표시 방식">
+      <div className="min-h-0 space-y-4 overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 lg:max-h-[68vh] lg:pr-3">
+        <div className="sticky top-0 z-20 -mx-1 -mt-1 rounded-xl border border-gray-200 bg-white/95 px-3 py-3 shadow-sm backdrop-blur">
+          <p className="text-sm font-black text-gray-950">이미지 컨트롤</p>
+          <p className="mt-1 text-xs font-semibold text-gray-500">
+            표시 방식, 글씨, 버튼, 링크 영역과 팝업을 설정하세요.
+          </p>
+        </div>
+
+        <Field label="이미지 표시 방식">
         <div className="grid grid-cols-3 gap-2">
           {[
             { value: "width", label: "가로 맞춤" },
@@ -24782,15 +25310,374 @@ function ImageCellUploader({
       </div>
 
       {cell.image_url ? (
-        <button
-          type="button"
-          disabled={uploading}
-          onClick={() => onUpdate({ image_url: "" })}
-          className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 disabled:opacity-50"
-        >
-          이미지 삭제
-        </button>
+        <div className="space-y-4 rounded-2xl border-2 border-indigo-200 bg-indigo-50 p-4">
+          <div>
+            <p className="text-sm font-black text-indigo-950">이미지 위 글씨·버튼</p>
+            <p className="mt-1 text-xs font-semibold text-indigo-700">
+              일반 이미지 위에 글씨와 여러 종류의 버튼을 표시합니다.
+            </p>
+          </div>
+
+          <label className="flex items-center justify-between rounded-xl border bg-white p-3">
+            <span className="text-sm font-black">오버레이 사용</span>
+            <input
+              type="checkbox"
+              checked={cell.image_overlay_enabled === true}
+              onChange={(event) =>
+                onUpdate({ image_overlay_enabled: event.target.checked })
+              }
+              className="h-5 w-5 accent-indigo-600"
+            />
+          </label>
+
+          {cell.image_overlay_enabled ? (
+            <>
+              <Field label="이미지 위 글씨">
+                <textarea
+                  rows={3}
+                  value={cell.overlay_text || ""}
+                  onChange={(event) => onUpdate({ overlay_text: event.target.value })}
+                  className="w-full rounded-xl border bg-white px-3 py-2.5"
+                  placeholder="예: ORDER CATERING"
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="글자 색상">
+                  <input
+                    type="color"
+                    value={cell.color || "#ffffff"}
+                    onChange={(event) => onUpdate({ color: event.target.value })}
+                    className="h-10 w-full rounded-lg border bg-white p-1"
+                  />
+                </Field>
+                <Field label={`글자 크기 · ${cell.font_size || 34}px`}>
+                  <input
+                    type="range"
+                    min={12}
+                    max={100}
+                    value={cell.font_size || 34}
+                    onChange={(event) =>
+                      onUpdate({ font_size: Number(event.target.value) })
+                    }
+                    className="w-full"
+                  />
+                </Field>
+              </div>
+
+              <Field label="글씨 위치">
+                <div className="grid grid-cols-3 gap-2">
+                  {(["left", "center", "right"] as const).map((position) => (
+                    <button
+                      key={position}
+                      type="button"
+                      onClick={() =>
+                        onUpdate({ overlay_text_horizontal: position })
+                      }
+                      className={`rounded-lg px-2 py-2 text-xs font-black ${
+                        (cell.overlay_text_horizontal || "center") === position
+                          ? "bg-indigo-600 text-white"
+                          : "border bg-white text-indigo-900"
+                      }`}
+                    >
+                      {position === "left" ? "왼쪽" : position === "right" ? "오른쪽" : "가운데"}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["top", "middle", "bottom"] as const).map((position) => (
+                    <button
+                      key={position}
+                      type="button"
+                      onClick={() =>
+                        onUpdate({ overlay_text_vertical: position })
+                      }
+                      className={`rounded-lg px-2 py-2 text-xs font-black ${
+                        (cell.overlay_text_vertical || "middle") === position
+                          ? "bg-indigo-600 text-white"
+                          : "border bg-white text-indigo-900"
+                      }`}
+                    >
+                      {position === "top" ? "위" : position === "bottom" ? "아래" : "중앙"}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <div className="rounded-xl border bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black">이미지 위 버튼</p>
+                    <p className="mt-1 text-xs font-semibold text-gray-500">
+                      둥근형·알약형·사각형·외곽선 버튼을 추가합니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate({
+                        overlay_buttons_visible: true,
+                        overlay_buttons: [
+                          ...normalizeOverlayButtons(cell),
+                          {
+                            id: createId("overlay-button"),
+                            text: "버튼",
+                            url: "#",
+                            style: "rounded",
+                            background_color: "#111827",
+                            text_color: "#ffffff",
+                            font_size: 15,
+                            height: 44,
+                          },
+                        ],
+                      })
+                    }
+                    className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-black text-white"
+                  >
+                    + 버튼
+                  </button>
+                </div>
+
+                <div className="mt-3 space-y-3">
+                  {normalizeOverlayButtons(cell).map((button) => (
+                    <div key={button.id} className="space-y-2 rounded-xl border bg-gray-50 p-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          value={button.text}
+                          onChange={(event) =>
+                            onUpdate({
+                              overlay_buttons: normalizeOverlayButtons(cell).map(
+                                (item) =>
+                                  item.id === button.id
+                                    ? { ...item, text: event.target.value }
+                                    : item,
+                              ),
+                            })
+                          }
+                          placeholder="버튼 글씨"
+                          className="rounded-lg border bg-white px-2 py-2 text-xs font-bold"
+                        />
+                        <select
+                          value={button.style}
+                          onChange={(event) =>
+                            onUpdate({
+                              overlay_buttons: normalizeOverlayButtons(cell).map(
+                                (item) =>
+                                  item.id === button.id
+                                    ? {
+                                        ...item,
+                                        style: event.target.value as OverlayButton["style"],
+                                      }
+                                    : item,
+                              ),
+                            })
+                          }
+                          className="rounded-lg border bg-white px-2 py-2 text-xs font-bold"
+                        >
+                          <option value="rounded">둥근형</option>
+                          <option value="pill">알약형</option>
+                          <option value="square">사각형</option>
+                          <option value="outline">외곽선</option>
+                        </select>
+                      </div>
+                      <input
+                        value={button.url}
+                        onChange={(event) =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).map(
+                              (item) =>
+                                item.id === button.id
+                                  ? { ...item, url: event.target.value }
+                                  : item,
+                            ),
+                          })
+                        }
+                        placeholder="https://... /page 또는 #layer"
+                        className="w-full rounded-lg border bg-white px-2 py-2 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).filter(
+                              (item) => item.id !== button.id,
+                            ),
+                          })
+                        }
+                        className="w-full rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                      >
+                        버튼 삭제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
       ) : null}
+
+      {cell.image_url ? (
+        <div className="space-y-4 rounded-2xl border-2 border-cyan-200 bg-cyan-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-cyan-950">이미지 특정 영역 링크</p>
+              <p className="mt-1 text-xs font-semibold text-cyan-800">
+                이미지 위 원하는 곳을 클릭해 영역을 만들고 링크·팝업·레이어 이동을 지정합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => addHotspotAt()}
+              className="shrink-0 rounded-lg bg-cyan-700 px-3 py-2 text-xs font-black text-white"
+            >
+              + 영역
+            </button>
+          </div>
+
+          <p className="rounded-xl border border-cyan-200 bg-white px-3 py-3 text-xs font-bold leading-5 text-cyan-800">
+            왼쪽 실시간 이미지에서 원하는 위치를 클릭하면 새 영역이 만들어집니다.
+            숫자가 표시된 영역을 클릭하면 아래 설정이 선택됩니다.
+          </p>
+
+          {selectedHotspot ? (
+            <div className="space-y-3 rounded-xl border bg-white p-3">
+              <div className="flex gap-2">
+                <input
+                  value={selectedHotspot.label || ""}
+                  onChange={(event) =>
+                    updateHotspot(selectedHotspot.id, { label: event.target.value })
+                  }
+                  placeholder="영역 이름"
+                  className="min-w-0 flex-1 rounded-lg border px-2 py-2 text-sm font-bold"
+                />
+                <button
+                  type="button"
+                  onClick={() => deleteHotspot(selectedHotspot.id)}
+                  className="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                >
+                  삭제
+                </button>
+              </div>
+
+              {([
+                ["x", "왼쪽 위치"],
+                ["y", "위쪽 위치"],
+                ["width", "영역 너비"],
+                ["height", "영역 높이"],
+              ] as const).map(([key, label]) => (
+                <Field key={key} label={`${label} · ${Math.round(selectedHotspot[key])}%`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={key === "x" || key === "y" ? 97 : 100}
+                    step={1}
+                    value={selectedHotspot[key]}
+                    onChange={(event) =>
+                      updateHotspot(selectedHotspot.id, {
+                        [key]: Number(event.target.value),
+                      })
+                    }
+                    className="w-full accent-cyan-700"
+                  />
+                </Field>
+              ))}
+
+              <Field label="클릭 동작">
+                <select
+                  value={selectedHotspot.action}
+                  onChange={(event) =>
+                    updateHotspot(selectedHotspot.id, {
+                      action: event.target.value as ImageHotspot["action"],
+                    })
+                  }
+                  className="w-full rounded-lg border px-3 py-2.5 font-bold"
+                >
+                  <option value="link">URL·페이지 링크</option>
+                  <option value="layer">레이어로 이동</option>
+                  <option value="popup">이미지 팝업</option>
+                </select>
+              </Field>
+
+              {selectedHotspot.action === "popup" ? (
+                <>
+                  <input
+                    ref={hotspotPopupInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      void uploadHotspotPopup(event.target.files?.[0]);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={hotspotPopupUploading}
+                    onClick={() => hotspotPopupInputRef.current?.click()}
+                    className="w-full rounded-lg bg-violet-600 px-3 py-2.5 text-sm font-black text-white disabled:opacity-50"
+                  >
+                    {hotspotPopupUploading
+                      ? "업로드 중..."
+                      : selectedHotspot.popup_image_url
+                        ? "팝업 이미지 교체"
+                        : "팝업 이미지 업로드"}
+                  </button>
+                  <input
+                    value={selectedHotspot.popup_title || ""}
+                    onChange={(event) =>
+                      updateHotspot(selectedHotspot.id, {
+                        popup_title: event.target.value,
+                      })
+                    }
+                    placeholder="팝업 제목"
+                    className="w-full rounded-lg border px-3 py-2.5"
+                  />
+                </>
+              ) : (
+                <input
+                  value={selectedHotspot.url || ""}
+                  onChange={(event) =>
+                    updateHotspot(selectedHotspot.id, { url: event.target.value })
+                  }
+                  placeholder={
+                    selectedHotspot.action === "layer"
+                      ? "예: burger-trays 또는 #burger-trays"
+                      : "https://... 또는 /business/.../website/page"
+                  }
+                  className="w-full rounded-lg border px-3 py-2.5"
+                />
+              )}
+
+              <label className="flex items-center justify-between rounded-lg border bg-gray-50 p-3">
+                <span className="text-sm font-black">공개 화면에 영역 테두리 표시</span>
+                <input
+                  type="checkbox"
+                  checked={selectedHotspot.visible_outline === true}
+                  onChange={(event) =>
+                    updateHotspot(selectedHotspot.id, {
+                      visible_outline: event.target.checked,
+                    })
+                  }
+                  className="h-5 w-5 accent-cyan-700"
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+        {cell.image_url ? (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => onUpdate({ image_url: "" })}
+            className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700 disabled:opacity-50"
+          >
+            이미지 삭제
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -25098,10 +25985,26 @@ function AutoImageSlider({
   images,
   autoHeight = true,
   mobile = false,
+  overlayText = "",
+  overlayColor = "#ffffff",
+  overlayFontSize = 38,
+  overlayFontFamily = "sans",
+  overlayFontWeight = "black",
+  overlayHorizontal = "center",
+  overlayVertical = "middle",
+  overlayBackgroundColor = "transparent",
 }: {
   images: string[];
   autoHeight?: boolean;
   mobile?: boolean;
+  overlayText?: string;
+  overlayColor?: string;
+  overlayFontSize?: number;
+  overlayFontFamily?: "sans" | "serif" | "rounded" | "mono";
+  overlayFontWeight?: "normal" | "semibold" | "bold" | "black" | "600";
+  overlayHorizontal?: "left" | "center" | "right";
+  overlayVertical?: "top" | "middle" | "bottom";
+  overlayBackgroundColor?: string;
 }) {
   const safeImages = Array.from(
     new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
@@ -25234,6 +26137,68 @@ function AutoImageSlider({
           />
         </div>
       ))}
+
+      {overlayText.trim() ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-20 flex p-5 sm:p-8"
+          style={{
+            justifyContent:
+              overlayHorizontal === "left"
+                ? "flex-start"
+                : overlayHorizontal === "right"
+                  ? "flex-end"
+                  : "center",
+            alignItems:
+              overlayVertical === "top"
+                ? "flex-start"
+                : overlayVertical === "bottom"
+                  ? "flex-end"
+                  : "center",
+          }}
+        >
+          <div
+            className="max-w-[92%] whitespace-pre-wrap px-4 py-3 text-center drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]"
+            style={{
+              color: overlayColor,
+              backgroundColor: overlayBackgroundColor,
+              fontFamily:
+                overlayFontFamily === "serif"
+                  ? "Georgia, serif"
+                  : overlayFontFamily === "rounded"
+                    ? "'Arial Rounded MT Bold', Arial, sans-serif"
+                    : overlayFontFamily === "mono"
+                      ? "ui-monospace, SFMono-Regular, Menlo, monospace"
+                      : "Arial, Helvetica, sans-serif",
+              fontWeight:
+                overlayFontWeight === "normal"
+                  ? 400
+                  : overlayFontWeight === "semibold" ||
+                      overlayFontWeight === "600"
+                    ? 600
+                    : overlayFontWeight === "bold"
+                      ? 700
+                      : 900,
+              fontSize: `${Math.max(
+                12,
+                Math.min(
+                  mobile ? 64 : 120,
+                  mobile
+                    ? Math.round(overlayFontSize * 0.72)
+                    : overlayFontSize,
+                ),
+              )}px`,
+              lineHeight: 1.15,
+              borderRadius:
+                overlayBackgroundColor &&
+                overlayBackgroundColor !== "transparent"
+                  ? "12px"
+                  : 0,
+            }}
+          >
+            {overlayText}
+          </div>
+        </div>
+      ) : null}
 
       {safeImages.length > 1 ? (
         <>
@@ -25769,7 +26734,6 @@ function TitleCellEditor({
         >
           <option value="text">📝 텍스트</option>
           <option value="restaurant-menu">🍽 DoorDash 스타일 메뉴</option>
-          <option value="service-card">🧩 이미지 + 제목 + 설명 카드</option>
           <option value="background-image">🖼 전체 배경 이미지</option>
           <option value="auto-slider">🎞 자동 이미지 슬라이드</option>
           <option value="image-scroll">↔ 옆으로 흐르는 이미지</option>
@@ -25778,182 +26742,6 @@ function TitleCellEditor({
           <option value="business-hours">🕒 비즈니스시간 입력</option>
         </select>
       </Field>
-
-      {mode === "text" ? (
-        <Field label="제목 글자">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenTextEditor();
-            }}
-            className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700"
-          >
-            모달 편집
-          </button>
-        </Field>
-      ) : null}
-
-      {mode === "restaurant-menu" ? (
-        <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-          <p className="text-sm font-black text-orange-950">DoorDash 스타일 Restaurant Menu</p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
-            가져온 카테고리와 메뉴를 자동으로 읽습니다. 데스크톱은 2열, 모바일은 1열이며 메뉴를 누르면 상세 사진 모달이 열립니다. 이 칸은 가로 4칸 전체로 합쳐 사용하는 것을 권장합니다.
-          </p>
-        </div>
-      ) : null}
-
-      {mode === "business-hours" ? (
-        <div className="mt-4 space-y-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
-          <div>
-            <p className="text-sm font-black text-gray-900">비즈니스 영업시간</p>
-            <p className="mt-1 text-xs leading-5 text-gray-600">
-              이 비즈니스의 businesses 테이블 hours 값을 자동으로 읽어 표시합니다.
-              비즈니스 정보에서 시간을 수정한 뒤 이 항목을 다시 선택하면 최신 내용으로 갱신됩니다.
-            </p>
-          </div>
-
-          <Field label="표시 제목">
-            <input
-              type="text"
-              value={cell.business_hours_title || "Business Hours"}
-              onChange={(event) =>
-                onUpdate({ business_hours_title: event.target.value })
-              }
-              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
-            />
-          </Field>
-
-          <button
-            type="button"
-            onClick={() => {
-              const parsedHours = parseBusinessTableHours(business.hours);
-              onUpdate({
-                business_hours_data: parsedHours,
-                business_hours_file_name: "",
-                business_hours_business_name: "",
-                business_hours_note: "",
-              });
-              setUploadError(
-                parsedHours.some((item) => !item.closed)
-                  ? ""
-                  : "businesses 테이블의 hours에 표시할 영업시간이 없습니다.",
-              );
-            }}
-            className="w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-amber-600"
-          >
-            businesses.hours 다시 읽기
-          </button>
-
-          {Array.isArray(cell.business_hours_data) && cell.business_hours_data.length > 0 ? (
-            <BusinessHoursDisplay cell={cell} compact />
-          ) : (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-6 text-center text-xs font-bold text-gray-500">
-              businesses 테이블의 hours 값이 없거나 형식을 읽지 못했습니다.
-            </div>
-          )}
-
-          {uploadError ? (
-            <p className="text-xs font-bold text-red-600">{uploadError}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {mode === "service-card" ? (
-        <div className="mt-4 space-y-4 rounded-2xl border border-gray-200 bg-white p-4">
-          <div>
-            <p className="text-sm font-black text-gray-900">
-              서비스 카드 이미지
-            </p>
-            <p className="mt-1 text-xs leading-5 text-gray-500">
-              MK Top Cleans 메인 서비스 카드처럼 이미지, 제목, 설명을 한 칸에 표시합니다.
-            </p>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void uploadBackgroundImage(file, "service-card");
-            }}
-            className="hidden"
-          />
-
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="w-full rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm font-black text-gray-700 hover:border-blue-400 hover:bg-blue-50 disabled:opacity-60"
-          >
-            {uploading
-              ? "이미지 업로드 중..."
-              : cell.image_url
-                ? "서비스 이미지 바꾸기"
-                : "서비스 이미지 업로드"}
-          </button>
-
-          {cell.image_url ? (
-            <div className="overflow-hidden rounded-xl border border-gray-200">
-              <img
-                src={cell.image_url}
-                alt=""
-                className="h-32 w-full object-cover"
-              />
-            </div>
-          ) : null}
-
-          {uploadError ? (
-            <p className="text-xs font-bold text-red-600">{uploadError}</p>
-          ) : null}
-
-          <Field label="서비스 제목">
-            <input
-              type="text"
-              value={cell.text || ""}
-              onChange={(event) => onUpdate({ text: event.target.value })}
-              placeholder="예: Medical Facility Cleaning"
-              className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
-            />
-          </Field>
-
-          <Field label="서비스 설명">
-            <textarea
-              rows={3}
-              value={cell.card_description || ""}
-              onChange={(event) =>
-                onUpdate({ card_description: event.target.value })
-              }
-              placeholder="예: Clinics, exam rooms, waiting areas..."
-              className="w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5"
-            />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="제목 색">
-              <input
-                type="color"
-                value={cell.color || "#111827"}
-                onChange={(event) => onUpdate({ color: event.target.value })}
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white p-1"
-              />
-            </Field>
-
-            <Field label="카드 배경">
-              <input
-                type="color"
-                value={cell.background_color || "#ffffff"}
-                onChange={(event) =>
-                  onUpdate({ background_color: event.target.value })
-                }
-                className="h-11 w-full rounded-lg border border-gray-300 bg-white p-1"
-              />
-            </Field>
-          </div>
-        </div>
-      ) : null}
 
       {mode === "background-image" ? (
         <>
@@ -26858,6 +27646,138 @@ function TitleCellEditor({
                 : "대표이미지 불러오기를 눌러주세요."}
             </div>
           )}
+
+          {mode === "auto-slider" ? (
+            <div className="mt-4 space-y-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
+              <div>
+                <p className="text-sm font-black text-violet-950">
+                  슬라이드 이미지 위 글씨
+                </p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-violet-800">
+                  모든 슬라이드 이미지 위에 같은 제목이나 안내 문구를 표시합니다.
+                </p>
+              </div>
+
+              <Field label="표시할 글씨">
+                <textarea
+                  value={cell.overlay_text || ""}
+                  onChange={(event) =>
+                    onUpdate({ overlay_text: event.target.value })
+                  }
+                  placeholder={"예: CATERING MADE DELICIOUS\nPerfect for every event"}
+                  rows={4}
+                  className="w-full rounded-xl border border-violet-200 bg-white px-3 py-3 text-sm font-semibold outline-none focus:border-violet-600"
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="글자 색상">
+                  <input
+                    type="color"
+                    value={cell.color || "#ffffff"}
+                    onChange={(event) =>
+                      onUpdate({ color: event.target.value })
+                    }
+                    className="h-10 w-full cursor-pointer rounded-lg border border-violet-200 bg-white p-1"
+                  />
+                </Field>
+
+                <Field label={`글자 크기 · ${cell.font_size ?? 38}px`}>
+                  <input
+                    type="range"
+                    min="12"
+                    max="120"
+                    step="1"
+                    value={cell.font_size ?? 38}
+                    onChange={(event) =>
+                      onUpdate({ font_size: Number(event.target.value) })
+                    }
+                    className="w-full"
+                  />
+                </Field>
+              </div>
+
+              <Field label="글자 위치">
+                <div className="grid grid-cols-3 gap-2">
+                  {(["left", "center", "right"] as const).map((horizontal) => (
+                    <button
+                      key={horizontal}
+                      type="button"
+                      onClick={() =>
+                        onUpdate({ overlay_text_horizontal: horizontal })
+                      }
+                      className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                        (cell.overlay_text_horizontal ?? "center") === horizontal
+                          ? "border-violet-600 bg-violet-600 text-white"
+                          : "border-violet-200 bg-white text-violet-900"
+                      }`}
+                    >
+                      {horizontal === "left"
+                        ? "왼쪽"
+                        : horizontal === "right"
+                          ? "오른쪽"
+                          : "가운데"}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(["top", "middle", "bottom"] as const).map((vertical) => (
+                    <button
+                      key={vertical}
+                      type="button"
+                      onClick={() =>
+                        onUpdate({ overlay_text_vertical: vertical })
+                      }
+                      className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                        (cell.overlay_text_vertical ?? "middle") === vertical
+                          ? "border-violet-600 bg-violet-600 text-white"
+                          : "border-violet-200 bg-white text-violet-900"
+                      }`}
+                    >
+                      {vertical === "top"
+                        ? "위"
+                        : vertical === "bottom"
+                          ? "아래"
+                          : "중앙"}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="글씨 배경">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={
+                      cell.background_color &&
+                      cell.background_color !== "transparent"
+                        ? cell.background_color
+                        : "#000000"
+                    }
+                    onChange={(event) =>
+                      onUpdate({ background_color: event.target.value })
+                    }
+                    className="h-10 w-16 cursor-pointer rounded-lg border border-violet-200 bg-white p-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate({ background_color: "transparent" })
+                    }
+                    className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                      !cell.background_color ||
+                      cell.background_color === "transparent"
+                        ? "border-violet-600 bg-violet-600 text-white"
+                        : "border-violet-200 bg-white text-violet-900"
+                    }`}
+                  >
+                    투명
+                  </button>
+                </div>
+              </Field>
+            </div>
+          ) : null}
 
           {mode === "auto-slider" ? (
             <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
