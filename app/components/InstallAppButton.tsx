@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -79,6 +80,11 @@ export default function InstallAppButton({
     useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isClosing, setIsClosing] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   useEffect(() => {
     const instanceId = instanceIdRef.current;
@@ -417,10 +423,18 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * 같은 도메인의 메인 앱 또는 브라우저 상태 때문에
-       * beforeinstallprompt가 다시 발생할 수 있습니다.
-       * 이미 저장된 비즈니스 앱 설치 상태는 여기서 지우지 않습니다.
+       * 이미 설치 완료 기록이 있으면 브라우저가 중복으로 전달한
+       * beforeinstallprompt 때문에 설치 상태를 다시 해제하지 않습니다.
        */
+      if (getInstalledState()) {
+        installPromptRef.current = null;
+        setInstallPrompt(null);
+        setIsInstalled(true);
+        setHasCheckedInstallState(true);
+        setShowBanner(false);
+        return;
+      }
+
       setHasCheckedInstallState(true);
 
       try {
@@ -670,6 +684,10 @@ export default function InstallAppButton({
     setTouchStartX(null);
   }
 
+  if (!portalReady) {
+    return null;
+  }
+
   if (!isInstallOwner) {
     return null;
   }
@@ -699,7 +717,7 @@ export default function InstallAppButton({
     ) : null;
   }
 
-  return (
+  return createPortal(
     <>
       {showBanner ? (
         <div
@@ -764,7 +782,13 @@ export default function InstallAppButton({
         <button
           type="button"
           onClick={openBanner}
-          className="fixed right-0 top-1/2 z-[2000] flex h-20 w-8 -translate-y-1/2 items-center justify-center rounded-l-full bg-[#A8A8A8] shadow-md transition active:scale-95"
+          className="fixed z-[100000] flex h-20 w-8 items-center justify-center rounded-l-full bg-[#A8A8A8] shadow-md transition active:scale-95"
+          style={{
+            position: "fixed",
+            right: 0,
+            top: "50dvh",
+            transform: "translateY(-50%)",
+          }}
           aria-label="Open install panel"
         >
           <span className="block text-center text-[14px] font-black text-white">
@@ -840,6 +864,7 @@ export default function InstallAppButton({
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   );
 }
