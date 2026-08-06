@@ -76,6 +76,13 @@ type GridCell = {
   popup_image_url?: string;
   popup_title?: string;
   popup_max_width_px?: number;
+  /** 휴대폰에서 이미지가 터치 가능함을 알려주는 움직이는 아이콘 */
+  click_hint_enabled?: boolean;
+  click_hint_icon?: "pointer" | "arrow" | "plus" | "zoom";
+  click_hint_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  click_hint_animation?: "pulse" | "bounce" | "slide";
+  click_hint_interval_seconds?: number;
+  click_hint_stop_after_tap?: boolean;
   logo_size_px?: number;
   display_mode?:
     | "text"
@@ -12918,6 +12925,84 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
   </>;
 }
 
+function MobileImageClickHint({
+  cell,
+  stopped,
+}: {
+  cell: GridCell;
+  stopped: boolean;
+}) {
+  if (cell.click_hint_enabled !== true || stopped) return null;
+
+  const icon =
+    cell.click_hint_icon === "arrow"
+      ? "↗"
+      : cell.click_hint_icon === "plus"
+        ? "⊕"
+        : cell.click_hint_icon === "zoom"
+          ? "⌕"
+          : "👆";
+  const position = cell.click_hint_position || "bottom-right";
+  const interval = Math.max(
+    2,
+    Math.min(10, Number(cell.click_hint_interval_seconds || 3)),
+  );
+  const animation = cell.click_hint_animation || "pulse";
+
+  const positionClass =
+    position === "top-left"
+      ? "left-3 top-3"
+      : position === "top-right"
+        ? "right-3 top-3"
+        : position === "bottom-left"
+          ? "bottom-3 left-3"
+          : "bottom-3 right-3";
+
+  return (
+    <>
+      <style>{`
+        @keyframes ktt-image-hint-pulse {
+          0%, 68%, 100% { transform: scale(1); }
+          76% { transform: scale(1.2); }
+          84% { transform: scale(1); }
+          91% { transform: scale(1.12); }
+        }
+        @keyframes ktt-image-hint-bounce {
+          0%, 68%, 100% { transform: translateY(0); }
+          77% { transform: translateY(-8px); }
+          86% { transform: translateY(0); }
+          93% { transform: translateY(-4px); }
+        }
+        @keyframes ktt-image-hint-slide {
+          0%, 68%, 100% { transform: translateX(0); }
+          78% { transform: translateX(-7px); }
+          88% { transform: translateX(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ktt-image-click-hint { animation: none !important; }
+        }
+      `}</style>
+      <span
+        aria-hidden="true"
+        className={`ktt-image-click-hint pointer-events-none absolute z-20 flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/90 bg-black/70 text-2xl leading-none text-white shadow-xl ${positionClass}`}
+        style={{
+          animationName:
+            animation === "bounce"
+              ? "ktt-image-hint-bounce"
+              : animation === "slide"
+                ? "ktt-image-hint-slide"
+                : "ktt-image-hint-pulse",
+          animationDuration: `${interval}s`,
+          animationTimingFunction: "ease-in-out",
+          animationIterationCount: "infinite",
+        }}
+      >
+        {icon}
+      </span>
+    </>
+  );
+}
+
 function CellPreview({
   cell,
   business,
@@ -12949,6 +13034,7 @@ function CellPreview({
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const [imageClickHintStopped, setImageClickHintStopped] = useState(false);
   const localSuppressImageClickRef = useRef(false);
   const suppressImageClickRef =
     controlledSuppressImageClickRef ?? localSuppressImageClickRef;
@@ -12965,6 +13051,10 @@ function CellPreview({
   const startImageDrag = canDragImage ? onImagePointerDown : undefined;
   const moveImageDrag = canDragImage ? onImagePointerMove : undefined;
   const stopImageDrag = canDragImage ? onImagePointerUp : undefined;
+
+  useEffect(() => {
+    setImageClickHintStopped(false);
+  }, [cell.id, cell.click_hint_enabled, cell.click_hint_icon, cell.click_hint_position]);
 
   useEffect(() => {
     if (!imageLightboxOpen) return;
@@ -13134,6 +13224,11 @@ function CellPreview({
       320,
       Math.min(1800, Number(cell.popup_max_width_px || 1200)),
     );
+    const stopClickHintAfterTap = () => {
+      if (cell.click_hint_stop_after_tap !== false) {
+        setImageClickHintStopped(true);
+      }
+    };
     const imageSize = Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100)));
     const imageFit = normalizeImageFit(cell.image_fit);
     const horizontal =
@@ -13225,6 +13320,7 @@ function CellPreview({
                 suppressImageClickRef.current = false;
                 return;
               }
+              stopClickHintAfterTap();
               if (lightboxImageUrl) setImageLightboxOpen(true);
             }}
             onPointerDown={startImageDrag ?? undefined}
@@ -13255,7 +13351,9 @@ function CellPreview({
                 event.preventDefault();
                 event.stopPropagation();
                 suppressImageClickRef.current = false;
+                return;
               }
+              stopClickHintAfterTap();
             }}
             className={`absolute inset-0 overflow-hidden ${
               canDragImage
@@ -13277,6 +13375,7 @@ function CellPreview({
                 suppressImageClickRef.current = false;
                 return;
               }
+              stopClickHintAfterTap();
               setImageLightboxOpen(true);
             }}
             onPointerDown={startImageDrag ?? undefined}
@@ -13293,6 +13392,11 @@ function CellPreview({
             {imageElement}
           </button>
         )}
+
+        <MobileImageClickHint
+          cell={cell}
+          stopped={imageClickHintStopped}
+        />
 
         {isSelected && canDragImage ? (
           <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/75 px-3 py-1.5 text-[10px] font-black text-white shadow">
@@ -23758,6 +23862,140 @@ function ImageCellUploader({
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-4 space-y-4 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+          <label className="flex cursor-pointer items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-amber-950">
+                휴대폰 클릭 유도 아이콘
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-amber-800">
+                이미지 위 아이콘이 일정 간격으로 움직이고, 사용자가 한 번 터치하면 멈춥니다.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={cell.click_hint_enabled === true}
+              onChange={(event) =>
+                onUpdate({ click_hint_enabled: event.target.checked })
+              }
+              className="h-5 w-5 accent-amber-600"
+            />
+          </label>
+
+          {cell.click_hint_enabled === true ? (
+            <>
+              <Field label="아이콘 선택">
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    ["pointer", "👆", "손가락"],
+                    ["arrow", "↗", "화살표"],
+                    ["plus", "⊕", "플러스"],
+                    ["zoom", "⌕", "크게 보기"],
+                  ] as const).map(([value, icon, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      title={label}
+                      onClick={() => onUpdate({ click_hint_icon: value })}
+                      className={`rounded-xl border py-3 text-2xl ${
+                        (cell.click_hint_icon || "pointer") === value
+                          ? "border-amber-700 bg-amber-700 text-white"
+                          : "border-amber-300 bg-white text-amber-950"
+                      }`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="아이콘 위치">
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    ["top-left", "↖", "왼쪽 위"],
+                    ["top-right", "↗", "오른쪽 위"],
+                    ["bottom-left", "↙", "왼쪽 아래"],
+                    ["bottom-right", "↘", "오른쪽 아래"],
+                  ] as const).map(([value, icon, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      title={label}
+                      onClick={() => onUpdate({ click_hint_position: value })}
+                      className={`rounded-xl border py-2.5 text-lg font-black ${
+                        (cell.click_hint_position || "bottom-right") === value
+                          ? "border-amber-700 bg-amber-700 text-white"
+                          : "border-amber-300 bg-white text-amber-950"
+                      }`}
+                    >
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="움직임 방식">
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ["pulse", "커졌다 작아짐"],
+                    ["bounce", "위아래 움직임"],
+                    ["slide", "좌우 움직임"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => onUpdate({ click_hint_animation: value })}
+                      className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
+                        (cell.click_hint_animation || "pulse") === value
+                          ? "border-amber-700 bg-amber-700 text-white"
+                          : "border-amber-300 bg-white text-amber-950"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="움직임 반복 간격">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={2}
+                    max={10}
+                    step={1}
+                    value={Math.max(2, Math.min(10, Number(cell.click_hint_interval_seconds || 3)))}
+                    onChange={(event) =>
+                      onUpdate({ click_hint_interval_seconds: Number(event.target.value) })
+                    }
+                    className="min-w-0 flex-1 accent-amber-700"
+                  />
+                  <span className="w-12 text-right text-sm font-black text-amber-950">
+                    {Math.max(2, Math.min(10, Number(cell.click_hint_interval_seconds || 3)))}초
+                  </span>
+                </div>
+              </Field>
+
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3">
+                <div>
+                  <p className="text-sm font-black text-gray-900">한 번 터치하면 멈춤</p>
+                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                    페이지를 다시 열면 아이콘이 다시 표시됩니다.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={cell.click_hint_stop_after_tap !== false}
+                  onChange={(event) =>
+                    onUpdate({ click_hint_stop_after_tap: event.target.checked })
+                  }
+                  className="h-5 w-5 accent-amber-600"
+                />
+              </label>
+            </>
+          ) : null}
         </div>
 
         {cell.popup_enabled ? (
