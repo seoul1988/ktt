@@ -32,6 +32,12 @@ type OverlayButton = {
   full_width?: boolean;
 };
 
+type GalleryImageItem = {
+  id: string;
+  url: string;
+  title: string;
+};
+
 type ImageHotspot = {
   id: string;
   label?: string;
@@ -114,6 +120,10 @@ type GridCell = {
     | "business-hours"
     | "restaurant-menu";
   gallery_images?: string[];
+  /** 갤러리 전용: 이미지 URL과 각 이미지 제목 */
+  gallery_items?: GalleryImageItem[];
+  /** 데스크톱 갤러리 열 수: 2, 4, 6 */
+  gallery_columns?: 2 | 4 | 6;
   slider_auto_height?: boolean;
   image_scroll_speed?: number;
   image_scroll_direction?: "left" | "right";
@@ -12984,7 +12994,9 @@ function EditableGrid({
                 onMergeNested={onMergeNested}
               />
 
-              {cell.type === "empty" && !cell.child_cells?.length ? (
+              {cell.type === "empty" &&
+              cell.display_mode !== "gallery" &&
+              !cell.child_cells?.length ? (
                 <span
                   className={`text-sm font-bold ${
                     area === "hero" ? "text-white/70" : "text-gray-400"
@@ -13358,6 +13370,202 @@ function getImageHotspotHref(hotspot: ImageHotspot) {
     return raw.startsWith("#") ? raw : `#${slugifyMenuValue(raw)}`;
   }
   return normalizeButtonHref(raw);
+}
+
+function normalizeGalleryItems(cell: GridCell): GalleryImageItem[] {
+  const savedItems = Array.isArray(cell.gallery_items)
+    ? cell.gallery_items
+        .map((item, index) => ({
+          id:
+            typeof item?.id === "string" && item.id
+              ? item.id
+              : `gallery-${index}-${String(item?.url || "").slice(-16)}`,
+          url: String(item?.url || "").trim(),
+          title: String(item?.title || ""),
+        }))
+        .filter((item) => /^https?:\/\//i.test(item.url))
+        .slice(0, 12)
+    : [];
+
+  if (savedItems.length > 0) return savedItems;
+
+  return (Array.isArray(cell.gallery_images) ? cell.gallery_images : [])
+    .map((url, index) => ({
+      id: `gallery-legacy-${index}-${String(url || "").slice(-16)}`,
+      url: String(url || "").trim(),
+      title: "",
+    }))
+    .filter((item) => /^https?:\/\//i.test(item.url))
+    .slice(0, 12);
+}
+
+function ImageGalleryGrid({
+  cell,
+  mobile = false,
+}: {
+  cell: GridCell;
+  mobile?: boolean;
+}) {
+  const items = normalizeGalleryItems(cell);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const desktopColumns =
+    cell.gallery_columns === 2 ||
+    cell.gallery_columns === 4 ||
+    cell.gallery_columns === 6
+      ? cell.gallery_columns
+      : 4;
+  const columns = mobile ? 2 : desktopColumns;
+
+  const close = useCallback(() => setActiveIndex(null), []);
+  const previous = useCallback(() => {
+    setActiveIndex((current) =>
+      current === null
+        ? null
+        : (current - 1 + items.length) % items.length,
+    );
+  }, [items.length]);
+  const next = useCallback(() => {
+    setActiveIndex((current) =>
+      current === null
+        ? null
+        : (current + 1) % items.length,
+    );
+  }, [items.length]);
+
+  useEffect(() => {
+    if (activeIndex === null) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+      if (event.key === "ArrowLeft") previous();
+      if (event.key === "ArrowRight") next();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeIndex, close, next, previous]);
+
+  if (items.length === 0) {
+    return (
+      <span className="text-sm font-black opacity-70">
+        갤러리 이미지를 선택해주세요
+      </span>
+    );
+  }
+
+  const activeItem =
+    activeIndex === null ? null : items[activeIndex] ?? null;
+
+  return (
+    <>
+      <div
+        className="grid h-full w-full content-start gap-2 overflow-y-auto"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        }}
+      >
+        {items.map((item, index) => (
+          <button
+            key={item.id || `${item.url}-${index}`}
+            type="button"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setActiveIndex(index);
+            }}
+            className="group relative block aspect-[4/3] min-w-0 overflow-hidden rounded-xl bg-gray-100 text-left"
+            aria-label={item.title || `갤러리 이미지 ${index + 1} 크게 보기`}
+          >
+            <img
+              src={item.url}
+              alt={item.title || `갤러리 이미지 ${index + 1}`}
+              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            />
+            {item.title ? (
+              <span className="absolute inset-x-0 bottom-0 block bg-black/65 px-2 py-2 text-xs font-black leading-4 text-white">
+                {item.title}
+              </span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {activeItem && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={activeItem.title || "갤러리 이미지 크게 보기"}
+              className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/92 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) close();
+              }}
+            >
+              <button
+                type="button"
+                aria-label="갤러리 닫기"
+                onClick={close}
+                className="fixed right-3 top-3 z-[12003] flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-3xl text-white shadow sm:right-6 sm:top-6"
+              >
+                ×
+              </button>
+
+              {items.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    aria-label="이전 이미지"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      previous();
+                    }}
+                    className="fixed left-2 top-1/2 z-[12002] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-4xl text-white shadow sm:left-6"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="다음 이미지"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      next();
+                    }}
+                    className="fixed right-2 top-1/2 z-[12002] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-black/65 text-4xl text-white shadow sm:right-6"
+                  >
+                    ›
+                  </button>
+                </>
+              ) : null}
+
+              <div className="flex max-h-[92dvh] w-full max-w-[1500px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                <div className="min-h-0 flex-1 bg-black p-2 sm:p-4">
+                  <img
+                    src={activeItem.url}
+                    alt={activeItem.title || "갤러리 이미지"}
+                    className="mx-auto block max-h-[78dvh] max-w-full object-contain"
+                  />
+                </div>
+                <div className="shrink-0 border-t border-gray-200 bg-white px-5 py-4 text-center">
+                  <p className="text-base font-black text-gray-950">
+                    {activeItem.title || `이미지 ${(activeIndex ?? 0) + 1}`}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-gray-500">
+                    {(activeIndex ?? 0) + 1} / {items.length}
+                  </p>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
 }
 
 function CellPreview({
@@ -14529,23 +14737,11 @@ function CellPreview({
     }
 
     if (cell.display_mode === "gallery") {
-      const images = Array.isArray(cell.gallery_images)
-        ? cell.gallery_images
-        : [];
-
-      return images.length ? (
-        <div className={`grid h-full w-full gap-2 overflow-hidden ${previewDevice === "mobile" ? "grid-cols-2" : "grid-cols-3"}`}>
-          {images.slice(0, 9).map((url, index) => (
-            <img
-              key={`${url}-${index}`}
-              src={url}
-              alt=""
-              className={`${previewDevice === "mobile" ? "min-h-[70px]" : "min-h-[90px]"} h-full w-full rounded-lg object-cover`}
-            />
-          ))}
-        </div>
-      ) : (
-        <span className="text-sm font-black opacity-70">갤러리 이미지를 선택해주세요</span>
+      return (
+        <ImageGalleryGrid
+          cell={cell}
+          mobile={previewDevice === "mobile"}
+        />
       );
     }
 
@@ -26254,6 +26450,81 @@ function AutoImageSlider({
   );
 }
 
+
+async function cropGalleryImageFile(
+  file: File,
+  outputWidth = 1200,
+  outputHeight = 900,
+): Promise<File> {
+  const sourceUrl = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("이미지를 읽을 수 없습니다."));
+      element.src = sourceUrl;
+    });
+
+    const sourceRatio = image.naturalWidth / image.naturalHeight;
+    const targetRatio = outputWidth / outputHeight;
+
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = image.naturalWidth;
+    let sourceHeight = image.naturalHeight;
+
+    if (sourceRatio > targetRatio) {
+      sourceWidth = Math.round(image.naturalHeight * targetRatio);
+      sourceX = Math.round((image.naturalWidth - sourceWidth) / 2);
+    } else {
+      sourceHeight = Math.round(image.naturalWidth / targetRatio);
+      sourceY = Math.round((image.naturalHeight - sourceHeight) / 2);
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("이미지 변환을 시작할 수 없습니다.");
+
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      outputWidth,
+      outputHeight,
+    );
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) =>
+          result
+            ? resolve(result)
+            : reject(new Error("이미지 변환에 실패했습니다.")),
+        "image/webp",
+        0.86,
+      );
+    });
+
+    const baseName =
+      file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9가-힣_-]+/g, "-") ||
+      "gallery-image";
+
+    return new File([blob], `${baseName}-1200x900.webp`, {
+      type: "image/webp",
+      lastModified: Date.now(),
+    });
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 function TitleCellEditor({
   businessId,
   adminKey,
@@ -26297,13 +26568,36 @@ function TitleCellEditor({
       : "text";
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [loadingImages, setLoadingImages] = useState(false);
   const [imageLoadError, setImageLoadError] = useState("");
   const [availableImages, setAvailableImages] = useState<string[]>([]);
+  const [galleryEditorOpen, setGalleryEditorOpen] = useState(false);
   const [activeControlStep, setActiveControlStep] = useState<1 | 2 | null>(1);
+
+  useEffect(() => {
+    if (!galleryEditorOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setGalleryEditorOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [galleryEditorOpen]);
 
   function chooseMode(nextMode: SectionMode) {
     if (nextMode === "image-scroll") {
@@ -26361,12 +26655,21 @@ function TitleCellEditor({
     }
 
     if (nextMode === "gallery") {
+      const currentItems = normalizeGalleryItems(cell);
       onUpdate({
+        type: "title",
+        child_cells: [],
         display_mode: "gallery",
-        gallery_images: Array.isArray(cell.gallery_images)
-          ? cell.gallery_images
-          : [],
+        gallery_images: currentItems.map((item) => item.url),
+        gallery_items: currentItems,
+        gallery_columns:
+          cell.gallery_columns === 2 ||
+          cell.gallery_columns === 4 ||
+          cell.gallery_columns === 6
+            ? cell.gallery_columns
+            : 4,
       });
+      setGalleryEditorOpen(true);
       return;
     }
 
@@ -26635,7 +26938,7 @@ function TitleCellEditor({
     const imagesToPlay =
       requestedMode === "auto-slider"
         ? checkedSliderImages
-        : urls.slice(0, 10);
+        : urls.slice(0, requestedMode === "gallery" ? 12 : 10);
 
     const currentImages = Array.isArray(cell.gallery_images)
       ? cell.gallery_images.map((url) => String(url || "").trim()).filter(Boolean)
@@ -26659,7 +26962,39 @@ function TitleCellEditor({
       return;
     }
 
-    // 갤러리와 흐르는 이미지는 기존처럼 불러온 사진을 기본 선택합니다.
+    // 갤러리는 URL과 제목을 함께 저장하고 최대 12장을 유지합니다.
+    if (requestedMode === "gallery") {
+      const existingByUrl = new Map(
+        normalizeGalleryItems(cell).map((item) => [item.url, item]),
+      );
+      const galleryItems = imagesToPlay.map((url) => {
+        const existing = existingByUrl.get(url);
+        return (
+          existing || {
+            id: createId("gallery"),
+            url,
+            title: "",
+          }
+        );
+      });
+
+      onUpdate({
+        type: "title",
+        child_cells: [],
+        display_mode: "gallery",
+        gallery_images: galleryItems.map((item) => item.url),
+        gallery_items: galleryItems,
+        gallery_columns:
+          cell.gallery_columns === 2 ||
+          cell.gallery_columns === 4 ||
+          cell.gallery_columns === 6
+            ? cell.gallery_columns
+            : 4,
+      });
+      return;
+    }
+
+    // 흐르는 이미지는 불러온 사진을 기본 선택합니다.
     if (cell.display_mode !== requestedMode || imagesChanged) {
       onUpdate({
         display_mode: requestedMode,
@@ -26679,7 +27014,49 @@ function TitleCellEditor({
   }
 }
 
+  function saveGalleryItems(items: GalleryImageItem[]) {
+    const limited = items
+      .filter((item) => /^https?:\/\//i.test(item.url))
+      .slice(0, 12);
+
+    onUpdate({
+      type: "title",
+      child_cells: [],
+      display_mode: "gallery",
+      gallery_items: limited,
+      gallery_images: limited.map((item) => item.url),
+    });
+  }
+
   function toggleSelectedImage(url: string) {
+    if (mode === "gallery") {
+      const selectedItems = normalizeGalleryItems(cell);
+      const existing = selectedItems.find((item) => item.url === url);
+
+      if (existing) {
+        saveGalleryItems(
+          selectedItems.filter((item) => item.url !== url),
+        );
+        return;
+      }
+
+      if (selectedItems.length >= 12) {
+        setImageLoadError("갤러리는 최대 12장까지 선택할 수 있습니다.");
+        return;
+      }
+
+      setImageLoadError("");
+      saveGalleryItems([
+        ...selectedItems,
+        {
+          id: createId("gallery"),
+          url,
+          title: "",
+        },
+      ]);
+      return;
+    }
+
     const selected = Array.isArray(cell.gallery_images)
       ? cell.gallery_images
       : [];
@@ -26698,12 +27075,109 @@ function TitleCellEditor({
     onUpdate({ gallery_images: [...selected, url] });
   }
 
+  function updateGalleryTitle(id: string, title: string) {
+    saveGalleryItems(
+      normalizeGalleryItems(cell).map((item) =>
+        item.id === id ? { ...item, title } : item,
+      ),
+    );
+  }
+
+  function removeGalleryItem(id: string) {
+    saveGalleryItems(
+      normalizeGalleryItems(cell).filter((item) => item.id !== id),
+    );
+  }
+
+  async function uploadGalleryFiles(files: FileList | null) {
+    if (!files?.length || galleryUploading) return;
+
+    const currentItems = normalizeGalleryItems(cell);
+    const remaining = Math.max(0, 12 - currentItems.length);
+    const selectedFiles = Array.from(files).slice(0, remaining);
+
+    if (remaining === 0) {
+      setImageLoadError("갤러리는 최대 12장까지 업로드할 수 있습니다.");
+      return;
+    }
+
+    if (selectedFiles.some((file) => !file.type.startsWith("image/"))) {
+      setImageLoadError("이미지 파일만 업로드할 수 있습니다.");
+      return;
+    }
+
+    setGalleryUploading(true);
+    setImageLoadError("");
+
+    try {
+      const uploadedItems: GalleryImageItem[] = [];
+
+      for (let index = 0; index < selectedFiles.length; index += 1) {
+        const originalFile = selectedFiles[index];
+        const croppedFile = await cropGalleryImageFile(originalFile);
+
+        const formData = new FormData();
+        formData.append("file", croppedFile);
+        formData.append("area", area);
+        formData.append("cellId", `${cell.id}-gallery-${Date.now()}-${index}`);
+
+        const response = await fetch(
+          `/api/admin/businesses/${businessId}/website/upload`,
+          {
+            method: "POST",
+            body: formData,
+            headers: adminKey ? { "x-admin-key": adminKey } : undefined,
+          },
+        );
+
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            String(result.error || result.message || "갤러리 이미지 업로드 실패"),
+          );
+        }
+
+        const url = String(
+          result.url ||
+            result.publicUrl ||
+            result.public_url ||
+            result.image_url ||
+            "",
+        ).trim();
+
+        if (!url) throw new Error("업로드된 이미지 URL을 받지 못했습니다.");
+
+        uploadedItems.push({
+          id: createId("gallery"),
+          url,
+          title: originalFile.name.replace(/\.[^.]+$/, ""),
+        });
+      }
+
+      saveGalleryItems([...currentItems, ...uploadedItems]);
+    } catch (error) {
+      setImageLoadError(
+        error instanceof Error
+          ? error.message
+          : "갤러리 이미지 업로드에 실패했습니다.",
+      );
+    } finally {
+      setGalleryUploading(false);
+      if (galleryFileInputRef.current) {
+        galleryFileInputRef.current.value = "";
+      }
+    }
+  }
+
   function handleFiles(files: FileList | null) {
     const file = files?.[0];
     if (file) void uploadBackgroundImage(file);
   }
 
-  const selectedCount = cell.gallery_images?.length || 0;
+  const selectedCount =
+    mode === "gallery"
+      ? normalizeGalleryItems(cell).length
+      : cell.gallery_images?.length || 0;
   const usesDbImages =
     mode === "auto-slider" || mode === "image-scroll" || mode === "gallery";
 
@@ -27607,10 +28081,297 @@ function TitleCellEditor({
             </a>
           ) : null}
 
-          {availableImages.length ? (
+          {mode === "gallery" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setGalleryEditorOpen(true)}
+                className="mt-3 flex w-full items-center justify-between rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-4 text-left hover:border-emerald-600 hover:bg-emerald-100"
+              >
+                <span>
+                  <span className="block text-sm font-black text-emerald-950">
+                    이미지 갤러리 편집
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-emerald-800">
+                    이미지 업로드·제목·2/4/6열 설정을 큰 팝업에서 편집합니다.
+                  </span>
+                </span>
+                <span className="rounded-full bg-emerald-700 px-3 py-2 text-xs font-black text-white">
+                  열기
+                </span>
+              </button>
+
+              {galleryEditorOpen && typeof document !== "undefined"
+                ? createPortal(
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="이미지 갤러리 편집"
+                      className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/65 p-2 sm:p-5"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setGalleryEditorOpen(false);
+                        }
+                      }}
+                    >
+                      <div className="flex max-h-[95dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6">
+                          <div>
+                            <h2 className="text-lg font-black text-gray-950 sm:text-xl">
+                              이미지 갤러리 편집
+                            </h2>
+                            <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+                              최대 12장 · 각 이미지 제목 · 한 줄 2/4/6개 표시
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="갤러리 편집창 닫기"
+                            onClick={() => setGalleryEditorOpen(false)}
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-3xl font-light text-gray-700 hover:bg-gray-200"
+                          >
+                            ×
+                          </button>
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                          <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+                            <aside className="space-y-4">
+                              <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
+                                <p className="text-sm font-black text-emerald-950">
+                                  표시 설정
+                                </p>
+                                <p className="mt-1 text-xs font-semibold leading-5 text-emerald-800">
+                                  업로드 이미지는 중앙 기준 4:3, 1200×900 WebP로
+                                  자동 크롭하여 저장합니다.
+                                </p>
+
+                                <div className="mt-4">
+                                  <p className="mb-2 text-xs font-black text-gray-700">
+                                    한 줄에 표시할 이미지 수
+                                  </p>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {([2, 4, 6] as const).map((count) => (
+                                      <button
+                                        key={count}
+                                        type="button"
+                                        onClick={() =>
+                                          onUpdate({ gallery_columns: count })
+                                        }
+                                        className={`rounded-xl border px-3 py-3 text-sm font-black ${
+                                          (cell.gallery_columns ?? 4) === count
+                                            ? "border-emerald-700 bg-emerald-700 text-white"
+                                            : "border-emerald-200 bg-white text-emerald-950"
+                                        }`}
+                                      >
+                                        {count}개
+                                      </button>
+                                    ))}
+                                  </div>
+                                  <p className="mt-2 text-xs font-bold leading-5 text-emerald-800">
+                                    12장 기준: 2개는 6줄 · 4개는 3줄 · 6개는 2줄
+                                  </p>
+                                </div>
+                              </div>
+
+                              <input
+                                ref={galleryFileInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={(event) => {
+                                  void uploadGalleryFiles(event.target.files);
+                                }}
+                              />
+
+                              <button
+                                type="button"
+                                disabled={galleryUploading || selectedCount >= 12}
+                                onClick={() => galleryFileInputRef.current?.click()}
+                                className="flex min-h-28 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-300 bg-white px-4 py-5 text-center disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <span className="text-3xl">＋</span>
+                                <span className="mt-2 text-sm font-black text-emerald-950">
+                                  {galleryUploading
+                                    ? "크롭 및 업로드 중..."
+                                    : `이미지 직접 업로드 · ${selectedCount}/12`}
+                                </span>
+                                <span className="mt-1 text-xs font-semibold text-emerald-700">
+                                  여러 이미지를 한 번에 선택할 수 있습니다.
+                                </span>
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={loadingImages}
+                                onClick={() => {
+                                  void loadSavedImages("gallery");
+                                }}
+                                className="w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                              >
+                                {loadingImages
+                                  ? "갤러리 이미지 불러오는 중..."
+                                  : "등록된 갤러리 이미지 불러오기"}
+                              </button>
+
+                              {imageLoadError ? (
+                                <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">
+                                  {imageLoadError}
+                                </p>
+                              ) : null}
+
+                              {availableImages.length > 0 ? (
+                                <div>
+                                  <p className="mb-2 text-xs font-black text-gray-700">
+                                    등록된 이미지에서 선택
+                                  </p>
+                                  <div className="grid max-h-[330px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
+                                    {availableImages.map((url, index) => {
+                                      const checked = normalizeGalleryItems(cell).some(
+                                        (item) => item.url === url,
+                                      );
+
+                                      return (
+                                        <label
+                                          key={`${url}-${index}`}
+                                          className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white ${
+                                            checked
+                                              ? "border-blue-600 ring-2 ring-blue-500/20"
+                                              : "border-transparent"
+                                          }`}
+                                        >
+                                          <img
+                                            src={url}
+                                            alt={`등록 이미지 ${index + 1}`}
+                                            className="aspect-[4/3] h-auto w-full object-cover"
+                                          />
+                                          <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
+                                            <input
+                                              type="checkbox"
+                                              checked={checked}
+                                              onChange={() => toggleSelectedImage(url)}
+                                              className="h-4 w-4 accent-blue-600"
+                                            />
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </aside>
+
+                            <section className="min-w-0">
+                              <div className="mb-3 flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-black text-gray-950">
+                                    선택된 이미지
+                                  </p>
+                                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                                    제목은 공개 갤러리와 이미지 모달에 표시됩니다.
+                                  </p>
+                                </div>
+                                {selectedCount > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onUpdate({
+                                        gallery_images: [],
+                                        gallery_items: [],
+                                      })
+                                    }
+                                    className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                                  >
+                                    전체 삭제
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              {normalizeGalleryItems(cell).length > 0 ? (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  {normalizeGalleryItems(cell).map((item, index) => (
+                                    <div
+                                      key={item.id}
+                                      className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+                                    >
+                                      <img
+                                        src={item.url}
+                                        alt={item.title || `갤러리 ${index + 1}`}
+                                        className="aspect-[4/3] h-auto w-full object-cover"
+                                      />
+                                      <div className="p-3">
+                                        <label className="block text-xs font-black text-gray-700">
+                                          이미지 {index + 1} 제목
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={item.title}
+                                          maxLength={100}
+                                          onChange={(event) =>
+                                            updateGalleryTitle(
+                                              item.id,
+                                              event.target.value,
+                                            )
+                                          }
+                                          placeholder="이미지 제목을 입력하세요"
+                                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => removeGalleryItem(item.id)}
+                                          className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700"
+                                        >
+                                          삭제
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex min-h-[360px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                                  <div>
+                                    <div className="text-4xl">📸</div>
+                                    <p className="mt-3 text-sm font-black text-gray-700">
+                                      아직 선택한 이미지가 없습니다.
+                                    </p>
+                                    <p className="mt-1 text-xs font-semibold text-gray-500">
+                                      왼쪽에서 직접 업로드하거나 등록 이미지를 불러오세요.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
+                          <span className="text-xs font-bold text-gray-500">
+                            현재 {selectedCount}/12장
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setGalleryEditorOpen(false)}
+                            className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white"
+                          >
+                            편집 완료
+                          </button>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )
+                : null}
+            </>
+          ) : null}
+
+          {mode !== "gallery" && availableImages.length ? (
             <div className="mt-3 grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
               {availableImages.map((url, index) => {
-                const checked = cell.gallery_images?.includes(url) || false;
+                const checked =
+                  mode === "gallery"
+                    ? normalizeGalleryItems(cell).some((item) => item.url === url)
+                    : cell.gallery_images?.includes(url) || false;
                 return (
                   <label
                     key={`${url}-${index}`}
@@ -27640,13 +28401,11 @@ function TitleCellEditor({
                 );
               })}
             </div>
-          ) : (
+          ) : mode !== "gallery" ? (
             <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">
-              {mode === "gallery"
-                ? "갤러리 이미지 불러오기를 눌러주세요."
-                : "대표이미지 불러오기를 눌러주세요."}
+              대표이미지 불러오기를 눌러주세요.
             </div>
-          )}
+          ) : null}
 
           {mode === "auto-slider" ? (
             <div className="mt-4 space-y-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
@@ -27803,7 +28562,7 @@ function TitleCellEditor({
           ) : null}
 
           <div className="mt-3 rounded-xl bg-blue-50 px-3 py-3 text-xs font-bold leading-5 text-blue-800">
-            현재 {selectedCount}장 선택 · 최대 10장
+            현재 {selectedCount}장 선택 · 최대 {mode === "gallery" ? 12 : 10}장
             {mode === "auto-slider" ? (
               <span className="block">
                 3장 이상 선택하면 4.5초마다 Fade 전환되며, Swipe·좌우 화살표·하단 점을 사용할 수 있습니다.
@@ -27921,7 +28680,12 @@ function TitleCellEditor({
           {selectedCount ? (
             <button
               type="button"
-              onClick={() => onUpdate({ gallery_images: [] })}
+              onClick={() =>
+                onUpdate({
+                  gallery_images: [],
+                  ...(mode === "gallery" ? { gallery_items: [] } : {}),
+                })
+              }
               className="mt-3 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-black text-red-700"
             >
               선택 이미지 모두 해제
