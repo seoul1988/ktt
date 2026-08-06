@@ -12956,9 +12956,15 @@ function CellPreview({
     x: Number(cell.image_position_x || 0),
     y: Number(cell.image_position_y || 0),
   };
-  const startImageDrag = onImagePointerDown;
-  const moveImageDrag = onImagePointerMove;
-  const stopImageDrag = onImagePointerUp;
+  // 휴대폰에서는 이미지가 화면 전체를 채워도 세로 스와이프로 페이지가
+  // 계속 스크롤되어야 합니다. 이미지 위치 드래그는 데스크톱 편집기에서만
+  // 활성화하고, 모바일 미리보기/공개 화면에서는 브라우저의 pan-y를 허용합니다.
+  const canDragImage =
+    previewDevice !== "mobile" &&
+    Boolean(onImagePointerDown && onImagePointerMove && onImagePointerUp);
+  const startImageDrag = canDragImage ? onImagePointerDown : undefined;
+  const moveImageDrag = canDragImage ? onImagePointerMove : undefined;
+  const stopImageDrag = canDragImage ? onImagePointerUp : undefined;
 
   useEffect(() => {
     if (!imageLightboxOpen) return;
@@ -13200,6 +13206,10 @@ function CellPreview({
       margin: 0,
       padding: 0,
       overflow: "hidden",
+      // touch-none은 이미지 위에서 페이지 스크롤까지 막습니다.
+      // 드래그 편집 중에만 none, 그 외에는 세로 스와이프를 허용합니다.
+      touchAction: canDragImage ? "none" : "pan-y",
+      WebkitUserSelect: canDragImage ? "none" : "auto",
     };
 
     return (
@@ -13221,7 +13231,11 @@ function CellPreview({
             onPointerMove={moveImageDrag ?? undefined}
             onPointerUp={stopImageDrag ?? undefined}
             onPointerCancel={stopImageDrag ?? undefined}
-            className={`absolute inset-0 touch-none overflow-hidden border-0 bg-transparent ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
+            className={`absolute inset-0 overflow-hidden border-0 bg-transparent ${
+              canDragImage
+                ? "touch-none cursor-grab"
+                : "touch-pan-y cursor-pointer"
+            } ${imageDragging ? "cursor-grabbing" : ""}`}
             style={imageContainerStyle}
           >
             {imageElement}
@@ -13243,7 +13257,11 @@ function CellPreview({
                 suppressImageClickRef.current = false;
               }
             }}
-            className={`absolute inset-0 touch-none overflow-hidden ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
+            className={`absolute inset-0 overflow-hidden ${
+              canDragImage
+                ? "touch-none cursor-grab"
+                : "touch-pan-y cursor-pointer"
+            } ${imageDragging ? "cursor-grabbing" : ""}`}
             style={imageContainerStyle}
           >
             {imageElement}
@@ -13265,14 +13283,18 @@ function CellPreview({
             onPointerMove={moveImageDrag ?? undefined}
             onPointerUp={stopImageDrag ?? undefined}
             onPointerCancel={stopImageDrag ?? undefined}
-            className={`absolute inset-0 touch-none overflow-hidden border-0 bg-transparent ${imageDragging ? "cursor-grabbing" : "cursor-grab"}`}
+            className={`absolute inset-0 overflow-hidden border-0 bg-transparent ${
+              canDragImage
+                ? "touch-none cursor-grab"
+                : "touch-pan-y cursor-pointer"
+            } ${imageDragging ? "cursor-grabbing" : ""}`}
             style={imageContainerStyle}
           >
             {imageElement}
           </button>
         )}
 
-        {isSelected ? (
+        {isSelected && canDragImage ? (
           <div className="pointer-events-none absolute bottom-2 left-1/2 z-30 -translate-x-1/2 rounded-full bg-black/75 px-3 py-1.5 text-[10px] font-black text-white shadow">
             이미지를 마우스로 드래그해 위치 이동
           </div>
