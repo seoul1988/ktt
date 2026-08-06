@@ -28951,9 +28951,7 @@ function TitleCellEditor({
             <div className="mt-3 grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
               {availableImages.map((url, index) => {
                 const checked =
-                  mode === "gallery"
-                    ? normalizeGalleryItems(cell).some((item) => item.url === url)
-                    : cell.gallery_images?.includes(url) || false;
+                  cell.gallery_images?.includes(url) || false;
                 return (
                   <label
                     key={`${url}-${index}`}
