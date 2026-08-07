@@ -354,7 +354,7 @@ export default function MenuItemModal({
               type="button"
               className="relative flex h-[190px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
               onClick={() => setOriginalImageOpen(true)}
-              aria-label={`${item.name} 이미지 크게 보기`}
+              aria-label={`${item.name} 이미지 View Larger`}
             >
               <img
                 src={
@@ -368,7 +368,7 @@ export default function MenuItemModal({
               />
 
               <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1.5 text-[10px] font-black text-white shadow-lg">
-                크게 보기
+                View Larger
               </span>
             </button>
           ) : null}
@@ -383,7 +383,7 @@ export default function MenuItemModal({
                 type="button"
                 onClick={onClose}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-black"
-                aria-label="메뉴 상세 닫기"
+                aria-label="Close menu details"
               >
                 ×
               </button>
@@ -433,25 +433,26 @@ export default function MenuItemModal({
               </div>
             ) : null}
 
-            <div className="mt-5 border-t border-black/10 pt-4">
-              <label className="text-xs font-black uppercase tracking-wide opacity-60">
-                Special instructions
-              </label>
+            {orderEnabled ? (
+              <div className="mt-5 border-t border-black/10 pt-4">
+                <label className="text-xs font-black uppercase tracking-wide opacity-60">
+                  Special Instructions
+                </label>
 
-              <textarea
-                value={instructions}
-                onChange={(event) =>
-                  setInstructions(event.target.value)
-                }
-                rows={2}
-                maxLength={500}
-                placeholder="요청사항을 입력하세요"
-                className="mt-2 w-full resize-none rounded-xl border border-black/15 bg-transparent px-3 py-2 text-sm outline-none"
-              />
-            </div>
+                <textarea
+                  value={instructions}
+                  onChange={(event) => setInstructions(event.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Add special instructions"
+                  className="mt-2 w-full resize-none rounded-xl border border-black/15 bg-transparent px-3 py-2 text-sm outline-none"
+                />
+              </div>
+            ) : null}
 
           </div>
 
+          {orderEnabled ? (
           <div
             className="z-20 flex min-h-14 shrink-0 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
             style={{ backgroundColor }}
@@ -497,10 +498,10 @@ export default function MenuItemModal({
               }`}
               title={
                 !orderEnabled
-                  ? "MENU 페이지에서는 주문할 수 없습니다. ORDER 페이지에서 주문해주세요."
+                  ? "Ordering is available only on the Order page."
                   : optionsValid
-                    ? "선택한 메뉴와 옵션을 주문에 추가"
-                    : "필수 옵션 선택 수량을 확인하세요"
+                    ? "Add the selected item and options to your order"
+                    : "Please complete the required option selections"
               }
             >
               <span className="shrink-0">
@@ -514,18 +515,13 @@ export default function MenuItemModal({
 
                 {optionExtra !== 0 ? (
                   <span className="block text-[10px] font-bold opacity-90">
-                    메뉴 $
-                    {Number(
-                      item.price || 0,
-                    ).toFixed(2)}{" "}
-                    + 옵션 $
-                    {optionExtra.toFixed(2)} ×{" "}
-                    {menuQuantity}
+                    Item ${Number(item.price || 0).toFixed(2)} + Options ${optionExtra.toFixed(2)} × {menuQuantity}
                   </span>
                 ) : null}
               </span>
             </button>
           </div>
+          ) : null}
         </div>
       </div>
 
@@ -542,7 +538,7 @@ export default function MenuItemModal({
               setOriginalImageOpen(false)
             }
             className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[13010] flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black text-black shadow-2xl"
-            aria-label="원본 이미지 닫기"
+            aria-label="Close enlarged image"
           >
             ×
           </button>
@@ -553,7 +549,7 @@ export default function MenuItemModal({
               item.thumbnail_url ||
               ""
             }
-            alt={`${item.name} 원본 이미지`}
+            alt={`${item.name} enlarged image`}
             draggable={false}
             className="max-h-[92vh] max-w-[94vw] select-none object-contain"
             onClick={(event) =>
