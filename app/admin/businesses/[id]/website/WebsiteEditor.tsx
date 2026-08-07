@@ -24466,73 +24466,6 @@ function VideoHeroUploader({
   section: BusinessSection;
   onUpdate: (patch: Partial<SectionContent>) => void;
 }) {
-  const overlayPageOptions = [
-    { label: "HOME", value: "home" },
-    ...sections
-      .filter(
-        (section) =>
-          section.content?.page_type === "link-page" &&
-          section.is_visible !== false,
-      )
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((section) => ({
-        label:
-          String(section.title || "").trim() ||
-          String(section.content?.page_slug || "").trim() ||
-          `PAGE ${section.id}`,
-        value: slugifyMenuValue(
-          String(section.content?.page_slug || section.title || ""),
-        ),
-      }))
-      .filter((item) => Boolean(item.value)),
-  ].filter(
-    (item, index, values) =>
-      values.findIndex((candidate) => candidate.value === item.value) === index,
-  );
-
-  const overlaySectionOptions = sections
-    .filter(
-      (section) =>
-        section.content?.page_type !== "link-page" &&
-        section.is_visible !== false,
-    )
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((section) => ({
-      label:
-        String(section.title || "").trim() ||
-        SECTION_LABELS[section.section_type] ||
-        section.section_type,
-      value:
-        slugifyMenuValue(
-          String(section.title || section.section_type || ""),
-        ) || section.section_type,
-    }))
-    .filter((item) => Boolean(item.value));
-
-  function updateOverlayButtonLink(
-    buttonId: string,
-    linkType: "page" | "section" | "external",
-    linkValue: string,
-  ) {
-    onUpdate({
-      overlay_buttons: normalizeOverlayButtons(cell).map((item) => {
-        if (item.id !== buttonId) return item;
-
-        const nextButton: OverlayButton = {
-          ...item,
-          link_type: linkType,
-          link_value: linkValue,
-          url: "",
-        };
-
-        return {
-          ...nextButton,
-          url: buildOverlayButtonUrl(nextButton, businessId),
-        };
-      }),
-    });
-  }
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -27249,6 +27182,73 @@ function TitleCellEditor({
     cell.display_mode === "restaurant-menu"
       ? cell.display_mode
       : "text";
+
+  const overlayPageOptions = [
+    { label: "HOME", value: "home" },
+    ...sections
+      .filter(
+        (section) =>
+          section.content?.page_type === "link-page" &&
+          section.is_visible !== false,
+      )
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((section) => ({
+        label:
+          String(section.title || "").trim() ||
+          String(section.content?.page_slug || "").trim() ||
+          `PAGE ${section.id}`,
+        value: slugifyMenuValue(
+          String(section.content?.page_slug || section.title || ""),
+        ),
+      }))
+      .filter((item) => Boolean(item.value)),
+  ].filter(
+    (item, index, values) =>
+      values.findIndex((candidate) => candidate.value === item.value) === index,
+  );
+
+  const overlaySectionOptions = sections
+    .filter(
+      (section) =>
+        section.content?.page_type !== "link-page" &&
+        section.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => ({
+      label:
+        String(section.title || "").trim() ||
+        SECTION_LABELS[section.section_type] ||
+        section.section_type,
+      value:
+        slugifyMenuValue(
+          String(section.title || section.section_type || ""),
+        ) || section.section_type,
+    }))
+    .filter((item) => Boolean(item.value));
+
+  function updateOverlayButtonLink(
+    buttonId: string,
+    linkType: "page" | "section" | "external",
+    linkValue: string,
+  ) {
+    onUpdate({
+      overlay_buttons: normalizeOverlayButtons(cell).map((item) => {
+        if (item.id !== buttonId) return item;
+
+        const nextButton: OverlayButton = {
+          ...item,
+          link_type: linkType,
+          link_value: linkValue,
+          url: "",
+        };
+
+        return {
+          ...nextButton,
+          url: buildOverlayButtonUrl(nextButton, businessId),
+        };
+      }),
+    });
+  }
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryFileInputRef = useRef<HTMLInputElement>(null);
