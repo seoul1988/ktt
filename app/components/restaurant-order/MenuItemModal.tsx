@@ -341,19 +341,20 @@ export default function MenuItemModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[12000] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+        className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 pt-10 pb-4 px-2 sm:pt-12 sm:pb-6 sm:px-4"
         onClick={onClose}
       >
         <div
-          className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl shadow-2xl sm:max-w-lg sm:rounded-3xl"
-          style={{ backgroundColor, color: textColor }}
+          className="flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
+          style={{ backgroundColor, color: textColor, transform: "translateY(18px)" }}
           onClick={(event) => event.stopPropagation()}
         >
           {item.image_url || item.thumbnail_url ? (
             <button
               type="button"
-              className="relative block h-[300px] w-full cursor-zoom-in overflow-hidden rounded-t-3xl bg-black p-0 sm:h-[360px]"
+              className="relative flex h-[190px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
               onClick={() => setOriginalImageOpen(true)}
+              aria-label={`${item.name} 이미지 크게 보기`}
             >
               <img
                 src={
@@ -362,14 +363,19 @@ export default function MenuItemModal({
                   ""
                 }
                 alt={item.name}
-                className="absolute inset-0 block h-full w-full object-cover"
+                draggable={false}
+                className="block h-full w-full select-none object-contain transition-transform duration-200 hover:scale-[1.02]"
               />
+
+              <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1.5 text-[10px] font-black text-white shadow-lg">
+                크게 보기
+              </span>
             </button>
           ) : null}
 
-          <div className="p-5 sm:p-6">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3.5 sm:p-4">
             <div className="flex items-start justify-between gap-4">
-              <h2 className="text-2xl font-black leading-tight">
+              <h2 className="text-lg font-black leading-tight sm:text-xl">
                 {item.name}
               </h2>
 
@@ -384,7 +390,7 @@ export default function MenuItemModal({
             </div>
 
             {item.price != null ? (
-              <p className="mt-3 text-lg font-black">
+              <p className="mt-1 text-[15px] font-black">
                 ${Number(item.price).toFixed(2)}
               </p>
             ) : null}
@@ -437,18 +443,17 @@ export default function MenuItemModal({
                 onChange={(event) =>
                   setInstructions(event.target.value)
                 }
-                rows={3}
+                rows={2}
                 maxLength={500}
                 placeholder="요청사항을 입력하세요"
                 className="mt-2 w-full resize-none rounded-xl border border-black/15 bg-transparent px-3 py-2 text-sm outline-none"
               />
             </div>
 
-            <div className="h-24" />
           </div>
 
           <div
-            className="sticky bottom-0 z-20 flex min-h-16 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
+            className="z-20 flex min-h-14 shrink-0 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
             style={{ backgroundColor }}
           >
             <div className="flex shrink-0 items-center border-r border-black/10">
@@ -459,12 +464,12 @@ export default function MenuItemModal({
                     Math.max(1, value - 1),
                   )
                 }
-                className="flex h-16 w-12 items-center justify-center text-xl font-black"
+                className="flex h-14 w-11 items-center justify-center text-lg font-black"
               >
                 −
               </button>
 
-              <div className="flex h-16 min-w-10 items-center justify-center text-sm font-black">
+              <div className="flex h-14 min-w-9 items-center justify-center text-sm font-black">
                 {menuQuantity}
               </div>
 
@@ -475,7 +480,7 @@ export default function MenuItemModal({
                     Math.min(99, value + 1),
                   )
                 }
-                className="flex h-16 w-12 items-center justify-center text-xl font-black"
+                className="flex h-14 w-11 items-center justify-center text-lg font-black"
               >
                 +
               </button>
@@ -549,7 +554,8 @@ export default function MenuItemModal({
               ""
             }
             alt={`${item.name} 원본 이미지`}
-            className="max-h-full max-w-full select-none object-contain"
+            draggable={false}
+            className="max-h-[92vh] max-w-[94vw] select-none object-contain"
             onClick={(event) =>
               event.stopPropagation()
             }

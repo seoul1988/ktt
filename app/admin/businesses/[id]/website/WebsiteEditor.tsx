@@ -139,6 +139,12 @@ type GridCell = {
     | "service-card"
     | "business-hours"
     | "restaurant-menu";
+
+  /** DoorDash 스타일 메뉴 셀에서 사용할 방식 */
+  restaurant_menu_menu_enabled?: boolean;
+  restaurant_menu_pickup_enabled?: boolean;
+  restaurant_menu_delivery_enabled?: boolean;
+
   gallery_images?: string[];
   /** 갤러리 전용: 이미지 URL과 각 이미지 제목 */
   gallery_items?: GalleryImageItem[];
@@ -389,6 +395,12 @@ type SectionContent = {
   link_page_kind?: "blank" | "restaurant-menu";
   restaurant_menu_background_color?: string;
   restaurant_menu_text_color?: string;
+
+  /** Restaurant Menu 페이지에서 표시할 방식 */
+  restaurant_menu_menu_enabled?: boolean;
+  restaurant_menu_pickup_enabled?: boolean;
+  restaurant_menu_delivery_enabled?: boolean;
+
   restaurant_menu_scroll_top_enabled?: boolean;
   restaurant_menu_scroll_top_button_color?: string;
   restaurant_menu_scroll_top_icon_color?: string;
@@ -3577,6 +3589,15 @@ function LinkPageContent({
           scrollTopButtonColor={scrollTopButtonColor}
           scrollTopIconColor={scrollTopIconColor}
           scrollTopPosition={scrollTopPosition}
+          menuEnabled={
+            section.content?.restaurant_menu_menu_enabled !== false
+          }
+          pickupEnabled={
+            section.content?.restaurant_menu_pickup_enabled === true
+          }
+          deliveryEnabled={
+            section.content?.restaurant_menu_delivery_enabled === true
+          }
         />
       </div>
     );
@@ -14817,6 +14838,9 @@ function CellPreview({
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
+            menuEnabled={cell.restaurant_menu_menu_enabled !== false}
+            pickupEnabled={cell.restaurant_menu_pickup_enabled === true}
+            deliveryEnabled={cell.restaurant_menu_delivery_enabled === true}
           />
         </div>
       );
@@ -17492,6 +17516,20 @@ function LinkPageEditor({
         : "Restaurant Menu를 이 페이지에서 제거하고 일반 페이지 편집으로 바꿀까요?\n\n가져온 메뉴 DB 데이터는 삭제되지 않습니다.";
 
     if (!window.confirm(message)) return;
+
+    if (nextKind === "restaurant-menu") {
+      onUpdate({
+        link_page_kind: nextKind,
+        restaurant_menu_menu_enabled:
+          section.content?.restaurant_menu_menu_enabled ?? true,
+        restaurant_menu_pickup_enabled:
+          section.content?.restaurant_menu_pickup_enabled ?? false,
+        restaurant_menu_delivery_enabled:
+          section.content?.restaurant_menu_delivery_enabled ?? false,
+      });
+      return;
+    }
+
     onUpdate({ link_page_kind: nextKind });
   }
 
@@ -17528,6 +17566,9 @@ function LinkPageEditor({
         >
           <span className="block text-lg">🍽</span>
           <span className="mt-1 block text-xs font-black">Restaurant Menu</span>
+          <span className="mt-1 inline-flex rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-black">
+            MENU · PICKUP · DELIVERY 설정
+          </span>
           <span className={`mt-1 block text-[10px] font-semibold leading-4 ${pageKind === "restaurant-menu" ? "text-white/80" : "text-gray-500"}`}>
             DoorDash 스타일 메뉴
           </span>
@@ -17546,6 +17587,89 @@ function LinkPageEditor({
         </p>
 
         {pageTypeSelector}
+
+          <div className="mt-4 rounded-2xl border-2 border-orange-400 bg-orange-50 p-4 shadow-sm">
+            <p className="text-base font-black text-orange-950">
+              이 메뉴 페이지에서 사용할 방식
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
+              MENU만 체크하면 보기 전용 메뉴가 되고 PICKUP / DELIVERY 버튼은 나타나지 않습니다.
+              주문 페이지는 PICKUP 또는 DELIVERY를 체크하세요.
+            </p>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[
+                {
+                  key: "restaurant_menu_menu_enabled",
+                  label: "MENU",
+                  checked:
+                    section.content?.restaurant_menu_menu_enabled !== false,
+                },
+                {
+                  key: "restaurant_menu_pickup_enabled",
+                  label: "PICKUP",
+                  checked:
+                    section.content?.restaurant_menu_pickup_enabled === true,
+                },
+                {
+                  key: "restaurant_menu_delivery_enabled",
+                  label: "DELIVERY",
+                  checked:
+                    section.content?.restaurant_menu_delivery_enabled === true,
+                },
+              ].map((option) => (
+                <label
+                  key={option.key}
+                  className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border px-2 py-3 text-xs font-black ${
+                    option.checked
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-blue-200 bg-white text-blue-950"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={option.checked}
+                    onChange={(event) => {
+                      const nextValue = event.target.checked;
+
+                      const nextMenu =
+                        option.key === "restaurant_menu_menu_enabled"
+                          ? nextValue
+                          : section.content?.restaurant_menu_menu_enabled !== false;
+                      const nextPickup =
+                        option.key === "restaurant_menu_pickup_enabled"
+                          ? nextValue
+                          : section.content?.restaurant_menu_pickup_enabled === true;
+                      const nextDelivery =
+                        option.key === "restaurant_menu_delivery_enabled"
+                          ? nextValue
+                          : section.content?.restaurant_menu_delivery_enabled === true;
+
+                      // 최소 한 가지는 항상 남겨둡니다.
+                      if (!nextMenu && !nextPickup && !nextDelivery) {
+                        return;
+                      }
+
+                      onUpdate({
+                        [option.key]: nextValue,
+                      });
+                    }}
+                    className="mb-2 h-4 w-4"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-3 rounded-lg bg-white px-3 py-2 text-[10px] font-bold leading-5 text-gray-600">
+              {section.content?.restaurant_menu_menu_enabled !== false &&
+              section.content?.restaurant_menu_pickup_enabled !== true &&
+              section.content?.restaurant_menu_delivery_enabled !== true
+                ? "현재: MENU 보기 전용 · 주문 버튼 숨김"
+                : "현재: 주문 방식 사용 · 체크한 PICKUP / DELIVERY 버튼만 표시"}
+            </div>
+          </div>
+
 
         <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex items-start gap-3">
@@ -27448,6 +27572,12 @@ function TitleCellEditor({
         text: "Restaurant Menu",
         background_color: "#ffffff",
         color: "#111827",
+        restaurant_menu_menu_enabled:
+          cell.restaurant_menu_menu_enabled ?? true,
+        restaurant_menu_pickup_enabled:
+          cell.restaurant_menu_pickup_enabled ?? false,
+        restaurant_menu_delivery_enabled:
+          cell.restaurant_menu_delivery_enabled ?? false,
       });
       return;
     }
@@ -28029,6 +28159,104 @@ function TitleCellEditor({
           <option value="business-hours">🕒 비즈니스시간 입력</option>
         </select>
       </Field>
+
+      {mode === "restaurant-menu" ? (
+        <div className="mt-4 rounded-2xl border-2 border-orange-400 bg-orange-50 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-base font-black text-orange-950">
+                이 메뉴에서 사용할 방식
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-orange-800">
+                MENU만 선택하면 보기 전용입니다. PICKUP 또는 DELIVERY를 선택하면
+                해당 주문 버튼이 메뉴 위에 표시됩니다.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-orange-600 px-2.5 py-1 text-[10px] font-black text-white">
+              ORDER MODE
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              {
+                key: "restaurant_menu_menu_enabled",
+                label: "MENU",
+                checked: cell.restaurant_menu_menu_enabled !== false,
+              },
+              {
+                key: "restaurant_menu_pickup_enabled",
+                label: "PICKUP",
+                checked: cell.restaurant_menu_pickup_enabled === true,
+              },
+              {
+                key: "restaurant_menu_delivery_enabled",
+                label: "DELIVERY",
+                checked: cell.restaurant_menu_delivery_enabled === true,
+              },
+            ].map((option) => (
+              <label
+                key={option.key}
+                className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 px-2 py-3 text-xs font-black transition ${
+                  option.checked
+                    ? "border-orange-600 bg-orange-600 text-white"
+                    : "border-orange-200 bg-white text-orange-950"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={option.checked}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked;
+
+                    const nextMenu =
+                      option.key === "restaurant_menu_menu_enabled"
+                        ? nextValue
+                        : cell.restaurant_menu_menu_enabled !== false;
+
+                    const nextPickup =
+                      option.key === "restaurant_menu_pickup_enabled"
+                        ? nextValue
+                        : cell.restaurant_menu_pickup_enabled === true;
+
+                    const nextDelivery =
+                      option.key === "restaurant_menu_delivery_enabled"
+                        ? nextValue
+                        : cell.restaurant_menu_delivery_enabled === true;
+
+                    // 아무 것도 없는 상태는 허용하지 않습니다.
+                    if (!nextMenu && !nextPickup && !nextDelivery) {
+                      return;
+                    }
+
+                    onUpdate({
+                      [option.key]: nextValue,
+                    } as Partial<GridCell>);
+                  }}
+                  className="mb-2 h-4 w-4 accent-orange-600"
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
+            {cell.restaurant_menu_menu_enabled !== false &&
+            cell.restaurant_menu_pickup_enabled !== true &&
+            cell.restaurant_menu_delivery_enabled !== true
+              ? "현재: MENU 보기 전용 · PICKUP / DELIVERY 버튼 숨김"
+              : `현재 표시: ${
+                  [
+                    cell.restaurant_menu_menu_enabled !== false ? "MENU" : "",
+                    cell.restaurant_menu_pickup_enabled === true ? "PICKUP" : "",
+                    cell.restaurant_menu_delivery_enabled === true ? "DELIVERY" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                }`}
+          </div>
+        </div>
+      ) : null}
 
       {mode === "background-image" ? (
         <>

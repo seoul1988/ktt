@@ -34,6 +34,8 @@ type MenuItem = {
   name: string;
   description: string | null;
   price: number | null;
+  pickup_price?: number | null;
+  delivery_price?: number | null;
   thumbnail_url: string | null;
   image_url: string | null;
   display_order: number | null;
@@ -280,6 +282,9 @@ export default function OwnerBusinessMenuPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
+  const [pickupPriceInputs, setPickupPriceInputs] = useState<Record<number, string>>({});
+  const [deliveryPriceInputs, setDeliveryPriceInputs] = useState<Record<number, string>>({});
+  const [deliveryPercentInput, setDeliveryPercentInput] = useState("15");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">(
     "all",
   );
@@ -368,13 +373,29 @@ export default function OwnerBusinessMenuPage() {
       });
 
       const nextPrices: Record<number, string> = {};
+      const nextPickupPrices: Record<number, string> = {};
+      const nextDeliveryPrices: Record<number, string> = {};
+
       for (const item of nextItems) {
         nextPrices[item.id] =
           item.price === null || item.price === undefined
             ? ""
             : Number(item.price).toFixed(2);
+
+        nextPickupPrices[item.id] =
+          item.pickup_price == null
+            ? nextPrices[item.id]
+            : Number(item.pickup_price).toFixed(2);
+
+        nextDeliveryPrices[item.id] =
+          item.delivery_price == null
+            ? nextPickupPrices[item.id]
+            : Number(item.delivery_price).toFixed(2);
       }
+
       setPriceInputs(nextPrices);
+      setPickupPriceInputs(nextPickupPrices);
+      setDeliveryPriceInputs(nextDeliveryPrices);
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "메뉴를 불러오지 못했습니다.",
@@ -903,6 +924,22 @@ export default function OwnerBusinessMenuPage() {
         [item.id]:
           item.price == null ? "" : Number(item.price).toFixed(2),
       }));
+      setPickupPriceInputs((current) => ({
+        ...current,
+        [item.id]:
+          item.pickup_price == null
+            ? item.price == null ? "" : Number(item.price).toFixed(2)
+            : Number(item.pickup_price).toFixed(2),
+      }));
+      setDeliveryPriceInputs((current) => ({
+        ...current,
+        [item.id]:
+          item.delivery_price == null
+            ? item.pickup_price == null
+              ? item.price == null ? "" : Number(item.price).toFixed(2)
+              : Number(item.pickup_price).toFixed(2)
+            : Number(item.delivery_price).toFixed(2),
+      }));
       setSelectedCategoryId(item.category_id ?? "all");
       setSearchTerm("");
       setMessage(
@@ -977,9 +1014,23 @@ export default function OwnerBusinessMenuPage() {
       setPriceInputs((current) => ({
         ...current,
         [duplicated.id]:
-          duplicated.price == null
-            ? ""
-            : Number(duplicated.price).toFixed(2),
+          duplicated.price == null ? "" : Number(duplicated.price).toFixed(2),
+      }));
+      setPickupPriceInputs((current) => ({
+        ...current,
+        [duplicated.id]:
+          duplicated.pickup_price == null
+            ? duplicated.price == null ? "" : Number(duplicated.price).toFixed(2)
+            : Number(duplicated.pickup_price).toFixed(2),
+      }));
+      setDeliveryPriceInputs((current) => ({
+        ...current,
+        [duplicated.id]:
+          duplicated.delivery_price == null
+            ? duplicated.pickup_price == null
+              ? duplicated.price == null ? "" : Number(duplicated.price).toFixed(2)
+              : Number(duplicated.pickup_price).toFixed(2)
+            : Number(duplicated.delivery_price).toFixed(2),
       }));
 
       setSelectedCategoryId(
@@ -1041,6 +1092,16 @@ export default function OwnerBusinessMenuPage() {
       );
 
       setPriceInputs((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      setPickupPriceInputs((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      setDeliveryPriceInputs((current) => {
         const next = { ...current };
         delete next[item.id];
         return next;
@@ -1108,25 +1169,77 @@ export default function OwnerBusinessMenuPage() {
     );
   }
 
+  function parseOptionalPrice(rawValue: string, itemName: string, label: string) {
+    const raw = rawValue.trim();
+    if (!raw) return null;
+
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error(`${itemName}의 ${label}이 올바르지 않습니다.`);
+    }
+
+    return Number(value.toFixed(2));
+  }
+
+  function applyDeliveryPercent(target: "filtered" | "all") {
+    const percent = Number(deliveryPercentInput);
+
+    if (!Number.isFinite(percent) || percent < -100 || percent > 1000) {
+      setMessage("배달 인상률은 -100% ~ 1000% 사이로 입력하세요.");
+      return;
+    }
+
+    const targetItems = target === "filtered" ? filteredItems : items;
+    const targetIds = new Set(targetItems.map((item) => item.id));
+
+    setDeliveryPriceInputs((current) => {
+      const next = { ...current };
+
+      for (const item of items) {
+        if (!targetIds.has(item.id)) continue;
+
+        const pickupRaw =
+          (pickupPriceInputs[item.id] ?? priceInputs[item.id] ?? "").trim();
+
+        if (!pickupRaw) continue;
+
+        const pickup = Number(pickupRaw);
+        if (!Number.isFinite(pickup) || pickup < 0) continue;
+
+        next[item.id] = (
+          Math.round(pickup * (1 + percent / 100) * 100) / 100
+        ).toFixed(2);
+      }
+
+      return next;
+    });
+
+    setMessage(
+      `✓ 배달 단가를 픽업 단가 기준 ${percent >= 0 ? "+" : ""}${percent}%로 계산했습니다. 개별 수정 후 전체 저장하세요.`,
+    );
+  }
+
   async function saveAll() {
     setSaving(true);
     setMessage("");
 
     try {
       const normalizedItems = items.map((item) => {
-        const rawPrice = (priceInputs[item.id] ?? "").trim();
-
-        let price: number | null = null;
-
-        if (rawPrice) {
-          price = Number(rawPrice);
-
-          if (!Number.isFinite(price) || price < 0) {
-            throw new Error(`${item.name}의 가격이 올바르지 않습니다.`);
-          }
-
-          price = Number(price.toFixed(2));
-        }
+        const price = parseOptionalPrice(
+          priceInputs[item.id] ?? "",
+          item.name,
+          "메뉴 단가",
+        );
+        const pickupPrice = parseOptionalPrice(
+          pickupPriceInputs[item.id] ?? "",
+          item.name,
+          "픽업 단가",
+        );
+        const deliveryPrice = parseOptionalPrice(
+          deliveryPriceInputs[item.id] ?? "",
+          item.name,
+          "배달 단가",
+        );
 
         if (!item.name.trim()) {
           throw new Error("상품명은 비워둘 수 없습니다.");
@@ -1138,6 +1251,8 @@ export default function OwnerBusinessMenuPage() {
           name: item.name.trim(),
           description: item.description?.trim() || null,
           price,
+          pickup_price: pickupPrice,
+          delivery_price: deliveryPrice,
           display_order: Number(item.display_order ?? 999),
           is_available: item.is_available,
           option_groups: normalizeOptionGroups(item).map(
@@ -1448,6 +1563,55 @@ export default function OwnerBusinessMenuPage() {
             </div>
           </div>
 
+          <div className="mt-4 rounded-3xl border-2 border-blue-200 bg-blue-50 p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-black text-blue-950">배달 단가 일괄 계산</p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-blue-700">
+                  픽업 단가 기준으로 배달 단가를 퍼센트로 계산합니다.
+                  적용 후 각 품목의 Delivery 금액은 개별 수정할 수 있습니다.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-end gap-2">
+                <label>
+                  <span className="mb-1 block text-[10px] font-black text-blue-700">
+                    배달 인상률
+                  </span>
+                  <div className="flex overflow-hidden rounded-xl border border-blue-300 bg-white">
+                    <input
+                      value={deliveryPercentInput}
+                      onChange={(event) =>
+                        setDeliveryPercentInput(
+                          event.target.value.replace(/[^0-9.-]/g, ""),
+                        )
+                      }
+                      inputMode="decimal"
+                      className="w-20 px-3 py-2 text-right text-sm font-black outline-none"
+                    />
+                    <span className="flex items-center border-l border-blue-200 px-2 text-xs font-black text-blue-700">%</span>
+                  </div>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => applyDeliveryPercent("filtered")}
+                  className="rounded-xl border border-blue-300 bg-white px-3 py-2 text-xs font-black text-blue-800"
+                >
+                  현재 표시 메뉴 적용
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => applyDeliveryPercent("all")}
+                  className="rounded-xl bg-blue-700 px-3 py-2 text-xs font-black text-white"
+                >
+                  전체 메뉴 적용
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="mt-4 space-y-4">
             {filteredItems.length === 0 ? (
               <div className="rounded-3xl bg-white p-6 text-center text-sm font-bold text-gray-500 shadow-sm">
@@ -1563,7 +1727,7 @@ export default function OwnerBusinessMenuPage() {
                       </div>
                     </div>
 
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_130px_90px_auto]">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_110px_110px_110px_80px_auto]">
                       <select
                         value={item.category_id ?? ""}
                         onChange={(event) =>
@@ -1583,23 +1747,62 @@ export default function OwnerBusinessMenuPage() {
                         ))}
                       </select>
 
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-gray-500">
-                          $
-                        </span>
-                        <input
-                          value={priceInputs[item.id] ?? ""}
-                          onChange={(event) =>
-                            setPriceInputs((current) => ({
-                              ...current,
-                              [item.id]: cleanPrice(event.target.value),
-                            }))
-                          }
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          className="w-full rounded-xl border border-gray-200 py-2 pl-7 pr-3 text-sm font-black outline-none focus:border-[#172033]"
-                        />
-                      </div>
+                      <label className="rounded-xl border border-gray-200 bg-white px-2 py-1">
+                        <span className="block text-[9px] font-black uppercase text-gray-500">Menu</span>
+                        <div className="flex items-center">
+                          <span className="mr-1 text-xs font-black text-gray-500">$</span>
+                          <input
+                            value={priceInputs[item.id] ?? ""}
+                            onChange={(event) =>
+                              setPriceInputs((current) => ({
+                                ...current,
+                                [item.id]: cleanPrice(event.target.value),
+                              }))
+                            }
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className="min-w-0 w-full bg-transparent py-1 text-sm font-black outline-none"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1">
+                        <span className="block text-[9px] font-black uppercase text-emerald-700">Pickup</span>
+                        <div className="flex items-center">
+                          <span className="mr-1 text-xs font-black text-emerald-700">$</span>
+                          <input
+                            value={pickupPriceInputs[item.id] ?? ""}
+                            onChange={(event) =>
+                              setPickupPriceInputs((current) => ({
+                                ...current,
+                                [item.id]: cleanPrice(event.target.value),
+                              }))
+                            }
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className="min-w-0 w-full bg-transparent py-1 text-sm font-black text-emerald-950 outline-none"
+                          />
+                        </div>
+                      </label>
+
+                      <label className="rounded-xl border border-orange-200 bg-orange-50 px-2 py-1">
+                        <span className="block text-[9px] font-black uppercase text-orange-700">Delivery</span>
+                        <div className="flex items-center">
+                          <span className="mr-1 text-xs font-black text-orange-700">$</span>
+                          <input
+                            value={deliveryPriceInputs[item.id] ?? ""}
+                            onChange={(event) =>
+                              setDeliveryPriceInputs((current) => ({
+                                ...current,
+                                [item.id]: cleanPrice(event.target.value),
+                              }))
+                            }
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className="min-w-0 w-full bg-transparent py-1 text-sm font-black text-orange-950 outline-none"
+                          />
+                        </div>
+                      </label>
 
                       <input
                         type="number"

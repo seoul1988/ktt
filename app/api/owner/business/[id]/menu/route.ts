@@ -303,7 +303,7 @@ export async function GET(
       supabase
         .from("business_menu_items")
         .select(
-          "id,category_id,name,description,price,thumbnail_path,image_path,display_order,is_available",
+          "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available",
         )
         .eq("business_id", businessId)
         .order("display_order", {
@@ -577,6 +577,8 @@ export async function POST(
             name: "NEW MENU ITEM",
             description: "",
             price: null,
+            pickup_price: null,
+            delivery_price: null,
             thumbnail_path: null,
             image_path: null,
             display_order: nextOrder,
@@ -584,7 +586,7 @@ export async function POST(
             source_platform: "manual",
           })
           .select(
-            "id,category_id,name,description,price,thumbnail_path,image_path,display_order,is_available",
+            "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available",
           )
           .single();
 
@@ -620,7 +622,7 @@ export async function POST(
         await supabase
           .from("business_menu_items")
           .select(
-            "id,category_id,name,description,price,display_order,is_available",
+            "id,category_id,name,description,price,pickup_price,delivery_price,display_order,is_available",
           )
           .eq("business_id", businessId)
           .eq("id", itemId)
@@ -662,6 +664,11 @@ export async function POST(
             name: `${sourceItem.name} (Copy)`,
             description: String(sourceItem.description ?? ""),
             price: sourceItem.price,
+            pickup_price: sourceItem.pickup_price ?? sourceItem.price,
+            delivery_price:
+              sourceItem.delivery_price ??
+              sourceItem.pickup_price ??
+              sourceItem.price,
             thumbnail_path: null,
             image_path: null,
             display_order: nextOrder,
@@ -669,7 +676,7 @@ export async function POST(
             source_platform: "manual",
           })
           .select(
-            "id,category_id,name,description,price,thumbnail_path,image_path,display_order,is_available",
+            "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available",
           )
           .single();
 
@@ -987,6 +994,34 @@ export async function PATCH(
         );
       }
 
+      const rawPickupPrice =
+        rawItem?.pickup_price ?? rawItem?.pickupPrice ?? null;
+      const pickupPrice =
+        rawPickupPrice == null || rawPickupPrice === ""
+          ? null
+          : Number(rawPickupPrice);
+
+      if (
+        pickupPrice !== null &&
+        (!Number.isFinite(pickupPrice) || pickupPrice < 0)
+      ) {
+        throw new Error(`${name}의 픽업 단가가 올바르지 않습니다.`);
+      }
+
+      const rawDeliveryPrice =
+        rawItem?.delivery_price ?? rawItem?.deliveryPrice ?? null;
+      const deliveryPrice =
+        rawDeliveryPrice == null || rawDeliveryPrice === ""
+          ? null
+          : Number(rawDeliveryPrice);
+
+      if (
+        deliveryPrice !== null &&
+        (!Number.isFinite(deliveryPrice) || deliveryPrice < 0)
+      ) {
+        throw new Error(`${name}의 배달 단가가 올바르지 않습니다.`);
+      }
+
       const { data, error } = await supabase
         .from("business_menu_items")
         .update({
@@ -1001,6 +1036,14 @@ export async function PATCH(
             price === null
               ? null
               : Number(price.toFixed(2)),
+          pickup_price:
+            pickupPrice === null
+              ? null
+              : Number(pickupPrice.toFixed(2)),
+          delivery_price:
+            deliveryPrice === null
+              ? null
+              : Number(deliveryPrice.toFixed(2)),
           display_order: Number(
             rawItem?.display_order ?? 999,
           ),

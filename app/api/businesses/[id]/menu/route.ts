@@ -103,6 +103,32 @@ async function requireBusinessAccess(
   };
 }
 
+function parseOptionalPrice(
+  value: unknown,
+  label: string,
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ""
+  ) {
+    return null;
+  }
+
+  const numberValue = Number(value);
+
+  if (
+    !Number.isFinite(numberValue) ||
+    numberValue < 0
+  ) {
+    throw new Error(
+      `${label}은 0 이상의 숫자여야 합니다.`,
+    );
+  }
+
+  return Number(numberValue.toFixed(2));
+}
+
 export async function GET(
   _request: Request,
   context: {
@@ -139,7 +165,7 @@ export async function GET(
       supabase
         .from("business_menu_items")
         .select(
-          "id,category_id,name,description,price,thumbnail_path,image_path,display_order,source_platform",
+          "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,source_platform",
         )
         .eq("business_id", businessId)
         .eq("is_available", true)
@@ -196,7 +222,10 @@ export async function GET(
     for (const group of optionGroups || []) {
       const menuItemId = Number(group.menu_item_id);
       const list = optionGroupsByMenu.get(menuItemId) || [];
-      const minSelect = Math.max(0, Number(group.min_select ?? 0));
+      const minSelect = Math.max(
+        0,
+        Number(group.min_select ?? 0),
+      );
       const rawMax = group.max_select;
       const maxSelect =
         rawMax === null || rawMax === undefined
@@ -214,7 +243,8 @@ export async function GET(
         max_select: maxSelect,
         displayOrder: Number(group.display_order ?? 0),
         display_order: Number(group.display_order ?? 0),
-        options: optionItemsByGroup.get(Number(group.id)) || [],
+        options:
+          optionItemsByGroup.get(Number(group.id)) || [],
       });
 
       optionGroupsByMenu.set(menuItemId, list);
@@ -233,14 +263,44 @@ export async function GET(
             .getPublicUrl(item.image_path).data.publicUrl
         : null;
 
-      const groups = optionGroupsByMenu.get(Number(item.id)) || [];
+      const groups =
+        optionGroupsByMenu.get(Number(item.id)) || [];
+
+      const basePrice =
+        item.price === null ||
+        item.price === undefined
+          ? null
+          : Number(item.price);
+
+      const pickupPrice =
+        item.pickup_price === null ||
+        item.pickup_price === undefined
+          ? basePrice
+          : Number(item.pickup_price);
+
+      const deliveryPrice =
+        item.delivery_price === null ||
+        item.delivery_price === undefined
+          ? pickupPrice
+          : Number(item.delivery_price);
 
       return {
         id: item.id,
         category_id: item.category_id,
         name: item.name,
         description: item.description,
-        price: item.price,
+
+        // 기본 메뉴 단가
+        price: basePrice,
+
+        // 픽업/배달 단가
+        pickup_price: pickupPrice,
+        delivery_price: deliveryPrice,
+
+        // camelCase도 같이 제공해서 프론트 호환
+        pickupPrice,
+        deliveryPrice,
+
         display_order: item.display_order,
         thumbnail_url: thumbnailUrl,
         image_url: imageUrl,
@@ -260,7 +320,8 @@ export async function GET(
       },
       {
         headers: {
-          "Cache-Control": "no-store, max-age=0",
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, max-age=0",
         },
       },
     );
@@ -294,7 +355,10 @@ export async function PATCH(
       );
     }
 
-    const access = await requireBusinessAccess(request, businessId);
+    const access = await requireBusinessAccess(
+      request,
+      businessId,
+    );
 
     if (!access.allowed) {
       return NextResponse.json(
@@ -305,7 +369,9 @@ export async function PATCH(
 
     const body = await request.json();
 
-    const items = Array.isArray(body?.items) ? body.items : [];
+    const items = Array.isArray(body?.items)
+      ? body.items
+      : [];
 
     if (items.length === 0) {
       return NextResponse.json(
@@ -318,35 +384,39 @@ export async function PATCH(
       (item: {
         id?: unknown;
         price?: unknown;
+        pickup_price?: unknown;
+        pickupPrice?: unknown;
+        delivery_price?: unknown;
+        deliveryPrice?: unknown;
       }) => {
         const itemId = Number(item.id);
 
         if (!Number.isInteger(itemId) || itemId <= 0) {
-          throw new Error("잘못된 메뉴 ID입니다.");
-        }
-
-        const price =
-          item.price === null ||
-          item.price === undefined ||
-          String(item.price).trim() === ""
-            ? null
-            : Number(item.price);
-
-        if (
-          price !== null &&
-          (!Number.isFinite(price) || price < 0)
-        ) {
           throw new Error(
-            "메뉴 가격은 0 이상의 숫자여야 합니다.",
+            "잘못된 메뉴 ID입니다.",
           );
         }
 
+        const price = parseOptionalPrice(
+          item.price,
+          "메뉴 가격",
+        );
+
+        const pickupPrice = parseOptionalPrice(
+          item.pickup_price ?? item.pickupPrice,
+          "픽업 가격",
+        );
+
+        const deliveryPrice = parseOptionalPrice(
+          item.delivery_price ?? item.deliveryPrice,
+          "배달 가격",
+        );
+
         return {
           id: itemId,
-          price:
-            price === null
-              ? null
-              : Number(price.toFixed(2)),
+          price,
+          pickup_price: pickupPrice,
+          delivery_price: deliveryPrice,
         };
       },
     );
@@ -360,6 +430,8 @@ export async function PATCH(
         .from("business_menu_items")
         .update({
           price: item.price,
+          pickup_price: item.pickup_price,
+          delivery_price: item.delivery_price,
         })
         .eq("id", item.id)
         .eq("business_id", businessId)
@@ -384,7 +456,8 @@ export async function PATCH(
       },
       {
         headers: {
-          "Cache-Control": "no-store, max-age=0",
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, max-age=0",
         },
       },
     );
