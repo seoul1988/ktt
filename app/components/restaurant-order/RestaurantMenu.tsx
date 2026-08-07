@@ -167,6 +167,15 @@ export default function RestaurantMenu({
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] =
     useState<RestaurantMenuItem | null>(null);
+
+  const [deliveryProviders, setDeliveryProviders] =
+    useState<DeliveryProvider[]>([]);
+  const [deliveryProviderOpen, setDeliveryProviderOpen] =
+    useState(false);
+
+  const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
     useState<CSSProperties>({});
@@ -198,6 +207,43 @@ export default function RestaurantMenu({
 
   const activeOrderEnabled =
     activeService === "pickup" || activeService === "delivery";
+
+  const cartCount = cartItems.reduce(
+    (sum, item) => sum + Math.max(1, Number(item.quantity) || 1),
+    0,
+  );
+
+  const cartSubtotal = cartItems.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0),
+    0,
+  );
+
+  useEffect(() => {
+    setCartItems(readStoredCart(businessId));
+
+    function syncCart(event?: Event) {
+      if (event instanceof CustomEvent) {
+        const detailBusinessId = Number(event.detail?.businessId);
+        if (Number.isFinite(detailBusinessId) && detailBusinessId !== businessId) {
+          return;
+        }
+      }
+      setCartItems(readStoredCart(businessId));
+    }
+
+    function syncStorage(event: StorageEvent) {
+      if (event.key && event.key !== getCartStorageKey(businessId)) return;
+      setCartItems(readStoredCart(businessId));
+    }
+
+    window.addEventListener("restaurant-order-cart-updated", syncCart as EventListener);
+    window.addEventListener("storage", syncStorage);
+
+    return () => {
+      window.removeEventListener("restaurant-order-cart-updated", syncCart as EventListener);
+      window.removeEventListener("storage", syncStorage);
+    };
+  }, [businessId]);
 
   useEffect(() => {
     // 서비스 변경 후 기존 가격으로 열린 모달이 남지 않게 닫습니다.
@@ -457,6 +503,38 @@ export default function RestaurantMenu({
       });
   }
 
+  function persistCart(items: StoredCartItem[]) {
+    setCartItems(items);
+    writeStoredCart(businessId, items);
+  }
+
+  function changeCartQuantity(cartItemId: string, delta: number) {
+    const next = cartItems
+      .map((item) => {
+        if (item.cartItemId !== cartItemId) return item;
+
+        const nextQuantity = Math.max(0, (Number(item.quantity) || 1) + delta);
+        if (nextQuantity === 0) return null;
+
+        return {
+          ...item,
+          quantity: nextQuantity,
+          totalPrice: Math.max(0, Number(item.unitPrice) || 0) * nextQuantity,
+        };
+      })
+      .filter((item): item is StoredCartItem => Boolean(item));
+
+    persistCart(next);
+  }
+
+  function removeCartItem(cartItemId: string) {
+    persistCart(cartItems.filter((item) => item.cartItemId !== cartItemId));
+  }
+
+  function clearCart() {
+    persistCart([]);
+  }
+
   function handleAddToOrder(draft: MenuOrderDraft) {
     // MENU 보기에서는 절대로 장바구니에 저장하지 않음
     if (!activeOrderEnabled) return;
@@ -503,10 +581,8 @@ export default function RestaurantMenu({
       addedAt: new Date().toISOString(),
     };
 
-    writeStoredCart(
-      businessId,
-      [...currentCart, newCartItem],
-    );
+    const nextCart = [...currentCart, newCartItem];
+    persistCart(nextCart);
 
     setSelectedItem(null);
   }
@@ -715,7 +791,7 @@ export default function RestaurantMenu({
                             className="h-full w-full rounded-xl object-cover"
                           />
 
-                          {!menuEnabled && activeOrderEnabled ? (
+                          {activeOrderEnabled ? (
                             <span
                               aria-hidden="true"
                               className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-[24px] font-medium leading-none text-gray-950 shadow-md sm:h-10 sm:w-10"
@@ -724,7 +800,7 @@ export default function RestaurantMenu({
                             </span>
                           ) : null}
                         </div>
-                      ) : !menuEnabled && activeOrderEnabled ? (
+                      ) : activeOrderEnabled ? (
                         <div className="flex shrink-0 items-end p-3">
                           <span
                             aria-hidden="true"
@@ -742,6 +818,165 @@ export default function RestaurantMenu({
           );
         })}
       </div>
+
+      {activeOrderEnabled && typeof document !== "undefined"
+        ? createPortal(
+            <>
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                aria-label={`Shopping cart, ${cartCount} item${cartCount === 1 ? "" : "s"}`}
+                className="fixed bottom-5 right-5 z-[12000] flex h-14 items-center gap-2 rounded-full border border-black/10 bg-gray-950 px-4 text-white shadow-2xl transition hover:scale-[1.02] sm:bottom-7 sm:right-7"
+              >
+                <span aria-hidden="true" className="text-xl leading-none">🛒</span>
+                <span className="text-xs font-black uppercase tracking-wide">Cart</span>
+                <span className="flex min-w-6 h-6 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-black text-gray-950">
+                  {cartCount}
+                </span>
+              </button>
+
+              {cartOpen ? (
+                <div
+                  className="fixed inset-0 z-[12600] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+                  onClick={() => setCartOpen(false)}
+                >
+                  <div
+                    className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-lg sm:rounded-3xl"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
+                          {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
+                        </p>
+                        <h3 className="mt-1 text-xl font-black">Shopping Cart</h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCartOpen(false)}
+                        className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-black"
+                        aria-label="Close cart"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+                      {cartItems.length ? (
+                        <div className="space-y-3">
+                          {cartItems.map((item) => (
+                            <div
+                              key={item.cartItemId}
+                              className="flex gap-3 rounded-2xl border border-gray-200 p-3"
+                            >
+                              {item.imageUrl ? (
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.name}
+                                  className="h-20 w-20 shrink-0 rounded-xl object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-2xl">
+                                  🍽️
+                                </div>
+                              )}
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-black">{item.name}</p>
+                                    {item.instructions ? (
+                                      <p className="mt-1 line-clamp-2 text-[11px] font-medium text-gray-500">
+                                        {item.instructions}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <span className="shrink-0 text-sm font-black">
+                                    ${Math.max(0, Number(item.totalPrice) || 0).toFixed(2)}
+                                  </span>
+                                </div>
+
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                  <div className="inline-flex items-center rounded-full border border-gray-200">
+                                    <button
+                                      type="button"
+                                      onClick={() => changeCartQuantity(item.cartItemId, -1)}
+                                      className="flex h-8 w-8 items-center justify-center text-lg font-black"
+                                      aria-label={`Decrease ${item.name} quantity`}
+                                    >
+                                      −
+                                    </button>
+                                    <span className="min-w-8 text-center text-xs font-black">
+                                      {Math.max(1, Number(item.quantity) || 1)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => changeCartQuantity(item.cartItemId, 1)}
+                                      className="flex h-8 w-8 items-center justify-center text-lg font-black"
+                                      aria-label={`Increase ${item.name} quantity`}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => removeCartItem(item.cartItemId)}
+                                    className="text-[11px] font-black uppercase tracking-wide text-red-600"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex min-h-[220px] flex-col items-center justify-center text-center">
+                          <div className="text-4xl">🛒</div>
+                          <p className="mt-3 text-base font-black">Your cart is empty</p>
+                          <p className="mt-1 text-xs font-medium text-gray-500">
+                            Tap the + button on a menu item to add it.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-gray-200 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-gray-600">Subtotal</span>
+                        <span className="text-xl font-black">${cartSubtotal.toFixed(2)}</span>
+                      </div>
+                      <p className="mt-1 text-[10px] font-medium text-gray-400">
+                        Taxes, fees, and delivery charges are calculated at checkout.
+                      </p>
+
+                      <div className="mt-4 flex gap-2">
+                        {cartItems.length ? (
+                          <button
+                            type="button"
+                            onClick={clearCart}
+                            className="rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
+                          >
+                            CLEAR
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => setCartOpen(false)}
+                          className="flex-1 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                        >
+                          CONTINUE ORDERING
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>,
+            document.body,
+          )
+        : null}
 
       {showScrollTop &&
       typeof document !== "undefined"
