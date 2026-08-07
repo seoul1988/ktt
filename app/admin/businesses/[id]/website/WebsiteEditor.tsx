@@ -29,6 +29,13 @@ type OverlayButton = {
   text: string;
   /** 모바일에서만 다른 버튼 문구를 쓰고 싶을 때 사용. 비우면 text 사용 */
   mobile_text?: string;
+
+  /** 버튼 이동 방식: 사이트 페이지 / 현재 페이지 레이어 / 외부 주소 */
+  link_type?: "page" | "section" | "external";
+  /** page이면 page_slug, section이면 section slug, external이면 URL */
+  link_value?: string;
+
+  /** 이전 저장 데이터 호환용 실제 href */
   url: string;
   style: "rounded" | "pill" | "square" | "outline";
   background_color: string;
@@ -1941,10 +1948,82 @@ function overlayPositionClasses(
   return `${horizontalClass} ${verticalClass}`;
 }
 
+function getLegacyOverlayButtonTarget(urlValue: unknown): {
+  type: "page" | "section" | "external";
+  value: string;
+} {
+  const raw = String(urlValue || "").trim();
+
+  if (!raw) {
+    return { type: "page", value: "" };
+  }
+
+  if (raw.startsWith("#")) {
+    return {
+      type: "section",
+      value: slugifyMenuValue(raw.slice(1)),
+    };
+  }
+
+  const businessPageMatch = raw.match(
+    /^\/business\/\d+\/website(?:\/([^?#]+))?/i,
+  );
+
+  if (businessPageMatch) {
+    return {
+      type: "page",
+      value: slugifyMenuValue(
+        decodeURIComponent(businessPageMatch[1] || "home"),
+      ),
+    };
+  }
+
+  if (raw.startsWith("/")) {
+    return {
+      type: "page",
+      value:
+        slugifyMenuValue(raw.replace(/^\/+/, "")) || "home",
+    };
+  }
+
+  return {
+    type: "external",
+    value: raw,
+  };
+}
+
+function buildOverlayButtonUrl(
+  button: Pick<OverlayButton, "link_type" | "link_value" | "url">,
+  businessId: string | number,
+) {
+  const legacy = getLegacyOverlayButtonTarget(button.url);
+  const type = button.link_type || legacy.type;
+  const value = String(button.link_value ?? legacy.value ?? "").trim();
+
+  if (type === "section") {
+    const slug = slugifyMenuValue(value);
+    return slug ? `#${slug}` : "#";
+  }
+
+  if (type === "page") {
+    const slug = slugifyMenuValue(value);
+
+    if (!slug || slug === "home") {
+      return `/business/${businessId}/website`;
+    }
+
+    return `/business/${businessId}/website/${encodeURIComponent(slug)}`;
+  }
+
+  return normalizeExternalUrl(value || button.url || "");
+}
+
 function createOverlayButton(index = 0): OverlayButton {
   return {
     id: createId("overlay-button"),
     text: index === 0 ? "예약하기" : `버튼 ${index + 1}`,
+    link_type: "page",
+    link_value: "",
     url: "",
     style: "rounded",
     background_color: "#111827",
@@ -1964,15 +2043,30 @@ function normalizeOverlayButtons(cell: GridCell): OverlayButton[] {
    * 그 상태를 그대로 유지해야 버튼이 다시 생기지 않습니다.
    */
   if (Array.isArray(cell.overlay_buttons)) {
-    return cell.overlay_buttons.map((button, index) => ({
-      ...createOverlayButton(index),
-      ...button,
-      id: button.id || createId("overlay-button"),
-      text: button.text || `버튼 ${index + 1}`,
-      url: button.url || "",
-      height: Math.max(30, Math.min(90, Number(button.height) || 46)),
-      font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
-    }));
+    return cell.overlay_buttons.map((button, index) => {
+      const legacy = getLegacyOverlayButtonTarget(button.url);
+
+      return {
+        ...createOverlayButton(index),
+        ...button,
+        id: button.id || createId("overlay-button"),
+        text: button.text || `버튼 ${index + 1}`,
+        link_type:
+          button.link_type === "page" ||
+          button.link_type === "section" ||
+          button.link_type === "external"
+            ? button.link_type
+            : legacy.type,
+        link_value:
+          typeof button.link_value === "string" &&
+          button.link_value.trim()
+            ? button.link_value.trim()
+            : legacy.value,
+        url: button.url || "",
+        height: Math.max(30, Math.min(90, Number(button.height) || 46)),
+        font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
+      };
+    });
   }
 
   return [createOverlayButton(0)];
@@ -14179,8 +14273,11 @@ function CellPreview({
                     : button.style === "pill"
                       ? "9999px"
                       : "12px";
-                const href = normalizeButtonHref(button.url || "#");
-                const external = isExternalButtonHref(href);
+                const href = buildOverlayButtonUrl(button, business.id);
+                const external =
+                  (button.link_type ||
+                    getLegacyOverlayButtonTarget(button.url).type) ===
+                  "external";
                 return (
                   <a
                     key={button.id}
@@ -14930,10 +15027,15 @@ function CellPreview({
                             ? "9999px"
                             : "12px";
 
+                      const buttonHref = buildOverlayButtonUrl(
+                        button,
+                        business.id,
+                      );
+
                       return (
                         <a
                           key={button.id}
-                          href={button.url || "#"}
+                          href={buttonHref}
                           onClick={(event) => event.preventDefault()}
                           className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 font-black shadow-lg"
                           style={{
@@ -22000,6 +22102,7 @@ function RightPanel(props: {
             area={area}
             cell={selectedCell}
             business={business}
+            sections={props.sections}
             onOpenTextEditor={openTextEditor}
             onUpdate={(patch) =>
               props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)
@@ -24363,6 +24466,73 @@ function VideoHeroUploader({
   section: BusinessSection;
   onUpdate: (patch: Partial<SectionContent>) => void;
 }) {
+  const overlayPageOptions = [
+    { label: "HOME", value: "home" },
+    ...sections
+      .filter(
+        (section) =>
+          section.content?.page_type === "link-page" &&
+          section.is_visible !== false,
+      )
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((section) => ({
+        label:
+          String(section.title || "").trim() ||
+          String(section.content?.page_slug || "").trim() ||
+          `PAGE ${section.id}`,
+        value: slugifyMenuValue(
+          String(section.content?.page_slug || section.title || ""),
+        ),
+      }))
+      .filter((item) => Boolean(item.value)),
+  ].filter(
+    (item, index, values) =>
+      values.findIndex((candidate) => candidate.value === item.value) === index,
+  );
+
+  const overlaySectionOptions = sections
+    .filter(
+      (section) =>
+        section.content?.page_type !== "link-page" &&
+        section.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => ({
+      label:
+        String(section.title || "").trim() ||
+        SECTION_LABELS[section.section_type] ||
+        section.section_type,
+      value:
+        slugifyMenuValue(
+          String(section.title || section.section_type || ""),
+        ) || section.section_type,
+    }))
+    .filter((item) => Boolean(item.value));
+
+  function updateOverlayButtonLink(
+    buttonId: string,
+    linkType: "page" | "section" | "external",
+    linkValue: string,
+  ) {
+    onUpdate({
+      overlay_buttons: normalizeOverlayButtons(cell).map((item) => {
+        if (item.id !== buttonId) return item;
+
+        const nextButton: OverlayButton = {
+          ...item,
+          link_type: linkType,
+          link_value: linkValue,
+          url: "",
+        };
+
+        return {
+          ...nextButton,
+          url: buildOverlayButtonUrl(nextButton, businessId),
+        };
+      }),
+    });
+  }
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -27039,6 +27209,7 @@ function TitleCellEditor({
   area,
   cell,
   business,
+  sections,
   onOpenTextEditor,
   onUpdate,
   onShowImageGuide,
@@ -27049,6 +27220,7 @@ function TitleCellEditor({
   area: "header" | "hero";
   cell: GridCell;
   business: Business;
+  sections: BusinessSection[];
   onOpenTextEditor: () => void;
   onUpdate: (patch: Partial<GridCell>) => void;
   onShowImageGuide: () => void;
@@ -28378,7 +28550,7 @@ function TitleCellEditor({
                 <div>
                   <p className="text-sm font-black text-gray-950">버튼 목록</p>
                   <p className="mt-1 text-xs text-gray-500">
-                    버튼 글자와 링크만 각각 입력하고, 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
+                    버튼마다 페이지·레이어·외부 링크를 선택할 수 있고, 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
                   </p>
                 </div>
                 <button
@@ -28468,21 +28640,130 @@ function TitleCellEditor({
                         placeholder="모바일 버튼 글자 (비우면 동일)"
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
                       />
-                      <input
-                        value={button.url}
-                        onChange={(event) =>
-                          onUpdate({
-                            overlay_buttons: normalizeOverlayButtons(cell).map(
-                              (item) =>
-                                item.id === button.id
-                                  ? { ...item, url: event.target.value }
-                                  : item,
-                            ),
-                          })
-                        }
-                        placeholder="/booking 또는 https://..."
-                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 md:col-span-2"
-                      />
+                      <label className="md:col-span-2">
+                        <span className="mb-1 block text-[11px] font-black text-gray-600">
+                          링크 방식
+                        </span>
+                        <select
+                          value={
+                            button.link_type ||
+                            getLegacyOverlayButtonTarget(button.url).type
+                          }
+                          onChange={(event) => {
+                            const nextType = event.target.value as
+                              | "page"
+                              | "section"
+                              | "external";
+
+                            const defaultValue =
+                              nextType === "page"
+                                ? overlayPageOptions[0]?.value || "home"
+                                : nextType === "section"
+                                  ? overlaySectionOptions[0]?.value || ""
+                                  : "";
+
+                            updateOverlayButtonLink(
+                              button.id,
+                              nextType,
+                              defaultValue,
+                            );
+                          }}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 font-black"
+                        >
+                          <option value="page">페이지 링크</option>
+                          <option value="section">레이어 링크</option>
+                          <option value="external">외부 링크</option>
+                        </select>
+                      </label>
+
+                      {(button.link_type ||
+                        getLegacyOverlayButtonTarget(button.url).type) ===
+                      "page" ? (
+                        <label className="md:col-span-2">
+                          <span className="mb-1 block text-[11px] font-black text-blue-700">
+                            이동할 페이지
+                          </span>
+                          <select
+                            value={
+                              String(
+                                button.link_value ||
+                                  getLegacyOverlayButtonTarget(button.url).value ||
+                                  "home",
+                              )
+                            }
+                            onChange={(event) =>
+                              updateOverlayButtonLink(
+                                button.id,
+                                "page",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-xl border-2 border-blue-300 bg-white px-3 py-2.5 font-black text-blue-950"
+                          >
+                            {overlayPageOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (button.link_type ||
+                          getLegacyOverlayButtonTarget(button.url).type) ===
+                        "section" ? (
+                        <label className="md:col-span-2">
+                          <span className="mb-1 block text-[11px] font-black text-amber-700">
+                            이동할 레이어
+                          </span>
+                          <select
+                            value={String(
+                              button.link_value ||
+                                getLegacyOverlayButtonTarget(button.url).value ||
+                                "",
+                            )}
+                            onChange={(event) =>
+                              updateOverlayButtonLink(
+                                button.id,
+                                "section",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-xl border-2 border-amber-300 bg-white px-3 py-2.5 font-black text-amber-950"
+                          >
+                            <option value="">레이어 선택</option>
+                            {overlaySectionOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label className="md:col-span-2">
+                          <span className="mb-1 block text-[11px] font-black text-gray-600">
+                            외부 주소
+                          </span>
+                          <input
+                            value={String(
+                              button.link_value ||
+                                getLegacyOverlayButtonTarget(button.url).value ||
+                                "",
+                            )}
+                            onChange={(event) =>
+                              updateOverlayButtonLink(
+                                button.id,
+                                "external",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="https://example.com"
+                            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                          />
+                        </label>
+                      )}
+
+                      <div className="md:col-span-2 rounded-xl bg-gray-100 px-3 py-2 text-[11px] font-bold text-gray-600">
+                        연결 주소: {buildOverlayButtonUrl(button, businessId) || "미지정"}
+                      </div>
                     </div>
                   </div>
                 ))}

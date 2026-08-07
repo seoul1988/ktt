@@ -1219,7 +1219,12 @@ export async function PATCH(
 
         if (group.options.length > 0) {
           const optionRows = group.options.map(
-            (option) => ({
+            (option: {
+              name: string;
+              price_delta: number;
+              is_available: boolean;
+              display_order: number;
+            }) => ({
               business_id: businessId,
               option_group_id:
                 Number(insertedGroup.id),
