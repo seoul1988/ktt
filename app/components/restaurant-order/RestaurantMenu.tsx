@@ -167,13 +167,6 @@ export default function RestaurantMenu({
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] =
     useState<RestaurantMenuItem | null>(null);
-
-  const [deliveryProviders, setDeliveryProviders] =
-    useState<DeliveryProvider[]>([]);
-
-  const [deliveryProviderOpen, setDeliveryProviderOpen] =
-    useState(false);
-
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
     useState<CSSProperties>({});
@@ -711,15 +704,35 @@ export default function RestaurantMenu({
                       </div>
 
                       {hasImage ? (
-                        <img
-                          src={
-                            item.thumbnail_url ||
-                            item.image_url ||
-                            ""
-                          }
-                          alt={item.name}
-                          className="m-2 h-[94px] w-[94px] shrink-0 rounded-xl object-cover sm:h-[116px] sm:w-[116px]"
-                        />
+                        <div className="relative m-2 h-[94px] w-[94px] shrink-0 sm:h-[116px] sm:w-[116px]">
+                          <img
+                            src={
+                              item.thumbnail_url ||
+                              item.image_url ||
+                              ""
+                            }
+                            alt={item.name}
+                            className="h-full w-full rounded-xl object-cover"
+                          />
+
+                          {!menuEnabled && activeOrderEnabled ? (
+                            <span
+                              aria-hidden="true"
+                              className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-[24px] font-medium leading-none text-gray-950 shadow-md sm:h-10 sm:w-10"
+                            >
+                              +
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : !menuEnabled && activeOrderEnabled ? (
+                        <div className="flex shrink-0 items-end p-3">
+                          <span
+                            aria-hidden="true"
+                            className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-[24px] font-medium leading-none text-gray-950 shadow-md sm:h-10 sm:w-10"
+                          >
+                            +
+                          </span>
+                        </div>
                       ) : null}
                     </button>
                   );
