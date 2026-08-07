@@ -29,19 +29,7 @@ type OverlayButton = {
   text: string;
   /** 모바일에서만 다른 버튼 문구를 쓰고 싶을 때 사용. 비우면 text 사용 */
   mobile_text?: string;
-
-  /**
-   * 버튼 이동 방식.
-   * page     = 사이트 내부 페이지
-   * section  = 현재 페이지의 레이어
-   * external = 외부 주소
-   *
-   * url은 이전 저장 데이터와의 호환을 위해 계속 유지합니다.
-   */
-  link_type?: "page" | "section" | "external";
-  link_value?: string;
   url: string;
-
   style: "rounded" | "pill" | "square" | "outline";
   background_color: string;
   text_color: string;
@@ -1953,85 +1941,10 @@ function overlayPositionClasses(
   return `${horizontalClass} ${verticalClass}`;
 }
 
-function getLegacyOverlayButtonTarget(urlValue: unknown): {
-  type: "page" | "section" | "external";
-  value: string;
-} {
-  const raw = String(urlValue || "").trim();
-
-  if (!raw) {
-    return { type: "page", value: "" };
-  }
-
-  if (raw.startsWith("#")) {
-    return {
-      type: "section",
-      value: slugifyMenuValue(raw.slice(1)),
-    };
-  }
-
-  const internalMatch = raw.match(
-    /^\/business\/[^/]+\/website(?:\/([^?#]+))?/i,
-  );
-
-  if (internalMatch) {
-    return {
-      type: "page",
-      value: slugifyMenuValue(
-        decodeURIComponent(internalMatch[1] || "home"),
-      ),
-    };
-  }
-
-  if (raw.startsWith("/")) {
-    return {
-      type: "page",
-      value: slugifyMenuValue(raw.replace(/^\/+/, "")) || "home",
-    };
-  }
-
-  return {
-    type: "external",
-    value: raw,
-  };
-}
-
-function buildOverlayButtonHref(
-  button: Pick<OverlayButton, "link_type" | "link_value" | "url">,
-  businessId: string | number,
-) {
-  const legacy = getLegacyOverlayButtonTarget(button.url);
-  const linkType = button.link_type || legacy.type;
-  const rawValue = String(button.link_value ?? legacy.value ?? "").trim();
-
-  if (linkType === "section") {
-    const slug = slugifyMenuValue(rawValue.replace(/^#/, ""));
-    return slug ? `#${slug}` : "#";
-  }
-
-  if (linkType === "page") {
-    const slug = slugifyMenuValue(
-      rawValue
-        .replace(/^\/business\/[^/]+\/website\/?/i, "")
-        .replace(/^\/+/, ""),
-    );
-
-    if (!slug || slug === "home") {
-      return `/business/${businessId}/website`;
-    }
-
-    return `/business/${businessId}/website/${encodeURIComponent(slug)}`;
-  }
-
-  return normalizeExternalUrl(rawValue || button.url || "");
-}
-
 function createOverlayButton(index = 0): OverlayButton {
   return {
     id: createId("overlay-button"),
     text: index === 0 ? "예약하기" : `버튼 ${index + 1}`,
-    link_type: "page",
-    link_value: "",
     url: "",
     style: "rounded",
     background_color: "#111827",
@@ -2051,34 +1964,15 @@ function normalizeOverlayButtons(cell: GridCell): OverlayButton[] {
    * 그 상태를 그대로 유지해야 버튼이 다시 생기지 않습니다.
    */
   if (Array.isArray(cell.overlay_buttons)) {
-    return cell.overlay_buttons.map((button, index) => {
-      const legacyTarget = getLegacyOverlayButtonTarget(button.url);
-
-      const linkType =
-        button.link_type === "page" ||
-        button.link_type === "section" ||
-        button.link_type === "external"
-          ? button.link_type
-          : legacyTarget.type;
-
-      const linkValue =
-        typeof button.link_value === "string" && button.link_value.trim()
-          ? button.link_value.trim()
-          : legacyTarget.value;
-
-      return {
-        ...createOverlayButton(index),
-        ...button,
-        id: button.id || createId("overlay-button"),
-        text: button.text || `버튼 ${index + 1}`,
-        link_type: linkType,
-        link_value: linkValue,
-        // 예전 코드/API에서도 쓸 수 있도록 계산된 URL을 함께 유지합니다.
-        url: button.url || "",
-        height: Math.max(30, Math.min(90, Number(button.height) || 46)),
-        font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
-      };
-    });
+    return cell.overlay_buttons.map((button, index) => ({
+      ...createOverlayButton(index),
+      ...button,
+      id: button.id || createId("overlay-button"),
+      text: button.text || `버튼 ${index + 1}`,
+      url: button.url || "",
+      height: Math.max(30, Math.min(90, Number(button.height) || 46)),
+      font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
+    }));
   }
 
   return [createOverlayButton(0)];
@@ -14285,10 +14179,8 @@ function CellPreview({
                     : button.style === "pill"
                       ? "9999px"
                       : "12px";
-                const href = buildOverlayButtonHref(button, business.id);
-                const external =
-                  (button.link_type ||
-                    getLegacyOverlayButtonTarget(button.url).type) === "external";
+                const href = normalizeButtonHref(button.url || "#");
+                const external = isExternalButtonHref(href);
                 return (
                   <a
                     key={button.id}
@@ -15038,26 +14930,11 @@ function CellPreview({
                             ? "9999px"
                             : "12px";
 
-                      const href = buildOverlayButtonHref(button, business.id);
-                      const external =
-                        (button.link_type ||
-                          getLegacyOverlayButtonTarget(button.url).type) ===
-                        "external";
-
                       return (
                         <a
                           key={button.id}
-                          href={href}
-                          target={external ? "_blank" : undefined}
-                          rel={external ? "noreferrer noopener" : undefined}
-                          onClick={(event) => {
-                            // 에디터에서 선택된 셀을 조정 중일 때만 실제 이동을 막습니다.
-                            // 작업 미리보기/공개 화면에서는 페이지 링크가 정상 동작합니다.
-                            if (isSelected) {
-                              event.preventDefault();
-                            }
-                            event.stopPropagation();
-                          }}
+                          href={button.url || "#"}
+                          onClick={(event) => event.preventDefault()}
                           className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 font-black shadow-lg"
                           style={{
                             width: `${Math.max(70, Number(cell.overlay_button_width ?? 140))}px`,
@@ -20799,7 +20676,7 @@ function RightPanel(props: {
                     </p>
                     <p className="mt-0.5 text-[11px] font-bold text-sky-700">
                       현재 {Math.round(Number(props.selectedLayoutSpacing || 0))}px ·
-                      {props.device === "mobile" ? " 모바일" : " 데스크톱"}
+                      {props.editorDevice === "mobile" ? " 모바일" : " 데스크톱"}
                     </p>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-sky-700 shadow-sm">
@@ -22123,7 +22000,6 @@ function RightPanel(props: {
             area={area}
             cell={selectedCell}
             business={business}
-            sections={props.sections}
             onOpenTextEditor={openTextEditor}
             onUpdate={(patch) =>
               props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)
@@ -26169,9 +26045,7 @@ function ImageCellUploader({
                             id: createId("overlay-button"),
                             text: "버튼",
                             mobile_text: "",
-                            link_type: "page",
-                            link_value: "home",
-                            url: `/business/${businessId}/website`,
+                            url: "#",
                             style: "rounded",
                             background_color: "#111827",
                             text_color: "#ffffff",
@@ -26244,102 +26118,21 @@ function ImageCellUploader({
                           <option value="square">사각형</option>
                           <option value="outline">외곽선</option>
                         </select>
-                      <select
-                        value={
-                          button.link_type ||
-                          getLegacyOverlayButtonTarget(button.url).type
+                      <input
+                        value={button.url}
+                        onChange={(event) =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).map(
+                              (item) =>
+                                item.id === button.id
+                                  ? { ...item, url: event.target.value }
+                                  : item,
+                            ),
+                          })
                         }
-                        onChange={(event) => {
-                          const nextType = event.target.value as
-                            | "page"
-                            | "section"
-                            | "external";
-                          const defaultValue =
-                            nextType === "page"
-                              ? overlayPageLinkOptions[0]?.value || "home"
-                              : nextType === "section"
-                                ? overlaySectionLinkOptions[0]?.value || ""
-                                : "";
-                          updateOverlayButtonTarget(
-                            button.id,
-                            nextType,
-                            defaultValue,
-                          );
-                        }}
-                        className="w-full rounded-lg border bg-white px-2 py-2 text-xs font-bold"
-                      >
-                        <option value="page">페이지 링크</option>
-                        <option value="section">레이어 링크</option>
-                        <option value="external">외부 링크</option>
-                      </select>
-
-                      {(button.link_type ||
-                        getLegacyOverlayButtonTarget(button.url).type) ===
-                      "page" ? (
-                        <select
-                          value={String(
-                            button.link_value ||
-                              getLegacyOverlayButtonTarget(button.url).value ||
-                              "home",
-                          )}
-                          onChange={(event) =>
-                            updateOverlayButtonTarget(
-                              button.id,
-                              "page",
-                              event.target.value,
-                            )
-                          }
-                          className="w-full rounded-lg border border-blue-300 bg-white px-2 py-2 text-xs font-bold"
-                        >
-                          {overlayPageLinkOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (button.link_type ||
-                          getLegacyOverlayButtonTarget(button.url).type) ===
-                        "section" ? (
-                        <select
-                          value={String(
-                            button.link_value ||
-                              getLegacyOverlayButtonTarget(button.url).value ||
-                              "",
-                          )}
-                          onChange={(event) =>
-                            updateOverlayButtonTarget(
-                              button.id,
-                              "section",
-                              event.target.value,
-                            )
-                          }
-                          className="w-full rounded-lg border border-amber-300 bg-white px-2 py-2 text-xs font-bold"
-                        >
-                          <option value="">레이어 선택</option>
-                          {overlaySectionLinkOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          value={String(
-                            button.link_value ||
-                              getLegacyOverlayButtonTarget(button.url).value ||
-                              "",
-                          )}
-                          onChange={(event) =>
-                            updateOverlayButtonTarget(
-                              button.id,
-                              "external",
-                              event.target.value,
-                            )
-                          }
-                          placeholder="https://..."
-                          className="w-full rounded-lg border bg-white px-2 py-2 text-xs"
-                        />
-                      )}
+                        placeholder="https://... /page 또는 #layer"
+                        className="w-full rounded-lg border bg-white px-2 py-2 text-xs"
+                      />
                       <button
                         type="button"
                         onClick={() =>
@@ -27246,7 +27039,6 @@ function TitleCellEditor({
   area,
   cell,
   business,
-  sections,
   onOpenTextEditor,
   onUpdate,
   onShowImageGuide,
@@ -27257,7 +27049,6 @@ function TitleCellEditor({
   area: "header" | "hero";
   cell: GridCell;
   business: Business;
-  sections: BusinessSection[];
   onOpenTextEditor: () => void;
   onUpdate: (patch: Partial<GridCell>) => void;
   onShowImageGuide: () => void;
@@ -27643,14 +27434,17 @@ function TitleCellEditor({
   setImageLoadError("");
 
   try {
-    const imageEndpoint =
+    const websiteImageType =
       requestedMode === "gallery"
-        ? `/api/owner/businesses/${encodeURIComponent(
-            businessId,
-          )}/gallery`
-        : `/api/admin/businesses/${encodeURIComponent(
-            businessId,
-          )}/website/images`;
+        ? "gallery"
+        : requestedMode === "image-scroll"
+          ? "scroll"
+          : "slider";
+
+    const imageEndpoint =
+      `/api/owner/businesses/${encodeURIComponent(
+        businessId,
+      )}/website-images?type=${encodeURIComponent(websiteImageType)}`;
 
     const response = await fetch(imageEndpoint, {
       method: "GET",
@@ -27672,43 +27466,58 @@ function TitleCellEditor({
 
     const rawImages = Array.isArray(result.images) ? result.images : [];
 
-    const urls = rawImages
-      .map((item: unknown) => {
+    const normalizedWebsiteImages = rawImages
+      .map((item: unknown, index: number) => {
         if (typeof item === "string") {
-          return item.trim();
+          return {
+            id: `website-image-${index}`,
+            url: item.trim(),
+            title: "",
+          };
         }
 
         if (item && typeof item === "object") {
           const image = item as {
+            id?: unknown;
             url?: unknown;
             image_url?: unknown;
+            thumbnail_url?: unknown;
+            title?: unknown;
           };
 
-          return String(image.url || image.image_url || "").trim();
+          return {
+            id: String(image.id || `website-image-${index}`),
+            url: String(
+              image.url ||
+                image.image_url ||
+                image.thumbnail_url ||
+                "",
+            ).trim(),
+            title: String(image.title || "").trim(),
+          };
         }
 
-        return "";
+        return {
+          id: `website-image-${index}`,
+          url: "",
+          title: "",
+        };
       })
-      .filter(Boolean)
-      .filter((url: string, index: number, values: string[]) => {
-        return values.indexOf(url) === index;
-      });
+      .filter((item) => Boolean(item.url))
+      .filter(
+        (item, index, values) =>
+          values.findIndex((candidate) => candidate.url === item.url) === index,
+      );
+
+    const urls = normalizedWebsiteImages.map((item) => item.url);
 
     setAvailableImages(urls);
 
-    const checkedSliderImages = Array.isArray(business.slider_image_urls)
-      ? business.slider_image_urls
-          .map((url) => String(url || "").trim())
-          .filter(Boolean)
-          .filter((url, index, values) => values.indexOf(url) === index)
-          .filter((url) => urls.includes(url))
-          .slice(0, 10)
-      : [];
-
-    const imagesToPlay =
-      requestedMode === "auto-slider"
-        ? checkedSliderImages
-        : urls.slice(0, requestedMode === "gallery" ? 12 : 10);
+    // 체크 선택 없이 해당 용도에 등록된 이미지를 순서대로 전부 사용합니다.
+    const imagesToPlay = urls.slice(
+      0,
+      requestedMode === "gallery" ? 12 : 10,
+    );
 
     const currentImages = Array.isArray(cell.gallery_images)
       ? cell.gallery_images.map((url) => String(url || "").trim()).filter(Boolean)
@@ -27737,15 +27546,19 @@ function TitleCellEditor({
       const existingByUrl = new Map(
         normalizeGalleryItems(cell).map((item) => [item.url, item]),
       );
+      const managedByUrl = new Map(
+        normalizedWebsiteImages.map((item) => [item.url, item]),
+      );
+
       const galleryItems = imagesToPlay.map((url) => {
         const existing = existingByUrl.get(url);
-        return (
-          existing || {
-            id: createId("gallery"),
-            url,
-            title: "",
-          }
-        );
+        const managed = managedByUrl.get(url);
+
+        return {
+          id: existing?.id || managed?.id || createId("gallery"),
+          url,
+          title: managed?.title || existing?.title || "",
+        };
       });
 
       onUpdate({
@@ -28004,84 +27817,6 @@ function TitleCellEditor({
   const usesDbImages =
     mode === "auto-slider" || mode === "image-scroll" || mode === "gallery";
 
-  const overlayPageLinkOptions = [
-    {
-      label: "HOME",
-      value: "home",
-    },
-    ...sections
-      .filter(
-        (section) =>
-          section.content?.page_type === "link-page" &&
-          section.is_visible !== false,
-      )
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((section) => {
-        const slug = slugifyMenuValue(
-          String(section.content?.page_slug || section.title || ""),
-        );
-
-        return {
-          label: section.title || slug || `페이지 ${section.id}`,
-          value: slug,
-        };
-      })
-      .filter((option) => Boolean(option.value)),
-  ].filter(
-    (option, index, options) =>
-      options.findIndex((item) => item.value === option.value) === index,
-  );
-
-  const overlaySectionLinkOptions = sections
-    .filter(
-      (section) =>
-        section.content?.page_type !== "link-page" &&
-        section.is_visible !== false,
-    )
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((section) => {
-      const slug =
-        slugifyMenuValue(
-          String(section.title || section.section_type || ""),
-        ) || section.section_type;
-
-      return {
-        label:
-          section.section_type === "hero"
-            ? "HOME / Main"
-            : section.title ||
-              SECTION_LABELS[section.section_type] ||
-              section.section_type,
-        value: slug,
-      };
-    })
-    .filter((option) => Boolean(option.value));
-
-  function updateOverlayButtonTarget(
-    buttonId: string,
-    linkType: "page" | "section" | "external",
-    linkValue: string,
-  ) {
-    const nextValue = String(linkValue || "").trim();
-
-    onUpdate({
-      overlay_buttons: normalizeOverlayButtons(cell).map((item) => {
-        if (item.id !== buttonId) return item;
-
-        const nextButton: OverlayButton = {
-          ...item,
-          link_type: linkType,
-          link_value: nextValue,
-          url: "",
-        };
-
-        // 이전 저장 데이터/다른 렌더러와의 호환을 위해 url도 같이 저장합니다.
-        nextButton.url = buildOverlayButtonHref(nextButton, businessId);
-        return nextButton;
-      }),
-    });
-  }
-
   const imageControlsOpen = activeControlStep === 1;
   const overlayControlsOpen = activeControlStep === 2;
 
@@ -28099,12 +27834,15 @@ function TitleCellEditor({
             const nextMode = event.target.value as SectionMode;
             chooseMode(nextMode);
 
-            /*
-             * 모드를 선택하는 것만으로는 이미지를 가져오지 않습니다.
-             * 아래의 '대표이미지 불러오기' 또는
-             * '갤러리 이미지 불러오기' 버튼을 눌렀을 때만 조회합니다.
-             */
             setImageLoadError("");
+
+            if (
+              nextMode === "auto-slider" ||
+              nextMode === "image-scroll" ||
+              nextMode === "gallery"
+            ) {
+              void loadSavedImages(nextMode);
+            }
           }}
           className="w-full rounded-xl border border-gray-300 bg-white px-3 py-3 font-bold text-gray-900"
         >
@@ -28640,7 +28378,7 @@ function TitleCellEditor({
                 <div>
                   <p className="text-sm font-black text-gray-950">버튼 목록</p>
                   <p className="mt-1 text-xs text-gray-500">
-                    버튼마다 페이지·레이어·외부 링크를 선택할 수 있습니다. 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
+                    버튼 글자와 링크만 각각 입력하고, 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
                   </p>
                 </div>
                 <button
@@ -28730,130 +28468,21 @@ function TitleCellEditor({
                         placeholder="모바일 버튼 글자 (비우면 동일)"
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
                       />
-                      <label className="md:col-span-2">
-                        <span className="mb-1 block text-[11px] font-black text-gray-600">
-                          이동 방식
-                        </span>
-                        <select
-                          value={
-                            button.link_type ||
-                            getLegacyOverlayButtonTarget(button.url).type
-                          }
-                          onChange={(event) => {
-                            const nextType = event.target.value as
-                              | "page"
-                              | "section"
-                              | "external";
-
-                            const defaultValue =
-                              nextType === "page"
-                                ? overlayPageLinkOptions[0]?.value || "home"
-                                : nextType === "section"
-                                  ? overlaySectionLinkOptions[0]?.value || ""
-                                  : "";
-
-                            updateOverlayButtonTarget(
-                              button.id,
-                              nextType,
-                              defaultValue,
-                            );
-                          }}
-                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 font-bold"
-                        >
-                          <option value="page">페이지 링크</option>
-                          <option value="section">레이어 링크</option>
-                          <option value="external">외부 링크</option>
-                        </select>
-                      </label>
-
-                      {(button.link_type ||
-                        getLegacyOverlayButtonTarget(button.url).type) ===
-                      "page" ? (
-                        <label className="md:col-span-2">
-                          <span className="mb-1 block text-[11px] font-black text-gray-600">
-                            이동할 페이지
-                          </span>
-                          <select
-                            value={
-                              String(
-                                button.link_value ||
-                                  getLegacyOverlayButtonTarget(button.url).value ||
-                                  "home",
-                              )
-                            }
-                            onChange={(event) =>
-                              updateOverlayButtonTarget(
-                                button.id,
-                                "page",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2.5 font-black text-blue-950"
-                          >
-                            {overlayPageLinkOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (button.link_type ||
-                          getLegacyOverlayButtonTarget(button.url).type) ===
-                        "section" ? (
-                        <label className="md:col-span-2">
-                          <span className="mb-1 block text-[11px] font-black text-gray-600">
-                            이동할 레이어
-                          </span>
-                          <select
-                            value={String(
-                              button.link_value ||
-                                getLegacyOverlayButtonTarget(button.url).value ||
-                                "",
-                            )}
-                            onChange={(event) =>
-                              updateOverlayButtonTarget(
-                                button.id,
-                                "section",
-                                event.target.value,
-                              )
-                            }
-                            className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2.5 font-black text-amber-950"
-                          >
-                            <option value="">레이어 선택</option>
-                            {overlaySectionLinkOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (
-                        <label className="md:col-span-2">
-                          <span className="mb-1 block text-[11px] font-black text-gray-600">
-                            외부 주소
-                          </span>
-                          <input
-                            value={String(
-                              button.link_value ||
-                                getLegacyOverlayButtonTarget(button.url).value ||
-                                "",
-                            )}
-                            onChange={(event) =>
-                              updateOverlayButtonTarget(
-                                button.id,
-                                "external",
-                                event.target.value,
-                              )
-                            }
-                            placeholder="https://example.com"
-                            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
-                          />
-                        </label>
-                      )}
-
-                      <div className="md:col-span-2 rounded-xl bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700">
-                        연결 주소: {buildOverlayButtonHref(button, businessId) || "선택 안 됨"}
-                      </div>
+                      <input
+                        value={button.url}
+                        onChange={(event) =>
+                          onUpdate({
+                            overlay_buttons: normalizeOverlayButtons(cell).map(
+                              (item) =>
+                                item.id === button.id
+                                  ? { ...item, url: event.target.value }
+                                  : item,
+                            ),
+                          })
+                        }
+                        placeholder="/booking 또는 https://..."
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 md:col-span-2"
+                      />
                     </div>
                   </div>
                 ))}
@@ -29837,8 +29466,10 @@ function TitleCellEditor({
               </p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
                 {mode === "gallery"
-                  ? "자동으로 가져오지 않습니다. 버튼을 누르면 갤러리 관리에 등록한 사진만 불러옵니다."
-                  : "자동으로 가져오지 않습니다. 대표이미지 불러오기 버튼을 누른 뒤 사용할 사진을 선택하세요."}
+                  ? "웹사이트 이미지 관리의 ‘갤러리’에 등록한 사진을 순서대로 모두 사용합니다."
+                  : mode === "image-scroll"
+                    ? "웹사이트 이미지 관리의 ‘흐르는 이미지’에 등록한 사진을 순서대로 모두 사용합니다."
+                    : "웹사이트 이미지 관리의 ‘슬라이드’에 등록한 사진을 순서대로 모두 사용합니다."}
               </p>
             </div>
             <button
@@ -29858,584 +29489,90 @@ function TitleCellEditor({
               {loadingImages
                 ? "불러오는 중"
                 : mode === "gallery"
-                  ? "갤러리 이미지 불러오기"
-                  : "대표이미지 불러오기"}
+                  ? "갤러리 새로고침"
+                  : mode === "image-scroll"
+                    ? "흐르는 이미지 새로고침"
+                    : "슬라이드 새로고침"}
             </button>
           </div>
 
           {mode === "auto-slider" ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setSliderEditorOpen(true)}
-                className="mt-3 flex w-full items-center justify-between rounded-2xl border-2 border-blue-300 bg-blue-50 px-4 py-4 text-left hover:border-blue-600 hover:bg-blue-100"
-              >
-                <span>
-                  <span className="block text-sm font-black text-blue-950">
-                    이미지 슬라이드 편집
-                  </span>
-                  <span className="mt-1 block text-xs font-semibold leading-5 text-blue-800">
-                    슬라이드 사진 선택과 높이 설정을 큰 팝업에서 편집합니다.
-                  </span>
-                </span>
-                <span className="rounded-full bg-blue-700 px-3 py-2 text-xs font-black text-white">
-                  열기
-                </span>
-              </button>
+            <div className="mt-3 space-y-3 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+              <div>
+                <p className="text-sm font-black text-blue-950">
+                  슬라이드 이미지
+                </p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-blue-800">
+                  이미지 추가·삭제·순서 변경은 웹사이트 이미지 관리의 ‘슬라이드’에서 합니다.
+                  이 레이어는 등록된 이미지를 전부 자동으로 사용합니다.
+                </p>
+              </div>
 
-              {sliderEditorOpen && typeof document !== "undefined"
-                ? createPortal(
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="이미지 슬라이드 편집"
-                      className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/65 p-2 sm:p-5"
-                      onMouseDown={(event) => {
-                        if (event.target === event.currentTarget) {
-                          setSliderEditorOpen(false);
-                        }
-                      }}
-                    >
-                      <div className="flex max-h-[95dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-                        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6">
-                          <div>
-                            <h2 className="text-lg font-black text-gray-950 sm:text-xl">
-                              이미지 슬라이드 편집
-                            </h2>
-                            <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-                              최대 10장 · 등록 이미지 불러오기 · 슬라이더 높이 설정
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            aria-label="슬라이드 편집창 닫기"
-                            onClick={() => setSliderEditorOpen(false)}
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-3xl font-light text-gray-700 hover:bg-gray-200"
-                          >
-                            ×
-                          </button>
-                        </div>
-
-                        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-                          <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
-                            <aside className="space-y-4">
-                              <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
-                                <p className="text-sm font-black text-blue-950">슬라이드 설정</p>
-                                <p className="mt-1 text-xs font-semibold leading-5 text-blue-800">
-                                  등록된 대표이미지를 불러온 뒤 슬라이드에 사용할 사진을 최대 10장 선택하세요.
-                                </p>
-
-                                <button
-                                  type="button"
-                                  disabled={loadingImages}
-                                  onClick={() => void loadSavedImages("auto-slider")}
-                                  className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-                                >
-                                  {loadingImages ? "불러오는 중..." : "등록된 이미지 불러오기"}
-                                </button>
-
-                                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-white p-3">
-                                  <input
-                                    type="checkbox"
-                                    checked={cell.slider_auto_height !== false}
-                                    onChange={(event) =>
-                                      onUpdate({ slider_auto_height: event.target.checked })
-                                    }
-                                    className="mt-0.5 h-5 w-5 shrink-0 accent-blue-600"
-                                  />
-                                  <span>
-                                    <span className="block text-sm font-black text-gray-900">슬라이더 높이 자동</span>
-                                    <span className="mt-1 block text-xs font-semibold leading-5 text-gray-600">
-                                      켜면 16:9 비율로 자동 맞춥니다. 끄면 레이어 높이 조절선을 사용할 수 있습니다.
-                                    </span>
-                                  </span>
-                                </label>
-                              </div>
-
-                              {imageLoadError ? (
-                                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold leading-5 text-red-700">
-                                  {imageLoadError}
-                                </div>
-                              ) : null}
-
-                              {availableImages.length > 0 ? (
-                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2">
-                                  <p className="px-1 pb-2 text-xs font-black text-gray-700">등록 이미지</p>
-                                  <div className="grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto">
-                                    {availableImages.map((url, index) => {
-                                      const checked = cell.gallery_images?.includes(url) || false;
-                                      return (
-                                        <label
-                                          key={`slider-modal-${url}-${index}`}
-                                          className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white ${
-                                            checked ? "border-blue-600 ring-2 ring-blue-500/20" : "border-transparent"
-                                          }`}
-                                        >
-                                          <img src={url} alt={`슬라이드 후보 ${index + 1}`} className="aspect-[4/3] h-auto w-full object-cover" />
-                                          <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
-                                            <input
-                                              type="checkbox"
-                                              checked={checked}
-                                              onChange={() => toggleSelectedImage(url)}
-                                              className="h-4 w-4 accent-blue-600"
-                                            />
-                                          </span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </aside>
-
-                            <section className="min-w-0">
-                              <div className="mb-3 flex items-center justify-between gap-3">
-                                <div>
-                                  <p className="text-sm font-black text-gray-950">선택된 슬라이드 이미지</p>
-                                  <p className="mt-1 text-xs font-semibold text-gray-500">
-                                    현재 순서대로 자동 재생됩니다.
-                                  </p>
-                                </div>
-                                {selectedCount > 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => onUpdate({ gallery_images: [] })}
-                                    className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
-                                  >
-                                    전체 삭제
-                                  </button>
-                                ) : null}
-                              </div>
-
-                              {Array.isArray(cell.gallery_images) && cell.gallery_images.length > 0 ? (
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                  {cell.gallery_images.map((url, index) => (
-                                    <div key={`selected-slider-${url}-${index}`} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-                                      <div className="relative">
-                                        <img src={url} alt={`슬라이드 ${index + 1}`} className="aspect-video h-auto w-full object-cover" />
-                                        <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[10px] font-black text-white">
-                                          {index + 1}
-                                        </span>
-                                      </div>
-                                      <div className="p-3">
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleSelectedImage(url)}
-                                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700"
-                                        >
-                                          삭제
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="flex min-h-[360px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-                                  <div>
-                                    <div className="text-4xl">🎞</div>
-                                    <p className="mt-3 text-sm font-black text-gray-700">아직 선택한 슬라이드 이미지가 없습니다.</p>
-                                    <p className="mt-1 text-xs font-semibold text-gray-500">왼쪽에서 등록 이미지를 불러오고 선택하세요.</p>
-                                  </div>
-                                </div>
-                              )}
-                            </section>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
-                          <span className="text-xs font-bold text-gray-500">현재 {selectedCount}/10장</span>
-                          <button
-                            type="button"
-                            onClick={() => setSliderEditorOpen(false)}
-                            className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white"
-                          >
-                            편집 완료
-                          </button>
-                        </div>
-                      </div>
-                    </div>,
-                    document.body,
-                  )
-                : null}
-            </>
-          ) : null}
-
-          {mode === "gallery" ? (
-            <a
-              href={`/owner/business/${businessId}/gallery`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-flex rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 no-underline"
-            >
-              갤러리 전용 이미지 등록창 열기 →
-            </a>
-          ) : null}
-
-          {mode === "gallery" ? (
-            <>
-              <button
-                type="button"
-                onClick={() => setGalleryEditorOpen(true)}
-                className="mt-3 flex w-full items-center justify-between rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-4 text-left hover:border-emerald-600 hover:bg-emerald-100"
-              >
-                <span>
-                  <span className="block text-sm font-black text-emerald-950">
-                    이미지 갤러리 편집
-                  </span>
-                  <span className="mt-1 block text-xs font-semibold leading-5 text-emerald-800">
-                    이미지 업로드·제목·표시 크기를 큰 팝업에서 편집합니다. 크기에 따라 한 줄 개수가 자동으로 바뀝니다.
-                  </span>
-                </span>
-                <span className="rounded-full bg-emerald-700 px-3 py-2 text-xs font-black text-white">
-                  열기
-                </span>
-              </button>
-
-              {galleryEditorOpen && typeof document !== "undefined"
-                ? createPortal(
-                    <div
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label="이미지 갤러리 편집"
-                      className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/65 p-2 sm:p-5"
-                      onMouseDown={(event) => {
-                        if (event.target === event.currentTarget) {
-                          setGalleryEditorOpen(false);
-                        }
-                      }}
-                    >
-                      <div className="flex max-h-[95dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-                        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6">
-                          <div>
-                            <h2 className="text-lg font-black text-gray-950 sm:text-xl">
-                              이미지 갤러리 편집
-                            </h2>
-                            <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-                              최대 12장 · 각 이미지 제목 · 이미지 크기에 따라 열 수 자동 조절
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            aria-label="갤러리 편집창 닫기"
-                            onClick={() => setGalleryEditorOpen(false)}
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-3xl font-light text-gray-700 hover:bg-gray-200"
-                          >
-                            ×
-                          </button>
-                        </div>
-
-                        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-                          <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
-                            <aside className="space-y-4">
-                              <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-                                <p className="text-sm font-black text-emerald-950">
-                                  표시 설정
-                                </p>
-                                <p className="mt-1 text-xs font-semibold leading-5 text-emerald-800">
-                                  업로드 이미지는 중앙 기준 4:3, 1200×900 WebP로
-                                  자동 크롭하여 저장합니다.
-                                </p>
-
-                                <div className="mt-4">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <p className="text-xs font-black text-gray-700">
-                                      표시되는 이미지 크기
-                                    </p>
-                                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-emerald-800">
-                                      {Math.round(
-                                        Number(cell.gallery_item_min_width_px ?? 260),
-                                      )}px
-                                    </span>
-                                  </div>
-
-                                  <div className="mt-2 grid grid-cols-4 gap-2">
-                                    {([
-                                      { label: "작게", value: 180 },
-                                      { label: "보통", value: 260 },
-                                      { label: "크게", value: 360 },
-                                      { label: "아주 크게", value: 480 },
-                                    ] as const).map((option) => (
-                                      <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() =>
-                                          onUpdate({
-                                            gallery_item_min_width_px: option.value,
-                                          })
-                                        }
-                                        className={`rounded-xl border px-2 py-2.5 text-[11px] font-black ${
-                                          Math.abs(
-                                            Number(
-                                              cell.gallery_item_min_width_px ?? 260,
-                                            ) - option.value,
-                                          ) < 20
-                                            ? "border-emerald-700 bg-emerald-700 text-white"
-                                            : "border-emerald-200 bg-white text-emerald-950"
-                                        }`}
-                                      >
-                                        {option.label}
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  <input
-                                    type="range"
-                                    min={140}
-                                    max={560}
-                                    step={10}
-                                    value={Math.max(
-                                      140,
-                                      Math.min(
-                                        560,
-                                        Number(cell.gallery_item_min_width_px ?? 260),
-                                      ),
-                                    )}
-                                    onChange={(event) =>
-                                      onUpdate({
-                                        gallery_item_min_width_px: Number(
-                                          event.target.value,
-                                        ),
-                                      })
-                                    }
-                                    className="mt-3 w-full accent-emerald-700"
-                                  />
-
-                                  <p className="mt-2 text-xs font-bold leading-5 text-emerald-800">
-                                    크게 지정할수록 한 줄에 적게 표시되고, 작게 지정할수록
-                                    많이 표시됩니다. 화면 폭에 맞춰 개수는 자동으로
-                                    조절됩니다.
-                                  </p>
-                                </div>
-                              </div>
-
-                              <input
-                                ref={galleryFileInputRef}
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                className="hidden"
-                                onChange={(event) => {
-                                  void uploadGalleryFiles(event.target.files);
-                                }}
-                              />
-
-                              <button
-                                type="button"
-                                disabled={galleryUploading || selectedCount >= 12}
-                                onClick={() => galleryFileInputRef.current?.click()}
-                                className="flex min-h-28 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-300 bg-white px-4 py-5 text-center disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                <span className="text-3xl">＋</span>
-                                <span className="mt-2 text-sm font-black text-emerald-950">
-                                  {galleryUploading
-                                    ? "크롭 및 업로드 중..."
-                                    : `이미지 직접 업로드 · ${selectedCount}/12`}
-                                </span>
-                                <span className="mt-1 text-xs font-semibold text-emerald-700">
-                                  여러 이미지를 한 번에 선택할 수 있습니다.
-                                </span>
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={loadingImages}
-                                onClick={() => {
-                                  void loadSavedImages("gallery");
-                                }}
-                                className="w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-                              >
-                                {loadingImages
-                                  ? "갤러리 이미지 불러오는 중..."
-                                  : "등록된 갤러리 이미지 불러오기"}
-                              </button>
-
-                              {imageLoadError ? (
-                                <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold leading-5 text-red-700">
-                                  {imageLoadError}
-                                </p>
-                              ) : null}
-
-                              {availableImages.length > 0 ? (
-                                <div>
-                                  <p className="mb-2 text-xs font-black text-gray-700">
-                                    등록된 이미지에서 선택
-                                  </p>
-                                  <div className="grid max-h-[330px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
-                                    {availableImages.map((url, index) => {
-                                      const checked = normalizeGalleryItems(cell).some(
-                                        (item) => item.url === url,
-                                      );
-
-                                      return (
-                                        <label
-                                          key={`${url}-${index}`}
-                                          className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white ${
-                                            checked
-                                              ? "border-blue-600 ring-2 ring-blue-500/20"
-                                              : "border-transparent"
-                                          }`}
-                                        >
-                                          <img
-                                            src={url}
-                                            alt={`등록 이미지 ${index + 1}`}
-                                            className="aspect-[4/3] h-auto w-full object-cover"
-                                          />
-                                          <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
-                                            <input
-                                              type="checkbox"
-                                              checked={checked}
-                                              onChange={() => toggleSelectedImage(url)}
-                                              className="h-4 w-4 accent-blue-600"
-                                            />
-                                          </span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ) : null}
-                            </aside>
-
-                            <section className="min-w-0">
-                              <div className="mb-3 flex items-center justify-between gap-3">
-                                <div>
-                                  <p className="text-sm font-black text-gray-950">
-                                    선택된 이미지
-                                  </p>
-                                  <p className="mt-1 text-xs font-semibold text-gray-500">
-                                    제목은 공개 갤러리와 이미지 모달에 표시됩니다.
-                                  </p>
-                                </div>
-                                {selectedCount > 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      onUpdate({
-                                        gallery_images: [],
-                                        gallery_items: [],
-                                      })
-                                    }
-                                    className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
-                                  >
-                                    전체 삭제
-                                  </button>
-                                ) : null}
-                              </div>
-
-                              {normalizeGalleryItems(cell).length > 0 ? (
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                  {normalizeGalleryItems(cell).map((item, index) => (
-                                    <div
-                                      key={item.id}
-                                      className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-                                    >
-                                      <img
-                                        src={item.url}
-                                        alt={item.title || `갤러리 ${index + 1}`}
-                                        className="aspect-[4/3] h-auto w-full object-cover"
-                                      />
-                                      <div className="p-3">
-                                        <label className="block text-xs font-black text-gray-700">
-                                          이미지 {index + 1} 제목
-                                        </label>
-                                        <input
-                                          type="text"
-                                          value={item.title}
-                                          maxLength={100}
-                                          onChange={(event) =>
-                                            updateGalleryTitle(
-                                              item.id,
-                                              event.target.value,
-                                            )
-                                          }
-                                          placeholder="이미지 제목을 입력하세요"
-                                          className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold"
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => removeGalleryItem(item.id)}
-                                          className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700"
-                                        >
-                                          삭제
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="flex min-h-[360px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
-                                  <div>
-                                    <div className="text-4xl">📸</div>
-                                    <p className="mt-3 text-sm font-black text-gray-700">
-                                      아직 선택한 이미지가 없습니다.
-                                    </p>
-                                    <p className="mt-1 text-xs font-semibold text-gray-500">
-                                      왼쪽에서 직접 업로드하거나 등록 이미지를 불러오세요.
-                                    </p>
-                                  </div>
-                                </div>
-                              )}
-                            </section>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
-                          <span className="text-xs font-bold text-gray-500">
-                            현재 {selectedCount}/12장
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setGalleryEditorOpen(false)}
-                            className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white"
-                          >
-                            편집 완료
-                          </button>
-                        </div>
-                      </div>
-                    </div>,
-                    document.body,
-                  )
-                : null}
-            </>
-          ) : null}
-
-          {mode !== "gallery" && mode !== "auto-slider" && availableImages.length ? (
-            <div className="mt-3 grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
-              {availableImages.map((url, index) => {
-                const checked =
-                  cell.gallery_images?.includes(url) || false;
-                return (
-                  <label
-                    key={`${url}-${index}`}
-                    className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white ${
-                      checked ? "border-blue-600 ring-2 ring-blue-500/20" : "border-transparent"
-                    }`}
+              <div className="grid grid-cols-2 gap-2">
+                {availableImages.map((url, index) => (
+                  <div
+                    key={`slider-managed-${url}-${index}`}
+                    className="relative overflow-hidden rounded-xl border border-blue-200 bg-white"
                   >
                     <img
                       src={url}
-                      alt={`DB 이미지 ${index + 1}`}
+                      alt={`슬라이드 ${index + 1}`}
+                      className="aspect-[4/3] h-auto w-full object-cover"
+                    />
+                    <span className="absolute bottom-2 right-2 rounded-full bg-emerald-600 px-2 py-1 text-[10px] font-black text-white">
+                      자동 사용
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-white p-3">
+                <input
+                  type="checkbox"
+                  checked={cell.slider_auto_height !== false}
+                  onChange={(event) =>
+                    onUpdate({ slider_auto_height: event.target.checked })
+                  }
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-blue-600"
+                />
+                <span>
+                  <span className="block text-sm font-black text-gray-900">
+                    슬라이더 높이 자동
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-gray-600">
+                    이미지 선택과는 관계없는 디자인 설정입니다.
+                  </span>
+                </span>
+              </label>
+            </div>
+          ) : null}
+
+          {mode === "image-scroll" && availableImages.length ? (
+            <div className="mt-3">
+              <div className="grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
+                {availableImages.map((url, index) => (
+                  <div
+                    key={`scroll-managed-${url}-${index}`}
+                    className="relative overflow-hidden rounded-xl border border-gray-200 bg-white"
+                  >
+                    <img
+                      src={url}
+                      alt={`흐르는 이미지 ${index + 1}`}
                       className="h-28 w-full object-cover"
                     />
-                    <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSelectedImage(url)}
-                        className="h-4 w-4 accent-blue-600"
-                      />
+                    <span className="absolute bottom-2 right-2 rounded-full bg-emerald-600 px-2 py-1 text-[10px] font-black text-white">
+                      자동 사용
                     </span>
-                    {checked ? (
-                      <span className="absolute bottom-2 right-2 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-black text-white">
-                        선택
-                      </span>
-                    ) : null}
-                  </label>
-                );
-              })}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+                체크할 필요가 없습니다. ‘흐르는 이미지’에 등록된 사진을 순서대로 모두 사용합니다.
+              </p>
             </div>
-          ) : mode !== "gallery" && mode !== "auto-slider" ? (
+          ) : mode === "image-scroll" ? (
             <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">
-              대표이미지 불러오기를 눌러주세요.
+              웹사이트 이미지 관리의 ‘흐르는 이미지’에 사진을 등록해주세요.
             </div>
           ) : null}
 
@@ -30594,7 +29731,7 @@ function TitleCellEditor({
           ) : null}
 
           <div className="mt-3 rounded-xl bg-blue-50 px-3 py-3 text-xs font-bold leading-5 text-blue-800">
-            현재 {selectedCount}장 선택 · 최대 {mode === "gallery" ? 12 : 10}장
+            현재 등록된 {selectedCount}장을 모두 사용 중 · 최대 {mode === "gallery" ? 12 : 10}장
             {mode === "auto-slider" ? (
               <span className="block">
                 3장 이상 선택하면 4.5초마다 Fade 전환되며, Swipe·좌우 화살표·하단 점을 사용할 수 있습니다.
