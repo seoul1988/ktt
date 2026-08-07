@@ -105,6 +105,12 @@ type GridCell = {
   rich_text_html?: string;
   mobile_text?: string;
   url?: string;
+
+  /** 버튼 셀 이동 방식: 사이트 페이지 / 현재 페이지 레이어 / 외부 주소 */
+  button_link_type?: "page" | "section" | "external";
+  /** page이면 page slug, section이면 layer slug, external이면 URL */
+  button_link_value?: string;
+
   image_url?: string;
   image_size_percent?: number;
   image_fit?: "scale" | "width" | "contain" | "cover" | "fill";
@@ -2046,6 +2052,45 @@ function createOverlayButton(index = 0): OverlayButton {
   };
 }
 
+
+function getCellButtonTarget(
+  cell: Pick<GridCell, "button_link_type" | "button_link_value" | "url">,
+): {
+  type: "page" | "section" | "external";
+  value: string;
+} {
+  const legacy = getLegacyOverlayButtonTarget(cell.url);
+
+  return {
+    type:
+      cell.button_link_type === "page" ||
+      cell.button_link_type === "section" ||
+      cell.button_link_type === "external"
+        ? cell.button_link_type
+        : legacy.type,
+    value:
+      typeof cell.button_link_value === "string"
+        ? cell.button_link_value
+        : legacy.value,
+  };
+}
+
+function buildCellButtonUrl(
+  cell: Pick<GridCell, "button_link_type" | "button_link_value" | "url">,
+  businessId: string | number,
+) {
+  const target = getCellButtonTarget(cell);
+
+  return buildOverlayButtonUrl(
+    {
+      link_type: target.type,
+      link_value: target.value,
+      url: String(cell.url || ""),
+    },
+    businessId,
+  );
+}
+
 function normalizeOverlayButtons(cell: GridCell): OverlayButton[] {
   /*
    * overlay_buttons가 아직 한 번도 저장되지 않은 기존 셀(undefined)에는
@@ -3577,7 +3622,7 @@ function LinkPageContent({
 
     return (
       <div
-        className="min-h-[60vh] w-full"
+        className="w-full"
         style={{ backgroundColor: menuBackgroundColor, color: menuTextColor }}
       >
         <RestaurantMenu
@@ -9852,6 +9897,14 @@ function CurrentWebsitePreview({
     websiteSettings.outer_background_color || "#e5e7eb",
   );
 
+  const previewBackgroundColor =
+    previewLinkPage?.content?.link_page_kind === "restaurant-menu"
+      ? String(
+          previewLinkPage.content?.restaurant_menu_background_color ||
+            "#ffffff",
+        )
+      : outerBackgroundColor;
+
   const headerGrid = normalizeGrid(
     websiteSettings.header_grid,
     createDefaultHeader(business.name || ""),
@@ -9861,7 +9914,7 @@ function CurrentWebsitePreview({
   return (
     <div
       className="fixed inset-0 z-[120] flex flex-col overflow-hidden"
-      style={{ backgroundColor: outerBackgroundColor }}
+      style={{ backgroundColor: previewBackgroundColor }}
     >
       <div className="flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
         <div>
@@ -9914,8 +9967,8 @@ function CurrentWebsitePreview({
         ref={previewScrollRef}
         className="relative min-h-0 flex-1 overflow-auto p-0"
         style={{
-          backgroundColor: outerBackgroundColor,
-          ...({ "--public-page-background": outerBackgroundColor } as React.CSSProperties),
+          backgroundColor: previewBackgroundColor,
+          ...({ "--public-page-background": previewBackgroundColor } as React.CSSProperties),
           backgroundImage: "none",
         }}
       >
@@ -9927,8 +9980,8 @@ function CurrentWebsitePreview({
           }`}
           style={{
             overflow: device === "mobile" ? "visible" : "hidden",
-            backgroundColor: outerBackgroundColor,
-            minHeight: device === "desktop" ? "100%" : undefined,
+            backgroundColor: previewBackgroundColor,
+            minHeight: previewLinkPage?.content?.link_page_kind === "restaurant-menu" ? 0 : device === "desktop" ? "100%" : undefined,
           }}
         >
           <div
@@ -9970,11 +10023,9 @@ function CurrentWebsitePreview({
           {previewLinkPage ? (
             previewLinkPage.content?.link_page_kind === "restaurant-menu" ? (
               <div
-                className="relative min-h-[60vh]"
+                className="relative"
                 style={{
-                  backgroundColor: String(
-                    websiteSettings.outer_background_color || "#e5e7eb",
-                  ),
+                  backgroundColor: previewBackgroundColor,
                 }}
               >
                 <LinkPageContent section={previewLinkPage} previewDevice={device} />
@@ -10346,8 +10397,34 @@ export function PublicWebsiteRenderer({
     websiteSettings.outer_background_color || "#e5e7eb",
   );
 
+  const normalizedSlug = slugifyMenuValue(pageSlug || "home") || "home";
+
+  // Restaurant Menu 페이지는 메뉴 자체에 지정된 배경색을 페이지 끝까지 사용합니다.
+  // 메뉴 내용이 화면 높이보다 짧아도 아래쪽에 사이트 바깥 배경색이 노출되지 않습니다.
+  const restaurantMenuPage = sections.find(
+    (section) =>
+      section.content?.page_type === "link-page" &&
+      section.content?.link_page_kind === "restaurant-menu" &&
+      slugifyMenuValue(
+        String(section.content?.page_slug || section.title || ""),
+      ) === normalizedSlug,
+  );
+
+  // Menu 링크 페이지에서는 모바일 헤더를 고정하지 않습니다.
+  // 일반 menu slug뿐 아니라 Restaurant Menu로 지정된 링크 페이지도 포함합니다.
+  const isMenuPage =
+    normalizedSlug === "menu" ||
+    Boolean(restaurantMenuPage);
+
+  const publicPageBackgroundColor = isMenuPage
+    ? String(
+        restaurantMenuPage?.content?.restaurant_menu_background_color ||
+          "#ffffff",
+      )
+    : outerBackgroundColor;
+
   // 공개 페이지가 상위 layout의 max-width나 흰 배경 안에 들어가더라도
-  // 브라우저 전체 좌우 여백에는 사용자가 선택한 바깥 배경색을 적용합니다.
+  // 브라우저 전체 좌우 여백에는 현재 페이지에 맞는 배경색을 적용합니다.
   useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -10380,9 +10457,9 @@ export function PublicWebsiteRenderer({
         }
       : null;
 
-    html.style.backgroundColor = outerBackgroundColor;
+    html.style.backgroundColor = publicPageBackgroundColor;
     html.style.overflowX = "clip";
-    body.style.backgroundColor = outerBackgroundColor;
+    body.style.backgroundColor = publicPageBackgroundColor;
     body.style.margin = "0";
     body.style.padding = "0";
     body.style.width = "100%";
@@ -10404,7 +10481,7 @@ export function PublicWebsiteRenderer({
       appSafeArea.style.margin = "0";
       appSafeArea.style.padding = "0";
       appSafeArea.style.boxSizing = "border-box";
-      appSafeArea.style.backgroundColor = outerBackgroundColor;
+      appSafeArea.style.backgroundColor = publicPageBackgroundColor;
       appSafeArea.style.overflowX = "clip";
     }
 
@@ -10433,22 +10510,7 @@ export function PublicWebsiteRenderer({
         appSafeArea.style.boxSizing = previousAppStyles.boxSizing;
       }
     };
-  }, [outerBackgroundColor]);
-
-  const normalizedSlug = slugifyMenuValue(pageSlug || "home") || "home";
-
-  // Menu 링크 페이지에서는 모바일 헤더를 고정하지 않습니다.
-  // 일반 menu slug뿐 아니라 Restaurant Menu로 지정된 링크 페이지도 포함합니다.
-  const isMenuPage =
-    normalizedSlug === "menu" ||
-    sections.some(
-      (section) =>
-        section.content?.page_type === "link-page" &&
-        section.content?.link_page_kind === "restaurant-menu" &&
-        slugifyMenuValue(
-          String(section.content?.page_slug || section.title || ""),
-        ) === normalizedSlug,
-    );
+  }, [publicPageBackgroundColor]);
 
   const visibleSections = [...sections]
     // 이전 데이터에서 is_visible이 null이어도 공개되도록 false만 제외합니다.
@@ -10534,7 +10596,9 @@ export function PublicWebsiteRenderer({
 
       <main
         data-public-website-root
-        className="relative block min-h-screen max-w-none overflow-x-clip"
+        className={`relative block max-w-none overflow-x-clip ${
+          isMenuPage ? "min-h-0" : "min-h-screen"
+        }`}
         style={{
           display: "block",
           position: "relative",
@@ -10546,24 +10610,29 @@ export function PublicWebsiteRenderer({
           padding: 0,
           transform: "translateX(-50%)",
           boxSizing: "border-box",
-          backgroundColor: outerBackgroundColor,
+          backgroundColor: publicPageBackgroundColor,
           backgroundImage: "none",
           overflowX: "clip",
           isolation: "isolate",
+          ...({
+            "--public-page-background": publicPageBackgroundColor,
+          } as React.CSSProperties),
         }}
       >
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 -z-10"
-        style={{ backgroundColor: outerBackgroundColor }}
+        style={{ backgroundColor: publicPageBackgroundColor }}
       />
 
       <div
-        className="min-h-screen w-full max-w-none overflow-x-hidden"
+        className={`w-full max-w-none overflow-x-hidden ${
+          isMenuPage ? "min-h-0" : "min-h-screen"
+        }`}
         style={{
           width: "100%",
           maxWidth: "none",
-          backgroundColor: outerBackgroundColor,
+          backgroundColor: publicPageBackgroundColor,
         }}
       >
         <header
@@ -10615,9 +10684,7 @@ export function PublicWebsiteRenderer({
           <section
             id={normalizedSlug}
             style={{
-              backgroundColor: String(
-                websiteSettings.outer_background_color || "#e5e7eb",
-              ),
+              backgroundColor: publicPageBackgroundColor,
             }}
           >
             <LinkPageContent section={heroSection} />
@@ -11165,10 +11232,15 @@ function ReadOnlyCellContent({
   return (
     <div
       className={`relative flex w-full min-h-0 min-w-0 ${
-        previewDevice === "mobile" && cell.display_mode === "auto-slider"
+        cell.display_mode === "restaurant-menu" ||
+        (previewDevice === "mobile" && cell.display_mode === "auto-slider")
           ? "h-auto"
           : "h-full"
-      } overflow-hidden`}
+      } ${
+        cell.display_mode === "restaurant-menu"
+          ? "overflow-visible"
+          : "overflow-hidden"
+      }`}
       style={{
         justifyContent:
           cell.text_align === "left"
@@ -11611,13 +11683,17 @@ function ReadOnlyGrid({
 
   const autoContentHeight =
     area !== "header" && Boolean(deviceGrid.auto_height);
-  // 모바일 영업시간만 내용 높이에 맞춰 자동으로 늘립니다.
-  // restaurant-menu는 저장된 레이어 높이를 정확히 따라야 하므로
-  // 자동 높이 대상에서 제외하고 내부 스크롤로 표시합니다.
+  // 영업시간과 Restaurant Menu는 내용 높이에 맞춰 자동으로 표시합니다.
   const autoMobileBusinessHours =
     previewDevice === "mobile" &&
     area !== "header" &&
     gridContainsDisplayMode(deviceGrid, "business-hours");
+
+  // Restaurant Menu는 메뉴 개수에 따라 실제 콘텐츠 높이를 사용합니다.
+  // 저장된 레이어 height_px가 더 커도 빈 공간을 만들지 않습니다.
+  const autoRestaurantMenu =
+    area !== "header" &&
+    gridContainsDisplayMode(deviceGrid, "restaurant-menu");
   const autoSliderCells = getCellsByDisplayMode(
     deviceGrid.cells,
     "auto-slider",
@@ -11637,6 +11713,7 @@ function ReadOnlyGrid({
       : previewDevice === "mobile" &&
           area !== "header" &&
           !autoMobileBusinessHours &&
+          !autoRestaurantMenu &&
           !autoContentHeight
         ? Math.max(20, Math.min(savedHeight, 900))
         : savedHeight;
@@ -11649,7 +11726,7 @@ function ReadOnlyGrid({
           : "overflow-hidden"
       }`}
       style={{
-        minHeight: sliderAutoHeight
+        minHeight: sliderAutoHeight || autoRestaurantMenu
           ? 0
           : autoMobileBusinessHours
             ? "180px"
@@ -11665,6 +11742,7 @@ function ReadOnlyGrid({
         height:
           sliderAutoHeight ||
           autoMobileBusinessHours ||
+          autoRestaurantMenu ||
           autoContentHeight ||
           shouldStackMobileCells
             ? "auto"
@@ -11672,6 +11750,7 @@ function ReadOnlyGrid({
         maxHeight:
           sliderAutoHeight ||
           autoMobileBusinessHours ||
+          autoRestaurantMenu ||
           autoContentHeight ||
           shouldStackMobileCells
             ? undefined
@@ -11728,10 +11807,13 @@ function ReadOnlyGrid({
               ? "hidden"
               : autoContentHeight
                 ? "flex overflow-visible"
-                : autoMobileBusinessHours &&
-                    cellContainsDisplayMode(cell, "business-hours")
-                  ? "flex overflow-visible"
-                  : "flex overflow-hidden"
+                : autoRestaurantMenu &&
+                    cellContainsDisplayMode(cell, "restaurant-menu")
+                  ? "flex h-auto overflow-visible"
+                  : autoMobileBusinessHours &&
+                      cellContainsDisplayMode(cell, "business-hours")
+                    ? "flex overflow-visible"
+                    : "flex overflow-hidden"
           }`}
           style={{
             // 모바일에서도 편집기에 저장한 가로 비율을 유지합니다.
@@ -12848,12 +12930,16 @@ function EditableGrid({
     // 저장 전의 이전 높이로 다시 초기화될 수 있습니다.
   }, [deviceGrid.height_px, grid.height, area, defaultHeight]);
 
-  // restaurant-menu가 있더라도 레이어 높이를 자동으로 늘리지 않습니다.
-  // 사용자가 아래 높이 핸들을 움직이면 버거칸도 같은 높이로 줄어듭니다.
+  // Restaurant Menu는 저장 높이보다 실제 메뉴 콘텐츠 높이를 우선합니다.
   const autoMobileBusinessHours =
     previewDevice === "mobile" &&
     area !== "header" &&
     gridContainsDisplayMode(deviceGrid, "business-hours");
+
+  const autoRestaurantMenu =
+    area !== "header" &&
+    gridContainsDisplayMode(deviceGrid, "restaurant-menu");
+
   const autoSliderCells = getCellsByDisplayMode(
     deviceGrid.cells,
     "auto-slider",
@@ -12999,11 +13085,11 @@ function EditableGrid({
       className={`relative grid gap-0 overflow-hidden ${heightClass}`}
       style={{
         height:
-          autoMobileBusinessHours || shouldStackMobileEditorCells
+          autoMobileBusinessHours || autoRestaurantMenu || shouldStackMobileEditorCells
             ? "auto"
             : `${localHeight}px`,
         maxHeight:
-          autoMobileBusinessHours || shouldStackMobileEditorCells
+          autoMobileBusinessHours || autoRestaurantMenu || shouldStackMobileEditorCells
             ? undefined
             : `${localHeight}px`,
         aspectRatio: undefined,
@@ -13065,7 +13151,14 @@ function EditableGrid({
                   onSelect(cell.id);
                 }
               }}
-              className={`group relative flex ${autoMobileBusinessHours && (cellContainsDisplayMode(cell, "business-hours") || cellContainsDisplayMode(cell, "restaurant-menu")) ? "h-auto min-h-[70px]" : "h-full min-h-0"} w-full overflow-visible transition ${
+              className={`group relative flex ${
+                (autoMobileBusinessHours &&
+                  cellContainsDisplayMode(cell, "business-hours")) ||
+                (autoRestaurantMenu &&
+                  cellContainsDisplayMode(cell, "restaurant-menu"))
+                  ? "h-auto min-h-0"
+                  : "h-full min-h-0"
+              } w-full overflow-visible transition ${
                 selected
                   ? isLogo
                     ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
@@ -14593,7 +14686,9 @@ function CellPreview({
         ? Math.min(configuredFontSize, 14)
         : configuredFontSize;
 
-    const buttonHref = normalizeButtonHref(cell.url);
+    const buttonHref = normalizeButtonHref(
+      buildCellButtonUrl(cell, business.id),
+    );
     const opensNewWindow = isExternalButtonHref(buttonHref);
 
     return (
@@ -14834,7 +14929,7 @@ function CellPreview({
   if (cell.type === "title") {
     if (cell.display_mode === "restaurant-menu") {
       return (
-        <div className="absolute inset-0 h-full min-h-0 w-full overflow-y-auto overscroll-contain rounded-[10px] bg-white">
+        <div className="relative h-auto min-h-0 w-full overflow-visible rounded-[10px] bg-white">
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
@@ -22332,24 +22427,200 @@ function RightPanel(props: {
               </p>
             </Field>
 
-            <Field label="버튼 링크">
-              <input
-                value={selectedCell.url || ""}
-                onChange={(event) =>
-                  props.onUpdateCell(
-                    area,
-                    selectedCell.id,
-                    { url: event.target.value },
-                    selection.layoutId,
+            {(() => {
+              const currentTarget = getCellButtonTarget(selectedCell);
+
+              const pageOptions = [
+                { label: "HOME", value: "home" },
+                ...props.sections
+                  .filter(
+                    (section) =>
+                      section.content?.page_type === "link-page" &&
+                      section.is_visible !== false,
                   )
-                }
-                placeholder="예: https://doordash.com/... 또는 #about"
-                className="w-full rounded-xl border border-gray-300 px-3 py-2.5"
-              />
-              <p className="mt-1 text-xs leading-5 text-gray-500">
-                외부 주소, 사이트 내부 주소(/menu), 같은 페이지 섹션(#about)을 사용할 수 있습니다.
-              </p>
-            </Field>
+                  .sort((a, b) => a.sort_order - b.sort_order)
+                  .map((section) => ({
+                    label:
+                      String(section.title || "").trim() ||
+                      String(section.content?.page_slug || "").trim() ||
+                      `PAGE ${section.id}`,
+                    value: slugifyMenuValue(
+                      String(
+                        section.content?.page_slug ||
+                          section.title ||
+                          "",
+                      ),
+                    ),
+                  }))
+                  .filter((option) => Boolean(option.value)),
+              ].filter(
+                (option, index, values) =>
+                  values.findIndex(
+                    (candidate) => candidate.value === option.value,
+                  ) === index,
+              );
+
+              const sectionOptions = props.sections
+                .filter(
+                  (section) =>
+                    section.content?.page_type !== "link-page" &&
+                    section.is_visible !== false,
+                )
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map((section) => ({
+                  label:
+                    String(section.title || "").trim() ||
+                    SECTION_LABELS[section.section_type] ||
+                    section.section_type,
+                  value:
+                    slugifyMenuValue(
+                      String(
+                        section.title ||
+                          section.section_type ||
+                          "",
+                      ),
+                    ) || section.section_type,
+                }))
+                .filter((option) => Boolean(option.value));
+
+              const updateButtonLink = (
+                linkType: "page" | "section" | "external",
+                linkValue: string,
+              ) => {
+                const nextCell: GridCell = {
+                  ...selectedCell,
+                  button_link_type: linkType,
+                  button_link_value: linkValue,
+                  url: "",
+                };
+
+                props.onUpdateCell(
+                  area,
+                  selectedCell.id,
+                  {
+                    button_link_type: linkType,
+                    button_link_value: linkValue,
+                    url: buildCellButtonUrl(
+                      nextCell,
+                      props.businessId,
+                    ),
+                  },
+                  selection.layoutId,
+                );
+              };
+
+              return (
+                <div className="mt-4 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+                  <p className="text-sm font-black text-blue-950">
+                    버튼 이동 설정
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-blue-700">
+                    레이어, 페이지 또는 외부 링크 주소를 선택할 수 있습니다.
+                  </p>
+
+                  <Field label="링크 방식">
+                    <select
+                      value={currentTarget.type}
+                      onChange={(event) => {
+                        const nextType = event.target.value as
+                          | "page"
+                          | "section"
+                          | "external";
+
+                        const defaultValue =
+                          nextType === "page"
+                            ? pageOptions[0]?.value || "home"
+                            : nextType === "section"
+                              ? sectionOptions[0]?.value || ""
+                              : "";
+
+                        updateButtonLink(nextType, defaultValue);
+                      }}
+                      className="w-full rounded-xl border-2 border-blue-300 bg-white px-3 py-2.5 font-black text-blue-950"
+                    >
+                      <option value="section">레이어</option>
+                      <option value="page">페이지</option>
+                      <option value="external">링크 주소</option>
+                    </select>
+                  </Field>
+
+                  {currentTarget.type === "section" ? (
+                    <Field label="이동할 레이어">
+                      <select
+                        value={currentTarget.value}
+                        onChange={(event) =>
+                          updateButtonLink(
+                            "section",
+                            event.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border-2 border-amber-300 bg-white px-3 py-2.5 font-black text-amber-950"
+                      >
+                        <option value="">레이어 선택</option>
+                        {sectionOptions.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : currentTarget.type === "page" ? (
+                    <Field label="이동할 페이지">
+                      <select
+                        value={currentTarget.value || "home"}
+                        onChange={(event) =>
+                          updateButtonLink(
+                            "page",
+                            event.target.value,
+                          )
+                        }
+                        className="w-full rounded-xl border-2 border-violet-300 bg-white px-3 py-2.5 font-black text-violet-950"
+                      >
+                        {pageOptions.map((option) => (
+                          <option
+                            key={option.value}
+                            value={option.value}
+                          >
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : (
+                    <Field label="링크 주소">
+                      <input
+                        type="text"
+                        inputMode="url"
+                        value={currentTarget.value}
+                        onChange={(event) =>
+                          updateButtonLink(
+                            "external",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="https://example.com 또는 mailto:..."
+                        className="w-full rounded-xl border-2 border-emerald-300 bg-white px-3 py-2.5 font-mono text-sm text-emerald-950"
+                      />
+                    </Field>
+                  )}
+
+                  <div className="mt-3 rounded-xl bg-white px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-wide text-gray-500">
+                      실제 버튼 주소
+                    </p>
+                    <p className="mt-1 break-all font-mono text-xs font-bold text-gray-800">
+                      {buildCellButtonUrl(
+                        selectedCell,
+                        props.businessId,
+                      ) || "선택되지 않음"}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
             <Field label="버튼 글자 크기">
               <input
