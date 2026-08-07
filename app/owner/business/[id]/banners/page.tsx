@@ -325,6 +325,7 @@ export default function BannerManagementPage() {
   const [linkUrl, setLinkUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [removeImageRequested, setRemoveImageRequested] = useState(false);
   const [backgroundColor, setBackgroundColor] =
     useState(TEMPLATES[0].backgroundColor);
   const [textColor, setTextColor] =
@@ -490,6 +491,7 @@ export default function BannerManagementPage() {
     setLinkUrl("");
     setImageFile(null);
     setImagePreview("");
+    setRemoveImageRequested(false);
     setImageStatus("");
     setBackgroundColor(template.backgroundColor);
     setTextColor(template.textColor);
@@ -553,6 +555,7 @@ export default function BannerManagementPage() {
     setLinkUrl(banner.link_url || "");
     setImageFile(null);
     setImagePreview(banner.image_url || "");
+    setRemoveImageRequested(false);
     setImageStatus(
       banner.image_url
         ? "✓ 기존 이미지가 등록되어 있습니다."
@@ -689,6 +692,17 @@ export default function BannerManagementPage() {
       formData.append("image_height", String(imageHeight));
       formData.append("image_fit", imageFit);
       formData.append("image_zoom", String(imageZoom));
+
+      // 기존에 저장된 이미지를 삭제한 경우 서버에도 삭제 의사를 전달합니다.
+      // 신규 이미지를 다시 선택하면 removeImageRequested가 false로 돌아갑니다.
+      formData.append(
+        "remove_image",
+        removeImageRequested && !imageFile ? "true" : "false",
+      );
+      if (removeImageRequested && !imageFile) {
+        formData.append("image_url", "");
+      }
+
       formData.append("style_preset", stylePreset);
       formData.append("popup_radius", String(popupRadius));
       formData.append("image_radius", String(imageRadius));
@@ -1006,13 +1020,43 @@ export default function BannerManagementPage() {
           </div>
         </section>
 
-        <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_420px]">
-          <section className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-black text-[#172033]">
-              팝업 내용과 디자인
-            </h2>
+        <style jsx global>{`
+          .popup-design-scroll::-webkit-scrollbar {
+            width: 10px;
+          }
+          .popup-design-scroll::-webkit-scrollbar-track {
+            background: #f5f1eb;
+            border-radius: 999px;
+          }
+          .popup-design-scroll::-webkit-scrollbar-thumb {
+            background: #c9bcae;
+            border: 2px solid #f5f1eb;
+            border-radius: 999px;
+          }
+          .popup-design-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a99886;
+          }
+        `}</style>
 
-            <div className="mt-4 grid gap-4">
+        <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_420px]">
+          <section className="rounded-3xl border border-[#E9DED0] bg-white shadow-sm lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-32px)] lg:flex-col lg:overflow-hidden">
+            <div className="shrink-0 border-b border-[#E9DED0] bg-white px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black text-[#172033]">
+                    팝업 내용과 디자인
+                  </h2>
+                  <p className="mt-1 text-[11px] font-bold text-[#667085]">
+                    아래 설정 영역만 스크롤됩니다. 미리보기는 옆에 그대로 유지됩니다.
+                  </p>
+                </div>
+                <span className="hidden rounded-full bg-[#FFF3DF] px-3 py-1 text-[10px] font-black text-[#B64032] lg:inline-flex">
+                  SCROLL
+                </span>
+              </div>
+            </div>
+
+            <div className="popup-design-scroll grid gap-4 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-3 [scrollbar-gutter:stable]">
               <label>
                 <span className="mb-1 block text-xs font-black text-[#667085]">
                   제목
@@ -1303,6 +1347,7 @@ export default function BannerManagementPage() {
                     }
 
                     setImageFile(file);
+                    setRemoveImageRequested(false);
                     setImagePreview(
                       URL.createObjectURL(file),
                     );
@@ -1334,6 +1379,38 @@ export default function BannerManagementPage() {
 
                 {imagePreview && (
                   <div className="mt-3 overflow-hidden rounded-xl border border-[#E9DED0] bg-gray-50">
+                    <div className="flex items-center justify-between gap-3 border-b border-[#E9DED0] bg-white px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-black text-[#172033]">
+                          현재 팝업 이미지
+                        </p>
+                        <p className="mt-0.5 text-[10px] font-bold text-[#667085]">
+                          삭제하면 미리보기에서 즉시 사라지고 저장 시에도 삭제 요청됩니다.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            imagePreview.startsWith("blob:")
+                          ) {
+                            URL.revokeObjectURL(imagePreview);
+                          }
+
+                          setImageFile(null);
+                          setImagePreview("");
+                          setRemoveImageRequested(true);
+                          setImageStatus(
+                            "이미지를 삭제했습니다. 아래 저장 버튼을 눌러 최종 반영하세요.",
+                          );
+                        }}
+                        className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:bg-red-100"
+                      >
+                        이미지 삭제
+                      </button>
+                    </div>
+
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={imagePreview}
@@ -1342,6 +1419,32 @@ export default function BannerManagementPage() {
                     />
                   </div>
                 )}
+
+                {!imagePreview && removeImageRequested ? (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5">
+                    <p className="text-xs font-black text-red-700">
+                      이미지 삭제 예정 · 저장하면 팝업 이미지가 제거됩니다.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRemoveImageRequested(false);
+
+                        if (editingBanner?.image_url) {
+                          setImagePreview(editingBanner.image_url);
+                          setImageStatus(
+                            "기존 이미지를 다시 사용합니다.",
+                          );
+                        } else {
+                          setImageStatus("");
+                        }
+                      }}
+                      className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-[11px] font-black text-red-700 shadow-sm"
+                    >
+                      삭제 취소
+                    </button>
+                  </div>
+                ) : null}
               </label>
 
               <label>
@@ -1553,7 +1656,7 @@ export default function BannerManagementPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
+          <section className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm lg:sticky lg:top-4 lg:self-start">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-black text-[#172033]">
                 미리보기

@@ -113,10 +113,7 @@ export async function GET(
     const { id } = await context.params;
     const businessId = Number(id);
 
-    if (
-      !Number.isInteger(businessId) ||
-      businessId <= 0
-    ) {
+    if (!Number.isInteger(businessId) || businessId <= 0) {
       return NextResponse.json(
         { error: "Invalid business id" },
         { status: 400 },
@@ -128,6 +125,8 @@ export async function GET(
     const [
       { data: categories, error: categoryError },
       { data: items, error: itemError },
+      { data: optionGroups, error: optionGroupError },
+      { data: optionItems, error: optionItemError },
     ] = await Promise.all([
       supabase
         .from("business_menu_categories")
@@ -140,16 +139,86 @@ export async function GET(
       supabase
         .from("business_menu_items")
         .select(
-          "id,category_id,name,description,price,thumbnail_path,image_path,display_order",
+          "id,category_id,name,description,price,thumbnail_path,image_path,display_order,source_platform",
         )
         .eq("business_id", businessId)
         .eq("is_available", true)
+        .order("display_order", { ascending: true })
+        .order("id", { ascending: true }),
+
+      supabase
+        .from("business_menu_option_groups")
+        .select(
+          "id,menu_item_id,name,is_required,min_select,max_select,display_order",
+        )
+        .eq("business_id", businessId)
+        .order("display_order", { ascending: true })
+        .order("id", { ascending: true }),
+
+      supabase
+        .from("business_menu_option_items")
+        .select(
+          "id,option_group_id,name,price_delta,is_available,display_order",
+        )
+        .eq("business_id", businessId)
         .order("display_order", { ascending: true })
         .order("id", { ascending: true }),
     ]);
 
     if (categoryError) throw categoryError;
     if (itemError) throw itemError;
+    if (optionGroupError) throw optionGroupError;
+    if (optionItemError) throw optionItemError;
+
+    const optionItemsByGroup = new Map<number, any[]>();
+
+    for (const option of optionItems || []) {
+      const groupId = Number(option.option_group_id);
+      const list = optionItemsByGroup.get(groupId) || [];
+
+      list.push({
+        id: option.id,
+        name: option.name,
+        priceDelta: Number(option.price_delta ?? 0),
+        price_delta: Number(option.price_delta ?? 0),
+        soldOut: option.is_available === false,
+        sold_out: option.is_available === false,
+        is_available: option.is_available !== false,
+        displayOrder: Number(option.display_order ?? 0),
+        display_order: Number(option.display_order ?? 0),
+      });
+
+      optionItemsByGroup.set(groupId, list);
+    }
+
+    const optionGroupsByMenu = new Map<number, any[]>();
+
+    for (const group of optionGroups || []) {
+      const menuItemId = Number(group.menu_item_id);
+      const list = optionGroupsByMenu.get(menuItemId) || [];
+      const minSelect = Math.max(0, Number(group.min_select ?? 0));
+      const rawMax = group.max_select;
+      const maxSelect =
+        rawMax === null || rawMax === undefined
+          ? null
+          : Math.max(0, Number(rawMax));
+
+      list.push({
+        id: group.id,
+        name: group.name,
+        required: group.is_required === true,
+        is_required: group.is_required === true,
+        minSelect,
+        min_select: minSelect,
+        maxSelect,
+        max_select: maxSelect,
+        displayOrder: Number(group.display_order ?? 0),
+        display_order: Number(group.display_order ?? 0),
+        options: optionItemsByGroup.get(Number(group.id)) || [],
+      });
+
+      optionGroupsByMenu.set(menuItemId, list);
+    }
 
     const withUrls = (items || []).map((item) => {
       const thumbnailUrl = item.thumbnail_path
@@ -164,6 +233,8 @@ export async function GET(
             .getPublicUrl(item.image_path).data.publicUrl
         : null;
 
+      const groups = optionGroupsByMenu.get(Number(item.id)) || [];
+
       return {
         id: item.id,
         category_id: item.category_id,
@@ -173,6 +244,12 @@ export async function GET(
         display_order: item.display_order,
         thumbnail_url: thumbnailUrl,
         image_url: imageUrl,
+        source_platform: item.source_platform || null,
+
+        // 프론트 호환을 위해 camelCase와 snake_case를 둘 다 제공합니다.
+        option_groups: groups,
+        optionGroups: groups,
+        menu_option_groups: groups,
       };
     });
 
@@ -210,18 +287,14 @@ export async function PATCH(
     const { id } = await context.params;
     const businessId = Number(id);
 
-    if (
-      !Number.isInteger(businessId) ||
-      businessId <= 0
-    ) {
+    if (!Number.isInteger(businessId) || businessId <= 0) {
       return NextResponse.json(
         { error: "Invalid business id" },
         { status: 400 },
       );
     }
 
-    const access =
-      await requireBusinessAccess(request, businessId);
+    const access = await requireBusinessAccess(request, businessId);
 
     if (!access.allowed) {
       return NextResponse.json(
@@ -232,9 +305,7 @@ export async function PATCH(
 
     const body = await request.json();
 
-    const items = Array.isArray(body?.items)
-      ? body.items
-      : [];
+    const items = Array.isArray(body?.items) ? body.items : [];
 
     if (items.length === 0) {
       return NextResponse.json(
@@ -250,10 +321,7 @@ export async function PATCH(
       }) => {
         const itemId = Number(item.id);
 
-        if (
-          !Number.isInteger(itemId) ||
-          itemId <= 0
-        ) {
+        if (!Number.isInteger(itemId) || itemId <= 0) {
           throw new Error("잘못된 메뉴 ID입니다.");
         }
 
@@ -332,4 +400,3 @@ export async function PATCH(
     );
   }
 }
-

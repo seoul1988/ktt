@@ -3,6 +3,10 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
+
+// KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
+// inline 이미지의 baseline 때문에 생기는 3~4px 하단 틈을 방지합니다.
 
 type CellType =
   | "empty"
@@ -23,7 +27,21 @@ type VerticalAlign = "top" | "center" | "bottom";
 type OverlayButton = {
   id: string;
   text: string;
+  /** 모바일에서만 다른 버튼 문구를 쓰고 싶을 때 사용. 비우면 text 사용 */
+  mobile_text?: string;
+
+  /**
+   * 버튼 이동 방식.
+   * page     = 사이트 내부 페이지
+   * section  = 현재 페이지의 레이어
+   * external = 외부 주소
+   *
+   * url은 이전 저장 데이터와의 호환을 위해 계속 유지합니다.
+   */
+  link_type?: "page" | "section" | "external";
+  link_value?: string;
   url: string;
+
   style: "rounded" | "pill" | "square" | "outline";
   background_color: string;
   text_color: string;
@@ -129,8 +147,10 @@ type GridCell = {
   gallery_images?: string[];
   /** 갤러리 전용: 이미지 URL과 각 이미지 제목 */
   gallery_items?: GalleryImageItem[];
-  /** 데스크톱 갤러리 열 수: 2, 4, 6 */
+  /** 이전 버전 호환용 데스크톱 갤러리 열 수 */
   gallery_columns?: 2 | 4 | 6;
+  /** 갤러리에서 각 이미지가 차지할 최소 가로 크기(px). 크기에 따라 열 수가 자동 결정됩니다. */
+  gallery_item_min_width_px?: number;
   /** 동영상 링크 목록: 개수 제한 없음 */
   video_items?: VideoCarouselItem[];
   /** 한 화면에 표시할 동영상 수: 1~6 */
@@ -162,6 +182,10 @@ type GridCell = {
   overlay_button_gap?: number;
   background_image_blur?: number;
   background_image_effect?: "original" | "blur" | "out-focus" | "in-focus";
+  /** 전체 배경 이미지 표시 방식 */
+  background_image_fit?: "width" | "contain" | "cover" | "scale" | "fill";
+  /** 직접 크기 모드에서 사용하는 배경 이미지 크기(%) */
+  background_image_size_percent?: number;
   background_image_focus_x?: number;
   background_image_focus_y?: number;
   overlay_text_horizontal?: "left" | "center" | "right";
@@ -171,6 +195,8 @@ type GridCell = {
   overlay_button_direction?: "row" | "column";
   overlay_button_width?: number;
   overlay_button_height?: number;
+  /** 모바일에서만 사용할 버튼 높이. 비우면 데스크톱 높이 사용 */
+  mobile_overlay_button_height?: number;
   overlay_button_font_size?: number;
   overlay_button_group_style?: "rounded" | "pill" | "square" | "outline";
   overlay_button_group_color?: string;
@@ -226,6 +252,11 @@ type GridData = {
   height_px?: number;
   /** 모바일에서만 사용하는 레이어 높이 */
   mobile_height_px?: number;
+
+  /** 이 레이아웃 아래 간격(px). 다음 레이어와의 공간을 직접 조절합니다. */
+  margin_bottom_px?: number;
+  /** 모바일에서만 사용하는 이 레이아웃 아래 간격(px) */
+  mobile_margin_bottom_px?: number;
 
   /**
    * 높이 조절 시 레이어 중심을 유지하기 위한 세로 위치값입니다.
@@ -452,6 +483,24 @@ type RestaurantMenuCategory = {
   display_order?: number | null;
 };
 
+type MenuImportPlatform = "doordash" | "clover" | "chownow";
+
+type UnifiedMenuOptionItem = {
+  name: string;
+  priceDelta: number;
+  soldOut: boolean;
+  displayOrder: number;
+};
+
+type UnifiedMenuOptionGroup = {
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number | null;
+  displayOrder: number;
+  options: UnifiedMenuOptionItem[];
+};
+
 type RestaurantMenuItem = {
   id: number;
   category_id: number;
@@ -461,6 +510,10 @@ type RestaurantMenuItem = {
   thumbnail_url?: string | null;
   image_url?: string | null;
   display_order?: number | null;
+  /** DoorDash/Clover/ChowNow 모두 이 공통 옵션 구조로 읽습니다. */
+  option_groups?: UnifiedMenuOptionGroup[] | null;
+  optionGroups?: UnifiedMenuOptionGroup[] | null;
+  menu_option_groups?: UnifiedMenuOptionGroup[] | null;
 };
 
 type RestaurantMenuPayload = {
@@ -710,6 +763,11 @@ const DEVICE_VISUAL_CELL_KEYS = new Set<keyof GridCell>([
   "overlay_text_vertical",
   "overlay_button_horizontal",
   "overlay_button_vertical",
+  "overlay_button_direction",
+  "overlay_button_width",
+  "overlay_button_height",
+  "overlay_button_font_size",
+  "overlay_button_gap",
 ]);
 
 function resolveCellForDevice(
@@ -735,9 +793,19 @@ function resolveCellForDevice(
     ),
   ) as Partial<GridCell>;
 
+  const legacyMobileButtonHeight =
+    device === "mobile" &&
+    !Object.prototype.hasOwnProperty.call(overrides, "overlay_button_height") &&
+    Number.isFinite(Number(cell.mobile_overlay_button_height))
+      ? Number(cell.mobile_overlay_button_height)
+      : undefined;
+
   const resolved: GridCell = {
     ...cell,
     ...overrides,
+    ...(legacyMobileButtonHeight != null
+      ? { overlay_button_height: legacyMobileButtonHeight }
+      : {}),
     width_percent:
       device === "mobile"
         ? Number(cell.mobile_width_percent ?? cell.width_percent)
@@ -771,6 +839,10 @@ function resolveGridForDevice(
       device === "mobile"
         ? Number(grid.mobile_height_px ?? grid.height_px)
         : grid.height_px,
+    margin_bottom_px:
+      device === "mobile"
+        ? Number(grid.mobile_margin_bottom_px ?? grid.margin_bottom_px ?? 0)
+        : Number(grid.margin_bottom_px ?? 0),
     cells: grid.cells
       .map((cell) => resolveCellForDevice(cell, device))
       .filter((cell): cell is GridCell => Boolean(cell)),
@@ -859,6 +931,7 @@ function createDefaultHero(): GridData {
   return {
     id: createId("layout"),
     height: "large",
+    margin_bottom_px: 0,
     layout_width_mode: "full",
     cells: [
       {
@@ -959,6 +1032,14 @@ function normalizeGrid(value: unknown, fallback: GridData): GridData {
       Number(raw.mobile_height_px) > 0
         ? Number(raw.mobile_height_px)
         : fallback.mobile_height_px,
+    margin_bottom_px:
+      Number.isFinite(Number(raw.margin_bottom_px))
+        ? Math.max(0, Math.min(500, Number(raw.margin_bottom_px)))
+        : Number(fallback.margin_bottom_px ?? 0),
+    mobile_margin_bottom_px:
+      Number.isFinite(Number(raw.mobile_margin_bottom_px))
+        ? Math.max(0, Math.min(500, Number(raw.mobile_margin_bottom_px)))
+        : fallback.mobile_margin_bottom_px,
     auto_height:
       typeof raw.auto_height === "boolean"
         ? raw.auto_height
@@ -1024,6 +1105,7 @@ function createEmptyHeroLayout(): GridData {
   return {
     id: createId("layout"),
     height: "medium",
+    margin_bottom_px: 0,
     layout_width_mode: "container",
     cells: [
       {
@@ -1871,10 +1953,85 @@ function overlayPositionClasses(
   return `${horizontalClass} ${verticalClass}`;
 }
 
+function getLegacyOverlayButtonTarget(urlValue: unknown): {
+  type: "page" | "section" | "external";
+  value: string;
+} {
+  const raw = String(urlValue || "").trim();
+
+  if (!raw) {
+    return { type: "page", value: "" };
+  }
+
+  if (raw.startsWith("#")) {
+    return {
+      type: "section",
+      value: slugifyMenuValue(raw.slice(1)),
+    };
+  }
+
+  const internalMatch = raw.match(
+    /^\/business\/[^/]+\/website(?:\/([^?#]+))?/i,
+  );
+
+  if (internalMatch) {
+    return {
+      type: "page",
+      value: slugifyMenuValue(
+        decodeURIComponent(internalMatch[1] || "home"),
+      ),
+    };
+  }
+
+  if (raw.startsWith("/")) {
+    return {
+      type: "page",
+      value: slugifyMenuValue(raw.replace(/^\/+/, "")) || "home",
+    };
+  }
+
+  return {
+    type: "external",
+    value: raw,
+  };
+}
+
+function buildOverlayButtonHref(
+  button: Pick<OverlayButton, "link_type" | "link_value" | "url">,
+  businessId: string | number,
+) {
+  const legacy = getLegacyOverlayButtonTarget(button.url);
+  const linkType = button.link_type || legacy.type;
+  const rawValue = String(button.link_value ?? legacy.value ?? "").trim();
+
+  if (linkType === "section") {
+    const slug = slugifyMenuValue(rawValue.replace(/^#/, ""));
+    return slug ? `#${slug}` : "#";
+  }
+
+  if (linkType === "page") {
+    const slug = slugifyMenuValue(
+      rawValue
+        .replace(/^\/business\/[^/]+\/website\/?/i, "")
+        .replace(/^\/+/, ""),
+    );
+
+    if (!slug || slug === "home") {
+      return `/business/${businessId}/website`;
+    }
+
+    return `/business/${businessId}/website/${encodeURIComponent(slug)}`;
+  }
+
+  return normalizeExternalUrl(rawValue || button.url || "");
+}
+
 function createOverlayButton(index = 0): OverlayButton {
   return {
     id: createId("overlay-button"),
     text: index === 0 ? "예약하기" : `버튼 ${index + 1}`,
+    link_type: "page",
+    link_value: "",
     url: "",
     style: "rounded",
     background_color: "#111827",
@@ -1894,15 +2051,34 @@ function normalizeOverlayButtons(cell: GridCell): OverlayButton[] {
    * 그 상태를 그대로 유지해야 버튼이 다시 생기지 않습니다.
    */
   if (Array.isArray(cell.overlay_buttons)) {
-    return cell.overlay_buttons.map((button, index) => ({
-      ...createOverlayButton(index),
-      ...button,
-      id: button.id || createId("overlay-button"),
-      text: button.text || `버튼 ${index + 1}`,
-      url: button.url || "",
-      height: Math.max(30, Math.min(90, Number(button.height) || 46)),
-      font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
-    }));
+    return cell.overlay_buttons.map((button, index) => {
+      const legacyTarget = getLegacyOverlayButtonTarget(button.url);
+
+      const linkType =
+        button.link_type === "page" ||
+        button.link_type === "section" ||
+        button.link_type === "external"
+          ? button.link_type
+          : legacyTarget.type;
+
+      const linkValue =
+        typeof button.link_value === "string" && button.link_value.trim()
+          ? button.link_value.trim()
+          : legacyTarget.value;
+
+      return {
+        ...createOverlayButton(index),
+        ...button,
+        id: button.id || createId("overlay-button"),
+        text: button.text || `버튼 ${index + 1}`,
+        link_type: linkType,
+        link_value: linkValue,
+        // 예전 코드/API에서도 쓸 수 있도록 계산된 URL을 함께 유지합니다.
+        url: button.url || "",
+        height: Math.max(30, Math.min(90, Number(button.height) || 46)),
+        font_size: Math.max(10, Math.min(40, Number(button.font_size) || 16)),
+      };
+    });
   }
 
   return [createOverlayButton(0)];
@@ -3404,7 +3580,7 @@ function LinkPageContent({
         className="min-h-[60vh] w-full"
         style={{ backgroundColor: menuBackgroundColor, color: menuTextColor }}
       >
-        <RestaurantMenuDisplay
+        <RestaurantMenu
           businessId={section.business_id}
           compact={previewDevice === "mobile"}
           backgroundColor={menuBackgroundColor}
@@ -3957,6 +4133,22 @@ type MenuImportRow = {
   price: number | null;
   imageFileName: string;
   displayOrder: number;
+  soldOut: boolean;
+  optionGroups: UnifiedMenuOptionGroup[];
+};
+
+type RawOptionCsvRow = {
+  category: string;
+  menuName: string;
+  groupName: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number | null;
+  optionName: string;
+  priceDelta: number;
+  soldOut: boolean;
+  groupOrder: number;
+  optionOrder: number;
 };
 
 function parseCsvLine(line: string) {
@@ -3984,48 +4176,274 @@ function parseCsvLine(line: string) {
   return values;
 }
 
-function parseMenuCsv(text: string): MenuImportRow[] {
+function normalizeCsvHeader(value: string) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]/g, "");
+}
+
+function csvBoolean(value: unknown) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return ["1", "true", "yes", "y", "required", "soldout", "sold out", "unavailable"].includes(normalized);
+}
+
+function csvNumber(value: unknown, fallback: number | null = null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseCsvTable(text: string) {
   const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return [];
+  if (lines.length < 2) return { headers: [] as string[], rows: [] as string[][] };
+  return {
+    headers: parseCsvLine(lines[0]).map(normalizeCsvHeader),
+    rows: lines.slice(1).map(parseCsvLine),
+  };
+}
 
-  const headers = parseCsvLine(lines[0]).map((header) =>
-    header.trim().toLowerCase().replace(/[\s_-]+/g, ""),
-  );
-  const findIndex = (...names: string[]) =>
-    headers.findIndex((header) => names.includes(header));
+function findCsvIndex(headers: string[], ...names: string[]) {
+  const normalizedNames = names.map(normalizeCsvHeader);
+  return headers.findIndex((header) => normalizedNames.includes(header));
+}
 
-  const categoryIndex = findIndex("category", "categoryname", "menucategory", "section", "카테고리");
-  const nameIndex = findIndex("name", "item", "itemname", "menuname", "title", "상품명", "메뉴명");
-  const descriptionIndex = findIndex("description", "desc", "details", "설명");
-  const priceIndex = findIndex("price", "itemprice", "가격");
-  const imageIndex = findIndex(
-    "imagefile",
-    "imagefilename",
-    "localimage",
-    "localimagepath",
-    "imagepath",
-    "downloadedfile",
-    "filename",
-    "이미지",
-  );
+function readCsvCell(columns: string[], index: number) {
+  return index >= 0 ? String(columns[index] ?? "").trim() : "";
+}
+
+function normalizeMenuMatchKey(category: string, menuName: string) {
+  const normalize = (value: string) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9가-힣]/g, "");
+  return `${normalize(category)}::${normalize(menuName)}`;
+}
+
+function normalizeMenuNameOnlyKey(menuName: string) {
+  return normalizeMenuMatchKey("", menuName).split("::")[1] || "";
+}
+
+function getMenuCsvAliases(platform: MenuImportPlatform) {
+  const common = {
+    category: ["category", "categoryname", "menucategory", "section", "카테고리"],
+    name: ["name", "item", "itemname", "menuname", "title", "상품명", "메뉴명"],
+    description: ["description", "desc", "details", "itemdescription", "설명"],
+    price: ["price", "itemprice", "baseprice", "price_display", "pricedisplay", "displayprice", "가격"],
+    image: [
+      "imagefile", "imagefilename", "localimage", "localimagepath", "imagepath",
+      "downloadedfile", "savedimage", "saved_image", "filename", "이미지",
+    ],
+    soldOut: ["soldout", "issoldout", "unavailable", "isavailable", "품절"],
+  };
+
+  if (platform === "clover") {
+    return {
+      ...common,
+      price: [...common.price, "menuprice", "unitprice"],
+      image: [...common.image, "savedfile", "savedfilename"],
+    };
+  }
+  if (platform === "chownow") {
+    return {
+      ...common,
+      category: [...common.category, "menu_section", "menusection"],
+      name: [...common.name, "itemtitle", "productname"],
+    };
+  }
+  return {
+    ...common,
+    category: [...common.category, "categorytitle"],
+    name: [...common.name, "displayname"],
+  };
+}
+
+function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow[] {
+  const { headers, rows } = parseCsvTable(text);
+  if (!headers.length) return [];
+  const aliases = getMenuCsvAliases(platform);
+  const categoryIndex = findCsvIndex(headers, ...aliases.category);
+  const nameIndex = findCsvIndex(headers, ...aliases.name);
+  const descriptionIndex = findCsvIndex(headers, ...aliases.description);
+  const priceIndex = findCsvIndex(headers, ...aliases.price);
+  const imageIndex = findCsvIndex(headers, ...aliases.image);
+  const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
 
   if (nameIndex < 0) {
-    throw new Error("CSV에서 메뉴 이름 컬럼을 찾지 못했습니다. name 또는 item_name 컬럼이 필요합니다.");
+    throw new Error(`${platform.toUpperCase()} CSV에서 메뉴 이름 컬럼을 찾지 못했습니다.`);
   }
 
-  return lines.slice(1).map((line, index) => {
-    const columns = parseCsvLine(line);
-    const rawPrice = priceIndex >= 0 ? columns[priceIndex] || "" : "";
-    const numericPrice = Number(rawPrice.replace(/[^0-9.-]/g, ""));
+  return rows.map((columns, index) => {
+    const rawPrice = readCsvCell(columns, priceIndex);
+    const numericPrice = csvNumber(rawPrice, null);
+    const soldOutRaw = readCsvCell(columns, soldOutIndex);
+    const soldOut = soldOutIndex >= 0 && normalizeCsvHeader(headers[soldOutIndex]) === "isavailable"
+      ? !["1", "true", "yes", "y"].includes(soldOutRaw.toLowerCase())
+      : csvBoolean(soldOutRaw);
+
     return {
-      category: (categoryIndex >= 0 ? columns[categoryIndex] : "Menu")?.trim() || "Menu",
-      name: (columns[nameIndex] || "").trim(),
-      description: (descriptionIndex >= 0 ? columns[descriptionIndex] : "")?.trim() || "",
-      price: Number.isFinite(numericPrice) ? numericPrice : null,
-      imageFileName: (imageIndex >= 0 ? columns[imageIndex] : "")?.trim().replace(/\\/g, "/") || "",
+      category: readCsvCell(columns, categoryIndex) || "Menu",
+      name: readCsvCell(columns, nameIndex),
+      description: readCsvCell(columns, descriptionIndex),
+      price: numericPrice,
+      imageFileName: readCsvCell(columns, imageIndex).replace(/\\/g, "/"),
       displayOrder: index,
+      soldOut,
+      optionGroups: [],
     };
   }).filter((row) => row.name);
+}
+
+function getOptionCsvAliases(platform: MenuImportPlatform) {
+  const common = {
+    category: ["category", "categoryname", "menucategory", "section", "카테고리"],
+    menuName: ["menuname", "menuitem", "menuitemname", "parentname", "parentitem", "itemname", "메뉴명"],
+    groupName: ["groupname", "optiongroup", "optiongroupname", "modifiergroup", "modifiergroupname", "modifiername", "group", "옵션그룹"],
+    required: ["required", "isrequired", "grouprequired", "필수"],
+    minSelect: ["minselect", "minimumselect", "minimum", "min", "minrequired", "최소"],
+    maxSelect: ["maxselect", "maximumselect", "maximum", "max", "최대"],
+    optionName: ["optionname", "choice", "choicename", "modifieritem", "modifieroption", "selection", "selectionname", "value", "옵션명"],
+    priceDelta: ["pricedelta", "optionprice", "modifierprice", "extraprice", "additionalprice", "addprice", "price", "추가금"],
+    soldOut: ["soldout", "issoldout", "unavailable", "disabled", "품절"],
+    groupOrder: ["grouporder", "groupdisplayorder", "groupsortorder"],
+    optionOrder: ["optionorder", "displayorder", "sortorder", "order"],
+  };
+
+  if (platform === "clover") {
+    return {
+      ...common,
+      menuName: [...common.menuName, "menu_name"],
+      groupName: [...common.groupName, "option_group", "option_group_name"],
+      optionName: [...common.optionName, "option_name"],
+      priceDelta: [...common.priceDelta, "price_delta"],
+    };
+  }
+  if (platform === "doordash") {
+    return {
+      ...common,
+      groupName: [...common.groupName, "extraoptiongroup", "itemextraoptiongroup"],
+      optionName: [...common.optionName, "extraoption", "itemextraoption"],
+    };
+  }
+  return {
+    ...common,
+    groupName: [...common.groupName, "modifiercategory"],
+    optionName: [...common.optionName, "modifieritemname"],
+  };
+}
+
+function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionCsvRow[] {
+  const { headers, rows } = parseCsvTable(text);
+  if (!headers.length) return [];
+  const aliases = getOptionCsvAliases(platform);
+  const categoryIndex = findCsvIndex(headers, ...aliases.category);
+  const menuNameIndex = findCsvIndex(headers, ...aliases.menuName);
+  const groupNameIndex = findCsvIndex(headers, ...aliases.groupName);
+  const requiredIndex = findCsvIndex(headers, ...aliases.required);
+  const minSelectIndex = findCsvIndex(headers, ...aliases.minSelect);
+  const maxSelectIndex = findCsvIndex(headers, ...aliases.maxSelect);
+  const optionNameIndex = findCsvIndex(headers, ...aliases.optionName);
+  const priceDeltaIndex = findCsvIndex(headers, ...aliases.priceDelta);
+  const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
+  const groupOrderIndex = findCsvIndex(headers, ...aliases.groupOrder);
+  const optionOrderIndex = findCsvIndex(headers, ...aliases.optionOrder);
+
+  if (menuNameIndex < 0 || groupNameIndex < 0 || optionNameIndex < 0) {
+    throw new Error(
+      `${platform.toUpperCase()} 옵션 CSV에서 메뉴명 / 옵션그룹 / 옵션명 컬럼을 찾지 못했습니다.`,
+    );
+  }
+
+  return rows.map((columns, index) => {
+    const required = csvBoolean(readCsvCell(columns, requiredIndex));
+    const minRaw = csvNumber(readCsvCell(columns, minSelectIndex), required ? 1 : 0);
+    const maxRaw = csvNumber(readCsvCell(columns, maxSelectIndex), null);
+    return {
+      category: readCsvCell(columns, categoryIndex),
+      menuName: readCsvCell(columns, menuNameIndex),
+      groupName: readCsvCell(columns, groupNameIndex) || "Options",
+      required,
+      minSelect: Math.max(0, Number(minRaw ?? 0)),
+      maxSelect: maxRaw == null ? null : Math.max(0, Number(maxRaw)),
+      optionName: readCsvCell(columns, optionNameIndex),
+      priceDelta: Number(csvNumber(readCsvCell(columns, priceDeltaIndex), 0) ?? 0),
+      soldOut: csvBoolean(readCsvCell(columns, soldOutIndex)),
+      groupOrder: Number(csvNumber(readCsvCell(columns, groupOrderIndex), index) ?? index),
+      optionOrder: Number(csvNumber(readCsvCell(columns, optionOrderIndex), index) ?? index),
+    };
+  }).filter((row) => row.menuName && row.optionName);
+}
+
+function attachUnifiedOptions(menuRows: MenuImportRow[], optionRows: RawOptionCsvRow[]) {
+  const exactMap = new Map<string, MenuImportRow>();
+  const nameMap = new Map<string, MenuImportRow[]>();
+  for (const row of menuRows) {
+    exactMap.set(normalizeMenuMatchKey(row.category, row.name), row);
+    const nameKey = normalizeMenuNameOnlyKey(row.name);
+    const list = nameMap.get(nameKey) || [];
+    list.push(row);
+    nameMap.set(nameKey, list);
+  }
+
+  let attached = 0;
+  let unmatched = 0;
+  for (const optionRow of optionRows) {
+    const exact = optionRow.category
+      ? exactMap.get(normalizeMenuMatchKey(optionRow.category, optionRow.menuName))
+      : undefined;
+    const byName = nameMap.get(normalizeMenuNameOnlyKey(optionRow.menuName)) || [];
+    const menu = exact || (byName.length === 1 ? byName[0] : undefined);
+    if (!menu) {
+      unmatched += 1;
+      continue;
+    }
+
+    let group = menu.optionGroups.find(
+      (item) => normalizeCsvHeader(item.name) === normalizeCsvHeader(optionRow.groupName),
+    );
+    if (!group) {
+      group = {
+        name: optionRow.groupName,
+        required: optionRow.required,
+        minSelect: optionRow.minSelect,
+        maxSelect: optionRow.maxSelect,
+        displayOrder: optionRow.groupOrder,
+        options: [],
+      };
+      menu.optionGroups.push(group);
+    } else {
+      group.required = group.required || optionRow.required;
+      group.minSelect = Math.max(group.minSelect, optionRow.minSelect);
+      if (optionRow.maxSelect != null) {
+        group.maxSelect = group.maxSelect == null
+          ? optionRow.maxSelect
+          : Math.max(group.maxSelect, optionRow.maxSelect);
+      }
+    }
+
+    const optionKey = normalizeCsvHeader(optionRow.optionName);
+    if (!group.options.some((item) => normalizeCsvHeader(item.name) === optionKey)) {
+      group.options.push({
+        name: optionRow.optionName,
+        priceDelta: optionRow.priceDelta,
+        soldOut: optionRow.soldOut,
+        displayOrder: optionRow.optionOrder,
+      });
+      attached += 1;
+    }
+  }
+
+  for (const row of menuRows) {
+    row.optionGroups.sort((a, b) => a.displayOrder - b.displayOrder);
+    for (const group of row.optionGroups) {
+      group.options.sort((a, b) => a.displayOrder - b.displayOrder);
+    }
+  }
+  return { attached, unmatched };
 }
 
 function normalizeMenuFileKey(value: string) {
@@ -4036,6 +4454,37 @@ function normalizeMenuFileKey(value: string) {
     .replace(/\.[^.]+$/, "")
     .toLowerCase()
     .replace(/[^a-z0-9가-힣]/g, "");
+}
+
+function getRestaurantMenuOptionGroups(item: RestaurantMenuItem | null): UnifiedMenuOptionGroup[] {
+  if (!item) return [];
+  const rawGroups = item.option_groups || item.optionGroups || item.menu_option_groups || [];
+  if (!Array.isArray(rawGroups)) return [];
+
+  return rawGroups.map((rawGroup, groupIndex) => {
+    const group = rawGroup as UnifiedMenuOptionGroup & Record<string, unknown>;
+    const rawOptions = Array.isArray(group.options) ? group.options : [];
+    const minSelect = Number(group.minSelect ?? (group as any).min_select ?? 0);
+    const maxValue = group.maxSelect ?? (group as any).max_select;
+    const maxSelect = maxValue == null || maxValue === "" ? null : Number(maxValue);
+    return {
+      name: String(group.name || (group as any).group_name || `Options ${groupIndex + 1}`),
+      required: Boolean(group.required ?? (group as any).is_required ?? minSelect > 0),
+      minSelect: Number.isFinite(minSelect) ? Math.max(0, minSelect) : 0,
+      maxSelect: maxSelect != null && Number.isFinite(maxSelect) ? Math.max(0, maxSelect) : null,
+      displayOrder: Number(group.displayOrder ?? (group as any).display_order ?? groupIndex) || groupIndex,
+      options: rawOptions.map((rawOption, optionIndex) => {
+        const option = rawOption as UnifiedMenuOptionItem & Record<string, unknown>;
+        const delta = Number(option.priceDelta ?? (option as any).price_delta ?? (option as any).price ?? 0);
+        return {
+          name: String(option.name || (option as any).option_name || `Option ${optionIndex + 1}`),
+          priceDelta: Number.isFinite(delta) ? delta : 0,
+          soldOut: Boolean(option.soldOut ?? (option as any).sold_out ?? false),
+          displayOrder: Number(option.displayOrder ?? (option as any).display_order ?? optionIndex) || optionIndex,
+        };
+      }).sort((a, b) => a.displayOrder - b.displayOrder),
+    };
+  }).sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
 async function imageFileToWebp(
@@ -4081,7 +4530,9 @@ function MenuImportModal({
   adminKey: string;
   onClose: () => void;
 }) {
+  const [platform, setPlatform] = useState<MenuImportPlatform>("clover");
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [optionsCsvFile, setOptionsCsvFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [replaceExisting, setReplaceExisting] = useState(true);
   const [importing, setImporting] = useState(false);
@@ -4089,9 +4540,22 @@ function MenuImportModal({
   const [result, setResult] = useState("");
   const [importError, setImportError] = useState("");
 
+  const platformLabel = platform === "doordash" ? "DoorDash" : platform === "clover" ? "Clover" : "ChowNow";
+
+  function changePlatform(nextPlatform: MenuImportPlatform) {
+    if (importing || nextPlatform === platform) return;
+    setPlatform(nextPlatform);
+    setCsvFile(null);
+    setOptionsCsvFile(null);
+    setImageFiles([]);
+    setProgress({ current: 0, total: 0 });
+    setResult("");
+    setImportError("");
+  }
+
   async function startImport() {
     if (!csvFile) {
-      setImportError("CSV 파일을 선택해주세요.");
+      setImportError(`${platformLabel} 메뉴 CSV 파일을 선택해주세요.`);
       return;
     }
 
@@ -4100,8 +4564,14 @@ function MenuImportModal({
     setResult("");
 
     try {
-      const rows = parseMenuCsv(await csvFile.text());
+      const rows = parseMenuCsv(await csvFile.text(), platform);
       if (!rows.length) throw new Error("가져올 메뉴가 없습니다.");
+
+      let optionAttachResult = { attached: 0, unmatched: 0 };
+      if (optionsCsvFile) {
+        const optionRows = parseOptionsCsv(await optionsCsvFile.text(), platform);
+        optionAttachResult = attachUnifiedOptions(rows, optionRows);
+      }
 
       const fileMap = new Map<string, File>();
       for (const file of imageFiles) {
@@ -4114,11 +4584,13 @@ function MenuImportModal({
       setProgress({ current: 0, total: rows.length });
       let imageCount = 0;
       let missingImageCount = 0;
+      let optionGroupCount = 0;
       const categoryNames = new Set<string>();
 
       for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index];
         categoryNames.add(row.category);
+        optionGroupCount += row.optionGroups.length;
         const requested = row.imageFileName.toLowerCase();
         const requestedBase = requested.split("/").pop() || requested;
         const imageFile =
@@ -4128,12 +4600,19 @@ function MenuImportModal({
           fileMap.get(normalizeMenuFileKey(row.name));
 
         const formData = new FormData();
+        formData.append("platform", platform);
+        formData.append("sourcePlatform", platform);
         formData.append("category", row.category);
         formData.append("name", row.name);
         formData.append("description", row.description);
         formData.append("price", row.price == null ? "" : String(row.price));
+        formData.append("soldOut", row.soldOut ? "true" : "false");
         formData.append("displayOrder", String(row.displayOrder));
         formData.append("replaceExisting", replaceExisting && index === 0 ? "true" : "false");
+        // 세 플랫폼 모두 서버에는 완전히 동일한 옵션 JSON 구조로 전달합니다.
+        const unifiedOptionsJson = JSON.stringify(row.optionGroups);
+        formData.append("optionsJson", unifiedOptionsJson);
+        formData.append("optionGroupsJson", unifiedOptionsJson);
 
         if (imageFile) {
           const thumbnail = await imageFileToWebp(imageFile, {
@@ -4172,7 +4651,7 @@ function MenuImportModal({
       }
 
       setResult(
-        `완료: 카테고리 ${categoryNames.size}개 · 메뉴 ${rows.length}개 · 이미지 ${imageCount}개 · 이미지 없음 ${missingImageCount}개 · 원본 업로드 0개`,
+        `완료: ${platformLabel} · 카테고리 ${categoryNames.size}개 · 메뉴 ${rows.length}개 · 옵션그룹 ${optionGroupCount}개 · 옵션 ${optionAttachResult.attached}개 · 이미지 ${imageCount}개 · 이미지 없음 ${missingImageCount}개${optionAttachResult.unmatched ? ` · 연결 실패 옵션 ${optionAttachResult.unmatched}개` : ""}`,
       );
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "메뉴 가져오기에 실패했습니다.");
@@ -4183,7 +4662,7 @@ function MenuImportModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/55 p-3">
-      <div className="max-h-[92vh] w-full max-w-[480px] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+      <div className="max-h-[92vh] w-full max-w-[520px] overflow-y-auto rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Restaurant Menu</p>
@@ -4201,8 +4680,32 @@ function MenuImportModal({
         </div>
 
         <div className="space-y-3 p-5">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <span className="block text-sm font-black text-gray-900">1. 가져올 플랫폼 선택</span>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {(["doordash", "clover", "chownow"] as MenuImportPlatform[]).map((entry) => {
+                const label = entry === "doordash" ? "DoorDash" : entry === "clover" ? "Clover" : "ChowNow";
+                const active = entry === platform;
+                return (
+                  <button
+                    key={entry}
+                    type="button"
+                    disabled={importing}
+                    onClick={() => changePlatform(entry)}
+                    className={`rounded-xl border px-3 py-2.5 text-xs font-black ${active ? "border-gray-950 bg-gray-950 text-white" : "border-gray-200 bg-white text-gray-800"}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] font-semibold leading-5 text-gray-500">
+              원본 CSV 형식은 플랫폼마다 달라도 KTown에 저장되는 옵션 구조는 모두 동일합니다.
+            </p>
+          </div>
+
           <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <span className="block text-sm font-black text-gray-900">1. 메뉴 CSV</span>
+            <span className="block text-sm font-black text-gray-900">2. {platformLabel} 메뉴 CSV</span>
             <input
               type="file"
               accept=".csv,text/csv"
@@ -4210,13 +4713,24 @@ function MenuImportModal({
               onChange={(event) => setCsvFile(event.target.files?.[0] || null)}
               className="mt-2 block w-full text-xs"
             />
-            {csvFile ? (
-              <span className="mt-1.5 block truncate text-xs font-bold text-emerald-700">{csvFile.name}</span>
-            ) : null}
+            {csvFile ? <span className="mt-1.5 block truncate text-xs font-bold text-emerald-700">{csvFile.name}</span> : null}
           </label>
 
           <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
-            <span className="block text-sm font-black text-gray-900">2. images 폴더</span>
+            <span className="block text-sm font-black text-gray-900">3. {platformLabel} 옵션 CSV</span>
+            <p className="mt-1 text-[11px] font-semibold leading-4 text-gray-500">옵션이 없는 메뉴만 가져올 때는 비워도 됩니다.</p>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={importing}
+              onChange={(event) => setOptionsCsvFile(event.target.files?.[0] || null)}
+              className="mt-2 block w-full text-xs"
+            />
+            {optionsCsvFile ? <span className="mt-1.5 block truncate text-xs font-bold text-emerald-700">{optionsCsvFile.name}</span> : null}
+          </label>
+
+          <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <span className="block text-sm font-black text-gray-900">4. {platformLabel} images 폴더</span>
             <input
               type="file"
               accept="image/*"
@@ -4226,13 +4740,14 @@ function MenuImportModal({
               onChange={(event) => setImageFiles(Array.from(event.target.files || []))}
               className="mt-2 block w-full text-xs"
             />
-            {imageFiles.length ? (
-              <span className="mt-1.5 block text-xs font-bold text-emerald-700">이미지 {imageFiles.length}개 선택됨</span>
-            ) : null}
+            {imageFiles.length ? <span className="mt-1.5 block text-xs font-bold text-emerald-700">이미지 {imageFiles.length}개 선택됨</span> : null}
           </label>
 
+          <div className="rounded-xl bg-violet-50 px-3 py-2 text-xs font-semibold leading-5 text-violet-950">
+            공통 옵션 구조: 옵션그룹 이름 · Required · 최소/최대 선택 수 · 옵션명 · 추가금 · Sold Out · 표시순서
+          </div>
           <p className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold leading-5 text-blue-950">
-            96×96 썸네일과 최대 800×800 WebP만 업로드하며 원본은 업로드하지 않습니다.
+            모든 플랫폼에서 이미지는 96×96 썸네일과 최대 800×800 WebP로 변환해 업로드하며 원본은 업로드하지 않습니다.
           </p>
 
           <label className="flex items-center gap-2.5 rounded-xl border border-gray-200 px-3 py-2.5">
@@ -4253,10 +4768,7 @@ function MenuImportModal({
                 <span>{progress.current} / {progress.total}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className="h-full bg-gray-950 transition-all"
-                  style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
-                />
+                <div className="h-full bg-gray-950 transition-all" style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }} />
               </div>
             </div>
           ) : null}
@@ -4280,7 +4792,7 @@ function MenuImportModal({
             onClick={() => void startImport()}
             className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"
           >
-            {importing ? `${progress.current}/${progress.total} 가져오는 중` : "메뉴 가져오기"}
+            {importing ? `${progress.current}/${progress.total} 가져오는 중` : `${platformLabel} 메뉴 가져오기`}
           </button>
         </div>
       </div>
@@ -5716,7 +6228,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     layoutId?: string,
   ) {
     const normalizedHeight = Math.round(
-      Math.max(area === "header" ? 48 : 100, Math.min(3000, heightPx)),
+      Math.max(area === "header" ? 48 : 20, Math.min(3000, heightPx)),
     );
 
     if (area === "header") {
@@ -7700,7 +8212,6 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 websiteSettings={websiteSettings}
                 businessId={businessId}
                 previewDevice={device}
-                editable
               />
             </div>
 
@@ -7732,7 +8243,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   editorPreview
                 />
 
-                <div className="relative z-10 space-y-3">
+                <div className="relative z-10">
                   {heroSection.section_type !== "hero" &&
                   !heroSection.content?.grid &&
                   !(Array.isArray(heroSection.content?.layouts) && heroSection.content.layouts.length > 0) ? (
@@ -7787,7 +8298,22 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           ? "ring-4 ring-blue-500/30"
                           : "hover:ring-2 hover:ring-blue-300/40"
                       }`}
-                      style={getLayoutBorderStyle(layout)}
+                      style={{
+                        ...getLayoutBorderStyle(layout),
+                        marginBottom: `${Math.max(
+                          0,
+                          Math.min(
+                            500,
+                            Number(
+                              device === "mobile"
+                                ? layout.mobile_margin_bottom_px ??
+                                    layout.margin_bottom_px ??
+                                    0
+                                : layout.margin_bottom_px ?? 0,
+                            ),
+                          ),
+                        )}px`,
+                      }}
                     >
                       <LayoutBorderOverlay layout={layout} />
 
@@ -7937,6 +8463,43 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               if (selection.area === "hero" && selection.layoutId) {
                 updateGridHeight("hero", heightPx, selection.layoutId);
               }
+            }}
+            selectedLayoutSpacing={
+              selection.area === "hero" && selection.layoutId
+                ? Number(
+                    device === "mobile"
+                      ? heroLayouts.find((layout) => layout.id === selection.layoutId)
+                          ?.mobile_margin_bottom_px ??
+                          heroLayouts.find((layout) => layout.id === selection.layoutId)
+                            ?.margin_bottom_px ??
+                          0
+                      : heroLayouts.find((layout) => layout.id === selection.layoutId)
+                          ?.margin_bottom_px ?? 0,
+                  )
+                : 0
+            }
+            onResizeSelectedLayoutSpacing={(spacingPx) => {
+              if (selection.area !== "hero" || !selection.layoutId) return;
+
+              const safeSpacing = Math.max(
+                0,
+                Math.min(500, Math.round(Number(spacingPx) || 0)),
+              );
+
+              updateGrid(
+                "hero",
+                (grid) =>
+                  device === "mobile"
+                    ? {
+                        ...grid,
+                        mobile_margin_bottom_px: safeSpacing,
+                      }
+                    : {
+                        ...grid,
+                        margin_bottom_px: safeSpacing,
+                      },
+                selection.layoutId,
+              );
             }}
             businessId={businessId}
             adminKey={adminKey}
@@ -9439,7 +10002,21 @@ function CurrentWebsitePreview({
                         style={{
                           ...getLayoutBorderStyle(layout),
                           marginBottom:
-                            layoutIndex < pageLayouts.length - 1 ? "6px" : 0,
+                            layoutIndex < pageLayouts.length - 1
+                              ? `${Math.max(
+                                  0,
+                                  Math.min(
+                                    500,
+                                    Number(
+                                      device === "mobile"
+                                        ? layout.mobile_margin_bottom_px ??
+                                            layout.margin_bottom_px ??
+                                            6
+                                        : layout.margin_bottom_px ?? 0,
+                                    ),
+                                  ),
+                                )}px`
+                              : 0,
                         }}
                       >
                         <div
@@ -9477,7 +10054,7 @@ function CurrentWebsitePreview({
               style={{
                 ...backgroundStyle(heroSection, outerBackgroundColor),
                 ...getSectionWidthStyle(heroSection),
-                marginBottom: "6px",
+                marginBottom: 0,
                 minHeight: getVideoSectionMinHeight(
                   heroSection,
                   device,
@@ -9502,7 +10079,21 @@ function CurrentWebsitePreview({
                     style={{
                       ...getLayoutBorderStyle(layout),
                       marginBottom:
-                        layoutIndex < heroLayouts.length - 1 ? "6px" : 0,
+                        layoutIndex < heroLayouts.length - 1
+                          ? `${Math.max(
+                              0,
+                              Math.min(
+                                500,
+                                Number(
+                                  device === "mobile"
+                                    ? layout.mobile_margin_bottom_px ??
+                                        layout.margin_bottom_px ??
+                                        6
+                                    : layout.margin_bottom_px ?? 0,
+                                ),
+                              ),
+                            )}px`
+                          : 0,
                     }}
                   >
                     <div
@@ -9623,506 +10214,6 @@ function CurrentWebsitePreview({
           )}
         </div>
       </div>
-    </div>
-  );
-}
-
-function RestaurantMenuDisplay({
-  businessId,
-  compact = false,
-  backgroundColor = "#ffffff",
-  textColor = "#111827",
-  scrollTopEnabled = true,
-  scrollTopButtonColor = "#111827",
-  scrollTopIconColor = "#ffffff",
-  scrollTopPosition = "right",
-}: {
-  businessId: number;
-  compact?: boolean;
-  backgroundColor?: string;
-  textColor?: string;
-  scrollTopEnabled?: boolean;
-  scrollTopButtonColor?: string;
-  scrollTopIconColor?: string;
-  scrollTopPosition?: "right" | "left";
-}) {
-  const [data, setData] = useState<RestaurantMenuPayload>({ categories: [], items: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
-  const [selectedItem, setSelectedItem] = useState<RestaurantMenuItem | null>(null);
-  const [originalImageOpen, setOriginalImageOpen] = useState(false);
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [scrollTopButtonStyle, setScrollTopButtonStyle] = useState<React.CSSProperties>({});
-  const [categoryBarFixed, setCategoryBarFixed] = useState(false);
-  const [categoryBarStyle, setCategoryBarStyle] = useState<React.CSSProperties>({});
-  const rootRef = useRef<HTMLDivElement>(null);
-  const stickyCategoryRef = useRef<HTMLDivElement>(null);
-  const categoryScrollRef = useRef<HTMLDivElement>(null);
-
-  function getMenuScrollContainer() {
-    const root = rootRef.current;
-    if (!root || typeof window === "undefined") return null;
-
-    let parent = root.parentElement;
-    while (parent) {
-      const style = window.getComputedStyle(parent);
-      const overflowY = style.overflowY;
-      if ((overflowY === "auto" || overflowY === "scroll") && parent.scrollHeight > parent.clientHeight) {
-        return parent;
-      }
-      parent = parent.parentElement;
-    }
-
-    return null;
-  }
-
-  function scrollMenuToElement(target: HTMLElement, behavior: ScrollBehavior = "smooth") {
-    const container = getMenuScrollContainer();
-    const stickyHeight = stickyCategoryRef.current?.offsetHeight || 0;
-    const extraGap = 12;
-
-    if (container) {
-      const containerRect = container.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      const nextTop = container.scrollTop + targetRect.top - containerRect.top - stickyHeight - extraGap;
-      container.scrollTo({ top: Math.max(0, nextTop), behavior });
-      return;
-    }
-
-    const nextTop = window.scrollY + target.getBoundingClientRect().top - stickyHeight - extraGap;
-    window.scrollTo({ top: Math.max(0, nextTop), behavior });
-  }
-
-  function scrollCategories(direction: -1 | 1) {
-    const element = categoryScrollRef.current;
-    if (!element) return;
-    element.scrollBy({
-      left: direction * Math.max(220, element.clientWidth * 0.72),
-      behavior: "smooth",
-    });
-  }
-
-  useEffect(() => {
-    const container = getMenuScrollContainer();
-
-    const updateCategoryBar = () => {
-      const root = rootRef.current;
-      const bar = stickyCategoryRef.current;
-      if (!root || !bar) return;
-
-      const rootRect = root.getBoundingClientRect();
-      const barHeight = bar.offsetHeight || 0;
-      const containerRect = container?.getBoundingClientRect();
-      const viewportTop = Math.max(0, containerRect?.top ?? 0);
-      const viewportBottom = Math.min(
-        window.innerHeight,
-        containerRect?.bottom ?? window.innerHeight,
-      );
-
-      const shouldFix =
-        rootRect.top <= viewportTop &&
-        rootRect.bottom > viewportTop + barHeight &&
-        rootRect.top < viewportBottom;
-
-      setCategoryBarFixed(shouldFix);
-
-      if (shouldFix) {
-        setCategoryBarStyle({
-          position: "fixed",
-          top: `${viewportTop}px`,
-          left: `${rootRect.left}px`,
-          width: `${rootRect.width}px`,
-          zIndex: 11800,
-          backgroundColor: `${backgroundColor}FA`,
-          WebkitBackdropFilter: "blur(18px)",
-          backdropFilter: "blur(18px)",
-        });
-      } else {
-        setCategoryBarStyle({
-          position: "relative",
-          top: "auto",
-          left: "auto",
-          width: "100%",
-          zIndex: 11800,
-          backgroundColor: `${backgroundColor}FA`,
-          WebkitBackdropFilter: "blur(18px)",
-          backdropFilter: "blur(18px)",
-        });
-      }
-    };
-
-    updateCategoryBar();
-    const scrollTarget: EventTarget = container || window;
-    scrollTarget.addEventListener("scroll", updateCategoryBar, { passive: true });
-    window.addEventListener("scroll", updateCategoryBar, { passive: true });
-    window.addEventListener("resize", updateCategoryBar);
-
-    const observer = new ResizeObserver(updateCategoryBar);
-    if (rootRef.current) observer.observe(rootRef.current);
-
-    return () => {
-      scrollTarget.removeEventListener("scroll", updateCategoryBar);
-      window.removeEventListener("scroll", updateCategoryBar);
-      window.removeEventListener("resize", updateCategoryBar);
-      observer.disconnect();
-    };
-  }, [backgroundColor, compact]);
-
-  useEffect(() => {
-    if (!scrollTopEnabled) {
-      setShowScrollTop(false);
-      return;
-    }
-
-    const container = getMenuScrollContainer();
-
-    const updateButton = () => {
-      const root = rootRef.current;
-      if (!root) return;
-
-      const currentScroll = container ? container.scrollTop : window.scrollY;
-      setShowScrollTop(currentScroll >= 1500);
-
-      const rootRect = root.getBoundingClientRect();
-      const buttonSize = compact ? 48 : 56;
-      const sideGap = compact ? 12 : 20;
-      const bottomGap = compact ? 16 : 24;
-
-      const horizontal =
-        scrollTopPosition === "left"
-          ? Math.max(sideGap, rootRect.left + sideGap)
-          : Math.min(
-              window.innerWidth - buttonSize - sideGap,
-              rootRect.right - buttonSize - sideGap,
-            );
-
-      const containerRect = container?.getBoundingClientRect();
-      const visibleBottom = Math.min(
-        window.innerHeight,
-        containerRect?.bottom ?? window.innerHeight,
-      );
-
-      setScrollTopButtonStyle({
-        left: `${Math.max(sideGap, horizontal)}px`,
-        top: `${Math.max(12, visibleBottom - buttonSize - bottomGap)}px`,
-      });
-    };
-
-    updateButton();
-    const scrollTarget: EventTarget = container || window;
-    scrollTarget.addEventListener("scroll", updateButton, { passive: true });
-    window.addEventListener("resize", updateButton);
-
-    const observer = new ResizeObserver(updateButton);
-    if (rootRef.current) observer.observe(rootRef.current);
-
-    return () => {
-      scrollTarget.removeEventListener("scroll", updateButton);
-      window.removeEventListener("resize", updateButton);
-      observer.disconnect();
-    };
-  }, [scrollTopEnabled, scrollTopPosition, compact]);
-
-  function scrollMenuToTop() {
-    const container = getMenuScrollContainer();
-
-    // 편집기 미리보기에서는 실제 스크롤 컨테이너 하나만 정확히 맨 위로 이동합니다.
-    // root 위치를 다시 계산하면 현재 위치에 따라 아래쪽 값이 만들어질 수 있으므로 사용하지 않습니다.
-    if (container) {
-      container.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-      return;
-    }
-
-    // 공개 페이지에서는 브라우저 문서 자체만 맨 위로 이동합니다.
-    const scrollingElement = document.scrollingElement;
-    if (scrollingElement) {
-      scrollingElement.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-      return;
-    }
-
-    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadMenu() {
-      setLoading(true);
-      setError("");
-      try {
-        const response = await fetch(`/api/businesses/${encodeURIComponent(String(businessId))}/menu`, {
-          cache: "no-store",
-        });
-        const payload = (await response.json()) as RestaurantMenuPayload & { error?: string };
-        if (!response.ok) throw new Error(payload.error || "메뉴를 불러오지 못했습니다.");
-        if (cancelled) return;
-        const categories = Array.isArray(payload.categories) ? payload.categories : [];
-        const items = Array.isArray(payload.items) ? payload.items : [];
-        setData({ categories, items });
-        setActiveCategoryId((current) => current ?? categories[0]?.id ?? null);
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "메뉴를 불러오지 못했습니다.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void loadMenu();
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId]);
-
-  const visibleCategories = data.categories.filter((category) =>
-    data.items.some((item) => item.category_id === category.id),
-  );
-
-  function scrollToCategory(categoryId: number) {
-    setActiveCategoryId(categoryId);
-    const target = document.getElementById(`restaurant-menu-${businessId}-${categoryId}`);
-    if (!target) return;
-
-    window.requestAnimationFrame(() => {
-      scrollMenuToElement(target, "smooth");
-    });
-  }
-
-  if (loading) {
-    return <div className="flex min-h-[260px] w-full items-center justify-center bg-white text-sm font-black text-gray-500">메뉴 불러오는 중...</div>;
-  }
-
-  if (error) {
-    return <div className="flex min-h-[260px] w-full items-center justify-center bg-white px-5 text-center text-sm font-black text-red-600">{error}</div>;
-  }
-
-  if (!visibleCategories.length) {
-    return <div className="flex min-h-[260px] w-full items-center justify-center bg-white px-5 text-center text-sm font-black text-gray-500">등록된 메뉴가 없습니다. 메뉴 가져오기를 먼저 실행해주세요.</div>;
-  }
-
-  return (
-    <div
-      ref={rootRef}
-      className="relative h-full w-full overflow-visible text-left"
-      style={{ backgroundColor, color: textColor }}
-    >
-      {categoryBarFixed ? (
-        <div
-          aria-hidden="true"
-          style={{ height: `${stickyCategoryRef.current?.offsetHeight || 0}px` }}
-        />
-      ) : null}
-
-      <div
-        ref={stickyCategoryRef}
-        className="w-full border-b border-black/10 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-md backdrop-blur-xl sm:px-5 sm:py-3"
-        style={categoryBarStyle}
-      >
-        <div
-          ref={categoryScrollRef}
-          className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        >
-          {visibleCategories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => scrollToCategory(category.id)}
-              className="shrink-0 rounded-full border px-4 py-2 text-xs font-black transition"
-              style={
-                activeCategoryId === category.id
-                  ? { backgroundColor: textColor, borderColor: textColor, color: backgroundColor }
-                  : { backgroundColor, borderColor: `${textColor}33`, color: textColor }
-              }
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-2 flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => scrollCategories(-1)}
-            className="flex h-9 w-12 items-center justify-center rounded-full border text-lg font-black shadow-sm transition hover:scale-105"
-            style={{ backgroundColor, borderColor: `${textColor}33`, color: textColor }}
-            aria-label="이전 메뉴 카테고리"
-            title="이전"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            onClick={() => scrollCategories(1)}
-            className="flex h-9 w-12 items-center justify-center rounded-full border text-lg font-black shadow-sm transition hover:scale-105"
-            style={{ backgroundColor, borderColor: `${textColor}33`, color: textColor }}
-            aria-label="다음 메뉴 카테고리"
-            title="다음"
-          >
-            ›
-          </button>
-        </div>
-      </div>
-
-      <div className={`${compact ? "px-3 py-4" : "px-4 py-5 sm:px-7 sm:py-7"}`}>
-        {visibleCategories.map((category) => {
-          const categoryItems = data.items.filter((item) => item.category_id === category.id);
-          return (
-            <section
-              key={category.id}
-              id={`restaurant-menu-${businessId}-${category.id}`}
-              className="scroll-mt-[118px] border-b border-gray-200 pb-7 pt-2 last:border-b-0 sm:scroll-mt-24"
-            >
-              <h2 className={`mb-4 font-black tracking-tight ${compact ? "text-xl" : "text-xl sm:text-2xl"}`}>{category.name}</h2>
-              <div className={`grid grid-cols-1 gap-3 ${compact ? "" : "lg:grid-cols-2"}`}>
-                {categoryItems.map((item) => {
-                  const hasImage = Boolean(item.thumbnail_url || item.image_url);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedItem(item)}
-                      className="group flex min-h-[118px] w-full overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md"
-                      style={{ backgroundColor, borderColor: `${textColor}22`, color: textColor }}
-                    >
-                      <div className="min-w-0 flex-1 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className={`line-clamp-2 font-black leading-snug ${compact ? "text-[15px]" : "text-[15px] sm:text-base"}`}>{item.name}</h3>
-                          {item.price != null ? (
-                            <span className="shrink-0 text-sm font-black">${Number(item.price).toFixed(2)}</span>
-                          ) : null}
-                        </div>
-                        {item.description ? (
-                          <p className={`mt-2 line-clamp-3 font-medium leading-5 opacity-65 ${compact ? "text-xs" : "text-xs sm:text-sm"}`}>{item.description}</p>
-                        ) : null}
-                      </div>
-                      {hasImage ? (
-                        <img
-                          src={item.thumbnail_url || item.image_url || ""}
-                          alt={item.name}
-                          className={`m-2 shrink-0 rounded-xl object-cover ${compact ? "h-[94px] w-[94px]" : "h-[102px] w-[102px] sm:h-[116px] sm:w-[116px]"}`}
-                        />
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-
-      {scrollTopEnabled && showScrollTop && typeof document !== "undefined"
-        ? createPortal(
-            <button
-              type="button"
-              onClick={scrollMenuToTop}
-              className={`fixed z-[11900] flex items-center justify-center rounded-full border text-xl font-black shadow-2xl backdrop-blur transition hover:-translate-y-0.5 ${
-                compact ? "h-12 w-12" : "h-14 w-14"
-              }`}
-              style={{
-                ...scrollTopButtonStyle,
-                backgroundColor: scrollTopButtonColor,
-                borderColor: `${scrollTopIconColor}55`,
-                color: scrollTopIconColor,
-              }}
-              aria-label="메뉴 맨 위로 이동"
-              title="맨 위로"
-            >
-              ↑
-            </button>,
-            document.body,
-          )
-        : null}
-
-      {selectedItem && typeof document !== "undefined"
-        ? createPortal(
-            <>
-              <div
-                className="fixed inset-0 z-[12000] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
-                onClick={() => {
-                  setOriginalImageOpen(false);
-                  setSelectedItem(null);
-                }}
-              >
-                <div
-                  className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl shadow-2xl sm:max-w-lg sm:rounded-3xl"
-                  style={{ backgroundColor, color: textColor }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  {selectedItem.image_url || selectedItem.thumbnail_url ? (
-                    <button
-                      type="button"
-                      className="relative block h-[300px] w-full cursor-zoom-in overflow-hidden rounded-t-3xl bg-black p-0 sm:h-[360px]"
-                      onClick={() => setOriginalImageOpen(true)}
-                      aria-label={`${selectedItem.name} 원본 이미지 보기`}
-                      title="원본 이미지 보기"
-                    >
-                      <img
-                        src={selectedItem.image_url || selectedItem.thumbnail_url || ""}
-                        alt={selectedItem.name}
-                        className="absolute inset-0 block h-full w-full scale-[2.05] object-cover"
-                        style={{
-                          objectPosition: "center 68%",
-                          transformOrigin: "center 68%",
-                        }}
-                      />
-                    </button>
-                  ) : null}
-
-                  <div className="p-5 sm:p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <h2 className="text-2xl font-black leading-tight">{selectedItem.name}</h2>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOriginalImageOpen(false);
-                          setSelectedItem(null);
-                        }}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black"
-                        aria-label="메뉴 상세 닫기"
-                      >
-                        ×
-                      </button>
-                    </div>
-                    {selectedItem.price != null ? (
-                      <p className="mt-3 text-lg font-black">${Number(selectedItem.price).toFixed(2)}</p>
-                    ) : null}
-                    {selectedItem.description ? (
-                      <p className="mt-4 whitespace-pre-wrap text-sm font-medium leading-6 opacity-70">
-                        {selectedItem.description}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              {originalImageOpen ? (
-                <div
-                  className="fixed inset-0 z-[13000] flex items-center justify-center bg-black/95 p-3 sm:p-6"
-                  onClick={() => setOriginalImageOpen(false)}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOriginalImageOpen(false)}
-                    className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[13010] flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black text-black shadow-2xl"
-                    aria-label="원본 이미지 닫기"
-                  >
-                    ×
-                  </button>
-                  <img
-                    src={selectedItem.image_url || selectedItem.thumbnail_url || ""}
-                    alt={`${selectedItem.name} 원본 이미지`}
-                    className="max-h-full max-w-full select-none object-contain"
-                    onClick={(event) => event.stopPropagation()}
-                  />
-                </div>
-              ) : null}
-            </>,
-            document.body,
-          )
-        : null}
     </div>
   );
 }
@@ -10532,7 +10623,7 @@ export function PublicWebsiteRenderer({
             style={{
               ...backgroundStyle(heroSection, outerBackgroundColor),
               ...getSectionWidthStyle(heroSection, true),
-              marginBottom: remainingSections.length > 0 ? "6px" : 0,
+              marginBottom: 0,
               minHeight: getVideoSectionMinHeight(
                 heroSection,
                 device,
@@ -10553,7 +10644,21 @@ export function PublicWebsiteRenderer({
                   style={{
                     ...getLayoutBorderStyle(layout),
                     marginBottom:
-                      layoutIndex < layouts.length - 1 ? "6px" : 0,
+                      layoutIndex < layouts.length - 1
+                        ? `${Math.max(
+                            0,
+                            Math.min(
+                              500,
+                              Number(
+                                device === "mobile"
+                                  ? layout.mobile_margin_bottom_px ??
+                                      layout.margin_bottom_px ??
+                                      6
+                                  : layout.margin_bottom_px ?? 0,
+                              ),
+                            ),
+                          )}px`
+                        : 0,
                   }}
                 >
                   <div
@@ -11524,7 +11629,7 @@ function ReadOnlyGrid({
           area !== "header" &&
           !autoMobileBusinessHours &&
           !autoContentHeight
-        ? Math.max(100, Math.min(savedHeight, 900))
+        ? Math.max(20, Math.min(savedHeight, 900))
         : savedHeight;
 
   return (
@@ -11546,7 +11651,7 @@ function ReadOnlyGrid({
                   ? mobileHeaderHeight
                   : area === "header"
                     ? 48
-                    : 40
+                    : 20
               }px`,
         height:
           sliderAutoHeight ||
@@ -11803,7 +11908,21 @@ function PreviewSection({
               style={{
                 ...getLayoutBorderStyle(layout),
                 marginBottom:
-                  layoutIndex < sectionLayouts.length - 1 ? "6px" : 0,
+                  layoutIndex < sectionLayouts.length - 1
+                    ? `${Math.max(
+                        0,
+                        Math.min(
+                          500,
+                          Number(
+                            previewDevice === "mobile"
+                              ? layout.mobile_margin_bottom_px ??
+                                  layout.margin_bottom_px ??
+                                  6
+                              : layout.margin_bottom_px ?? 0,
+                          ),
+                        ),
+                      )}px`
+                    : 0,
               }}
             >
               <div
@@ -12740,7 +12859,7 @@ function EditableGrid({
     area !== "header" &&
     deviceGrid.cells.length > 1;
 
-  const heightClass = area === "header" ? "min-h-[48px]" : "min-h-[40px]";
+  const heightClass = area === "header" ? "min-h-[48px]" : "min-h-[20px]";
 
   function startHeightDragging(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -12758,9 +12877,9 @@ function EditableGrid({
     event.preventDefault();
     event.stopPropagation();
 
-    // 일반 레이어는 40px까지 줄일 수 있어 글씨가 하단 경계를 따라
-    // 계속 위로 이동할 수 있습니다. 헤더는 기존 최소 높이를 유지합니다.
-    const minimum = area === "header" ? 48 : 40;
+    // 일반 레이어는 20px까지 줄일 수 있습니다.
+    // 빈 레이어를 얇은 spacer처럼 사용할 때도 저장/미리보기가 같은 높이를 유지합니다.
+    const minimum = area === "header" ? 48 : 20;
     const nextHeight = Math.max(
       minimum,
       Math.min(3000, heightDragging.startHeight + event.clientY - heightDragging.startY),
@@ -13633,7 +13752,18 @@ function ImageGalleryGrid({
     cell.gallery_columns === 6
       ? cell.gallery_columns
       : 4;
-  const columns = mobile ? 2 : desktopColumns;
+  const savedItemMinWidth = Number(cell.gallery_item_min_width_px);
+  const desktopItemMinWidth =
+    Number.isFinite(savedItemMinWidth) && savedItemMinWidth >= 120
+      ? Math.max(120, Math.min(640, savedItemMinWidth))
+      : desktopColumns === 2
+        ? 480
+        : desktopColumns === 6
+          ? 180
+          : 260;
+  const itemMinWidth = mobile
+    ? Math.max(140, Math.min(220, Math.round(desktopItemMinWidth * 0.65)))
+    : desktopItemMinWidth;
 
   const close = useCallback(() => setActiveIndex(null), []);
   const previous = useCallback(() => {
@@ -13686,7 +13816,7 @@ function ImageGalleryGrid({
       <div
         className="grid h-full w-full content-start gap-2 overflow-y-auto"
         style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(auto-fit, minmax(min(${itemMinWidth}px, 100%), 1fr))`,
         }}
       >
         {items.map((item, index) => (
@@ -14155,8 +14285,10 @@ function CellPreview({
                     : button.style === "pill"
                       ? "9999px"
                       : "12px";
-                const href = normalizeButtonHref(button.url || "#");
-                const external = isExternalButtonHref(href);
+                const href = buildOverlayButtonHref(button, business.id);
+                const external =
+                  (button.link_type ||
+                    getLegacyOverlayButtonTarget(button.url).type) === "external";
                 return (
                   <a
                     key={button.id}
@@ -14693,7 +14825,7 @@ function CellPreview({
     if (cell.display_mode === "restaurant-menu") {
       return (
         <div className="absolute inset-0 h-full min-h-0 w-full overflow-y-auto overscroll-contain rounded-[10px] bg-white">
-          <RestaurantMenuDisplay
+          <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
           />
@@ -14792,17 +14924,47 @@ function CellPreview({
           <img
             src={cell.image_url}
             alt=""
-            className="absolute inset-0 h-full w-full rounded-[10px] object-cover object-center"
+            className="absolute inset-0 h-full w-full rounded-[10px]"
             style={{
               width: "100%",
               height: "100%",
               maxWidth: "none",
               maxHeight: "none",
-              objectFit: "cover",
-              objectPosition: "50% 50%",
-              transformOrigin: "50% 50%",
+              objectFit:
+                cell.background_image_fit === "fill"
+                  ? "fill"
+                  : cell.background_image_fit === "cover"
+                    ? "cover"
+                    : "contain",
+              objectPosition: `${Math.max(
+                0,
+                Math.min(100, Number(cell.background_image_focus_x ?? 50)),
+              )}% ${Math.max(
+                0,
+                Math.min(100, Number(cell.background_image_focus_y ?? 50)),
+              )}%`,
+              transformOrigin: `${Math.max(
+                0,
+                Math.min(100, Number(cell.background_image_focus_x ?? 50)),
+              )}% ${Math.max(
+                0,
+                Math.min(100, Number(cell.background_image_focus_y ?? 50)),
+              )}%`,
               filter: getBackgroundImageFilter(cell),
-              transform: `scale(${getBackgroundImageScale(cell)})`,
+              transform: `scale(${
+                getBackgroundImageScale(cell) *
+                (
+                  cell.background_image_fit === "scale"
+                    ? Math.max(
+                        0.1,
+                        Math.min(
+                          5,
+                          Number(cell.background_image_size_percent ?? 100) / 100,
+                        ),
+                      )
+                    : 1
+                )
+              })`,
             }}
           />
 
@@ -14841,18 +15003,26 @@ function CellPreview({
                 (cell.background_overlay_type === "button" ||
                   Boolean(cell.overlay_buttons?.length))) ? (
                 <div
-                  className={`absolute inset-0 z-20 flex p-6 ${overlayPositionClasses(
+                  className={`pointer-events-none absolute inset-0 z-[70] flex ${overlayPositionClasses(
                     cell.overlay_button_horizontal ?? "center",
                     cell.overlay_button_vertical ?? "bottom",
                   )}`}
+                  style={{
+                    padding: previewDevice === "mobile" ? "16px" : "28px",
+                    overflow: "visible",
+                  }}
                 >
                   <div
-                    className={`flex max-w-[96%] ${
+                    className={`pointer-events-auto flex max-w-[96%] ${
                       (cell.overlay_button_direction ?? "row") === "row"
                         ? "flex-row flex-wrap"
                         : "flex-col"
                     }`}
-                    style={{ gap: `${cell.overlay_button_gap ?? 10}px` }}
+                    style={{
+                      gap: `${cell.overlay_button_gap ?? 10}px`,
+                      position: "relative",
+                      zIndex: 71,
+                    }}
                   >
                     {normalizeOverlayButtons(cell).map((button) => {
                       const style =
@@ -14868,15 +15038,42 @@ function CellPreview({
                             ? "9999px"
                             : "12px";
 
+                      const href = buildOverlayButtonHref(button, business.id);
+                      const external =
+                        (button.link_type ||
+                          getLegacyOverlayButtonTarget(button.url).type) ===
+                        "external";
+
                       return (
                         <a
                           key={button.id}
-                          href={button.url || "#"}
-                          onClick={(event) => event.preventDefault()}
-                          className="inline-flex shrink-0 items-center justify-center px-4 font-black shadow-lg"
+                          href={href}
+                          target={external ? "_blank" : undefined}
+                          rel={external ? "noreferrer noopener" : undefined}
+                          onClick={(event) => {
+                            // 에디터에서 선택된 셀을 조정 중일 때만 실제 이동을 막습니다.
+                            // 작업 미리보기/공개 화면에서는 페이지 링크가 정상 동작합니다.
+                            if (isSelected) {
+                              event.preventDefault();
+                            }
+                            event.stopPropagation();
+                          }}
+                          className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 font-black shadow-lg"
                           style={{
-                            width: `${cell.overlay_button_width ?? 140}px`,
-                            minHeight: `${cell.overlay_button_height ?? 44}px`,
+                            width: `${Math.max(70, Number(cell.overlay_button_width ?? 140))}px`,
+                            height: `${Math.max(
+                              20,
+                              Number(cell.overlay_button_height ?? 44),
+                            )}px`,
+                            minHeight: `${Math.max(
+                              20,
+                              Number(cell.overlay_button_height ?? 44),
+                            )}px`,
+                            lineHeight: 1.1,
+                            opacity: 1,
+                            visibility: "visible",
+                            position: "relative",
+                            zIndex: 72,
                             backgroundColor:
                               style === "outline"
                                 ? "transparent"
@@ -14891,7 +15088,11 @@ function CellPreview({
                             fontSize: `${cell.overlay_button_font_size ?? 15}px`,
                           }}
                         >
-                          {button.text || "버튼"}
+                          {previewDevice === "mobile"
+                            ? String(button.mobile_text || "").trim() ||
+                              button.text ||
+                              "버튼"
+                            : button.text || "버튼"}
                         </a>
                       );
                     })}
@@ -17871,6 +18072,8 @@ function RightPanel(props: {
   onClearCell: (area: "header" | "hero", cellId: string, layoutId?: string) => void;
   selectedLayoutHeight: number;
   onResizeSelectedLayoutHeight: (heightPx: number) => void;
+  selectedLayoutSpacing: number;
+  onResizeSelectedLayoutSpacing: (spacingPx: number) => void;
   onShowImageGuide: (
     area: "header" | "hero",
     cellId: string,
@@ -18163,35 +18366,36 @@ function RightPanel(props: {
     setMapEditorOpen(false);
   }
 
-  function openTextEditor() {
-    if (!selectedCell) return;
+  function openTextEditor(cellOverride?: GridCell) {
+    const editorCell = cellOverride || selectedCell;
+    if (!editorCell) return;
 
-    const initialHtml = getSelectedCellEditorHtml(selectedCell);
+    const initialHtml = getSelectedCellEditorHtml(editorCell);
 
     setTextEditorHtml(initialHtml);
-    setSelectionFontSize(selectedCell?.font_size || 24);
-    setInputFontSize(selectedCell?.font_size || 24);
+    setSelectionFontSize(editorCell.font_size || 24);
+    setInputFontSize(editorCell.font_size || 24);
     setInputLineHeight(
-      Math.max(0.8, Math.min(3, Number(selectedCell?.line_height ?? 1.6))),
+      Math.max(0.8, Math.min(3, Number(editorCell.line_height ?? 1.6))),
     );
     setSelectionLineHeight(
-      Math.max(0.8, Math.min(3, Number(selectedCell?.line_height ?? 1.6))),
+      Math.max(0.8, Math.min(3, Number(editorCell.line_height ?? 1.6))),
     );
-    setInputFontFamily(selectedCell?.font_family || "sans");
-    setInputFontWeight(selectedCell?.font_weight || "normal");
-    setInputFontStyle(selectedCell?.font_style || "normal");
-    setInputTextDecoration(selectedCell?.text_decoration || "none");
-    setInputColor(selectedCell?.color || "#111827");
+    setInputFontFamily(editorCell.font_family || "sans");
+    setInputFontWeight(editorCell.font_weight || "normal");
+    setInputFontStyle(editorCell.font_style || "normal");
+    setInputTextDecoration(editorCell.text_decoration || "none");
+    setInputColor(editorCell.color || "#111827");
     setInputBackgroundColor(
-      selectedCell?.background_color === "transparent"
+      editorCell.background_color === "transparent"
         ? "#ffffff"
-        : selectedCell?.background_color || "#ffffff",
+        : editorCell.background_color || "#ffffff",
     );
-    setInputTextAlign(selectedCell?.text_align || "left");
-    setInputVerticalAlign(selectedCell?.vertical_align || "top");
+    setInputTextAlign(editorCell.text_align || "left");
+    setInputVerticalAlign(editorCell.vertical_align || "top");
     setTextLinkType("section");
     setTextLinkValue("");
-    setTextInsertPhone(selectedCell?.phone_number || "");
+    setTextInsertPhone(editorCell.phone_number || "");
     setTextInsertPhoneLabel("Call Us");
     setTextInsertSnsPlatform("instagram");
     setTextInsertSnsUrl("");
@@ -18213,7 +18417,7 @@ function RightPanel(props: {
     setSelectedTextEditorTableMobileStack(true);
 
 
-    setSelectedTextColor(selectedCell?.color || "#111827");
+    setSelectedTextColor(editorCell.color || "#111827");
 
     setSelectedTextEditorDividerId("");
     setSelectedDividerWidth(100);
@@ -20485,6 +20689,7 @@ function RightPanel(props: {
           : null}
 
         {area === "hero" && heroSection ? (
+          <>
           <div className="mb-5 overflow-hidden rounded-2xl border-2 border-amber-200 bg-amber-50">
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <div>
@@ -20518,11 +20723,11 @@ function RightPanel(props: {
                 <div className="mt-3 flex items-center gap-3">
                   <input
                     type="range"
-                    min={100}
+                    min={20}
                     max={1600}
-                    step={10}
+                    step={1}
                     value={Math.max(
-                      100,
+                      20,
                       Math.min(1600, Number(props.selectedLayoutHeight || 560)),
                     )}
                     onChange={(event) =>
@@ -20533,15 +20738,15 @@ function RightPanel(props: {
                   <div className="flex w-24 items-center overflow-hidden rounded-xl border border-amber-300 bg-white">
                     <input
                       type="number"
-                      min={100}
+                      min={20}
                       max={3000}
-                      step={10}
+                      step={1}
                       value={Math.round(Number(props.selectedLayoutHeight || 560))}
                       onChange={(event) =>
                         props.onResizeSelectedLayoutHeight(
                           Math.max(
-                            100,
-                            Math.min(3000, Number(event.target.value) || 100),
+                            20,
+                            Math.min(3000, Number(event.target.value) || 20),
                           ),
                         )
                       }
@@ -20553,10 +20758,10 @@ function RightPanel(props: {
 
                 <div className="mt-3 grid grid-cols-4 gap-2">
                   {[
-                    { label: "낮게", value: 320 },
+                    { label: "얇게", value: 20 },
+                    { label: "낮게", value: 100 },
                     { label: "보통", value: 560 },
                     { label: "크게", value: 760 },
-                    { label: "전체", value: 960 },
                   ].map((preset) => (
                     <button
                       key={preset.value}
@@ -20584,6 +20789,84 @@ function RightPanel(props: {
               </div>
             ) : null}
           </div>
+
+          <div className="mb-5 overflow-hidden rounded-2xl border-2 border-sky-200 bg-sky-50">
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-sky-950">
+                      다음 레이어와의 간격
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold text-sky-700">
+                      현재 {Math.round(Number(props.selectedLayoutSpacing || 0))}px ·
+                      {props.device === "mobile" ? " 모바일" : " 데스크톱"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-sky-700 shadow-sm">
+                    Spacing
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={0}
+                    max={200}
+                    step={1}
+                    value={Math.max(
+                      0,
+                      Math.min(200, Number(props.selectedLayoutSpacing || 0)),
+                    )}
+                    onChange={(event) =>
+                      props.onResizeSelectedLayoutSpacing(Number(event.target.value))
+                    }
+                    className="min-w-0 flex-1"
+                  />
+                  <div className="flex w-24 items-center overflow-hidden rounded-xl border border-sky-300 bg-white">
+                    <input
+                      type="number"
+                      min={0}
+                      max={500}
+                      step={1}
+                      value={Math.round(Number(props.selectedLayoutSpacing || 0))}
+                      onChange={(event) =>
+                        props.onResizeSelectedLayoutSpacing(
+                          Math.max(
+                            0,
+                            Math.min(500, Number(event.target.value) || 0),
+                          ),
+                        )
+                      }
+                      className="w-full px-2 py-2 text-right text-sm font-black text-gray-900 outline-none"
+                    />
+                    <span className="pr-2 text-xs font-bold text-gray-500">px</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-5 gap-2">
+                  {[0, 6, 12, 24, 48].map((spacing) => (
+                    <button
+                      key={spacing}
+                      type="button"
+                      onClick={() => props.onResizeSelectedLayoutSpacing(spacing)}
+                      className={`rounded-lg border px-2 py-2 text-[10px] font-black ${
+                        Math.abs(Number(props.selectedLayoutSpacing || 0) - spacing) < 1
+                          ? "border-sky-600 bg-sky-600 text-white"
+                          : "border-sky-300 bg-white text-sky-900"
+                      }`}
+                    >
+                      {spacing}px
+                    </button>
+                  ))}
+                </div>
+
+                <p className="mt-3 text-[11px] leading-5 text-sky-700">
+                  빈 레이어를 추가하지 않아도 이 값으로 레이어 사이 공간을 조절할 수 있습니다.
+                  Desktop과 Mobile에서 각각 다른 값을 저장합니다.
+                </p>
+              </div>
+            </div>
+          </>
         ) : null}
 
         <p className="text-xs font-black uppercase tracking-[0.16em] text-gray-400">선택한 칸</p>
@@ -20834,9 +21117,7 @@ function RightPanel(props: {
                         return;
                       }
 
-                      props.onUpdateCell(
-                        area,
-                        selectedCell.id,
+                      const nextPatch: Partial<GridCell> =
                         entry.value === "menu"
                           ? {
                               type: "menu",
@@ -20884,10 +21165,45 @@ function RightPanel(props: {
                                       getBusinessContactValue(business, ["email", "business_email", "contact_email"]),
                                     map_sns_items: normalizeLocationSnsItems(selectedCell, business),
                                   }
-                                : { type: entry.value },
+                                : entry.value === "title"
+                                  ? {
+                                      type: "title",
+                                      text:
+                                        selectedCell.type === "title"
+                                          ? selectedCell.text || ""
+                                          : "",
+                                      rich_text_html:
+                                        selectedCell.type === "title"
+                                          ? selectedCell.rich_text_html || ""
+                                          : "",
+                                    }
+                                  : entry.value === "text"
+                                    ? {
+                                        type: "text",
+                                        text:
+                                          selectedCell.type === "text"
+                                            ? selectedCell.text || ""
+                                            : "",
+                                        rich_text_html:
+                                          selectedCell.type === "text"
+                                            ? selectedCell.rich_text_html || ""
+                                            : "",
+                                      }
+                                    : { type: entry.value };
+
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        nextPatch,
                         selection.layoutId,
                       );
                       setCellTypePickerOpen(false);
+
+                      // 제목이나 글을 선택하면 이미지 선택 때처럼 즉시 모달을 엽니다.
+                      // 이 모달 안에서 글 작성뿐 아니라 이미지도 함께 삽입할 수 있습니다.
+                      if (entry.value === "title" || entry.value === "text") {
+                        openTextEditor({ ...selectedCell, ...nextPatch } as GridCell);
+                      }
                     }}
                     className={`rounded-xl border p-2 text-center ${
                       selectedCell.type === entry.value
@@ -21803,9 +22119,11 @@ function RightPanel(props: {
           <TitleCellEditor
             businessId={props.businessId}
             adminKey={props.adminKey}
+            editorDevice={props.editorDevice}
             area={area}
             cell={selectedCell}
             business={business}
+            sections={props.sections}
             onOpenTextEditor={openTextEditor}
             onUpdate={(patch) =>
               props.onUpdateCell(area, selectedCell.id, patch, selection.layoutId)
@@ -25025,7 +25343,7 @@ function ImageCellUploader({
             </p>
 
             <div
-              className="relative aspect-square w-full overflow-hidden rounded-xl border-2 border-blue-300 bg-white shadow-sm"
+              className="relative h-[220px] w-full overflow-hidden rounded-xl border-2 border-blue-300 bg-white shadow-sm sm:h-[250px] lg:h-[280px]"
               onClick={(event) => {
                 const target = event.target as HTMLElement;
                 if (target.closest("[data-image-preview-control='true']")) return;
@@ -25184,7 +25502,7 @@ function ImageCellUploader({
             </div>
           </div>
         ) : (
-          <div className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-white text-center">
+          <div className="flex h-[220px] items-center justify-center rounded-xl border-2 border-dashed border-blue-300 bg-white text-center sm:h-[250px] lg:h-[280px]">
             <div>
               <div className="text-4xl">▧</div>
               <p className="mt-2 text-sm font-black text-gray-800">
@@ -25841,13 +26159,19 @@ function ImageCellUploader({
                     type="button"
                     onClick={() =>
                       onUpdate({
+                        background_overlay_type: "button",
                         overlay_buttons_visible: true,
+                        overlay_button_horizontal: "center",
+                        overlay_button_vertical: "middle",
                         overlay_buttons: [
                           ...normalizeOverlayButtons(cell),
                           {
                             id: createId("overlay-button"),
                             text: "버튼",
-                            url: "#",
+                            mobile_text: "",
+                            link_type: "page",
+                            link_value: "home",
+                            url: `/business/${businessId}/website`,
                             style: "rounded",
                             background_color: "#111827",
                             text_color: "#ffffff",
@@ -25879,10 +26203,26 @@ function ImageCellUploader({
                               ),
                             })
                           }
-                          placeholder="버튼 글씨"
+                          placeholder="데스크톱 글씨"
                           className="rounded-lg border bg-white px-2 py-2 text-xs font-bold"
                         />
-                        <select
+                        <input
+                          value={button.mobile_text || ""}
+                          onChange={(event) =>
+                            onUpdate({
+                              overlay_buttons: normalizeOverlayButtons(cell).map(
+                                (item) =>
+                                  item.id === button.id
+                                    ? { ...item, mobile_text: event.target.value }
+                                    : item,
+                              ),
+                            })
+                          }
+                          placeholder="모바일 글씨 (비우면 동일)"
+                          className="rounded-lg border bg-white px-2 py-2 text-xs font-bold"
+                        />
+                      </div>
+                      <select
                           value={button.style}
                           onChange={(event) =>
                             onUpdate({
@@ -25904,22 +26244,102 @@ function ImageCellUploader({
                           <option value="square">사각형</option>
                           <option value="outline">외곽선</option>
                         </select>
-                      </div>
-                      <input
-                        value={button.url}
-                        onChange={(event) =>
-                          onUpdate({
-                            overlay_buttons: normalizeOverlayButtons(cell).map(
-                              (item) =>
-                                item.id === button.id
-                                  ? { ...item, url: event.target.value }
-                                  : item,
-                            ),
-                          })
+                      <select
+                        value={
+                          button.link_type ||
+                          getLegacyOverlayButtonTarget(button.url).type
                         }
-                        placeholder="https://... /page 또는 #layer"
-                        className="w-full rounded-lg border bg-white px-2 py-2 text-xs"
-                      />
+                        onChange={(event) => {
+                          const nextType = event.target.value as
+                            | "page"
+                            | "section"
+                            | "external";
+                          const defaultValue =
+                            nextType === "page"
+                              ? overlayPageLinkOptions[0]?.value || "home"
+                              : nextType === "section"
+                                ? overlaySectionLinkOptions[0]?.value || ""
+                                : "";
+                          updateOverlayButtonTarget(
+                            button.id,
+                            nextType,
+                            defaultValue,
+                          );
+                        }}
+                        className="w-full rounded-lg border bg-white px-2 py-2 text-xs font-bold"
+                      >
+                        <option value="page">페이지 링크</option>
+                        <option value="section">레이어 링크</option>
+                        <option value="external">외부 링크</option>
+                      </select>
+
+                      {(button.link_type ||
+                        getLegacyOverlayButtonTarget(button.url).type) ===
+                      "page" ? (
+                        <select
+                          value={String(
+                            button.link_value ||
+                              getLegacyOverlayButtonTarget(button.url).value ||
+                              "home",
+                          )}
+                          onChange={(event) =>
+                            updateOverlayButtonTarget(
+                              button.id,
+                              "page",
+                              event.target.value,
+                            )
+                          }
+                          className="w-full rounded-lg border border-blue-300 bg-white px-2 py-2 text-xs font-bold"
+                        >
+                          {overlayPageLinkOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (button.link_type ||
+                          getLegacyOverlayButtonTarget(button.url).type) ===
+                        "section" ? (
+                        <select
+                          value={String(
+                            button.link_value ||
+                              getLegacyOverlayButtonTarget(button.url).value ||
+                              "",
+                          )}
+                          onChange={(event) =>
+                            updateOverlayButtonTarget(
+                              button.id,
+                              "section",
+                              event.target.value,
+                            )
+                          }
+                          className="w-full rounded-lg border border-amber-300 bg-white px-2 py-2 text-xs font-bold"
+                        >
+                          <option value="">레이어 선택</option>
+                          {overlaySectionLinkOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          value={String(
+                            button.link_value ||
+                              getLegacyOverlayButtonTarget(button.url).value ||
+                              "",
+                          )}
+                          onChange={(event) =>
+                            updateOverlayButtonTarget(
+                              button.id,
+                              "external",
+                              event.target.value,
+                            )
+                          }
+                          placeholder="https://..."
+                          className="w-full rounded-lg border bg-white px-2 py-2 text-xs"
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() =>
@@ -26320,6 +26740,29 @@ function HorizontalImageScroll({
   imageWidth: number;
   gap: number;
 }) {
+  const [isPaused, setIsPaused] = useState(false);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState("");
+
+  useEffect(() => {
+    if (!lightboxImageUrl) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLightboxImageUrl("");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [lightboxImageUrl]);
+
   const safeImages = Array.from(
     new Set(images.map((url) => String(url || "").trim()).filter(Boolean)),
   ).slice(0, 10);
@@ -26336,54 +26779,61 @@ function HorizontalImageScroll({
   const spacing = Math.max(0, Math.min(48, Number(gap) || 12));
 
   return (
-    <div
-      className="absolute inset-0 block h-full min-h-0 w-full overflow-hidden bg-transparent align-top leading-none"
-      style={{
-        width: "100%",
-        height: "100%",
-        minHeight: 0,
-        maxHeight: "100%",
-        margin: 0,
-        padding: 0,
-        borderRadius: "inherit",
-        lineHeight: 0,
-      }}
-    >
+    <>
       <div
-        className="flex h-full min-h-0 w-max items-stretch will-change-transform"
+        className="absolute inset-0 block h-full min-h-0 w-full overflow-hidden bg-transparent align-top leading-none"
         style={{
-          gap: `${spacing}px`,
-          animationName:
-            direction === "right"
-              ? "website-image-flow-right"
-              : "website-image-flow-left",
-          animationDuration: `${duration}s`,
-          animationTimingFunction: "linear",
-          animationIterationCount: "infinite",
+          width: "100%",
+          height: "100%",
+          minHeight: 0,
+          maxHeight: "100%",
+          margin: 0,
+          padding: 0,
+          borderRadius: "inherit",
+          lineHeight: 0,
         }}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
       >
-        {repeatedImages.map((url, index) => (
-          <div
-            key={`${url}-${index}`}
-            className="relative h-full min-h-0 shrink-0 overflow-hidden"
-            style={{
-              width: `${width}px`,
-              height: "100%",
-              minHeight: 0,
-            }}
-          >
-            <img
-              src={url}
-              alt={`흐르는 이미지 ${(index % safeImages.length) + 1}`}
-              draggable={false}
-              className="absolute inset-0 block h-full w-full select-none object-cover object-center"
-            style={{ borderRadius: "inherit" }}
-            />
-          </div>
-        ))}
-      </div>
+        <div
+          className="flex h-full min-h-0 w-max items-stretch will-change-transform"
+          style={{
+            gap: `${spacing}px`,
+            animationName:
+              direction === "right"
+                ? "website-image-flow-right"
+                : "website-image-flow-left",
+            animationDuration: `${duration}s`,
+            animationTimingFunction: "linear",
+            animationIterationCount: "infinite",
+            animationPlayState: isPaused ? "paused" : "running",
+          }}
+        >
+          {repeatedImages.map((url, index) => (
+            <button
+              key={`${url}-${index}`}
+              type="button"
+              onClick={() => setLightboxImageUrl(url)}
+              className="relative h-full min-h-0 shrink-0 cursor-zoom-in overflow-hidden border-0 bg-transparent p-0"
+              style={{
+                width: `${width}px`,
+                height: "100%",
+                minHeight: 0,
+              }}
+              aria-label={`흐르는 이미지 ${(index % safeImages.length) + 1} 크게 보기`}
+            >
+              <img
+                src={url}
+                alt={`흐르는 이미지 ${(index % safeImages.length) + 1}`}
+                draggable={false}
+                className="absolute inset-0 block h-full w-full select-none object-cover object-center"
+                style={{ borderRadius: "inherit" }}
+              />
+            </button>
+          ))}
+        </div>
 
-      <style jsx>{`
+        <style jsx>{`
         @keyframes website-image-flow-left {
           from {
             transform: translateX(0);
@@ -26393,16 +26843,52 @@ function HorizontalImageScroll({
           }
         }
 
-        @keyframes website-image-flow-right {
-          from {
-            transform: translateX(calc(-50% - ${spacing / 2}px));
+          @keyframes website-image-flow-right {
+            from {
+              transform: translateX(calc(-50% - ${spacing / 2}px));
+            }
+            to {
+              transform: translateX(0);
+            }
           }
-          to {
-            transform: translateX(0);
-          }
-        }
-      `}</style>
-    </div>
+        `}</style>
+      </div>
+
+      {lightboxImageUrl && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/85 p-4 sm:p-8"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setLightboxImageUrl("");
+                }
+              }}
+            >
+              <div
+                className="relative flex max-h-[94vh] max-w-[94vw] items-center justify-center"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <img
+                  src={lightboxImageUrl}
+                  alt="큰 이미지"
+                  className="block max-h-[90vh] max-w-[92vw] object-contain shadow-2xl"
+                  draggable={false}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setLightboxImageUrl("")}
+                  className="absolute -right-3 -top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black leading-none text-gray-950 shadow-xl hover:bg-gray-100"
+                  aria-label="큰 이미지 닫기"
+                >
+                  ×
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
 
@@ -26756,18 +27242,22 @@ async function cropGalleryImageFile(
 function TitleCellEditor({
   businessId,
   adminKey,
+  editorDevice,
   area,
   cell,
   business,
+  sections,
   onOpenTextEditor,
   onUpdate,
   onShowImageGuide,
 }: {
   businessId: string;
   adminKey: string;
+  editorDevice: "desktop" | "mobile";
   area: "header" | "hero";
   cell: GridCell;
   business: Business;
+  sections: BusinessSection[];
   onOpenTextEditor: () => void;
   onUpdate: (patch: Partial<GridCell>) => void;
   onShowImageGuide: () => void;
@@ -26807,14 +27297,21 @@ function TitleCellEditor({
   const [imageLoadError, setImageLoadError] = useState("");
   const [availableImages, setAvailableImages] = useState<string[]>([]);
   const [galleryEditorOpen, setGalleryEditorOpen] = useState(false);
+  const [sliderEditorOpen, setSliderEditorOpen] = useState(false);
   const [videoEditorOpen, setVideoEditorOpen] = useState(false);
+  const [backgroundImageEditorOpen, setBackgroundImageEditorOpen] = useState(false);
   const [videoUrlInput, setVideoUrlInput] = useState("");
   const [videoTitleInput, setVideoTitleInput] = useState("");
   const [videoEditorError, setVideoEditorError] = useState("");
   const [activeControlStep, setActiveControlStep] = useState<1 | 2 | null>(1);
 
   useEffect(() => {
-    if (!galleryEditorOpen && !videoEditorOpen) return;
+    if (
+      !galleryEditorOpen &&
+      !sliderEditorOpen &&
+      !videoEditorOpen &&
+      !backgroundImageEditorOpen
+    ) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -26822,7 +27319,9 @@ function TitleCellEditor({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setGalleryEditorOpen(false);
+        setSliderEditorOpen(false);
         setVideoEditorOpen(false);
+        setBackgroundImageEditorOpen(false);
       }
     };
 
@@ -26832,7 +27331,12 @@ function TitleCellEditor({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [galleryEditorOpen, videoEditorOpen]);
+  }, [
+    galleryEditorOpen,
+    sliderEditorOpen,
+    videoEditorOpen,
+    backgroundImageEditorOpen,
+  ]);
 
   function chooseMode(nextMode: SectionMode) {
     if (nextMode === "image-scroll") {
@@ -26886,6 +27390,7 @@ function TitleCellEditor({
           ? ""
           : "웹사이트 슬라이드로 체크된 이미지가 없습니다. 비즈니스 이미지 관리에서 사용할 사진을 체크하고 저장하세요.",
       );
+      setSliderEditorOpen(true);
       return;
     }
 
@@ -26923,6 +27428,10 @@ function TitleCellEditor({
           cell.gallery_columns === 6
             ? cell.gallery_columns
             : 4,
+        gallery_item_min_width_px:
+          Number.isFinite(Number(cell.gallery_item_min_width_px))
+            ? Math.max(120, Math.min(640, Number(cell.gallery_item_min_width_px)))
+            : 260,
       });
       setGalleryEditorOpen(true);
       return;
@@ -27014,6 +27523,11 @@ function TitleCellEditor({
         overlay_button_gap: cell.overlay_button_gap ?? 10,
         background_image_blur: cell.background_image_blur ?? 0,
         background_image_effect: cell.background_image_effect ?? "original",
+        background_image_fit: cell.background_image_fit ?? "width",
+        background_image_size_percent: Math.max(
+          10,
+          Math.min(500, Number(cell.background_image_size_percent ?? 100)),
+        ),
         background_image_focus_x: cell.background_image_focus_x ?? 50,
         background_image_focus_y: cell.background_image_focus_y ?? 50,
         overlay_text_horizontal: cell.overlay_text_horizontal ?? "center",
@@ -27035,6 +27549,7 @@ function TitleCellEditor({
           (cell.background_overlay_type === "button" ||
             Boolean(cell.overlay_buttons?.length)),
       });
+      setBackgroundImageEditorOpen(true);
       return;
     }
 
@@ -27245,6 +27760,10 @@ function TitleCellEditor({
           cell.gallery_columns === 6
             ? cell.gallery_columns
             : 4,
+        gallery_item_min_width_px:
+          Number.isFinite(Number(cell.gallery_item_min_width_px))
+            ? Math.max(120, Math.min(640, Number(cell.gallery_item_min_width_px)))
+            : 260,
       });
       return;
     }
@@ -27485,6 +28004,84 @@ function TitleCellEditor({
   const usesDbImages =
     mode === "auto-slider" || mode === "image-scroll" || mode === "gallery";
 
+  const overlayPageLinkOptions = [
+    {
+      label: "HOME",
+      value: "home",
+    },
+    ...sections
+      .filter(
+        (section) =>
+          section.content?.page_type === "link-page" &&
+          section.is_visible !== false,
+      )
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((section) => {
+        const slug = slugifyMenuValue(
+          String(section.content?.page_slug || section.title || ""),
+        );
+
+        return {
+          label: section.title || slug || `페이지 ${section.id}`,
+          value: slug,
+        };
+      })
+      .filter((option) => Boolean(option.value)),
+  ].filter(
+    (option, index, options) =>
+      options.findIndex((item) => item.value === option.value) === index,
+  );
+
+  const overlaySectionLinkOptions = sections
+    .filter(
+      (section) =>
+        section.content?.page_type !== "link-page" &&
+        section.is_visible !== false,
+    )
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((section) => {
+      const slug =
+        slugifyMenuValue(
+          String(section.title || section.section_type || ""),
+        ) || section.section_type;
+
+      return {
+        label:
+          section.section_type === "hero"
+            ? "HOME / Main"
+            : section.title ||
+              SECTION_LABELS[section.section_type] ||
+              section.section_type,
+        value: slug,
+      };
+    })
+    .filter((option) => Boolean(option.value));
+
+  function updateOverlayButtonTarget(
+    buttonId: string,
+    linkType: "page" | "section" | "external",
+    linkValue: string,
+  ) {
+    const nextValue = String(linkValue || "").trim();
+
+    onUpdate({
+      overlay_buttons: normalizeOverlayButtons(cell).map((item) => {
+        if (item.id !== buttonId) return item;
+
+        const nextButton: OverlayButton = {
+          ...item,
+          link_type: linkType,
+          link_value: nextValue,
+          url: "",
+        };
+
+        // 이전 저장 데이터/다른 렌더러와의 호환을 위해 url도 같이 저장합니다.
+        nextButton.url = buildOverlayButtonHref(nextButton, businessId);
+        return nextButton;
+      }),
+    });
+  }
+
   const imageControlsOpen = activeControlStep === 1;
   const overlayControlsOpen = activeControlStep === 2;
 
@@ -27529,7 +28126,7 @@ function TitleCellEditor({
             <div>
               <p className="text-sm font-black text-gray-800">전체 배경 이미지</p>
               <p className="mt-1 text-xs leading-5 text-gray-500">
-                선택한 이미지가 이 칸 전체를 채웁니다.
+                선택하면 이미지 추가/교체와 표시 방식을 모달에서 한 번에 설정합니다.
               </p>
             </div>
             <button
@@ -27540,6 +28137,22 @@ function TitleCellEditor({
               이미지 안내
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setBackgroundImageEditorOpen(true)}
+            className="mt-3 flex w-full items-center justify-between rounded-2xl border-2 border-blue-300 bg-blue-50 px-4 py-3 text-left hover:border-blue-600"
+          >
+            <div>
+              <p className="text-sm font-black text-blue-950">
+                배경 이미지 추가 · 교체 · 표시 방식
+              </p>
+              <p className="mt-1 text-xs font-semibold text-blue-700">
+                가로 맞춤, 전체 보기, 칸 꽉 채움, 직접 크기, 늘여 맞춤
+              </p>
+            </div>
+            <span className="text-xl font-black text-blue-700">↗</span>
+          </button>
 
           {cell.image_url ? (
             <>
@@ -27587,6 +28200,8 @@ function TitleCellEditor({
                           onUpdate({
                             background_image_effect: "original",
                             background_image_blur: 0,
+                            background_image_fit: "width",
+                            background_image_size_percent: 100,
                             background_image_focus_x: 50,
                             background_image_focus_y: 50,
                           })
@@ -27596,6 +28211,90 @@ function TitleCellEditor({
                         초기화
                       </button>
                     </div>
+
+                <Field label="이미지 표시 방식">
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: "width", label: "가로 맞춤" },
+                      { value: "contain", label: "전체 보기" },
+                      { value: "cover", label: "칸 꽉 채움" },
+                      { value: "scale", label: "직접 크기" },
+                      { value: "fill", label: "늘여 맞춤" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() =>
+                          onUpdate({
+                            background_image_fit:
+                              option.value as GridCell["background_image_fit"],
+                          })
+                        }
+                        className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
+                          (cell.background_image_fit ?? "width") === option.value
+                            ? "border-blue-700 bg-blue-700 text-white"
+                            : "border-blue-200 bg-white text-blue-950"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+                    기본은 ‘가로 맞춤’입니다. 원본 전체가 꼭 보여야 하면 ‘전체 보기’,
+                    배경처럼 빈틈없이 채우려면 ‘칸 꽉 채움’을 선택하세요.
+                  </p>
+                </Field>
+
+                {(cell.background_image_fit ?? "width") === "scale" ? (
+                  <Field label="이미지 크기">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={10}
+                        max={500}
+                        step={1}
+                        value={Math.max(
+                          10,
+                          Math.min(
+                            500,
+                            Number(cell.background_image_size_percent ?? 100),
+                          ),
+                        )}
+                        onChange={(event) =>
+                          onUpdate({
+                            background_image_size_percent: Number(event.target.value),
+                          })
+                        }
+                        className="min-w-0 flex-1 accent-blue-700"
+                      />
+                      <div className="flex w-24 items-center overflow-hidden rounded-xl border border-blue-300 bg-white">
+                        <input
+                          type="number"
+                          min={10}
+                          max={500}
+                          value={Math.max(
+                            10,
+                            Math.min(
+                              500,
+                              Number(cell.background_image_size_percent ?? 100),
+                            ),
+                          )}
+                          onChange={(event) =>
+                            onUpdate({
+                              background_image_size_percent: Math.max(
+                                10,
+                                Math.min(500, Number(event.target.value) || 100),
+                              ),
+                            })
+                          }
+                          className="w-full px-2 py-2 text-right text-sm font-black outline-none"
+                        />
+                        <span className="pr-2 text-xs font-bold text-gray-500">%</span>
+                      </div>
+                    </div>
+                  </Field>
+                ) : null}
 
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   {[
@@ -27941,19 +28640,31 @@ function TitleCellEditor({
                 <div>
                   <p className="text-sm font-black text-gray-950">버튼 목록</p>
                   <p className="mt-1 text-xs text-gray-500">
-                    버튼 글자와 링크만 각각 입력하고, 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
+                    버튼마다 페이지·레이어·외부 링크를 선택할 수 있습니다. 디자인과 크기는 모든 버튼에 한 번에 적용됩니다.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => {
                     const current = normalizeOverlayButtons(cell);
+                    const nextButtons = [
+                      ...current,
+                      createOverlayButton(current.length),
+                    ];
+
+                    /*
+                     * 버튼을 추가하는 순간 미리보기 이미지에도 바로 표시합니다.
+                     * 배경 오버레이 종류와 표시 여부, 버튼 배열을 한 번의 업데이트로
+                     * 함께 반영해야 중간 렌더에서 버튼이 숨겨지지 않습니다.
+                     */
                     onUpdate({
+                      background_overlay_type: "button",
                       overlay_buttons_visible: true,
-                      overlay_buttons: [
-                        ...current,
-                        createOverlayButton(current.length),
-                      ],
+                      overlay_buttons: nextButtons,
+                      // 새 버튼이 아래 높이 조절선에 가려지지 않도록
+                      // 추가 즉시 이미지 중앙에 표시합니다.
+                      overlay_button_horizontal: "center",
+                      overlay_button_vertical: "middle",
                     });
                   }}
                   className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"
@@ -28001,24 +28712,148 @@ function TitleCellEditor({
                             ),
                           })
                         }
-                        placeholder="버튼 글자"
+                        placeholder="데스크톱 버튼 글자"
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
                       />
                       <input
-                        value={button.url}
+                        value={button.mobile_text || ""}
                         onChange={(event) =>
                           onUpdate({
                             overlay_buttons: normalizeOverlayButtons(cell).map(
                               (item) =>
                                 item.id === button.id
-                                  ? { ...item, url: event.target.value }
+                                  ? { ...item, mobile_text: event.target.value }
                                   : item,
                             ),
                           })
                         }
-                        placeholder="/booking 또는 https://..."
+                        placeholder="모바일 버튼 글자 (비우면 동일)"
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
                       />
+                      <label className="md:col-span-2">
+                        <span className="mb-1 block text-[11px] font-black text-gray-600">
+                          이동 방식
+                        </span>
+                        <select
+                          value={
+                            button.link_type ||
+                            getLegacyOverlayButtonTarget(button.url).type
+                          }
+                          onChange={(event) => {
+                            const nextType = event.target.value as
+                              | "page"
+                              | "section"
+                              | "external";
+
+                            const defaultValue =
+                              nextType === "page"
+                                ? overlayPageLinkOptions[0]?.value || "home"
+                                : nextType === "section"
+                                  ? overlaySectionLinkOptions[0]?.value || ""
+                                  : "";
+
+                            updateOverlayButtonTarget(
+                              button.id,
+                              nextType,
+                              defaultValue,
+                            );
+                          }}
+                          className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 font-bold"
+                        >
+                          <option value="page">페이지 링크</option>
+                          <option value="section">레이어 링크</option>
+                          <option value="external">외부 링크</option>
+                        </select>
+                      </label>
+
+                      {(button.link_type ||
+                        getLegacyOverlayButtonTarget(button.url).type) ===
+                      "page" ? (
+                        <label className="md:col-span-2">
+                          <span className="mb-1 block text-[11px] font-black text-gray-600">
+                            이동할 페이지
+                          </span>
+                          <select
+                            value={
+                              String(
+                                button.link_value ||
+                                  getLegacyOverlayButtonTarget(button.url).value ||
+                                  "home",
+                              )
+                            }
+                            onChange={(event) =>
+                              updateOverlayButtonTarget(
+                                button.id,
+                                "page",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-xl border border-blue-300 bg-white px-3 py-2.5 font-black text-blue-950"
+                          >
+                            {overlayPageLinkOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (button.link_type ||
+                          getLegacyOverlayButtonTarget(button.url).type) ===
+                        "section" ? (
+                        <label className="md:col-span-2">
+                          <span className="mb-1 block text-[11px] font-black text-gray-600">
+                            이동할 레이어
+                          </span>
+                          <select
+                            value={String(
+                              button.link_value ||
+                                getLegacyOverlayButtonTarget(button.url).value ||
+                                "",
+                            )}
+                            onChange={(event) =>
+                              updateOverlayButtonTarget(
+                                button.id,
+                                "section",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2.5 font-black text-amber-950"
+                          >
+                            <option value="">레이어 선택</option>
+                            {overlaySectionLinkOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label className="md:col-span-2">
+                          <span className="mb-1 block text-[11px] font-black text-gray-600">
+                            외부 주소
+                          </span>
+                          <input
+                            value={String(
+                              button.link_value ||
+                                getLegacyOverlayButtonTarget(button.url).value ||
+                                "",
+                            )}
+                            onChange={(event) =>
+                              updateOverlayButtonTarget(
+                                button.id,
+                                "external",
+                                event.target.value,
+                              )
+                            }
+                            placeholder="https://example.com"
+                            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5"
+                          />
+                        </label>
+                      )}
+
+                      <div className="md:col-span-2 rounded-xl bg-blue-50 px-3 py-2 text-[11px] font-bold text-blue-700">
+                        연결 주소: {buildOverlayButtonHref(button, businessId) || "선택 안 됨"}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -28128,7 +28963,13 @@ function TitleCellEditor({
                   />
                 </div>
 
-                <Field label="버튼 가로 길이">
+                <Field
+                  label={
+                    editorDevice === "mobile"
+                      ? "폰 버튼 가로 길이"
+                      : "데스크톱 버튼 가로 길이"
+                  }
+                >
                   <input
                     type="range"
                     min="70"
@@ -28146,10 +28987,16 @@ function TitleCellEditor({
                   </p>
                 </Field>
 
-                <Field label="버튼 두께 · 높이">
+                <Field
+                  label={
+                    editorDevice === "mobile"
+                      ? "폰 버튼 두께 · 높이"
+                      : "데스크톱 버튼 두께 · 높이"
+                  }
+                >
                   <input
                     type="range"
-                    min="30"
+                    min="20"
                     max="80"
                     value={cell.overlay_button_height ?? 44}
                     onChange={(event) =>
@@ -28164,7 +29011,19 @@ function TitleCellEditor({
                   </p>
                 </Field>
 
-                <Field label="버튼 글자 크기">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-semibold leading-5 text-blue-700">
+                  {editorDevice === "mobile"
+                    ? "지금 바꾸는 버튼 크기와 글자 크기는 폰에만 저장됩니다. 데스크톱 값은 그대로 유지됩니다."
+                    : "지금 바꾸는 버튼 크기와 글자 크기는 데스크톱에만 저장됩니다. Mobile로 전환하면 폰 값을 따로 조절할 수 있습니다."}
+                </div>
+
+                <Field
+                  label={
+                    editorDevice === "mobile"
+                      ? "폰 버튼 글자 크기"
+                      : "데스크톱 버튼 글자 크기"
+                  }
+                >
                   <input
                     type="range"
                     min="10"
@@ -28182,7 +29041,13 @@ function TitleCellEditor({
                   </p>
                 </Field>
 
-                <Field label="버튼 사이 간격">
+                <Field
+                  label={
+                    editorDevice === "mobile"
+                      ? "폰 버튼 사이 간격"
+                      : "데스크톱 버튼 사이 간격"
+                  }
+                >
                   <input
                     type="range"
                     min="0"
@@ -28335,6 +29200,352 @@ function TitleCellEditor({
         </>
       ) : null}
 
+
+      {backgroundImageEditorOpen && typeof document !== "undefined"
+            ? createPortal(
+                <div
+                  className="fixed inset-0 z-[10120] flex items-center justify-center bg-black/70 p-3 sm:p-6"
+                  onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) {
+                      setBackgroundImageEditorOpen(false);
+                    }
+                  }}
+                >
+                  <div
+                    className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+                    onMouseDown={(event) => event.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4 sm:px-6">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+                          Background Image Editor
+                        </p>
+                        <h3 className="mt-1 text-xl font-black text-gray-950">
+                          전체 배경 이미지
+                        </h3>
+                        <p className="mt-1 text-xs font-semibold text-gray-500">
+                          이미지 추가/교체와 표시 방식을 한 창에서 설정합니다.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setBackgroundImageEditorOpen(false)}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200"
+                        aria-label="배경 이미지 편집창 닫기"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto bg-gray-50 p-4 sm:p-6">
+                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+                        <div className="space-y-4">
+                          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-black">
+                            {cell.image_url ? (
+                              <div className="relative h-[260px] w-full sm:h-[360px]">
+                                <img
+                                  src={cell.image_url}
+                                  alt="배경 이미지 미리보기"
+                                  className="absolute inset-0 h-full w-full"
+                                  style={{
+                                    objectFit:
+                                      cell.background_image_fit === "fill"
+                                        ? "fill"
+                                        : cell.background_image_fit === "cover"
+                                          ? "cover"
+                                          : "contain",
+                                    objectPosition: `${Math.max(
+                                      0,
+                                      Math.min(
+                                        100,
+                                        Number(cell.background_image_focus_x ?? 50),
+                                      ),
+                                    )}% ${Math.max(
+                                      0,
+                                      Math.min(
+                                        100,
+                                        Number(cell.background_image_focus_y ?? 50),
+                                      ),
+                                    )}%`,
+                                    transformOrigin: `${Math.max(
+                                      0,
+                                      Math.min(
+                                        100,
+                                        Number(cell.background_image_focus_x ?? 50),
+                                      ),
+                                    )}% ${Math.max(
+                                      0,
+                                      Math.min(
+                                        100,
+                                        Number(cell.background_image_focus_y ?? 50),
+                                      ),
+                                    )}%`,
+                                    transform:
+                                      cell.background_image_fit === "scale"
+                                        ? `scale(${Math.max(
+                                            0.1,
+                                            Math.min(
+                                              5,
+                                              Number(
+                                                cell.background_image_size_percent ?? 100,
+                                              ) / 100,
+                                            ),
+                                          )})`
+                                        : undefined,
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex h-[260px] items-center justify-center text-center text-white/70 sm:h-[360px]">
+                                <div>
+                                  <div className="text-5xl">▧</div>
+                                  <p className="mt-3 text-sm font-black">
+                                    배경 이미지를 추가하세요
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(event) => {
+                              handleFiles(event.target.files);
+                              event.currentTarget.value = "";
+                            }}
+                          />
+
+                          <button
+                            type="button"
+                            disabled={uploading}
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex min-h-28 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-blue-300 bg-white px-5 py-5 text-center transition hover:border-blue-700 disabled:cursor-wait disabled:opacity-60"
+                          >
+                            <span className="text-3xl">{uploading ? "◌" : "▧"}</span>
+                            <span className="mt-2 text-sm font-black text-gray-950">
+                              {uploading
+                                ? "이미지를 업로드하고 있습니다..."
+                                : cell.image_url
+                                  ? "다른 배경 이미지로 교체"
+                                  : "배경 이미지 파일 선택"}
+                            </span>
+                            <span className="mt-1 text-xs text-gray-500">
+                              클릭해서 이미지 선택 · 최대 10MB
+                            </span>
+                          </button>
+
+                          {uploadError ? (
+                            <p className="rounded-xl bg-red-50 px-3 py-2.5 text-xs font-bold text-red-700">
+                              {uploadError}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-5 rounded-2xl border border-gray-200 bg-white p-4">
+                          <div>
+                            <p className="text-sm font-black text-gray-950">
+                              이미지 컨트롤
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-gray-500">
+                              표시 방식과 크기, 보이는 위치를 설정하세요.
+                            </p>
+                          </div>
+
+                          <Field label="이미지 표시 방식">
+                            <div className="grid grid-cols-3 gap-2">
+                              {[
+                                { value: "width", label: "가로 맞춤" },
+                                { value: "contain", label: "전체 보기" },
+                                { value: "cover", label: "칸 꽉 채움" },
+                                { value: "scale", label: "직접 크기" },
+                                { value: "fill", label: "늘여 맞춤" },
+                              ].map((option) => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() =>
+                                    onUpdate({
+                                      background_image_fit:
+                                        option.value as GridCell["background_image_fit"],
+                                    })
+                                  }
+                                  className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
+                                    (cell.background_image_fit ?? "width") ===
+                                    option.value
+                                      ? "border-blue-700 bg-blue-700 text-white"
+                                      : "border-blue-200 bg-white text-blue-950"
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+                              기본은 ‘가로 맞춤’입니다. 원본 전체가 꼭 보여야 하면
+                              ‘전체 보기’, 빈틈없이 채우려면 ‘칸 꽉 채움’을 선택하세요.
+                            </p>
+                          </Field>
+
+                          {(cell.background_image_fit ?? "width") === "scale" ? (
+                            <Field label="이미지 크기">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="range"
+                                  min={10}
+                                  max={500}
+                                  step={1}
+                                  value={Math.max(
+                                    10,
+                                    Math.min(
+                                      500,
+                                      Number(
+                                        cell.background_image_size_percent ?? 100,
+                                      ),
+                                    ),
+                                  )}
+                                  onChange={(event) =>
+                                    onUpdate({
+                                      background_image_size_percent: Number(
+                                        event.target.value,
+                                      ),
+                                    })
+                                  }
+                                  className="min-w-0 flex-1 accent-blue-700"
+                                />
+                                <div className="flex w-24 items-center overflow-hidden rounded-xl border border-blue-300 bg-white">
+                                  <input
+                                    type="number"
+                                    min={10}
+                                    max={500}
+                                    value={Math.max(
+                                      10,
+                                      Math.min(
+                                        500,
+                                        Number(
+                                          cell.background_image_size_percent ?? 100,
+                                        ),
+                                      ),
+                                    )}
+                                    onChange={(event) =>
+                                      onUpdate({
+                                        background_image_size_percent: Math.max(
+                                          10,
+                                          Math.min(
+                                            500,
+                                            Number(event.target.value) || 100,
+                                          ),
+                                        ),
+                                      })
+                                    }
+                                    className="w-full px-2 py-2 text-right text-sm font-black outline-none"
+                                  />
+                                  <span className="pr-2 text-xs font-bold text-gray-500">
+                                    %
+                                  </span>
+                                </div>
+                              </div>
+                            </Field>
+                          ) : null}
+
+                          <Field label="가로 중심">
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  Number(cell.background_image_focus_x ?? 50),
+                                ),
+                              )}
+                              onChange={(event) =>
+                                onUpdate({
+                                  background_image_focus_x: Number(
+                                    event.target.value,
+                                  ),
+                                })
+                              }
+                              className="w-full accent-blue-700"
+                            />
+                            <div className="mt-1 text-right text-xs font-bold text-gray-500">
+                              {Math.round(
+                                Number(cell.background_image_focus_x ?? 50),
+                              )}%
+                            </div>
+                          </Field>
+
+                          <Field label="세로 중심">
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="1"
+                              value={Math.max(
+                                0,
+                                Math.min(
+                                  100,
+                                  Number(cell.background_image_focus_y ?? 50),
+                                ),
+                              )}
+                              onChange={(event) =>
+                                onUpdate({
+                                  background_image_focus_y: Number(
+                                    event.target.value,
+                                  ),
+                                })
+                              }
+                              className="w-full accent-blue-700"
+                            />
+                            <div className="mt-1 text-right text-xs font-bold text-gray-500">
+                              {Math.round(
+                                Number(cell.background_image_focus_y ?? 50),
+                              )}%
+                            </div>
+                          </Field>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdate({
+                                background_image_fit: "width",
+                                background_image_size_percent: 100,
+                                background_image_focus_x: 50,
+                                background_image_focus_y: 50,
+                              })
+                            }
+                            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs font-black text-gray-700 hover:bg-gray-100"
+                          >
+                            이미지 표시 설정 초기화
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-4 sm:px-6">
+                      <p className="text-xs font-semibold text-gray-500">
+                        완료를 눌러도 현재 설정은 이미 편집 화면에 반영되어 있습니다.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setBackgroundImageEditorOpen(false)}
+                        className="rounded-xl bg-blue-700 px-6 py-3 text-sm font-black text-white hover:bg-blue-800"
+                      >
+                        완료
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body,
+              )
+            : null}
+
+          
 
       {mode === "video-carousel" ? (
         <>
@@ -28652,6 +29863,203 @@ function TitleCellEditor({
             </button>
           </div>
 
+          {mode === "auto-slider" ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setSliderEditorOpen(true)}
+                className="mt-3 flex w-full items-center justify-between rounded-2xl border-2 border-blue-300 bg-blue-50 px-4 py-4 text-left hover:border-blue-600 hover:bg-blue-100"
+              >
+                <span>
+                  <span className="block text-sm font-black text-blue-950">
+                    이미지 슬라이드 편집
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-blue-800">
+                    슬라이드 사진 선택과 높이 설정을 큰 팝업에서 편집합니다.
+                  </span>
+                </span>
+                <span className="rounded-full bg-blue-700 px-3 py-2 text-xs font-black text-white">
+                  열기
+                </span>
+              </button>
+
+              {sliderEditorOpen && typeof document !== "undefined"
+                ? createPortal(
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="이미지 슬라이드 편집"
+                      className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/65 p-2 sm:p-5"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setSliderEditorOpen(false);
+                        }
+                      }}
+                    >
+                      <div className="flex max-h-[95dvh] w-full max-w-[1180px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-gray-200 px-4 py-4 sm:px-6">
+                          <div>
+                            <h2 className="text-lg font-black text-gray-950 sm:text-xl">
+                              이미지 슬라이드 편집
+                            </h2>
+                            <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
+                              최대 10장 · 등록 이미지 불러오기 · 슬라이더 높이 설정
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="슬라이드 편집창 닫기"
+                            onClick={() => setSliderEditorOpen(false)}
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gray-100 text-3xl font-light text-gray-700 hover:bg-gray-200"
+                          >
+                            ×
+                          </button>
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                          <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+                            <aside className="space-y-4">
+                              <div className="rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+                                <p className="text-sm font-black text-blue-950">슬라이드 설정</p>
+                                <p className="mt-1 text-xs font-semibold leading-5 text-blue-800">
+                                  등록된 대표이미지를 불러온 뒤 슬라이드에 사용할 사진을 최대 10장 선택하세요.
+                                </p>
+
+                                <button
+                                  type="button"
+                                  disabled={loadingImages}
+                                  onClick={() => void loadSavedImages("auto-slider")}
+                                  className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                                >
+                                  {loadingImages ? "불러오는 중..." : "등록된 이미지 불러오기"}
+                                </button>
+
+                                <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-blue-200 bg-white p-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={cell.slider_auto_height !== false}
+                                    onChange={(event) =>
+                                      onUpdate({ slider_auto_height: event.target.checked })
+                                    }
+                                    className="mt-0.5 h-5 w-5 shrink-0 accent-blue-600"
+                                  />
+                                  <span>
+                                    <span className="block text-sm font-black text-gray-900">슬라이더 높이 자동</span>
+                                    <span className="mt-1 block text-xs font-semibold leading-5 text-gray-600">
+                                      켜면 16:9 비율로 자동 맞춥니다. 끄면 레이어 높이 조절선을 사용할 수 있습니다.
+                                    </span>
+                                  </span>
+                                </label>
+                              </div>
+
+                              {imageLoadError ? (
+                                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold leading-5 text-red-700">
+                                  {imageLoadError}
+                                </div>
+                              ) : null}
+
+                              {availableImages.length > 0 ? (
+                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2">
+                                  <p className="px-1 pb-2 text-xs font-black text-gray-700">등록 이미지</p>
+                                  <div className="grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto">
+                                    {availableImages.map((url, index) => {
+                                      const checked = cell.gallery_images?.includes(url) || false;
+                                      return (
+                                        <label
+                                          key={`slider-modal-${url}-${index}`}
+                                          className={`relative cursor-pointer overflow-hidden rounded-xl border-2 bg-white ${
+                                            checked ? "border-blue-600 ring-2 ring-blue-500/20" : "border-transparent"
+                                          }`}
+                                        >
+                                          <img src={url} alt={`슬라이드 후보 ${index + 1}`} className="aspect-[4/3] h-auto w-full object-cover" />
+                                          <span className="absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white shadow">
+                                            <input
+                                              type="checkbox"
+                                              checked={checked}
+                                              onChange={() => toggleSelectedImage(url)}
+                                              className="h-4 w-4 accent-blue-600"
+                                            />
+                                          </span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </aside>
+
+                            <section className="min-w-0">
+                              <div className="mb-3 flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-black text-gray-950">선택된 슬라이드 이미지</p>
+                                  <p className="mt-1 text-xs font-semibold text-gray-500">
+                                    현재 순서대로 자동 재생됩니다.
+                                  </p>
+                                </div>
+                                {selectedCount > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onUpdate({ gallery_images: [] })}
+                                    className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                                  >
+                                    전체 삭제
+                                  </button>
+                                ) : null}
+                              </div>
+
+                              {Array.isArray(cell.gallery_images) && cell.gallery_images.length > 0 ? (
+                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                  {cell.gallery_images.map((url, index) => (
+                                    <div key={`selected-slider-${url}-${index}`} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                                      <div className="relative">
+                                        <img src={url} alt={`슬라이드 ${index + 1}`} className="aspect-video h-auto w-full object-cover" />
+                                        <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-1 text-[10px] font-black text-white">
+                                          {index + 1}
+                                        </span>
+                                      </div>
+                                      <div className="p-3">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleSelectedImage(url)}
+                                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-black text-red-700"
+                                        >
+                                          삭제
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex min-h-[360px] items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 text-center">
+                                  <div>
+                                    <div className="text-4xl">🎞</div>
+                                    <p className="mt-3 text-sm font-black text-gray-700">아직 선택한 슬라이드 이미지가 없습니다.</p>
+                                    <p className="mt-1 text-xs font-semibold text-gray-500">왼쪽에서 등록 이미지를 불러오고 선택하세요.</p>
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
+                          <span className="text-xs font-bold text-gray-500">현재 {selectedCount}/10장</span>
+                          <button
+                            type="button"
+                            onClick={() => setSliderEditorOpen(false)}
+                            className="rounded-xl bg-gray-950 px-6 py-3 text-sm font-black text-white"
+                          >
+                            편집 완료
+                          </button>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )
+                : null}
+            </>
+          ) : null}
+
           {mode === "gallery" ? (
             <a
               href={`/owner/business/${businessId}/gallery`}
@@ -28675,7 +30083,7 @@ function TitleCellEditor({
                     이미지 갤러리 편집
                   </span>
                   <span className="mt-1 block text-xs font-semibold leading-5 text-emerald-800">
-                    이미지 업로드·제목·2/4/6열 설정을 큰 팝업에서 편집합니다.
+                    이미지 업로드·제목·표시 크기를 큰 팝업에서 편집합니다. 크기에 따라 한 줄 개수가 자동으로 바뀝니다.
                   </span>
                 </span>
                 <span className="rounded-full bg-emerald-700 px-3 py-2 text-xs font-black text-white">
@@ -28703,7 +30111,7 @@ function TitleCellEditor({
                               이미지 갤러리 편집
                             </h2>
                             <p className="mt-1 text-xs font-semibold text-gray-500 sm:text-sm">
-                              최대 12장 · 각 이미지 제목 · 한 줄 2/4/6개 표시
+                              최대 12장 · 각 이미지 제목 · 이미지 크기에 따라 열 수 자동 조절
                             </p>
                           </div>
                           <button
@@ -28729,29 +30137,73 @@ function TitleCellEditor({
                                 </p>
 
                                 <div className="mt-4">
-                                  <p className="mb-2 text-xs font-black text-gray-700">
-                                    한 줄에 표시할 이미지 수
-                                  </p>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {([2, 4, 6] as const).map((count) => (
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="text-xs font-black text-gray-700">
+                                      표시되는 이미지 크기
+                                    </p>
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-emerald-800">
+                                      {Math.round(
+                                        Number(cell.gallery_item_min_width_px ?? 260),
+                                      )}px
+                                    </span>
+                                  </div>
+
+                                  <div className="mt-2 grid grid-cols-4 gap-2">
+                                    {([
+                                      { label: "작게", value: 180 },
+                                      { label: "보통", value: 260 },
+                                      { label: "크게", value: 360 },
+                                      { label: "아주 크게", value: 480 },
+                                    ] as const).map((option) => (
                                       <button
-                                        key={count}
+                                        key={option.value}
                                         type="button"
                                         onClick={() =>
-                                          onUpdate({ gallery_columns: count })
+                                          onUpdate({
+                                            gallery_item_min_width_px: option.value,
+                                          })
                                         }
-                                        className={`rounded-xl border px-3 py-3 text-sm font-black ${
-                                          (cell.gallery_columns ?? 4) === count
+                                        className={`rounded-xl border px-2 py-2.5 text-[11px] font-black ${
+                                          Math.abs(
+                                            Number(
+                                              cell.gallery_item_min_width_px ?? 260,
+                                            ) - option.value,
+                                          ) < 20
                                             ? "border-emerald-700 bg-emerald-700 text-white"
                                             : "border-emerald-200 bg-white text-emerald-950"
                                         }`}
                                       >
-                                        {count}개
+                                        {option.label}
                                       </button>
                                     ))}
                                   </div>
+
+                                  <input
+                                    type="range"
+                                    min={140}
+                                    max={560}
+                                    step={10}
+                                    value={Math.max(
+                                      140,
+                                      Math.min(
+                                        560,
+                                        Number(cell.gallery_item_min_width_px ?? 260),
+                                      ),
+                                    )}
+                                    onChange={(event) =>
+                                      onUpdate({
+                                        gallery_item_min_width_px: Number(
+                                          event.target.value,
+                                        ),
+                                      })
+                                    }
+                                    className="mt-3 w-full accent-emerald-700"
+                                  />
+
                                   <p className="mt-2 text-xs font-bold leading-5 text-emerald-800">
-                                    12장 기준: 2개는 6줄 · 4개는 3줄 · 6개는 2줄
+                                    크게 지정할수록 한 줄에 적게 표시되고, 작게 지정할수록
+                                    많이 표시됩니다. 화면 폭에 맞춰 개수는 자동으로
+                                    조절됩니다.
                                   </p>
                                 </div>
                               </div>
@@ -28947,7 +30399,7 @@ function TitleCellEditor({
             </>
           ) : null}
 
-          {mode !== "gallery" && availableImages.length ? (
+          {mode !== "gallery" && mode !== "auto-slider" && availableImages.length ? (
             <div className="mt-3 grid max-h-[430px] grid-cols-2 gap-2 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-2">
               {availableImages.map((url, index) => {
                 const checked =
@@ -28981,7 +30433,7 @@ function TitleCellEditor({
                 );
               })}
             </div>
-          ) : mode !== "gallery" ? (
+          ) : mode !== "gallery" && mode !== "auto-slider" ? (
             <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm font-bold text-gray-500">
               대표이미지 불러오기를 눌러주세요.
             </div>
