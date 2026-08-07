@@ -121,15 +121,17 @@ export default function MenuOptionGroup({
     (maximum == null || selectedCount <= maximum);
 
   const requirementText =
-    minimum > 0
-      ? `${minimum} required${
-          maximum != null && maximum !== minimum
-            ? `, ${maximum} maximum`
-            : ""
-        }`
-      : maximum != null
-        ? `${maximum} maximum`
-        : "Optional";
+    minimum === 0 && maximum == null
+      ? "OPTIONAL"
+      : minimum === 0 && maximum != null
+        ? `OPTIONAL (UP TO ${maximum})`
+        : minimum === 1 && maximum === 1
+          ? "REQUIRED"
+          : minimum === maximum
+            ? `REQUIRED (SELECT ${minimum})`
+            : maximum != null
+              ? `REQUIRED (MIN ${minimum} · UP TO ${maximum})`
+              : `REQUIRED (MIN ${minimum})`;
 
   function setQuantitySafely(
     optionIndex: number,
@@ -190,15 +192,15 @@ export default function MenuOptionGroup({
   return (
     <section className="border-t border-black/10 pt-4">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h3 className="text-xs font-black uppercase tracking-wide opacity-60">
+        <h3 className="text-sm font-black leading-tight">
           {group.name}
         </h3>
 
         <span
-          className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+          className={`shrink-0 rounded border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
             valid
-              ? "bg-green-50 text-green-700"
-              : "bg-amber-50 text-amber-700"
+              ? "border-black/20 bg-white text-black"
+              : "border-amber-300 bg-amber-50 text-amber-800"
           }`}
         >
           {requirementText}
@@ -256,110 +258,47 @@ export default function MenuOptionGroup({
             option.soldOut ||
             (!checked && maximumReached);
 
-          const cannotIncrease =
-            option.soldOut ||
-            (maximum != null && selectedCount >= maximum);
-
           return (
-            <div
+            <label
               key={`${groupIndex}:${key}`}
-              className={`py-2.5 text-sm ${
-                option.soldOut ? "opacity-40" : ""
+              className={`flex cursor-pointer items-center gap-3 py-3 text-sm ${
+                option.soldOut ? "cursor-not-allowed opacity-40" : ""
               }`}
             >
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={cannotSelectNew}
-                  onChange={(event) => {
-                    if (event.target.checked) {
-                      if (maximumReached) return;
-                      setQuantitySafely(optionIndex, 1);
-                    } else {
-                      setQuantitySafely(optionIndex, 0);
-                    }
-                  }}
-                  className="h-4 w-4"
-                />
-
-                <button
-                  type="button"
-                  disabled={cannotSelectNew}
-                  onClick={() => {
-                    if (checked) {
-                      setQuantitySafely(optionIndex, 0);
-                      return;
-                    }
-
-                    if (maximumReached) return;
-                    setQuantitySafely(optionIndex, 1);
-                  }}
-                  className="min-w-0 flex-1 text-left font-semibold disabled:cursor-not-allowed"
-                >
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold">
                   {option.name}
                   {option.soldOut ? " · Sold Out" : ""}
-                </button>
-
-                <span className="shrink-0 text-xs font-bold opacity-60">
-                  {option.priceDelta > 0
-                    ? `+$${option.priceDelta.toFixed(2)}`
-                    : option.priceDelta < 0
-                      ? `-$${Math.abs(option.priceDelta).toFixed(2)}`
-                      : "+$0.00"}
-                </span>
+                </div>
+                {option.priceDelta !== 0 ? (
+                  <div className="mt-0.5 text-xs font-medium opacity-65">
+                    {option.priceDelta > 0
+                      ? `$${option.priceDelta.toFixed(2)}`
+                      : `-$${Math.abs(option.priceDelta).toFixed(2)}`}
+                  </div>
+                ) : null}
               </div>
 
-              {checked ? (
-                <div className="mt-2 flex items-center gap-0 pl-7">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuantitySafely(
-                        optionIndex,
-                        Math.max(0, quantity - 1),
-                      )
-                    }
-                    className="flex h-8 w-9 items-center justify-center rounded-l-lg border border-black/15 text-base font-black"
-                  >
-                    −
-                  </button>
-
-                  <div className="flex h-8 min-w-10 items-center justify-center border-y border-black/15 px-2 text-xs font-black">
-                    {quantity}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={cannotIncrease}
-                    onClick={() => {
-                      if (cannotIncrease) return;
-                      setQuantitySafely(optionIndex, quantity + 1);
-                    }}
-                    className="flex h-8 w-9 items-center justify-center rounded-r-lg border border-black/15 text-base font-black disabled:cursor-not-allowed disabled:opacity-35"
-                  >
-                    +
-                  </button>
-                </div>
-              ) : null}
-            </div>
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={cannotSelectNew}
+                onChange={(event) => {
+                  if (event.target.checked) {
+                    if (maximumReached) return;
+                    setQuantitySafely(optionIndex, 1);
+                  } else {
+                    setQuantitySafely(optionIndex, 0);
+                  }
+                }}
+                className="h-5 w-5 shrink-0 rounded border-black/25 accent-black"
+              />
+            </label>
           );
         })}
       </div>
 
-      {!singleChoice ? (
-        <p
-          className={`mt-2 rounded-lg px-3 py-2 text-[11px] font-bold ${
-            valid
-              ? "bg-green-50 text-green-700"
-              : "bg-amber-50 text-amber-700"
-          }`}
-        >
-          Selected {selectedCount}
-          {minimum > 0 ? ` · Min ${minimum}` : ""}
-          {maximum != null ? ` · Max ${maximum}` : ""}
-        </p>
-      ) : null}
+
     </section>
   );
 }

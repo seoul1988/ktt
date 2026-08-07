@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MenuItemModal from "./MenuItemModal";
+import RestaurantCheckoutModal from "./RestaurantCheckoutModal";
 import type { MenuOrderDraft } from "./MenuItemModal";
 import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
 
@@ -175,6 +176,7 @@ export default function RestaurantMenu({
 
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
@@ -951,7 +953,7 @@ export default function RestaurantMenu({
                         Taxes, fees, and delivery charges are calculated at checkout.
                       </p>
 
-                      <div className="mt-4 flex gap-2">
+                      <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
                         {cartItems.length ? (
                           <button
                             type="button"
@@ -960,14 +962,23 @@ export default function RestaurantMenu({
                           >
                             CLEAR
                           </button>
-                        ) : null}
+                        ) : <span />}
                         <button
                           type="button"
                           onClick={() => setCartOpen(false)}
-                          className="flex-1 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                          className="rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
                         >
                           CONTINUE ORDERING
                         </button>
+                        {cartItems.length ? (
+                          <button
+                            type="button"
+                            onClick={() => { setCartOpen(false); setCheckoutOpen(true); }}
+                            className="col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                          >
+                            CHECKOUT
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -977,6 +988,16 @@ export default function RestaurantMenu({
             document.body,
           )
         : null}
+
+      {checkoutOpen && activeOrderEnabled ? (
+        <RestaurantCheckoutModal
+          businessId={businessId}
+          fulfillmentType={activeService === "delivery" ? "delivery" : "pickup"}
+          cartItems={cartItems}
+          onClose={() => setCheckoutOpen(false)}
+          onOrderPlaced={() => { clearCart(); setCheckoutOpen(false); }}
+        />
+      ) : null}
 
       {showScrollTop &&
       typeof document !== "undefined"
