@@ -877,6 +877,23 @@ function resolveGridForDevice(
   };
 }
 
+/**
+ * 레이아웃 아래 간격은 마지막 레이아웃에도 적용합니다.
+ * 마지막 레이아웃 뒤에는 다음 "레이아웃"이 없더라도 다음 섹션/레이어가 올 수 있으므로
+ * index 기준으로 0으로 덮어쓰면 사용자가 지정한 간격이 사라집니다.
+ */
+function getLayoutSpacingPx(
+  layout: GridData,
+  device: "desktop" | "mobile",
+): number {
+  const raw =
+    device === "mobile"
+      ? layout.mobile_margin_bottom_px ?? layout.margin_bottom_px ?? 0
+      : layout.margin_bottom_px ?? 0;
+
+  return Math.max(0, Math.min(500, Number(raw) || 0));
+}
+
 function applyCellPatchForDevice(
   cell: GridCell,
   patch: Partial<GridCell>,
@@ -8515,19 +8532,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                               backgroundColor: outerBackgroundColor,
                             }
                           : {}),
-                        marginBottom: `${Math.max(
-                          0,
-                          Math.min(
-                            500,
-                            Number(
-                              device === "mobile"
-                                ? layout.mobile_margin_bottom_px ??
-                                    layout.margin_bottom_px ??
-                                    0
-                                : layout.margin_bottom_px ?? 0,
-                            ),
-                          ),
-                        )}px`,
+                        marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
                       }}
                     >
                       <LayoutBorderOverlay layout={layout} />
@@ -10217,28 +10222,14 @@ function CurrentWebsitePreview({
 
                 <div className="relative z-10">
                   {normalizeHeroLayouts(previewLinkPage.content).map(
-                    (layout, layoutIndex, pageLayouts) => (
+                    (layout) => (
                       <div
                         key={layout.id}
                         className={getLayoutWidthClass(layout)}
                         style={{
                           ...getLayoutBorderStyle(layout),
-                          marginBottom:
-                            layoutIndex < pageLayouts.length - 1
-                              ? `${Math.max(
-                                  0,
-                                  Math.min(
-                                    500,
-                                    Number(
-                                      device === "mobile"
-                                        ? layout.mobile_margin_bottom_px ??
-                                            layout.margin_bottom_px ??
-                                            6
-                                        : layout.margin_bottom_px ?? 0,
-                                    ),
-                                  ),
-                                )}px`
-                              : 0,
+                          // 마지막 레이아웃도 다음 섹션/레이어와 간격을 가져야 합니다.
+                          marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
                         }}
                       >
                         <div
@@ -10297,7 +10288,7 @@ function CurrentWebsitePreview({
               />
 
               <div className="relative z-10">
-                {heroLayouts.map((layout, layoutIndex) => (
+                {heroLayouts.map((layout) => (
                   <div
                     key={layout.id}
                     className={
@@ -10305,22 +10296,8 @@ function CurrentWebsitePreview({
                     }
                     style={{
                       ...getLayoutBorderStyle(layout),
-                      marginBottom:
-                        layoutIndex < heroLayouts.length - 1
-                          ? `${Math.max(
-                              0,
-                              Math.min(
-                                500,
-                                Number(
-                                  device === "mobile"
-                                    ? layout.mobile_margin_bottom_px ??
-                                        layout.margin_bottom_px ??
-                                        6
-                                    : layout.margin_bottom_px ?? 0,
-                                ),
-                              ),
-                            )}px`
-                          : 0,
+                      // 마지막 레이아웃 뒤의 값도 그대로 유지합니다.
+                      marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
                     }}
                   >
                     <div
@@ -10889,7 +10866,7 @@ export function PublicWebsiteRenderer({
             />
 
             <div className="relative z-10">
-              {layouts.map((layout, layoutIndex) => (
+              {layouts.map((layout) => (
                 <div
                   key={layout.id}
                   className={getLayoutWidthClass(layout)}
@@ -10900,22 +10877,8 @@ export function PublicWebsiteRenderer({
                           backgroundColor: outerBackgroundColor,
                         }
                       : {}),
-                    marginBottom:
-                      layoutIndex < layouts.length - 1
-                        ? `${Math.max(
-                            0,
-                            Math.min(
-                              500,
-                              Number(
-                                device === "mobile"
-                                  ? layout.mobile_margin_bottom_px ??
-                                      layout.margin_bottom_px ??
-                                      6
-                                  : layout.margin_bottom_px ?? 0,
-                              ),
-                            ),
-                          )}px`
-                        : 0,
+                    // 마지막 레이아웃의 간격도 다음 섹션 앞에 실제로 반영합니다.
+                    marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
                   }}
                 >
                   <div
@@ -12203,7 +12166,7 @@ function PreviewSection({
 
       {hasLayoutContent ? (
         <div className="w-full max-w-none px-0">
-          {sectionLayouts.map((layout, layoutIndex) => (
+          {sectionLayouts.map((layout) => (
             <div
               key={layout.id}
               className={
@@ -12211,22 +12174,8 @@ function PreviewSection({
               }
               style={{
                 ...getLayoutBorderStyle(layout),
-                marginBottom:
-                  layoutIndex < sectionLayouts.length - 1
-                    ? `${Math.max(
-                        0,
-                        Math.min(
-                          500,
-                          Number(
-                            previewDevice === "mobile"
-                              ? layout.mobile_margin_bottom_px ??
-                                  layout.margin_bottom_px ??
-                                  6
-                              : layout.margin_bottom_px ?? 0,
-                          ),
-                        ),
-                      )}px`
-                    : 0,
+                // 섹션 안의 마지막 레이아웃도 다음 섹션과의 간격을 보존합니다.
+                marginBottom: `${getLayoutSpacingPx(layout, previewDevice)}px`,
               }}
             >
               <div
@@ -14528,7 +14477,7 @@ function CellPreview({
         setImageClickHintStopped(true);
       }
     };
-    const imageSize = Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100)));
+    const imageSize = Math.max(3, Math.min(500, Number(cell.image_size_percent ?? 100)));
     const imageFit = normalizeImageFit(cell.image_fit);
     const horizontal =
       cell.text_align === "left"
@@ -14552,18 +14501,19 @@ function CellPreview({
         style={{
           width:
             imageFit === "scale"
-              ? "auto"
+              ? `${imageSize}%`
               : "100%",
           height:
-            imageFit === "width"
+            imageFit === "width" || imageFit === "scale"
               ? "auto"
-              : imageFit === "scale"
-                ? `${imageSize}%`
-                : "100%",
-          maxWidth: imageFit === "scale" ? "none" : "100%",
+              : "100%",
+          maxWidth:
+            imageFit === "scale"
+              ? `${imageSize}%`
+              : "100%",
           maxHeight:
             imageFit === "width" || imageFit === "scale"
-              ? "none"
+              ? "100%"
               : "100%",
           flexShrink: 0,
           objectFit:
@@ -17186,7 +17136,7 @@ function RichWebPasteBox({
       const alt = file.name.replace(/\.[^.]+$/, "").replace(/"/g, "");
       const imageId = createId("html-image");
       insertHtmlAtCursor(
-        `<p style="text-align:center;"><span data-html-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
+        `<p style="text-align:center;"><span data-html-image-id="${imageId}" contenteditable="false" data-drag-x="0" data-drag-y="0" style="display:inline-block;position:relative;width:min(520px,100%);min-width:40px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;cursor:grab;touch-action:none;transform:translate(0px,0px);"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
       );
       setSelectedImageId(imageId);
       setSelectedImageWidth(520);
@@ -18614,6 +18564,16 @@ function RightPanel(props: {
     useState<TextAlign>("center");
   const [selectedTextEditorImageVertical, setSelectedTextEditorImageVertical] =
     useState<VerticalAlign>("center");
+
+  const textEditorImageDragRef = useRef<{
+    id: string;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
   const [selectedTextEditorTableId, setSelectedTextEditorTableId] = useState("");
   const [selectedTextEditorTableWidth, setSelectedTextEditorTableWidth] =
     useState(100);
@@ -19571,7 +19531,7 @@ function RightPanel(props: {
       const imageId = createId("text-editor-image");
       const alt = file.name.replace(/\.[^.]+$/, "").replace(/"/g, "");
       insertTextEditorHtmlAtCursor(
-        `<p data-text-editor-image-row="true" style="display:flex;width:100%;min-height:240px;margin:0;justify-content:center;align-items:center;line-height:0;"><span data-text-editor-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
+        `<p data-text-editor-image-row="true" style="display:flex;width:100%;min-height:300px;height:300px;margin:0;justify-content:center;align-items:center;line-height:0;overflow:hidden;"><span data-text-editor-image-id="${imageId}" contenteditable="false" style="display:inline-block;position:relative;width:min(520px,100%);min-width:80px;max-width:100%;resize:horizontal;overflow:auto;vertical-align:top;line-height:0;"><img src="${url}" alt="${alt}" draggable="false" style="display:block;width:100%;height:auto;max-width:none;border-radius:12px;" /></span></p><p><br></p>`,
       );
       setSelectedTextEditorImageId(imageId);
       setSelectedTextEditorImageWidth(520);
@@ -19606,14 +19566,39 @@ function RightPanel(props: {
       return;
     }
     wrapper.setAttribute("data-selected", "true");
+
+    // 기존에 저장된 이미지도 모달 안에서 오른쪽 아래 모서리를 마우스로 잡아
+    // 가로 크기를 자유롭게 조절할 수 있게 합니다.
+    wrapper.style.resize = "horizontal";
+    wrapper.style.overflow = "auto";
+    wrapper.style.minWidth = "40px";
+    wrapper.style.maxWidth = "100%";
+    wrapper.style.cursor = "grab";
+    wrapper.style.touchAction = "none";
+
     setSelectedTextEditorImageId(wrapper.dataset.textEditorImageId || "");
     setSelectedTextEditorImageWidth(
-      Math.max(80, Math.round(wrapper.getBoundingClientRect().width)),
+      Math.max(40, Math.round(wrapper.getBoundingClientRect().width)),
     );
 
     const parent = wrapper.closest<HTMLElement>(
       '[data-text-editor-image-row="true"], p, div',
     );
+    if (parent) {
+      const editorHeight = Math.max(
+        240,
+        textEditorRef.current?.clientHeight || 300,
+      );
+      parent.setAttribute("data-text-editor-image-row", "true");
+      parent.style.display = "flex";
+      parent.style.width = "100%";
+      parent.style.minHeight = `${editorHeight}px`;
+      parent.style.height = `${editorHeight}px`;
+      parent.style.overflow = "hidden";
+      parent.style.margin = "0";
+      parent.style.lineHeight = "0";
+    }
+
     const justifyContent = parent?.style.justifyContent || "center";
     const alignItems = parent?.style.alignItems || "center";
 
@@ -19893,10 +19878,137 @@ function RightPanel(props: {
     const wrapper = getSelectedTextEditorImage();
     if (!wrapper) return;
     const maxWidth = textEditorRef.current?.clientWidth || 1200;
-    const next = Math.max(80, Math.min(maxWidth, Math.round(width)));
+    const next = Math.max(40, Math.min(maxWidth, Math.round(width)));
     wrapper.style.width = `${next}px`;
     setSelectedTextEditorImageWidth(next);
     syncEditorHtml();
+  }
+
+  function syncSelectedTextEditorImageMouseResize() {
+    const wrapper = getSelectedTextEditorImage();
+    if (!wrapper) return;
+
+    const maxWidth = textEditorRef.current?.clientWidth || 1200;
+    const measured = Math.max(
+      40,
+      Math.min(maxWidth, Math.round(wrapper.getBoundingClientRect().width)),
+    );
+
+    wrapper.style.width = `${measured}px`;
+    setSelectedTextEditorImageWidth(measured);
+    syncEditorHtml(true);
+  }
+
+  function startTextEditorImageDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const wrapper = target?.closest<HTMLElement>("[data-text-editor-image-id]");
+    const editor = textEditorRef.current;
+
+    if (!wrapper || !editor?.contains(wrapper)) return;
+
+    // 오른쪽 아래 resize 손잡이 영역에서는 이동 대신 크기 조절을 허용합니다.
+    const rect = wrapper.getBoundingClientRect();
+    const resizeCorner = 28;
+    const inResizeCorner =
+      event.clientX >= rect.right - resizeCorner &&
+      event.clientY >= rect.bottom - resizeCorner;
+
+    if (inResizeCorner) return;
+
+    selectTextEditorImage(wrapper);
+
+    const startX = Number(wrapper.dataset.dragX || 0);
+    const startY = Number(wrapper.dataset.dragY || 0);
+
+    textEditorImageDragRef.current = {
+      id: wrapper.dataset.textEditorImageId || "",
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startX: Number.isFinite(startX) ? startX : 0,
+      startY: Number.isFinite(startY) ? startY : 0,
+    };
+
+    wrapper.style.cursor = "grabbing";
+    wrapper.style.touchAction = "none";
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  function moveTextEditorImageDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = textEditorImageDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const editor = textEditorRef.current;
+    const wrapper = editor?.querySelector<HTMLElement>(
+      `[data-text-editor-image-id="${drag.id}"]`,
+    );
+    if (!editor || !wrapper) return;
+
+    const parent =
+      wrapper.closest<HTMLElement>('[data-text-editor-image-row="true"]') ||
+      wrapper.parentElement;
+    if (!parent) return;
+
+    const parentRect = parent.getBoundingClientRect();
+    const wrapperRect = wrapper.getBoundingClientRect();
+
+    const rawX = drag.startX + (event.clientX - drag.startClientX);
+    const rawY = drag.startY + (event.clientY - drag.startClientY);
+
+    // 이미지가 편집 row 밖으로 완전히 빠져나가지 않도록 이동 범위를 제한합니다.
+    const maxX = Math.max(0, parentRect.width - wrapperRect.width);
+    const maxY = Math.max(0, parentRect.height - wrapperRect.height);
+
+    const baseHorizontal =
+      parent.style.justifyContent === "flex-start"
+        ? 0
+        : parent.style.justifyContent === "flex-end"
+          ? maxX
+          : maxX / 2;
+    const baseVertical =
+      parent.style.alignItems === "flex-start"
+        ? 0
+        : parent.style.alignItems === "flex-end"
+          ? maxY
+          : maxY / 2;
+
+    const minTranslateX = -baseHorizontal;
+    const maxTranslateX = maxX - baseHorizontal;
+    const minTranslateY = -baseVertical;
+    const maxTranslateY = maxY - baseVertical;
+
+    const nextX = Math.max(minTranslateX, Math.min(maxTranslateX, rawX));
+    const nextY = Math.max(minTranslateY, Math.min(maxTranslateY, rawY));
+
+    wrapper.dataset.dragX = String(Math.round(nextX));
+    wrapper.dataset.dragY = String(Math.round(nextY));
+    wrapper.style.transform = `translate(${Math.round(nextX)}px, ${Math.round(nextY)}px)`;
+    wrapper.style.willChange = "transform";
+
+    event.preventDefault();
+  }
+
+  function finishTextEditorImageDrag(event?: React.PointerEvent<HTMLDivElement>) {
+    const drag = textEditorImageDragRef.current;
+    if (!drag) return;
+
+    const wrapper = textEditorRef.current?.querySelector<HTMLElement>(
+      `[data-text-editor-image-id="${drag.id}"]`,
+    );
+
+    if (wrapper) {
+      wrapper.style.cursor = "grab";
+      wrapper.style.touchAction = "none";
+      wrapper.style.removeProperty("will-change");
+    }
+
+    if (event && event.currentTarget.hasPointerCapture?.(drag.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(drag.pointerId);
+    }
+
+    textEditorImageDragRef.current = null;
+    syncEditorHtml(true);
   }
 
   function positionSelectedTextEditorImage(
@@ -19915,7 +20027,15 @@ function RightPanel(props: {
     parent.setAttribute("data-text-editor-image-row", "true");
     parent.style.display = "flex";
     parent.style.width = "100%";
-    parent.style.minHeight = "240px";
+    const editorHeight = Math.max(
+      240,
+      textEditorRef.current?.clientHeight || 300,
+    );
+
+    // 이미지 위치를 위/가운데/아래로 움직일 수 있도록 이미지 row가
+    // 편집창의 사용 가능한 높이를 갖게 합니다.
+    parent.style.minHeight = `${editorHeight}px`;
+    parent.style.height = `${editorHeight}px`;
     parent.style.margin = "0";
     parent.style.lineHeight = "0";
     parent.style.textAlign = "initial";
@@ -19931,6 +20051,12 @@ function RightPanel(props: {
         : vertical === "bottom"
           ? "flex-end"
           : "center";
+
+    wrapper.dataset.dragX = "0";
+    wrapper.dataset.dragY = "0";
+    wrapper.style.transform = "translate(0px, 0px)";
+    wrapper.style.cursor = "grab";
+    wrapper.style.touchAction = "none";
 
     setSelectedTextEditorImageHorizontal(horizontal);
     setSelectedTextEditorImageVertical(vertical);
@@ -23387,10 +23513,13 @@ function RightPanel(props: {
                   {selectedTextEditorImageId ? (
                     <div className="mt-3 rounded-xl border border-amber-300 bg-white p-3">
                       <div className="flex flex-wrap items-center gap-2">
+                        <div className="w-full rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+                          이미지 본체를 잡아 상하좌우로 끌면 위치를 자유롭게 이동할 수 있습니다. 오른쪽 아래 모서리를 잡으면 크기를 조절합니다.
+                        </div>
                         <span className="text-xs font-black text-amber-900">선택한 이미지 폭</span>
                         <input
                           type="range"
-                          min="80"
+                          min="40"
                           max="1200"
                           value={selectedTextEditorImageWidth}
                           onChange={(event) => resizeSelectedTextEditorImage(Number(event.target.value))}
@@ -23398,7 +23527,7 @@ function RightPanel(props: {
                         />
                         <input
                           type="number"
-                          min="80"
+                          min="40"
                           max="1200"
                           value={selectedTextEditorImageWidth}
                           onChange={(event) => resizeSelectedTextEditorImage(Number(event.target.value))}
@@ -24650,9 +24779,26 @@ function RightPanel(props: {
                     selectTextEditorTable(event.target);
                     selectTextEditorDivider(event.target);
                   }}
-                  onMouseUp={() => { rememberTextSelection(); syncEditorHtml(); }}
+                  onPointerDown={startTextEditorImageDrag}
+                  onPointerMove={moveTextEditorImageDrag}
+                  onPointerUp={(event) => {
+                    finishTextEditorImageDrag(event);
+                    syncSelectedTextEditorImageMouseResize();
+                  }}
+                  onPointerCancel={(event) => {
+                    finishTextEditorImageDrag(event);
+                  }}
+                  onMouseUp={() => {
+                    rememberTextSelection();
+                    syncSelectedTextEditorImageMouseResize();
+                    syncEditorHtml();
+                  }}
                   onKeyUp={rememberTextSelection}
-                  onBlur={rememberTextSelection}
+                  onBlur={() => {
+                    finishTextEditorImageDrag();
+                    rememberTextSelection();
+                    syncSelectedTextEditorImageMouseResize();
+                  }}
                   className="text-cell-rich-editor min-h-[300px] w-full whitespace-pre-wrap rounded-2xl border-2 border-gray-300 px-5 py-4 text-lg leading-8 outline-none focus:border-blue-500"
                   style={{
                     fontSize: `${inputFontSize}px`,
@@ -24871,6 +25017,15 @@ function RightPanel(props: {
                             onClick={() => {
                               setInputTextAlign(horizontal);
                               setInputVerticalAlign(vertical);
+
+                              // 이미지가 선택된 상태라면 글씨 정렬뿐 아니라
+                              // 선택한 이미지의 row 정렬도 같은 9방향으로 즉시 적용합니다.
+                              if (selectedTextEditorImageId) {
+                                positionSelectedTextEditorImage(
+                                  horizontal,
+                                  vertical,
+                                );
+                              }
                             }}
                             className={`flex h-12 items-center justify-center rounded-xl border text-xl font-black transition ${
                               active
@@ -25715,18 +25870,18 @@ function ImageCellUploader({
   const [dragging, setDragging] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [draftImageSize, setDraftImageSize] = useState(() =>
-    Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100))),
+    Math.max(3, Math.min(500, Number(cell.image_size_percent ?? 100))),
   );
 
   useEffect(() => {
     setDraftImageSize(
-      Math.max(10, Math.min(500, Number(cell.image_size_percent ?? 100))),
+      Math.max(3, Math.min(500, Number(cell.image_size_percent ?? 100))),
     );
   }, [cell.id, cell.image_size_percent]);
 
   const commitImageSize = useCallback(
     (value: number) => {
-      const nextValue = Math.max(10, Math.min(500, Number(value) || 10));
+      const nextValue = Math.max(3, Math.min(500, Number(value) || 3));
       setDraftImageSize(nextValue);
       onUpdate({ image_size_percent: nextValue });
     },
@@ -26009,23 +26164,54 @@ function ImageCellUploader({
                 addHotspotAt(x - 11, y - 9);
               }}
             >
-              <img
-                src={cell.image_url}
-                alt="선택한 이미지 실시간 미리보기"
-                draggable={false}
-                className={`absolute inset-0 h-full w-full select-none ${
-                  imageFit === "cover"
-                    ? "object-cover"
-                    : imageFit === "fill"
-                      ? "object-fill"
-                      : "object-contain"
-                }`}
+              <div
+                className="absolute inset-0 flex"
                 style={{
-                  objectPosition: `${cell.image_position_x ?? 50}% ${
-                    cell.image_position_y ?? 50
-                  }%`,
+                  justifyContent:
+                    cell.text_align === "left"
+                      ? "flex-start"
+                      : cell.text_align === "right"
+                        ? "flex-end"
+                        : "center",
+                  alignItems:
+                    cell.vertical_align === "top"
+                      ? "flex-start"
+                      : cell.vertical_align === "bottom"
+                        ? "flex-end"
+                        : "center",
                 }}
-              />
+              >
+                <img
+                  src={cell.image_url}
+                  alt="선택한 이미지 실시간 미리보기"
+                  draggable={false}
+                  className={`block select-none ${
+                    imageFit === "cover"
+                      ? "object-cover"
+                      : imageFit === "fill"
+                        ? "object-fill"
+                        : "object-contain"
+                  }`}
+                  style={{
+                    width:
+                      imageFit === "scale"
+                        ? `${imageSize}%`
+                        : "100%",
+                    height:
+                      imageFit === "width" || imageFit === "scale"
+                        ? "auto"
+                        : "100%",
+                    maxWidth:
+                      imageFit === "scale"
+                        ? `${imageSize}%`
+                        : "100%",
+                    maxHeight: "100%",
+                    objectPosition: `${cell.image_position_x ?? 50}% ${
+                      cell.image_position_y ?? 50
+                    }%`,
+                  }}
+                />
+              </div>
 
               {cell.image_overlay_enabled && cell.overlay_text ? (
                 <div
@@ -26267,21 +26453,19 @@ function ImageCellUploader({
           <div className="flex items-center gap-3">
             <input
               type="range"
-              min={10}
+              min={3}
               max={500}
               step={1}
               value={imageSize}
               onChange={(event) =>
                 commitImageSize(Number(event.target.value))
               }
-              onPointerUp={() => commitImageSize(imageSize)}
-              onKeyUp={() => commitImageSize(imageSize)}
               className="min-w-0 flex-1 accent-blue-700"
             />
             <div className="flex w-24 items-center overflow-hidden rounded-xl border border-blue-300 bg-white">
               <input
                 type="number"
-                min={10}
+                min={3}
                 max={500}
                 value={imageSize}
                 onChange={(event) =>
