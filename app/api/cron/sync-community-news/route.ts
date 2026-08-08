@@ -750,11 +750,15 @@ async function translateToKorean(
     throw new Error("ARGOS_TRANSLATE_URL is missing");
   }
 
+  // 중첩 함수 안에서는 TypeScript가 위의 null 체크를 유지하지 못할 수 있으므로
+  // 확정된 string 값으로 한 번 더 고정합니다.
+  const resolvedTranslateUrl: string = translateUrl;
+
   async function translateText(text: string | null | undefined) {
     const sourceText = String(text ?? "").trim();
     if (!sourceText) return "";
 
-    const response = await fetch(translateUrl, {
+    const response = await fetch(resolvedTranslateUrl, {
       method: "POST",
       cache: "no-store",
       headers: {
