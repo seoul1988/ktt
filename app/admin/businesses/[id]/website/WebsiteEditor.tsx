@@ -708,10 +708,14 @@ function getLayoutWidthClass(layout: GridData) {
 
 function findCellRecursive(cells: GridCell[], cellId: string): GridCell | null {
   for (const cell of cells) {
-    if (cell.id === cellId) return cell;
+    // 오래된 분할 데이터에는 부모와 첫 번째 child가 같은 id를 가진 경우가 있습니다.
+    // 안쪽 칸을 편집할 때 부모가 먼저 잡히지 않도록 child를 먼저 찾습니다.
     const nested = findCellRecursive(cell.child_cells || [], cellId);
     if (nested) return nested;
+
+    if (cell.id === cellId) return cell;
   }
+
   return null;
 }
 
@@ -721,13 +725,24 @@ function mapCellRecursive(
   updater: (cell: GridCell) => GridCell,
 ): GridCell[] {
   return cells.map((cell) => {
-    if (cell.id === cellId) return updater(cell);
-    if (cell.child_cells?.length) {
+    const children = cell.child_cells || [];
+
+    // 오래된 데이터에서 부모/첫 child ID가 같아도 실제 선택한 안쪽 칸을 우선합니다.
+    const descendantContainsTarget = children.some(
+      (child) => findCellRecursive([child], cellId) !== null,
+    );
+
+    if (descendantContainsTarget) {
       return {
         ...cell,
-        child_cells: mapCellRecursive(cell.child_cells, cellId, updater),
+        child_cells: mapCellRecursive(children, cellId, updater),
       };
     }
+
+    if (cell.id === cellId) {
+      return updater(cell);
+    }
+
     return cell;
   });
 }
@@ -2432,6 +2447,14 @@ function BusinessLocationMap({
   );
 }
 
+function sectionContainsRestaurantMenu(section: BusinessSection | null | undefined) {
+  if (!section) return false;
+
+  return normalizeHeroLayouts(section.content).some((layout) =>
+    gridContainsDisplayMode(layout, "restaurant-menu"),
+  );
+}
+
 function backgroundStyle(
   section: BusinessSection,
   outerBackgroundColor = "#e5e7eb",
@@ -3598,10 +3621,12 @@ function LinkPageContent({
   section,
   editable = false,
   previewDevice = "desktop",
+  outerBackgroundColor = "#e5e7eb",
 }: {
   section: BusinessSection;
   editable?: boolean;
   previewDevice?: "desktop" | "mobile";
+  outerBackgroundColor?: string;
 }) {
   if (section.content?.link_page_kind === "restaurant-menu") {
     const menuBackgroundColor = String(
@@ -3619,31 +3644,52 @@ function LinkPageContent({
     );
     const scrollTopPosition =
       section.content?.restaurant_menu_scroll_top_position === "left" ? "left" : "right";
+    const widthMode = String(
+      section.content?.link_page_width || "normal",
+    ) as "normal" | "wide" | "full";
+    const menuWidthClass =
+      widthMode === "full"
+        ? "max-w-none"
+        : widthMode === "wide"
+          ? "max-w-[1400px]"
+          : "max-w-[1120px]";
 
     return (
       <div
+        data-restaurant-menu-outer
         className="w-full"
-        style={{ backgroundColor: menuBackgroundColor, color: menuTextColor }}
+        style={{
+          width: "100%",
+          backgroundColor: outerBackgroundColor,
+        }}
       >
-        <RestaurantMenu
-          businessId={section.business_id}
-          compact={previewDevice === "mobile"}
-          backgroundColor={menuBackgroundColor}
-          textColor={menuTextColor}
-          scrollTopEnabled={scrollTopEnabled}
-          scrollTopButtonColor={scrollTopButtonColor}
-          scrollTopIconColor={scrollTopIconColor}
-          scrollTopPosition={scrollTopPosition}
-          menuEnabled={
-            section.content?.restaurant_menu_menu_enabled !== false
-          }
-          pickupEnabled={
-            section.content?.restaurant_menu_pickup_enabled === true
-          }
-          deliveryEnabled={
-            section.content?.restaurant_menu_delivery_enabled === true
-          }
-        />
+        <div
+          className={`mx-auto w-full ${menuWidthClass}`}
+          style={{
+            backgroundColor: "transparent",
+            color: menuTextColor,
+          }}
+        >
+          <RestaurantMenu
+            businessId={section.business_id}
+            compact={previewDevice === "mobile"}
+            backgroundColor={menuBackgroundColor}
+            textColor={menuTextColor}
+            scrollTopEnabled={scrollTopEnabled}
+            scrollTopButtonColor={scrollTopButtonColor}
+            scrollTopIconColor={scrollTopIconColor}
+            scrollTopPosition={scrollTopPosition}
+            menuEnabled={
+              section.content?.restaurant_menu_menu_enabled !== false
+            }
+            pickupEnabled={
+              section.content?.restaurant_menu_pickup_enabled === true
+            }
+            deliveryEnabled={
+              section.content?.restaurant_menu_delivery_enabled === true
+            }
+          />
+        </div>
       </div>
     );
   }
@@ -6614,16 +6660,32 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       area,
       (grid) => ({
         ...grid,
-        cells: grid.cells.map((cell) => {
-          if (cell.id !== cellId) return cell;
 
-          // 비우기를 누르면 이전 텍스트, 이미지, 전화번호, 메뉴, 갤러리 등
-          // 모든 콘텐츠 속성을 완전히 제거합니다. 칸의 위치와 폭만 유지합니다.
+        /*
+         * 나눈 안쪽 셀(child_cells)도 비울 수 있어야 합니다.
+         * 기존 grid.cells.map()은 최상위 셀만 찾기 때문에,
+         * 모달 편집 후 선택된 안쪽 셀에서는 "비우기"가 아무 동작도 하지 않았습니다.
+         * mapCellRecursive()로 모든 중첩 셀을 찾아서 비웁니다.
+         */
+        cells: mapCellRecursive(grid.cells, cellId, (cell) => {
+          const emptyCell = defaultCell("empty", "", cell.span || 1);
+
           return {
-            ...defaultCell("empty", "", cell.span || 1),
+            ...emptyCell,
+
+            // 현재 셀의 ID와 레이아웃 크기 정보는 그대로 유지합니다.
             id: cell.id,
             span: cell.span,
             width_percent: cell.width_percent,
+            mobile_width_percent: cell.mobile_width_percent,
+            size_percent: cell.size_percent,
+            mobile_size_percent: cell.mobile_size_percent,
+
+            // 중첩 셀에서 사용하던 높이 비율/레이아웃 위치도 유지합니다.
+            nested_height_px: cell.nested_height_px,
+            mobile_nested_height_px: cell.mobile_nested_height_px,
+
+            // 콘텐츠 배경은 완전히 투명하게 초기화합니다.
             background_color: "transparent",
           };
         }),
@@ -6631,6 +6693,10 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       layoutId,
     );
 
+    /*
+     * 모달에서 편집하고 돌아온 뒤에도 같은 셀을 계속 선택 상태로 유지합니다.
+     * 그래야 비우기 직후 다시 다른 내용을 넣거나 합치기를 할 수 있습니다.
+     */
     setSelection({
       area,
       sectionId: area === "hero" ? heroSection?.id : undefined,
@@ -7253,6 +7319,21 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         (id) => !currentSectionIds.includes(id),
       );
 
+      /*
+       * website_settings를 현재 에디터 상태 그대로 명시적으로 정규화해서 보냅니다.
+       * 특히 outer_background_color가 PATCH 과정에서 빠지는지 확인하기 쉽도록
+       * businessForSave를 따로 만듭니다.
+       */
+      const settingsForSave = normalizeSettings(
+        business.website_settings,
+        business.name || "",
+      );
+
+      const businessForSave: Business = {
+        ...business,
+        website_settings: settingsForSave,
+      };
+
       const response = await fetch(`/api/admin/businesses/${businessId}/website`, {
         method: "PATCH",
         cache: "no-store",
@@ -7261,7 +7342,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          business,
+          business: businessForSave,
           sections: sectionsForSave,
 
           /*
@@ -7282,6 +7363,69 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               `저장하지 못했습니다. HTTP ${response.status}`,
           ),
         );
+      }
+
+      /*
+       * PATCH 성공 뒤 DB를 다시 읽어서 outer_background_color가 실제로
+       * 서버에 저장되었는지 검증합니다. 로컬 상태만 보고 성공 처리하지 않습니다.
+       */
+      const verifyResponse = await fetch(
+        `/api/admin/businesses/${businessId}/website?verify=${Date.now()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include",
+          headers: {
+            "Cache-Control": "no-cache, no-store, max-age=0",
+            Pragma: "no-cache",
+          },
+        },
+      );
+
+      const verifyResult = await readApiResponse(verifyResponse);
+
+      if (!verifyResponse.ok) {
+        throw new Error(
+          String(
+            verifyResult.error ||
+              verifyResult.message ||
+              `저장 후 서버 확인에 실패했습니다. HTTP ${verifyResponse.status}`,
+          ),
+        );
+      }
+
+      const verifiedBusiness =
+        verifyResult.business &&
+        typeof verifyResult.business === "object"
+          ? (verifyResult.business as Business)
+          : null;
+
+      const verifiedSettings = normalizeSettings(
+        verifiedBusiness?.website_settings,
+        verifiedBusiness?.name || business.name || "",
+      );
+
+      const expectedOuterBackground = String(
+        settingsForSave.outer_background_color || "#e5e7eb",
+      ).toLowerCase();
+
+      const savedOuterBackground = String(
+        verifiedSettings.outer_background_color || "#e5e7eb",
+      ).toLowerCase();
+
+      if (savedOuterBackground !== expectedOuterBackground) {
+        throw new Error(
+          `바깥 배경색 서버 저장 확인 실패: 편집값 ${expectedOuterBackground}, 서버값 ${savedOuterBackground}`,
+        );
+      }
+
+      if (verifiedBusiness) {
+        setBusiness({
+          ...verifiedBusiness,
+          website_settings: verifiedSettings,
+        });
+      } else {
+        setBusiness(businessForSave);
       }
 
       const previousDraft = loadWebsiteDraft(businessId);
@@ -7407,9 +7551,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
       setDeletedLayer(null);
 
+      const savedBusinessForDraft: Business = verifiedBusiness
+        ? {
+            ...verifiedBusiness,
+            website_settings: verifiedSettings,
+          }
+        : businessForSave;
+
       const savedAt = saveWebsiteDraft(
         businessId,
-        business,
+        savedBusinessForDraft,
         normalizedReturnedSections,
       );
       setLastDraftSavedAt(savedAt);
@@ -8272,12 +8423,17 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             {selection.area === "hero" &&
             heroSection?.content?.page_type === "link-page" &&
             heroSection.content?.link_page_kind === "restaurant-menu" ? (
-              <LinkPageContent section={heroSection} editable />
+              <LinkPageContent section={heroSection} editable outerBackgroundColor={outerBackgroundColor} />
             ) : selection.area === "hero" && heroSection ? (
               <div
                 className="relative w-full max-w-none overflow-hidden"
                 style={{
-                  ...backgroundStyle(heroSection, outerBackgroundColor),
+                  ...(sectionContainsRestaurantMenu(heroSection)
+                    ? {
+                        backgroundColor: outerBackgroundColor,
+                        backgroundImage: "none",
+                      }
+                    : backgroundStyle(heroSection, outerBackgroundColor)),
                   display: "block",
                   width: "100%",
                   maxWidth: "none",
@@ -8354,6 +8510,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                       }`}
                       style={{
                         ...getLayoutBorderStyle(layout),
+                        ...(gridContainsDisplayMode(layout, "restaurant-menu")
+                          ? {
+                              backgroundColor: outerBackgroundColor,
+                            }
+                          : {}),
                         marginBottom: `${Math.max(
                           0,
                           Math.min(
@@ -9897,13 +10058,9 @@ function CurrentWebsitePreview({
     websiteSettings.outer_background_color || "#e5e7eb",
   );
 
-  const previewBackgroundColor =
-    previewLinkPage?.content?.link_page_kind === "restaurant-menu"
-      ? String(
-          previewLinkPage.content?.restaurant_menu_background_color ||
-            "#ffffff",
-        )
-      : outerBackgroundColor;
+  // 바깥 배경은 사용자가 "화면 좌우 바깥 컬러"에서 지정한 색을 항상 유지합니다.
+  // Restaurant Menu의 흰색/지정색은 가운데 메뉴 패널에만 적용합니다.
+  const previewBackgroundColor = outerBackgroundColor;
 
   const headerGrid = normalizeGrid(
     websiteSettings.header_grid,
@@ -10028,7 +10185,7 @@ function CurrentWebsitePreview({
                   backgroundColor: previewBackgroundColor,
                 }}
               >
-                <LinkPageContent section={previewLinkPage} previewDevice={device} />
+                <LinkPageContent section={previewLinkPage} previewDevice={device} outerBackgroundColor={outerBackgroundColor} />
               </div>
             ) : (
               <section
@@ -10041,7 +10198,12 @@ function CurrentWebsitePreview({
                 )}
                 className={getSectionWidthClass(previewLinkPage)}
                 style={{
-                  ...backgroundStyle(previewLinkPage, outerBackgroundColor),
+                  ...(sectionContainsRestaurantMenu(previewLinkPage)
+                    ? {
+                        backgroundColor: outerBackgroundColor,
+                        backgroundImage: "none",
+                      }
+                    : backgroundStyle(previewLinkPage, outerBackgroundColor)),
                   ...getSectionWidthStyle(previewLinkPage),
                   minHeight: getVideoSectionMinHeight(previewLinkPage, device),
                 }}
@@ -10112,7 +10274,12 @@ function CurrentWebsitePreview({
             <div
               className={getSectionWidthClass(heroSection)}
               style={{
-                ...backgroundStyle(heroSection, outerBackgroundColor),
+                ...(sectionContainsRestaurantMenu(heroSection)
+                  ? {
+                      backgroundColor: outerBackgroundColor,
+                      backgroundImage: "none",
+                    }
+                  : backgroundStyle(heroSection, outerBackgroundColor)),
                 ...getSectionWidthStyle(heroSection),
                 marginBottom: 0,
                 minHeight: getVideoSectionMinHeight(
@@ -10399,8 +10566,8 @@ export function PublicWebsiteRenderer({
 
   const normalizedSlug = slugifyMenuValue(pageSlug || "home") || "home";
 
-  // Restaurant Menu 페이지는 메뉴 자체에 지정된 배경색을 페이지 끝까지 사용합니다.
-  // 메뉴 내용이 화면 높이보다 짧아도 아래쪽에 사이트 바깥 배경색이 노출되지 않습니다.
+  // Restaurant Menu는 가운데 콘텐츠 폭과 메뉴 배경색을 따로 사용하고,
+  // 화면 좌우 및 메뉴 아래 바깥 영역은 사이트 outer_background_color를 유지합니다.
   const restaurantMenuPage = sections.find(
     (section) =>
       section.content?.page_type === "link-page" &&
@@ -10416,12 +10583,9 @@ export function PublicWebsiteRenderer({
     normalizedSlug === "menu" ||
     Boolean(restaurantMenuPage);
 
-  const publicPageBackgroundColor = isMenuPage
-    ? String(
-        restaurantMenuPage?.content?.restaurant_menu_background_color ||
-          "#ffffff",
-      )
-    : outerBackgroundColor;
+  // 공개 페이지도 바깥 영역은 사이트의 outer_background_color를 유지합니다.
+  // Restaurant Menu 배경색은 가운데 메뉴 패널에만 적용됩니다.
+  const publicPageBackgroundColor = outerBackgroundColor;
 
   // 공개 페이지가 상위 layout의 max-width나 흰 배경 안에 들어가더라도
   // 브라우저 전체 좌우 여백에는 현재 페이지에 맞는 배경색을 적용합니다.
@@ -10683,11 +10847,17 @@ export function PublicWebsiteRenderer({
         heroSection.content?.link_page_kind === "restaurant-menu" ? (
           <section
             id={normalizedSlug}
+            className="w-full max-w-none"
             style={{
+              width: "100%",
+              maxWidth: "none",
               backgroundColor: publicPageBackgroundColor,
             }}
           >
-            <LinkPageContent section={heroSection} />
+            <LinkPageContent
+              section={heroSection}
+              outerBackgroundColor={publicPageBackgroundColor}
+            />
           </section>
         ) : heroSection ? (
           <section
@@ -10697,7 +10867,13 @@ export function PublicWebsiteRenderer({
             }
             className={getSectionWidthClass(heroSection)}
             style={{
-              ...backgroundStyle(heroSection, outerBackgroundColor),
+              ...(sectionContainsRestaurantMenu(heroSection)
+                ? {
+                    background: outerBackgroundColor,
+                    backgroundColor: outerBackgroundColor,
+                    backgroundImage: "none",
+                  }
+                : backgroundStyle(heroSection, outerBackgroundColor)),
               ...getSectionWidthStyle(heroSection, true),
               marginBottom: 0,
               minHeight: getVideoSectionMinHeight(
@@ -10719,6 +10895,11 @@ export function PublicWebsiteRenderer({
                   className={getLayoutWidthClass(layout)}
                   style={{
                     ...getLayoutBorderStyle(layout),
+                    ...(gridContainsDisplayMode(layout, "restaurant-menu")
+                      ? {
+                          backgroundColor: outerBackgroundColor,
+                        }
+                      : {}),
                     marginBottom:
                       layoutIndex < layouts.length - 1
                         ? `${Math.max(
@@ -11141,14 +11322,24 @@ function ReadOnlyCellContent({
     const direction = shouldStackNestedMobile
       ? "column"
       : originalDirection;
-    const rawSizes = cell.child_cells.map((child) => Number(child.size_percent));
+    const rawSizes = cell.child_cells.map((child) =>
+      Number(
+        previewDevice === "mobile"
+          ? child.mobile_size_percent ?? child.size_percent
+          : child.size_percent,
+      ),
+    );
     const validSizes = rawSizes.every((value) => Number.isFinite(value) && value >= 5);
     const total = validSizes ? rawSizes.reduce((sum, value) => sum + value, 0) || 100 : 100;
     const sizes = validSizes
       ? rawSizes.map((value) => (value / total) * 100)
       : cell.child_cells.map(() => 100 / cell.child_cells!.length);
     const template = sizes.map((size) => `minmax(0, ${Math.max(0.01, size)}fr)`).join(" ");
-    const savedNestedHeight = Number(cell.nested_height_px);
+    const savedNestedHeight = Number(
+      previewDevice === "mobile"
+        ? cell.mobile_nested_height_px ?? cell.nested_height_px
+        : cell.nested_height_px,
+    );
     const hasSavedNestedHeight =
       Number.isFinite(savedNestedHeight) && savedNestedHeight > 0;
 
@@ -11163,11 +11354,13 @@ function ReadOnlyCellContent({
           shouldStackNestedMobile
             ? {
                 gridTemplateColumns: "minmax(0, 1fr)",
-                gridTemplateRows: "none",
-                gridAutoRows: "auto",
-                height: "auto",
+                gridTemplateRows: hasSavedNestedHeight ? template : "none",
+                gridAutoRows: hasSavedNestedHeight ? undefined : "auto",
+                height: hasSavedNestedHeight
+                  ? `${savedNestedHeight}px`
+                  : "auto",
                 minHeight: 0,
-                maxHeight: "none",
+                maxHeight: hasSavedNestedHeight ? "1800px" : "none",
               }
             : direction === "row"
               ? { gridTemplateColumns: template }
@@ -11196,13 +11389,24 @@ function ReadOnlyCellContent({
                * 제목·노란칸·버거칸 위치가 서로 어긋납니다.
                */
               minHeight: shouldStackNestedMobile
-                ? renderedChild.type === "image"
+                ? hasSavedNestedHeight
                   ? 0
-                  : "160px"
+                  : renderedChild.type === "image"
+                    ? 0
+                    : "160px"
                 : 0,
-              height: shouldStackNestedMobile ? "auto" : undefined,
+              height:
+                shouldStackNestedMobile && hasSavedNestedHeight
+                  ? "100%"
+                  : shouldStackNestedMobile
+                    ? "auto"
+                    : undefined,
+              overflow: "hidden",
+              maxHeight: "100%",
               aspectRatio:
-                shouldStackNestedMobile && renderedChild.type === "image"
+                shouldStackNestedMobile &&
+                !hasSavedNestedHeight &&
+                renderedChild.type === "image"
                   ? "1 / 1"
                   : undefined,
               alignSelf: "stretch",
@@ -11763,7 +11967,10 @@ function ReadOnlyGrid({
         // border-box를 사용해 4px 여백 때문에 레이어 크기가 커지지 않게 합니다.
         boxSizing: "border-box",
         padding:
-          area === "hero" && !hasAutoSlider && !deviceGrid.cells.every(isVisualCell)
+          area === "hero" &&
+          !hasAutoSlider &&
+          !autoRestaurantMenu &&
+          !deviceGrid.cells.every(isVisualCell)
             ? "4px"
             : 0,
         /*
@@ -11774,7 +11981,11 @@ function ReadOnlyGrid({
           area === "hero"
             ? hasAutoSlider
               ? "#000000"
-              : gridFrameBackgroundColor
+              : autoRestaurantMenu
+                ? String(
+                    websiteSettings?.outer_background_color || "#e5e7eb",
+                  )
+                : gridFrameBackgroundColor
             : undefined,
         // 데스크톱과 모바일 모두 저장된 칸 비율을 그대로 사용합니다.
         // 모바일에서는 resolveGridForDevice()가 mobile_width_percent를
@@ -11872,10 +12083,12 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : cell.type === "image"
-                  ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
-                  : normalizeVisibleBackgroundColor(cell.background_color) ||
-                    gridFrameBackgroundColor,
+                : cell.display_mode === "restaurant-menu"
+                  ? "transparent"
+                  : cell.type === "image"
+                    ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
+                    : normalizeVisibleBackgroundColor(cell.background_color) ||
+                      gridFrameBackgroundColor,
             padding:
               cell.child_cells?.length ||
               cell.type === "image" ||
@@ -12280,7 +12493,11 @@ function NestedEditableCellsV2({
   const direction = shouldStackNestedMobile
     ? "column"
     : originalDirection;
-  const savedNestedHeight = Number(parentCell.nested_height_px);
+  const savedNestedHeight = Number(
+    previewDevice === "mobile"
+      ? parentCell.mobile_nested_height_px ?? parentCell.nested_height_px
+      : parentCell.nested_height_px,
+  );
   const [nestedHeight, setNestedHeight] = useState<number | null>(
     Number.isFinite(savedNestedHeight) && savedNestedHeight > 0 ? savedNestedHeight : null,
   );
@@ -12311,9 +12528,15 @@ function NestedEditableCellsV2({
     return () => observer.disconnect();
   }, [previewDevice]);
 
+  const activeNestedHeight = Number(
+    previewDevice === "mobile"
+      ? parentCell.mobile_nested_height_px ?? parentCell.nested_height_px
+      : parentCell.nested_height_px,
+  );
+
   useEffect(() => {
     if (heightDragRef.current) return;
-    const next = Number(parentCell.nested_height_px);
+    const next = activeNestedHeight;
 
     if (Number.isFinite(next) && next > 0) {
       initializedNestedHeightRef.current = true;
@@ -12342,7 +12565,11 @@ function NestedEditableCellsV2({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [onResizeHeight, parentCell.id, parentCell.nested_height_px]);
+  }, [
+    onResizeHeight,
+    parentCell.id,
+    activeNestedHeight,
+  ]);
   const dragRef = useRef<{
     pointerId: number;
     index: number;
@@ -12352,8 +12579,29 @@ function NestedEditableCellsV2({
   } | null>(null);
   const saveFrameRef = useRef<number | null>(null);
 
+  const activeDragHeightRef = useRef<number>(240);
+  activeDragHeightRef.current = Math.max(
+    80,
+    Number(
+      previewDevice === "mobile"
+        ? parentCell.mobile_nested_height_px ??
+            nestedHeight ??
+            parentCell.nested_height_px ??
+            240
+        : parentCell.nested_height_px ??
+            nestedHeight ??
+            240,
+    ) || 240,
+  );
+
   const getNormalizedSizes = useCallback(() => {
-    const raw = children.map((child) => Number(child.size_percent));
+    const raw = children.map((child) =>
+      Number(
+        previewDevice === "mobile"
+          ? child.mobile_size_percent ?? child.size_percent
+          : child.size_percent,
+      ),
+    );
     const valid =
       raw.length === children.length &&
       raw.every((value) => Number.isFinite(value) && value >= 3);
@@ -12364,7 +12612,7 @@ function NestedEditableCellsV2({
     }
 
     return children.map(() => 100 / Math.max(1, children.length));
-  }, [children]);
+  }, [children, previewDevice]);
 
   const [sizes, setSizes] = useState<number[]>(getNormalizedSizes);
   const sizesRef = useRef<number[]>(sizes);
@@ -12372,7 +12620,11 @@ function NestedEditableCellsV2({
 
   const childSizeSignature = children
     .map((child) => {
-      const value = Number(child.size_percent) || 0;
+      const value = Number(
+        previewDevice === "mobile"
+          ? child.mobile_size_percent ?? child.size_percent
+          : child.size_percent,
+      ) || 0;
       return `${child.id}:${value.toFixed(4)}`;
     })
     .join("|");
@@ -12411,7 +12663,13 @@ function NestedEditableCellsV2({
     // 드래그 중에는 서버/부모 상태 재렌더링이 들어와도 현재 손잡이 위치를 유지합니다.
     if (dragRef.current) return;
 
-    const raw = children.map((child) => Number(child.size_percent));
+    const raw = children.map((child) =>
+      Number(
+        previewDevice === "mobile"
+          ? child.mobile_size_percent ?? child.size_percent
+          : child.size_percent,
+      ),
+    );
     const valid =
       raw.length === children.length &&
       raw.every((value) => Number.isFinite(value) && value >= 3);
@@ -12444,7 +12702,7 @@ function NestedEditableCellsV2({
      * 1개와 2개 사이에서 바뀌는 경고를 방지합니다.
      */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [childSizeSignature]);
+  }, [childSizeSignature, previewDevice]);
 
   useEffect(() => {
     return () => {
@@ -12472,7 +12730,10 @@ function NestedEditableCellsV2({
 
       event.preventDefault();
       const rect = host.getBoundingClientRect();
-      const length = direction === "row" ? rect.width : rect.height;
+      const length =
+        direction === "row"
+          ? rect.width
+          : Math.max(80, activeDragHeightRef.current || rect.height);
       if (!Number.isFinite(length) || length < 20) return;
 
       const point = direction === "row" ? event.clientX : event.clientY;
@@ -12602,11 +12863,11 @@ function NestedEditableCellsV2({
         shouldStackNestedMobile
           ? {
               gridTemplateColumns: "minmax(0, 1fr)",
-              gridTemplateRows: "none",
-              gridAutoRows: "auto",
-              height: "auto",
-              minHeight: 0,
-              maxHeight: "none",
+              gridTemplateRows: template,
+              gridAutoRows: undefined,
+              height: `${Math.max(80, nestedHeight ?? 240)}px`,
+              minHeight: "80px",
+              maxHeight: "1800px",
               flex: "0 0 auto",
             }
           : direction === "row"
@@ -12633,9 +12894,11 @@ function NestedEditableCellsV2({
         const selected = selectedCellId === child.id;
         const hasNext = index < children.length - 1;
         const isDragging = draggingIndex === index;
-        // 중첩 칸 크기를 바꿔도 사용자가 저장한 세로 정렬값을 그대로 유지합니다.
-        // 이전처럼 두 번째 이후 칸을 강제로 top 정렬하면 버거 위치가 갑자기 움직입니다.
-        const renderedChild = child;
+        // 모바일에서는 text_align / vertical_align 등이 mobile_overrides에 저장됩니다.
+        // raw child를 그대로 렌더링하면 저장은 되어도 화면에서 위치가 바뀌지 않으므로
+        // 반드시 현재 디바이스용 셀 값을 해석해서 렌더링합니다.
+        const renderedChild =
+          resolveCellForDevice(child, previewDevice) || child;
 
         return (
           <div
@@ -12653,38 +12916,37 @@ function NestedEditableCellsV2({
             }`}
             style={{
               width: shouldStackNestedMobile ? "100%" : undefined,
-              minHeight: shouldStackNestedMobile
-                ? child.type === "image"
-                  ? 0
-                  : "160px"
-                : 0,
-              height: shouldStackNestedMobile ? "auto" : undefined,
-              aspectRatio:
-                shouldStackNestedMobile && child.type === "image"
-                  ? "1 / 1"
-                  : undefined,
+              minHeight: shouldStackNestedMobile ? 0 : 0,
+              height: shouldStackNestedMobile ? "100%" : undefined,
+              overflow: "hidden",
+              maxHeight: "100%",
+              aspectRatio: undefined,
               justifyContent:
-                child.text_align === "left"
+                renderedChild.text_align === "left"
                   ? "flex-start"
-                  : child.text_align === "right"
+                  : renderedChild.text_align === "right"
                     ? "flex-end"
                     : "center",
               alignItems:
-                child.vertical_align === "top"
+                shouldStackNestedMobile && index === 0
                   ? "flex-start"
-                  : child.vertical_align === "bottom"
-                    ? "flex-end"
-                    : "center",
-              textAlign: child.text_align || "center",
-              color: child.color || (area === "hero" ? "#ffffff" : "#111827"),
+                  : renderedChild.vertical_align === "top"
+                    ? "flex-start"
+                    : renderedChild.vertical_align === "bottom"
+                      ? "flex-end"
+                      : "center",
+              textAlign: renderedChild.text_align || "center",
+              color:
+                renderedChild.color ||
+                (area === "hero" ? "#ffffff" : "#111827"),
               background:
                 area === "header"
                   ? "transparent"
-                  : child.background_color || "transparent",
+                  : renderedChild.background_color || "transparent",
               padding:
-                child.child_cells?.length ||
-                child.type === "image" ||
-                child.display_mode === "restaurant-menu"
+                renderedChild.child_cells?.length ||
+                renderedChild.type === "image" ||
+                renderedChild.display_mode === "restaurant-menu"
                   ? 0
                   : "8px",
             }}
@@ -12727,11 +12989,14 @@ function NestedEditableCellsV2({
               onMergeNested={onMergeNested}
             />
 
-            {child.type === "empty" && !child.child_cells?.length ? (
-              <span className="pointer-events-none text-xs font-bold opacity-70">+ 내용 추가</span>
+            {renderedChild.type === "empty" &&
+            !renderedChild.child_cells?.length ? (
+              <span className="pointer-events-none text-xs font-bold opacity-70">
+                + 내용 추가
+              </span>
             ) : null}
 
-            {!shouldStackNestedMobile && hasNext ? (
+            {hasNext ? (
               <button
                 type="button"
                 aria-label={
@@ -12747,13 +13012,21 @@ function NestedEditableCellsV2({
                 className={`absolute z-[200] flex touch-none items-center justify-center select-none ${
                   direction === "row"
                     ? "-right-3 top-0 h-full w-6 cursor-col-resize"
-                    : "-bottom-4 left-0 h-8 w-full cursor-row-resize"
+                    : shouldStackNestedMobile
+                      ? "-bottom-5 left-0 h-10 w-full cursor-row-resize"
+                      : "-bottom-4 left-0 h-8 w-full cursor-row-resize"
                 }`}
               >
                 <span
                   className={`absolute rounded-full ${
                     isDragging ? "bg-red-500" : "bg-orange-500"
-                  } ${direction === "row" ? "h-full w-1" : "h-1 w-full"}`}
+                  } ${
+                    direction === "row"
+                      ? "h-full w-1"
+                      : shouldStackNestedMobile
+                        ? "h-1.5 w-full"
+                        : "h-1 w-full"
+                  }`}
                 />
                 <span
                   className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 bg-white text-base font-black shadow-lg ${
@@ -12770,7 +13043,7 @@ function NestedEditableCellsV2({
         );
       })}
 
-      {direction === "column" && !shouldStackNestedMobile ? (
+      {direction === "column" ? (
         <>
           <div
             className="pointer-events-none absolute inset-x-0 bottom-0 z-[195] border-b-2 border-dashed border-orange-400"
@@ -13097,12 +13370,16 @@ function EditableGrid({
         // 사방 4px 안쪽으로 띄웁니다.
         boxSizing: "border-box",
         padding:
-          area === "hero" && !hasAutoSlider ? "4px" : 0,
+          area === "hero" && !hasAutoSlider && !autoRestaurantMenu ? "4px" : 0,
         backgroundColor:
           area === "hero"
             ? hasAutoSlider
               ? "#000000"
-              : gridFrameBackgroundColor
+              : autoRestaurantMenu
+                ? String(
+                    websiteSettings?.outer_background_color || "#e5e7eb",
+                  )
+                : gridFrameBackgroundColor
             : undefined,
         minHeight: "40px",
         gridTemplateColumns: shouldStackMobileEditorCells
@@ -13162,7 +13439,9 @@ function EditableGrid({
                 selected
                   ? isLogo
                     ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
-                    : "bg-blue-50/15 ring-2 ring-inset ring-blue-600"
+                    : cell.display_mode === "restaurant-menu"
+                      ? "bg-transparent ring-2 ring-inset ring-blue-600"
+                      : "bg-blue-50/15 ring-2 ring-inset ring-blue-600"
                   : cellContainsDisplayMode(cell, "auto-slider")
                     ? "ring-0 hover:ring-2 hover:ring-blue-400"
                     : "ring-1 ring-inset ring-white/55 hover:ring-2 hover:ring-blue-400"
@@ -13187,8 +13466,10 @@ function EditableGrid({
                 background:
                   area === "header"
                     ? "transparent"
-                    : normalizeVisibleBackgroundColor(cell.background_color) ||
-                      gridFrameBackgroundColor,
+                    : cell.display_mode === "restaurant-menu"
+                      ? "transparent"
+                      : normalizeVisibleBackgroundColor(cell.background_color) ||
+                        gridFrameBackgroundColor,
                 padding:
                   cell.child_cells?.length ||
                   cell.type === "image" ||

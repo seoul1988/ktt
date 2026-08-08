@@ -591,7 +591,7 @@ export default function RestaurantMenu({
 
   if (loading) {
     return (
-      <div className="flex min-h-[260px] items-center justify-center text-sm font-black text-gray-500">
+      <div className="flex min-h-[260px] items-center justify-center text-sm font-black">
         메뉴 불러오는 중...
       </div>
     );
@@ -610,16 +610,19 @@ export default function RestaurantMenu({
       ref={rootRef}
       className="relative w-full"
       style={{
-        backgroundColor,
+        backgroundColor: "transparent",
         color: textColor,
       }}
     >
       <div
         className="border-b border-black/10 px-3 py-3 sm:px-5"
-        style={{ backgroundColor }}
+        style={{ backgroundColor: "transparent" }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div
+            className="rounded-lg px-2 py-1"
+            style={{ backgroundColor }}
+          >
             <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-50">
               {activeOrderEnabled ? "ORDER ONLINE" : "MENU"}
             </p>
@@ -682,9 +685,9 @@ export default function RestaurantMenu({
 
       {visibleCategories.length ? (
         <div
-          className="sticky top-0 z-20 border-b border-black/10 px-3 py-3 backdrop-blur"
+          className="sticky top-0 z-20 border-b border-black/10 px-3 py-3"
           style={{
-            backgroundColor,
+            backgroundColor: "transparent",
           }}
         >
           <div className="flex gap-2 overflow-x-auto">
@@ -714,6 +717,7 @@ export default function RestaurantMenu({
             ? "px-3 py-4"
             : "px-4 py-5 sm:px-7 sm:py-7"
         }
+        style={{ backgroundColor: "transparent" }}
       >
         {visibleCategories.map((category) => {
           const items = data.items.filter(
@@ -727,7 +731,10 @@ export default function RestaurantMenu({
               id={`restaurant-menu-${businessId}-${category.id}`}
               className="scroll-mt-[90px] border-b border-gray-200 pb-7 pt-2 last:border-b-0"
             >
-              <h2 className="mb-4 text-xl font-black tracking-tight sm:text-2xl">
+              <h2
+                className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
+                style={{ backgroundColor }}
+              >
                 {category.name}
               </h2>
 
