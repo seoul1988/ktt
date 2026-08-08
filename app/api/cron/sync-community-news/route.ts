@@ -738,80 +738,150 @@ function parseTranslationJson(
     );
 }
 
+type ArgosTranslateResponse = {
+  translatedText?: string;
+  translation?: string;
+  translated_text?: string;
+  detail?: string;
+  error?: string;
+  message?: string;
+};
+
+function getArgosTranslateEndpoint(value: string) {
+  const cleaned = value.trim().replace(/\/+$/, "");
+
+  return /\/translate$/i.test(cleaned)
+    ? cleaned
+    : `${cleaned}/translate`;
+}
+
 async function translateToKorean(
   items: TranslationInput[],
 ): Promise<TranslationOutput[]> {
   if (items.length === 0) return [];
 
-  const translateUrl = process.env.ARGOS_TRANSLATE_URL?.trim();
+  const baseUrl = process.env.ARGOS_TRANSLATE_URL?.trim();
   const apiKey = process.env.ARGOS_TRANSLATE_API_KEY?.trim();
 
-  if (!translateUrl) {
+  if (!baseUrl) {
     throw new Error("ARGOS_TRANSLATE_URL is missing");
   }
 
-  // 중첩 함수 안에서는 TypeScript가 위의 null 체크를 유지하지 못할 수 있으므로
-  // 확정된 string 값으로 한 번 더 고정합니다.
-  const resolvedTranslateUrl: string = translateUrl;
+  const endpoint = getArgosTranslateEndpoint(baseUrl);
 
-  async function translateText(text: string | null | undefined) {
-    const sourceText = String(text ?? "").trim();
+  async function translateText(
+    value: string | null | undefined,
+  ): Promise<string> {
+    const sourceText = String(value ?? "").trim();
+
     if (!sourceText) return "";
 
-    const response = await fetch(resolvedTranslateUrl, {
-      method: "POST",
-      cache: "no-store",
-      headers: {
-        "content-type": "application/json",
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        q: sourceText,
-        source: "en",
-        target: "ko",
-        format: "text",
-        ...(apiKey ? { api_key: apiKey } : {}),
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      30000,
+    );
 
-    const payload = await response.json().catch(() => null);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "content-type": "application/json",
+          ...(apiKey
+            ? {
+                authorization: `Bearer ${apiKey}`,
+              }
+            : {}),
+        },
 
-    if (!response.ok) {
-      throw new Error(
-        payload?.error ||
-          payload?.message ||
-          `Argos translation failed: HTTP ${response.status}`,
-      );
+        // 현재 Argos 서버는 q가 아니라 text 필드를 받습니다.
+        body: JSON.stringify({
+          text: sourceText,
+          source: "en",
+          target: "ko",
+        }),
+      });
+
+      const payload =
+        (await response.json().catch(() => null)) as
+          | ArgosTranslateResponse
+          | null;
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.detail ||
+            payload?.error ||
+            payload?.message ||
+            `Argos translation failed: HTTP ${response.status}`,
+        );
+      }
+
+      const translated = String(
+        payload?.translatedText ||
+          payload?.translation ||
+          payload?.translated_text ||
+          "",
+      ).trim();
+
+      if (!translated) {
+        throw new Error(
+          "Argos translation returned empty output",
+        );
+      }
+
+      return translated;
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.name === "AbortError"
+      ) {
+        throw new Error(
+          "Argos translation timed out after 30 seconds",
+        );
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const translated = String(
-      payload?.translatedText ??
-        payload?.translation ??
-        payload?.translated_text ??
-        "",
-    ).trim();
-
-    if (!translated) {
-      throw new Error("Argos translation returned empty output");
-    }
-
-    return translated;
   }
 
-  // 한 번에 너무 많은 요청을 보내지 않도록 순차 처리합니다.
   const translatedItems: TranslationOutput[] = [];
 
-  for (const item of items) {
-    const title = await translateText(item.title);
-    const summary = item.summary
-      ? await translateText(item.summary)
-      : null;
+  // 한 번에 3개 기사씩 처리합니다.
+  // 각 기사 안에서는 title/summary를 동시에 번역해 전체 실행시간을 줄입니다.
+  for (let index = 0; index < items.length; index += 3) {
+    const batch = items.slice(index, index + 3);
 
-    translatedItems.push({
-      article_url: item.article_url,
-      title: title || item.title,
-      summary: summary || item.summary || null,
-    });
+    const translatedBatch = await Promise.all(
+      batch.map(async (item) => {
+        const [title, summary] = await Promise.all([
+          translateText(item.title),
+          item.summary
+            ? translateText(item.summary.slice(0, 500))
+            : Promise.resolve(""),
+        ]);
+
+        // 영어 원문을 조용히 DB에 넣지 않도록 번역 결과를 확인합니다.
+        if (!containsKorean(title)) {
+          throw new Error(
+            `Argos did not return Korean for: ${item.title.slice(0, 80)}`,
+          );
+        }
+
+        return {
+          article_url: item.article_url,
+          title: title.slice(0, 180),
+          summary: summary
+            ? summary.slice(0, 600)
+            : null,
+        } satisfies TranslationOutput;
+      }),
+    );
+
+    translatedItems.push(...translatedBatch);
   }
 
   return translatedItems;
@@ -909,6 +979,17 @@ async function translateUsNews(
         "community news translation error:",
         warning,
       );
+
+      /*
+       * 번역 실패는 미국 RSS 업데이트 자체를 막지 않습니다.
+       * translatedMap이 비어 있으므로 아래 merged 단계에서
+       * 번역되지 않은 새 미국 기사는 영어 원문(item) 그대로 사용됩니다.
+       *
+       * 결과:
+       * - 번역 성공: 한국어 title/summary 저장
+       * - 번역 실패: 영어 title/summary 저장
+       * - 어느 경우든 US 뉴스는 최신 12개 유지
+       */
     }
   }
 
@@ -960,19 +1041,42 @@ async function replaceRegionNews(
   region: Region,
   items: ParsedNews[],
 ) {
-  const regionItems = items
-    .filter(
-      (item) => item.region === region,
-    )
-    .slice(0, NEWS_LIMIT);
+  const regionItems = Array.from(
+    new Map(
+      items
+        .filter(
+          (item) =>
+            item.region === region &&
+            Boolean(item.article_url) &&
+            Boolean(item.title),
+        )
+        .sort(sortNewest)
+        .map((item) => [
+          item.article_url,
+          item,
+        ]),
+    ).values(),
+  ).slice(0, NEWS_LIMIT);
 
   if (regionItems.length === 0) {
     return {
       saved: 0,
       deleted: 0,
+      retained: 0,
     };
   }
 
+  /*
+   * 중요:
+   * 기존 12개를 먼저 삭제하지 않습니다.
+   *
+   * 예)
+   * DB 기존 12개 + 새 기사 2개
+   *   1) 새 기사 2개 upsert -> DB 14개
+   *   2) DB 전체를 최신순 정렬
+   *   3) 최신 12개 유지
+   *   4) 가장 오래된 2개만 삭제
+   */
   const { error: upsertError } =
     await admin
       .from("community_news")
@@ -982,18 +1086,14 @@ async function replaceRegionNews(
 
   if (upsertError) throw upsertError;
 
-  const currentUrlSet = new Set(
-    regionItems.map(
-      (item) => item.article_url,
-    ),
-  );
-
   const {
     data: existingRows,
     error: existingError,
   } = await admin
     .from("community_news")
-    .select("id, article_url")
+    .select(
+      "id, article_url, published_at, fetched_at, updated_at",
+    )
     .eq("region", region);
 
   if (existingError) throw existingError;
@@ -1001,13 +1101,37 @@ async function replaceRegionNews(
   const rows = (existingRows ?? []) as Array<{
     id: number | string;
     article_url: string;
+    published_at: string | null;
+    fetched_at: string | null;
+    updated_at: string | null;
   }>;
 
-  const deleteIds = rows
-    .filter(
-      (row) =>
-        !currentUrlSet.has(row.article_url),
-    )
+  const getRowTime = (
+    row: (typeof rows)[number],
+  ) => {
+    const value =
+      row.published_at ||
+      row.fetched_at ||
+      row.updated_at;
+
+    if (!value) return 0;
+
+    const timestamp = new Date(value).getTime();
+
+    return Number.isFinite(timestamp)
+      ? timestamp
+      : 0;
+  };
+
+  const sortedRows = [...rows].sort(
+    (a, b) => getRowTime(b) - getRowTime(a),
+  );
+
+  const retainedRows =
+    sortedRows.slice(0, NEWS_LIMIT);
+
+  const deleteIds = sortedRows
+    .slice(NEWS_LIMIT)
     .map((row) => row.id);
 
   if (deleteIds.length > 0) {
@@ -1020,9 +1144,27 @@ async function replaceRegionNews(
     if (deleteError) throw deleteError;
   }
 
+  const retainedUrls = retainedRows.map(
+    (row) => row.article_url,
+  );
+
+  if (retainedUrls.length > 0) {
+    const { error: activateError } =
+      await admin
+        .from("community_news")
+        .update({
+          active: true,
+        })
+        .eq("region", region)
+        .in("article_url", retainedUrls);
+
+    if (activateError) throw activateError;
+  }
+
   return {
     saved: regionItems.length,
     deleted: deleteIds.length,
+    retained: retainedRows.length,
   };
 }
 
