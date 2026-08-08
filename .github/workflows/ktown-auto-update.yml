@@ -14,8 +14,8 @@ concurrency:
 
 jobs:
   # =========================================================
-  # 한국·미국 뉴스
-  # 매시간 실행
+  # RSS 한국·미국 뉴스
+  # 매 1시간
   # =========================================================
   community-news:
     name: Update Korea and US News
@@ -53,8 +53,8 @@ jobs:
           echo "Korea and US news update completed."
 
   # =========================================================
-  # Today's Korea 연예인 뉴스
-  # 매시간 실행
+  # Today's Korea
+  # 매 1시간
   # =========================================================
   todays-korea:
     name: Update Celebrity News
@@ -74,7 +74,7 @@ jobs:
             exit 1
           fi
 
-          echo "Updating celebrity news..."
+          echo "Updating Today's Korea..."
 
           curl \
             --fail-with-body \
@@ -89,12 +89,13 @@ jobs:
             "https://www.ktowntriangle.com/api/todays-korea/update"
 
           echo ""
-          echo "Celebrity update completed."
+          echo "Today's Korea update completed."
 
   # =========================================================
   # Google Ratings
-  # 미국 동부시간 매일 밤 12시대 예약 실행에서만 실행
-  # 수동 실행 시에는 실행하지 않음
+  # 매일 미국 동부시간 12:00 AM 시간대에 1번
+  # 현재 전체 Workflow가 :07에 실행되므로 실제 실행은 약 12:07 AM ET
+  # 수동 실행에서는 실행하지 않음
   # =========================================================
   google-ratings:
     name: Update Google Ratings
@@ -109,17 +110,14 @@ jobs:
           set -euo pipefail
 
           EVENT_NAME="${{ github.event_name }}"
-          ET_DATE=$(TZ=America/New_York date +%Y-%m-%d)
           ET_HOUR=$(TZ=America/New_York date +%-H)
-          ET_MINUTE=$(TZ=America/New_York date +%-M)
 
           echo "Event: ${EVENT_NAME}"
-          echo "Eastern date: ${ET_DATE}"
-          echo "Current Eastern Time: ${ET_HOUR}:${ET_MINUTE}"
+          echo "Eastern hour: ${ET_HOUR}"
 
           if [ "$EVENT_NAME" = "schedule" ] && [ "$ET_HOUR" = "0" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Scheduled midnight run: Google Ratings will run."
+            echo "Google Ratings will run."
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
             echo "Google Ratings will be skipped."
@@ -160,5 +158,5 @@ jobs:
         shell: bash
         run: |
           echo "Google Ratings was skipped."
-          echo "It runs only during the scheduled 12:07 AM Eastern workflow."
-          echo "Manual Run workflow does not update Google Ratings."
+          echo "Automatic update runs once daily around 12:07 AM Eastern Time."
+          echo "Manual workflow runs do not update Google Ratings."
