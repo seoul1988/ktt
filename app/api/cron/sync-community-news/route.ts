@@ -51,39 +51,13 @@ type AdminClient = {
 };
 
 const NEWS_LIMIT = 12;
-const KOREA_SOURCE_LIMIT = 6;
 
 const FEEDS: FeedDefinition[] = [
-  // 한국 뉴스: 매일경제와 한국경제의 여러 공식 RSS를 조합합니다.
   {
     region: "korea",
     source: "매일경제",
     url: "https://www.mk.co.kr/rss/30000001/",
-    candidateLimit: 30,
-  },
-  {
-    region: "korea",
-    source: "매일경제",
-    url: "https://www.mk.co.kr/rss/30100041/",
-    candidateLimit: 30,
-  },
-  {
-    region: "korea",
-    source: "한국경제",
-    url: "https://www.hankyung.com/feed/all-news",
-    candidateLimit: 30,
-  },
-  {
-    region: "korea",
-    source: "한국경제",
-    url: "https://www.hankyung.com/feed/economy",
-    candidateLimit: 30,
-  },
-  {
-    region: "korea",
-    source: "한국경제",
-    url: "https://www.hankyung.com/feed/international",
-    candidateLimit: 30,
+    candidateLimit: 80,
   },
 
   // MarketWatch 직접 RSS
@@ -532,25 +506,26 @@ function getKoreaUsEconomyScore(
   return score;
 }
 
-function selectDiversifiedKoreaNews(
+function filterKoreaUsEconomyNews(
   items: ParsedNews[],
 ) {
-  const scoredItems = items
-    .filter(
-      (item) =>
-        item.region === "korea" &&
-        Boolean(item.article_url) &&
-        Boolean(item.title),
-    )
+  return items
     .map((item) => ({
       item,
-      score: getKoreaUsEconomyScore(
-        item.title,
-        item.summary,
-      ),
+      usEconomyScore:
+        getKoreaUsEconomyScore(
+          item.title,
+          item.summary,
+        ),
     }))
-    // 미국·미국 증시·연준·미국 기업과 경제 문맥이 확인된 기사만 통과합니다.
-    .filter(({ score }) => score >= 4)
+    /*
+     * 제목에 강한 미국 경제 키워드가 있거나,
+     * 미국 기업명과 경제 문맥이 함께 있어야 통과합니다.
+     */
+    .filter(
+      ({ usEconomyScore }) =>
+        usEconomyScore >= 4,
+    )
     .sort((a, b) => {
       const dateDifference =
         sortNewest(a.item, b.item);
@@ -559,39 +534,12 @@ function selectDiversifiedKoreaNews(
         return dateDifference;
       }
 
-      return b.score - a.score;
-    });
-
-  const uniqueItems = Array.from(
-    new Map(
-      scoredItems.map(({ item }) => [
-        item.article_url,
-        item,
-      ]),
-    ).values(),
-  );
-
-  const selected: ParsedNews[] = [];
-  const sourceCounts = new Map<string, number>();
-
-  // 미국 관련 경제 기사 중에서도 특정 언론사만 도배되지 않게 제한합니다.
-  for (const item of uniqueItems) {
-    const count =
-      sourceCounts.get(item.source) ?? 0;
-
-    if (count >= KOREA_SOURCE_LIMIT) {
-      continue;
-    }
-
-    selected.push(item);
-    sourceCounts.set(item.source, count + 1);
-
-    if (selected.length >= NEWS_LIMIT) {
-      break;
-    }
-  }
-
-  return selected;
+      return (
+        b.usEconomyScore -
+        a.usEconomyScore
+      );
+    })
+    .map(({ item }) => item);
 }
 
 async function loadFeed(
@@ -792,79 +740,77 @@ function parseTranslationJson(
 
 async function translateToKorean(
   items: TranslationInput[],
-) {
-  if (items.length === 0) {
-    return [] as TranslationOutput[];
+): Promise<TranslationOutput[]> {
+  if (items.length === 0) return [];
+
+  const translateUrl = process.env.ARGOS_TRANSLATE_URL?.trim();
+  const apiKey = process.env.ARGOS_TRANSLATE_API_KEY?.trim();
+
+  if (!translateUrl) {
+    throw new Error("ARGOS_TRANSLATE_URL is missing");
   }
 
-  const apiKey =
-    process.env.OPENAI_API_KEY;
+  async function translateText(text: string | null | undefined) {
+    const sourceText = String(text ?? "").trim();
+    if (!sourceText) return "";
 
-  if (!apiKey) {
-    throw new Error(
-      "OPENAI_API_KEY is missing",
-    );
-  }
-
-  const model =
-    process.env.OPENAI_TRANSLATION_MODEL ||
-    "gpt-5-mini";
-
-  const response = await fetch(
-    "https://api.openai.com/v1/responses",
-    {
+    const response = await fetch(translateUrl, {
       method: "POST",
       cache: "no-store",
       headers: {
-        authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model,
-        input: [
-          {
-            role: "system",
-            content:
-              "Translate US business and financial news into natural Korean. " +
-              "Return JSON only. Do not add facts or opinions. " +
-              "Keep company and product names recognizable. " +
-              "Use concise Korean financial-news wording. " +
-              "Keep titles under about 55 Korean characters. " +
-              "Keep summaries under 220 Korean characters.",
-          },
-          {
-            role: "user",
-            content:
-              "Translate every item below. " +
-              "Return one JSON array using exactly this shape: " +
-              '[{"article_url":"...","title":"...","summary":"... or null"}].\n\n' +
-              JSON.stringify(items),
-          },
-        ],
+        q: sourceText,
+        source: "en",
+        target: "ko",
+        format: "text",
+        ...(apiKey ? { api_key: apiKey } : {}),
       }),
-    },
-  );
+    });
 
-  const payload =
-    await response.json().catch(() => null);
+    const payload = await response.json().catch(() => null);
 
-  if (!response.ok) {
-    throw new Error(
-      payload?.error?.message ||
-        `OpenAI translation failed: HTTP ${response.status}`,
-    );
+    if (!response.ok) {
+      throw new Error(
+        payload?.error ||
+          payload?.message ||
+          `Argos translation failed: HTTP ${response.status}`,
+      );
+    }
+
+    const translated = String(
+      payload?.translatedText ??
+        payload?.translation ??
+        payload?.translated_text ??
+        "",
+    ).trim();
+
+    if (!translated) {
+      throw new Error("Argos translation returned empty output");
+    }
+
+    return translated;
   }
 
-  const outputText =
-    extractOpenAIText(payload);
+  // 한 번에 너무 많은 요청을 보내지 않도록 순차 처리합니다.
+  const translatedItems: TranslationOutput[] = [];
 
-  if (!outputText) {
-    throw new Error(
-      "OpenAI translation returned empty output",
-    );
+  for (const item of items) {
+    const title = await translateText(item.title);
+    const summary = item.summary
+      ? await translateText(item.summary)
+      : null;
+
+    translatedItems.push({
+      article_url: item.article_url,
+      title: title || item.title,
+      summary: summary || item.summary || null,
+    });
   }
 
-  return parseTranslationJson(outputText);
+  return translatedItems;
 }
 
 async function translateUsNews(
@@ -1010,29 +956,19 @@ async function replaceRegionNews(
   region: Region,
   items: ParsedNews[],
 ) {
-  const regionItems = Array.from(
-    new Map(
-      items
-        .filter(
-          (item) => item.region === region,
-        )
-        .sort(sortNewest)
-        .map((item) => [
-          item.article_url,
-          item,
-        ]),
-    ).values(),
-  ).slice(0, NEWS_LIMIT);
+  const regionItems = items
+    .filter(
+      (item) => item.region === region,
+    )
+    .slice(0, NEWS_LIMIT);
 
   if (regionItems.length === 0) {
     return {
       saved: 0,
       deleted: 0,
-      retained: 0,
     };
   }
 
-  // 기존 기사를 먼저 지우지 않고 새 기사부터 저장합니다.
   const { error: upsertError } =
     await admin
       .from("community_news")
@@ -1042,15 +978,18 @@ async function replaceRegionNews(
 
   if (upsertError) throw upsertError;
 
-  // 저장 후 DB의 기존 기사와 새 기사를 함께 최신순으로 정렬합니다.
+  const currentUrlSet = new Set(
+    regionItems.map(
+      (item) => item.article_url,
+    ),
+  );
+
   const {
     data: existingRows,
     error: existingError,
   } = await admin
     .from("community_news")
-    .select(
-      "id, article_url, title, summary, source, published_at, fetched_at, updated_at",
-    )
+    .select("id, article_url")
     .eq("region", region);
 
   if (existingError) throw existingError;
@@ -1058,59 +997,12 @@ async function replaceRegionNews(
   const rows = (existingRows ?? []) as Array<{
     id: number | string;
     article_url: string;
-    title: string | null;
-    summary: string | null;
-    source: string | null;
-    published_at: string | null;
-    fetched_at: string | null;
-    updated_at: string | null;
   }>;
 
-  const getRowTime = (
-    row: (typeof rows)[number],
-  ) => {
-    const value =
-      row.published_at ||
-      row.fetched_at ||
-      row.updated_at;
-
-    if (!value) return 0;
-
-    const timestamp = new Date(value).getTime();
-
-    return Number.isFinite(timestamp)
-      ? timestamp
-      : 0;
-  };
-
-  const eligibleRows =
-    region === "korea"
-      ? rows.filter(
-          (row) =>
-            getKoreaUsEconomyScore(
-              row.title ?? "",
-              row.summary,
-            ) >= 4,
-        )
-      : rows;
-
-  const sortedRows = [...eligibleRows].sort(
-    (a, b) => getRowTime(b) - getRowTime(a),
-  );
-
-  // 한국 뉴스는 미국 관련 경제 기사만, 미국 뉴스는 최신 기사만 12개 유지합니다.
-  const retainedRows =
-    sortedRows.slice(0, NEWS_LIMIT);
-
-  const retainedIdSet = new Set(
-    retainedRows.map((row) => String(row.id)),
-  );
-
-  // 미국 관련 경제가 아닌 기존 한국 기사와 12개 초과분을 삭제합니다.
   const deleteIds = rows
     .filter(
       (row) =>
-        !retainedIdSet.has(String(row.id)),
+        !currentUrlSet.has(row.article_url),
     )
     .map((row) => row.id);
 
@@ -1124,28 +1016,9 @@ async function replaceRegionNews(
     if (deleteError) throw deleteError;
   }
 
-  const retainedUrls = retainedRows.map(
-    (row) => row.article_url,
-  );
-
-  if (retainedUrls.length > 0) {
-    const { error: activateError } =
-      await admin
-        .from("community_news")
-        .update({
-          active: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("region", region)
-        .in("article_url", retainedUrls);
-
-    if (activateError) throw activateError;
-  }
-
   return {
     saved: regionItems.length,
     deleted: deleteIds.length,
-    retained: retainedRows.length,
   };
 }
 
@@ -1238,7 +1111,7 @@ export async function GET(
     );
 
     const koreaItems =
-      selectDiversifiedKoreaNews(
+      filterKoreaUsEconomyNews(
         successful
           .filter(
             (result) =>
@@ -1247,7 +1120,9 @@ export async function GET(
           .flatMap(
             (result) => result.items,
           ),
-      );
+      )
+        .sort(sortNewest)
+        .slice(0, NEWS_LIMIT);
 
     const rawUsItems = Array.from(
       new Map(
@@ -1341,20 +1216,9 @@ export async function GET(
       ok: true,
       korea: koreaResult,
       us: usResult,
-      koreaSelection: {
-        mode: "us-economy-only",
-        limit: NEWS_LIMIT,
-        perSourceLimit: KOREA_SOURCE_LIMIT,
-        minimumScore: 4,
+      koreaFilter: {
+        topic: "US economy",
         saved: koreaItems.length,
-        sources: koreaItems.reduce<Record<string, number>>(
-          (counts, item) => {
-            counts[item.source] =
-              (counts[item.source] ?? 0) + 1;
-            return counts;
-          },
-          {},
-        ),
       },
       usSources: usSourceCounts,
       usImages: {
@@ -1397,5 +1261,3 @@ export async function GET(
     );
   }
 }
-
-
