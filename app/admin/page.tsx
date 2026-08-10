@@ -23,14 +23,17 @@ export default function AdminPage() {
           .from("profiles")
           .select("id", { count: "exact", head: true })
           .eq("owner_status", "pending"),
+
         supabase
           .from("event_requests")
           .select("id", { count: "exact", head: true })
           .eq("status", "pending"),
+
         supabase
           .from("coupons")
           .select("id", { count: "exact", head: true })
           .eq("status", "pending"),
+
         supabase
           .from("ads")
           .select("id", { count: "exact", head: true })
@@ -79,12 +82,13 @@ export default function AdminPage() {
     "mt-2 will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-active:scale-[1.04]";
 
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28">
-      <div className="mx-auto w-full max-w-xl">
-        <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
+    <main className="min-h-screen bg-[#F5F2EC] pb-28">
+      <div className="mx-auto w-full max-w-3xl px-4 py-4">
+        {/* HEADER */}
+        <div className="relative mb-5 flex min-h-[48px] items-center">
           <Link
-            href="/community"
-            className="touch-manipulation rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] [-webkit-tap-highlight-color:transparent] active:scale-[1.05]"
+            href="/"
+            className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-[#172033] shadow-sm transition hover:bg-gray-50 active:scale-[0.98]"
           >
             ← Back
           </Link>
@@ -98,98 +102,130 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* ADMIN MENU */}
         <div className="grid grid-cols-2 gap-3">
-          <Link
-            href="/admin/owner-requests"
-            className={menuClass}
-          >
+          {/* OWNER REQUESTS */}
+          <Link href="/admin/owner-requests" className={menuClass}>
             <span className={iconClass}>👤</span>
+
             <span className={labelClass}>
               Owner Requests
             </span>
+
             <Badge count={ownerRequestCount} />
           </Link>
 
+          {/* LINK OWNER */}
           <Link
             href="/admin/owner-business-matching"
             className={menuClass}
           >
             <span className={iconClass}>🔗</span>
+
             <span className={labelClass}>
               Link Owner
             </span>
           </Link>
 
+          {/* EVENT REQUESTS */}
           <Link
             href="/admin/event-requests"
             className={menuClass}
           >
             <span className={iconClass}>🎉</span>
+
             <span className={labelClass}>
               Event Requests
             </span>
+
             <Badge count={eventRequestCount} />
           </Link>
 
+          {/* COUPON REQUESTS */}
           <Link
             href="/admin/coupon-requests"
             className={menuClass}
           >
             <span className={iconClass}>🎟️</span>
+
             <span className={labelClass}>
               Coupon Requests
             </span>
+
             <Badge count={couponRequestCount} />
           </Link>
 
+          {/* BUSINESSES */}
           <Link
             href="/admin/businesses"
             className={menuClass}
           >
             <span className={iconClass}>🏪</span>
+
             <span className={labelClass}>
               Businesses
             </span>
           </Link>
 
+          {/* BANNER MANAGEMENT */}
+          <Link
+            href="/admin/banners"
+            className={menuClass}
+          >
+            <span className={iconClass}>🖼️</span>
+
+            <span className={labelClass}>
+              Banner Management
+            </span>
+          </Link>
+
+          {/* CATEGORIES */}
           <Link
             href="/admin/categories"
             className={menuClass}
           >
             <span className={iconClass}>🏷️</span>
+
             <span className={labelClass}>
               Categories
             </span>
           </Link>
 
+          {/* MEMBERS */}
           <Link
             href="/admin/users"
             className={menuClass}
           >
             <span className={iconClass}>👥</span>
+
             <span className={labelClass}>
               Members
             </span>
           </Link>
 
+          {/* VISITOR STATISTICS */}
           <Link
             href="/admin/visitors"
             className={menuClass}
           >
             <span className={iconClass}>📊</span>
+
             <span className={labelClass}>
               Visitor Statistics
             </span>
           </Link>
 
+          {/* AD MANAGEMENT */}
           <Link
             href="/admin/community/ads/magazines"
-            className={`${menuClass} col-span-2 bg-[#B83A2F] hover:bg-[#9E3027] active:bg-[#9E3027]`}
+            className={`${menuClass} bg-[#B83A2F] hover:bg-[#9E3027] active:bg-[#9E3027]`}
           >
             <span className={iconClass}>📢</span>
+
             <span className={labelClass}>
               광고 관리
             </span>
+
             <Badge count={adRequestCount} />
           </Link>
         </div>

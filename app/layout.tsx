@@ -9,6 +9,7 @@ import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
 import MainInstallAppButton from "./components/MainInstallAppButton";
+import KTownPopupBanner from "./components/KTownPopupBanner";
 
 import "./globals.css";
 
@@ -165,14 +166,6 @@ export default function RootLayout({
       }}
       suppressHydrationWarning
     >
-      <head>
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash-1242x2208.png"
-          media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"
-        />
-      </head>
-
       <body
         className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
         style={{
@@ -198,6 +191,9 @@ export default function RootLayout({
           <VisitorTracker />
           <AppBadgeManager />
           <AppUpdateNotice />
+
+          {/* 공용 팝업: 현재 pathname에 따라 홈/커뮤니티/이벤트를 자동 필터링 */}
+          <KTownPopupBanner />
 
           <div
             className="app-safe-area"

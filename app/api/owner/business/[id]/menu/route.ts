@@ -1442,26 +1442,27 @@ export async function DELETE(
       );
     }
 
-    const { count, error: countError } =
+    // 카테고리를 삭제해도 그 안의 메뉴까지 삭제하지 않습니다.
+    // 기존 메뉴는 "카테고리 없음"으로 이동시킨 뒤 카테고리만 삭제합니다.
+    const { data: categoryItems, error: categoryItemsError } =
       await supabase
         .from("business_menu_items")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
+        .select("id")
         .eq("business_id", businessId)
         .eq("category_id", categoryId);
 
-    if (countError) throw countError;
+    if (categoryItemsError) throw categoryItemsError;
 
-    if ((count || 0) > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "이 카테고리에 메뉴가 있습니다. 먼저 메뉴를 다른 카테고리로 옮겨주세요.",
-        },
-        { status: 409 },
-      );
+    const movedItemCount = categoryItems?.length || 0;
+
+    if (movedItemCount > 0) {
+      const { error: detachItemsError } = await supabase
+        .from("business_menu_items")
+        .update({ category_id: null })
+        .eq("business_id", businessId)
+        .eq("category_id", categoryId);
+
+      if (detachItemsError) throw detachItemsError;
     }
 
     const { data, error } = await supabase
@@ -1483,6 +1484,8 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
+      deletedCategoryId: categoryId,
+      movedItemCount,
     });
   } catch (error) {
     console.error("OWNER MENU DELETE ERROR:", error);

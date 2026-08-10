@@ -144,7 +144,8 @@ type GridCell = {
     | "image-scroll"
     | "service-card"
     | "business-hours"
-    | "restaurant-menu";
+    | "restaurant-menu"
+    | "catering-menu";
 
   /** DoorDash 스타일 메뉴 셀에서 사용할 방식 */
   restaurant_menu_menu_enabled?: boolean;
@@ -197,8 +198,14 @@ type GridCell = {
   background_image_focus_y?: number;
   overlay_text_horizontal?: "left" | "center" | "right";
   overlay_text_vertical?: "top" | "middle" | "bottom";
+  /** 자유 드래그 위치(셀 내부 %, 중앙 기준). 없으면 기존 9방향 위치를 사용합니다. */
+  overlay_text_x_percent?: number;
+  overlay_text_y_percent?: number;
   overlay_button_horizontal?: "left" | "center" | "right";
   overlay_button_vertical?: "top" | "middle" | "bottom";
+  /** 자유 드래그 위치(셀 내부 %, 버튼 그룹 중앙 기준). */
+  overlay_button_x_percent?: number;
+  overlay_button_y_percent?: number;
   overlay_button_direction?: "row" | "column";
   overlay_button_width?: number;
   overlay_button_height?: number;
@@ -534,6 +541,81 @@ type RestaurantMenuPayload = {
   items: RestaurantMenuItem[];
 };
 
+type CateringPackage = {
+  id: number;
+  package_name: string;
+  serving_label?: string | null;
+  price: number;
+  sort_order?: number | null;
+};
+
+type CateringOptionChoice = {
+  id: number;
+  name: string;
+  description?: string | null;
+  price_delta: number;
+  charge_type: "flat" | "per_person" | "per_item";
+  sort_order?: number | null;
+  image_url?: string | null;
+  image_path?: string | null;
+};
+
+type CateringOptionGroup = {
+  id: number;
+  name: string;
+  description?: string | null;
+  selection_type: "single" | "multiple";
+  min_select: number;
+  max_select: number;
+  sort_order?: number | null;
+  choices: CateringOptionChoice[];
+};
+
+type CateringMenuItem = {
+  id: number;
+  category_id: number | null;
+  name: string;
+  description?: string | null;
+  image_url?: string | null;
+  pricing_type: "fixed" | "package" | "per_person" | "per_item" | "quote";
+  base_price?: number | null;
+  minimum_quantity?: number | null;
+  advance_notice_hours?: number | null;
+  pickup_enabled?: boolean;
+  delivery_enabled?: boolean;
+  delivery_fee?: number | null;
+  is_active?: boolean;
+  sort_order?: number | null;
+  packages: CateringPackage[];
+  option_groups: CateringOptionGroup[];
+};
+
+type CateringCategory = {
+  id: number;
+  name: string;
+  description?: string | null;
+  sort_order?: number | null;
+  is_active?: boolean;
+};
+
+type CateringSettingsPayload = {
+  is_enabled?: boolean;
+  page_title?: string | null;
+  page_subtitle?: string | null;
+  minimum_order_amount?: number | null;
+  minimum_order_people?: number | null;
+  advance_notice_hours?: number | null;
+  pickup_enabled?: boolean;
+  delivery_enabled?: boolean;
+  quote_enabled?: boolean;
+};
+
+type CateringMenuPayload = {
+  settings: CateringSettingsPayload | null;
+  categories: CateringCategory[];
+  items: CateringMenuItem[];
+};
+
 type ApiPayload = {
   business: Business;
   sections: BusinessSection[];
@@ -789,8 +871,12 @@ const DEVICE_VISUAL_CELL_KEYS = new Set<keyof GridCell>([
   "sns_icon_gap_px",
   "overlay_text_horizontal",
   "overlay_text_vertical",
+  "overlay_text_x_percent",
+  "overlay_text_y_percent",
   "overlay_button_horizontal",
   "overlay_button_vertical",
+  "overlay_button_x_percent",
+  "overlay_button_y_percent",
   "overlay_button_direction",
   "overlay_button_width",
   "overlay_button_height",
@@ -3634,6 +3720,616 @@ function getUploadedUrl(result: Record<string, any>) {
   ).trim();
 }
 
+
+function CateringMenuDisplay({
+  businessId,
+  businessPhone,
+  compact = false,
+}: {
+  businessId: number;
+  businessPhone?: string | null;
+  compact?: boolean;
+}) {
+  const [payload, setPayload] = useState<CateringMenuPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [detailItem, setDetailItem] = useState<CateringMenuItem | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCatering() {
+      setLoading(true);
+      setLoadError("");
+
+      try {
+        const isAdmin =
+          typeof window !== "undefined" &&
+          window.location.pathname.startsWith("/admin/");
+
+        const url = isAdmin
+          ? `/api/owner/business/${businessId}/catering`
+          : `/api/business/${businessId}/catering`;
+
+        const response = await fetch(url, {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "캐터링 메뉴를 불러오지 못했습니다.",
+          );
+        }
+
+        if (!cancelled) {
+          setPayload({
+            settings: data?.settings ?? null,
+            categories: Array.isArray(data?.categories)
+              ? data.categories
+              : [],
+            items: Array.isArray(data?.items)
+              ? data.items
+              : [],
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "캐터링 메뉴를 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadCatering();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  const categories = useMemo(
+    () =>
+      [...(payload?.categories ?? [])]
+        .filter((category) => category.is_active !== false)
+        .sort(
+          (a, b) =>
+            Number(a.sort_order ?? 0) -
+              Number(b.sort_order ?? 0) ||
+            a.id - b.id,
+        ),
+    [payload?.categories],
+  );
+
+  const itemsByCategory = useMemo(() => {
+    const map = new Map<number | null, CateringMenuItem[]>();
+
+    for (const item of payload?.items ?? []) {
+      if (item.is_active === false) continue;
+
+      const key = item.category_id ?? null;
+      const list = map.get(key) ?? [];
+      list.push(item);
+      map.set(key, list);
+    }
+
+    for (const [key, list] of map) {
+      list.sort(
+        (a, b) =>
+          Number(a.sort_order ?? 0) -
+            Number(b.sort_order ?? 0) ||
+          a.id - b.id,
+      );
+      map.set(key, list);
+    }
+
+    return map;
+  }, [payload?.items]);
+
+  const visibleCategories = useMemo(
+    () =>
+      categories.filter(
+        (category) =>
+          (itemsByCategory.get(category.id) ?? []).length > 0,
+      ),
+    [categories, itemsByCategory],
+  );
+
+  useEffect(() => {
+    if (
+      activeCategoryId == null &&
+      visibleCategories.length > 0
+    ) {
+      setActiveCategoryId(visibleCategories[0].id);
+    }
+  }, [activeCategoryId, visibleCategories]);
+
+  const activeCategory =
+    visibleCategories.find(
+      (category) => category.id === activeCategoryId,
+    ) ?? visibleCategories[0] ?? null;
+
+  const activeItems = activeCategory
+    ? itemsByCategory.get(activeCategory.id) ?? []
+    : [];
+
+  function priceLabel(item: CateringMenuItem) {
+    if (item.pricing_type === "quote") return "Request a Quote";
+
+    if (
+      item.pricing_type === "package" &&
+      Array.isArray(item.packages) &&
+      item.packages.length > 0
+    ) {
+      const prices = item.packages
+        .map((pkg) => Number(pkg.price))
+        .filter((price) => Number.isFinite(price));
+
+      if (prices.length) {
+        return `From $${Math.min(...prices).toFixed(2)}`;
+      }
+
+      return "Package Pricing";
+    }
+
+    if (item.base_price == null) return "";
+
+    const base = `$${Number(item.base_price).toFixed(2)}`;
+
+    if (item.pricing_type === "per_person") {
+      return `${base} / person`;
+    }
+
+    if (item.pricing_type === "per_item") {
+      return `${base} / item`;
+    }
+
+    return base;
+  }
+
+  function optionPrice(choice: CateringOptionChoice) {
+    const amount = Number(choice.price_delta ?? 0);
+    if (!amount) return "";
+
+    if (choice.charge_type === "per_person") {
+      return `+$${amount.toFixed(2)}/person`;
+    }
+
+    if (choice.charge_type === "per_item") {
+      return `+$${amount.toFixed(2)}/item`;
+    }
+
+    return `+$${amount.toFixed(2)}`;
+  }
+
+  function scrollCategoryIntoView(
+    categoryId: number,
+    button: HTMLButtonElement,
+  ) {
+    setActiveCategoryId(categoryId);
+    button.scrollIntoView({
+      behavior: "smooth",
+      inline: "center",
+      block: "nearest",
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="w-full rounded-2xl bg-white px-6 py-12 text-center text-sm font-black text-gray-400">
+        캐터링 메뉴를 불러오는 중...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="w-full rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-sm font-bold text-red-700">
+        {loadError}
+      </div>
+    );
+  }
+
+  const totalItems = (payload?.items ?? []).filter(
+    (item) => item.is_active !== false,
+  ).length;
+
+  if (!totalItems) {
+    return (
+      <div className="w-full rounded-2xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
+        <p className="text-lg font-black text-gray-700">
+          등록된 캐터링 메뉴가 없습니다.
+        </p>
+        <p className="mt-2 text-sm font-semibold text-gray-400">
+          Owner의 캐터링 관리에서 메뉴를 등록하면 여기에 자동으로 표시됩니다.
+        </p>
+      </div>
+    );
+  }
+
+  const settings = payload?.settings;
+
+  return (
+    <>
+      <div className="w-full bg-white text-gray-950">
+        <div className={`${compact ? "px-4 py-5" : "px-5 py-7 sm:px-8"}`}>
+          <div className="mx-auto w-full max-w-[1180px]">
+            <div className="flex flex-col gap-4 border-b border-gray-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-orange-600">
+                  Catering
+                </p>
+                <h2
+                  className={`${
+                    compact ? "mt-1 text-2xl" : "mt-1 text-3xl"
+                  } font-black`}
+                >
+                  {String(settings?.page_title || "Catering Menu")}
+                </h2>
+                {settings?.page_subtitle ? (
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-gray-500">
+                    {settings.page_subtitle}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {Number(settings?.minimum_order_amount || 0) > 0 ? (
+                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-gray-700">
+                    Min ${Number(settings?.minimum_order_amount).toFixed(2)}
+                  </span>
+                ) : null}
+                {Number(settings?.minimum_order_people || 0) > 0 ? (
+                  <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-black text-gray-700">
+                    Min {Number(settings?.minimum_order_people)} people
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="relative mt-4 border-b border-gray-200">
+              <div className="flex w-full gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {visibleCategories.map((category) => {
+                  const active = activeCategory?.id === category.id;
+
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={(event) =>
+                        scrollCategoryIntoView(
+                          category.id,
+                          event.currentTarget,
+                        )
+                      }
+                      className={`relative shrink-0 whitespace-nowrap px-3 py-3 text-sm font-black transition ${
+                        active
+                          ? "text-gray-950"
+                          : "text-gray-500 hover:text-gray-900"
+                      }`}
+                    >
+                      {category.name}
+                      {active ? (
+                        <span className="absolute inset-x-1 bottom-0 h-[3px] rounded-full bg-emerald-800" />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {activeCategory ? (
+              <section className="pt-5">
+                <div className="mb-4">
+                  <h3 className={`${compact ? "text-xl" : "text-2xl"} font-black`}>
+                    {activeCategory.name}
+                  </h3>
+                  {activeCategory.description ? (
+                    <p className="mt-1 text-sm font-semibold text-gray-500">
+                      {activeCategory.description}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div
+                  className={`grid gap-3 ${
+                    compact ? "grid-cols-1" : "md:grid-cols-2"
+                  }`}
+                >
+                  {activeItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setDetailItem(item)}
+                      className="group overflow-hidden rounded-2xl border border-gray-200 bg-white text-left transition hover:border-gray-300 hover:shadow-md"
+                    >
+                      <div
+                        className={`grid min-h-[178px] ${
+                          item.image_url
+                            ? compact
+                              ? "grid-cols-[minmax(0,1fr)_116px]"
+                              : "grid-cols-[minmax(0,1fr)_190px]"
+                            : "grid-cols-1"
+                        }`}
+                      >
+                        <div className={`${compact ? "p-4" : "p-5"} flex min-w-0 flex-col`}>
+                          <div className="flex-1">
+                            <h4
+                              className={`${
+                                compact ? "text-base" : "text-lg"
+                              } font-black leading-snug`}
+                            >
+                              {item.name}
+                            </h4>
+
+                            {item.description ? (
+                              <p className="mt-2 line-clamp-3 text-sm font-medium leading-6 text-gray-600">
+                                {item.description}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-4 flex items-end justify-between gap-3">
+                            <div>
+                              <p className="text-base font-black text-gray-950">
+                                {priceLabel(item)}
+                              </p>
+                              {Number(item.minimum_quantity || 0) > 1 ? (
+                                <p className="mt-1 text-xs font-bold text-gray-500">
+                                  Minimum {item.minimum_quantity}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 text-2xl font-light text-gray-700 transition group-hover:bg-gray-950 group-hover:text-white">
+                              +
+                            </span>
+                          </div>
+                        </div>
+
+                        {item.image_url ? (
+                          <div className="relative overflow-hidden bg-gray-100">
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {detailItem && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[15000] flex items-center justify-center bg-black/60 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setDetailItem(null);
+                }
+              }}
+            >
+              <div className="max-h-[92vh] w-full max-w-[760px] overflow-y-auto rounded-3xl bg-white shadow-2xl">
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white/95 px-5 py-4 backdrop-blur">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-orange-600">
+                      Catering Item
+                    </p>
+                    <h3 className="mt-1 truncate text-xl font-black text-gray-950">
+                      {detailItem.name}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailItem(null)}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700"
+                    aria-label="닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                {detailItem.image_url ? (
+                  <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-100">
+                    <img
+                      src={detailItem.image_url}
+                      alt={detailItem.name}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  </div>
+                ) : null}
+
+                <div className="p-5 sm:p-7">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-2xl font-black text-gray-950">
+                        {detailItem.name}
+                      </h4>
+                      {detailItem.description ? (
+                        <p className="mt-3 whitespace-pre-line text-sm font-medium leading-7 text-gray-600">
+                          {detailItem.description}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-lg font-black text-orange-700">
+                      {priceLabel(detailItem)}
+                    </div>
+                  </div>
+
+                  {(detailItem.packages ?? []).length > 0 ? (
+                    <div className="mt-6">
+                      <h5 className="text-sm font-black text-gray-900">
+                        Package / Size
+                      </h5>
+                      <div className="mt-2 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
+                        {[...(detailItem.packages ?? [])]
+                          .sort(
+                            (a, b) =>
+                              Number(a.sort_order ?? 0) -
+                                Number(b.sort_order ?? 0) ||
+                              a.id - b.id,
+                          )
+                          .map((pkg) => (
+                            <div
+                              key={pkg.id}
+                              className="flex items-center justify-between gap-4 px-4 py-3"
+                            >
+                              <div className="min-w-0">
+                                <p className="font-black text-gray-800">
+                                  {pkg.package_name}
+                                </p>
+                                {pkg.serving_label ? (
+                                  <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                                    {pkg.serving_label}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <span className="shrink-0 font-black text-gray-950">
+                                ${Number(pkg.price).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {(detailItem.option_groups ?? []).length > 0 ? (
+                    <div className="mt-6 space-y-4">
+                      {[...(detailItem.option_groups ?? [])]
+                        .sort(
+                          (a, b) =>
+                            Number(a.sort_order ?? 0) -
+                              Number(b.sort_order ?? 0) ||
+                            a.id - b.id,
+                        )
+                        .map((group) => (
+                          <div key={group.id}>
+                            <div className="flex items-center gap-2">
+                              <h5 className="text-sm font-black text-gray-900">
+                                {group.name}
+                              </h5>
+                              {group.min_select > 0 ? (
+                                <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-black text-orange-700">
+                                  Required
+                                </span>
+                              ) : null}
+                            </div>
+                            {group.description ? (
+                              <p className="mt-1 text-xs font-semibold text-gray-500">
+                                {group.description}
+                              </p>
+                            ) : null}
+
+                            <div className="mt-2 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-200">
+                              {(group.choices ?? []).map((choice) => (
+                                <div
+                                  key={choice.id}
+                                  className="flex items-center justify-between gap-3 px-4 py-3"
+                                >
+                                  <div className="flex min-w-0 items-center gap-3">
+                                    {choice.image_url ? (
+                                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+                                        <img
+                                          src={choice.image_url}
+                                          alt={choice.name}
+                                          className="h-full w-full object-cover"
+                                        />
+                                      </div>
+                                    ) : null}
+
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold text-gray-800">
+                                        {choice.name}
+                                      </p>
+                                      {choice.description ? (
+                                        <p className="mt-0.5 text-xs font-medium text-gray-500">
+                                          {choice.description}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  {optionPrice(choice) ? (
+                                    <span className="shrink-0 text-sm font-black text-gray-700">
+                                      {optionPrice(choice)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    {Number(detailItem.minimum_quantity || 0) > 1 ? (
+                      <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
+                        Minimum {detailItem.minimum_quantity}
+                      </span>
+                    ) : null}
+                    {Number(detailItem.advance_notice_hours || 0) > 0 ? (
+                      <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
+                        {detailItem.advance_notice_hours} hr notice
+                      </span>
+                    ) : null}
+                    {String(businessPhone || "").trim() ? (
+                      <a
+                        href={`tel:${String(businessPhone)
+                          .replace(/[^0-9+]/g, "")}`}
+                        className="rounded-full bg-gray-950 px-3 py-1.5 text-xs font-black text-white"
+                      >
+                        ☎ Call Us
+                      </a>
+                    ) : null}
+
+                    {detailItem.pickup_enabled ? (
+                      <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+                        Pickup
+                      </span>
+                    ) : null}
+                    {detailItem.delivery_enabled ? (
+                      <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
+                        Delivery
+                        {Number(detailItem.delivery_fee || 0) > 0
+                          ? ` · $${Number(detailItem.delivery_fee).toFixed(2)} fee`
+                          : ""}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setDetailItem(null)}
+                    className="mt-7 w-full rounded-2xl bg-gray-950 px-5 py-3.5 text-sm font-black text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 function LinkPageContent({
   section,
   editable = false,
@@ -4258,6 +4954,7 @@ type RawOptionCsvRow = {
   category: string;
   menuName: string;
   groupName: string;
+  ruleText: string;
   required: boolean;
   minSelect: number;
   maxSelect: number | null;
@@ -4329,6 +5026,58 @@ function findCsvIndex(headers: string[], ...names: string[]) {
 
 function readCsvCell(columns: string[], index: number) {
   return index >= 0 ? String(columns[index] ?? "").trim() : "";
+}
+
+function parseChowNowOptionGroupMeta(
+  rawGroupName: string,
+  rawRuleText: string,
+  fallbackRequired: boolean,
+  fallbackMin: number,
+  fallbackMax: number | null,
+) {
+  const ruleText = String(rawRuleText || "").replace(/\s+/g, " ").trim();
+  const groupText = String(rawGroupName || "").replace(/\s+/g, " ").trim();
+  const source = ruleText || groupText;
+  const marker = source.match(/\b(REQUIRED|OPTIONAL)\b/i);
+
+  let groupName = groupText || "Options";
+  let required = fallbackRequired;
+  let minSelect = Math.max(0, fallbackMin);
+  let maxSelect = fallbackMax == null ? null : Math.max(0, fallbackMax);
+
+  if (marker && marker.index != null) {
+    const beforeMarker = source.slice(0, marker.index).trim();
+    if (beforeMarker) groupName = beforeMarker;
+
+    required = marker[1].toUpperCase() === "REQUIRED";
+    if (required && minSelect === 0) minSelect = 1;
+
+    const afterMarker = source.slice(marker.index + marker[0].length).trim();
+    const upTo = afterMarker.match(/(?:\(|\b)UP\s+TO\s+(\d+)(?:\)|\b)/i);
+    if (upTo) {
+      maxSelect = Math.max(0, Number(upTo[1]));
+      if (!required) minSelect = 0;
+    }
+
+    const range = afterMarker.match(/^(?:\(?\s*)?(\d+)\s*(?:-|–|TO)\s*(\d+)(?:\s*\)?)?/i);
+    if (range) {
+      minSelect = Math.max(0, Number(range[1]));
+      maxSelect = Math.max(minSelect, Number(range[2]));
+      required = minSelect > 0;
+    }
+
+    const exact = afterMarker.match(/^(?:\(?\s*)?(\d+)(?:\s*\)?)?(?:\s|$)/);
+    if (!range && exact && exact[1] && required) {
+      const n = Math.max(0, Number(exact[1]));
+      minSelect = n;
+      maxSelect = n;
+    }
+  }
+
+  // groupName 자체에 REQUIRED/OPTIONAL이 붙어 들어온 경우도 제거합니다.
+  groupName = groupName.split(/\b(?:REQUIRED|OPTIONAL)\b/i)[0].trim() || "Options";
+
+  return { groupName, ruleText, required, minSelect, maxSelect };
 }
 
 function normalizeMenuMatchKey(category: string, menuName: string) {
@@ -4420,6 +5169,7 @@ function getOptionCsvAliases(platform: MenuImportPlatform) {
     category: ["category", "categoryname", "menucategory", "section", "카테고리"],
     menuName: ["menuname", "menuitem", "menuitemname", "parentname", "parentitem", "itemname", "메뉴명"],
     groupName: ["groupname", "optiongroup", "optiongroupname", "modifiergroup", "modifiergroupname", "modifiername", "group", "옵션그룹"],
+    ruleText: ["ruletext", "rule_text", "grouprule", "group_rule", "selectionrule", "selection_rule", "규칙"],
     required: ["required", "isrequired", "grouprequired", "필수"],
     minSelect: ["minselect", "minimumselect", "minimum", "min", "minrequired", "최소"],
     maxSelect: ["maxselect", "maximumselect", "maximum", "max", "최대"],
@@ -4448,8 +5198,10 @@ function getOptionCsvAliases(platform: MenuImportPlatform) {
   }
   return {
     ...common,
-    groupName: [...common.groupName, "modifiercategory"],
-    optionName: [...common.optionName, "modifieritemname"],
+    groupName: [...common.groupName, "modifiercategory", "option_group", "option_group_name"],
+    ruleText: [...common.ruleText, "rule_text", "modifier_rule", "modifier_rule_text"],
+    optionName: [...common.optionName, "modifieritemname", "option_name"],
+    priceDelta: [...common.priceDelta, "additional_price", "price_delta"],
   };
 }
 
@@ -4460,11 +5212,42 @@ function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionC
   const categoryIndex = findCsvIndex(headers, ...aliases.category);
   const menuNameIndex = findCsvIndex(headers, ...aliases.menuName);
   const groupNameIndex = findCsvIndex(headers, ...aliases.groupName);
+  const ruleTextIndex = findCsvIndex(headers, ...aliases.ruleText);
   const requiredIndex = findCsvIndex(headers, ...aliases.required);
   const minSelectIndex = findCsvIndex(headers, ...aliases.minSelect);
   const maxSelectIndex = findCsvIndex(headers, ...aliases.maxSelect);
   const optionNameIndex = findCsvIndex(headers, ...aliases.optionName);
-  const priceDeltaIndex = findCsvIndex(headers, ...aliases.priceDelta);
+  // ChowNow 옵션 CSV에는 메뉴 기본 price 컬럼과 옵션 추가금 additional_price 컬럼이
+  // 같이 있을 수 있습니다. 기존 findCsvIndex는 "가장 왼쪽에 있는 일치 컬럼"을 잡기 때문에
+  // generic price가 additional_price보다 앞에 있으면 옵션 추가금이 0으로 들어갈 수 있습니다.
+  // ChowNow에서는 additional_price / price_delta를 반드시 우선 사용합니다.
+  const priceDeltaIndex =
+    platform === "chownow"
+      ? (() => {
+          const preferredNames = [
+            "additional_price",
+            "additionalprice",
+            "price_delta",
+            "pricedelta",
+            "option_price",
+            "optionprice",
+            "modifier_price",
+            "modifierprice",
+            "extra_price",
+            "extraprice",
+            "add_price",
+            "addprice",
+          ].map(normalizeCsvHeader);
+
+          for (const preferred of preferredNames) {
+            const found = headers.findIndex((header) => header === preferred);
+            if (found >= 0) return found;
+          }
+
+          // 전용 추가금 컬럼이 없을 때만 generic price까지 fallback
+          return findCsvIndex(headers, ...aliases.priceDelta);
+        })()
+      : findCsvIndex(headers, ...aliases.priceDelta);
   const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
   const groupOrderIndex = findCsvIndex(headers, ...aliases.groupOrder);
   const optionOrderIndex = findCsvIndex(headers, ...aliases.optionOrder);
@@ -4476,23 +5259,131 @@ function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionC
   }
 
   return rows.map((columns, index) => {
-    const required = csvBoolean(readCsvCell(columns, requiredIndex));
-    const minRaw = csvNumber(readCsvCell(columns, minSelectIndex), required ? 1 : 0);
+    const rawRequired = csvBoolean(readCsvCell(columns, requiredIndex));
+    const minRaw = csvNumber(readCsvCell(columns, minSelectIndex), rawRequired ? 1 : 0);
     const maxRaw = csvNumber(readCsvCell(columns, maxSelectIndex), null);
+    const rawGroupName = readCsvCell(columns, groupNameIndex) || "Options";
+    const rawRuleText = readCsvCell(columns, ruleTextIndex);
+    const meta = platform === "chownow"
+      ? parseChowNowOptionGroupMeta(
+          rawGroupName,
+          rawRuleText,
+          rawRequired,
+          Math.max(0, Number(minRaw ?? 0)),
+          maxRaw == null ? null : Math.max(0, Number(maxRaw)),
+        )
+      : {
+          groupName: rawGroupName,
+          ruleText: rawRuleText,
+          required: rawRequired,
+          minSelect: Math.max(0, Number(minRaw ?? 0)),
+          maxSelect: maxRaw == null ? null : Math.max(0, Number(maxRaw)),
+        };
+
     return {
       category: readCsvCell(columns, categoryIndex),
       menuName: readCsvCell(columns, menuNameIndex),
-      groupName: readCsvCell(columns, groupNameIndex) || "Options",
-      required,
-      minSelect: Math.max(0, Number(minRaw ?? 0)),
-      maxSelect: maxRaw == null ? null : Math.max(0, Number(maxRaw)),
-      optionName: readCsvCell(columns, optionNameIndex),
+      groupName: meta.groupName,
+      ruleText: meta.ruleText,
+      required: meta.required,
+      minSelect: meta.minSelect,
+      maxSelect: meta.maxSelect,
+      optionName: readCsvCell(columns, optionNameIndex).replace(/^Select\s+/i, "").trim(),
+      // ChowNow는 additional_price / price_delta를 우선 읽습니다.
+      // 예: Cheese Sauce = 1 -> priceDelta 1 -> DB price_delta 1.00
       priceDelta: Number(csvNumber(readCsvCell(columns, priceDeltaIndex), 0) ?? 0),
       soldOut: csvBoolean(readCsvCell(columns, soldOutIndex)),
       groupOrder: Number(csvNumber(readCsvCell(columns, groupOrderIndex), index) ?? index),
       optionOrder: Number(csvNumber(readCsvCell(columns, optionOrderIndex), index) ?? index),
     };
   }).filter((row) => row.menuName && row.optionName);
+}
+
+
+function buildMenuRowsFromOptions(optionRows: RawOptionCsvRow[]): MenuImportRow[] {
+  const rows: MenuImportRow[] = [];
+  const exactMap = new Map<string, MenuImportRow>();
+  const nameMap = new Map<string, MenuImportRow[]>();
+
+  for (const optionRow of optionRows) {
+    const exactKey = optionRow.category
+      ? normalizeMenuMatchKey(optionRow.category, optionRow.menuName)
+      : "";
+    const nameKey = normalizeMenuNameOnlyKey(optionRow.menuName);
+
+    let menu = exactKey ? exactMap.get(exactKey) : undefined;
+
+    if (!menu) {
+      const sameName = nameMap.get(nameKey) || [];
+      // 옵션 CSV에 category가 없는 경우 같은 이름의 메뉴가 하나뿐이면 그 행에 묶습니다.
+      if (!optionRow.category && sameName.length === 1) {
+        menu = sameName[0];
+      }
+    }
+
+    if (!menu) {
+      menu = {
+        category: optionRow.category || "",
+        name: optionRow.menuName,
+        description: "",
+        price: null,
+        imageFileName: "",
+        displayOrder: rows.length,
+        soldOut: false,
+        optionGroups: [],
+      };
+      rows.push(menu);
+
+      if (exactKey) exactMap.set(exactKey, menu);
+      const list = nameMap.get(nameKey) || [];
+      list.push(menu);
+      nameMap.set(nameKey, list);
+    }
+
+    let group = menu.optionGroups.find(
+      (item) => normalizeCsvHeader(item.name) === normalizeCsvHeader(optionRow.groupName),
+    );
+
+    if (!group) {
+      group = {
+        name: optionRow.groupName,
+        required: optionRow.required,
+        minSelect: optionRow.minSelect,
+        maxSelect: optionRow.maxSelect,
+        displayOrder: optionRow.groupOrder,
+        options: [],
+      };
+      menu.optionGroups.push(group);
+    } else {
+      group.required = group.required || optionRow.required;
+      group.minSelect = Math.max(group.minSelect, optionRow.minSelect);
+      if (optionRow.maxSelect != null) {
+        group.maxSelect =
+          group.maxSelect == null
+            ? optionRow.maxSelect
+            : Math.max(group.maxSelect, optionRow.maxSelect);
+      }
+    }
+
+    const optionKey = normalizeCsvHeader(optionRow.optionName);
+    if (!group.options.some((item) => normalizeCsvHeader(item.name) === optionKey)) {
+      group.options.push({
+        name: optionRow.optionName,
+        priceDelta: optionRow.priceDelta,
+        soldOut: optionRow.soldOut,
+        displayOrder: optionRow.optionOrder,
+      });
+    }
+  }
+
+  for (const row of rows) {
+    row.optionGroups.sort((a, b) => a.displayOrder - b.displayOrder);
+    for (const group of row.optionGroups) {
+      group.options.sort((a, b) => a.displayOrder - b.displayOrder);
+    }
+  }
+
+  return rows;
 }
 
 function attachUnifiedOptions(menuRows: MenuImportRow[], optionRows: RawOptionCsvRow[]) {
@@ -4671,8 +5562,20 @@ function MenuImportModal({
   }
 
   async function startImport() {
-    if (!csvFile) {
-      setImportError(`${platformLabel} 메뉴 CSV 파일을 선택해주세요.`);
+    const optionsOnly = !csvFile && Boolean(optionsCsvFile);
+
+    // ChowNow에서 메뉴 CSV + 옵션 CSV를 같이 선택하면
+    // 기존 메뉴 이름/가격/설명/이미지는 유지하고
+    // CSV의 카테고리 배치 + 옵션 구조/옵션 가격만 동기화합니다.
+    const syncExistingChowNow =
+      platform === "chownow" &&
+      Boolean(csvFile) &&
+      Boolean(optionsCsvFile);
+
+    if (!csvFile && !optionsCsvFile) {
+      setImportError(
+        `${platformLabel} 메뉴 CSV 또는 옵션 CSV 중 하나를 선택해주세요.`,
+      );
       return;
     }
 
@@ -4681,97 +5584,416 @@ function MenuImportModal({
     setResult("");
 
     try {
-      const rows = parseMenuCsv(await csvFile.text(), platform);
-      if (!rows.length) throw new Error("가져올 메뉴가 없습니다.");
-
+      let rows: MenuImportRow[] = [];
       let optionAttachResult = { attached: 0, unmatched: 0 };
-      if (optionsCsvFile) {
-        const optionRows = parseOptionsCsv(await optionsCsvFile.text(), platform);
-        optionAttachResult = attachUnifiedOptions(rows, optionRows);
+      let parsedOptionRows: RawOptionCsvRow[] = [];
+      let categorySyncDebug = "";
+
+      if (optionsOnly) {
+        const optionRows = parseOptionsCsv(
+          await optionsCsvFile!.text(),
+          platform,
+        );
+        parsedOptionRows = optionRows;
+        if (!optionRows.length) {
+          throw new Error("업데이트할 옵션이 없습니다.");
+        }
+
+        rows = buildMenuRowsFromOptions(optionRows);
+        if (!rows.length) {
+          throw new Error("옵션 CSV에서 메뉴를 찾지 못했습니다.");
+        }
+
+        optionAttachResult = {
+          attached: optionRows.length,
+          unmatched: 0,
+        };
+      } else {
+        // 메뉴 CSV는 카테고리 매핑의 기준입니다.
+        // ChowNow sync 모드에서도 메뉴 가격/설명/이미지는 서버에서 보존합니다.
+        rows = parseMenuCsv(await csvFile!.text(), platform);
+        if (!rows.length) throw new Error("가져올 메뉴가 없습니다.");
+
+        if (optionsCsvFile) {
+          const optionRows = parseOptionsCsv(
+            await optionsCsvFile.text(),
+            platform,
+          );
+          parsedOptionRows = optionRows;
+          optionAttachResult = attachUnifiedOptions(rows, optionRows);
+        }
       }
 
       const fileMap = new Map<string, File>();
-      for (const file of imageFiles) {
-        const relativePath = String((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name);
-        fileMap.set(relativePath.replace(/\\/g, "/").toLowerCase(), file);
-        fileMap.set(file.name.toLowerCase(), file);
-        fileMap.set(normalizeMenuFileKey(file.name), file);
+
+      // 옵션 전용 또는 ChowNow 기존메뉴 동기화 모드에서는
+      // 기존 이미지를 그대로 유지하므로 이미지 폴더를 사용하지 않습니다.
+      if (!optionsOnly && !syncExistingChowNow) {
+        for (const file of imageFiles) {
+          const relativePath = String(
+            (file as File & { webkitRelativePath?: string })
+              .webkitRelativePath || file.name,
+          );
+          fileMap.set(
+            relativePath.replace(/\\/g, "/").toLowerCase(),
+            file,
+          );
+          fileMap.set(file.name.toLowerCase(), file);
+          fileMap.set(normalizeMenuFileKey(file.name), file);
+        }
       }
 
       setProgress({ current: 0, total: rows.length });
+
       let imageCount = 0;
       let missingImageCount = 0;
       let optionGroupCount = 0;
       const categoryNames = new Set<string>();
 
+      // ChowNow 화면 순서대로 카테고리 display_order를 만듭니다.
+      const categoryDisplayOrder = new Map<string, number>();
+      for (const row of rows) {
+        const categoryName = String(row.category || "").trim();
+        if (
+          categoryName &&
+          !categoryDisplayOrder.has(categoryName.toLowerCase())
+        ) {
+          categoryDisplayOrder.set(
+            categoryName.toLowerCase(),
+            categoryDisplayOrder.size,
+          );
+        }
+      }
+
+      // 카테고리 동기화는 메뉴 CSV + 옵션 CSV의 정보를 합쳐서 만듭니다.
+      // ChowNow 옵션 CSV에만 Salad / Sandwiches / Shakes 정보가 있는 경우도
+      // 빠지지 않도록 같은 메뉴명은 옵션 CSV의 category로 보완합니다.
+      const categoryMapByMenu = new Map<
+        string,
+        {
+          name: string;
+          category: string;
+          categoryDisplayOrder: number;
+          price: number | null;
+        }
+      >();
+
+      const addCategoryMapRow = (
+        menuName: string,
+        categoryName: string,
+        menuPrice: number | null = null,
+      ) => {
+        const name = String(menuName || "").trim();
+        const category = String(categoryName || "").trim();
+        if (!name || !category || category.toLowerCase() === "menu") return;
+
+        const menuKey = normalizeMenuNameOnlyKey(name);
+        if (!menuKey) return;
+
+        if (!categoryDisplayOrder.has(category.toLowerCase())) {
+          categoryDisplayOrder.set(
+            category.toLowerCase(),
+            categoryDisplayOrder.size,
+          );
+        }
+
+        const next = {
+          name,
+          category,
+          categoryDisplayOrder:
+            categoryDisplayOrder.get(category.toLowerCase()) ?? 0,
+          price:
+            menuPrice == null || !Number.isFinite(Number(menuPrice))
+              ? null
+              : Number(menuPrice),
+        };
+
+        const existing = categoryMapByMenu.get(menuKey);
+
+        // 옵션 CSV의 실제 category가 있으면 generic "Menu"보다 우선합니다.
+        if (!existing || !existing.category || existing.category === "Menu") {
+          categoryMapByMenu.set(menuKey, next);
+        } else if (existing.price == null && next.price != null) {
+          categoryMapByMenu.set(menuKey, {
+            ...existing,
+            price: next.price,
+          });
+        }
+      };
+
+      for (const row of rows) {
+        addCategoryMapRow(row.name, row.category, row.price);
+      }
+
+      for (const optionRow of parsedOptionRows) {
+        // 옵션 CSV에는 메뉴 가격이 없을 수 있으므로 이름/카테고리만 보완합니다.
+        addCategoryMapRow(optionRow.menuName, optionRow.category, null);
+      }
+
+      const categoryMenuMap = Array.from(categoryMapByMenu.values());
+
+      // CSV에서 카테고리 이름만 따로 추출합니다.
+      // 이 목록은 메뉴 매칭 성공 여부와 완전히 무관하게 서버에서 먼저 DB에 저장됩니다.
+      const uniqueCategoryNames = Array.from(
+        new Set(
+          [
+            ...rows.map((row) => String(row.category || "").trim()),
+            ...parsedOptionRows.map((row) =>
+              String(row.category || "").trim(),
+            ),
+          ].filter(
+            (name) =>
+              Boolean(name) &&
+              name.toLowerCase() !== "menu",
+          ),
+        ),
+      );
+
+      // ChowNow 메뉴 CSV + 옵션 CSV 동기화에서는
+      // 카테고리를 메뉴별 옵션 저장과 분리해서 먼저 한 번에 처리합니다.
+      if (syncExistingChowNow) {
+        const categorySyncForm = new FormData();
+        categorySyncForm.append("platform", platform);
+        categorySyncForm.append("sourcePlatform", platform);
+        categorySyncForm.append("categorySyncOnly", "true");
+        categorySyncForm.append(
+          "categoryMenuMapJson",
+          JSON.stringify(categoryMenuMap),
+        );
+        categorySyncForm.append(
+          "uniqueCategoriesJson",
+          JSON.stringify(uniqueCategoryNames),
+        );
+
+        const categorySyncResponse = await fetch(
+          `/api/admin/businesses/${encodeURIComponent(
+            businessId,
+          )}/menu/import`,
+          {
+            method: "POST",
+            credentials: "include",
+            body: categorySyncForm,
+          },
+        );
+
+        const categorySyncPayload =
+          await readApiResponse(categorySyncResponse);
+
+        if (!categorySyncResponse.ok) {
+          throw new Error(
+            String(
+              categorySyncPayload.error ||
+                categorySyncPayload.message ||
+                "카테고리 동기화 실패",
+            ),
+          );
+        }
+
+        const unmatched = Array.isArray(
+          categorySyncPayload.unmatchedMenuNames,
+        )
+          ? categorySyncPayload.unmatchedMenuNames
+          : [];
+
+        const savedCategories = Array.isArray(
+          categorySyncPayload.categories,
+        )
+          ? categorySyncPayload.categories
+          : [];
+
+        categorySyncDebug = [
+          `CSV 카테고리: ${uniqueCategoryNames.length}개`,
+          uniqueCategoryNames.length
+            ? uniqueCategoryNames.join(" | ")
+            : "(없음)",
+          `DB 확인 카테고리: ${Number(
+            categorySyncPayload.categoryCount || 0,
+          )}개`,
+          savedCategories.length
+            ? savedCategories.join(" | ")
+            : "(서버 응답에 없음)",
+          `메뉴 추가: ${Number(
+            categorySyncPayload.addedMenuCount || 0,
+          )}개`,
+          `기존 메뉴 스킵: ${Number(
+            categorySyncPayload.skippedExistingCount || 0,
+          )}개`,
+          unmatched.length
+            ? `매치 실패: ${unmatched.join(" | ")}`
+            : "매치 실패: 없음",
+        ].join("\n");
+      }
+
       for (let index = 0; index < rows.length; index += 1) {
         const row = rows[index];
-        categoryNames.add(row.category);
+
+        if (row.category) {
+          categoryNames.add(row.category);
+        }
+
         optionGroupCount += row.optionGroups.length;
-        const requested = row.imageFileName.toLowerCase();
-        const requestedBase = requested.split("/").pop() || requested;
-        const imageFile =
-          fileMap.get(requested) ||
-          fileMap.get(requestedBase) ||
-          fileMap.get(normalizeMenuFileKey(requestedBase)) ||
-          fileMap.get(normalizeMenuFileKey(row.name));
 
         const formData = new FormData();
         formData.append("platform", platform);
         formData.append("sourcePlatform", platform);
-        formData.append("category", row.category);
         formData.append("name", row.name);
-        formData.append("description", row.description);
-        formData.append("price", row.price == null ? "" : String(row.price));
-        formData.append("soldOut", row.soldOut ? "true" : "false");
-        formData.append("displayOrder", String(row.displayOrder));
-        formData.append("replaceExisting", replaceExisting && index === 0 ? "true" : "false");
-        // 세 플랫폼 모두 서버에는 완전히 동일한 옵션 JSON 구조로 전달합니다.
+
+        // 기존 메뉴 유지 모드:
+        // - 옵션 CSV만 선택: 해당 옵션 CSV에 있는 메뉴의 카테고리 + 옵션 업데이트
+        // - ChowNow 메뉴 CSV + 옵션 CSV: 모든 기존 메뉴의 카테고리 + 옵션 업데이트
+        // 메뉴 이름/가격/설명/이미지/품절 상태는 수정하지 않습니다.
+        if (optionsOnly || syncExistingChowNow) {
+          if (optionsOnly) {
+            formData.append("optionsOnly", "true");
+            formData.append("optionOnly", "true");
+          }
+
+          if (syncExistingChowNow) {
+            formData.append("syncExistingMenuOnly", "true");
+          }
+
+          formData.append("preserveExistingOptionPrices", "false");
+          formData.append("replaceExisting", "false");
+
+          if (row.category) {
+            formData.append("category", row.category);
+            formData.append(
+              "categoryDisplayOrder",
+              String(
+                categoryDisplayOrder.get(
+                  String(row.category).trim().toLowerCase(),
+                ) ?? 0,
+              ),
+            );
+          }
+
+        } else {
+          formData.append("category", row.category);
+          formData.append("description", row.description);
+          formData.append(
+            "price",
+            row.price == null ? "" : String(row.price),
+          );
+          formData.append(
+            "soldOut",
+            row.soldOut ? "true" : "false",
+          );
+          formData.append(
+            "displayOrder",
+            String(row.displayOrder),
+          );
+          formData.append(
+            "replaceExisting",
+            replaceExisting && index === 0 ? "true" : "false",
+          );
+        }
+
         const unifiedOptionsJson = JSON.stringify(row.optionGroups);
         formData.append("optionsJson", unifiedOptionsJson);
         formData.append("optionGroupsJson", unifiedOptionsJson);
 
-        if (imageFile) {
-          const thumbnail = await imageFileToWebp(imageFile, {
-            width: 96,
-            height: 96,
-            quality: 0.74,
-            crop: true,
-          });
-          const display = await imageFileToWebp(imageFile, {
-            width: 800,
-            height: 800,
-            quality: 0.82,
-            crop: false,
-          });
-          const safeName = normalizeMenuFileKey(row.name) || `menu-${index + 1}`;
-          formData.append("thumbnail", thumbnail, `${safeName}.webp`);
-          formData.append("displayImage", display, `${safeName}.webp`);
-          imageCount += 1;
-        } else {
-          missingImageCount += 1;
+        if (!optionsOnly && !syncExistingChowNow) {
+          const requested = row.imageFileName.toLowerCase();
+          const requestedBase =
+            requested.split("/").pop() || requested;
+
+          const imageFile =
+            fileMap.get(requested) ||
+            fileMap.get(requestedBase) ||
+            fileMap.get(normalizeMenuFileKey(requestedBase)) ||
+            fileMap.get(normalizeMenuFileKey(row.name));
+
+          if (imageFile) {
+            const thumbnail = await imageFileToWebp(imageFile, {
+              width: 96,
+              height: 96,
+              quality: 0.74,
+              crop: true,
+            });
+
+            const display = await imageFileToWebp(imageFile, {
+              width: 800,
+              height: 800,
+              quality: 0.82,
+              crop: false,
+            });
+
+            const safeName =
+              normalizeMenuFileKey(row.name) ||
+              `menu-${index + 1}`;
+
+            formData.append(
+              "thumbnail",
+              thumbnail,
+              `${safeName}.webp`,
+            );
+            formData.append(
+              "displayImage",
+              display,
+              `${safeName}.webp`,
+            );
+            imageCount += 1;
+          } else {
+            missingImageCount += 1;
+          }
         }
 
         const response = await fetch(
-          `/api/admin/businesses/${encodeURIComponent(businessId)}/menu/import`,
+          `/api/admin/businesses/${encodeURIComponent(
+            businessId,
+          )}/menu/import`,
           {
             method: "POST",
             credentials: "include",
             body: formData,
           },
         );
+
         const payload = await readApiResponse(response);
+
         if (!response.ok) {
-          throw new Error(String(payload.error || payload.message || `${row.name} 저장 실패`));
+          throw new Error(
+            String(
+              payload.error ||
+                payload.message ||
+                `${row.name} 저장 실패`,
+            ),
+          );
         }
-        setProgress({ current: index + 1, total: rows.length });
+
+        setProgress({
+          current: index + 1,
+          total: rows.length,
+        });
       }
 
-      setResult(
-        `완료: ${platformLabel} · 카테고리 ${categoryNames.size}개 · 메뉴 ${rows.length}개 · 옵션그룹 ${optionGroupCount}개 · 옵션 ${optionAttachResult.attached}개 · 이미지 ${imageCount}개 · 이미지 없음 ${missingImageCount}개${optionAttachResult.unmatched ? ` · 연결 실패 옵션 ${optionAttachResult.unmatched}개` : ""}`,
-      );
+      if (syncExistingChowNow) {
+        const syncedCategoryCount = new Set(
+          categoryMenuMap.map((row) => row.category),
+        ).size;
+
+        setResult(
+          `${categorySyncDebug || "카테고리 동기화 결과 없음"}\n\n완료: ${platformLabel} 기존 메뉴 유지 · 카테고리 ${syncedCategoryCount}개 동기화 · 메뉴 ${rows.length}개 처리 · 옵션그룹 ${optionGroupCount}개 · 옵션 ${optionAttachResult.attached}개 · 메뉴 가격/설명/이미지는 변경하지 않음`,
+        );
+      } else if (optionsOnly) {
+        setResult(
+          `완료: ${platformLabel} 옵션/카테고리 업데이트 · 메뉴 ${rows.length}개 · 옵션그룹 ${optionGroupCount}개 · 옵션 ${optionAttachResult.attached}개 · 기존 메뉴 가격/설명/이미지는 변경하지 않음`,
+        );
+      } else {
+        setResult(
+          `완료: ${platformLabel} · 카테고리 ${categoryNames.size}개 · 메뉴 ${rows.length}개 · 옵션그룹 ${optionGroupCount}개 · 옵션 ${optionAttachResult.attached}개 · 이미지 ${imageCount}개 · 이미지 없음 ${missingImageCount}개${
+            optionAttachResult.unmatched
+              ? ` · 연결 실패 옵션 ${optionAttachResult.unmatched}개`
+              : ""
+          }`,
+        );
+      }
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "메뉴 가져오기에 실패했습니다.");
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : "메뉴 가져오기에 실패했습니다.",
+      );
     } finally {
       setImporting(false);
     }
@@ -4823,6 +6045,7 @@ function MenuImportModal({
 
           <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
             <span className="block text-sm font-black text-gray-900">2. {platformLabel} 메뉴 CSV</span>
+            <p className="mt-1 text-[11px] font-semibold leading-4 text-gray-500">메뉴 전체를 가져올 때만 선택하세요. 옵션만 업데이트할 때는 비워두세요.</p>
             <input
               type="file"
               accept=".csv,text/csv"
@@ -4835,7 +6058,7 @@ function MenuImportModal({
 
           <label className="block rounded-xl border border-gray-200 bg-gray-50 p-3">
             <span className="block text-sm font-black text-gray-900">3. {platformLabel} 옵션 CSV</span>
-            <p className="mt-1 text-[11px] font-semibold leading-4 text-gray-500">옵션이 없는 메뉴만 가져올 때는 비워도 됩니다.</p>
+            <p className="mt-1 text-[11px] font-semibold leading-4 text-violet-700">옵션만 업데이트하려면 이 파일만 선택하고 메뉴 CSV와 images 폴더는 비워두세요.</p>
             <input
               type="file"
               accept=".csv,text/csv"
@@ -4871,11 +6094,14 @@ function MenuImportModal({
             <input
               type="checkbox"
               checked={replaceExisting}
-              disabled={importing}
+              disabled={importing || (!csvFile && Boolean(optionsCsvFile))}
               onChange={(event) => setReplaceExisting(event.target.checked)}
               className="h-4 w-4"
             />
             <span className="text-xs font-black text-gray-800">기존 메뉴를 지우고 새 메뉴로 교체</span>
+            {!csvFile && optionsCsvFile ? (
+              <span className="ml-auto text-[11px] font-black text-violet-700">옵션만 업데이트에서는 사용 안 함</span>
+            ) : null}
           </label>
 
           {progress.total > 0 ? (
@@ -4905,11 +6131,15 @@ function MenuImportModal({
           </button>
           <button
             type="button"
-            disabled={importing || !csvFile}
+            disabled={importing || (!csvFile && !optionsCsvFile)}
             onClick={() => void startImport()}
             className="rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"
           >
-            {importing ? `${progress.current}/${progress.total} 가져오는 중` : `${platformLabel} 메뉴 가져오기`}
+            {importing
+              ? `${progress.current}/${progress.total} 가져오는 중`
+              : !csvFile && optionsCsvFile
+                ? `${platformLabel} 옵션만 업데이트`
+                : `${platformLabel} 메뉴 가져오기`}
           </button>
         </div>
       </div>
@@ -7147,6 +8377,162 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     setError("");
   }
 
+
+  function addOrOpenCateringPage() {
+    const pageName = "Catering";
+    const pageSlug = "catering";
+
+    const existingPage = sections.find((section) => {
+      const savedSlug = slugifyMenuValue(
+        String(section.content?.page_slug || ""),
+      );
+      const titleSlug = slugifyMenuValue(section.title || "");
+
+      return (
+        savedSlug === pageSlug ||
+        titleSlug === pageSlug ||
+        normalizeHeroLayouts(section.content).some((layout) =>
+          gridContainsDisplayMode(layout, "catering-menu"),
+        )
+      );
+    });
+
+    if (existingPage) {
+      const existingLayouts = normalizeHeroLayouts(
+        existingPage.content,
+      );
+
+      let cateringLayout = existingLayouts.find((layout) =>
+        gridContainsDisplayMode(layout, "catering-menu"),
+      );
+
+      let nextContent = existingPage.content;
+
+      if (!cateringLayout) {
+        cateringLayout = {
+          id: createId("layout"),
+          height: "medium",
+          auto_height: true,
+          margin_bottom_px: 0,
+          layout_width_mode: "container",
+          cells: [
+            {
+              ...defaultCell("title", "Catering Menu", 4),
+              width_percent: 100,
+              display_mode: "catering-menu",
+              background_color: "#ffffff",
+              color: "#111827",
+            },
+          ],
+        };
+
+        const nextLayouts = [...existingLayouts, cateringLayout];
+
+        nextContent = {
+          ...existingPage.content,
+          page_type: "link-page",
+          page_slug: pageSlug,
+          link_page_kind: "blank",
+          background_type: "color",
+          background_color: "#ffffff",
+          grid: nextLayouts[0],
+          layouts: nextLayouts,
+        };
+
+        setSections((current) =>
+          current.map((section) =>
+            section.id === existingPage.id
+              ? {
+                  ...section,
+                  title: section.title || pageName,
+                  content: nextContent,
+                  is_visible: true,
+                }
+              : section,
+          ),
+        );
+      }
+
+      const cateringCell =
+        cateringLayout.cells.find((cell) =>
+          cellContainsDisplayMode(cell, "catering-menu"),
+        ) || cateringLayout.cells[0];
+
+      setSelection({
+        area: "hero",
+        sectionId: existingPage.id,
+        layoutId: cateringLayout.id,
+        cellId: cateringCell?.id,
+      });
+
+      setMessage(
+        `Catering 페이지를 불러왔습니다. Owner 캐터링 메뉴가 카테고리별로 자동 표시됩니다.`,
+      );
+      setError("");
+      return;
+    }
+
+    const maxOrder = sections.reduce(
+      (max, section) =>
+        Math.max(max, Number(section.sort_order) || 0),
+      0,
+    );
+
+    const cateringLayout: GridData = {
+      id: createId("layout"),
+      height: "medium",
+      auto_height: true,
+      margin_bottom_px: 0,
+      layout_width_mode: "container",
+      cells: [
+        {
+          ...defaultCell("title", "Catering Menu", 4),
+          width_percent: 100,
+          display_mode: "catering-menu",
+          background_color: "#ffffff",
+          color: "#111827",
+        },
+      ],
+    };
+
+    const newSection: BusinessSection = {
+      id: -Date.now(),
+      business_id: Number(businessId),
+      section_type: "custom",
+      title: pageName,
+      content: {
+        page_type: "link-page",
+        page_slug: pageSlug,
+        link_page_kind: "blank",
+        background_type: "color",
+        background_color: "#ffffff",
+        grid: cateringLayout,
+        layouts: [cateringLayout],
+      },
+      settings: {
+        text_align: "left",
+        overlay: false,
+        overlay_opacity: 0,
+        height: "medium",
+      },
+      sort_order: maxOrder + 1,
+      is_visible: true,
+    };
+
+    setSections((current) => [...current, newSection]);
+    setSelection({
+      area: "hero",
+      sectionId: newSection.id,
+      layoutId: cateringLayout.id,
+      cellId: cateringLayout.cells[0]?.id,
+    });
+
+    setMessage(
+      `Catering 페이지를 만들었습니다. Owner 캐터링 메뉴가 카테고리별로 자동 표시됩니다. 서버 저장을 눌러 공개하세요.`,
+    );
+    setError("");
+  }
+
   function deleteSection(sectionId: number) {
     const ordered = [...sections].sort(
       (a, b) => a.sort_order - b.sort_order,
@@ -7694,6 +9080,14 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800 hover:bg-orange-100"
             >
               🍽 메뉴 가져오기
+            </button>
+            <button
+              type="button"
+              onClick={addOrOpenCateringPage}
+              className="rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800 hover:bg-emerald-100"
+              title="Owner 캐터링 관리에 등록한 메뉴를 자동으로 불러와 Catering 페이지에 표시합니다."
+            >
+              🥡 캐터링 메뉴 가져오기
             </button>
             <button
               type="button"
@@ -11263,6 +12657,367 @@ function shouldStackNestedCellsOnMobile(
   });
 }
 
+
+function UniversalOverlayButtons({
+  cell,
+  business,
+  previewDevice = "desktop",
+  onUpdate,
+}: {
+  cell: GridCell;
+  business: Business;
+  previewDevice?: "desktop" | "mobile";
+  onUpdate?: (patch: Partial<GridCell>) => void;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    kind: "text" | "button";
+    pointerId: number;
+  } | null>(null);
+  const [draggingKind, setDraggingKind] = useState<
+    "text" | "button" | null
+  >(null);
+
+  const buttons = normalizeOverlayButtons(cell);
+  const buttonsVisible =
+    cell.overlay_buttons_visible ??
+    Boolean(cell.overlay_buttons?.length);
+  const textVisible = Boolean(cell.overlay_text?.trim());
+
+  /*
+   * 일반 이미지와 background-image는 기존 이미지 전용 렌더러가 이미
+   * 오버레이를 표시하므로 중복 표시하지 않습니다.
+   * 나머지 모든 셀(지도/제목/글/메뉴/전화/SNS 등)은 여기서 자유 배치합니다.
+   */
+  if (
+    (cell.type === "title" &&
+      cell.display_mode === "background-image") ||
+    (!textVisible && (!buttonsVisible || buttons.length === 0))
+  ) {
+    return null;
+  }
+
+  const canDrag = Boolean(onUpdate);
+
+  const fallbackTextX =
+    (cell.overlay_text_horizontal ?? "center") === "left"
+      ? 15
+      : (cell.overlay_text_horizontal ?? "center") === "right"
+        ? 85
+        : 50;
+  const fallbackTextY =
+    (cell.overlay_text_vertical ?? "middle") === "top"
+      ? 15
+      : (cell.overlay_text_vertical ?? "middle") === "bottom"
+        ? 85
+        : 50;
+
+  const fallbackButtonX =
+    (cell.overlay_button_horizontal ?? "center") === "left"
+      ? 15
+      : (cell.overlay_button_horizontal ?? "center") === "right"
+        ? 85
+        : 50;
+  const fallbackButtonY =
+    (cell.overlay_button_vertical ?? "bottom") === "top"
+      ? 15
+      : (cell.overlay_button_vertical ?? "bottom") === "middle"
+        ? 50
+        : 85;
+
+  function startDrag(
+    event: React.PointerEvent<HTMLElement>,
+    kind: "text" | "button",
+  ) {
+    if (!canDrag) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      kind,
+      pointerId: event.pointerId,
+    };
+    setDraggingKind(kind);
+  }
+
+  function moveDrag(event: React.PointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    const host = hostRef.current;
+
+    if (
+      !drag ||
+      !host ||
+      drag.pointerId !== event.pointerId ||
+      !onUpdate
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = host.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    // 가장자리에서도 요소 전체가 어느 정도 보이도록 2~98%로 제한합니다.
+    const x = Math.max(
+      2,
+      Math.min(
+        98,
+        ((event.clientX - rect.left) / rect.width) * 100,
+      ),
+    );
+    const y = Math.max(
+      2,
+      Math.min(
+        98,
+        ((event.clientY - rect.top) / rect.height) * 100,
+      ),
+    );
+
+    if (drag.kind === "text") {
+      onUpdate({
+        overlay_text_x_percent: Number(x.toFixed(2)),
+        overlay_text_y_percent: Number(y.toFixed(2)),
+      });
+    } else {
+      onUpdate({
+        overlay_button_x_percent: Number(x.toFixed(2)),
+        overlay_button_y_percent: Number(y.toFixed(2)),
+      });
+    }
+  }
+
+  function stopDrag(event: React.PointerEvent<HTMLElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // 이미 capture가 해제된 경우 무시합니다.
+    }
+
+    dragRef.current = null;
+    setDraggingKind(null);
+  }
+
+  return (
+    <div
+      ref={hostRef}
+      className="pointer-events-none absolute inset-0 z-[70] overflow-visible"
+    >
+      {textVisible ? (
+        <div
+          className="absolute z-[72] max-w-[92%]"
+          style={{
+            left: `${Number(
+              cell.overlay_text_x_percent ?? fallbackTextX,
+            )}%`,
+            top: `${Number(
+              cell.overlay_text_y_percent ?? fallbackTextY,
+            )}%`,
+            transform: "translate(-50%, -50%)",
+            pointerEvents: canDrag ? "auto" : "none",
+            cursor: canDrag
+              ? draggingKind === "text"
+                ? "grabbing"
+                : "grab"
+              : "default",
+            touchAction: canDrag ? "none" : "auto",
+            userSelect: "none",
+          }}
+          onPointerDown={(event) => startDrag(event, "text")}
+          onPointerMove={moveDrag}
+          onPointerUp={stopDrag}
+          onPointerCancel={stopDrag}
+          title={canDrag ? "드래그해서 글씨 위치 이동" : undefined}
+        >
+          <div
+            className="whitespace-pre-line rounded-md px-2 py-1 leading-tight"
+            style={{
+              color: cell.color || "#111827",
+              backgroundColor:
+                cell.background_color &&
+                cell.background_color !== "transparent"
+                  ? cell.background_color
+                  : "transparent",
+              fontSize: `${
+                previewDevice === "mobile"
+                  ? Math.min(Number(cell.font_size) || 28, 24)
+                  : Number(cell.font_size) || 28
+              }px`,
+              fontWeight:
+                cell.font_weight === "normal"
+                  ? 400
+                  : cell.font_weight === "semibold" ||
+                      cell.font_weight === "600"
+                    ? 600
+                    : cell.font_weight === "bold"
+                      ? 700
+                      : 900,
+              textAlign: "center",
+              boxShadow:
+                draggingKind === "text"
+                  ? "0 0 0 2px #2563eb"
+                  : undefined,
+            }}
+          >
+            {cell.overlay_text}
+          </div>
+        </div>
+      ) : null}
+
+      {buttonsVisible && buttons.length > 0 ? (
+        <div
+          className="absolute z-[73]"
+          style={{
+            left: `${Number(
+              cell.overlay_button_x_percent ?? fallbackButtonX,
+            )}%`,
+            top: `${Number(
+              cell.overlay_button_y_percent ?? fallbackButtonY,
+            )}%`,
+            transform: "translate(-50%, -50%)",
+            pointerEvents: "auto",
+            cursor: canDrag
+              ? draggingKind === "button"
+                ? "grabbing"
+                : "grab"
+              : "default",
+            touchAction: canDrag ? "none" : "auto",
+            userSelect: "none",
+          }}
+          onPointerDown={(event) => startDrag(event, "button")}
+          onPointerMove={moveDrag}
+          onPointerUp={stopDrag}
+          onPointerCancel={stopDrag}
+          title={canDrag ? "드래그해서 버튼 위치 이동" : undefined}
+        >
+          <div
+            className={`relative flex max-w-[96vw] ${
+              (cell.overlay_button_direction ?? "row") === "row"
+                ? "flex-row flex-wrap"
+                : "flex-col"
+            }`}
+            style={{
+              gap: `${cell.overlay_button_gap ?? 10}px`,
+              outline:
+                draggingKind === "button"
+                  ? "2px solid #2563eb"
+                  : "none",
+              outlineOffset: "3px",
+              borderRadius: "10px",
+            }}
+          >
+            {canDrag ? (
+              <span
+                className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white shadow"
+              >
+                잡고 이동
+              </span>
+            ) : null}
+            {buttons.map((button) => {
+              const style =
+                cell.overlay_button_group_style ??
+                button.style ??
+                "rounded";
+              const backgroundColor =
+                cell.overlay_button_group_color ??
+                button.background_color ??
+                "#111827";
+              const textColor =
+                cell.overlay_button_group_text_color ??
+                button.text_color ??
+                "#ffffff";
+
+              const radius =
+                style === "square"
+                  ? "4px"
+                  : style === "pill"
+                    ? "9999px"
+                    : "12px";
+
+              const href = buildOverlayButtonUrl(
+                button,
+                business.id,
+              );
+
+              return (
+                <a
+                  key={button.id}
+                  href={href || "#"}
+                  draggable={false}
+                  onDragStart={(event) => event.preventDefault()}
+                  onPointerDown={(event) => {
+                    if (canDrag) {
+                      // 버튼 자체를 잡아도 부모 드래그가 바로 시작되게 합니다.
+                      event.preventDefault();
+                    }
+                  }}
+                  onClick={(event) => {
+                    // 편집 중에는 링크 이동을 막습니다.
+                    if (canDrag) {
+                      event.preventDefault();
+                    }
+                    event.stopPropagation();
+                  }}
+                  className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 font-black shadow-lg"
+                  style={{
+                    width: `${Math.max(
+                      70,
+                      Number(cell.overlay_button_width ?? 140),
+                    )}px`,
+                    height: `${Math.max(
+                      20,
+                      Number(
+                        cell.overlay_button_height ??
+                          button.height ??
+                          44,
+                      ),
+                    )}px`,
+                    backgroundColor:
+                      style === "outline"
+                        ? "transparent"
+                        : backgroundColor,
+                    color: textColor,
+                    border:
+                      style === "outline"
+                        ? `2px solid ${backgroundColor}`
+                        : "none",
+                    borderRadius: radius,
+                    fontSize: `${Math.max(
+                      10,
+                      Number(
+                        cell.overlay_button_font_size ??
+                          button.font_size ??
+                          15,
+                      ),
+                    )}px`,
+                  }}
+                >
+                  {previewDevice === "mobile"
+                    ? String(button.mobile_text || "").trim() ||
+                      button.text ||
+                      "버튼"
+                    : button.text || "버튼"}
+                </a>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function ReadOnlyCellContent({
   cell, business, accentColor, area, previewDevice, websiteSettings,
 }: {
@@ -11399,12 +13154,12 @@ function ReadOnlyCellContent({
   return (
     <div
       className={`relative flex w-full min-h-0 min-w-0 ${
-        cell.display_mode === "restaurant-menu" ||
+        (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu") ||
         (previewDevice === "mobile" && cell.display_mode === "auto-slider")
           ? "h-auto"
           : "h-full"
       } ${
-        cell.display_mode === "restaurant-menu"
+        (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
           ? "overflow-visible"
           : "overflow-hidden"
       }`}
@@ -11431,6 +13186,11 @@ function ReadOnlyCellContent({
         area={area}
         previewDevice={previewDevice}
         websiteSettings={websiteSettings}
+      />
+      <UniversalOverlayButtons
+        cell={cell}
+        business={business}
+        previewDevice={previewDevice}
       />
     </div>
   );
@@ -11860,7 +13620,7 @@ function ReadOnlyGrid({
   // 저장된 레이어 height_px가 더 커도 빈 공간을 만들지 않습니다.
   const autoRestaurantMenu =
     area !== "header" &&
-    gridContainsDisplayMode(deviceGrid, "restaurant-menu");
+    (gridContainsDisplayMode(deviceGrid, "restaurant-menu") || gridContainsDisplayMode(deviceGrid, "catering-menu"));
   const autoSliderCells = getCellsByDisplayMode(
     deviceGrid.cells,
     "auto-slider",
@@ -11982,7 +13742,7 @@ function ReadOnlyGrid({
               : autoContentHeight
                 ? "flex overflow-visible"
                 : autoRestaurantMenu &&
-                    cellContainsDisplayMode(cell, "restaurant-menu")
+                    (cellContainsDisplayMode(cell, "restaurant-menu") || cellContainsDisplayMode(cell, "catering-menu"))
                   ? "flex h-auto overflow-visible"
                   : autoMobileBusinessHours &&
                       cellContainsDisplayMode(cell, "business-hours")
@@ -12046,7 +13806,7 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : cell.display_mode === "restaurant-menu"
+                : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
                   ? "transparent"
                   : cell.type === "image"
                     ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
@@ -12056,7 +13816,7 @@ function ReadOnlyGrid({
               cell.child_cells?.length ||
               cell.type === "image" ||
               cellContainsDisplayMode(cell, "auto-slider") ||
-              cell.display_mode === "restaurant-menu" ||
+              (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu") ||
               (cell.type === "title" &&
                 (cell.display_mode === "background-image" ||
                   cell.display_mode === "service-card"))
@@ -12381,21 +14141,31 @@ function EditableCellContent({ cell, selectedCellId, onSelect, onUpdateCell, bus
     );
   }
   return (
-    <CellPreview
-      cell={cell}
-      business={business}
-      accentColor={accentColor}
-      area={area}
-      previewDevice={previewDevice}
-      websiteSettings={websiteSettings}
-      imageDragPosition={imageDragPosition}
-      imageDragging={imageDragging}
-      suppressImageClickRef={suppressImageClickRef}
-      onImagePointerDown={startImageDrag}
-      onImagePointerMove={moveImageDrag}
-      onImagePointerUp={stopImageDrag}
-      isSelected={selectedCellId === cell.id}
-    />
+    <div className="relative h-full w-full min-h-0 min-w-0">
+      <CellPreview
+        cell={cell}
+        business={business}
+        accentColor={accentColor}
+        area={area}
+        previewDevice={previewDevice}
+        websiteSettings={websiteSettings}
+        imageDragPosition={imageDragPosition}
+        imageDragging={imageDragging}
+        suppressImageClickRef={suppressImageClickRef}
+        onImagePointerDown={startImageDrag}
+        onImagePointerMove={moveImageDrag}
+        onImagePointerUp={stopImageDrag}
+        isSelected={selectedCellId === cell.id}
+      />
+      <UniversalOverlayButtons
+        cell={cell}
+        business={business}
+        previewDevice={previewDevice}
+        onUpdate={(patch) =>
+          onUpdateCell?.(cell.id, patch)
+        }
+      />
+    </div>
   );
 }
 
@@ -12895,7 +14665,7 @@ function NestedEditableCellsV2({
               padding:
                 renderedChild.child_cells?.length ||
                 renderedChild.type === "image" ||
-                renderedChild.display_mode === "restaurant-menu"
+                (renderedChild.display_mode === "restaurant-menu" || renderedChild.display_mode === "catering-menu")
                   ? 0
                   : "8px",
             }}
@@ -13160,7 +14930,7 @@ function EditableGrid({
 
   const autoRestaurantMenu =
     area !== "header" &&
-    gridContainsDisplayMode(deviceGrid, "restaurant-menu");
+    (gridContainsDisplayMode(deviceGrid, "restaurant-menu") || gridContainsDisplayMode(deviceGrid, "catering-menu"));
 
   const autoSliderCells = getCellsByDisplayMode(
     deviceGrid.cells,
@@ -13381,14 +15151,14 @@ function EditableGrid({
                 (autoMobileBusinessHours &&
                   cellContainsDisplayMode(cell, "business-hours")) ||
                 (autoRestaurantMenu &&
-                  cellContainsDisplayMode(cell, "restaurant-menu"))
+                  (cellContainsDisplayMode(cell, "restaurant-menu") || cellContainsDisplayMode(cell, "catering-menu")))
                   ? "h-auto min-h-0"
                   : "h-full min-h-0"
               } w-full overflow-visible transition ${
                 selected
                   ? isLogo
                     ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
-                    : cell.display_mode === "restaurant-menu"
+                    : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
                       ? "bg-transparent ring-2 ring-inset ring-blue-600"
                       : "bg-blue-50/15 ring-2 ring-inset ring-blue-600"
                   : cellContainsDisplayMode(cell, "auto-slider")
@@ -13415,7 +15185,7 @@ function EditableGrid({
                 background:
                   area === "header"
                     ? "transparent"
-                    : cell.display_mode === "restaurant-menu"
+                    : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
                       ? "transparent"
                       : normalizeVisibleBackgroundColor(cell.background_color) ||
                         gridFrameBackgroundColor,
@@ -13424,7 +15194,7 @@ function EditableGrid({
                   cell.type === "image" ||
                   cellContainsDisplayMode(cell, "auto-slider") ||
                   cell.display_mode === "map-section" ||
-                  cell.display_mode === "restaurant-menu" ||
+                  (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu") ||
                   (cell.type === "title" &&
                     (cell.display_mode === "background-image" ||
                       cell.display_mode === "service-card"))
@@ -14596,7 +16366,7 @@ function CellPreview({
           </div>
         ) : null}
 
-        {cell.image_overlay_enabled && normalizeOverlayButtons(cell).length ? (
+        {false && cell.image_overlay_enabled && normalizeOverlayButtons(cell).length ? (
           <div
             className={`absolute inset-0 z-40 flex p-4 sm:p-6 ${overlayPositionClasses(
               cell.overlay_button_horizontal ?? "center",
@@ -15172,6 +16942,18 @@ function CellPreview({
       );
     }
 
+    if (cell.display_mode === "catering-menu") {
+      return (
+        <div className="relative h-auto min-h-0 w-full overflow-visible rounded-[10px] bg-white">
+          <CateringMenuDisplay
+            businessId={business.id}
+            businessPhone={business.phone}
+            compact={previewDevice === "mobile"}
+          />
+        </div>
+      );
+    }
+
     if (cell.display_mode === "business-hours") {
       return (
         <div
@@ -15543,25 +17325,38 @@ function CellPreview({
       previewDevice,
     );
     return (
-      <RichTextImagePopup
-        html={titleHtml}
-        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
+      <div
+        className="flex h-full w-full min-h-0 min-w-0"
         style={{
-          ...commonStyle,
-          color: cell.color || "#111827",
-          width: previewDevice === "mobile" ? "100%" : "fit-content",
-          height: "fit-content",
-          maxWidth: "100%",
-          flex: "0 0 auto",
-          alignSelf:
+          justifyContent:
             cell.text_align === "left"
               ? "flex-start"
               : cell.text_align === "right"
                 ? "flex-end"
                 : "center",
+          alignItems:
+            cell.vertical_align === "top"
+              ? "flex-start"
+              : cell.vertical_align === "bottom"
+                ? "flex-end"
+                : "center",
           textAlign: cell.text_align || "center",
         }}
-      />
+      >
+        <RichTextImagePopup
+          html={titleHtml}
+          className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
+          style={{
+            ...commonStyle,
+            color: cell.color || "#111827",
+            width: previewDevice === "mobile" ? "100%" : "fit-content",
+            height: "fit-content",
+            maxWidth: "100%",
+            flex: "0 0 auto",
+            textAlign: cell.text_align || "center",
+          }}
+        />
+      </div>
     );
   }
   if (cell.type === "text") {
@@ -15572,25 +17367,38 @@ function CellPreview({
       previewDevice,
     );
     return (
-      <RichTextImagePopup
-        html={textHtml}
-        className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible whitespace-pre-wrap [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+      <div
+        className="flex h-full w-full min-h-0 min-w-0"
         style={{
-          ...commonStyle,
-          color: cell.color || "#111827",
-          width: previewDevice === "mobile" ? "100%" : "fit-content",
-          height: "fit-content",
-          maxWidth: "100%",
-          flex: "0 0 auto",
-          alignSelf:
+          justifyContent:
             cell.text_align === "left"
               ? "flex-start"
               : cell.text_align === "right"
                 ? "flex-end"
                 : "center",
+          alignItems:
+            cell.vertical_align === "top"
+              ? "flex-start"
+              : cell.vertical_align === "bottom"
+                ? "flex-end"
+                : "center",
           textAlign: cell.text_align || "center",
         }}
-      />
+      >
+        <RichTextImagePopup
+          html={textHtml}
+          className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible whitespace-pre-wrap [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
+          style={{
+            ...commonStyle,
+            color: cell.color || "#111827",
+            width: previewDevice === "mobile" ? "100%" : "fit-content",
+            height: "fit-content",
+            maxWidth: "100%",
+            flex: "0 0 auto",
+            textAlign: cell.text_align || "center",
+          }}
+        />
+      </div>
     );
   }
   return area === "header" ? null : null;
@@ -21245,6 +23053,30 @@ function RightPanel(props: {
         background_color: inputBackgroundColor,
         text_align: inputTextAlign,
         vertical_align: inputVerticalAlign,
+
+        // 텍스트 편집 모달의 9방향 위치를 실제 셀 위치와 확실히 동기화합니다.
+        // 자유 드래그 좌표가 남아 있어도 저장한 위치가 우선 보이도록 함께 갱신합니다.
+        ...(selectedCell.overlay_text
+          ? {
+              overlay_text_horizontal: inputTextAlign,
+              overlay_text_vertical:
+                inputVerticalAlign === "center"
+                  ? "middle"
+                  : inputVerticalAlign,
+              overlay_text_x_percent:
+                inputTextAlign === "left"
+                  ? 10
+                  : inputTextAlign === "right"
+                    ? 90
+                    : 50,
+              overlay_text_y_percent:
+                inputVerticalAlign === "top"
+                  ? 10
+                  : inputVerticalAlign === "bottom"
+                    ? 90
+                    : 50,
+            }
+          : {}),
       },
       selection.layoutId,
     );
@@ -21670,17 +23502,152 @@ function RightPanel(props: {
                   </span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        type: "title",
+                        display_mode: "catering-menu",
+                        text: "Catering Menu",
+                        background_color: "#ffffff",
+                        color: "#111827",
+                      },
+                      selection.layoutId,
+                    );
+                    setCellTypePickerOpen(false);
+                  }}
+                  className={`rounded-xl border p-2 text-center ${
+                    selectedCell.display_mode === "catering-menu"
+                      ? "border-emerald-600 bg-emerald-50 text-emerald-800"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-emerald-300 hover:bg-emerald-50"
+                  }`}
+                >
+                  <span className="block text-xl">🥡</span>
+                  <span className="mt-1 block text-[11px] font-black leading-tight">
+                    Catering Menu
+                  </span>
+                </button>
+
                 {CELL_TYPES.map((entry) => (
                   <button
                     key={entry.value}
                     type="button"
                     onClick={() => {
-                      if (entry.value === "image") {
-                        /*
-                         * 이미지 셀로 전환할 때 기존 이미지 크기와 팝업 설정을
-                         * 절대로 초기화하지 않습니다. 이미지 전용 모달을 바로
-                         * 열어 화면 이미지와 클릭 후 이미지를 한 곳에서 설정합니다.
-                         */
+                      const currentType = selectedCell.type;
+                      const nextType = entry.value;
+
+                      // --------------------------------------------------
+                      // 버튼은 언제든지 "추가"합니다.
+                      // 기존 제목/글/이미지/메뉴 등을 절대 지우지 않습니다.
+                      // --------------------------------------------------
+                      if (nextType === "button" && currentType !== "empty") {
+                        const currentButtons =
+                          Array.isArray(selectedCell.overlay_buttons) &&
+                          selectedCell.overlay_buttons.length > 0
+                            ? normalizeOverlayButtons(selectedCell)
+                            : [];
+
+                        const nextButtons = [
+                          ...currentButtons,
+                          createOverlayButton(currentButtons.length),
+                        ];
+
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          {
+                            overlay_buttons: nextButtons,
+                            overlay_buttons_visible: true,
+                            overlay_button_horizontal:
+                              selectedCell.overlay_button_horizontal ??
+                              "center",
+                            overlay_button_vertical:
+                              selectedCell.overlay_button_vertical ??
+                              "bottom",
+                            overlay_button_direction:
+                              selectedCell.overlay_button_direction ??
+                              "row",
+                            overlay_button_gap:
+                              selectedCell.overlay_button_gap ?? 10,
+                            overlay_button_x_percent:
+                              selectedCell.overlay_button_x_percent ??
+                              50,
+                            overlay_button_y_percent:
+                              selectedCell.overlay_button_y_percent ??
+                              80,
+
+                            // 일반 이미지 셀은 기존 이미지 오버레이 렌더러를 사용합니다.
+                            ...(currentType === "image"
+                              ? { image_overlay_enabled: true }
+                              : {}),
+                          },
+                          selection.layoutId,
+                        );
+
+                        setCellTypePickerOpen(false);
+                        return;
+                      }
+
+                      // 글/제목도 기존 내용을 바꾸지 않고 위에 추가합니다.
+                      if (
+                        (nextType === "text" ||
+                          nextType === "title") &&
+                        currentType !== "empty"
+                      ) {
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          {
+                            overlay_text:
+                              selectedCell.overlay_text ||
+                              (nextType === "title"
+                                ? "새 제목"
+                                : "새 글"),
+                            overlay_text_x_percent:
+                              selectedCell.overlay_text_x_percent ??
+                              50,
+                            overlay_text_y_percent:
+                              selectedCell.overlay_text_y_percent ??
+                              50,
+                          },
+                          selection.layoutId,
+                        );
+                        setCellTypePickerOpen(false);
+                        return;
+                      }
+
+                      // 같은 종류를 다시 누르면 기존 데이터를 그대로 유지합니다.
+                      if (nextType === currentType) {
+                        setCellTypePickerOpen(false);
+
+                        if (nextType === "image") {
+                          setImageEditorOpen(true);
+                        } else if (
+                          nextType === "title" ||
+                          nextType === "text"
+                        ) {
+                          openTextEditor(selectedCell);
+                        }
+                        return;
+                      }
+
+                      // --------------------------------------------------
+                      // 내용이 이미 있는 칸에서는 다른 종류를 눌러도
+                      // 현재 내용을 자동으로 교체/삭제하지 않습니다.
+                      // 버튼만 위에서 별도 추가할 수 있습니다.
+                      // --------------------------------------------------
+                      if (currentType !== "empty") {
+                        setCellTypePickerOpen(false);
+                        return;
+                      }
+
+                      // --------------------------------------------------
+                      // 아래부터는 "빈 칸"에서만 기존 방식대로 첫 내용을 넣습니다.
+                      // --------------------------------------------------
+                      if (nextType === "image") {
                         props.onUpdateCell(
                           area,
                           selectedCell.id,
@@ -21689,10 +23656,9 @@ function RightPanel(props: {
                             image_fit: normalizeImageFit(
                               selectedCell.image_fit,
                             ),
-                            image_size_percent:
-                              Number(
-                                selectedCell.image_size_percent ?? 100,
-                              ),
+                            image_size_percent: Number(
+                              selectedCell.image_size_percent ?? 100,
+                            ),
                             text_align:
                               selectedCell.text_align || "center",
                             vertical_align:
@@ -21703,17 +23669,16 @@ function RightPanel(props: {
                               selectedCell.popup_image_url || "",
                             popup_title:
                               selectedCell.popup_title || "",
-                            popup_max_width_px:
-                              Math.max(
-                                320,
-                                Math.min(
-                                  1800,
-                                  Number(
-                                    selectedCell.popup_max_width_px ??
-                                      1200,
-                                  ),
+                            popup_max_width_px: Math.max(
+                              320,
+                              Math.min(
+                                1800,
+                                Number(
+                                  selectedCell.popup_max_width_px ??
+                                    1200,
                                 ),
                               ),
+                            ),
                           },
                           selection.layoutId,
                         );
@@ -21723,78 +23688,72 @@ function RightPanel(props: {
                       }
 
                       const nextPatch: Partial<GridCell> =
-                        entry.value === "menu"
+                        nextType === "menu"
                           ? {
                               type: "menu",
                               menu_mode: "text",
-                              menu_items:
-                                selectedCell.menu_items &&
-                                selectedCell.menu_items.length > 0
-                                  ? selectedCell.menu_items
-                                  : [
-                                      createMenuItem("Home"),
-                                      createMenuItem("About"),
-                                    ],
+                              menu_items: [
+                                createMenuItem("Home"),
+                                createMenuItem("About"),
+                              ],
                             }
-                          : entry.value === "phone"
+                          : nextType === "phone"
                             ? {
                                 type: "phone",
-                                phone_number:
-                                  selectedCell.phone_number ||
-                                  selectedCell.text ||
-                                  "",
-                                text:
-                                  selectedCell.phone_number ||
-                                  selectedCell.text ||
-                                  "",
+                                phone_number: "",
+                                text: "",
                               }
-                            : entry.value === "sns"
+                            : nextType === "sns"
                               ? {
                                   type: "sns",
-                                  sns_items: normalizeSnsItems(selectedCell),
-                                  sns_icon_size_px:
-                                    selectedCell.sns_icon_size_px || 32,
-                                  sns_icon_gap_px:
-                                    selectedCell.sns_icon_gap_px || 12,
+                                  sns_items:
+                                    normalizeSnsItems(selectedCell),
+                                  sns_icon_size_px: 32,
+                                  sns_icon_gap_px: 12,
                                 }
-                              : entry.value === "map"
+                              : nextType === "map"
                                 ? {
                                     type: "map",
-                                    map_title: selectedCell.map_title || "LOCATION",
-                                    map_address: selectedCell.map_address || getBusinessAddress(business),
+                                    map_title: "LOCATION",
+                                    map_address:
+                                      getBusinessAddress(business),
                                     map_phone:
-                                      selectedCell.map_phone ||
-                                      getBusinessContactValue(business, ["phone", "phone_number", "telephone"]),
+                                      getBusinessContactValue(
+                                        business,
+                                        [
+                                          "phone",
+                                          "phone_number",
+                                          "telephone",
+                                        ],
+                                      ),
                                     map_email:
-                                      selectedCell.map_email ||
-                                      getBusinessContactValue(business, ["email", "business_email", "contact_email"]),
-                                    map_sns_items: normalizeLocationSnsItems(selectedCell, business),
+                                      getBusinessContactValue(
+                                        business,
+                                        [
+                                          "email",
+                                          "business_email",
+                                          "contact_email",
+                                        ],
+                                      ),
+                                    map_sns_items:
+                                      normalizeLocationSnsItems(
+                                        selectedCell,
+                                        business,
+                                      ),
                                   }
-                                : entry.value === "title"
+                                : nextType === "title"
                                   ? {
                                       type: "title",
-                                      text:
-                                        selectedCell.type === "title"
-                                          ? selectedCell.text || ""
-                                          : "",
-                                      rich_text_html:
-                                        selectedCell.type === "title"
-                                          ? selectedCell.rich_text_html || ""
-                                          : "",
+                                      text: "",
+                                      rich_text_html: "",
                                     }
-                                  : entry.value === "text"
+                                  : nextType === "text"
                                     ? {
                                         type: "text",
-                                        text:
-                                          selectedCell.type === "text"
-                                            ? selectedCell.text || ""
-                                            : "",
-                                        rich_text_html:
-                                          selectedCell.type === "text"
-                                            ? selectedCell.rich_text_html || ""
-                                            : "",
+                                        text: "",
+                                        rich_text_html: "",
                                       }
-                                    : { type: entry.value };
+                                    : { type: nextType };
 
                       props.onUpdateCell(
                         area,
@@ -21804,10 +23763,14 @@ function RightPanel(props: {
                       );
                       setCellTypePickerOpen(false);
 
-                      // 제목이나 글을 선택하면 이미지 선택 때처럼 즉시 모달을 엽니다.
-                      // 이 모달 안에서 글 작성뿐 아니라 이미지도 함께 삽입할 수 있습니다.
-                      if (entry.value === "title" || entry.value === "text") {
-                        openTextEditor({ ...selectedCell, ...nextPatch } as GridCell);
+                      if (
+                        nextType === "title" ||
+                        nextType === "text"
+                      ) {
+                        openTextEditor({
+                          ...selectedCell,
+                          ...nextPatch,
+                        } as GridCell);
                       }
                     }}
                     className={`rounded-xl border p-2 text-center ${
@@ -21826,6 +23789,308 @@ function RightPanel(props: {
             </div>
           ) : null}
         </div>
+
+        {selectedCell.type !== "empty" &&
+        Array.isArray(selectedCell.overlay_buttons) &&
+        selectedCell.overlay_buttons.length > 0 ? (
+          <div className="mt-4 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-blue-950">
+                  추가 버튼
+                </p>
+                <p className="mt-1 text-xs font-semibold text-blue-700">
+                  기존 내용은 그대로 두고 버튼만 추가·수정합니다.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const current =
+                    normalizeOverlayButtons(selectedCell);
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    {
+                      overlay_buttons: [
+                        ...current,
+                        createOverlayButton(current.length),
+                      ],
+                      overlay_buttons_visible: true,
+                      ...(selectedCell.type === "image"
+                        ? { image_overlay_enabled: true }
+                        : {}),
+                    },
+                    selection.layoutId,
+                  );
+                }}
+                className="rounded-lg bg-blue-700 px-3 py-2 text-xs font-black text-white"
+              >
+                + 버튼
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {normalizeOverlayButtons(selectedCell).map(
+                (button, index) => (
+                  <div
+                    key={button.id}
+                    className="rounded-xl border border-blue-100 bg-white p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-gray-600">
+                        버튼 {index + 1}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextButtons =
+                            normalizeOverlayButtons(
+                              selectedCell,
+                            ).filter(
+                              (item) =>
+                                item.id !== button.id,
+                            );
+
+                          props.onUpdateCell(
+                            area,
+                            selectedCell.id,
+                            {
+                              overlay_buttons:
+                                nextButtons,
+                              overlay_buttons_visible:
+                                nextButtons.length > 0,
+                            },
+                            selection.layoutId,
+                          );
+                        }}
+                        className="rounded-md bg-red-50 px-2 py-1 text-[11px] font-black text-red-600"
+                      >
+                        삭제
+                      </button>
+                    </div>
+
+                    <div className="mt-2 grid gap-2">
+                      <input
+                        value={button.text || ""}
+                        onChange={(event) =>
+                          props.onUpdateCell(
+                            area,
+                            selectedCell.id,
+                            {
+                              overlay_buttons:
+                                normalizeOverlayButtons(
+                                  selectedCell,
+                                ).map((item) =>
+                                  item.id === button.id
+                                    ? {
+                                        ...item,
+                                        text: event.target
+                                          .value,
+                                      }
+                                    : item,
+                                ),
+                            },
+                            selection.layoutId,
+                          )
+                        }
+                        placeholder="버튼 글자"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
+                      />
+
+                      <input
+                        value={button.url || ""}
+                        onChange={(event) =>
+                          props.onUpdateCell(
+                            area,
+                            selectedCell.id,
+                            {
+                              overlay_buttons:
+                                normalizeOverlayButtons(
+                                  selectedCell,
+                                ).map((item) =>
+                                  item.id === button.id
+                                    ? {
+                                        ...item,
+                                        url: event.target
+                                          .value,
+                                        link_type:
+                                          "external",
+                                        link_value:
+                                          event.target.value,
+                                      }
+                                    : item,
+                                ),
+                            },
+                            selection.layoutId,
+                          )
+                        }
+                        placeholder="링크 주소 또는 /페이지"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                ),
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-blue-100 bg-white p-3">
+              <p className="text-xs font-black text-gray-700">
+                버튼 종류
+              </p>
+
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {[
+                  { value: "rounded", label: "둥근 사각형" },
+                  { value: "pill", label: "알약 모양" },
+                  { value: "square", label: "각진 모양" },
+                  { value: "outline", label: "테두리형" },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() =>
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        {
+                          overlay_button_group_style:
+                            option.value as GridCell["overlay_button_group_style"],
+                        },
+                        selection.layoutId,
+                      )
+                    }
+                    className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                      (selectedCell.overlay_button_group_style ?? "rounded") ===
+                      option.value
+                        ? "border-gray-950 bg-gray-950 text-white"
+                        : "border-gray-200 bg-white text-gray-700"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <ColorInput
+                  label="버튼 색상"
+                  value={
+                    selectedCell.overlay_button_group_color ??
+                    "#111827"
+                  }
+                  onChange={(value) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        overlay_button_group_color: value,
+                      },
+                      selection.layoutId,
+                    )
+                  }
+                />
+
+                <ColorInput
+                  label="글자색"
+                  value={
+                    selectedCell.overlay_button_group_text_color ??
+                    "#ffffff"
+                  }
+                  onChange={(value) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        overlay_button_group_text_color: value,
+                      },
+                      selection.layoutId,
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-xl bg-white px-3 py-2">
+              <p className="text-xs font-bold text-blue-800">
+                미리보기의 버튼을 마우스로 잡고 원하는 위치로 드래그하세요.
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  props.onUpdateCell(
+                    area,
+                    selectedCell.id,
+                    {
+                      overlay_button_x_percent: 50,
+                      overlay_button_y_percent: 80,
+                    },
+                    selection.layoutId,
+                  )
+                }
+                className="rounded-lg border border-blue-200 px-2.5 py-1.5 text-xs font-black text-blue-700"
+              >
+                위치 초기화
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <Field label="버튼 가로 위치">
+                <select
+                  value={
+                    selectedCell.overlay_button_horizontal ??
+                    "center"
+                  }
+                  onChange={(event) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        overlay_button_horizontal:
+                          event.target
+                            .value as GridCell["overlay_button_horizontal"],
+                      },
+                      selection.layoutId,
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm"
+                >
+                  <option value="left">왼쪽</option>
+                  <option value="center">가운데</option>
+                  <option value="right">오른쪽</option>
+                </select>
+              </Field>
+
+              <Field label="버튼 세로 위치">
+                <select
+                  value={
+                    selectedCell.overlay_button_vertical ??
+                    "bottom"
+                  }
+                  onChange={(event) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        overlay_button_vertical:
+                          event.target
+                            .value as GridCell["overlay_button_vertical"],
+                      },
+                      selection.layoutId,
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm"
+                >
+                  <option value="top">위</option>
+                  <option value="middle">가운데</option>
+                  <option value="bottom">아래</option>
+                </select>
+              </Field>
+            </div>
+          </div>
+        ) : null}
+
 
         {area !== "header" &&
         heroSection?.content?.background_type === "video" ? (
@@ -26954,7 +29219,15 @@ function ImageCellUploader({
                       key={position}
                       type="button"
                       onClick={() =>
-                        onUpdate({ overlay_text_horizontal: position })
+                        onUpdate({
+                          overlay_text_horizontal: position,
+                          overlay_text_x_percent:
+                            position === "left"
+                              ? 10
+                              : position === "right"
+                                ? 90
+                                : 50,
+                        })
                       }
                       className={`rounded-lg px-2 py-2 text-xs font-black ${
                         (cell.overlay_text_horizontal || "center") === position
@@ -26972,7 +29245,15 @@ function ImageCellUploader({
                       key={position}
                       type="button"
                       onClick={() =>
-                        onUpdate({ overlay_text_vertical: position })
+                        onUpdate({
+                          overlay_text_vertical: position,
+                          overlay_text_y_percent:
+                            position === "top"
+                              ? 10
+                              : position === "bottom"
+                                ? 90
+                                : 50,
+                        })
                       }
                       className={`rounded-lg px-2 py-2 text-xs font-black ${
                         (cell.overlay_text_vertical || "middle") === position
@@ -28039,7 +30320,7 @@ function TitleCellEditor({
     cell.display_mode === "map-section" ||
     cell.display_mode === "service-card" ||
     cell.display_mode === "business-hours" ||
-    cell.display_mode === "restaurant-menu"
+    (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
       ? cell.display_mode
       : "text";
 
@@ -29491,6 +31772,18 @@ function TitleCellEditor({
                               horizontal as GridCell["overlay_text_horizontal"],
                             overlay_text_vertical:
                               vertical as GridCell["overlay_text_vertical"],
+                            overlay_text_x_percent:
+                              horizontal === "left"
+                                ? 10
+                                : horizontal === "right"
+                                  ? 90
+                                  : 50,
+                            overlay_text_y_percent:
+                              vertical === "top"
+                                ? 10
+                                : vertical === "bottom"
+                                  ? 90
+                                  : 50,
                           })
                         }
                         className={`rounded-xl border px-2 py-2 text-[11px] font-black ${

@@ -448,7 +448,7 @@ export default async function BusinessManagePage({
 
                 <p className="mt-2 text-sm font-medium text-[#667085]">
                   {isRestaurant
-                    ? "메뉴, 배너와 홈페이지를 관리합니다."
+                    ? "메뉴, 캐터링, 배너와 홈페이지를 관리합니다."
                     : "배너와 홈페이지를 관리합니다."}
                 </p>
               </div>
@@ -495,6 +495,15 @@ export default async function BusinessManagePage({
       icon="📋"
       title="전체 메뉴 관리"
       description="카테고리, 메뉴 품목, 설명, 가격, 이미지, 순서와 판매 상태를 한 화면에서 관리합니다."
+    />
+  )}
+
+  {isRestaurant && (
+    <ManagementCard
+      href={`/owner/business/${businessId}/catering`}
+      icon="🍽️"
+      title="캐터링 관리"
+      description="캐터링 카테고리와 메뉴, 패키지·사이즈, 가격, 옵션, 최소 주문과 픽업·딜리버리 설정을 관리합니다."
     />
   )}
 

@@ -28,6 +28,26 @@ type MenuOptionGroup = {
   options: MenuOption[];
 };
 
+type MenuOptionTemplate = {
+  id: string;
+  name: string;
+  required: boolean;
+  minSelect: number;
+  maxSelect: number | null;
+  options: MenuOption[];
+};
+
+const DEFAULT_OPTION_CATEGORY_NAMES = [
+  "Options",
+  "Option 2",
+  "Option 3",
+  "Option 4",
+];
+
+function getDefaultOptionCategoryName(index: number) {
+  return DEFAULT_OPTION_CATEGORY_NAMES[index] ?? `Option ${index + 1}`;
+}
+
 type MenuItem = {
   id: number;
   category_id: number | null;
@@ -318,17 +338,921 @@ export default function OwnerBusinessMenuPage() {
     DEFAULT_DELIVERY_PROVIDERS,
   );
   const [savingDeliveryProviders, setSavingDeliveryProviders] = useState(false);
+  const [deliveryPartnersOpen, setDeliveryPartnersOpen] = useState(false);
   const [newDeliveryProviderName, setNewDeliveryProviderName] = useState("");
   const [newDeliveryProviderUrl, setNewDeliveryProviderUrl] = useState("");
   const [expandedOptionItemIds, setExpandedOptionItemIds] = useState<
     Set<number>
   >(new Set());
 
+  const [optionTemplates, setOptionTemplates] = useState<MenuOptionTemplate[]>([]);
+  const [optionTemplateOpen, setOptionTemplateOpen] = useState(false);
+  const [expandedOptionTemplateIds, setExpandedOptionTemplateIds] = useState<Set<string>>(new Set());
+  const [expandedSavedOptionKeys, setExpandedSavedOptionKeys] = useState<Set<string>>(new Set());
+  const [templateNameInput, setTemplateNameInput] = useState("");
+  const [templateRequiredInput, setTemplateRequiredInput] = useState(false);
+  const [templateMinInput, setTemplateMinInput] = useState(0);
+  const [templateMaxInput, setTemplateMaxInput] = useState<number | null>(null);
+  const [templateOptionsInput, setTemplateOptionsInput] = useState<MenuOption[]>([]);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [selectedTemplateByItem, setSelectedTemplateByItem] = useState<
+    Record<number, string>
+  >({});
+  const [optionCategoryNames, setOptionCategoryNames] = useState<string[]>(
+    DEFAULT_OPTION_CATEGORY_NAMES,
+  );
+
   useEffect(() => {
     void loadMenu();
     void loadDeliveryProviders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
+
+
+  useEffect(() => {
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    try {
+      const rawCategories = window.localStorage.getItem(
+        `ktown-menu-option-categories:${businessId}`,
+      );
+
+      if (rawCategories) {
+        const parsedCategories = JSON.parse(rawCategories);
+        if (Array.isArray(parsedCategories)) {
+          const categoryCount = Math.max(
+            DEFAULT_OPTION_CATEGORY_NAMES.length,
+            parsedCategories.length,
+          );
+          const nextCategories = Array.from(
+            { length: categoryCount },
+            (_, index) => {
+              const fallback = getDefaultOptionCategoryName(index);
+              return String(parsedCategories[index] || fallback).trim() || fallback;
+            },
+          );
+          setOptionCategoryNames(nextCategories);
+        }
+      }
+    } catch {
+      // ignore malformed local storage data
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    try {
+      const raw = window.localStorage.getItem(
+        `ktown-menu-option-templates:${businessId}`,
+      );
+
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw) as MenuOptionTemplate[];
+      if (!Array.isArray(parsed)) return;
+
+      const storedTemplates = parsed.map((template, templateIndex) => ({
+        id:
+          String(template?.id || "") ||
+          `template-${Date.now()}-${templateIndex}`,
+        name: String(template?.name || `Option ${templateIndex + 1}`),
+        required: Boolean(template?.required),
+        minSelect: Math.max(
+          0,
+          Math.floor(Number(template?.minSelect) || 0),
+        ),
+        maxSelect:
+          template?.maxSelect == null
+            ? null
+            : Math.max(
+                0,
+                Math.floor(Number(template.maxSelect) || 0),
+              ),
+        options: Array.isArray(template?.options)
+          ? template.options.map((option, optionIndex) => ({
+              name: String(option?.name || `Option ${optionIndex + 1}`),
+              priceDelta: Number(option?.priceDelta || 0),
+              soldOut: Boolean(option?.soldOut),
+              displayOrder: optionIndex,
+            }))
+          : [],
+      }));
+
+      // 메뉴에서 먼저 불러온 옵션이 있어도 localStorage가 덮어쓰지 않도록
+      // 같은 이름의 그룹은 옵션 항목을 합쳐서 유지합니다.
+      setOptionTemplates((current) =>
+        mergeTemplateCollections(current, storedTemplates),
+      );
+    } catch {
+      // ignore malformed local storage data
+    }
+  }, [businessId]);
+
+  // 공용 옵션이 불러와지면 첫 그룹의 실제 옵션 항목을
+  // 관리 입력창에도 바로 보여줍니다. "수정" 버튼을 누르지 않아도 확인 가능합니다.
+  useEffect(() => {
+    if (editingTemplateId || templateOptionsInput.length > 0) return;
+    if (optionTemplates.length === 0) return;
+
+    const first = optionTemplates[0];
+    setEditingTemplateId(first.id);
+    setTemplateNameInput(first.name);
+    setTemplateRequiredInput(first.required);
+    setTemplateMinInput(first.minSelect);
+    setTemplateMaxInput(first.maxSelect);
+    setTemplateOptionsInput(
+      first.options.map((option, index) => ({
+        ...option,
+        displayOrder: index,
+      })),
+    );
+  }, [optionTemplates, editingTemplateId, templateOptionsInput.length]);
+
+
+  function mergeTemplateCollections(
+    base: MenuOptionTemplate[],
+    incoming: MenuOptionTemplate[],
+  ): MenuOptionTemplate[] {
+    const next = base.map((template) => ({
+      ...template,
+      options: template.options.map((option, index) => ({
+        ...option,
+        displayOrder: index,
+      })),
+    }));
+
+    for (const template of incoming) {
+      const normalizedName = template.name.trim().toLowerCase();
+      if (!normalizedName) continue;
+
+      const existingIndex = next.findIndex(
+        (row) => row.name.trim().toLowerCase() === normalizedName,
+      );
+
+      if (existingIndex === -1) {
+        next.push({
+          ...template,
+          options: template.options.map((option, index) => ({
+            ...option,
+            displayOrder: index,
+          })),
+        });
+        continue;
+      }
+
+      const existing = next[existingIndex];
+      const mergedOptions = [...existing.options];
+
+      for (const option of template.options) {
+        const optionName = option.name.trim().toLowerCase();
+        const optionPrice = Number(option.priceDelta || 0).toFixed(2);
+
+        const alreadyExists = mergedOptions.some(
+          (row) =>
+            row.name.trim().toLowerCase() === optionName &&
+            Number(row.priceDelta || 0).toFixed(2) === optionPrice,
+        );
+
+        if (!alreadyExists) {
+          mergedOptions.push({
+            ...option,
+            displayOrder: mergedOptions.length,
+          });
+        }
+      }
+
+      next[existingIndex] = {
+        ...existing,
+        // 저장된 공용 옵션이 비어 있거나 기본값이면 실제 메뉴 설정을 사용합니다.
+        required:
+          existing.options.length === 0 ? template.required : existing.required,
+        minSelect:
+          existing.options.length === 0 ? template.minSelect : existing.minSelect,
+        maxSelect:
+          existing.options.length === 0 ? template.maxSelect : existing.maxSelect,
+        options: mergedOptions.map((option, index) => ({
+          ...option,
+          displayOrder: index,
+        })),
+      };
+    }
+
+    return next;
+  }
+
+  function buildTemplatesFromRegisteredMenu(
+    menuItems: MenuItem[],
+  ): MenuOptionTemplate[] {
+    const templates: MenuOptionTemplate[] = [];
+
+    for (const item of menuItems) {
+      for (const group of normalizeOptionGroups(item)) {
+        const normalizedName = group.name.trim();
+        if (!normalizedName) continue;
+
+        const template: MenuOptionTemplate = {
+          id: `existing-${item.id}-${group.displayOrder}-${templates.length}`,
+          name: normalizedName,
+          required: group.required,
+          minSelect: group.minSelect,
+          maxSelect: group.maxSelect,
+          options: group.options.map((option, optionIndex) => ({
+            ...option,
+            displayOrder: optionIndex,
+          })),
+        };
+
+        const merged = mergeTemplateCollections(templates, [template]);
+        templates.splice(0, templates.length, ...merged);
+      }
+    }
+
+    return templates;
+  }
+
+  function mergeRegisteredTemplates(
+    registered: MenuOptionTemplate[],
+  ) {
+    setOptionTemplates((current) => {
+      const next = mergeTemplateCollections(current, registered);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          `ktown-menu-option-templates:${businessId}`,
+          JSON.stringify(next),
+        );
+      }
+
+      return next;
+    });
+  }
+
+  function persistOptionTemplates(next: MenuOptionTemplate[]) {
+    setOptionTemplates(next);
+
+    if (
+      typeof window !== "undefined" &&
+      Number.isInteger(businessId) &&
+      businessId > 0
+    ) {
+      window.localStorage.setItem(
+        `ktown-menu-option-templates:${businessId}`,
+        JSON.stringify(next),
+      );
+    }
+  }
+
+  function persistOptionCategoryNames(next: string[]) {
+    const categoryCount = Math.max(DEFAULT_OPTION_CATEGORY_NAMES.length, next.length);
+    const normalized = Array.from({ length: categoryCount }, (_, index) => {
+      const fallback = getDefaultOptionCategoryName(index);
+      return String(next[index] || fallback).trim() || fallback;
+    });
+
+    setOptionCategoryNames(normalized);
+
+    if (
+      typeof window !== "undefined" &&
+      Number.isInteger(businessId) &&
+      businessId > 0
+    ) {
+      window.localStorage.setItem(
+        `ktown-menu-option-categories:${businessId}`,
+        JSON.stringify(normalized),
+      );
+    }
+  }
+
+  function updateOptionCategoryName(categoryIndex: number, value: string) {
+    setOptionCategoryNames((current) =>
+      current.map((name, index) => (index === categoryIndex ? value : name)),
+    );
+  }
+
+  function saveOptionCategoryNames() {
+    persistOptionCategoryNames(optionCategoryNames);
+    setMessage("✓ 옵션 카테고리 이름을 저장했습니다.");
+  }
+
+  function ensureOptionCategoryTemplates() {
+    const next = [...optionTemplates];
+
+    for (let index = 0; index < optionCategoryNames.length; index += 1) {
+      const fallback = getDefaultOptionCategoryName(index);
+      const name =
+        String(optionCategoryNames[index] || fallback).trim() || fallback;
+      const exists = next.some(
+        (template) => template.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+
+      if (!exists) {
+        next.push({
+          id: `category-${index}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          required: false,
+          minSelect: 0,
+          maxSelect: null,
+          options: [],
+        });
+      }
+    }
+
+    persistOptionTemplates(next);
+  }
+
+  function addOptionCategory() {
+    const categoryIndex = optionCategoryNames.length;
+    const newName = getDefaultOptionCategoryName(categoryIndex);
+    const nextNames = [...optionCategoryNames, newName];
+
+    persistOptionCategoryNames(nextNames);
+
+    const exists = optionTemplates.some(
+      (template) => template.name.trim().toLowerCase() === newName.toLowerCase(),
+    );
+
+    if (!exists) {
+      persistOptionTemplates([
+        ...optionTemplates,
+        {
+          id: `category-${categoryIndex}-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 7)}`,
+          name: newName,
+          required: false,
+          minSelect: 0,
+          maxSelect: null,
+          options: [],
+        },
+      ]);
+    }
+
+    setMessage(`✓ 옵션 카테고리 ${categoryIndex + 1}을 추가했습니다.`);
+  }
+
+  function updateSavedOptionPrice(
+    templateId: string,
+    optionIndex: number,
+    rawValue: string,
+  ) {
+    const cleaned = cleanPrice(rawValue);
+    const priceDelta = cleaned === "" ? 0 : Number(cleaned);
+
+    if (!Number.isFinite(priceDelta) || priceDelta < 0) return;
+
+    const next = optionTemplates.map((template) => {
+      if (template.id !== templateId) return template;
+
+      return {
+        ...template,
+        options: template.options.map((option, index) =>
+          index === optionIndex
+            ? { ...option, priceDelta: Number(priceDelta.toFixed(2)) }
+            : option,
+        ),
+      };
+    });
+
+    persistOptionTemplates(next);
+
+    if (editingTemplateId === templateId) {
+      setTemplateOptionsInput((current) =>
+        current.map((option, index) =>
+          index === optionIndex
+            ? { ...option, priceDelta: Number(priceDelta.toFixed(2)) }
+            : option,
+        ),
+      );
+    }
+  }
+
+  function moveSavedOptionToCategory(
+    sourceTemplateId: string,
+    optionIndex: number,
+    targetCategoryIndex: number,
+  ) {
+    const sourceTemplate = optionTemplates.find(
+      (template) => template.id === sourceTemplateId,
+    );
+    const movingOption = sourceTemplate?.options[optionIndex];
+
+    if (!sourceTemplate || !movingOption) return;
+
+    const targetName =
+      String(
+        optionCategoryNames[targetCategoryIndex] ||
+          getDefaultOptionCategoryName(targetCategoryIndex),
+      ).trim() || getDefaultOptionCategoryName(targetCategoryIndex);
+
+    if (sourceTemplate.name.trim().toLowerCase() === targetName.toLowerCase()) {
+      setMessage(`✓ 이미 "${targetName}" 카테고리에 있습니다.`);
+      return;
+    }
+
+    let next = optionTemplates.map((template) =>
+      template.id === sourceTemplateId
+        ? {
+            ...template,
+            options: template.options
+              .filter((_, index) => index !== optionIndex)
+              .map((option, index) => ({ ...option, displayOrder: index })),
+          }
+        : {
+            ...template,
+            options: template.options.map((option, index) => ({
+              ...option,
+              displayOrder: index,
+            })),
+          },
+    );
+
+    let targetIndex = next.findIndex(
+      (template) =>
+        template.name.trim().toLowerCase() === targetName.toLowerCase(),
+    );
+
+    if (targetIndex === -1) {
+      next = [
+        ...next,
+        {
+          id: `category-${targetCategoryIndex}-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 7)}`,
+          name: targetName,
+          required: false,
+          minSelect: 0,
+          maxSelect: null,
+          options: [{ ...movingOption, displayOrder: 0 }],
+        },
+      ];
+      targetIndex = next.length - 1;
+    } else {
+      const target = next[targetIndex];
+      const duplicate = target.options.some(
+        (option) =>
+          option.name.trim().toLowerCase() ===
+          movingOption.name.trim().toLowerCase(),
+      );
+
+      if (duplicate) {
+        window.alert(`"${movingOption.name}" 옵션 이름이 이미 "${targetName}" 카테고리에 있습니다. 같은 이름은 이동할 수 없습니다.`);
+        setMessage(`⚠️ "${movingOption.name}" 옵션 이름이 이미 "${targetName}" 카테고리에 있습니다. 같은 이름은 이동할 수 없습니다.`);
+        return;
+      }
+
+      if (!duplicate) {
+        next[targetIndex] = {
+          ...target,
+          options: [
+            ...target.options,
+            { ...movingOption, displayOrder: target.options.length },
+          ],
+        };
+      }
+    }
+
+    persistOptionTemplates(next);
+
+    // 이동한 뒤에는 대상 카테고리를 즉시 편집창에 보여줍니다.
+    const targetTemplate = next[targetIndex];
+    if (targetTemplate) {
+      setEditingTemplateId(targetTemplate.id);
+      setTemplateNameInput(targetTemplate.name);
+      setTemplateRequiredInput(targetTemplate.required);
+      setTemplateMinInput(targetTemplate.minSelect);
+      setTemplateMaxInput(targetTemplate.maxSelect);
+      setTemplateOptionsInput(
+        targetTemplate.options.map((option, index) => ({
+          ...option,
+          displayOrder: index,
+        })),
+      );
+      setOptionTemplateOpen(true);
+    }
+
+    setMessage(
+      `✓ "${movingOption.name}" → "${targetName}" 카테고리로 이동했습니다. 이동한 카테고리를 바로 보여줍니다.`,
+    );
+  }
+
+
+  function moveMenuOptionToCategory(
+    itemId: number,
+    sourceGroupIndex: number,
+    optionIndex: number,
+    targetCategoryIndex: number,
+  ) {
+    const targetName =
+      String(
+        optionCategoryNames[targetCategoryIndex] ||
+          getDefaultOptionCategoryName(targetCategoryIndex),
+      ).trim() || getDefaultOptionCategoryName(targetCategoryIndex);
+
+    const sourceItem = items.find((item) => item.id === itemId);
+    const sourceGroups = sourceItem ? normalizeOptionGroups(sourceItem) : [];
+    const sourceGroup = sourceGroups[sourceGroupIndex];
+    const movingOption = sourceGroup?.options[optionIndex];
+
+    if (!sourceGroup || !movingOption) return;
+
+    if (sourceGroup.name.trim().toLowerCase() === targetName.toLowerCase()) {
+      setMessage(`✓ 이미 "${targetName}" 카테고리에 있습니다.`);
+      return;
+    }
+
+    const targetTemplate = optionTemplates.find(
+      (template) =>
+        template.name.trim().toLowerCase() === targetName.toLowerCase(),
+    );
+
+    updateOptionGroups(itemId, (groups) => {
+      const source = groups[sourceGroupIndex];
+      const optionToMove = source?.options[optionIndex];
+      if (!source || !optionToMove) return groups;
+
+      const next = groups.map((group) => ({
+        ...group,
+        options: group.options.map((option) => ({ ...option })),
+      }));
+
+      next[sourceGroupIndex] = {
+        ...next[sourceGroupIndex],
+        options: next[sourceGroupIndex].options.filter(
+          (_, index) => index !== optionIndex,
+        ),
+      };
+
+      const targetGroupIndex = next.findIndex(
+        (group) =>
+          group.name.trim().toLowerCase() === targetName.toLowerCase(),
+      );
+
+      if (targetGroupIndex >= 0) {
+        next[targetGroupIndex] = {
+          ...next[targetGroupIndex],
+          options: [
+            ...next[targetGroupIndex].options,
+            {
+              ...optionToMove,
+              displayOrder: next[targetGroupIndex].options.length,
+            },
+          ],
+        };
+      } else {
+        next.push({
+          name: targetName,
+          required: targetTemplate?.required ?? false,
+          minSelect: targetTemplate?.minSelect ?? 0,
+          maxSelect: targetTemplate?.maxSelect ?? null,
+          displayOrder: next.length,
+          options: [{ ...optionToMove, displayOrder: 0 }],
+        });
+      }
+
+      return next;
+    });
+
+    setMessage(
+      `✓ "${movingOption.name}" → "${targetName}" 옵션 카테고리로 이동했습니다. 아래 전체 저장을 눌러 DB에 반영하세요.`,
+    );
+  }
+
+  function resetOptionTemplateForm() {
+    setEditingTemplateId(null);
+    setTemplateNameInput("");
+    setTemplateRequiredInput(false);
+    setTemplateMinInput(0);
+    setTemplateMaxInput(null);
+    setTemplateOptionsInput([]);
+  }
+
+  function addTemplateOption() {
+    setTemplateOptionsInput((current) => [
+      ...current,
+      {
+        name: "New option",
+        priceDelta: 0,
+        soldOut: false,
+        displayOrder: current.length,
+      },
+    ]);
+  }
+
+  function updateTemplateOption(
+    optionIndex: number,
+    patch: Partial<MenuOption>,
+  ) {
+    setTemplateOptionsInput((current) =>
+      current.map((option, index) =>
+        index === optionIndex ? { ...option, ...patch } : option,
+      ),
+    );
+  }
+
+
+  function moveEditingTemplateOptionToCategory(
+    optionIndex: number,
+    targetCategoryIndex: number,
+  ) {
+    const movingOption = templateOptionsInput[optionIndex];
+    if (!movingOption) return;
+
+    const targetName =
+      String(
+        optionCategoryNames[targetCategoryIndex] ||
+          getDefaultOptionCategoryName(targetCategoryIndex),
+      ).trim() || getDefaultOptionCategoryName(targetCategoryIndex);
+
+    const sourceName = templateNameInput.trim();
+
+    if (sourceName.toLowerCase() === targetName.toLowerCase()) {
+      setMessage(`✓ 이미 "${targetName}" 카테고리에 있습니다.`);
+      return;
+    }
+
+    // 현재 편집 중인 내용까지 포함해서 source 그룹을 먼저 최신 상태로 만듭니다.
+    const sourceOptions = templateOptionsInput
+      .filter((_, index) => index !== optionIndex)
+      .map((option, index) => ({ ...option, displayOrder: index }));
+
+    let next = optionTemplates.map((template) => ({
+      ...template,
+      options: template.options.map((option, index) => ({
+        ...option,
+        displayOrder: index,
+      })),
+    }));
+
+    let sourceIndex = editingTemplateId
+      ? next.findIndex((template) => template.id === editingTemplateId)
+      : -1;
+
+    if (sourceIndex === -1) {
+      sourceIndex = next.findIndex(
+        (template) =>
+          template.name.trim().toLowerCase() === sourceName.toLowerCase(),
+      );
+    }
+
+    if (sourceIndex >= 0) {
+      next[sourceIndex] = {
+        ...next[sourceIndex],
+        name: sourceName || next[sourceIndex].name,
+        required: templateRequiredInput,
+        minSelect: Math.max(0, templateMinInput),
+        maxSelect: templateMaxInput == null ? null : Math.max(0, templateMaxInput),
+        options: sourceOptions,
+      };
+    }
+
+    let targetIndex = next.findIndex(
+      (template) =>
+        template.name.trim().toLowerCase() === targetName.toLowerCase(),
+    );
+
+    if (targetIndex === -1) {
+      next.push({
+        id: `category-${targetCategoryIndex}-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 7)}`,
+        name: targetName,
+        required: false,
+        minSelect: 0,
+        maxSelect: null,
+        options: [{ ...movingOption, displayOrder: 0 }],
+      });
+      targetIndex = next.length - 1;
+    } else {
+      const target = next[targetIndex];
+      const duplicate = target.options.some(
+        (option) =>
+          option.name.trim().toLowerCase() ===
+          movingOption.name.trim().toLowerCase(),
+      );
+
+      if (duplicate) {
+        window.alert(`"${movingOption.name}" 옵션 이름이 이미 "${targetName}" 카테고리에 있습니다. 같은 이름은 이동할 수 없습니다.`);
+        setMessage(`⚠️ "${movingOption.name}" 옵션 이름이 이미 "${targetName}" 카테고리에 있습니다. 같은 이름은 이동할 수 없습니다.`);
+        return;
+      }
+
+      if (!duplicate) {
+        next[targetIndex] = {
+          ...target,
+          options: [
+            ...target.options,
+            { ...movingOption, displayOrder: target.options.length },
+          ],
+        };
+      }
+    }
+
+    // source에서 빠진 상태 + target에 들어간 상태를 동시에 저장합니다.
+    persistOptionTemplates(next);
+
+    // 핵심: 옵션을 옮긴 직후 대상 카테고리로 화면을 바꾸고,
+    // 방금 이동한 옵션이 포함된 목록을 즉시 보여줍니다.
+    const targetTemplate = next[targetIndex];
+    if (targetTemplate) {
+      setEditingTemplateId(targetTemplate.id);
+      setTemplateNameInput(targetTemplate.name);
+      setTemplateRequiredInput(targetTemplate.required);
+      setTemplateMinInput(targetTemplate.minSelect);
+      setTemplateMaxInput(targetTemplate.maxSelect);
+      setTemplateOptionsInput(
+        targetTemplate.options.map((option, index) => ({
+          ...option,
+          displayOrder: index,
+        })),
+      );
+      setOptionTemplateOpen(true);
+    }
+
+    setMessage(
+      `✓ "${movingOption.name}" → "${targetName}" 카테고리로 이동했습니다. 지금 "${targetName}" 옵션을 보여주고 있습니다.`,
+    );
+  }
+
+
+  function deleteTemplateOptionRow(optionIndex: number) {
+    setTemplateOptionsInput((current) =>
+      current
+        .filter((_, index) => index !== optionIndex)
+        .map((option, index) => ({
+          ...option,
+          displayOrder: index,
+        })),
+    );
+  }
+
+  function saveOptionTemplate() {
+    const name = templateNameInput.trim();
+
+    if (!name) {
+      setMessage("옵션 그룹 이름을 입력하세요.");
+      return;
+    }
+
+    if (templateOptionsInput.length === 0) {
+      setMessage("옵션 항목을 하나 이상 추가하세요.");
+      return;
+    }
+
+    // 같은 옵션 카테고리 안에서는 옵션 이름 중복 저장 금지 (대소문자/앞뒤 공백 무시)
+    const seenOptionNames = new Set<string>();
+    const duplicateOption = templateOptionsInput.find((option) => {
+      const optionName = option.name.trim().toLowerCase();
+      if (!optionName) return false;
+      if (seenOptionNames.has(optionName)) return true;
+      seenOptionNames.add(optionName);
+      return false;
+    });
+
+    if (duplicateOption) {
+      const duplicateName = duplicateOption.name.trim();
+      window.alert(`"${duplicateName}" 옵션 이름이 이미 있습니다. 같은 이름은 저장할 수 없습니다.`);
+      setMessage(`⚠️ "${duplicateName}" 옵션 이름이 이미 있습니다. 같은 이름은 저장할 수 없습니다.`);
+      return;
+    }
+
+    if (
+      templateMaxInput != null &&
+      templateMaxInput < templateMinInput
+    ) {
+      setMessage("최대 선택 수는 최소 선택 수보다 작을 수 없습니다.");
+      return;
+    }
+
+    const template: MenuOptionTemplate = {
+      id:
+        editingTemplateId ??
+        `template-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
+      name,
+      required: templateRequiredInput,
+      minSelect: Math.max(0, templateMinInput),
+      maxSelect:
+        templateMaxInput == null
+          ? null
+          : Math.max(0, templateMaxInput),
+      options: templateOptionsInput.map((option, index) => ({
+        name: option.name.trim() || `Option ${index + 1}`,
+        priceDelta: Number(option.priceDelta || 0),
+        soldOut: Boolean(option.soldOut),
+        displayOrder: index,
+      })),
+    };
+
+    const wasEdit = Boolean(editingTemplateId);
+
+    persistOptionTemplates(
+      editingTemplateId
+        ? optionTemplates.map((row) =>
+            row.id === editingTemplateId ? template : row,
+          )
+        : [...optionTemplates, template],
+    );
+
+    resetOptionTemplateForm();
+    setMessage(
+      wasEdit
+        ? "✓ 공용 옵션 그룹을 수정했습니다."
+        : "✓ 공용 옵션 그룹을 등록했습니다.",
+    );
+  }
+
+  function editOptionTemplate(template: MenuOptionTemplate) {
+    setEditingTemplateId(template.id);
+    setTemplateNameInput(template.name);
+    setTemplateRequiredInput(template.required);
+    setTemplateMinInput(template.minSelect);
+    setTemplateMaxInput(template.maxSelect);
+    setTemplateOptionsInput(
+      template.options.map((option, index) => ({
+        ...option,
+        displayOrder: index,
+      })),
+    );
+    setOptionTemplateOpen(true);
+  }
+
+  function deleteOptionTemplate(templateId: string) {
+    if (!window.confirm("이 공용 옵션 그룹을 삭제할까요?")) return;
+
+    persistOptionTemplates(
+      optionTemplates.filter((template) => template.id !== templateId),
+    );
+
+    if (editingTemplateId === templateId) {
+      resetOptionTemplateForm();
+    }
+
+    setMessage("✓ 공용 옵션 그룹을 삭제했습니다.");
+  }
+
+  function applyOptionTemplateToItem(itemId: number) {
+    const templateId = selectedTemplateByItem[itemId];
+    const template = optionTemplates.find(
+      (row) => row.id === templateId,
+    );
+
+    if (!template) {
+      setMessage("불러올 공용 옵션을 선택하세요.");
+      return;
+    }
+
+    updateOptionGroups(itemId, (groups) => [
+      ...groups,
+      {
+        name: template.name,
+        required: template.required,
+        minSelect: template.minSelect,
+        maxSelect: template.maxSelect,
+        displayOrder: groups.length,
+        options: template.options.map((option, index) => ({
+          ...option,
+          displayOrder: index,
+        })),
+      },
+    ]);
+
+    setExpandedOptionItemIds((current) => {
+      const next = new Set(current);
+      next.add(itemId);
+      return next;
+    });
+
+    setMessage(
+      `✓ "${template.name}" 공용 옵션을 메뉴에 추가했습니다. 아래 전체 저장을 눌러 DB에 반영하세요.`,
+    );
+  }
+
+  function saveGroupAsTemplate(
+    item: MenuItem,
+    group: MenuOptionGroup,
+  ) {
+    const baseName =
+      group.name.trim() || `${item.name} Option`;
+
+    const template: MenuOptionTemplate = {
+      id: `template-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      name: baseName,
+      required: group.required,
+      minSelect: group.minSelect,
+      maxSelect: group.maxSelect,
+      options: group.options.map((option, index) => ({
+        ...option,
+        displayOrder: index,
+      })),
+    };
+
+    persistOptionTemplates([...optionTemplates, template]);
+    setMessage(`✓ "${baseName}" 옵션을 공용 옵션에 저장했습니다.`);
+  }
 
   async function getAccessToken() {
     const {
@@ -376,6 +1300,12 @@ export default function OwnerBusinessMenuPage() {
       setBusinessName(data.business?.name || "Business");
       setCategories(nextCategories);
       setItems(nextItems);
+
+      // DB에 이미 저장되어 각 메뉴에 붙어 있는 옵션 그룹도
+      // 공용 옵션 관리에 자동으로 나타나게 합니다.
+      mergeRegisteredTemplates(
+        buildTemplatesFromRegisteredMenu(nextItems),
+      );
 
       setNewMenuCategoryId((current) => {
         if (
@@ -1615,16 +2545,29 @@ export default function OwnerBusinessMenuPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void saveDeliveryProviders()}
-              disabled={savingDeliveryProviders}
-              className="rounded-xl bg-orange-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-            >
-              {savingDeliveryProviders ? "저장 중..." : "배달 업체 저장"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDeliveryPartnersOpen((open) => !open)}
+                aria-expanded={deliveryPartnersOpen}
+                className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-3 text-xs font-black text-orange-700 hover:bg-orange-100"
+              >
+                {deliveryPartnersOpen ? "▼ 접기" : "▶ 펼치기"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void saveDeliveryProviders()}
+                disabled={savingDeliveryProviders}
+                className="rounded-xl bg-orange-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+              >
+                {savingDeliveryProviders ? "저장 중..." : "배달 업체 저장"}
+              </button>
+            </div>
           </div>
 
+          {deliveryPartnersOpen && (
+            <>
           <div className="mt-4 space-y-2">
             {deliveryProviders.map((provider, index) => (
               <div
@@ -1748,6 +2691,479 @@ export default function OwnerBusinessMenuPage() {
               </button>
             </div>
           </div>
+            </>
+          )}
+        </section>
+
+        <section className="mb-5 rounded-3xl border-2 border-blue-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-blue-600">
+                Shared Options
+              </p>
+              <h2 className="mt-1 text-xl font-black">
+                공용 옵션 관리
+              </h2>
+              <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">
+                이미 메뉴에 등록되어 있는 옵션도 자동으로 불러오며, Sauce, Add-ons, Size 같은 공용 옵션을 등록·수정·삭제하고 다른 메뉴에서 재사용할 수 있습니다.
+              </p>
+            </div>
+
+            <div className="w-full rounded-2xl border border-blue-100 bg-blue-50 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-black text-blue-900">
+                  옵션 카테고리 {optionCategoryNames.length}개
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={addOptionCategory}
+                    className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-black text-blue-700"
+                  >
+                    + 옵션 카테고리 추가
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveOptionCategoryNames}
+                    className="rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-black text-white"
+                  >
+                    카테고리 이름 저장
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {optionCategoryNames.map((categoryName, categoryIndex) => (
+                  <label
+                    key={`option-category-name-${categoryIndex}`}
+                    className="rounded-xl bg-white p-2"
+                  >
+                    <span className="block text-[10px] font-black text-gray-500">
+                      옵션 카테고리 {categoryIndex + 1}
+                    </span>
+                    <input
+                      value={categoryName}
+                      onChange={(event) =>
+                        updateOptionCategoryName(categoryIndex, event.target.value)
+                      }
+                      placeholder={getDefaultOptionCategoryName(categoryIndex)}
+                      className="mt-1 w-full rounded-lg border border-blue-100 px-2 py-2 text-xs font-black outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <p className="mt-2 text-[11px] font-semibold leading-5 text-blue-900/70">
+                아래 옵션 항목마다 소속 카테고리를 선택해서 이동할 수 있습니다.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setOptionTemplateOpen((current) => !current)}
+              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white"
+            >
+              {optionTemplateOpen ? "접기" : "공용 옵션 열기"}
+            </button>
+          </div>
+
+          {optionTemplateOpen ? (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                  <input
+                    value={templateNameInput}
+                    onChange={(event) =>
+                      setTemplateNameInput(event.target.value)
+                    }
+                    placeholder="옵션 그룹 이름 예: Sauce / Add-ons / Size"
+                    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-black outline-none"
+                  />
+
+                  <label className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-black">
+                    <input
+                      type="checkbox"
+                      checked={templateRequiredInput}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setTemplateRequiredInput(checked);
+                        if (checked && templateMinInput === 0) {
+                          setTemplateMinInput(1);
+                        }
+                      }}
+                    />
+                    Required
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={resetOptionTemplateForm}
+                    className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700"
+                  >
+                    새로 입력
+                  </button>
+                </div>
+
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="rounded-xl border border-blue-100 bg-white px-3 py-2">
+                    <span className="block text-[10px] font-black text-gray-500">
+                      최소 선택
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={templateMinInput}
+                      onChange={(event) =>
+                        setTemplateMinInput(
+                          Math.max(
+                            0,
+                            Math.floor(Number(event.target.value) || 0),
+                          ),
+                        )
+                      }
+                      className="w-full bg-transparent text-sm font-black outline-none"
+                    />
+                  </label>
+
+                  <label className="rounded-xl border border-blue-100 bg-white px-3 py-2">
+                    <span className="block text-[10px] font-black text-gray-500">
+                      최대 선택
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={templateMaxInput == null ? "" : templateMaxInput}
+                      placeholder="제한 없음"
+                      onChange={(event) =>
+                        setTemplateMaxInput(
+                          event.target.value === ""
+                            ? null
+                            : Math.max(
+                                0,
+                                Math.floor(Number(event.target.value) || 0),
+                              ),
+                        )
+                      }
+                      className="w-full bg-transparent text-sm font-black outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-white">
+                  {templateOptionsInput.length === 0 ? (
+                    <div className="px-3 py-4 text-center text-xs font-bold text-gray-400">
+                      옵션 항목이 없습니다. 아래 버튼으로 추가하세요.
+                    </div>
+                  ) : (
+                    templateOptionsInput.map((option, optionIndex) => (
+                      <div
+                        key={`template-option-${optionIndex}`}
+                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_96px_150px_auto_auto]"
+                      >
+                        <input
+                          value={option.name}
+                          onChange={(event) =>
+                            updateTemplateOption(optionIndex, {
+                              name: event.target.value,
+                            })
+                          }
+                          placeholder="옵션 이름"
+                          className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold outline-none"
+                        />
+
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-gray-500">
+                            +$
+                          </span>
+                          <input
+                            key={`template-price-${editingTemplateId ?? "new"}-${optionIndex}-${option.priceDelta}`}
+                            type="text"
+                            inputMode="decimal"
+                            defaultValue={String(option.priceDelta ?? 0)}
+                            onInput={(event) => {
+                              const input = event.currentTarget;
+                              const cleaned = cleanPrice(input.value);
+                              if (input.value !== cleaned) input.value = cleaned;
+                            }}
+                            onBlur={(event) => {
+                              const cleaned = cleanPrice(event.currentTarget.value);
+                              const priceDelta = cleaned === "" || cleaned === "."
+                                ? 0
+                                : Number(cleaned);
+                              const normalized = Number.isFinite(priceDelta)
+                                ? Math.max(0, Number(priceDelta.toFixed(2)))
+                                : 0;
+                              updateTemplateOption(optionIndex, { priceDelta: normalized });
+                              event.currentTarget.value = String(normalized);
+                            }}
+                            className="w-full rounded-lg border border-gray-200 py-2 pl-7 pr-2 text-xs font-black outline-none"
+                          />
+                        </div>
+
+                        <select
+                          value={Math.max(
+                            0,
+                            optionCategoryNames.findIndex(
+                              (name) =>
+                                name.trim().toLowerCase() ===
+                                templateNameInput.trim().toLowerCase(),
+                            ),
+                          )}
+                          onChange={(event) =>
+                            moveEditingTemplateOptionToCategory(
+                              optionIndex,
+                              Number(event.target.value),
+                            )
+                          }
+                          title="옵션 카테고리 이동"
+                          className="w-full rounded-lg border border-blue-200 bg-blue-50 px-2 py-2 text-[11px] font-black text-blue-900 outline-none"
+                        >
+                          {optionCategoryNames.map((name, categoryIndex) => (
+                            <option
+                              key={`editing-template-${optionIndex}-category-${categoryIndex}`}
+                              value={categoryIndex}
+                            >
+                              {name || `Option ${categoryIndex + 1}`}
+                            </option>
+                          ))}
+                        </select>
+
+                        <label className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-2 text-[10px] font-black">
+                          <input
+                            type="checkbox"
+                            checked={option.soldOut}
+                            onChange={(event) =>
+                              updateTemplateOption(optionIndex, {
+                                soldOut: event.target.checked,
+                              })
+                            }
+                          />
+                          Sold Out
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteTemplateOptionRow(optionIndex)
+                          }
+                          className="rounded-lg bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={addTemplateOption}
+                    className="rounded-xl border border-dashed border-blue-300 bg-white px-4 py-2 text-xs font-black text-blue-700"
+                  >
+                    + 옵션 항목 추가
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={saveOptionTemplate}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white"
+                  >
+                    {editingTemplateId
+                      ? "공용 옵션 수정 저장"
+                      : "공용 옵션 등록"}
+                  </button>
+                </div>
+              </div>
+
+              {optionTemplates.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-center text-xs font-bold text-gray-500">
+                  등록된 공용 옵션이 없습니다.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {optionTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="rounded-2xl border border-gray-200 p-3"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedOptionTemplateIds((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(template.id)) next.delete(template.id);
+                                  else next.add(template.id);
+                                  return next;
+                                })
+                              }
+                              className="flex items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-gray-50"
+                              aria-expanded={expandedOptionTemplateIds.has(template.id)}
+                            >
+                              <span className="text-xs font-black text-gray-500">
+                                {expandedOptionTemplateIds.has(template.id) ? "▼" : "▶"}
+                              </span>
+                              <p className="font-black">{template.name}</p>
+                            </button>
+                            {template.id.startsWith("existing-") ? (
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
+                                기존 메뉴 옵션
+                              </span>
+                            ) : null}
+                          </div>
+                          {expandedOptionTemplateIds.has(template.id) && (template.options.length === 0 ? (
+                            <p className="mt-1 text-xs font-semibold text-gray-400">
+                              아직 옵션 항목이 없습니다.
+                            </p>
+                          ) : (
+                            <div className="mt-2 space-y-1">
+                              {template.options.map((option, optionIndex) => {
+                                const optionKey = `${template.id}-saved-option-${optionIndex}`;
+                                const optionOpen = expandedSavedOptionKeys.has(optionKey);
+
+                                return (
+                                  <div
+                                    key={optionKey}
+                                    className="rounded-lg bg-gray-50 p-2"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setExpandedSavedOptionKeys((current) => {
+                                          const next = new Set(current);
+                                          if (next.has(optionKey)) next.delete(optionKey);
+                                          else next.add(optionKey);
+                                          return next;
+                                        })
+                                      }
+                                      className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left hover:bg-white"
+                                      aria-expanded={optionOpen}
+                                    >
+                                      <span className="text-[11px] font-black text-gray-500">
+                                        {optionOpen ? "▼" : "▶"}
+                                      </span>
+                                      <span className="text-xs font-bold">
+                                        {option.name}
+                                      </span>
+                                    </button>
+
+                                    {optionOpen && (
+                                      <div className="mt-2 grid gap-2 sm:grid-cols-[110px_150px_auto] sm:items-center">
+                                        <div className="relative">
+                                          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-black text-gray-500">
+                                            +$
+                                          </span>
+                                          <input
+                                            key={`${template.id}-saved-price-${optionIndex}-${option.priceDelta}`}
+                                            type="text"
+                                            inputMode="decimal"
+                                            defaultValue={String(option.priceDelta ?? 0)}
+                                            onInput={(event) => {
+                                              const input = event.currentTarget;
+                                              const cleaned = cleanPrice(input.value);
+                                              if (input.value !== cleaned) input.value = cleaned;
+                                            }}
+                                            onBlur={(event) => {
+                                              const cleaned = cleanPrice(event.currentTarget.value);
+                                              const priceDelta =
+                                                cleaned === "" || cleaned === "."
+                                                  ? 0
+                                                  : Number(cleaned);
+                                              const normalized = Number.isFinite(priceDelta)
+                                                ? Math.max(0, Number(priceDelta.toFixed(2)))
+                                                : 0;
+                                              updateSavedOptionPrice(
+                                                template.id,
+                                                optionIndex,
+                                                String(normalized),
+                                              );
+                                              event.currentTarget.value = String(normalized);
+                                              setMessage(
+                                                `✓ "${option.name}" 가격을 +$${normalized.toFixed(2)}로 수정했습니다.`,
+                                              );
+                                            }}
+                                            aria-label={`${option.name} 추가 가격`}
+                                            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-7 pr-2 text-[11px] font-black outline-none focus:border-blue-400"
+                                          />
+                                        </div>
+
+                                        <select
+                                          defaultValue={
+                                            Math.max(
+                                              0,
+                                              optionCategoryNames.findIndex(
+                                                (name) =>
+                                                  name.trim().toLowerCase() ===
+                                                  template.name.trim().toLowerCase(),
+                                              ),
+                                            )
+                                          }
+                                          id={`${template.id}-category-${optionIndex}`}
+                                          className="rounded-lg border border-gray-200 bg-white px-2 py-2 text-[11px] font-black outline-none"
+                                        >
+                                          {optionCategoryNames.map((name, categoryIndex) => (
+                                            <option
+                                              key={`${template.id}-${optionIndex}-category-${categoryIndex}`}
+                                              value={categoryIndex}
+                                            >
+                                              {name || `Option ${categoryIndex + 1}`}
+                                            </option>
+                                          ))}
+                                        </select>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const element = document.getElementById(
+                                              `${template.id}-category-${optionIndex}`,
+                                            ) as HTMLSelectElement | null;
+                                            moveSavedOptionToCategory(
+                                              template.id,
+                                              optionIndex,
+                                              Number(element?.value || 0),
+                                            );
+                                          }}
+                                          className="rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-black text-white"
+                                        >
+                                          이동
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => editOptionTemplate(template)}
+                            className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              deleteOptionTemplate(template.id)
+                            }
+                            className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
@@ -2242,6 +3658,46 @@ export default function OwnerBusinessMenuPage() {
 
                     {expandedOptionItemIds.has(item.id) && (
                       <div className="mt-3 space-y-3 rounded-2xl border border-[#E8DED1] bg-[#FBF8F4] p-3 sm:p-4">
+                        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+                          <p className="text-xs font-black text-blue-900">
+                            공용 옵션에서 불러오기
+                          </p>
+
+                          <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                            <select
+                              value={selectedTemplateByItem[item.id] || ""}
+                              onChange={(event) =>
+                                setSelectedTemplateByItem((current) => ({
+                                  ...current,
+                                  [item.id]: event.target.value,
+                                }))
+                              }
+                              className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black outline-none"
+                            >
+                              <option value="">공용 옵션 선택</option>
+                              {optionTemplates.map((template) => (
+                                <option key={template.id} value={template.id}>
+                                  {template.name}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                applyOptionTemplateToItem(item.id)
+                              }
+                              disabled={
+                                !selectedTemplateByItem[item.id] ||
+                                optionTemplates.length === 0
+                              }
+                              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white disabled:opacity-40"
+                            >
+                              선택 옵션 추가
+                            </button>
+                          </div>
+                        </div>
+
                         {normalizeOptionGroups(item).length === 0 ? (
                           <div className="rounded-xl bg-white p-4 text-center text-xs font-bold text-gray-500">
                             옵션 그룹이 없습니다. “+ 옵션 그룹”을 눌러 추가하세요.
@@ -2300,6 +3756,16 @@ export default function OwnerBusinessMenuPage() {
                                     >
                                       ↓
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        saveGroupAsTemplate(item, group)
+                                      }
+                                      className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
+                                    >
+                                      공용 옵션 저장
+                                    </button>
+
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -2430,7 +3896,7 @@ export default function OwnerBusinessMenuPage() {
                                       ) => (
                                         <div
                                           key={`${item.id}-${groupIndex}-${optionIndex}`}
-                                          className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[1fr_120px_auto_auto]"
+                                          className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[1fr_120px_155px_auto_auto]"
                                         >
                                           <input
                                             value={option.name}
@@ -2453,28 +3919,67 @@ export default function OwnerBusinessMenuPage() {
                                               +$
                                             </span>
                                             <input
-                                              value={String(
-                                                option.priceDelta ?? 0,
-                                              )}
+                                              key={`${item.id}-${groupIndex}-${optionIndex}-price-${option.priceDelta}`}
+                                              type="text"
                                               inputMode="decimal"
-                                              onChange={(event) =>
+                                              defaultValue={String(option.priceDelta ?? 0)}
+                                              onInput={(event) => {
+                                                const input = event.currentTarget;
+                                                const cleaned = cleanPrice(input.value);
+                                                if (input.value !== cleaned) input.value = cleaned;
+                                              }}
+                                              onBlur={(event) => {
+                                                const cleaned = cleanPrice(event.currentTarget.value);
+                                                const priceDelta = cleaned === "" || cleaned === "."
+                                                  ? 0
+                                                  : Number(cleaned);
+                                                const normalized = Number.isFinite(priceDelta)
+                                                  ? Math.max(0, Number(priceDelta.toFixed(2)))
+                                                  : 0;
                                                 updateOption(
                                                   item.id,
                                                   groupIndex,
                                                   optionIndex,
-                                                  {
-                                                    priceDelta:
-                                                      Number(
-                                                        cleanPrice(
-                                                          event.target.value,
-                                                        ),
-                                                      ) || 0,
-                                                  },
-                                                )
-                                              }
+                                                  { priceDelta: normalized },
+                                                );
+                                                event.currentTarget.value = String(normalized);
+                                              }}
                                               className="w-full rounded-lg border border-gray-200 py-2 pl-7 pr-2 text-xs font-black outline-none"
                                             />
                                           </div>
+
+                                          <select
+                                            value={Math.max(
+                                              0,
+                                              optionCategoryNames.findIndex(
+                                                (name) =>
+                                                  name.trim().toLowerCase() ===
+                                                  group.name.trim().toLowerCase(),
+                                              ),
+                                            )}
+                                            onChange={(event) =>
+                                              moveMenuOptionToCategory(
+                                                item.id,
+                                                groupIndex,
+                                                optionIndex,
+                                                Number(event.target.value),
+                                              )
+                                            }
+                                            title="옵션 카테고리 이동"
+                                            className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-2 text-[11px] font-black text-blue-900 outline-none"
+                                          >
+                                            {optionCategoryNames.map(
+                                              (name, categoryIndex) => (
+                                                <option
+                                                  key={`${item.id}-${groupIndex}-${optionIndex}-category-${categoryIndex}`}
+                                                  value={categoryIndex}
+                                                >
+                                                  {name ||
+                                                    `Option ${categoryIndex + 1}`}
+                                                </option>
+                                              ),
+                                            )}
+                                          </select>
 
                                           <label className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-2 text-[10px] font-black">
                                             <input
