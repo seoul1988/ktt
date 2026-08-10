@@ -30309,7 +30309,8 @@ function TitleCellEditor({
     | "map-section"
     | "service-card"
     | "business-hours"
-    | "restaurant-menu";
+    | "restaurant-menu"
+    | "catering-menu";
 
   const mode: SectionMode =
     cell.display_mode === "background-image" ||
