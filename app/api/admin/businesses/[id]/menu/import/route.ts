@@ -461,6 +461,7 @@ async function syncFullCategoryMap(
       addedMenuCount: 0,
       skippedExistingCount: 0,
       unmatchedMenuNames: [] as string[],
+      duplicateMatchedMenuNames: [] as string[],
     };
   }
 
@@ -673,6 +674,7 @@ async function syncFullCategoryMap(
     addedMenuCount,
     skippedExistingCount,
     unmatchedMenuNames: Array.from(new Set(unmatchedMenuNames)),
+    duplicateMatchedMenuNames: [] as string[],
   };
 }
 
