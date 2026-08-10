@@ -11,6 +11,7 @@ import CommunityEventManageButtons from "./CommunityEventManageButtons";
 import BackButton from "@/app/components/BackButton";
 import ProfileButton from "../../../components/ProfileButton";
 import CommunityEventActionButtons from "./CommunityEventActionButtons";
+import CommunityPdfPreview from "./CommunityPdfPreview";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -293,10 +294,6 @@ export default async function CommunityEventDetailPage({
     String(event.pdf_name || "").trim() ||
     `${String(event.title || "event").trim() || "event"}.pdf`;
 
-  const pdfPreviewUrl = pdfUrl
-    ? `${pdfUrl}#page=1&view=FitH&toolbar=0&navpanes=0`
-    : "";
-
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
@@ -317,10 +314,9 @@ export default async function CommunityEventDetailPage({
         {pdfUrl ? (
           <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
             <div className="overflow-hidden rounded-[20px] bg-[#ECE8E2]">
-              <iframe
-                src={pdfPreviewUrl}
-                title={`${event.title || "Community Event"} PDF preview`}
-                className="h-[68vh] min-h-[520px] w-full bg-white"
+              <CommunityPdfPreview
+                pdfUrl={pdfUrl}
+                title={event.title || "Community Event"}
               />
             </div>
 
