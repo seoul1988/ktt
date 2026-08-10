@@ -16947,7 +16947,7 @@ function CellPreview({
         <div className="relative h-auto min-h-0 w-full overflow-visible rounded-[10px] bg-white">
           <CateringMenuDisplay
             businessId={business.id}
-            businessPhone={business.phone}
+            businessPhone={business.phone == null ? null : String(business.phone)}
             compact={previewDevice === "mobile"}
           />
         </div>
