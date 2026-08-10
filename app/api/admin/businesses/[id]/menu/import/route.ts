@@ -974,8 +974,10 @@ export async function POST(
             )
           : {
               categoryCount: categoryNames.length,
-              movedMenuCount: 0,
+              addedMenuCount: 0,
+              skippedExistingCount: 0,
               unmatchedMenuNames: [] as string[],
+              duplicateMatchedMenuNames: [] as string[],
             };
 
       console.log("[CHOWNOW CATEGORY SYNC]", {
