@@ -232,6 +232,20 @@ function validImageFit(value: unknown) {
     : "contain";
 }
 
+function validDisplayLocation(value: unknown) {
+  const location = String(value || "").trim();
+
+  if (
+    location === "home" ||
+    location === "community" ||
+    location === "events"
+  ) {
+    return location;
+  }
+
+  return "all";
+}
+
 function validColor(value: unknown, fallback: string) {
   const text = String(value || "").trim();
 
@@ -559,6 +573,9 @@ export async function POST(request: Request) {
           reward_signup_url: String(formData.get("reward_signup_url") || "").trim().slice(0, 1000) || null,
           form_background_color: validColor(formData.get("form_background_color"), "#FFFFFF"),
           lead_expanded_mode: parseBoolean(formData.get("lead_expanded_mode")),
+          display_location: validDisplayLocation(
+            formData.get("display_location"),
+          ),
           display_order:
             positiveInteger(
               formData.get("display_order"),
@@ -884,6 +901,9 @@ export async function PATCH(request: Request) {
           reward_signup_url: String(formData.get("reward_signup_url") || "").trim().slice(0, 1000) || null,
           form_background_color: validColor(formData.get("form_background_color"), "#FFFFFF"),
           lead_expanded_mode: parseBoolean(formData.get("lead_expanded_mode")),
+          display_location: validDisplayLocation(
+            formData.get("display_location"),
+          ),
           display_order:
             positiveInteger(
               formData.get("display_order"),
