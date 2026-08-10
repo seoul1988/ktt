@@ -34,6 +34,7 @@ type PublicBanner = {
   popup_height?: number | null;
   popup_radius?: number | null;
   popup_shadow?: string | null;
+  style_preset?: string | null;
 
   image_position?: string | null;
   image_fit?: ImageFit | null;
