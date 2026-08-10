@@ -34,13 +34,13 @@ function PhoneIcon() {
       className="h-5 w-5"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.9"
       aria-hidden="true"
     >
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M6.7 3.8 9 3.2a1.5 1.5 0 0 1 1.7.8l1.2 2.8a1.5 1.5 0 0 1-.4 1.7l-1.3 1.1a13.2 13.2 0 0 0 4.2 4.2l1.1-1.3a1.5 1.5 0 0 1 1.7-.4l2.8 1.2a1.5 1.5 0 0 1 .8 1.7l-.6 2.3a2.8 2.8 0 0 1-2.7 2.1C10.4 19.4 4.6 13.6 4.6 6.5a2.8 2.8 0 0 1 2.1-2.7Z"
+        d="M6.6 3.8 9 8.2 7.4 9.8c1.2 2.5 3.2 4.5 5.7 5.7l1.6-1.6 4.4 2.4c.4.2.6.7.5 1.1-.5 2-2.3 3.4-4.4 3.2C8.9 20 4 15.1 3.4 8.8 3.2 6.7 4.6 4.9 6.6 4.4c.4-.1.8.1 1 .4Z"
       />
     </svg>
   );
@@ -53,15 +53,14 @@ function DirectionsIcon() {
       className="h-5 w-5"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.9"
       aria-hidden="true"
     >
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
-        d="M12 21s6-5.3 6-11a6 6 0 1 0-12 0c0 5.7 6 11 6 11Z"
+        d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z"
       />
-
       <circle cx="12" cy="10" r="2.1" />
     </svg>
   );
@@ -74,13 +73,12 @@ function ShareIcon() {
       className="h-5 w-5"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.9"
       aria-hidden="true"
     >
-      <circle cx="18" cy="5" r="2.2" />
       <circle cx="6" cy="12" r="2.2" />
-      <circle cx="18" cy="19" r="2.2" />
-
+      <circle cx="18" cy="6" r="2.2" />
+      <circle cx="18" cy="18" r="2.2" />
       <path
         strokeLinecap="round"
         d="m8 11 7.8-4.6M8 13l7.8 4.6"
@@ -96,17 +94,10 @@ function CopyIcon() {
       className="h-5 w-5"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.9"
       aria-hidden="true"
     >
-      <rect
-        x="8"
-        y="8"
-        width="11"
-        height="11"
-        rx="2"
-      />
-
+      <rect x="8" y="8" width="12" height="12" rx="2" />
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -123,17 +114,15 @@ function RegisterIcon() {
       className="h-5 w-5"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.9"
       aria-hidden="true"
     >
       <circle cx="9" cy="8" r="3" />
-
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M3.8 20c.5-4 2.3-6 5.2-6 1.4 0 2.6.5 3.5 1.4"
       />
-
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -154,8 +143,7 @@ export default function CommunityEventActionButtons({
   const [copied, setCopied] = useState(false);
 
   const cleanPhone = normalizePhone(phone);
-  const cleanRegistrationUrl =
-    normalizeExternalUrl(registrationUrl);
+  const cleanRegistrationUrl = normalizeExternalUrl(registrationUrl);
   const cleanAddress = String(address || "").trim();
 
   const hasCoordinates =
@@ -181,11 +169,7 @@ export default function CommunityEventActionButtons({
       (directionsUrl ? 1 : 0) +
       (cleanRegistrationUrl ? 1 : 0)
     );
-  }, [
-    cleanPhone,
-    directionsUrl,
-    cleanRegistrationUrl,
-  ]);
+  }, [cleanPhone, directionsUrl, cleanRegistrationUrl]);
 
   const gridClass =
     visibleCount >= 5
@@ -207,10 +191,7 @@ export default function CommunityEventActionButtons({
         setCopied(false);
       }, 1800);
     } catch {
-      window.prompt(
-        "아래 주소를 복사하세요.",
-        pageUrl,
-      );
+      window.prompt("Copy the URL below.", pageUrl);
     }
   }
 
@@ -256,14 +237,11 @@ export default function CommunityEventActionButtons({
       {cleanPhone && (
         <a
           href={`tel:${cleanPhone}`}
-          aria-label={`${eventTitle} 전화`}
+          aria-label={`Call ${eventTitle}`}
           className={buttonClass}
         >
           <PhoneIcon />
-
-          <span className={labelClass}>
-            전화
-          </span>
+          <span className={labelClass}>Call</span>
         </a>
       )}
 
@@ -272,40 +250,33 @@ export default function CommunityEventActionButtons({
           href={directionsUrl}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`${eventTitle} 길찾기`}
+          aria-label={`Directions to ${eventTitle}`}
           className={buttonClass}
         >
           <DirectionsIcon />
-
-          <span className={labelClass}>
-            길찾기
-          </span>
+          <span className={labelClass}>Directions</span>
         </a>
       )}
 
       <button
         type="button"
         onClick={sharePage}
-        aria-label={`${eventTitle} 공유`}
+        aria-label={`Share ${eventTitle}`}
         className={buttonClass}
       >
         <ShareIcon />
-
-        <span className={labelClass}>
-          공유
-        </span>
+        <span className={labelClass}>Share</span>
       </button>
 
       <button
         type="button"
         onClick={copyPageUrl}
-        aria-label={`${eventTitle} 링크 복사`}
+        aria-label={`Copy link for ${eventTitle}`}
         className={buttonClass}
       >
         <CopyIcon />
-
         <span className={labelClass}>
-          {copied ? "복사됨" : "링크복사"}
+          {copied ? "Copied" : "Copy Link"}
         </span>
       </button>
 
@@ -314,14 +285,11 @@ export default function CommunityEventActionButtons({
           href={cleanRegistrationUrl}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`${eventTitle} 참가신청`}
+          aria-label={`Register for ${eventTitle}`}
           className={registerButtonClass}
         >
           <RegisterIcon />
-
-          <span className={registerLabelClass}>
-            참가신청
-          </span>
+          <span className={registerLabelClass}>Register</span>
         </a>
       )}
     </div>
