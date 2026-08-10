@@ -1036,10 +1036,14 @@ export async function POST(
       );
     }
 
-    let fullCategorySyncResult = {
+    let fullCategorySyncResult: Awaited<
+      ReturnType<typeof syncFullCategoryMap>
+    > = {
       categoryCount: 0,
-      movedMenuCount: 0,
+      addedMenuCount: 0,
+      skippedExistingCount: 0,
       unmatchedMenuNames: [] as string[],
+      duplicateMatchedMenuNames: [] as string[],
     };
 
     // 이전 버전 호환: categoryMenuMapJson이 메뉴별 요청에 같이 들어온 경우만 처리합니다.
