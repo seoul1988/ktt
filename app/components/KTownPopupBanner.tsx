@@ -454,7 +454,7 @@ export default function KTownPopupBanner() {
             onChange={(event) => setHide24Hours(event.target.checked)}
             className="h-4 w-4 accent-white"
           />
-          24시간 동안 이 팝업 보지 않기
+          Don't show again for 24 hours
         </label>
       </div>
     </div>
