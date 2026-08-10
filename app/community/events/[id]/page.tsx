@@ -62,7 +62,7 @@ function cleanDescription(
   description: string | null | undefined,
 ) {
   if (!description) {
-    return "KTownTriangle 커뮤니티 이벤트 안내";
+    return "KTownTriangle Community Event Information";
   }
 
   return description
@@ -118,7 +118,7 @@ export async function generateMetadata({
   if (!event) {
     return {
       title: "Event Not Found | KTownTriangle",
-      description: "요청하신 이벤트를 찾을 수 없습니다.",
+      description: "The requested event could not be found.",
       robots: {
         index: false,
         follow: false,
@@ -327,7 +327,7 @@ export default async function CommunityEventDetailPage({
                 rel="noopener noreferrer"
                 className="flex min-h-12 items-center justify-center rounded-2xl bg-[#172033] px-3 py-3 text-center text-sm font-black text-white"
               >
-                원본 PDF 보기
+                View Original PDF
               </a>
 
               <a
@@ -335,7 +335,7 @@ export default async function CommunityEventDetailPage({
                 download={pdfName}
                 className="flex min-h-12 items-center justify-center rounded-2xl bg-[#C46A2B] px-3 py-3 text-center text-sm font-black text-white"
               >
-                PDF 다운로드
+                Download PDF
               </a>
             </div>
 
@@ -401,10 +401,9 @@ export default async function CommunityEventDetailPage({
             ) : null}
 
             <div className="mt-3 rounded-xl bg-white/50 p-2 text-[11px] leading-5">
-              추첨 이벤트는 본인 직접 등록자만 응모할 수
-              있습니다.
+              Only participants who register themselves are eligible for the prize drawing.
               <br />
-              동반인은 추첨 대상에 포함되지 않습니다.
+              Guests are not eligible for the prize drawing.
             </div>
           </div>
         )}
@@ -422,7 +421,7 @@ export default async function CommunityEventDetailPage({
 
         {collectAttendees && (registrationClosed || drawReady) && (
           <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-[#6B6257] shadow-sm">
-            참가 신청이 마감되었습니다.
+            Registration is closed.
           </div>
         )}
 
