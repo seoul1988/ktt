@@ -648,6 +648,9 @@ export default function AdminBusinessesPage() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <h3 className="break-words text-xl font-black">
+                                <span className="mr-2 text-sm font-black text-gray-400">
+                                  #{business.id}
+                                </span>
                                 {business.name ||
                                   "No business name"}
                               </h3>
@@ -779,6 +782,15 @@ export default function AdminBusinessesPage() {
         ? "Website ON"
         : "Website OFF"}
   </button>
+  {business.website_enabled && (
+    <Link
+      href={`/owner/business/${business.id}/manage`}
+      className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm sm:px-3 sm:text-xs"
+    >
+      사이트관리
+    </Link>
+  )}
+
 
   <Link
     href={`/business/${business.id}/edit`}
