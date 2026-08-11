@@ -183,26 +183,26 @@ export default function RootLayout({
            */}
           <MainInstallAppButton />
 
-          {/* Instagram, Facebook, Threads는 영어 안내
-              KakaoTalk은 한글 안내
-              Chrome/Safari는 안내 없음 */}
+          {/*
+           * Instagram, Facebook, Threads는 영어 안내
+           * KakaoTalk은 한글 안내
+           * Chrome/Safari는 안내 없음
+           */}
           <InAppBrowserNotice />
 
           <VisitorTracker />
           <AppBadgeManager />
           <AppUpdateNotice />
 
-          {/* 공용 팝업: 현재 pathname에 따라 홈/커뮤니티/이벤트를 자동 필터링 */}
+          {/* 공용 팝업 */}
           <KTownPopupBanner />
 
-          <div
-            className="app-safe-area"
-            style={{
-              touchAction: "auto",
-            }}
-          >
-            {children}
-          </div>
+          {/*
+           * 중요:
+           * RootLayout 전체에 app-safe-area를 씌우지 않습니다.
+           * BottomNav 자체에서 safe-area를 처리합니다.
+           */}
+          {children}
         </AuthProvider>
 
         {/* Google Analytics 4 and Google Ads */}
