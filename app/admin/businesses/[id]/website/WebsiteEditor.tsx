@@ -12069,25 +12069,25 @@ export function PublicWebsiteRenderer({
             ) === normalizedSlug,
         );
 
-  const hasSavedLayouts = (section: BusinessSection) =>
-    Array.isArray(section.content?.layouts) &&
-    section.content.layouts.length > 0;
-
   /*
-   * 공개 홈은 오래된 기본 hero보다 실제 에디터에서 저장된 layouts를 우선합니다.
-   * 그래서 에디터 미리보기와 공개 홈페이지가 같은 Home 레이어를 표시합니다.
+   * 공개 화면도 에디터의 CurrentWebsitePreview와 같은 규칙으로
+   * Home/Main 레이어를 선택합니다.
+   *
+   * 에디터 미리보기:
+   * 1. section_type === "hero"
+   * 2. isHomeLikeSection(section)
+   * 3. 없으면 첫 번째 표시 레이어
+   *
+   * layouts가 있다는 이유만으로 About/Services 등의 다른 레이어를
+   * 홈페이지 Hero로 잘못 선택하지 않도록 합니다.
    */
   const heroSection =
     normalizedSlug === "home"
-      ? pageSections.find(
-          (section) => isHomeLikeSection(section) && hasSavedLayouts(section),
-        ) ||
-        pageSections.find(hasSavedLayouts) ||
-        pageSections.find(isHomeLikeSection) ||
-        pageSections.find((section) => section.section_type === "hero") ||
-        pageSections[0] ||
+      ? pageSections.find((section) => section.section_type === "hero") ??
+        pageSections.find(isHomeLikeSection) ??
+        pageSections[0] ??
         null
-      : pageSections[0] || null;
+      : pageSections[0] ?? null;
 
   // Home/Main으로 잘못 복제된 레이어는 공개 화면에 반복 표시하지 않습니다.
   // 실제 본문 레이어(About, Services, Gallery 등)만 hero 아래에 렌더링합니다.
