@@ -341,14 +341,27 @@ export default function ProfileButton() {
 
   async function logout() {
     try {
-      await supabase.auth.signOut();
-    } finally {
+      // 메뉴를 먼저 닫아 화면 상태를 안정적으로 유지합니다.
+      setOpen(false);
+
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error("Logout error:", error);
+        return;
+      }
+
+      // PWA 전체 페이지를 강제 reload 하지 않습니다.
+      // 아래 onAuthStateChange 구독이 SIGNED_OUT 이벤트를 감지해
+      // 로그인 상태를 다시 읽고 UI를 Login 상태로 갱신합니다.
       setUserId(null);
       setRole(null);
       resetBusinessState();
-      setOpen(false);
+    } catch (error) {
+      console.error("Logout failed:", error);
 
-      window.location.href = "/";
+      // 로그아웃 중 오류가 나도 메뉴가 열린 채 남지 않도록 합니다.
+      setOpen(false);
     }
   }
 
