@@ -527,6 +527,9 @@ export async function POST(request: Request) {
           hide_24h_enabled: parseBoolean(
             formData.get("hide_24h_enabled"),
           ),
+          hide_days: boundedInteger(
+            formData.get("hide_days"), 1, 1, 31,
+          ),
 
           image_x: boundedInteger(
             formData.get("image_x"), 0, 0, 100,
@@ -854,6 +857,9 @@ export async function PATCH(request: Request) {
           ),
           hide_24h_enabled: parseBoolean(
             formData.get("hide_24h_enabled"),
+          ),
+          hide_days: boundedInteger(
+            formData.get("hide_days"), 1, 1, 31,
           ),
 
           image_x: boundedInteger(
