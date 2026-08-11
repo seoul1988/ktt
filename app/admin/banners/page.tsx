@@ -1577,7 +1577,7 @@ export default function BannerManagementPage() {
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        min={1}
+                        min={1}    
                         max={31}
                         value={hideDays}
                         onChange={(event) => {
