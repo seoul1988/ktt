@@ -59,6 +59,7 @@ type Banner = {
   button_width?: number;
   button_height?: number;
   hide_24h_enabled?: boolean;
+  hide_days?: number;
   image_x: number;
   image_y: number;
   image_width: number;
@@ -369,6 +370,7 @@ export default function BannerManagementPage() {
   const [buttonWidth, setButtonWidth] = useState(34);
   const [buttonHeight, setButtonHeight] = useState(10);
   const [hide24HoursEnabled, setHide24HoursEnabled] = useState(true);
+  const [hideDays, setHideDays] = useState(1);
   const [imageX, setImageX] = useState(0);
   const [imageY, setImageY] = useState(0);
   const [imageWidth, setImageWidth] = useState(100);
@@ -539,6 +541,7 @@ export default function BannerManagementPage() {
     setButtonWidth(34);
     setButtonHeight(10);
     setHide24HoursEnabled(true);
+    setHideDays(1);
     setImageX(0);
     setImageY(0);
     setImageWidth(100);
@@ -626,6 +629,7 @@ export default function BannerManagementPage() {
     setButtonWidth(Number(banner.button_width) || 34);
     setButtonHeight(Number(banner.button_height) || 10);
     setHide24HoursEnabled(banner.hide_24h_enabled !== false);
+    setHideDays(Math.max(1, Math.min(31, Number(banner.hide_days) || 1)));
     setImageX(Number(banner.image_x) || 0);
     setImageY(Number(banner.image_y) || 0);
     setImageWidth(Number(banner.image_width) || 100);
@@ -746,6 +750,7 @@ export default function BannerManagementPage() {
       formData.append("button_width", String(buttonWidth));
       formData.append("button_height", String(buttonHeight));
       formData.append("hide_24h_enabled", String(hide24HoursEnabled));
+      formData.append("hide_days", String(Math.max(1, Math.min(31, hideDays))));
       formData.append("image_x", String(imageX));
       formData.append("image_y", String(imageY));
       formData.append("image_width", String(imageWidth));
@@ -1548,13 +1553,48 @@ export default function BannerManagementPage() {
                 )}
               </section>
 
-              <label className="flex items-center justify-between gap-3 rounded-2xl border border-[#D9CFC2] bg-white px-4 py-3">
-                <div>
-                  <div className="text-sm font-black text-[#172033]">24시간 숨기기 체크박스</div>
-                  <p className="mt-1 text-[11px] font-bold text-[#667085]">사용자가 체크하면 해당 기기에서 이 팝업을 24시간 표시하지 않습니다.</p>
-                </div>
-                <input type="checkbox" checked={hide24HoursEnabled} onChange={(event) => setHide24HoursEnabled(event.target.checked)} className="h-5 w-5 accent-green-600" />
-              </label>
+              <div className="rounded-2xl border border-[#D9CFC2] bg-white px-4 py-3">
+                <label className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black text-[#172033]">팝업 숨기기 체크박스</div>
+                    <p className="mt-1 text-[11px] font-bold text-[#667085]">
+                      사용자가 체크하면 해당 기기에서 아래에 지정한 기간 동안 이 팝업을 표시하지 않습니다.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={hide24HoursEnabled}
+                    onChange={(event) => setHide24HoursEnabled(event.target.checked)}
+                    className="h-5 w-5 accent-green-600"
+                  />
+                </label>
+
+                {hide24HoursEnabled && (
+                  <label className="mt-3 block">
+                    <span className="mb-1 block text-xs font-black text-[#667085]">
+                      다시 표시하지 않을 기간 (1일 ~ 31일)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={hideDays}
+                        onChange={(event) => {
+                          const value = Number(event.target.value);
+                          setHideDays(
+                            Number.isFinite(value)
+                              ? Math.max(1, Math.min(31, value))
+                              : 1,
+                          );
+                        }}
+                        className="w-24 rounded-xl border border-[#D9CFC2] bg-white px-3 py-2 text-sm font-black"
+                      />
+                      <span className="text-sm font-black text-[#172033]">일</span>
+                    </div>
+                  </label>
+                )}
+              </div>
 
               <label>
                 <span className="mb-1 block text-xs font-black text-[#667085]">
@@ -2051,7 +2091,7 @@ export default function BannerManagementPage() {
               {hide24HoursEnabled && (
                 <label className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[11px] font-black text-[#172033] shadow">
                   <input type="checkbox" className="h-4 w-4" onChange={() => undefined} />
-                  24시간 동안 이 팝업 보지 않기
+                  {hideDays}일 동안 이 팝업 보지 않기
                 </label>
               )}
             </div>
