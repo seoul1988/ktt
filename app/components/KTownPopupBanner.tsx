@@ -60,6 +60,8 @@ type PublicBanner = {
   button_height?: number | null;
 
   button_enabled?: boolean | null;
+  hide_24h_enabled?: boolean | null;
+  hide_days?: number | null;
   is_active?: boolean | null;
   display_location?: DisplayLocation | null;
   display_order?: number | null;
@@ -172,7 +174,7 @@ export default function KTownPopupBanner() {
   const [banners, setBanners] = useState<PublicBanner[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [closed, setClosed] = useState(false);
-  const [hide24Hours, setHide24Hours] = useState(false);
+  const [hideForPeriod, setHideForPeriod] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -188,7 +190,7 @@ export default function KTownPopupBanner() {
             setBanners([]);
             setCurrentIndex(0);
             setClosed(false);
-            setHide24Hours(false);
+            setHideForPeriod(false);
             setLoading(false);
           }
           return;
@@ -205,7 +207,7 @@ export default function KTownPopupBanner() {
         const payload = (await response.json()) as ApiResponse;
 
         if (!response.ok) {
-          throw new Error(payload.error || "팝업을 불러오지 못했습니다.");
+          throw new Error(payload.error || "Unable to load popup.");
         }
 
         const visible = (payload.banners || [])
@@ -222,7 +224,7 @@ export default function KTownPopupBanner() {
           setBanners(visible);
           setCurrentIndex(0);
           setClosed(false);
-          setHide24Hours(false);
+          setHideForPeriod(false);
         }
       } catch (error) {
         console.error("KTownPopupBanner load error:", error);
@@ -278,12 +280,13 @@ export default function KTownPopupBanner() {
   const imageZoom = Math.max(25, Math.min(300, safeNumber(banner.image_zoom, 100)));
   const imageFit = banner.image_fit || "cover";
   const link = normalizeUrl(banner.link_url);
+  const hideDays = Math.max(1, Math.min(31, safeNumber(banner.hide_days, 1)));
 
   function closePopup() {
-    if (hide24Hours) {
+    if (hideForPeriod && banner.hide_24h_enabled !== false) {
       localStorage.setItem(
         `${HIDE_PREFIX}${banner.id}`,
-        String(Date.now() + 24 * 60 * 60 * 1000),
+        String(Date.now() + hideDays * 24 * 60 * 60 * 1000),
       );
     }
 
@@ -294,7 +297,7 @@ export default function KTownPopupBanner() {
 
     if (next >= 0) {
       setCurrentIndex(next);
-      setHide24Hours(false);
+      setHideForPeriod(false);
       return;
     }
 
@@ -365,7 +368,7 @@ export default function KTownPopupBanner() {
           type="button"
           onClick={closePopup}
           className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/70 text-2xl font-black leading-none text-white shadow-lg transition hover:bg-black"
-          aria-label="팝업 닫기"
+          aria-label="Close popup"
         >
           ×
         </button>
@@ -447,15 +450,17 @@ export default function KTownPopupBanner() {
           )
         )}
 
-        <label className="absolute bottom-3 left-1/2 z-50 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur">
-          <input
-            type="checkbox"
-            checked={hide24Hours}
-            onChange={(event) => setHide24Hours(event.target.checked)}
-            className="h-4 w-4 accent-white"
-          />
-          Don't show again for 24 hours
-        </label>
+        {banner.hide_24h_enabled !== false && (
+          <label className="absolute bottom-3 left-1/2 z-50 flex -translate-x-1/2 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-black/70 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur">
+            <input
+              type="checkbox"
+              checked={hideForPeriod}
+              onChange={(event) => setHideForPeriod(event.target.checked)}
+              className="h-4 w-4 accent-white"
+            />
+            Don't show again for {hideDays} {hideDays === 1 ? "day" : "days"}
+          </label>
+        )}
       </div>
     </div>
   );
