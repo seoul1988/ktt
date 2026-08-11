@@ -6,14 +6,16 @@ export const revalidate = 0;
 
 function noStoreHeaders() {
   return {
-    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Cache-Control":
+      "no-store, no-cache, must-revalidate, max-age=0",
     Pragma: "no-cache",
     Expires: "0",
   };
 }
 
 export async function GET() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
 
   const supabaseKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -24,7 +26,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error:
-          "Supabase environment variables are missing. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+          "Supabase environment variables are missing.",
       },
       {
         status: 500,
@@ -52,13 +54,30 @@ export async function GET() {
       },
     );
 
-    const { data, error } = await supabase.rpc(
-      "get_all_time_hourly_visits",
-    );
+    /*
+     * visitor_logs의 실제 전체 행 개수를 셉니다.
+     *
+     * 중복 제거 안 함
+     * 같은 visitor_key가 여러 번 방문해도 모두 카운트
+     * 10,000개 제한 없음
+     *
+     * 2026-07-14 미국 동부시간 00:00부터 계산
+     * 07/14/2026은 EDT이므로 UTC 04:00
+     */
+    const { count, error } = await supabase
+      .from("visitor_logs")
+      .select("visitor_key", {
+        count: "exact",
+        head: true,
+      })
+      .gte(
+        "created_at",
+        "2026-07-14T04:00:00.000Z",
+      );
 
     if (error) {
       console.error(
-        "get_all_time_hourly_visits RPC failed:",
+        "visitor_logs total count failed:",
         error,
       );
 
@@ -73,7 +92,7 @@ export async function GET() {
       );
     }
 
-    const totalVisits = Number(data);
+    const totalVisits = Number(count ?? 0);
 
     if (
       !Number.isFinite(totalVisits) ||
@@ -94,8 +113,9 @@ export async function GET() {
     return NextResponse.json(
       {
         totalVisits,
+        since: "07/14/26",
         countingMethod:
-          "One visit per visitor_key per one-hour inactivity session",
+          "Total visitor_logs rows including repeat visits",
       },
       {
         status: 200,
