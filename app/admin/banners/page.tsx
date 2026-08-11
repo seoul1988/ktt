@@ -114,8 +114,8 @@ const TEMPLATES: Template[] = [
     type: "popup",
     style: "custom",
     icon: "🎨",
-    name: "자유 디자인 팝업",
-    description: "글자 크기, 색상, 이미지, 버튼과 정렬을 직접 디자인합니다.",
+    name: "Custom Design Popup",
+    description: "Customize font sizes, colors, images, buttons, and alignment.",
     title: "This Week's Special",
     subtitle: "Discover our signature dishes made with fresh ingredients.",
     buttonText: "View Menu",
@@ -145,7 +145,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "square",
     icon: "▣",
     name: "Square",
-    description: "모서리가 없는 기본 사각형",
+    description: "Basic square with sharp corners",
     popupRadius: 0,
     imageRadius: 0,
     buttonRadius: 0,
@@ -155,7 +155,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "rounded",
     icon: "▢",
     name: "Rounded",
-    description: "부드러운 둥근 모서리",
+    description: "Soft rounded corners",
     popupRadius: 28,
     imageRadius: 18,
     buttonRadius: 12,
@@ -165,7 +165,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "modern",
     icon: "✦",
     name: "Modern",
-    description: "큰 라운드와 깊은 그림자",
+    description: "Large rounded corners with a deep shadow",
     popupRadius: 36,
     imageRadius: 24,
     buttonRadius: 16,
@@ -175,7 +175,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "glass",
     icon: "◇",
     name: "Glass",
-    description: "가볍고 투명한 느낌",
+    description: "Light and transparent look",
     popupRadius: 32,
     imageRadius: 22,
     buttonRadius: 999,
@@ -187,7 +187,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "iphone",
     icon: "▯",
     name: "iPhone Style",
-    description: "모바일 카드처럼 큰 라운드",
+    description: "Large rounded corners like a mobile card",
     popupRadius: 44,
     imageRadius: 32,
     buttonRadius: 999,
@@ -197,7 +197,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "coupon",
     icon: "🎟",
     name: "Coupon",
-    description: "쿠폰 카드에 어울리는 스타일",
+    description: "A style designed for coupon cards",
     popupRadius: 20,
     imageRadius: 12,
     buttonRadius: 8,
@@ -207,7 +207,7 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     id: "circle",
     icon: "●",
     name: "Circle",
-    description: "최대한 둥근 캡슐·원형 스타일",
+    description: "Fully rounded capsule/circle style",
     popupRadius: 999,
     imageRadius: 999,
     buttonRadius: 999,
@@ -258,7 +258,7 @@ async function loadImage(file: File) {
 
     image.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("이미지를 읽지 못했습니다."));
+      reject(new Error("Unable to read the image."));
     };
 
     image.src = url;
@@ -267,11 +267,11 @@ async function loadImage(file: File) {
 
 async function resizeBannerImage(file: File) {
   if (!file.type.startsWith("image/")) {
-    throw new Error("이미지 파일만 선택하세요.");
+    throw new Error("Please select an image file only.");
   }
 
   if (file.size > 20 * 1024 * 1024) {
-    throw new Error("원본 파일은 20MB 이하만 선택할 수 있습니다.");
+    throw new Error("The original file must be 20MB or smaller.");
   }
 
   const image = await loadImage(file);
@@ -299,7 +299,7 @@ async function resizeBannerImage(file: File) {
   const context = canvas.getContext("2d");
 
   if (!context) {
-    throw new Error("이미지 처리 기능을 사용할 수 없습니다.");
+    throw new Error("Image processing is unavailable.");
   }
 
   context.imageSmoothingEnabled = true;
@@ -311,7 +311,7 @@ async function resizeBannerImage(file: File) {
       (blob) =>
         blob
           ? resolve(blob)
-          : reject(new Error("이미지 변환에 실패했습니다.")),
+          : reject(new Error("Image conversion failed.")),
       "image/webp",
       0.82,
     );
@@ -358,7 +358,7 @@ export default function BannerManagementPage() {
   const [textX, setTextX] = useState(8);
   const [textY, setTextY] = useState(16);
   const [textWidth, setTextWidth] = useState(84);
-  // 제목/설명/버튼을 서로 독립적으로 드래그하기 위한 위치/크기
+  // Title/Description/버튼을 서로 독립적으로 드래그하기 위한 위치/크기
   const [titleX, setTitleX] = useState(8);
   const [titleY, setTitleY] = useState(14);
   const [titleWidth, setTitleWidth] = useState(84);
@@ -370,7 +370,7 @@ export default function BannerManagementPage() {
   const [buttonWidth, setButtonWidth] = useState(34);
   const [buttonHeight, setButtonHeight] = useState(10);
   const [hide24HoursEnabled, setHide24HoursEnabled] = useState(true);
-  const [hideDays, setHideDays] = useState(1);
+  const [hideDays, setHideDays] = useState("1");
   const [imageX, setImageX] = useState(0);
   const [imageY, setImageY] = useState(0);
   const [imageWidth, setImageWidth] = useState(100);
@@ -424,7 +424,7 @@ export default function BannerManagementPage() {
     } = await supabase.auth.getSession();
 
     if (!session?.access_token) {
-      throw new Error("로그인이 필요합니다.");
+      throw new Error("Please log in.");
     }
 
     return session.access_token;
@@ -456,7 +456,7 @@ export default function BannerManagementPage() {
 
     if (!response.ok) {
       throw new Error(
-        data.error || "요청을 처리하지 못했습니다.",
+        data.error || "Unable to process the request.",
       );
     }
 
@@ -476,7 +476,7 @@ export default function BannerManagementPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "배너를 불러오지 못했습니다.",
+          : "Unable to load banners.",
       );
     } finally {
       setLoading(false);
@@ -541,7 +541,7 @@ export default function BannerManagementPage() {
     setButtonWidth(34);
     setButtonHeight(10);
     setHide24HoursEnabled(true);
-    setHideDays(1);
+    setHideDays("1");
     setImageX(0);
     setImageY(0);
     setImageWidth(100);
@@ -590,8 +590,8 @@ export default function BannerManagementPage() {
     setRemoveImageRequested(false);
     setImageStatus(
       banner.image_url
-        ? "✓ 기존 이미지가 등록되어 있습니다."
-        : "등록된 이미지가 없습니다.",
+        ? "✓ An existing image is registered."
+        : "No image is registered.",
     );
     setBackgroundColor(banner.background_color);
     setTextColor(banner.text_color);
@@ -629,7 +629,7 @@ export default function BannerManagementPage() {
     setButtonWidth(Number(banner.button_width) || 34);
     setButtonHeight(Number(banner.button_height) || 10);
     setHide24HoursEnabled(banner.hide_24h_enabled !== false);
-    setHideDays(Math.max(1, Math.min(31, Number(banner.hide_days) || 1)));
+    setHideDays(String(Math.max(1, Math.min(31, Number(banner.hide_days) || 1))));
     setImageX(Number(banner.image_x) || 0);
     setImageY(Number(banner.image_y) || 0);
     setImageWidth(Number(banner.image_width) || 100);
@@ -683,12 +683,12 @@ export default function BannerManagementPage() {
 
   async function saveBanner() {
     if (leadCaptureEnabled && !emailPlaceholder.trim()) {
-      alert("이메일 입력 안내 문구를 입력하세요.");
+      alert("Please enter the email placeholder text.");
       return;
     }
 
     if (!endsAt) {
-      alert("팝업 종료일을 입력하세요.");
+      alert("Please enter the popup end date.");
       return;
     }
 
@@ -697,7 +697,7 @@ export default function BannerManagementPage() {
       new Date(startsAt).getTime() >=
         new Date(endsAt).getTime()
     ) {
-      alert("종료일은 시작일보다 뒤여야 합니다.");
+      alert("The end date must be later than the start date.");
       return;
     }
 
@@ -750,7 +750,7 @@ export default function BannerManagementPage() {
       formData.append("button_width", String(buttonWidth));
       formData.append("button_height", String(buttonHeight));
       formData.append("hide_24h_enabled", String(hide24HoursEnabled));
-      formData.append("hide_days", String(Math.max(1, Math.min(31, hideDays))));
+      formData.append("hide_days", String(Math.max(1, Math.min(31, Number(hideDays) || 1))));
       formData.append("image_x", String(imageX));
       formData.append("image_y", String(imageY));
       formData.append("image_width", String(imageWidth));
@@ -811,7 +811,7 @@ export default function BannerManagementPage() {
       const isUploadingNewImage = Boolean(imageFile);
 
       if (imageFile) {
-        setImageStatus("이미지를 WEBP로 변환하고 업로드하는 중...");
+        setImageStatus("Converting the image to WEBP and uploading...");
 
         const resized = await resizeBannerImage(
           imageFile,
@@ -831,7 +831,7 @@ export default function BannerManagementPage() {
 
       if (!data.banner) {
         throw new Error(
-          "저장된 팝업 정보를 받지 못했습니다.",
+          "Unable to retrieve the saved popup information.",
         );
       }
 
@@ -840,18 +840,18 @@ export default function BannerManagementPage() {
         !data.banner.image_url
       ) {
         throw new Error(
-          "팝업 내용은 저장됐지만 이미지 경로가 저장되지 않았습니다.",
+          "The popup was saved, but the image path was not saved.",
         );
       }
 
       if (data.banner.image_url) {
-        setImageStatus("✓ 이미지가 Storage와 DB에 저장되었습니다.");
+        setImageStatus("✓ The image has been saved to Storage and the database.");
       }
 
       setMessage(
         editingBanner
-          ? "✓ 팝업을 수정했습니다."
-          : "✓ 팝업을 등록했습니다.",
+          ? "✓ Popup updated."
+          : "✓ Popup created.",
       );
 
       await loadBanners();
@@ -860,7 +860,7 @@ export default function BannerManagementPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "배너 저장 실패",
+          : "Failed to save banner.",
       );
     } finally {
       setSaving(false);
@@ -884,7 +884,7 @@ export default function BannerManagementPage() {
 
       if (!data.banner) {
         throw new Error(
-          "배너 상태를 변경하지 못했습니다.",
+          "Unable to change banner status.",
         );
       }
 
@@ -899,7 +899,7 @@ export default function BannerManagementPage() {
       setMessage(
         error instanceof Error
           ? error.message
-          : "배너 상태 변경 실패",
+          : "Failed to change banner status.",
       );
     } finally {
       setSaving(false);
@@ -909,7 +909,7 @@ export default function BannerManagementPage() {
   async function deleteBanner(banner: Banner) {
     if (
       !window.confirm(
-        `"${banner.title}" 배너를 삭제할까요?`,
+        `"${banner.title}" banner?`,
       )
     ) {
       return;
@@ -935,12 +935,12 @@ export default function BannerManagementPage() {
         applyTemplate(selectedTemplate);
       }
 
-      setMessage("✓ 배너를 삭제했습니다.");
+      setMessage("✓ Banner deleted.");
     } catch (error) {
       setMessage(
         error instanceof Error
           ? error.message
-          : "배너 삭제 실패",
+          : "Failed to delete banner.",
       );
     } finally {
       setSaving(false);
@@ -989,7 +989,7 @@ export default function BannerManagementPage() {
     return (
       <main className="min-h-screen bg-[#F8F5F0] p-6">
         <div className="mx-auto max-w-6xl rounded-3xl bg-white p-6 font-bold shadow-sm">
-          KTownTriangle 배너를 불러오는 중...
+          Loading KTownTriangle banners...
         </div>
       </main>
     );
@@ -1021,10 +1021,10 @@ export default function BannerManagementPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-black text-[#172033]">
-                배너 관리
+                Banner Management
               </h2>
               <p className="mt-1 text-sm font-medium text-[#667085]">
-                KTownTriangle 홈, 커뮤니티, 이벤트 등에 사용할 공용 배너를 관리합니다.
+                Manage shared banners for KTownTriangle Home, Community, Events, and more.
               </p>
             </div>
 
@@ -1041,13 +1041,13 @@ export default function BannerManagementPage() {
               }}
               className="shrink-0 rounded-xl bg-[#172033] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#26324A] active:scale-[0.98]"
             >
-              + 새 배너 추가
+              + Add New Banner
             </button>
           </div>
 
           <div className="mt-4 max-w-[280px]">
             <label className="mb-1.5 block text-xs font-black text-[#667085]">
-              표시 위치
+              Display Location
             </label>
             <select
               value={displayLocation}
@@ -1056,10 +1056,10 @@ export default function BannerManagementPage() {
               }
               className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-bold text-[#172033] outline-none focus:border-[#172033]"
             >
-              <option value="all">모든 위치</option>
-              <option value="home">홈</option>
-              <option value="community">커뮤니티</option>
-              <option value="events">이벤트</option>
+              <option value="all">All Locations</option>
+              <option value="home">Home</option>
+              <option value="community">Community</option>
+              <option value="events">Events</option>
             </select>
           </div>
         </section>
@@ -1078,11 +1078,11 @@ export default function BannerManagementPage() {
 
         <section id="banner-editor" className="scroll-mt-5 rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
           <h2 className="text-lg font-black text-[#172033]">
-            자유 디자인 팝업
+            Custom Design Popup
           </h2>
           <p className="mt-2 text-sm font-medium leading-6 text-[#667085]">
-            기본 포맷 하나에서 제목, 설명, 이미지, 버튼, 글자 크기와 색상을 직접 설정합니다.
-            실제 팝업에 표시되는 글씨는 영어로 입력하세요.
+            Customize the title, description, image, button, font sizes, and colors using one flexible popup format.
+            Enter the text that will appear in the actual popup in English.
           </p>
         </section>
 
@@ -1090,15 +1090,15 @@ export default function BannerManagementPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-[#172033]">
-                팝업 스타일 프리셋
+                Popup Style Presets
               </h2>
               <p className="mt-1 text-xs font-medium text-[#667085]">
-                프리셋을 누르면 모서리, 이미지, 버튼과 그림자가 한 번에 적용됩니다.
+                Select a preset to apply corners, image style, buttons, and shadows at once.
               </p>
             </div>
 
             <span className="rounded-full bg-[#FFF3DF] px-3 py-1.5 text-xs font-black text-[#B64032]">
-              선택: {POPUP_STYLE_PRESETS.find((item) => item.id === stylePreset)?.name || "Custom"}
+              Selected: {POPUP_STYLE_PRESETS.find((item) => item.id === stylePreset)?.name || "Custom"}
             </span>
           </div>
 
@@ -1160,10 +1160,10 @@ export default function BannerManagementPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black text-[#172033]">
-                    팝업 내용과 디자인
+                    Popup Content & Design
                   </h2>
                   <p className="mt-1 text-[11px] font-bold text-[#667085]">
-                    아래 설정 영역만 스크롤됩니다. 미리보기는 옆에 그대로 유지됩니다.
+                    Only the settings area below scrolls. The preview remains visible beside it.
                   </p>
                 </div>
                 <span className="hidden rounded-full bg-[#FFF3DF] px-3 py-1 text-[10px] font-black text-[#B64032] lg:inline-flex">
@@ -1175,9 +1175,9 @@ export default function BannerManagementPage() {
             <div className="popup-design-scroll grid gap-4 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-3 [scrollbar-gutter:stable]">
               <label className="flex items-center justify-between gap-3 rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] px-4 py-3">
                 <div>
-                  <div className="text-sm font-black text-[#172033]">글자 표시</div>
+                  <div className="text-sm font-black text-[#172033]">Show Text</div>
                   <p className="mt-1 text-[11px] font-bold text-[#667085]">
-                    끄면 제목·설명만 숨깁니다. 버튼은 아래의 '버튼 사용'에서 별도로 켜고 끌 수 있습니다.
+                    Turn this off to hide only the title and description. The button can be enabled or disabled separately below.
                   </p>
                 </div>
                 <input
@@ -1191,7 +1191,7 @@ export default function BannerManagementPage() {
               <div className="contents">
               <label>
                 <span className="mb-1 block text-xs font-black text-[#667085]">
-                  제목
+                  Title
                 </span>
                 <input
                   value={title}
@@ -1204,7 +1204,7 @@ export default function BannerManagementPage() {
 
               <label>
                 <span className="mb-1 block text-xs font-black text-[#667085]">
-                  설명
+                  Description
                 </span>
                 <textarea
                   value={subtitle}
@@ -1219,7 +1219,7 @@ export default function BannerManagementPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    제목 크기
+                    Title 크기
                   </span>
                   <input
                     type="number"
@@ -1235,7 +1235,7 @@ export default function BannerManagementPage() {
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    설명 크기
+                    Description 크기
                   </span>
                   <input
                     type="number"
@@ -1251,7 +1251,7 @@ export default function BannerManagementPage() {
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    글자 정렬
+                    Text Alignment
                   </span>
                   <select
                     value={textAlign}
@@ -1260,9 +1260,9 @@ export default function BannerManagementPage() {
                     }
                     className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-black"
                   >
-                    <option value="left">왼쪽</option>
-                    <option value="center">가운데</option>
-                    <option value="right">오른쪽</option>
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
                   </select>
                 </label>
               </div>
@@ -1270,7 +1270,7 @@ export default function BannerManagementPage() {
               <div className="grid gap-3 sm:grid-cols-3">
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    제목 굵기
+                    Title 굵기
                   </span>
                   <select
                     value={titleFontWeight}
@@ -1279,16 +1279,16 @@ export default function BannerManagementPage() {
                     }
                     className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-black"
                   >
-                    <option value={400}>보통</option>
-                    <option value={600}>중간</option>
-                    <option value={700}>굵게</option>
-                    <option value={900}>아주 굵게</option>
+                    <option value={400}>Regular</option>
+                    <option value={600}>Medium</option>
+                    <option value={700}>Bold</option>
+                    <option value={900}>아주 Bold</option>
                   </select>
                 </label>
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    설명 굵기
+                    Description 굵기
                   </span>
                   <select
                     value={subtitleFontWeight}
@@ -1297,16 +1297,16 @@ export default function BannerManagementPage() {
                     }
                     className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-black"
                   >
-                    <option value={400}>보통</option>
-                    <option value={500}>중간</option>
-                    <option value={600}>약간 굵게</option>
-                    <option value={700}>굵게</option>
+                    <option value={400}>Regular</option>
+                    <option value={500}>Medium</option>
+                    <option value={600}>약간 Bold</option>
+                    <option value={700}>Bold</option>
                   </select>
                 </label>
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    팝업 가로 크기 (px)
+                    Popup Width (px)
                   </span>
                   <div className="space-y-2">
                     <input
@@ -1336,11 +1336,11 @@ export default function BannerManagementPage() {
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {[
-                  ["배경색", backgroundColor, setBackgroundColor],
-                  ["제목색", titleColor, setTitleColor],
-                  ["설명색", subtitleColor, setSubtitleColor],
-                  ["버튼색", buttonColor, setButtonColor],
-                  ["버튼 글자", buttonTextColor, setButtonTextColor],
+                  ["Background", backgroundColor, setBackgroundColor],
+                  ["Title색", titleColor, setTitleColor],
+                  ["Description색", subtitleColor, setSubtitleColor],
+                  ["Button Color", buttonColor, setButtonColor],
+                  ["Button Text", buttonTextColor, setButtonTextColor],
                 ].map(([label, value, setter]) => (
                   <label key={String(label)}>
                     <span className="mb-1 block text-[11px] font-black text-[#667085]">
@@ -1361,14 +1361,14 @@ export default function BannerManagementPage() {
               </div>
 
               <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
-                <div className="text-sm font-black text-[#172033]">각 요소 위치 · 크기</div>
+                <div className="text-sm font-black text-[#172033]">Element Position & Size</div>
                 <p className="mt-1 text-[11px] font-bold leading-5 text-[#667085]">
-                  미리보기에서 제목, 설명, 버튼을 각각 직접 드래그해 위치를 바꿀 수 있습니다. 아래에서는 각 요소의 가로 크기를 조절합니다.
+                  미리보기에서 Title, Description, 버튼을 각각 직접 드래그해 위치를 바꿀 수 있습니다. 아래에서는 각 요소의 가로 크기를 조절합니다.
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <NumberControl label="제목 가로 (%)" value={titleWidth} min={10} max={100} onChange={setTitleWidth} />
-                  <NumberControl label="설명 가로 (%)" value={subtitleWidth} min={10} max={100} onChange={setSubtitleWidth} />
-                  <NumberControl label="버튼 가로 (%)" value={buttonWidth} min={8} max={100} onChange={setButtonWidth} />
+                  <NumberControl label="Title 가로 (%)" value={titleWidth} min={10} max={100} onChange={setTitleWidth} />
+                  <NumberControl label="Description 가로 (%)" value={subtitleWidth} min={10} max={100} onChange={setSubtitleWidth} />
+                  <NumberControl label="Button Width (%)" value={buttonWidth} min={8} max={100} onChange={setButtonWidth} />
                 </div>
               </div>
 
@@ -1376,10 +1376,10 @@ export default function BannerManagementPage() {
                 <label className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-black text-[#172033]">
-                      버튼 사용
+                      Enable Button
                     </div>
                     <p className="mt-1 text-[11px] font-bold leading-5 text-[#667085]">
-                      배경 이미지 모드에서도 버튼을 자유롭게 추가하고 미리보기에서 원하는 위치로 드래그할 수 있습니다.
+                      You can add a button even in background-image mode and drag it to the desired position in the preview.
                     </p>
                   </div>
                   <input
@@ -1395,24 +1395,24 @@ export default function BannerManagementPage() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label>
                         <span className="mb-1 block text-xs font-black text-[#667085]">
-                          버튼 글씨
+                          Button Text
                         </span>
                         <input
                           value={buttonText}
                           onChange={(event) => setButtonText(event.target.value)}
-                          placeholder="예: 자세히 보기"
+                          placeholder="e.g. Learn More"
                           className="w-full rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-600"
                         />
                       </label>
 
                       <label>
                         <span className="mb-1 block text-xs font-black text-[#667085]">
-                          버튼 링크 주소
+                          Button Link URL
                         </span>
                         <input
                           value={linkUrl}
                           onChange={(event) => setLinkUrl(event.target.value)}
-                          placeholder="/events 또는 https://..."
+                          placeholder="/events or https://..."
                           className="w-full rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-600"
                         />
                       </label>
@@ -1420,14 +1420,14 @@ export default function BannerManagementPage() {
 
                     <div>
                       <span className="mb-2 block text-xs font-black text-[#667085]">
-                        버튼 모양
+                        Button Shape
                       </span>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {[
-                          { name: "사각", radius: 0 },
-                          { name: "살짝 둥근", radius: 8 },
-                          { name: "둥근", radius: 18 },
-                          { name: "캡슐", radius: 999 },
+                          { name: "Square", radius: 0 },
+                          { name: "Slightly Rounded", radius: 8 },
+                          { name: "Rounded", radius: 18 },
+                          { name: "Pill", radius: 999 },
                         ].map((shape) => (
                           <button
                             key={shape.name}
@@ -1448,14 +1448,14 @@ export default function BannerManagementPage() {
 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <NumberControl
-                        label="버튼 가로 크기 (%)"
+                        label="Button Width (%)"
                         value={buttonWidth}
                         min={8}
                         max={100}
                         onChange={setButtonWidth}
                       />
                       <NumberControl
-                        label="버튼 높이 (%)"
+                        label="Button Height (%)"
                         value={buttonHeight}
                         min={4}
                         max={35}
@@ -1464,7 +1464,7 @@ export default function BannerManagementPage() {
 
                       <label>
                         <span className="mb-1 block text-xs font-black text-[#667085]">
-                          버튼 글자 크기
+                          Button Text 크기
                         </span>
                         <input
                           type="number"
@@ -1477,7 +1477,7 @@ export default function BannerManagementPage() {
                       </label>
 
                       <NumberControl
-                        label="버튼 모서리 직접 조절 (px)"
+                        label="Button Corner Radius (px)"
                         value={buttonRadius}
                         min={0}
                         max={999}
@@ -1488,7 +1488,7 @@ export default function BannerManagementPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <label>
                         <span className="mb-1 block text-xs font-black text-[#667085]">
-                          버튼 배경색
+                          버튼 Background
                         </span>
                         <input
                           type="color"
@@ -1500,7 +1500,7 @@ export default function BannerManagementPage() {
 
                       <label>
                         <span className="mb-1 block text-xs font-black text-[#667085]">
-                          버튼 글자색
+                          Button Text색
                         </span>
                         <input
                           type="color"
@@ -1512,7 +1512,7 @@ export default function BannerManagementPage() {
                     </div>
 
                     <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[11px] font-bold leading-5 text-emerald-800">
-                      오른쪽 미리보기의 초록 점선 버튼을 마우스로 잡고 원하는 위치로 자유롭게 이동하세요.
+                      Right 미리보기의 초록 점선 버튼을 마우스로 잡고 원하는 위치로 자유롭게 이동하세요.
                     </div>
                   </div>
                 )}
@@ -1522,8 +1522,8 @@ export default function BannerManagementPage() {
               <section className="rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] p-4">
                 <label className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-black text-[#172033]">이메일 수집 + 쿠폰 발급</div>
-                    <p className="mt-1 text-xs font-medium text-[#667085]">이메일을 저장하고 고유 쿠폰 코드를 발급하며, 선택적으로 리워드 가입 페이지로 연결합니다.</p>
+                    <div className="text-sm font-black text-[#172033]">이메Days 수집 + 쿠폰 발급</div>
+                    <p className="mt-1 text-xs font-medium text-[#667085]">이메Days을 저장하고 고유 쿠폰 코드를 발급하며, 선택적으로 리워드 가입 페이지로 연결합니다.</p>
                   </div>
                   <input type="checkbox" checked={leadCaptureEnabled} onChange={(event) => setLeadCaptureEnabled(event.target.checked)} className="h-5 w-5 accent-green-600" />
                 </label>
@@ -1531,13 +1531,13 @@ export default function BannerManagementPage() {
                 {leadCaptureEnabled && (
                   <div className="mt-4 grid gap-3">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <FieldInput label="이메일 placeholder" value={emailPlaceholder} onChange={setEmailPlaceholder} />
+                      <FieldInput label="이메Days placeholder" value={emailPlaceholder} onChange={setEmailPlaceholder} />
                       <FieldInput label="제출 버튼 텍스트" value={submitButtonText} onChange={setSubmitButtonText} />
                       <FieldInput label="성공 메시지" value={successMessage} onChange={setSuccessMessage} />
                       <FieldInput label="쿠폰 코드 접두어" value={couponCodePrefix} onChange={setCouponCodePrefix} placeholder="WELCOME" />
                       <FieldInput label="리워드 가입 주소 (선택)" value={rewardSignupUrl} onChange={setRewardSignupUrl} placeholder="https://..." />
                       <label>
-                        <span className="mb-1 block text-xs font-black text-[#667085]">폼 배경색</span>
+                        <span className="mb-1 block text-xs font-black text-[#667085]">폼 Background</span>
                         <input type="color" value={formBackgroundColor} onChange={(event) => setFormBackgroundColor(event.target.value)} className="h-11 w-full rounded-xl border border-[#D9CFC2] bg-white p-1" />
                       </label>
                     </div>
@@ -1547,7 +1547,7 @@ export default function BannerManagementPage() {
                     </label>
                     <label className="flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black">
                       <input type="checkbox" checked={leadExpandedMode} onChange={(event) => setLeadExpandedMode(event.target.checked)} className="h-4 w-4 accent-green-600" />
-                      처음에는 이메일 입력만 표시하고, 클릭하면 약관과 제출 버튼 펼치기
+                      처음에는 이메Days 입력만 표시하고, 클릭하면 약관과 제출 버튼 펼치기
                     </label>
                   </div>
                 )}
@@ -1556,9 +1556,9 @@ export default function BannerManagementPage() {
               <div className="rounded-2xl border border-[#D9CFC2] bg-white px-4 py-3">
                 <label className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-black text-[#172033]">팝업 숨기기 체크박스</div>
+                    <div className="text-sm font-black text-[#172033]">Hide Popup Checkbox</div>
                     <p className="mt-1 text-[11px] font-bold text-[#667085]">
-                      사용자가 체크하면 해당 기기에서 아래에 지정한 기간 동안 이 팝업을 표시하지 않습니다.
+                      When checked, this popup will not be shown on that device for the period specified below.
                     </p>
                   </div>
                   <input
@@ -1572,25 +1572,47 @@ export default function BannerManagementPage() {
                 {hide24HoursEnabled && (
                   <label className="mt-3 block">
                     <span className="mb-1 block text-xs font-black text-[#667085]">
-                      다시 표시하지 않을 기간 (1일 ~ 31일)
+                      Do Not Show Again For (1–31 Days)
                     </span>
                     <div className="flex items-center gap-2">
                       <input
                         type="number"
-                        min={1}    
+                        min={1}
                         max={31}
                         value={hideDays}
                         onChange={(event) => {
-                          const value = Number(event.target.value);
+                          const raw = event.target.value;
+
+                          // 입력 중에는 빈칸을 허용해야 기존 "1"을 지우고
+                          // "10", "15", "31" 같은 값을 정상적으로 입력할 수 있습니다.
+                          if (raw === "") {
+                            setHideDays("");
+                            return;
+                          }
+
+                          if (!/^\\d{1,2}$/.test(raw)) {
+                            return;
+                          }
+
+                          const value = Number(raw);
+
+                          if (value >= 1 && value <= 31) {
+                            setHideDays(raw);
+                          }
+                        }}
+                        onBlur={() => {
+                          const value = Number(hideDays);
                           setHideDays(
-                            Number.isFinite(value)
-                              ? Math.max(1, Math.min(31, value))
-                              : 1,
+                            String(
+                              Number.isFinite(value)
+                                ? Math.max(1, Math.min(31, value))
+                                : 1,
+                            ),
                           );
                         }}
                         className="w-24 rounded-xl border border-[#D9CFC2] bg-white px-3 py-2 text-sm font-black"
                       />
-                      <span className="text-sm font-black text-[#172033]">일</span>
+                      <span className="text-sm font-black text-[#172033]">Days</span>
                     </div>
                   </label>
                 )}
@@ -1733,7 +1755,7 @@ export default function BannerManagementPage() {
                   className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-black"
                 >
                   <option value="top">자유 배치</option>
-                  <option value="left">왼쪽</option>
+                  <option value="left">Left</option>
                   <option value="background">배경 이미지</option>
                 </select>
               </label>
@@ -1751,7 +1773,7 @@ export default function BannerManagementPage() {
                     className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-black"
                   >
                     <option value="contain">전체 보기 · 원본 비율</option>
-                    <option value="cover">영역 꽉 채우기 · 일부 잘림</option>
+                    <option value="cover">영역 꽉 채우기 · Days부 잘림</option>
                     <option value="fill">영역에 맞춰 늘리기</option>
                   </select>
                 </label>
@@ -1802,7 +1824,7 @@ export default function BannerManagementPage() {
                     >
                       <option value="none">없음</option>
                       <option value="small">작게</option>
-                      <option value="medium">중간</option>
+                      <option value="medium">Medium</option>
                       <option value="large">크게</option>
                       <option value="glass">Glass</option>
                     </select>
@@ -1815,7 +1837,7 @@ export default function BannerManagementPage() {
                   팝업·이미지 크기 및 위치
                 </h3>
                 <p className="mt-1 text-xs font-medium leading-5 text-[#667085]">
-                  아래 슬라이더로 크기를 조절하고, 오른쪽 미리보기에서는
+                  아래 슬라이더로 크기를 조절하고, Right 미리보기에서는
                   점선 박스를 직접 끌어서 위치를 바꿀 수 있습니다.
                 </p>
 
@@ -1832,11 +1854,11 @@ export default function BannerManagementPage() {
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <NumberControl label="팝업 세로 크기 (px)" value={popupHeight} min={320} max={900} onChange={setPopupHeight} />
                   <NumberControl label="글자 영역 가로 크기 (%)" value={textWidth} min={20} max={100} onChange={setTextWidth} />
-                  <NumberControl label="글자 왼쪽 위치 (%)" value={textX} min={0} max={Math.max(0, 100 - textWidth)} onChange={setTextX} />
+                  <NumberControl label="글자 Left 위치 (%)" value={textX} min={0} max={Math.max(0, 100 - textWidth)} onChange={setTextX} />
                   <NumberControl label="글자 위쪽 위치 (%)" value={textY} min={0} max={92} onChange={setTextY} />
                   <NumberControl label="이미지 가로 크기 (%)" value={imageWidth} min={10} max={100} onChange={setImageWidth} />
                   <NumberControl label="이미지 세로 크기 (%)" value={imageHeight} min={10} max={100} onChange={setImageHeight} />
-                  <NumberControl label="이미지 왼쪽 위치 (%)" value={imageX} min={0} max={Math.max(0, 100 - imageWidth)} onChange={setImageX} />
+                  <NumberControl label="이미지 Left 위치 (%)" value={imageX} min={0} max={Math.max(0, 100 - imageWidth)} onChange={setImageX} />
                   <NumberControl label="이미지 위쪽 위치 (%)" value={imageY} min={0} max={Math.max(0, 100 - imageHeight)} onChange={setImageY} />
                 </div>
               </div>
@@ -1861,7 +1883,7 @@ export default function BannerManagementPage() {
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    시작일
+                    시작Days
                   </span>
                   <input
                     type="datetime-local"
@@ -1875,7 +1897,7 @@ export default function BannerManagementPage() {
 
                 <label>
                   <span className="mb-1 block text-xs font-black text-[#667085]">
-                    종료일 (필수)
+                    종료Days (필수)
                   </span>
                   <input
                     type="datetime-local"
@@ -1938,7 +1960,7 @@ export default function BannerManagementPage() {
 
               <div className="flex flex-wrap gap-2 text-[11px] font-black">
                 <span className="rounded-full bg-blue-100 px-3 py-1.5 text-blue-700">
-                  {textEnabled ? "파란 점선 = 제목 · 설명 드래그 / 초록 점선 = 버튼 드래그" : "제목·설명 숨김 / 초록 점선 버튼은 계속 드래그 가능"}
+                  {textEnabled ? "파란 점선 = Title · Description 드래그 / 초록 점선 = 버튼 드래그" : "Title·Description 숨김 / 초록 점선 버튼은 계속 드래그 가능"}
                 </span>
                 <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700">
                   점선 이미지 박스 = 이미지 위치·크기
@@ -1947,8 +1969,8 @@ export default function BannerManagementPage() {
             </div>
 
             <p className="mt-2 text-xs font-medium leading-5 text-[#667085]">
-              {textEnabled ? "제목 · 설명을 각각 마우스로 끌어 이동하세요. 버튼도 별도로 자유 드래그할 수 있습니다. " : "제목·설명은 숨김 상태입니다. 버튼은 별도로 자유 드래그할 수 있습니다. "}
-              크기는 왼쪽의 슬라이더에서 조절합니다.
+              {textEnabled ? "Title · Description을 각각 마우스로 끌어 이동하세요. 버튼도 별도로 자유 드래그할 수 있습니다. " : "Title·Description은 숨김 상태입니다. 버튼은 별도로 자유 드래그할 수 있습니다. "}
+              크기는 Left의 슬라이더에서 조절합니다.
             </p>
 
             <div
@@ -2044,7 +2066,7 @@ export default function BannerManagementPage() {
                   <div style={{ color: titleColor, fontSize: `${titleFontSize}px`, fontWeight: titleFontWeight, lineHeight: 1.15 }}>
                     {title}
                   </div>
-                  <span className="absolute -top-5 left-0 rounded bg-blue-600 px-1.5 py-0.5 text-[9px] font-black text-white">제목 이동</span>
+                  <span className="absolute -top-5 left-0 rounded bg-blue-600 px-1.5 py-0.5 text-[9px] font-black text-white">Title 이동</span>
                 </div>
               )}
 
@@ -2060,7 +2082,7 @@ export default function BannerManagementPage() {
                   <p style={{ color: subtitleColor, fontSize: `${subtitleFontSize}px`, fontWeight: subtitleFontWeight, lineHeight: 1.45 }}>
                     {subtitle}
                   </p>
-                  <span className="absolute -top-5 left-0 rounded bg-sky-600 px-1.5 py-0.5 text-[9px] font-black text-white">설명 이동</span>
+                  <span className="absolute -top-5 left-0 rounded bg-sky-600 px-1.5 py-0.5 text-[9px] font-black text-white">Description 이동</span>
                 </div>
               )}
 
@@ -2091,7 +2113,7 @@ export default function BannerManagementPage() {
               {hide24HoursEnabled && (
                 <label className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[11px] font-black text-[#172033] shadow">
                   <input type="checkbox" className="h-4 w-4" onChange={() => undefined} />
-                  {hideDays}일 동안 이 팝업 보지 않기
+                  {Math.max(1, Math.min(31, Number(hideDays) || 1))} Days — Do Not Show This Popup
                 </label>
               )}
             </div>
@@ -2175,12 +2197,12 @@ export default function BannerManagementPage() {
                       <p className="mt-1 text-xs font-medium text-[#667085]">
                         순서 {banner.display_order} · {
                           banner.display_location === "community"
-                            ? "커뮤니티"
+                            ? "Community"
                             : banner.display_location === "events"
-                              ? "이벤트"
+                              ? "Events"
                               : banner.display_location === "home"
-                                ? "홈"
-                                : "모든 위치"
+                                ? "Home"
+                                : "All Locations"
                         }
                         {banner.starts_at
                           ? ` · 시작 ${new Date(
