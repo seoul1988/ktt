@@ -195,7 +195,7 @@ export default function RootLayout({
           <AppUpdateNotice />
 
           {/* 공용 팝업 */}
-{/* <KTownPopupBanner /> */}
+          <KTownPopupBanner />
 
           {/*
            * 중요:
