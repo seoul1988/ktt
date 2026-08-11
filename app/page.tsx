@@ -8,6 +8,7 @@ import ProfileButton from "./components/ProfileButton";
 import AuthRefreshWrapper from "./components/AuthRefreshWrapper";
 import InstallAppButton from "./components/InstallAppButton";
 import FeaturedSponsorSlider from "./components/FeaturedSponsorSlider";
+import KTownPopupBanner from "./components/KTownPopupBanner";
 
 import TodaysKoreaNewsModal from "./components/TodaysKoreaNewsModal";
 
@@ -786,6 +787,7 @@ const kdramaNews = (todaysKoreaPosts || [])
 
   return (
     <>
+      <KTownPopupBanner />
           <InstallAppButton />
    
 

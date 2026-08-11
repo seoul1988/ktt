@@ -45,7 +45,6 @@ export const metadata: Metadata = {
     "Discover Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, deals, and everything Korean across Raleigh, Cary, Durham, Chapel Hill, and the Triangle.",
 
   applicationName: "KTown Triangle",
-
   manifest: "/manifest.webmanifest",
 
   alternates: {
@@ -54,20 +53,13 @@ export const metadata: Metadata = {
 
   openGraph: {
     title: "Discover Korean Town in the Triangle | KTown Triangle",
-
     description:
       "Find Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, deals, and everything Korean across Raleigh, Cary, Durham, Chapel Hill, and the Triangle.",
-
     url: SITE_URL,
-
     siteName: "KTown Triangle",
-
     locale: "en_US",
-
     alternateLocale: ["ko_KR"],
-
     type: "website",
-
     images: [
       {
         url: OG_IMAGE_URL,
@@ -82,12 +74,9 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
-
     title: "Discover Korean Town in the Triangle | KTown Triangle",
-
     description:
       "Explore Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, local deals, and everything Korean in one place.",
-
     images: [
       {
         url: OG_IMAGE_URL,
@@ -109,13 +98,11 @@ export const metadata: Metadata = {
         sizes: "32x32",
         type: "image/png",
       },
-
       {
         url: "/icon-192.png",
         sizes: "192x192",
         type: "image/png",
       },
-
       {
         url: "/icon-512.png",
         sizes: "512x512",
@@ -137,7 +124,6 @@ export const metadata: Metadata = {
         sizes: "180x180",
         type: "image/png",
       },
-
       {
         url: "/icon-192.png",
         sizes: "192x192",
@@ -155,25 +141,14 @@ export const metadata: Metadata = {
   },
 };
 
-/*
- * 모바일/PWA 화면 크기 고정
- *
- * Android PWA에서 화면이 작게 렌더링된 뒤
- * 사용자가 확대하면서 fixed BottomNav가 화면 밖으로
- * 밀리는 현상을 방지합니다.
- */
 export const viewport: Viewport = {
   themeColor: "#F8F3EC",
-
   width: "device-width",
-
   initialScale: 1,
-
   minimumScale: 1,
-
-  maximumScale: 1,
-
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -186,98 +161,51 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
       style={{
-        width: "100%",
-        minHeight: "100%",
         backgroundColor: "#F8F3EC",
+        touchAction: "auto",
       }}
       suppressHydrationWarning
     >
       <body
-        className="
-          min-h-screen
-          w-full
-          overflow-x-hidden
-          bg-[#F8F3EC]
-          text-[#172033]
-        "
+        className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
         style={{
-          width: "100%",
-          minWidth: "100%",
-          margin: 0,
-          padding: 0,
           backgroundColor: "#F8F3EC",
-          overflowX: "hidden",
+          touchAction: "auto",
         }}
       >
         <AuthProvider>
-          {/*
-           * PWA Service Worker
-           */}
           <ServiceWorkerRegister />
 
           {/*
-           * 메인 KTown 설치 버튼
-           *
-           * /business/[id]/website 페이지에서는
-           * 비즈니스 전용 InstallAppButton을 사용합니다.
+           * 메인 KTown 페이지에서만 설치 버튼을 표시합니다.
+           * /business/[id]/website 페이지에서는 비즈니스 전용
+           * InstallAppButton을 사용하므로 여기서는 자동으로 숨깁니다.
            */}
           <MainInstallAppButton />
 
           {/*
-           * Instagram / Facebook / Threads
-           * → 영어 안내
-           *
-           * KakaoTalk
-           * → 한글 안내
-           *
-           * 일반 Chrome / Safari
-           * → 표시하지 않음
+           * Instagram, Facebook, Threads는 영어 안내
+           * KakaoTalk은 한글 안내
+           * Chrome/Safari는 안내 없음
            */}
           <InAppBrowserNotice />
 
-          {/*
-           * 방문자 카운트
-           */}
           <VisitorTracker />
-
-          {/*
-           * 앱 아이콘 Badge
-           */}
           <AppBadgeManager />
-
-          {/*
-           * PWA 업데이트 안내
-           */}
           <AppUpdateNotice />
 
-          {/*
-           * 공용 Popup Banner
-           */}
+          {/* 공용 팝업 */}
           <KTownPopupBanner />
 
           {/*
-           * 중요
-           *
-           * 예전에 사용했던:
-           *
-           * <div className="app-safe-area">
-           *   {children}
-           * </div>
-           *
-           * 를 사용하지 않습니다.
-           *
-           * BottomNav가 자체적으로
-           * safe-area-inset-bottom을 처리하고 있기 때문에
-           * RootLayout에서 다시 적용하면
-           * Android PWA에서 화면 계산이 꼬일 수 있습니다.
+           * 중요:
+           * RootLayout 전체에 app-safe-area를 씌우지 않습니다.
+           * BottomNav 자체에서 safe-area를 처리합니다.
            */}
           {children}
         </AuthProvider>
 
-        {/*
-         * Google Analytics 4
-         * Google Ads
-         */}
+        {/* Google Analytics 4 and Google Ads */}
         <Script
           id="google-tag-manager"
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
