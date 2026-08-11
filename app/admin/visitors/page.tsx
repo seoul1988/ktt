@@ -16,20 +16,12 @@ type VisitorLogRow = {
 };
 
 const PAGE_SIZE = 1000;
-const MAX_VISITOR_LOGS = 10000;
 
 async function loadAllVisitorLogs() {
   const allLogs: VisitorLogRow[] = [];
 
-  for (
-    let from = 0;
-    from < MAX_VISITOR_LOGS;
-    from += PAGE_SIZE
-  ) {
-    const to = Math.min(
-      from + PAGE_SIZE - 1,
-      MAX_VISITOR_LOGS - 1,
-    );
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const to = from + PAGE_SIZE - 1;
 
     const { data, error } = await supabase
       .from("visitor_logs")
@@ -70,7 +62,7 @@ async function loadAllVisitorLogs() {
   }
 
   return {
-    data: allLogs.slice(0, MAX_VISITOR_LOGS),
+    data: allLogs,
     error: null,
   };
 }
@@ -244,6 +236,12 @@ export default async function AdminVisitorsPage() {
       .filter((value): value is string => Boolean(value)),
   ).size;
 
+  const allTimeUniqueVisitors = new Set(
+    logs
+      .map((row) => row.visitor_key)
+      .filter((value): value is string => Boolean(value)),
+  ).size;
+
   const todayUniqueVisitors = new Set(
     todayLogs
       .map((row) => row.visitor_key)
@@ -342,6 +340,11 @@ export default async function AdminVisitorsPage() {
               <StatRow
                 label="👤 이번 달 중복 제외 방문자"
                 value={monthlyUniqueVisitors}
+              />
+
+              <StatRow
+                label="👤 Since 07/12/26 : 총 중복 제외 방문자 수"
+                value={allTimeUniqueVisitors}
               />
 
               <StatRow label="👣 전체 접속 수" value={totalVisits} />
