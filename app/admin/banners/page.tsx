@@ -1590,7 +1590,7 @@ export default function BannerManagementPage() {
                             return;
                           }
 
-                          if (!/^\\d{1,2}$/.test(raw)) {
+                          if (!/^\d{1,2}$/.test(raw)) {
                             return;
                           }
 
