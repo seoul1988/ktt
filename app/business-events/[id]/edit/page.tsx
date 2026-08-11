@@ -5,15 +5,130 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Autocomplete, useLoadScript } from "@react-google-maps/api";
 import { supabase } from "../../../../lib/supabase";
-import ProfileButton from "../../../components/ProfileButton";
 import BottomNav from "../../../components/BottomNav";
 
 const libraries: "places"[] = ["places"];
 
+function normalizeUrl(value: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) return "";
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function formatDateTimeLocal(value: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - offset * 60 * 1000);
+
+  return localDate.toISOString().slice(0, 16);
+}
+
+
 export default function EditBusinessEventPage() {
   const router = useRouter();
   const params = useParams();
-  const id = String(params.id);
+  const id = String(params.id || "");
+
+  const [event, setEvent] = useState<any>(null);
+  const [loadingEvent, setLoadingEvent] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadEvent() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          alert("로그인이 필요합니다.");
+          router.replace("/login");
+          return;
+        }
+
+        const { data: currentEvent, error } = await supabase
+          .from("business_events")
+          .select("*")
+          .eq("id", id)
+          .maybeSingle();
+
+        if (error || !currentEvent) {
+          alert("이벤트를 찾을 수 없습니다.");
+          router.replace("/business-events");
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        const isAdmin = profile?.role === "admin";
+        const isOwner = currentEvent.owner_id === user.id;
+
+        if (!isAdmin && !isOwner) {
+          alert("수정 권한이 없습니다.");
+          router.replace(`/business-events/${id}`);
+          return;
+        }
+
+        if (!cancelled) {
+          setEvent(currentEvent);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingEvent(false);
+        }
+      }
+    }
+
+    if (id) {
+      void loadEvent();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, router]);
+
+  if (loadingEvent) {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
+        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-6 font-black shadow">
+          Loading...
+        </div>
+      </main>
+    );
+  }
+
+  if (!event) {
+    return null;
+  }
+
+  return <EditBusinessEventForm event={event} />;
+}
+
+function EditBusinessEventForm({ event }: { event: any }) {
+  const router = useRouter();
   const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
 
   const { isLoaded } = useLoadScript({
@@ -21,350 +136,510 @@ export default function EditBusinessEventPage() {
     libraries,
   });
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [canManage, setCanManage] = useState(false);
+  const [title, setTitle] = useState(event.title || "");
+  const [description, setDescription] = useState(event.description || "");
+  const [eventDateTime, setEventDateTime] = useState(
+    formatDateTimeLocal(event.event_date),
+  );
+  const [location, setLocation] = useState(event.location || event.address || "");
+  const [latitude, setLatitude] = useState<number | null>(event.latitude ?? null);
+  const [longitude, setLongitude] = useState<number | null>(event.longitude ?? null);
 
-  const [contactName, setContactName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [eventDate, setEventDate] = useState("");
-  const [location, setLocation] = useState("");
-  const [latitude, setLatitude] = useState<number | null>(null);
-  const [longitude, setLongitude] = useState<number | null>(null);
-
-  const [imageUrl, setImageUrl] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState("");
+  const [imagePreview, setImagePreview] = useState(event.image_url || "");
+  const [imageRemoved, setImageRemoved] = useState(false);
 
-  const [videoUrl, setVideoUrl] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState("");
-  const [externalVideoUrl, setExternalVideoUrl] = useState("");
-  const [oldVideoUrlToDelete, setOldVideoUrlToDelete] = useState("");
+  const [videoPreview, setVideoPreview] = useState(event.video_url || "");
+  const [videoUrl, setVideoUrl] = useState(event.external_video_url || "");
 
-  useEffect(() => {
-    loadEvent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfName, setPdfName] = useState(event.pdf_name || "");
+  const [pdfUrl, setPdfUrl] = useState(event.pdf_url || "");
+  const [pdfRemoved, setPdfRemoved] = useState(false);
+  const [registrationUrl, setRegistrationUrl] = useState(
+    event.registration_url || ""
+  );
+
+  const [contactName, setContactName] = useState(event.contact_name || "");
+  const [contactEmail, setContactEmail] = useState(event.contact_email || "");
+  const [contactPhone, setContactPhone] = useState(event.contact_phone || "");
+
+  const [collectAttendees, setCollectAttendees] = useState(
+    event.collect_attendees === true
+  );
+  const [raffleEnabled, setRaffleEnabled] = useState(
+    event.raffle_enabled === true
+  );
+  const [raffleDrawAt, setRaffleDrawAt] = useState(
+    formatDateTimeLocal(event.raffle_draw_at)
+  );
+  const [raffleWinnerCount, setRaffleWinnerCount] = useState(
+    event.raffle_winner_count || 1
+  );
+
+  const [saving, setSaving] = useState(false);
+  const [optimizingImage, setOptimizingImage] = useState(false);
 
   function onPlaceChanged() {
     const place = autocompleteRef.current?.getPlace();
     if (!place) return;
 
-    const fullAddress = place.formatted_address || place.name || "";
-    setLocation(fullAddress);
+    setLocation(place.formatted_address || place.name || "");
 
     const lat = place.geometry?.location?.lat();
     const lng = place.geometry?.location?.lng();
 
-    setLatitude(typeof lat === "number" ? lat : null);
-    setLongitude(typeof lng === "number" ? lng : null);
+    if (lat && lng) {
+      setLatitude(lat);
+      setLongitude(lng);
+    }
   }
 
-  function handleImage(file: File | null) {
-    if (!file) return;
 
-    if (imagePreview) {
-      URL.revokeObjectURL(imagePreview);
+  async function optimizeImage(file: File) {
+    if (file.type === "image/gif" || file.type === "image/svg+xml") {
+      return file;
     }
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    let bitmap: ImageBitmap | null = null;
+
+    try {
+      bitmap = await createImageBitmap(file);
+
+      const maxWidth = 1000;
+      const maxHeight = 1000;
+      const scale = Math.min(
+        1,
+        maxWidth / bitmap.width,
+        maxHeight / bitmap.height,
+      );
+
+      const width = Math.max(1, Math.round(bitmap.width * scale));
+      const height = Math.max(1, Math.round(bitmap.height * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        return file;
+      }
+
+      context.drawImage(bitmap, 0, 0, width, height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", 0.7);
+      });
+
+      if (!blob) {
+        throw new Error("Image conversion failed.");
+      }
+
+      const baseName = file.name.replace(/\.[^/.]+$/, "") || "event-image";
+
+      return new File([blob], `${baseName}.webp`, {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    } finally {
+      bitmap?.close();
+    }
   }
 
-  async function removeImage() {
-    if (imageUrl) {
-      await deleteImageFromStorage(imageUrl);
+  function getStoragePathFromPublicUrl(
+    publicUrl: string | null | undefined,
+    bucket: string,
+  ) {
+    if (!publicUrl) return null;
+
+    try {
+      const url = new URL(publicUrl);
+      const marker = `/storage/v1/object/public/${bucket}/`;
+      const markerIndex = url.pathname.indexOf(marker);
+
+      if (markerIndex === -1) {
+        return null;
+      }
+
+      return decodeURIComponent(
+        url.pathname.slice(markerIndex + marker.length),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async function deleteStorageFile(
+    publicUrl: string | null | undefined,
+    bucket: string,
+  ) {
+    const storagePath = getStoragePathFromPublicUrl(publicUrl, bucket);
+
+    if (!storagePath) {
+      return;
+    }
+
+    const { error } = await supabase.storage.from(bucket).remove([storagePath]);
+
+    if (error) {
+      console.error(`${bucket} delete failed:`, error);
+    }
+  }
+
+  async function handleImage(file: File | null) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+
+    setOptimizingImage(true);
+
+    try {
+      const optimized = await optimizeImage(file);
+
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
+      setImageFile(optimized);
+      setImagePreview(URL.createObjectURL(optimized));
+      setImageRemoved(false);
+    } catch (error: any) {
+      alert("Image processing failed: " + (error?.message || "Unknown error"));
+    } finally {
+      setOptimizingImage(false);
+    }
+  }
+
+  function removeImage() {
+    if (imagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
     }
 
     setImageFile(null);
     setImagePreview("");
-    setImageUrl("");
+    setImageRemoved(true);
   }
 
   function handleVideo(file: File | null) {
     if (!file) return;
 
-    if (!file.type.startsWith("video/")) {
-      alert("Please select a video file.");
+    const maxSize = 50 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      alert("The video file is too large. Please upload a file under 50MB.");
       return;
     }
 
-    if (videoPreview) {
-      URL.revokeObjectURL(videoPreview);
-    }
-
-    setOldVideoUrlToDelete(videoUrl);
-    setExternalVideoUrl("");
     setVideoFile(file);
     setVideoPreview(URL.createObjectURL(file));
   }
 
-  async function removeVideo() {
-    if (videoUrl) {
-      setOldVideoUrlToDelete(videoUrl);
-    }
+  function handlePdf(file: File | null) {
+    if (!file) return;
 
-    setVideoFile(null);
-    setVideoPreview("");
-    setVideoUrl("");
-    setExternalVideoUrl("");
-  }
+    const isPdf =
+      file.type === "application/pdf" ||
+      file.name.toLowerCase().endsWith(".pdf");
 
-  async function uploadFile(file: File) {
-    const ext = file.name.split(".").pop();
-    const fileName = `images/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
-
-    const { error } = await supabase.storage
-      .from("event-images")
-      .upload(fileName, file);
-
-    if (error) throw error;
-
-    const { data } = supabase.storage
-      .from("event-images")
-      .getPublicUrl(fileName);
-
-    return data.publicUrl;
-  }
-
-  async function uploadVideoFile(file: File) {
-    const ext = file.name.split(".").pop();
-    const fileName = `videos/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`;
-
-    const { error } = await supabase.storage
-      .from("event-videos")
-      .upload(fileName, file);
-
-    if (error) throw error;
-
-    const { data } = supabase.storage
-      .from("event-videos")
-      .getPublicUrl(fileName);
-
-    return data.publicUrl;
-  }
-
-  function getStoragePathFromPublicUrl(publicUrl: string, bucket: string) {
-    const marker = `/storage/v1/object/public/${bucket}/`;
-    const index = publicUrl.indexOf(marker);
-
-    if (index === -1) return null;
-
-    return decodeURIComponent(publicUrl.slice(index + marker.length));
-  }
-
-  async function deleteVideoFromStorage(publicUrl: string) {
-    const path = getStoragePathFromPublicUrl(publicUrl, "event-videos");
-
-    if (!path) return;
-
-    const { error } = await supabase.storage.from("event-videos").remove([path]);
-
-    if (error) {
-      alert("Storage 영상 삭제 실패: " + error.message);
-    }
-  }
-
-  async function deleteImageFromStorage(publicUrl: string) {
-    const path = getStoragePathFromPublicUrl(publicUrl, "event-images");
-
-    if (!path) return;
-
-    const { error } = await supabase.storage.from("event-images").remove([path]);
-
-    if (error) {
-      alert("Storage 이미지 삭제 실패: " + error.message);
-    }
-  }
-
-  async function loadEvent() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const { data: event, error } = await supabase
-      .from("business_events")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (error || !event) {
-      alert("이벤트를 찾을 수 없습니다.");
-      router.push("/business-events");
+    if (!isPdf) {
+      alert("Please select a PDF file.");
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, name, phone")
-      .eq("id", user?.id)
-      .maybeSingle();
+    const maxSize = 20 * 1024 * 1024;
 
-    const isOwner = user?.id === event.owner_id;
-    const isAdmin = profile?.role === "admin";
-
-    if (!user || (!isOwner && !isAdmin)) {
-      alert("수정 권한이 없습니다.");
-      router.push(`/business-events/${id}`);
+    if (file.size > maxSize) {
+      alert("The PDF file is too large. Please upload a file under 20MB.");
       return;
     }
 
-    setCanManage(true);
-    setTitle(event.title || "");
-    setDescription(event.description || "");
-    setEventDate(event.event_date || "");
-    setLocation(event.location || "");
-    setLatitude(event.latitude ?? null);
-    setLongitude(event.longitude ?? null);
-    setImageUrl(event.image_url || "");
-    setVideoUrl(event.video_url || "");
-    setExternalVideoUrl(event.external_video_url || "");
-
-    setContactName(event.contact_name || profile?.name || "");
-    setContactEmail(event.contact_email || user.email || "");
-    setContactPhone(event.contact_phone || profile?.phone || "");
-
-    setLoading(false);
+    setPdfFile(file);
+    setPdfName(file.name);
+    setPdfRemoved(false);
   }
 
-  async function saveEvent() {
-    if (!canManage) return;
+  function removePdf() {
+    setPdfFile(null);
+    setPdfName("");
+    setPdfUrl("");
+    setPdfRemoved(true);
+  }
 
+  async function uploadFile(file: File, bucket: string, folder: string) {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "mp4";
+    const fileName = `${folder}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: file.type || "image/webp",
+      });
+
+    if (error) {
+      throw new Error(`${bucket} upload failed: ${error.message}`);
+    }
+
+    const { data: publicData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(data.path);
+
+    return publicData.publicUrl;
+  }
+
+  function setRegistrationMode(value: boolean) {
+    setCollectAttendees(value);
+
+    if (!value) {
+      setRaffleEnabled(false);
+      setRaffleDrawAt("");
+      setRaffleWinnerCount(1);
+    }
+  }
+
+  function setRaffleMode(value: boolean) {
+    setRaffleEnabled(value);
+
+    if (value) {
+      setCollectAttendees(true);
+    } else {
+      setRaffleDrawAt("");
+      setRaffleWinnerCount(1);
+    }
+  }
+
+  async function submitEvent() {
     if (!title.trim()) {
-      alert("제목을 입력하세요.");
+      alert("Please enter an event title.");
+      return;
+    }
+
+    if (!eventDateTime) {
+      alert("Please enter the event date and time.");
+      return;
+    }
+
+    if (raffleEnabled && !raffleDrawAt) {
+      alert("Please enter the raffle drawing date and time.");
+      return;
+    }
+
+    if (raffleEnabled && Number(raffleWinnerCount) < 1) {
+      alert("Please enter at least 1 winner.");
+      return;
+    }
+
+    const normalizedVideoUrl = normalizeUrl(videoUrl);
+    const normalizedRegistrationUrl = normalizeUrl(registrationUrl);
+
+    if (normalizedVideoUrl && !isValidHttpUrl(normalizedVideoUrl)) {
+      alert("Please enter a valid video link URL.");
+      return;
+    }
+
+    if (
+      normalizedRegistrationUrl &&
+      !isValidHttpUrl(normalizedRegistrationUrl)
+    ) {
+      alert("Please enter a valid registration link URL.");
       return;
     }
 
     setSaving(true);
 
     try {
-      let finalImageUrl = imageUrl;
-      let finalVideoUrl = videoUrl;
+      const previousImageUrl = event.image_url || null;
+      const previousPdfUrl = event.pdf_url || null;
+      let uploadedImageUrl = imageRemoved ? null : previousImageUrl;
+      let uploadedVideoUrl = event.video_url || null;
+      let uploadedPdfUrl = pdfRemoved ? null : previousPdfUrl;
+      let uploadedPdfName = pdfRemoved ? null : event.pdf_name || null;
 
       if (imageFile) {
-        finalImageUrl = await uploadFile(imageFile);
+        uploadedImageUrl = await uploadFile(
+          imageFile,
+          "event-images",
+          "images"
+        );
       }
 
       if (videoFile) {
-        if (oldVideoUrlToDelete) {
-          await deleteVideoFromStorage(oldVideoUrlToDelete);
-        }
-
-        finalVideoUrl = await uploadVideoFile(videoFile);
+        uploadedVideoUrl = await uploadFile(
+          videoFile,
+          "event-videos",
+          "videos"
+        );
       }
 
-      if (!videoFile && oldVideoUrlToDelete && !videoUrl) {
-        await deleteVideoFromStorage(oldVideoUrlToDelete);
-        finalVideoUrl = "";
+      if (pdfFile) {
+        uploadedPdfUrl = await uploadFile(
+          pdfFile,
+          "event-pdfs",
+          "pdfs"
+        );
+        uploadedPdfName = pdfFile.name;
       }
+
+      const finalRaffleEnabled = collectAttendees && raffleEnabled;
 
       const { error } = await supabase
         .from("business_events")
         .update({
           title: title.trim(),
-          description: description.trim() || null,
-          event_date: eventDate || null,
-          location: location.trim() || null,
+          description: description.trim(),
+
+          image_url: uploadedImageUrl,
+          video_url: uploadedVideoUrl,
+          pdf_name: uploadedPdfName,
+          pdf_url: uploadedPdfUrl,
+          external_video_url: normalizedVideoUrl || null,
+          registration_url: normalizedRegistrationUrl || null,
+
+          event_date: new Date(eventDateTime).toISOString(),
+          location: location.trim(),
+
           latitude,
           longitude,
-          image_url: finalImageUrl || null,
-          video_url: finalVideoUrl || null,
-          external_video_url: finalVideoUrl
-            ? null
-            : externalVideoUrl.trim() || null,
+
           contact_name: contactName.trim() || null,
           contact_email: contactEmail.trim() || null,
           contact_phone: contactPhone.trim() || null,
+
+          collect_attendees: collectAttendees,
+          raffle_enabled: finalRaffleEnabled,
+          raffle_draw_at: finalRaffleEnabled ? raffleDrawAt : null,
+          raffle_winner_count: finalRaffleEnabled
+            ? Number(raffleWinnerCount)
+            : null,
+          attendee_required_name: collectAttendees,
+          attendee_required_phone: collectAttendees,
+          allow_companions: finalRaffleEnabled ? false : collectAttendees,
         })
-        .eq("id", id);
+        .eq("id", event.id);
 
       if (error) {
-        alert("수정 실패: " + error.message);
+        alert("Update failed: " + error.message);
         setSaving(false);
         return;
       }
 
-      alert("수정되었습니다.");
-      router.push(`/business-events/${id}`);
+      if (
+        previousImageUrl &&
+        (imageRemoved || (imageFile && uploadedImageUrl !== previousImageUrl))
+      ) {
+        await deleteStorageFile(previousImageUrl, "event-images");
+      }
+
+      if (
+        previousPdfUrl &&
+        (pdfRemoved || (pdfFile && uploadedPdfUrl !== previousPdfUrl))
+      ) {
+        await deleteStorageFile(previousPdfUrl, "event-pdfs");
+      }
+
+      router.push(`/business-events/${event.id}`);
       router.refresh();
     } catch (err: any) {
-      alert("저장 실패: " + err.message);
+      alert("Save failed: " + err.message);
       setSaving(false);
     }
   }
 
-  if (loading) {
-    return <main className="min-h-screen bg-[#F8F3EC] p-5">Loading...</main>;
-  }
-
   return (
-    <main className="min-h-screen bg-[#F8F3EC] p-5 pb-28 text-[#172033]">
-  <div className="mx-auto max-w-xl">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <Link
-          href={`/business-events/${id}`}
-          className="rounded-full bg-white px-4 py-2 text-sm font-black shadow"
-        >
-          ← Back
-        </Link>
+    <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32">
+      <div className="mx-auto max-w-3xl px-2 lg:px-4">
+        <div className="relative mb-5 flex items-center justify-center">
+          <Link
+            href={`/business-events/${event.id}`}
+            className="absolute left-0 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#C46A2B] shadow"
+          >
+            ←
+          </Link>
 
-        <h1 className="text-xl font-black text-[#172033]">Edit Event</h1>
+          <h1 className="text-2xl font-black text-[#C46A2B]">
+            Edit Event
+          </h1>
 
-        <div className="shrink-0">
-          <ProfileButton />
+          <details className="absolute right-0">
+            <summary className="flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-full bg-white text-2xl font-black text-[#C46A2B] shadow">
+              ⋯
+            </summary>
+
+            <div className="absolute right-0 top-12 z-[99999] w-56 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
+              <Link href="/profile" className="block px-4 py-3 hover:bg-gray-100">
+                Edit Profile
+              </Link>
+
+              <Link href="/my-coupons" className="block px-4 py-3 hover:bg-gray-100">
+                My Coupons
+              </Link>
+
+              <Link href="/owner" className="block px-4 py-3 hover:bg-gray-100">
+                My Business
+              </Link>
+
+              <Link href="/business/new" className="block px-4 py-3 hover:bg-gray-100">
+                Register Business
+              </Link>
+
+              <Link href="/events/new" className="block px-4 py-3 hover:bg-gray-100">
+                Create Event
+              </Link>
+
+              <Link href="/deals/new" className="block px-4 py-3 hover:bg-gray-100">
+                Create Deal
+              </Link>
+
+              <Link href="/coupons/new" className="block px-4 py-3 hover:bg-gray-100">
+                Register Coupon
+              </Link>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  window.location.href = "/login";
+                }}
+                className="block w-full px-4 py-3 text-left text-red-600 hover:bg-gray-100"
+              >
+                Logout
+              </button>
+            </div>
+          </details>
         </div>
-      </div>
 
-      <div className="space-y-5 rounded-3xl bg-white p-5 shadow">
-        <div>
-          <label className="mb-2 block text-sm font-black text-[#172033]">
-            제목
-          </label>
+        <div className="space-y-4 rounded-3xl bg-white p-5 shadow">
           <input
             type="text"
-            placeholder="이벤트 제목"
+            placeholder="Event Title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
           />
-        </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-black text-[#172033]">
-            날짜
-          </label>
-          <input
-            type="date"
-            value={eventDate || ""}
-            onChange={(e) => setEventDate(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          />
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-black text-[#172033]">
-            주소
-          </label>
+          <div>
+            <label className="mb-1 block text-xs font-black text-[#172033]">
+              Event Date & Time
+            </label>
+            <input
+              type="datetime-local"
+              value={eventDateTime}
+              onChange={(e) => setEventDateTime(e.target.value)}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
+          </div>
 
           {isLoaded ? (
             <Autocomplete
-              options={{
-                fields: [
-                  "formatted_address",
-                  "address_components",
-                  "geometry",
-                  "name",
-                ],
-              }}
               onLoad={(autocomplete) => {
                 autocompleteRef.current = autocomplete;
               }}
@@ -372,7 +647,7 @@ export default function EditBusinessEventPage() {
             >
               <input
                 type="text"
-                placeholder="주소"
+                placeholder="Location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
@@ -381,110 +656,221 @@ export default function EditBusinessEventPage() {
           ) : (
             <input
               type="text"
-              placeholder="주소"
+              placeholder="Location"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
           )}
 
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <input
               type="number"
               value={latitude ?? ""}
-              onChange={(e) =>
-                setLatitude(e.target.value ? Number(e.target.value) : null)
-              }
+              onChange={(e) => setLatitude(Number(e.target.value))}
               placeholder="Latitude"
-              className="w-full rounded-2xl border px-4 py-3 text-xs font-bold"
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
 
             <input
               type="number"
               value={longitude ?? ""}
-              onChange={(e) =>
-                setLongitude(e.target.value ? Number(e.target.value) : null)
-              }
+              onChange={(e) => setLongitude(Number(e.target.value))}
               placeholder="Longitude"
-              className="w-full rounded-2xl border px-4 py-3 text-xs font-bold"
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
           </div>
-        </div>
 
-        <div>
-  <label className="mb-2 block text-sm font-black text-[#172033]">
-    연락처
-  </label>
+          <div className="rounded-2xl border bg-gray-50 p-4">
+            <p className="mb-3 font-black text-[#172033]">
+              Attendee Registration
+            </p>
 
-  <input
-    value={contactName}
-    onChange={(e) => setContactName(e.target.value)}
-    placeholder="Contact Name"
-    className="mb-2 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-  />
-
-  <input
-    value={contactEmail}
-    onChange={(e) => setContactEmail(e.target.value)}
-    placeholder="Email"
-    className="mb-2 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-  />
-
-  <input
-    value={contactPhone}
-    onChange={(e) => setContactPhone(e.target.value)}
-    placeholder="Phone"
-    className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-  />
-</div>
-
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="block text-sm font-black text-[#172033]">
-              이미지
-            </label>
-
-            <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
-              첨부
-
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImage(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          {(imagePreview || imageUrl) && (
-            <div className="relative mt-3 overflow-hidden rounded-2xl bg-white">
-              <img
-                src={imagePreview || imageUrl}
-                alt="Preview"
-                className="h-56 w-full object-contain"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setRegistrationMode(true)}
+                className={`rounded-2xl px-3 py-3 text-sm font-black shadow-sm transition ${
+                  collectAttendees
+                    ? "bg-[#C46A2B] text-white"
+                    : "border bg-white text-[#172033]"
+                }`}
+              >
+                Collect Attendees
+              </button>
 
               <button
                 type="button"
-                onClick={removeImage}
-                className="absolute right-3 top-3 z-[9999] flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-xl font-black text-white shadow-lg"
+                onClick={() => setRegistrationMode(false)}
+                className={`rounded-2xl px-3 py-3 text-sm font-black shadow-sm transition ${
+                  !collectAttendees
+                    ? "bg-[#C46A2B] text-white"
+                    : "border bg-white text-[#172033]"
+                }`}
               >
-                ×
+                No Registration
               </button>
             </div>
-          )}
-        </div>
 
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <label className="block text-sm font-black text-[#172033]">
-              동영상
-            </label>
+            <p className="mt-3 text-xs font-bold text-gray-500">
+              Choose whether this event should collect attendee registrations on the event detail page.
+            </p>
 
-            {!videoPreview && !videoUrl && !externalVideoUrl && (
-              <label className="cursor-pointer rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow">
-                첨부
+            {collectAttendees && (
+              <div className="mt-4 rounded-2xl border bg-white p-4">
+                <p className="mb-3 text-sm font-black text-[#172033]">
+                  Prize Drawing / Raffle
+                </p>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRaffleMode(true)}
+                    className={`rounded-2xl px-3 py-3 text-sm font-black shadow-sm transition ${
+                      raffleEnabled
+                        ? "bg-[#C4483A] text-white"
+                        : "border bg-white text-[#172033]"
+                    }`}
+                  >
+                    Raffle Yes
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRaffleMode(false)}
+                    className={`rounded-2xl px-3 py-3 text-sm font-black shadow-sm transition ${
+                      !raffleEnabled
+                        ? "bg-[#C4483A] text-white"
+                        : "border bg-white text-[#172033]"
+                    }`}
+                  >
+                    Raffle No
+                  </button>
+                </div>
+
+                {raffleEnabled && (
+                  <div className="mt-4 space-y-3 rounded-2xl bg-red-50 p-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-black text-[#172033]">
+                        Drawing Date & Time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={raffleDrawAt}
+                        onChange={(e) => setRaffleDrawAt(e.target.value)}
+                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-black text-[#172033]">
+                        Number of Winners
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={raffleWinnerCount}
+                        onChange={(e) =>
+                          setRaffleWinnerCount(Number(e.target.value) || 1)
+                        }
+                        className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+                      />
+                    </div>
+
+                    <div className="rounded-xl bg-white p-3 text-xs font-bold leading-5 text-red-700">
+                      Raffle registration will collect only the attendee&apos;s name and phone number.
+                      Guests/companions will be disabled so only the person who directly registers can win a prize.
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border bg-gray-50 p-4">
+            <p className="mb-3 font-black">Contact Information</p>
+
+            <input
+              value={contactName}
+              onChange={(e) => setContactName(e.target.value)}
+              placeholder="Contact Name"
+              className="mb-2 w-full rounded-xl border px-4 py-3"
+            />
+
+            <input
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+              placeholder="Email"
+              className="mb-2 w-full rounded-xl border px-4 py-3"
+            />
+
+            <input
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              placeholder="Phone"
+              className="w-full rounded-xl border px-4 py-3"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#C46A2B]">
+                Event Image
+              </span>
+
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
+                {imagePreview ? "Replace" : "Upload"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    void handleImage(file);
+                  }}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            <p className="mt-2 text-xs font-bold text-blue-600">
+              New images are resized to a maximum of 1000px and converted to
+              WebP at 70% quality.
+            </p>
+
+            {imagePreview ? (
+              <div className="mt-3 space-y-2">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-h-[520px] w-full rounded-2xl object-contain"
+                />
+
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="w-full rounded-xl bg-red-500 py-3 text-sm font-black text-white"
+                >
+                  Delete Current Image
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-400">
+                No event image selected
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#C46A2B]">
+                Event Video
+              </span>
+
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
+                Upload
                 <input
                   type="file"
                   accept="video/*"
@@ -492,84 +878,174 @@ export default function EditBusinessEventPage() {
                   className="hidden"
                 />
               </label>
+            </div>
+
+            {videoFile && (
+              <p className="mt-2 text-xs font-bold text-gray-500">
+                {videoFile.name}
+              </p>
+            )}
+
+            {videoPreview && (
+              <video
+                src={videoPreview}
+                controls
+                className="mt-3 h-48 w-full rounded-2xl object-cover"
+              />
             )}
           </div>
 
-          {(videoPreview || videoUrl) && (
-            <div className="relative mt-3 overflow-hidden rounded-2xl bg-black">
-              <video
-                src={videoPreview || videoUrl}
-                controls
-                playsInline
-                className="h-56 w-full object-contain"
-              />
+          <div>
+            <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <span className="text-sm font-black text-[#C46A2B]">
+                Event PDF
+              </span>
 
-              <button
-                type="button"
-                onClick={removeVideo}
-                className="absolute right-3 top-3 z-[9999] flex h-10 w-10 items-center justify-center rounded-full bg-red-600 text-xl font-black text-white shadow-lg"
-              >
-                ×
-              </button>
+              <label className="cursor-pointer rounded-full bg-[#C46A2B] px-4 py-2 text-xs font-black text-white shadow">
+                {pdfName ? "Replace PDF" : "Upload PDF"}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const file = input.files?.[0] || null;
+
+                    input.value = "";
+                    handlePdf(file);
+                  }}
+                  className="hidden"
+                />
+              </label>
             </div>
-          )}
 
-          {externalVideoUrl && !videoPreview && !videoUrl && (
-            <div className="mt-3 rounded-2xl border bg-gray-50 p-3 text-sm font-bold">
-              <p className="mb-2 text-xs text-gray-500">External video link</p>
-              <a
-                href={externalVideoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="break-words text-[#2453A6] underline"
-              >
-                {externalVideoUrl}
-              </a>
-              <button
-                type="button"
-                onClick={() => setExternalVideoUrl("")}
-                className="mt-3 w-full rounded-xl bg-red-600 py-3 font-black text-white"
-              >
-                Remove Link
-              </button>
-            </div>
-          )}
+            <p className="mt-2 text-xs font-bold text-blue-600">
+              PDF files up to 20MB are supported. The attachment will appear on
+              the event detail page after saving.
+            </p>
 
-          {!videoPreview && !videoUrl && (
+            {pdfName ? (
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-red-600 text-xl text-white">
+                    PDF
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-black text-[#172033]">
+                      {pdfName}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-gray-500">
+                      {pdfFile
+                        ? `${(pdfFile.size / 1024 / 1024).toFixed(2)} MB · New file`
+                        : "Current attached PDF"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {pdfUrl && !pdfFile ? (
+                    <a
+                      href={pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-xl bg-[#172033] px-3 py-3 text-center text-xs font-black text-white"
+                    >
+                      View Current PDF
+                    </a>
+                  ) : (
+                    <div className="rounded-xl bg-white px-3 py-3 text-center text-xs font-black text-gray-500">
+                      Save to view
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={removePdf}
+                    className="rounded-xl bg-red-500 px-3 py-3 text-xs font-black text-white"
+                  >
+                    Delete PDF
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center text-sm font-bold text-gray-400">
+                No PDF attached
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-black text-[#172033]">
+              Video Link URL
+            </label>
+
             <input
-              value={externalVideoUrl}
-              onChange={(e) => setExternalVideoUrl(e.target.value)}
-              placeholder="YouTube / Facebook / Instagram video link"
-              className="mt-3 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="YouTube, Vimeo, Instagram video URL"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              onBlur={() => {
+                if (videoUrl.trim()) {
+                  setVideoUrl(normalizeUrl(videoUrl));
+                }
+              }}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
             />
-          )}
-        </div>
+          </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-black text-[#172033]">
-            설명
-          </label>
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+            <label className="mb-2 block text-sm font-black text-[#172033]">
+              External Registration Link
+            </label>
+
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="Google Form, Eventbrite, SignUpGenius URL"
+              value={registrationUrl}
+              onChange={(e) => setRegistrationUrl(e.target.value)}
+              onBlur={() => {
+                if (registrationUrl.trim()) {
+                  setRegistrationUrl(normalizeUrl(registrationUrl));
+                }
+              }}
+              className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-blue-500"
+            />
+
+            <p className="mt-2 text-xs font-semibold leading-5 text-blue-700">
+              선택사항입니다. Google Form, Eventbrite, SignUpGenius 등 외부
+              참가 신청 링크를 입력하거나 수정할 수 있습니다.
+              <br />
+              예: https://forms.gle/xxxxx
+            </p>
+          </div>
+
           <textarea
-            placeholder="이벤트 설명"
-            rows={8}
+            placeholder="Event Description"
+            rows={6}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
           />
-        </div>
 
-        <div className="pt-4">
           <button
             type="button"
-            disabled={saving}
-            onClick={saveEvent}
-            className="w-full rounded-full bg-[#172033] py-4 text-sm font-black text-white shadow disabled:bg-gray-400"
+            disabled={saving || optimizingImage}
+            onClick={submitEvent}
+            className="w-full rounded-full bg-[#C46A2B] py-4 text-sm font-black text-white disabled:bg-gray-400"
           >
-            {saving ? "Saving..." : "Save Event"}
+            {optimizingImage ? "Optimizing Image..." : saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
-</div>
+
       <BottomNav />
     </main>
   );

@@ -19,7 +19,9 @@ export const revalidate = 0;
 const SITE_URL = "https://www.ktowntriangle.com";
 const DEFAULT_EVENT_IMAGE = `${SITE_URL}/event.png`;
 
-function normalizeExternalUrl(value: string | null | undefined) {
+function normalizeExternalUrl(
+  value: string | null | undefined,
+) {
   const trimmed = String(value || "").trim();
 
   if (!trimmed) {
@@ -39,7 +41,9 @@ type PageProps = {
   }>;
 };
 
-function getAbsoluteImageUrl(imageUrl: string | null | undefined) {
+function getAbsoluteImageUrl(
+  imageUrl: string | null | undefined,
+) {
   if (!imageUrl) {
     return DEFAULT_EVENT_IMAGE;
   }
@@ -62,7 +66,7 @@ function cleanDescription(
   description: string | null | undefined,
 ) {
   if (!description) {
-    return "KTownTriangle Community Event Information";
+    return "KTownTriangle Business Event Information";
   }
 
   return description
@@ -71,7 +75,6 @@ function cleanDescription(
     .trim()
     .slice(0, 160);
 }
-
 
 function formatEasternDateTime(
   value: string | null | undefined,
@@ -101,7 +104,7 @@ export async function generateMetadata({
   const { id } = await params;
 
   const { data: event } = await supabase
-    .from("community_events")
+    .from("business_events")
     .select(
       `
         id,
@@ -109,7 +112,7 @@ export async function generateMetadata({
         description,
         image_url,
         event_date,
-        address
+        location
       `,
     )
     .eq("id", id)
@@ -118,7 +121,8 @@ export async function generateMetadata({
   if (!event) {
     return {
       title: "Event Not Found | KTownTriangle",
-      description: "The requested event could not be found.",
+      description:
+        "The requested business event could not be found.",
       robots: {
         index: false,
         follow: false,
@@ -127,11 +131,16 @@ export async function generateMetadata({
   }
 
   const eventTitle =
-    event.title?.trim() || "Community Event";
+    event.title?.trim() || "Business Event";
 
-  const pageUrl = `${SITE_URL}/community/events/${event.id}`;
-  const imageUrl = getAbsoluteImageUrl(event.image_url);
-  const description = cleanDescription(event.description);
+  const pageUrl =
+    `${SITE_URL}/business-events/${event.id}`;
+
+  const imageUrl =
+    getAbsoluteImageUrl(event.image_url);
+
+  const description =
+    cleanDescription(event.description);
 
   return {
     metadataBase: new URL(SITE_URL),
@@ -145,7 +154,7 @@ export async function generateMetadata({
 
     openGraph: {
       type: "article",
-      locale: "ko_KR",
+      locale: "en_US",
       siteName: "KTownTriangle",
       url: pageUrl,
       title: eventTitle,
@@ -173,13 +182,13 @@ export async function generateMetadata({
   };
 }
 
-export default async function CommunityEventDetailPage({
+export default async function BusinessEventDetailPage({
   params,
 }: PageProps) {
   const { id } = await params;
 
   const { data: event, error } = await supabase
-    .from("community_events")
+    .from("business_events")
     .select("*")
     .eq("id", id)
     .maybeSingle();
@@ -197,70 +206,32 @@ export default async function CommunityEventDetailPage({
           </p>
 
           <Link
-            href="/community"
+            href="/business-events"
             className="mt-4 inline-block font-black text-[#C4483A]"
           >
-            ← Back to Community
+            ← Back to Events
           </Link>
         </div>
 
-        <CommunityBottomNav activeNav="community" />
+        <BottomNav />
       </main>
     );
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const raffleEnabled =
+    event.raffle_enabled === true;
 
-  let isAdmin = false;
+  const raffleDrawAt =
+    event.raffle_draw_at
+      ? new Date(event.raffle_draw_at).getTime()
+      : null;
 
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    isAdmin = profile?.role === "admin";
-  }
-
-  const isOwner = user?.id === event.owner_id;
-  const canManage = isAdmin || isOwner;
-
-  async function deleteEvent() {
-    "use server";
-
-    const { data: currentEvent } = await supabase
-      .from("community_events")
-      .select("id")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (!currentEvent) {
-      redirect("/community");
-    }
-
-    await supabase
-      .from("community_events")
-      .delete()
-      .eq("id", id);
-
-    revalidatePath("/community");
-    revalidatePath(`/community/events/${id}`);
-
-    redirect("/community");
-  }
-
-  const raffleEnabled = event.raffle_enabled === true;
-
-  const raffleDrawAt = event.raffle_draw_at
-    ? new Date(event.raffle_draw_at).getTime()
-    : null;
-
-  const registrationDeadlineAt = event.registration_deadline
-    ? new Date(event.registration_deadline).getTime()
-    : null;
+  const registrationDeadlineAt =
+    event.registration_deadline
+      ? new Date(
+          event.registration_deadline,
+        ).getTime()
+      : null;
 
   const drawReady =
     raffleEnabled &&
@@ -276,27 +247,47 @@ export default async function CommunityEventDetailPage({
     event.collect_attendees === true ||
     raffleEnabled === true;
 
-  const allowCompanions = raffleEnabled
-    ? false
-    : event.allow_companions !== false;
+  const allowCompanions =
+    raffleEnabled
+      ? false
+      : event.allow_companions !== false;
 
   const winnerCount = Math.max(
     1,
-    Number(event.raffle_winner_count || 1),
+    Number(
+      event.raffle_winner_count || 1,
+    ),
   );
 
-  const registrationUrl = normalizeExternalUrl(
-    event.registration_url,
-  );
+  const registrationUrl =
+    normalizeExternalUrl(
+      event.registration_url,
+    );
 
-  const pdfUrl = normalizeExternalUrl(event.pdf_url);
+  const pdfUrl =
+    normalizeExternalUrl(event.pdf_url);
+
   const pdfName =
     String(event.pdf_name || "").trim() ||
-    `${String(event.title || "event").trim() || "event"}.pdf`;
+    `${
+      String(event.title || "event").trim() ||
+      "event"
+    }.pdf`;
+
+  const images =
+    event.image_url
+      ? [event.image_url]
+      : [];
+
+  const videos =
+    event.video_url
+      ? [event.video_url]
+      : [];
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
       <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
+        {/* HEADER */}
         <div className="relative mb-4 flex min-h-10 items-center justify-center">
           <div className="absolute left-0">
             <BackButton />
@@ -311,12 +302,16 @@ export default async function CommunityEventDetailPage({
           </div>
         </div>
 
+        {/* PDF / IMAGE / VIDEO */}
         {pdfUrl ? (
           <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
             <div className="overflow-hidden rounded-[20px] bg-[#ECE8E2]">
-              <CommunityPdfPreview
+              <BusinessPdfPreview
                 pdfUrl={pdfUrl}
-                title={event.title || "Community Event"}
+                title={
+                  event.title ||
+                  "Business Event"
+                }
               />
             </div>
 
@@ -343,28 +338,41 @@ export default async function CommunityEventDetailPage({
               {pdfName}
             </p>
           </div>
-        ) : event.image_url ? (
+        ) : event.image_url ||
+          event.video_url ? (
           <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
             <div className="overflow-hidden rounded-[20px]">
-              <ImageModal
-                src={event.image_url}
-                alt={event.title || "Community Event"}
+              <BusinessMediaViewer
+                images={
+                  images.length > 0
+                    ? images
+                    : ["/event.png"]
+                }
+                videos={videos}
+                name={
+                  event.title ||
+                  "Business Event"
+                }
               />
             </div>
           </div>
         ) : null}
 
+        {/* TITLE + EDIT / DELETE */}
         <div className="flex items-start justify-between gap-3">
           <h1 className="min-w-0 flex-1 text-3xl font-black leading-tight">
             {event.title}
           </h1>
 
-          <CommunityEventManageButtons
+          <BusinessEventManageButtons
             eventId={event.id}
-            ownerId={event.owner_id || null}
+            ownerId={
+              event.owner_id || null
+            }
           />
         </div>
 
+        {/* RAFFLE */}
         {raffleEnabled && (
           <div className="mt-4 rounded-2xl bg-yellow-100 px-4 py-4 text-xs font-black text-yellow-900">
             <div className="text-sm font-black">
@@ -377,7 +385,9 @@ export default async function CommunityEventDetailPage({
                   🎯 Drawing Time:
                 </span>
                 <br />
-                {formatEasternDateTime(event.raffle_draw_at)}
+                {formatEasternDateTime(
+                  event.raffle_draw_at,
+                )}
               </div>
             )}
 
@@ -387,7 +397,9 @@ export default async function CommunityEventDetailPage({
                   ⏰ Registration Deadline:
                 </span>
                 <br />
-                {formatEasternDateTime(event.registration_deadline)}
+                {formatEasternDateTime(
+                  event.registration_deadline,
+                )}
               </div>
             )}
 
@@ -408,22 +420,32 @@ export default async function CommunityEventDetailPage({
           </div>
         )}
 
-        {collectAttendees && !registrationClosed && !drawReady && (
-          <CommunityAttendeeRegistrationForm
-            eventId={event.id}
-            eventTitle={
-              event.title || "Community Event"
-            }
-            raffleEnabled={raffleEnabled}
-            allowCompanions={allowCompanions}
-          />
-        )}
+        {/* ATTENDEE REGISTRATION */}
+        {collectAttendees &&
+          !registrationClosed &&
+          !drawReady && (
+            <AttendeeRegistrationForm
+              eventId={event.id}
+              eventTitle={
+                event.title ||
+                "Business Event"
+              }
+              raffleEnabled={
+                raffleEnabled
+              }
+              allowCompanions={
+                allowCompanions
+              }
+            />
+          )}
 
-        {collectAttendees && (registrationClosed || drawReady) && (
-          <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-[#6B6257] shadow-sm">
-            Registration is closed.
-          </div>
-        )}
+        {collectAttendees &&
+          (registrationClosed ||
+            drawReady) && (
+            <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-[#6B6257] shadow-sm">
+              Registration is closed.
+            </div>
+          )}
 
         {!collectAttendees && (
           <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-bold text-[#6B6257] shadow-sm">
@@ -431,15 +453,19 @@ export default async function CommunityEventDetailPage({
           </div>
         )}
 
+        {/* EVENT INFO */}
         <div className="mt-5 rounded-[24px] border border-[#E2E4E7] bg-[#F1F2F4] px-5 py-5 shadow-sm">
           <p className="text-sm font-bold text-[#6B6257]">
             {event.event_date
-              ? formatEasternDateTime(event.event_date)
+              ? formatEasternDateTime(
+                  event.event_date,
+                )
               : "Date TBA"}
           </p>
 
           <p className="mt-2 text-sm font-bold text-[#6B6257]">
-            {event.address || event.location || "Location TBA"}
+            {event.location ||
+              "Location TBA"}
           </p>
 
           {event.description && (
@@ -449,27 +475,48 @@ export default async function CommunityEventDetailPage({
           )}
         </div>
 
-        <CommunityEventActionButtons
-          eventTitle={event.title || "Community Event"}
-          phone={event.contact_phone || null}
-          address={event.address || event.location || null}
-          latitude={event.latitude ?? null}
-          longitude={event.longitude ?? null}
-          registrationUrl={registrationUrl || null}
+        {/* ACTION BUTTONS — BELOW INFO CARD */}
+        <BusinessEventActionButtons
+          eventTitle={
+            event.title ||
+            "Business Event"
+          }
+          phone={
+            event.contact_phone || null
+          }
+          address={
+            event.location || null
+          }
+          latitude={
+            event.latitude ?? null
+          }
+          longitude={
+            event.longitude ?? null
+          }
+          registrationUrl={
+            registrationUrl || null
+          }
         />
 
+        {/* ATTENDEE LIST */}
         {collectAttendees && (
-          <CommunityAttendeeList
+          <AttendeeList
             eventId={event.id}
-            ownerId={event.owner_id || null}
-            raffleEnabled={raffleEnabled}
+            ownerId={
+              event.owner_id || null
+            }
+            raffleEnabled={
+              raffleEnabled
+            }
             drawReady={drawReady}
-            winnerCount={winnerCount}
+            winnerCount={
+              winnerCount
+            }
           />
         )}
       </section>
 
-      <CommunityBottomNav activeNav="community" />
+      <BottomNav />
     </main>
   );
 }

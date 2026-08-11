@@ -1,14 +1,51 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import { supabase } from "../../../lib/supabase";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import BottomNav from "../../components/BottomNav";
 import AttendeeRegistrationForm from "./AttendeeRegistrationForm";
 import AttendeeList from "./AttendeeList";
+import BackButton from "@/app/components/BackButton";
+import ProfileButton from "../../components/ProfileButton";
+import BusinessEventManageButtons from "./BusinessEventManageButtons";
+import BusinessEventActionButtons from "./BusinessEventActionButtons";
+import BusinessPdfPreview from "./BusinessPdfPreview";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function normalizeExternalUrl(value: string | null | undefined) {
+  const trimmed = String(value || "").trim();
+
+  if (!trimmed) return "";
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
+function formatEasternDateTime(
+  value: string | null | undefined,
+) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
 
 export default async function BusinessEventDetailPage({
   params,
@@ -25,59 +62,27 @@ export default async function BusinessEventDetailPage({
 
   if (error || !event) {
     return (
-      <main className="min-h-screen bg-[#F8F5F0] pb-24">
-        <div className="mx-auto max-w-3xl px-4 py-8">
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            <h1 className="text-2xl font-black text-[#172033]">
-              Event not found
-            </h1>
+      <main className="min-h-screen bg-[#F8F3EC] px-5 py-10 text-[#172033]">
+        <div className="mx-auto w-full max-w-xl">
+          <h1 className="text-2xl font-black">
+            Event not found
+          </h1>
 
-            <p className="mt-2 text-sm font-bold text-[#6B6257]">
-              ID: {id}
-            </p>
+          <p className="mt-2 text-sm font-bold text-[#6B6257]">
+            ID: {id}
+          </p>
 
-            <Link
-              href="/business-events"
-              className="mt-4 inline-block font-black text-[#C4483A]"
-            >
-              ← Back to Events
-            </Link>
-          </div>
+          <Link
+            href="/business-events"
+            className="mt-4 inline-block font-black text-[#C4483A]"
+          >
+            ← Back to Events
+          </Link>
         </div>
 
         <BottomNav />
       </main>
     );
-  }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  let isAdmin = false;
-
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    isAdmin = profile?.role === "admin";
-  }
-
-  async function deleteEvent() {
-    "use server";
-
-    await supabase
-      .from("business_events")
-      .delete()
-      .eq("id", id);
-
-    revalidatePath("/business-events");
-    revalidatePath(`/business-events/${id}`);
-
-    redirect("/business-events");
   }
 
   const raffleEnabled = event.raffle_enabled === true;
@@ -122,64 +127,92 @@ export default async function BusinessEventDetailPage({
     ? [event.video_url]
     : [];
 
+  const pdfUrl = normalizeExternalUrl(event.pdf_url);
+
+  const pdfName =
+    String(event.pdf_name || "").trim() ||
+    `${String(event.title || "event").trim() || "event"}.pdf`;
+
+  const registrationUrl =
+    normalizeExternalUrl(event.registration_url);
+
   return (
-    <main className="min-h-screen bg-[#F8F5F0] pb-24">
-      <section className="mx-auto max-w-3xl px-4 py-6">
+    <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
+      <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
         {/* HEADER */}
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <Link
-            href="/business-events"
-            className="rounded-full bg-white px-4 py-2 text-sm font-black text-[#172033] shadow-sm transition hover:bg-gray-50"
-          >
-            ← Back
-          </Link>
+        <div className="relative mb-4 flex min-h-10 items-center justify-center">
+          <div className="absolute left-0">
+            <BackButton />
+          </div>
 
-          <span className="rounded-full bg-[#172033] px-3 py-1 text-[10px] font-black text-white">
-            BUSINESS EVENT
-          </span>
+          <h2 className="text-xl font-black text-[#172033]">
+            EVENT
+          </h2>
+
+          <div className="absolute right-0">
+            <ProfileButton />
+          </div>
         </div>
 
-        {/* MEDIA */}
-        <div className="mb-5 overflow-hidden rounded-3xl bg-white shadow-sm">
-          <BusinessMediaViewer
-            images={
-              images.length > 0
-                ? images
-                : ["/event.png"]
-            }
-            videos={videos}
-            name={
-              event.title ||
-              "Business Event"
-            }
-          />
-        </div>
+        {/* PDF OR MEDIA */}
+        {pdfUrl ? (
+          <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
+            <div className="overflow-hidden rounded-[20px] bg-[#ECE8E2]">
+              <BusinessPdfPreview
+                pdfUrl={pdfUrl}
+                title={event.title || "Business Event"}
+              />
+            </div>
 
-        {/* TITLE + ADMIN CONTROLS */}
+            <div className="grid grid-cols-2 gap-2 p-2 pt-3">
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-12 items-center justify-center rounded-2xl bg-[#172033] px-3 py-3 text-center text-sm font-black text-white"
+              >
+                View Original PDF
+              </a>
+
+              <a
+                href={pdfUrl}
+                download={pdfName}
+                className="flex min-h-12 items-center justify-center rounded-2xl bg-[#C46A2B] px-3 py-3 text-center text-sm font-black text-white"
+              >
+                Download PDF
+              </a>
+            </div>
+
+            <p className="truncate px-3 pb-3 text-center text-xs font-bold text-[#6B6257]">
+              {pdfName}
+            </p>
+          </div>
+        ) : (
+          <div className="mb-5 overflow-hidden rounded-[26px] border border-[#E3DDD5] bg-white p-1.5 shadow-sm">
+            <div className="overflow-hidden rounded-[20px]">
+              <BusinessMediaViewer
+                images={
+                  images.length > 0
+                    ? images
+                    : ["/event.png"]
+                }
+                videos={videos}
+                name={event.title || "Business Event"}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* TITLE + MANAGE */}
         <div className="flex items-start justify-between gap-3">
-          <h1 className="min-w-0 flex-1 text-3xl font-black leading-tight text-[#172033]">
+          <h1 className="min-w-0 flex-1 text-3xl font-black leading-tight">
             {event.title}
           </h1>
 
-          {isAdmin && (
-            <div className="flex shrink-0 gap-2">
-              <Link
-                href={`/business-events/${event.id}/edit`}
-                className="rounded-full bg-[#172033] px-4 py-2 text-xs font-black text-white shadow transition hover:bg-[#26324A] active:scale-[0.98]"
-              >
-                ✏️ Edit
-              </Link>
-
-              <form action={deleteEvent}>
-                <button
-                  type="submit"
-                  className="rounded-full bg-red-600 px-4 py-2 text-xs font-black text-white shadow transition hover:bg-red-700 active:scale-[0.98]"
-                >
-                  🗑 Delete
-                </button>
-              </form>
-            </div>
-          )}
+          <BusinessEventManageButtons
+            eventId={event.id}
+            ownerId={event.owner_id || null}
+          />
         </div>
 
         {/* RAFFLE */}
@@ -189,31 +222,25 @@ export default async function BusinessEventDetailPage({
               🎁 Prize Drawing Event
             </div>
 
-            {event.registration_deadline && (
-              <div className="mt-2">
-                <span className="font-black">
-                  ⏰ Registration Deadline:
-                </span>
-
-                <br />
-
-                {new Date(
-                  event.registration_deadline,
-                ).toLocaleString()}
-              </div>
-            )}
-
             {event.raffle_draw_at && (
               <div className="mt-2">
                 <span className="font-black">
                   🎯 Drawing Time:
                 </span>
-
                 <br />
+                {formatEasternDateTime(event.raffle_draw_at)}
+              </div>
+            )}
 
-                {new Date(
-                  event.raffle_draw_at,
-                ).toLocaleString()}
+            {event.registration_deadline && (
+              <div className="mt-2">
+                <span className="font-black">
+                  ⏰ Registration Deadline:
+                </span>
+                <br />
+                {formatEasternDateTime(
+                  event.registration_deadline,
+                )}
               </div>
             )}
 
@@ -225,14 +252,13 @@ export default async function BusinessEventDetailPage({
             </div>
 
             <div className="mt-3 rounded-xl bg-white/50 p-2 text-[11px] leading-5">
-              추첨 이벤트는 본인 직접 등록자만 응모할 수 있습니다.
+              Only participants who register themselves are eligible for the prize drawing.
               <br />
-              동반인은 추첨 대상에 포함되지 않습니다.
+              Guests are not eligible for the prize drawing.
             </div>
           </div>
         )}
 
-        {/* INVALID RAFFLE DATE */}
         {hasInvalidRaffleSchedule && (
           <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-black text-red-700 shadow-sm">
             추첨일은 등록 마감일보다 빠를 수 없습니다.
@@ -240,7 +266,7 @@ export default async function BusinessEventDetailPage({
           </div>
         )}
 
-        {/* REGISTRATION FORM */}
+        {/* REGISTRATION */}
         {collectAttendees &&
           !registrationClosed &&
           !drawReady &&
@@ -248,10 +274,7 @@ export default async function BusinessEventDetailPage({
             <div className="mt-4">
               <AttendeeRegistrationForm
                 eventId={event.id}
-                eventTitle={
-                  event.title ||
-                  "Business Event"
-                }
+                eventTitle={event.title || "Business Event"}
                 raffleEnabled={raffleEnabled}
                 allowCompanions={!raffleEnabled}
                 buttonOnly
@@ -259,10 +282,7 @@ export default async function BusinessEventDetailPage({
 
               <AttendeeRegistrationForm
                 eventId={event.id}
-                eventTitle={
-                  event.title ||
-                  "Business Event"
-                }
+                eventTitle={event.title || "Business Event"}
                 raffleEnabled={raffleEnabled}
                 allowCompanions={!raffleEnabled}
                 formOnly
@@ -270,42 +290,37 @@ export default async function BusinessEventDetailPage({
             </div>
           )}
 
-        {/* REGISTRATION CLOSED */}
         {collectAttendees &&
           (registrationClosed || drawReady) && (
             <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-black text-[#6B6257] shadow-sm">
-              이벤트 등록 시간이 마감되었습니다.
+              Registration is closed.
             </div>
           )}
 
-        {/* REGISTRATION DISABLED */}
         {!collectAttendees && (
           <div className="mt-4 rounded-2xl bg-white p-4 text-sm font-bold text-[#6B6257] shadow-sm">
             Registration is not open for this event.
           </div>
         )}
 
-        {/* EVENT DATE */}
-        <p className="mt-5 text-sm font-bold text-[#6B6257]">
-          {event.event_date
-            ? new Date(
-                event.event_date,
-              ).toLocaleString()
-            : "Date TBA"}
-        </p>
-
-        {/* EVENT LOCATION */}
-        <p className="mt-2 text-sm font-bold text-[#6B6257]">
-          {event.location ||
-            "Location TBA"}
-        </p>
-
-        {/* DESCRIPTION */}
-        {event.description && (
-          <p className="mt-6 whitespace-pre-line text-base font-semibold leading-7 text-[#172033]">
-            {event.description}
+        {/* EVENT INFO */}
+        <div className="mt-5 rounded-[24px] border border-[#E2E4E7] bg-[#F1F2F4] px-5 py-5 shadow-sm">
+          <p className="text-sm font-bold text-[#6B6257]">
+            {event.event_date
+              ? formatEasternDateTime(event.event_date)
+              : "Date TBA"}
           </p>
-        )}
+
+          <p className="mt-2 text-sm font-bold text-[#6B6257]">
+            {event.location || "Location TBA"}
+          </p>
+
+          {event.description && (
+            <p className="mt-6 whitespace-pre-line text-base font-semibold leading-7 text-[#172033]">
+              {event.description}
+            </p>
+          )}
+        </div>
 
         {/* EXTERNAL VIDEO */}
         {event.external_video_url && (
@@ -313,74 +328,30 @@ export default async function BusinessEventDetailPage({
             href={event.external_video_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-5 block rounded-2xl bg-[#172033] py-4 text-center text-sm font-black text-white transition hover:bg-[#26324A]"
+            className="mt-5 flex min-h-12 items-center justify-center rounded-2xl bg-[#172033] px-4 py-3 text-center text-sm font-black text-white"
           >
             ▶ Watch Video
           </a>
         )}
 
-        {/* ACTION BUTTONS */}
-        <div className="mt-6 grid grid-cols-3 gap-2 text-center text-xs font-black">
-          <a
-            href={
-              event.contact_phone
-                ? `tel:${event.contact_phone}`
-                : "#"
-            }
-            className="rounded-2xl bg-white px-2 py-3 text-[#172033] shadow-sm"
-          >
-            <div className="text-xl">
-              ☎
-            </div>
+        {/* COMMUNITY-LIKE ACTION BUTTONS */}
+        <BusinessEventActionButtons
+          eventTitle={event.title || "Business Event"}
+          phone={event.contact_phone || null}
+          address={event.location || null}
+          latitude={event.latitude ?? null}
+          longitude={event.longitude ?? null}
+          registrationUrl={registrationUrl || null}
+        />
 
-            Call
-          </a>
-
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-              event.location || "",
-            )}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-2xl bg-white px-2 py-3 text-[#172033] shadow-sm"
-          >
-            <div className="text-xl">
-              ↱
-            </div>
-
-            Directions
-          </a>
-
-          <a
-            href={`sms:?&body=${encodeURIComponent(
-              `${event.title || ""}\n${
-                event.location || ""
-              }`,
-            )}`}
-            className="rounded-2xl bg-white px-2 py-3 text-[#172033] shadow-sm"
-          >
-            <div className="text-xl">
-              ⌲
-            </div>
-
-            Share
-          </a>
-        </div>
-
-        {/* ATTENDEE LIST */}
+        {/* ATTENDEES */}
         {collectAttendees && (
           <AttendeeList
             eventId={event.id}
-            ownerId={
-              event.owner_id || null
-            }
-            raffleEnabled={
-              raffleEnabled
-            }
+            ownerId={event.owner_id || null}
+            raffleEnabled={raffleEnabled}
             drawReady={drawReady}
-            winnerCount={
-              winnerCount
-            }
+            winnerCount={winnerCount}
           />
         )}
       </section>
