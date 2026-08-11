@@ -464,7 +464,7 @@ export default async function BusinessManagePage({
                 />
 
                 <Link
-                  href={`/business/${businessId}`}
+                  href={`/business/${businessId}/website`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex h-11 items-center justify-center rounded-xl border border-[#D9CFC2] bg-white px-5 text-sm font-black text-[#172033] shadow-sm transition hover:border-[#B64032]"
