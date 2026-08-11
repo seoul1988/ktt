@@ -9,9 +9,10 @@ function normalizeHost(value: string | null) {
   return String(value ?? "")
     .trim()
     .toLowerCase()
+    .split(",")[0]
+    .trim()
     .split(":")[0]
-    .replace(/^www\./, "")
-    .replace(/\.$/, "");
+    .replace(/^www\./, "");
 }
 
 function shouldIgnorePath(pathname: string) {
@@ -33,20 +34,37 @@ function shouldIgnorePath(pathname: string) {
 }
 
 async function findBusinessIdByDomain(domain: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    console.error("Missing Supabase environment variables");
+    console.error(
+      "Missing Supabase environment variables",
+    );
+
     return null;
   }
 
-  const query = new URL(`${supabaseUrl}/rest/v1/businesses`);
+  const query = new URL(
+    `${supabaseUrl}/rest/v1/businesses`,
+  );
 
   query.searchParams.set("select", "id");
-  query.searchParams.set("custom_domain", `eq.${domain}`);
-  query.searchParams.set("website_enabled", "eq.true");
-  query.searchParams.set("website_status", "eq.published");
+  query.searchParams.set(
+    "custom_domain",
+    `eq.${domain}`,
+  );
+  query.searchParams.set(
+    "website_enabled",
+    "eq.true",
+  );
+  query.searchParams.set(
+    "website_status",
+    "eq.published",
+  );
   query.searchParams.set("limit", "1");
 
   const response = await fetch(query, {
@@ -67,22 +85,34 @@ async function findBusinessIdByDomain(domain: string) {
     return null;
   }
 
-  const rows = (await response.json()) as Array<{ id: number }>;
+  const rows =
+    (await response.json()) as Array<{
+      id: number;
+    }>;
 
   return rows[0]?.id ?? null;
 }
 
-export async function proxy(request: NextRequest) {
+export async function proxy(
+  request: NextRequest,
+) {
   const rawHost =
     request.headers.get("x-forwarded-host") ??
     request.headers.get("host");
 
   const host = normalizeHost(rawHost);
-  const pathname = request.nextUrl.pathname;
 
+  const pathname =
+    request.nextUrl.pathname;
+
+  /*
+   * normalizeHost에서 www.를 제거하기 때문에
+   * 메인 사이트는 ktowntriangle.com 하나만
+   * 확인하면 됩니다.
+   */
   if (
     !host ||
-    PRIMARY_HOSTS.has(host) ||
+    host === "ktowntriangle.com" ||
     host.endsWith(".vercel.app") ||
     host === "localhost" ||
     shouldIgnorePath(pathname)
@@ -90,20 +120,25 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const businessId = await findBusinessIdByDomain(host);
+  const businessId =
+    await findBusinessIdByDomain(host);
 
   if (!businessId) {
     return NextResponse.next();
   }
 
-  const url = request.nextUrl.clone();
+  const url =
+    request.nextUrl.clone();
 
   if (pathname === "/") {
-    url.pathname = `/business/${businessId}/website`;
+    url.pathname =
+      `/business/${businessId}/website`;
   } else {
-    const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
+    const cleanPath =
+      pathname.replace(/^\/+|\/+$/g, "");
 
-    url.pathname = `/business/${businessId}/website/${cleanPath}`;
+    url.pathname =
+      `/business/${businessId}/website/${cleanPath}`;
   }
 
   return NextResponse.rewrite(url);
