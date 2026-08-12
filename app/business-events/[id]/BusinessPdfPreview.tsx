@@ -37,21 +37,20 @@ type PdfJsLib = {
   };
 };
 
-declare global {
-  interface Window {
-    pdfjsLib?: PdfJsLib;
-  }
-}
-
 const PDFJS_VERSION = "4.10.38";
 const PDFJS_SCRIPT =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.mjs`;
 const PDFJS_WORKER =
   `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
 
+// Window 전역 타입을 확장하지 않고 이 모듈 안에서만 캐시합니다.
+// BusinessPdfPreview와 CommunityPdfPreview가 동시에 존재해도
+// pdfjsLib 전역 선언 충돌이 생기지 않습니다.
+let cachedPdfJs: PdfJsLib | null = null;
+
 async function loadPdfJs(): Promise<PdfJsLib> {
-  if (window.pdfjsLib) {
-    return window.pdfjsLib;
+  if (cachedPdfJs) {
+    return cachedPdfJs;
   }
 
   const pdfjs = (await import(
@@ -60,12 +59,15 @@ async function loadPdfJs(): Promise<PdfJsLib> {
   )) as unknown as PdfJsLib;
 
   pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-  window.pdfjsLib = pdfjs;
+  cachedPdfJs = pdfjs;
 
   return pdfjs;
 }
 
-export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
+export default function CommunityPdfPreview({
+  pdfUrl,
+  title,
+}: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState("PDF를 불러오는 중...");
   const [error, setError] = useState("");
@@ -85,19 +87,13 @@ export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
         host.innerHTML = "";
 
         const pdfjs = await loadPdfJs();
-
-        currentPdf = await pdfjs.getDocument({
-          url: pdfUrl,
-        }).promise;
+        currentPdf = await pdfjs.getDocument({ url: pdfUrl }).promise;
 
         if (cancelled) return;
 
-        const viewportWidth =
-          typeof window !== "undefined" ? window.innerWidth : 360;
-
         const availableWidth = Math.max(
           280,
-          Math.min(host.clientWidth || viewportWidth - 24, 900),
+          Math.min(host.clientWidth || window.innerWidth - 32, 900),
         );
 
         for (
@@ -111,17 +107,9 @@ export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
           const baseViewport = page.getViewport({ scale: 1 });
 
           const cssScale = availableWidth / baseViewport.width;
-
-          // 휴대폰 Retina 화면에서도 글자가 흐리지 않도록 실제 canvas는
-          // CSS 표시 크기보다 크게 렌더링합니다.
-          const devicePixelRatio = Math.min(
-            2,
-            Math.max(1, window.devicePixelRatio || 1),
-          );
-
           const renderScale = Math.min(
-            2.5,
-            Math.max(1.25, cssScale * devicePixelRatio),
+            2.2,
+            Math.max(1.2, cssScale * (window.devicePixelRatio || 1)),
           );
 
           const renderViewport = page.getViewport({
@@ -129,9 +117,7 @@ export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
           });
 
           const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d", {
-            alpha: false,
-          });
+          const context = canvas.getContext("2d");
 
           if (!context) {
             throw new Error("PDF canvas를 만들지 못했습니다.");
@@ -139,7 +125,6 @@ export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
 
           canvas.width = Math.ceil(renderViewport.width);
           canvas.height = Math.ceil(renderViewport.height);
-
           canvas.style.width = `${availableWidth}px`;
           canvas.style.height = "auto";
           canvas.style.display = "block";
@@ -185,7 +170,9 @@ export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
       if (resizeTimer) clearTimeout(resizeTimer);
 
       resizeTimer = setTimeout(() => {
-        if (!cancelled) void renderPdf();
+        if (!cancelled) {
+          void renderPdf();
+        }
       }, 250);
     }
 
@@ -195,12 +182,14 @@ export default function BusinessPdfPreview({ pdfUrl, title }: Props) {
       cancelled = true;
       window.removeEventListener("resize", handleResize);
 
-      if (resizeTimer) clearTimeout(resizeTimer);
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
 
       try {
         void currentPdf?.destroy?.();
       } catch {
-        // cleanup 실패는 화면 표시와 무관하므로 무시합니다.
+        // cleanup failure can be ignored
       }
     };
   }, [pdfUrl]);
