@@ -45,6 +45,7 @@ export const metadata: Metadata = {
     "Discover Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, deals, and everything Korean across Raleigh, Cary, Durham, Chapel Hill, and the Triangle.",
 
   applicationName: "KTown Triangle",
+
   manifest: "/manifest.webmanifest",
 
   alternates: {
@@ -53,13 +54,20 @@ export const metadata: Metadata = {
 
   openGraph: {
     title: "Discover Korean Town in the Triangle | KTown Triangle",
+
     description:
       "Find Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, deals, and everything Korean across Raleigh, Cary, Durham, Chapel Hill, and the Triangle.",
+
     url: SITE_URL,
+
     siteName: "KTown Triangle",
+
     locale: "en_US",
+
     alternateLocale: ["ko_KR"],
+
     type: "website",
+
     images: [
       {
         url: OG_IMAGE_URL,
@@ -74,9 +82,12 @@ export const metadata: Metadata = {
 
   twitter: {
     card: "summary_large_image",
+
     title: "Discover Korean Town in the Triangle | KTown Triangle",
+
     description:
       "Explore Korean BBQ, bakeries, fried chicken, K-POP, events, shopping, local deals, and everything Korean in one place.",
+
     images: [
       {
         url: OG_IMAGE_URL,
@@ -141,14 +152,16 @@ export const metadata: Metadata = {
   },
 };
 
+/*
+ * 모바일 화면이 새로고침 시 축소되는 문제 방지
+ */
 export const viewport: Viewport = {
   themeColor: "#F8F3EC",
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  viewportFit: "cover",
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -161,57 +174,70 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
       style={{
+        width: "100%",
+        minHeight: "100%",
         backgroundColor: "#F8F3EC",
-        touchAction: "auto",
       }}
       suppressHydrationWarning
     >
       <body
-        className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
+        className="min-h-screen w-full overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
         style={{
+          width: "100%",
+          minWidth: "100%",
+          margin: 0,
+          padding: 0,
           backgroundColor: "#F8F3EC",
-          touchAction: "auto",
+          overflowX: "hidden",
         }}
       >
         <AuthProvider>
+          {/* PWA Service Worker */}
           <ServiceWorkerRegister />
 
           {/*
-           * 메인 KTown 페이지에서만 설치 버튼을 표시합니다.
-           * /business/[id]/website 페이지에서는 비즈니스 전용
-           * InstallAppButton을 사용하므로 여기서는 자동으로 숨깁니다.
+           * 메인 KTown 페이지에서만 설치 버튼 표시
+           * /business/[id]/website에서는 비즈니스 전용 설치 버튼 사용
            */}
           <MainInstallAppButton />
 
           {/*
-           * Instagram, Facebook, Threads는 영어 안내
-           * KakaoTalk은 한글 안내
-           * Chrome/Safari는 안내 없음
+           * Instagram / Facebook / Threads → 영어
+           * KakaoTalk → 한글
+           * 일반 Chrome / Safari → 안내 없음
            */}
           <InAppBrowserNotice />
 
           <VisitorTracker />
+
           <AppBadgeManager />
+
           <AppUpdateNotice />
 
-          {/* 공용 팝업 */}
+          {/*
+           * 공용 팝업
+           * 홈 / 커뮤니티 / 이벤트 위치에 따라 자동 필터링
+           */}
           <KTownPopupBanner />
 
           {/*
            * 중요:
-           * RootLayout 전체에 app-safe-area를 씌우지 않습니다.
-           * BottomNav 자체에서 safe-area를 처리합니다.
+           * app-safe-area로 children 전체를 감싸지 않습니다.
+           *
+           * BottomNav 같은 fixed 요소에서
+           * safe-area를 개별 처리합니다.
            */}
           {children}
         </AuthProvider>
 
-        {/* Google Analytics 4 and Google Ads */}
+        {/* Google Analytics 4 */}
         <Script
           id="google-tag-manager"
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"
         />
 
+        {/* Google Analytics + Google Ads */}
         <Script id="google-analytics-and-ads" strategy="afterInteractive">
           {`
             window.dataLayer = window.dataLayer || [];
