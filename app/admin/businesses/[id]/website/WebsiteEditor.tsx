@@ -13317,25 +13317,22 @@ function MobileWebsiteHeader({
       style={{ backgroundColor: headerBackgroundColor }}
     >
       <div
-        className="grid w-full grid-cols-[72px_minmax(0,1fr)_48px] items-center gap-2 px-3"
+        className="grid w-full grid-cols-[auto_minmax(0,1fr)_48px] items-center gap-2 px-3"
         style={{
           minHeight: `${mobileHeight}px`,
           backgroundColor: headerBackgroundColor,
           color: mobileTitleColor,
         }}
       >
-        <div className="flex min-w-0 items-center justify-start overflow-hidden">
+        <div className="flex min-w-0 items-center justify-start overflow-visible">
           {logoCell ? (
             <CellPreview
               cell={{
                 ...logoCell,
-                logo_size_px: Math.min(
-                  Number(
-                    logoCell.logo_size_px ??
-                      websiteSettings?.header_logo_size_px ??
-                      120,
-                  ),
-                  Math.max(40, mobileHeight - 16),
+                logo_size_px: Number(
+                  logoCell.logo_size_px ??
+                    websiteSettings?.header_logo_size_px ??
+                    120,
                 ),
               }}
               business={business}
@@ -16162,12 +16159,19 @@ function CellPreview({
         Number(websiteSettings?.header_vertical_padding_px || 8),
       ),
     );
+    const isMobileHeaderLogo =
+      area === "header" && previewDevice === "mobile";
+
     const availableHeight =
-      area === "header"
+      area === "header" && !isMobileHeaderLogo
         ? Math.max(24, actualHeaderHeight - headerPadding * 2)
         : requestedLogoSize;
-    const logoSize =
-      area === "header"
+
+    // 모바일 헤더에서는 사용자가 지정한 폰 로고 크기를 그대로 사용합니다.
+    // 데스크탑만 기존처럼 헤더 높이에 맞춰 제한합니다.
+    const logoSize = isMobileHeaderLogo
+      ? requestedLogoSize
+      : area === "header"
         ? Math.min(requestedLogoSize, availableHeight)
         : requestedLogoSize;
 
@@ -16193,7 +16197,7 @@ function CellPreview({
               width: `${logoSize}px`,
               height: `${logoSize}px`,
               maxWidth: "none",
-              maxHeight: `${availableHeight}px`,
+              maxHeight: isMobileHeaderLogo ? "none" : `${availableHeight}px`,
             }}
           />
         ) : (
@@ -16203,7 +16207,7 @@ function CellPreview({
               width: `${logoSize}px`,
               height: `${logoSize}px`,
               maxWidth: "none",
-              maxHeight: `${availableHeight}px`,
+              maxHeight: isMobileHeaderLogo ? "none" : `${availableHeight}px`,
               fontSize: `${Math.max(10, logoSize / 4)}px`,
             }}
           >
