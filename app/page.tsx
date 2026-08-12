@@ -483,6 +483,10 @@ function isMainVisibleBusiness(
 
 
 export default async function Home() {
+  // TEMPORARY HOME FEATURE
+  // true  = Business ID 196 "Coming Soon" card
+  // false = normal Grand Opening card
+  const SHOW_TEMP_COMING_SOON_196 = true;
   const now = new Date().toISOString();
   const today = now.slice(0, 10);
 
@@ -779,6 +783,17 @@ const kdramaNews = (todaysKoreaPosts || [])
   const mainEvent = businessEvents[0];
   const mainGrandOpening = grandOpenings[0];
 
+  // Temporary Coming Soon business
+  const comingSoonBusiness = spots.find(
+    (business: any) => Number(business.id) === 196
+  );
+
+  const comingSoonImage =
+    comingSoonBusiness?.thumbnail_url ||
+    comingSoonBusiness?.image_url ||
+    "/event.png";
+
+  // Keep Grand Opening ready for later.
   const grandOpeningImage =
     mainGrandOpening?.images?.[0] ||
     mainGrandOpening?.image_url ||
@@ -818,7 +833,80 @@ const kdramaNews = (todaysKoreaPosts || [])
           </section>
         )}
 
-        {mainGrandOpening && (
+        {SHOW_TEMP_COMING_SOON_196 && comingSoonBusiness ? (
+          <section className="mx-auto mb-6 max-w-xl">
+            <div className="rounded-[26px] border border-amber-200 bg-[#FFF4D8] p-3 shadow-sm sm:p-4">
+              <div className="flex items-center justify-between gap-3 px-1 pb-4 pt-1">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-xl shadow-sm">
+                    🎉
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                      Featured
+                    </p>
+
+                    <h2 className="mt-0.5 truncate text-[22px] font-black leading-tight text-[#071A3D]">
+                      Coming Soon
+                    </h2>
+                  </div>
+                </div>
+
+                <Link
+                  href="/business/196"
+                  aria-label="View coming soon business"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-base font-black text-amber-700 shadow-sm transition hover:scale-105 hover:bg-amber-50 active:scale-95"
+                >
+                  →
+                </Link>
+              </div>
+
+              <Link
+                href="/business/196"
+                className="block overflow-hidden rounded-[24px] border border-amber-100 bg-white shadow-sm transition hover:shadow-md active:scale-[0.995]"
+              >
+                <div className="relative aspect-[16/8.8] w-full overflow-hidden bg-[#F8F3EC]">
+                  <img
+                    src={comingSoonImage}
+                    alt={comingSoonBusiness.name || "Coming Soon"}
+                    loading="lazy"
+                    decoding="async"
+                    className="block h-full w-full object-cover object-center"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      objectPosition: "center",
+                    }}
+                  />
+
+                  <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#071A3D] shadow-sm">
+                    Coming Soon
+                  </span>
+                </div>
+
+                <div className="border-t border-gray-100 bg-white px-4 py-4 sm:px-5">
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="line-clamp-1 text-[18px] font-black uppercase leading-tight text-[#071A3D]">
+                        {comingSoonBusiness.name || "Coming Soon"}
+                      </h3>
+
+                      <p className="mt-2 line-clamp-1 text-[13px] font-bold uppercase text-[#6B5848]">
+                        {comingSoonBusiness.category || "New Business"}
+                      </p>
+                    </div>
+
+                    <p className="shrink-0 text-right text-[11px] font-black text-amber-700">
+                      Coming Soon
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          </section>
+        ) : mainGrandOpening ? (
           <section className="mx-auto mb-6 max-w-xl">
             <div className="rounded-[26px] border border-amber-200 bg-[#FFF4D8] p-3 shadow-sm sm:p-4">
               <div className="flex items-center justify-between gap-3 px-1 pb-4 pt-1">
@@ -893,7 +981,7 @@ const kdramaNews = (todaysKoreaPosts || [])
               </Link>
             </div>
           </section>
-        )}
+        ) : null}
 
         {mainEvent && (
           <section className="mx-auto mb-10 max-w-xl">

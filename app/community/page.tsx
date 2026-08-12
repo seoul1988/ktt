@@ -461,11 +461,11 @@ export default async function CommunityPage() {
 
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-wide text-[#465B7A]">
-                    NEWS / PERFORMANCE
+                    REGISTERED NEWS
                   </p>
 
                   <h2 className="text-xl font-black text-[#172033]">
-                    뉴스 / 공연
+                    {latestRegisteredNews?.category || "등록 뉴스"}
                   </h2>
                 </div>
               </div>
@@ -487,7 +487,7 @@ export default async function CommunityPage() {
                   {latestRegisteredNews.image_url ? (
                     <img
                       src={latestRegisteredNews.image_url}
-                      alt={latestRegisteredNews.title || "뉴스 / 공연"}
+                      alt={latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -503,7 +503,7 @@ export default async function CommunityPage() {
 
                 <div className="p-4">
                   <h3 className="line-clamp-3 text-xl font-black leading-tight">
-                    {latestRegisteredNews.title || "뉴스 / 공연"}
+                    {latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
                   </h3>
 
                   {latestRegisteredNews.summary ? (
@@ -514,7 +514,7 @@ export default async function CommunityPage() {
 
                   <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold text-[#6B6257]">
                     <span className="line-clamp-1">
-                      {latestRegisteredNews.category || "뉴스 / 공연"}
+                      {latestRegisteredNews.category || "등록 뉴스"}
                     </span>
                     {latestRegisteredNews.published_at ? (
                       <span className="shrink-0">
@@ -532,7 +532,7 @@ export default async function CommunityPage() {
                 <div>
                   <div className="text-4xl">📰</div>
                   <p className="mt-3 text-lg font-black text-[#172033]">
-                    뉴스 / 공연
+                    등록 뉴스
                   </p>
                   <p className="mt-2 text-sm font-bold text-[#6B6257]">
                     새 소식이 등록되면 여기에 가장 최근 소식이 표시됩니다.
