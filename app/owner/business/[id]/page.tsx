@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { supabase } from "../../../../lib/supabase";
 
 type Business = {
@@ -13,76 +13,114 @@ type Business = {
   description: string | null;
 };
 
+type Props = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 export default function OwnerBusinessEditPage({
   params,
-}: {
-  params: { id: string };
-}) {
-  const businessId = Number(params.id);
+}: Props) {
+  const { id } = use(params);
+
+  const businessId = Number(id);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [business, setBusiness] = useState<Business | null>(null);
+  const [business, setBusiness] =
+    useState<Business | null>(null);
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [category, setCategory] = useState("");
   const [hours, setHours] = useState("");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] =
+    useState("");
 
   useEffect(() => {
-    loadBusiness();
-  }, []);
+    void loadBusiness();
+  }, [businessId]);
 
   async function loadBusiness() {
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      if (
+        !Number.isFinite(businessId) ||
+        businessId <= 0
+      ) {
+        alert("Invalid business ID.");
+        window.location.href = "/owner";
+        return;
+      }
 
-    if (!user) {
-      window.location.href = "/login";
-      return;
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        window.location.href = "/login";
+        return;
+      }
+
+      const {
+        data: ownerRow,
+        error: ownerError,
+      } = await supabase
+        .from("business_owners")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("business_id", businessId)
+        .eq("status", "approved")
+        .maybeSingle();
+
+      if (ownerError || !ownerRow) {
+        alert(
+          "You do not have permission to edit this business.",
+        );
+
+        window.location.href = "/owner";
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("businesses")
+        .select(
+          "id, name, address, phone, category, hours, description",
+        )
+        .eq("id", businessId)
+        .maybeSingle();
+
+      if (error || !data) {
+        alert("Business not found.");
+        window.location.href = "/owner";
+        return;
+      }
+
+      const loadedBusiness = data as Business;
+
+      setBusiness(loadedBusiness);
+      setName(loadedBusiness.name || "");
+      setAddress(loadedBusiness.address || "");
+      setPhone(loadedBusiness.phone || "");
+      setCategory(loadedBusiness.category || "");
+      setHours(loadedBusiness.hours || "");
+      setDescription(
+        loadedBusiness.description || "",
+      );
+    } catch (error) {
+      console.error(
+        "Failed to load business:",
+        error,
+      );
+
+      alert("Unable to load business.");
+    } finally {
+      setLoading(false);
     }
-
-    const { data: ownerRow, error: ownerError } = await supabase
-      .from("business_owners")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("business_id", businessId)
-      .eq("status", "approved")
-      .maybeSingle();
-
-    if (ownerError || !ownerRow) {
-      alert("You do not have permission to edit this business.");
-      window.location.href = "/owner";
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("id, name, address, phone, category, hours, description")
-      .eq("id", businessId)
-      .maybeSingle();
-
-    if (error || !data) {
-      alert("Business not found.");
-      window.location.href = "/owner";
-      return;
-    }
-
-    setBusiness(data as Business);
-    setName(data.name || "");
-    setAddress(data.address || "");
-    setPhone(data.phone || "");
-    setCategory(data.category || "");
-    setHours(data.hours || "");
-    setDescription(data.description || "");
-
-    setLoading(false);
   }
 
   async function saveBusiness() {
@@ -95,33 +133,44 @@ export default function OwnerBusinessEditPage({
 
     setSaving(true);
 
-    const { error } = await supabase
-      .from("businesses")
-      .update({
-        name,
-        address,
-        phone,
-        category,
-        hours,
-        description,
-      })
-      .eq("id", business.id);
+    try {
+      const { error } = await supabase
+        .from("businesses")
+        .update({
+          name: name.trim(),
+          address: address.trim(),
+          phone: phone.trim(),
+          category: category.trim(),
+          hours: hours.trim(),
+          description: description.trim(),
+        })
+        .eq("id", business.id);
 
-    setSaving(false);
+      if (error) {
+        alert(error.message);
+        return;
+      }
 
-    if (error) {
-      alert(error.message);
-      return;
+      alert("Business updated.");
+      window.location.href = "/owner";
+    } catch (error) {
+      console.error(
+        "Failed to save business:",
+        error,
+      );
+
+      alert("Unable to save business.");
+    } finally {
+      setSaving(false);
     }
-
-    alert("Business updated.");
-    window.location.href = "/owner";
   }
 
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F8F3EC] text-[#172033]">
-        <p className="font-bold">Loading...</p>
+        <p className="font-bold">
+          Loading...
+        </p>
       </main>
     );
   }
@@ -130,6 +179,7 @@ export default function OwnerBusinessEditPage({
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
       <div className="mx-auto max-w-md">
         <button
+          type="button"
           onClick={() => {
             window.location.href = "/owner";
           }}
@@ -139,16 +189,21 @@ export default function OwnerBusinessEditPage({
         </button>
 
         <div className="rounded-[32px] bg-white p-6 shadow-2xl">
-          <h1 className="text-3xl font-black">Edit Business</h1>
+          <h1 className="text-3xl font-black">
+            Edit Business
+          </h1>
 
           <div className="mt-6 space-y-4">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-gray-700">
                 Business Name
               </span>
+
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) =>
+                  setName(e.target.value)
+                }
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
               />
             </label>
@@ -157,9 +212,12 @@ export default function OwnerBusinessEditPage({
               <span className="mb-2 block text-sm font-bold text-gray-700">
                 Address
               </span>
+
               <input
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={(e) =>
+                  setAddress(e.target.value)
+                }
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
               />
             </label>
@@ -168,9 +226,12 @@ export default function OwnerBusinessEditPage({
               <span className="mb-2 block text-sm font-bold text-gray-700">
                 Phone
               </span>
+
               <input
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) =>
+                  setPhone(e.target.value)
+                }
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
               />
             </label>
@@ -179,9 +240,12 @@ export default function OwnerBusinessEditPage({
               <span className="mb-2 block text-sm font-bold text-gray-700">
                 Category
               </span>
+
               <input
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                onChange={(e) =>
+                  setCategory(e.target.value)
+                }
                 placeholder="Restaurant, Cafe, Market..."
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
               />
@@ -191,9 +255,12 @@ export default function OwnerBusinessEditPage({
               <span className="mb-2 block text-sm font-bold text-gray-700">
                 Hours
               </span>
+
               <input
                 value={hours}
-                onChange={(e) => setHours(e.target.value)}
+                onChange={(e) =>
+                  setHours(e.target.value)
+                }
                 placeholder="Mon-Sun 11:00 AM - 9:00 PM"
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
               />
@@ -203,20 +270,26 @@ export default function OwnerBusinessEditPage({
               <span className="mb-2 block text-sm font-bold text-gray-700">
                 Description
               </span>
+
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) =>
+                  setDescription(e.target.value)
+                }
                 rows={5}
                 className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4 outline-none focus:border-[#172033]"
               />
             </label>
 
             <button
+              type="button"
               onClick={saveBusiness}
               disabled={saving}
               className="w-full rounded-2xl bg-[#172033] py-4 text-lg font-extrabold text-white shadow-lg disabled:opacity-60"
             >
-              {saving ? "Saving..." : "Save Business"}
+              {saving
+                ? "Saving..."
+                : "Save Business"}
             </button>
           </div>
         </div>
