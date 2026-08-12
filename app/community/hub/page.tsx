@@ -590,6 +590,32 @@ export default function CommunityHubPage() {
           })}
         </div>
 
+          {/* 이용 매뉴얼 - 광고북 바로 위 */}
+          <section className="mt-3 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-[0_2px_10px_rgba(23,32,51,0.06)]">
+            <Link
+              href="/community/manual"
+              className="group flex items-center gap-3 p-4 transition hover:bg-blue-50 active:scale-[0.99]"
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-600 text-white shadow-sm">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6" aria-hidden="true">
+                  <path d="M9.5 7.5v9l7-4.5-7-4.5Z" />
+                </svg>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[14px] font-extrabold text-[#172033]">이용 매뉴얼</h2>
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-red-600">VIDEO</span>
+                </div>
+                <p className="mt-1 text-[11px] font-semibold leading-relaxed text-gray-500">회원가입 · 오너신청 · 사이트관리 방법</p>
+              </div>
+
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0 text-gray-400 transition group-hover:translate-x-0.5" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </Link>
+          </section>
+
           <section className="mt-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_2px_10px_rgba(23,32,51,0.06)]">
             <Link
               href="/community/ads"
