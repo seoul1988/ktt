@@ -9,6 +9,8 @@ import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import AppBadgeManager from "./components/AppBadgeManager";
 import AppUpdateNotice from "./components/AppUpdateNotice";
 import MainInstallAppButton from "./components/MainInstallAppButton";
+import KTownPopupBanner from "./components/KTownPopupBanner";
+
 
 import "./globals.css";
 
@@ -92,42 +94,16 @@ export const metadata: Metadata = {
 
   icons: {
     icon: [
-      {
-        url: "/favicon.png",
-        sizes: "32x32",
-        type: "image/png",
-      },
-      {
-        url: "/icon-192.png",
-        sizes: "192x192",
-        type: "image/png",
-      },
-      {
-        url: "/icon-512.png",
-        sizes: "512x512",
-        type: "image/png",
-      },
+      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-
     shortcut: [
-      {
-        url: "/favicon.png",
-        sizes: "32x32",
-        type: "image/png",
-      },
+      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
     ],
-
     apple: [
-      {
-        url: "/apple-touch-icon.png",
-        sizes: "180x180",
-        type: "image/png",
-      },
-      {
-        url: "/icon-192.png",
-        sizes: "192x192",
-        type: "image/png",
-      },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
     ],
   },
 
@@ -145,9 +121,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   minimumScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  viewportFit: "cover",
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -160,56 +135,38 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-[#F8F3EC] antialiased`}
       style={{
+        width: "100%",
+        minHeight: "100%",
+        margin: 0,
+        padding: 0,
         backgroundColor: "#F8F3EC",
-        touchAction: "auto",
       }}
       suppressHydrationWarning
     >
-      <head>
-        <link
-          rel="apple-touch-startup-image"
-          href="/ios-splash-1242x2208.png"
-          media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3)"
-        />
-      </head>
-
       <body
-        className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
+        className="min-h-screen w-full overflow-x-hidden bg-[#F8F3EC] text-[#172033]"
         style={{
+          width: "100%",
+          minWidth: "100%",
+          maxWidth: "100%",
+          margin: 0,
+          padding: 0,
           backgroundColor: "#F8F3EC",
-          touchAction: "auto",
+          overflowX: "hidden",
         }}
       >
         <AuthProvider>
+
           <ServiceWorkerRegister />
-
-          {/*
-           * 메인 KTown 페이지에서만 설치 버튼을 표시합니다.
-           * /business/[id]/website 페이지에서는 비즈니스 전용
-           * InstallAppButton을 사용하므로 여기서는 자동으로 숨깁니다.
-           */}
           <MainInstallAppButton />
-
-          {/* Instagram, Facebook, Threads는 영어 안내
-              KakaoTalk은 한글 안내
-              Chrome/Safari는 안내 없음 */}
           <InAppBrowserNotice />
-
           <VisitorTracker />
           <AppBadgeManager />
           <AppUpdateNotice />
-
-          <div
-            className="app-safe-area"
-            style={{
-              touchAction: "auto",
-            }}
-          >
-            {children}
-          </div>
+          <KTownPopupBanner />
+          {children}
         </AuthProvider>
 
-        {/* Google Analytics 4 and Google Ads */}
         <Script
           id="google-tag-manager"
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
