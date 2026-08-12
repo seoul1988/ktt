@@ -37,6 +37,24 @@ export default async function CommunityPage() {
     console.error("community deals error:", dealsError);
   }
 
+  // 두 번째 소스: /community/news에 직접 등록된 뉴스/공연·문화.
+  // 위의 자동 Community News(community_news)가 아니라 business_news에서
+  // 가장 최근 등록된 1건을 가져옵니다.
+  const { data: registeredNewsData, error: registeredNewsError } =
+    await supabase
+      .from("business_news")
+      .select(
+        "id, title, summary, category, image_url, published_at, published",
+      )
+      .order("id", { ascending: false })
+      .limit(1);
+
+  if (registeredNewsError) {
+    console.error("registered news/culture error:", registeredNewsError);
+  }
+
+  const latestRegisteredNews = registeredNewsData?.[0] ?? null;
+
   const newsSelect =
     "id, region, source, title, summary, article_url, image_url, published_at";
 
@@ -334,119 +352,196 @@ export default async function CommunityPage() {
           </div>
         </section>
 
-        {/* Community Deals */}
-        <section className="mb-8 overflow-hidden rounded-3xl border border-[#F1DEAB] bg-[#FFF4D8] p-3 shadow-sm">
-          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F1DEAB] bg-white text-xl shadow-sm">
-                🏷️
+        {/* Community Deals / fallback: latest News & Performance */}
+        {dealCount > 0 ? (
+          <section className="mb-8 overflow-hidden rounded-3xl border border-[#F1DEAB] bg-[#FFF4D8] p-3 shadow-sm">
+            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F1DEAB] bg-white text-xl shadow-sm">
+                  🏷️
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-[#B98000]">
+                    Deals
+                  </p>
+
+                  <h2 className="text-xl font-black text-[#172033]">
+                    Community Deals
+                  </h2>
+                </div>
               </div>
 
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-[#B98000]">
-                  Deals
-                </p>
-
-                <h2 className="text-xl font-black text-[#172033]">
-                  Community Deals
-                </h2>
-              </div>
+              <Link
+                href="/community/deals"
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B98000] shadow-sm"
+              >
+                →
+              </Link>
             </div>
 
-            <Link
-              href="/community/deals"
-              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B98000] shadow-sm"
+            <div
+              className={
+                dealCount === 1
+                  ? "grid grid-cols-1 gap-4"
+                  : "flex gap-4 overflow-x-auto pb-1"
+              }
             >
-              →
-            </Link>
-          </div>
-
-          <div
-            className={
-              dealCount === 1
-                ? "grid grid-cols-1 gap-4"
-                : "flex gap-4 overflow-x-auto pb-1"
-            }
-          >
-            {deals?.map((deal) => (
-              <Link
-                key={deal.id}
-                href={`/community/deals/${deal.id}`}
-                className={
-                  dealCount === 1
-                    ? "overflow-hidden rounded-3xl bg-white shadow-sm"
-                    : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
-                }
-              >
-                <div
+              {deals?.map((deal) => (
+                <Link
+                  key={deal.id}
+                  href={`/community/deals/${deal.id}`}
                   className={
                     dealCount === 1
-                      ? "relative h-64 w-full overflow-hidden bg-[#E8DED1]"
-                      : "relative h-44 w-full overflow-hidden bg-[#E8DED1]"
+                      ? "overflow-hidden rounded-3xl bg-white shadow-sm"
+                      : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
                   }
                 >
-                  {deal.image_url ? (
+                  <div
+                    className={
+                      dealCount === 1
+                        ? "relative h-64 w-full overflow-hidden bg-[#E8DED1]"
+                        : "relative h-44 w-full overflow-hidden bg-[#E8DED1]"
+                    }
+                  >
+                    {deal.image_url ? (
+                      <img
+                        src={deal.image_url}
+                        alt={deal.title || "Deal"}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
+                        No Photo
+                      </div>
+                    )}
+
+                    <div className="absolute left-3 top-3 rounded-full bg-[#F4C95D] px-3 py-1 text-[10px] font-black text-[#172033] shadow-lg">
+                      DEAL
+                    </div>
+
+                    {(deal.discount_text || deal.discount) && (
+                      <div className="absolute bottom-3 left-3 rounded-full bg-[#C4483A] px-4 py-2 text-sm font-black text-white shadow-lg">
+                        {deal.discount_text || deal.discount}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className="line-clamp-2 text-lg font-black text-[#172033]">
+                      {deal.title || "Community Deal"}
+                    </h3>
+
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="line-clamp-1 text-sm font-bold text-[#6B6257]">
+                        {deal.business_name ||
+                          deal.business ||
+                          deal.store_name ||
+                          "Local Business"}
+                      </p>
+
+                      {deal.end_date && (
+                        <span className="shrink-0 text-xs font-black text-[#C4483A]">
+                          Ends {new Date(deal.end_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
+            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#CBD7EA] bg-white text-xl shadow-sm">
+                  📰
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-[#465B7A]">
+                    NEWS / PERFORMANCE
+                  </p>
+
+                  <h2 className="text-xl font-black text-[#172033]">
+                    뉴스 / 공연
+                  </h2>
+                </div>
+              </div>
+
+              <Link
+                href="/community/news"
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#465B7A] shadow-sm"
+              >
+                →
+              </Link>
+            </div>
+
+            {latestRegisteredNews ? (
+              <Link
+                href={`/community/news/${latestRegisteredNews.id}`}
+                className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+              >
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#DDE5F0]">
+                  {latestRegisteredNews.image_url ? (
                     <img
-                      src={deal.image_url}
-                      alt={deal.title || "Deal"}
+                      src={latestRegisteredNews.image_url}
+                      alt={latestRegisteredNews.title || "뉴스 / 공연"}
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
-                      No Photo
+                    <div className="flex h-full w-full items-center justify-center text-5xl">
+                      📰
                     </div>
                   )}
 
-                  <div className="absolute left-3 top-3 rounded-full bg-[#F4C95D] px-3 py-1 text-[10px] font-black text-[#172033] shadow-lg">
-                    DEAL
+                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                    LATEST
                   </div>
-
-                  {(deal.discount_text || deal.discount) && (
-                    <div className="absolute bottom-3 left-3 rounded-full bg-[#C4483A] px-4 py-2 text-sm font-black text-white shadow-lg">
-                      {deal.discount_text || deal.discount}
-                    </div>
-                  )}
                 </div>
 
                 <div className="p-4">
-  <h3 className="line-clamp-2 text-lg font-black text-[#172033]">
-    {deal.title || "Community Deal"}
-  </h3>
+                  <h3 className="line-clamp-3 text-xl font-black leading-tight">
+                    {latestRegisteredNews.title || "뉴스 / 공연"}
+                  </h3>
 
- <div className="mt-2 flex items-center justify-between gap-2">
-  <p className="line-clamp-1 text-sm font-bold text-[#6B6257]">
-    {deal.business_name ||
-      deal.business ||
-      deal.store_name ||
-      "Local Business"}
-  </p>
+                  {latestRegisteredNews.summary ? (
+                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-[#6B6257]">
+                      {latestRegisteredNews.summary}
+                    </p>
+                  ) : null}
 
-  {deal.end_date && (
-    <span className="shrink-0 text-xs font-black text-[#C4483A]">
-      Ends {new Date(deal.end_date).toLocaleDateString()}
-    </span>
-  )}
-</div>
-
-</div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold text-[#6B6257]">
+                    <span className="line-clamp-1">
+                      {latestRegisteredNews.category || "뉴스 / 공연"}
+                    </span>
+                    {latestRegisteredNews.published_at ? (
+                      <span className="shrink-0">
+                        {new Date(latestRegisteredNews.published_at).toLocaleDateString()}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
               </Link>
-            ))}
-
-            {!dealCount && (
-              <div className="min-w-full rounded-3xl bg-white p-6 text-sm font-bold text-[#6B6257] shadow-sm">
-                No community deals yet.
-              </div>
+            ) : (
+              <Link
+                href="/community/news"
+                className="flex min-h-[180px] items-center justify-center rounded-3xl bg-white p-6 text-center shadow-sm"
+              >
+                <div>
+                  <div className="text-4xl">📰</div>
+                  <p className="mt-3 text-lg font-black text-[#172033]">
+                    뉴스 / 공연
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-[#6B6257]">
+                    새 소식이 등록되면 여기에 가장 최근 소식이 표시됩니다.
+                  </p>
+                </div>
+              </Link>
             )}
-          </div>
-        </section>
-
-
-
-
-
-
-
-
+          </section>
+        )}
 
 
         <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
