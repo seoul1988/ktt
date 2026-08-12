@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import ProfileButton from "@/app/components/ProfileButton";
 
 type BannerType = "popup";
-type DisplayLocation = "all" | "home" | "community" | "events";
+type DisplayLocation = string;
 
 type TextAlign = "left" | "center" | "right";
 type ImagePosition = "top" | "left" | "background";
@@ -664,11 +664,7 @@ export default function BannerManagementPage() {
     setFormBackgroundColor(banner.form_background_color || "#FFFFFF");
     setLeadExpandedMode(banner.lead_expanded_mode !== false);
     setDisplayLocation(
-      banner.display_location === "home" ||
-      banner.display_location === "community" ||
-      banner.display_location === "events"
-        ? banner.display_location
-        : "all",
+      String(banner.display_location || "all").trim() || "all",
     );
     setDisplayOrder(banner.display_order);
     setIsActive(banner.is_active);
@@ -783,7 +779,10 @@ export default function BannerManagementPage() {
       formData.append("reward_signup_url", rewardSignupUrl.trim());
       formData.append("form_background_color", formBackgroundColor);
       formData.append("lead_expanded_mode", String(leadExpandedMode));
-      formData.append("display_location", displayLocation);
+      formData.append(
+        "display_location",
+        displayLocation.trim() || "all",
+      );
       formData.append(
         "display_order",
         String(displayOrder),
@@ -1045,22 +1044,61 @@ export default function BannerManagementPage() {
             </button>
           </div>
 
-          <div className="mt-4 max-w-[280px]">
+          <div className="mt-4 max-w-[560px]">
             <label className="mb-1.5 block text-xs font-black text-[#667085]">
               Display Location
             </label>
-            <select
-              value={displayLocation}
-              onChange={(event) =>
-                setDisplayLocation(event.target.value as DisplayLocation)
-              }
-              className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-bold text-[#172033] outline-none focus:border-[#172033]"
-            >
-              <option value="all">All Locations</option>
-              <option value="home">Home</option>
-              <option value="community">Community</option>
-              <option value="events">Events</option>
-            </select>
+
+            <div className="flex gap-2">
+              <input
+                value={displayLocation === "all" ? "" : displayLocation}
+                onChange={(event) =>
+                  setDisplayLocation(event.target.value)
+                }
+                placeholder="Leave blank for all pages, or enter /community/manual"
+                className="min-w-0 flex-1 rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-bold text-[#172033] outline-none focus:border-[#172033]"
+              />
+
+              {displayLocation && displayLocation !== "all" && (
+                <button
+                  type="button"
+                  onClick={() => setDisplayLocation("all")}
+                  className="shrink-0 rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-xs font-black text-[#B64032] hover:bg-[#FFF8EF]"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <p className="mt-2 text-[11px] font-bold leading-5 text-[#667085]">
+              Leave this blank to show the popup on every page. To show it only
+              on one page, enter that page path, for example
+              <span className="ml-1 font-black text-[#172033]">/community/manual</span>.
+            </p>
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              {[
+                ["All Pages", "all"],
+                ["Home", "/"],
+                ["Community", "/community"],
+                ["Events", "/events"],
+                ["Manual", "/community/manual"],
+              ].map(([label, value]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDisplayLocation(value)}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-black transition ${
+                    displayLocation === value ||
+                    (value === "all" && !displayLocation.trim())
+                      ? "border-[#172033] bg-[#172033] text-white"
+                      : "border-[#D9CFC2] bg-white text-[#667085] hover:border-[#172033]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -2196,13 +2234,9 @@ export default function BannerManagementPage() {
 
                       <p className="mt-1 text-xs font-medium text-[#667085]">
                         순서 {banner.display_order} · {
-                          banner.display_location === "community"
-                            ? "Community"
-                            : banner.display_location === "events"
-                              ? "Events"
-                              : banner.display_location === "home"
-                                ? "Home"
-                                : "All Locations"
+                          !banner.display_location || banner.display_location === "all"
+                            ? "All Pages"
+                            : banner.display_location
                         }
                         {banner.starts_at
                           ? ` · 시작 ${new Date(

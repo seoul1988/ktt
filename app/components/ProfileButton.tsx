@@ -72,6 +72,7 @@ export default function ProfileButton() {
   const isAdmin = role === "admin";
 
   const canManage = isOwner || isAdmin;
+
   const hasEnabledBusiness =
     businessIds.length > 0;
 
@@ -352,28 +353,90 @@ export default function ProfileButton() {
     }
   }
 
+  /*
+   * 로그인 상태 확인 중
+   *
+   * Guide 버튼은 로그인 여부와 관계없이
+   * 항상 보이도록 구성합니다.
+   */
   if (checking) {
     return (
-      <div className="h-8 w-8 animate-pulse rounded-lg border border-[#E8DED1] bg-white" />
+      <div className="flex items-center gap-1.5">
+        <Link
+          href="/community/manual"
+          className="inline-flex h-7 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#E8DED1] bg-white px-2 text-[10px] font-black text-[#172033] shadow-sm active:scale-95"
+          aria-label="Open user guide"
+        >
+          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#172033] text-[9px] font-black leading-none text-white">
+            ?
+          </span>
+
+          <span>Guide</span>
+        </Link>
+
+        <div className="h-8 w-8 animate-pulse rounded-lg border border-[#E8DED1] bg-white" />
+      </div>
     );
   }
 
+  /*
+   * 로그인하지 않은 경우
+   *
+   * Guide + Login 표시
+   */
   if (!userId) {
     return (
-      <Link
-        href="/login"
-        className="relative z-[99999] inline-flex h-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white px-3 text-xs font-black text-[#172033] shadow-sm"
-      >
-        Login
-      </Link>
+      <div className="flex items-center gap-1.5">
+        <Link
+          href="/community/manual"
+          className="relative z-[99999] inline-flex h-7 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#E8DED1] bg-white px-2 text-[10px] font-black text-[#172033] shadow-sm active:scale-95"
+          aria-label="Open user guide"
+        >
+          <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#172033] text-[9px] font-black leading-none text-white">
+            ?
+          </span>
+
+          <span>Guide</span>
+        </Link>
+
+        <Link
+          href="/login"
+          className="relative z-[99999] inline-flex h-8 items-center justify-center rounded-lg border border-[#E8DED1] bg-white px-3 text-xs font-black text-[#172033] shadow-sm"
+        >
+          Login
+        </Link>
+      </div>
     );
   }
 
+  /*
+   * 로그인된 사용자
+   *
+   * Guide 버튼을 ☰ 바로 왼쪽에 배치
+   */
   return (
     <div
       ref={menuRef}
-      className="relative z-[99999]"
+      className="relative z-[99999] flex items-center gap-1.5"
     >
+      {/* GUIDE */}
+      <Link
+        href="/community/manual"
+        onClick={(event) => {
+          event.stopPropagation();
+          setOpen(false);
+        }}
+        className="relative z-[99999] inline-flex h-7 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#E8DED1] bg-white px-2 text-[10px] font-black text-[#172033] shadow-sm transition active:scale-95"
+        aria-label="Open user guide"
+      >
+        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#172033] text-[9px] font-black leading-none text-white">
+          ?
+        </span>
+
+        <span>Guide</span>
+      </Link>
+
+      {/* PROFILE MENU BUTTON */}
       <button
         type="button"
         onClick={(event) => {
@@ -396,6 +459,7 @@ export default function ProfileButton() {
         </span>
       </button>
 
+      {/* PROFILE DROPDOWN */}
       {open && (
         <div className="absolute right-0 top-10 z-[999999] w-64 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white text-sm font-bold text-[#172033] shadow-xl">
           <Link
@@ -441,6 +505,7 @@ export default function ProfileButton() {
                   <span>
                     ⚙️ 사이트 관리
                   </span>
+
                   <span>›</span>
                 </Link>
               ) : hasEnabledBusiness ? (
@@ -454,6 +519,7 @@ export default function ProfileButton() {
                   <span>
                     ⚙️ 사이트 관리
                   </span>
+
                   <span>›</span>
                 </Link>
               ) : hasConnectedBusiness ? (
