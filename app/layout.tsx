@@ -165,7 +165,7 @@ export default function RootLayout({
           <AppUpdateNotice />
           <KTownPopupBanner />
           {children}
-        </AuthProvider>
+      
 
         <Script
           id="google-tag-manager"
