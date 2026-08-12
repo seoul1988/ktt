@@ -17,112 +17,58 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* =========================================================
-   기본 문서 크기
-   ========================================================= */
-
 html {
   width: 100%;
-  max-width: 100%;
   min-height: 100%;
-
-  margin: 0;
-  padding: 0;
-
   overflow-x: hidden;
-
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-
   scroll-behavior: smooth;
 }
 
 body {
   width: 100%;
-  max-width: 100%;
-
   min-height: 100vh;
-
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
-
-  overflow-x: hidden;
-
   background: var(--background);
   color: var(--foreground);
-
   font-family: Arial, Helvetica, sans-serif;
   font-size: 15px;
-
+  overflow-x: hidden;
   word-break: keep-all;
   overflow-wrap: break-word;
-
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
-/* =========================================================
-   Box sizing
-   ========================================================= */
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  min-width: 0;
 }
-
-/*
- * 중요:
- *
- * 예전처럼 모든 요소에
- *
- * min-width: 0;
- *
- * 을 강제로 적용하지 않습니다.
- *
- * flex/grid 안에서 필요한 곳만
- * Tailwind의 min-w-0을 사용합니다.
- */
-
-/* =========================================================
-   미디어
-   ========================================================= */
 
 img,
 picture,
 video,
-canvas {
+canvas,
+svg {
   display: block;
   max-width: 100%;
   height: auto;
 }
 
-/*
- * SVG는 아이콘에서 Tailwind h-6 w-6 등의
- * 크기를 정상적으로 사용할 수 있도록 별도로 둡니다.
- */
-svg {
-  display: block;
-}
-
-/* =========================================================
-   Form
-   ========================================================= */
-
 input,
 textarea,
-select,
-button {
+select {
   font: inherit;
 }
 
 button {
   font-family: inherit;
 }
-
-/* =========================================================
-   Text helpers
-   ========================================================= */
 
 .break-anywhere {
   overflow-wrap: anywhere;
@@ -133,25 +79,31 @@ button {
   overflow-wrap: break-word;
 }
 
-/* =========================================================
-   화면 높이
-   ========================================================= */
+/*
+ * 전체 앱에 공통으로 적용되는 iPhone 안전영역입니다.
+ * layout.tsx에서 children을 app-safe-area로 감싸므로
+ * 일반 페이지는 별도로 safe-area 상단 여백을 넣지 않아도 됩니다.
+ */
+.app-safe-area {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: var(--app-safe-top);
+  padding-left: var(--app-safe-left);
+  padding-right: var(--app-safe-right);
+}
 
+/*
+ * 페이지 최소 높이용 클래스입니다.
+ */
 .safe-screen {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
-/* 최신 모바일 브라우저 */
-@supports (height: 100dvh) {
-  .safe-screen {
-    min-height: 100dvh;
-  }
-}
-
-/* =========================================================
-   Safe Area
-   ========================================================= */
-
+/*
+ * 특정 컴포넌트에서 안전영역이 별도로 필요한 경우 사용합니다.
+ */
 .safe-top {
   padding-top: var(--app-safe-top);
 }
@@ -169,22 +121,23 @@ button {
 }
 
 /*
- * RootLayout 전체에는 safe-area padding을 주지 않습니다.
+ * fixed 상단 헤더에 사용:
+ * className="fixed inset-x-0 top-0 pt-[var(--app-safe-top)]"
  *
- * BottomNav 같은 fixed 컴포넌트에서만:
- *
- * padding-bottom: env(safe-area-inset-bottom, 0px);
- *
- * 형태로 개별 처리합니다.
+ * fixed 하단 메뉴에 사용:
+ * className="fixed inset-x-0 bottom-0 pb-[var(--app-safe-bottom)]"
  */
 
-/* =========================================================
-   iPhone
-   ========================================================= */
-
 @supports (-webkit-touch-callout: none) {
-  html,
+  html {
+    min-height: -webkit-fill-available;
+  }
+
   body {
+    min-height: -webkit-fill-available;
+  }
+
+  .app-safe-area {
     min-height: -webkit-fill-available;
   }
 

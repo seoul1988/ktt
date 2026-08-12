@@ -789,7 +789,7 @@ const kdramaNews = (todaysKoreaPosts || [])
           <InstallAppButton />
    
 
-      <main className="min-h-screen w-full overflow-x-hidden bg-[#F8F3EC] px-4 pb-28 pt-6 text-[#172033]">
+      <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
        <div className="mx-auto mb-1 flex max-w-xl items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#C4483A]">KTT</p>
@@ -1126,10 +1126,9 @@ const kdramaNews = (todaysKoreaPosts || [])
   </div>
 </section>
 
+        <BottomNav activeNav="home" />
+        <ScrollToTopButton />
       </main>
-
-      <BottomNav activeNav="home" />
-      <ScrollToTopButton />
     </>
   );
 }
