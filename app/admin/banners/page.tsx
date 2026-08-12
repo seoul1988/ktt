@@ -81,7 +81,7 @@ type Banner = {
   reward_signup_url: string | null;
   form_background_color: string;
   lead_expanded_mode: boolean;
-  display_location?: DisplayLocation;
+  display_location?: string | null;
   display_order: number;
   is_active: boolean;
   starts_at: string | null;
@@ -246,6 +246,22 @@ function toIsoOrNull(value: string) {
     : date.toISOString();
 }
 
+function normalizeDisplayLocationForEditor(value: unknown) {
+  const raw = String(value || "").trim();
+
+  if (!raw || raw.toLowerCase() === "all") return "";
+
+  if (raw.toLowerCase() === "home") return "/";
+  if (raw.toLowerCase() === "community") return "/community";
+  if (raw.toLowerCase() === "events") return "/events";
+
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+
+  return withSlash.length > 1
+    ? withSlash.replace(/\/+$/, "")
+    : withSlash;
+}
+
 async function loadImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -395,7 +411,9 @@ export default function BannerManagementPage() {
   const [formBackgroundColor, setFormBackgroundColor] = useState("#FFFFFF");
   const [leadExpandedMode, setLeadExpandedMode] = useState(true);
   const [dragging, setDragging] = useState<"title" | "subtitle" | "button" | "image" | null>(null);
-  const [displayLocation, setDisplayLocation] = useState<DisplayLocation>("all");
+  // 비워두면 모든 페이지에 표시됩니다. 특정 페이지에만 표시하려면 경로를 입력합니다.
+  // 예: /community/manual
+  const [displayLocation, setDisplayLocation] = useState<DisplayLocation>("");
   const [displayOrder, setDisplayOrder] = useState(1);
   const [isActive, setIsActive] = useState(true);
   const [startsAt, setStartsAt] = useState("");
@@ -563,7 +581,7 @@ export default function BannerManagementPage() {
     setRewardSignupUrl("");
     setFormBackgroundColor("#FFFFFF");
     setLeadExpandedMode(true);
-    setDisplayLocation("all");
+    setDisplayLocation("");
     setDisplayOrder(banners.length + 1);
     setIsActive(true);
     setStartsAt("");
@@ -663,9 +681,13 @@ export default function BannerManagementPage() {
     setRewardSignupUrl(banner.reward_signup_url || "");
     setFormBackgroundColor(banner.form_background_color || "#FFFFFF");
     setLeadExpandedMode(banner.lead_expanded_mode !== false);
-    setDisplayLocation(
-      String(banner.display_location || "all").trim() || "all",
+    const savedDisplayLocation = normalizeDisplayLocationForEditor(
+      banner.display_location,
     );
+
+    // 수정 버튼을 눌렀을 때 DB에 저장된 위치를 그대로 편집 상태로 복원합니다.
+    // /community/manual 같은 실제 경로도 All Pages로 바꾸지 않습니다.
+    setDisplayLocation(savedDisplayLocation);
     setDisplayOrder(banner.display_order);
     setIsActive(banner.is_active);
     setStartsAt(toLocalDateTime(banner.starts_at));
@@ -675,6 +697,12 @@ export default function BannerManagementPage() {
       top: 0,
       behavior: "smooth",
     });
+
+    // 다른 UI 상태 변경과 같은 틱에 겹쳐도 기존 위치가 사라지지 않도록
+    // 다음 렌더에서 한 번 더 복원합니다.
+    window.setTimeout(() => {
+      setDisplayLocation(savedDisplayLocation);
+    }, 0);
   }
 
   async function saveBanner() {
@@ -779,10 +807,8 @@ export default function BannerManagementPage() {
       formData.append("reward_signup_url", rewardSignupUrl.trim());
       formData.append("form_background_color", formBackgroundColor);
       formData.append("lead_expanded_mode", String(leadExpandedMode));
-      formData.append(
-        "display_location",
-        displayLocation.trim() || "all",
-      );
+      // 빈 값 = 모든 페이지. 특정 경로를 입력하면 그 페이지에서만 표시합니다.
+      formData.append("display_location", displayLocation.trim());
       formData.append(
         "display_order",
         String(displayOrder),
@@ -1051,19 +1077,18 @@ export default function BannerManagementPage() {
 
             <div className="flex gap-2">
               <input
-                value={displayLocation === "all" ? "" : displayLocation}
-                onChange={(event) =>
-                  setDisplayLocation(event.target.value)
-                }
+                value={displayLocation}
+                onChange={(event) => setDisplayLocation(event.target.value)}
                 placeholder="Leave blank for all pages, or enter /community/manual"
                 className="min-w-0 flex-1 rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-bold text-[#172033] outline-none focus:border-[#172033]"
               />
 
-              {displayLocation && displayLocation !== "all" && (
+              {displayLocation.trim() && (
                 <button
                   type="button"
-                  onClick={() => setDisplayLocation("all")}
-                  className="shrink-0 rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-xs font-black text-[#B64032] hover:bg-[#FFF8EF]"
+                  onClick={() => setDisplayLocation("")}
+                  className="shrink-0 rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-xs font-black text-[#B64032] transition hover:bg-[#FFF8EF] active:scale-[0.98]"
+                  title="Clear to show on all pages"
                 >
                   Clear
                 </button>
@@ -1071,33 +1096,41 @@ export default function BannerManagementPage() {
             </div>
 
             <p className="mt-2 text-[11px] font-bold leading-5 text-[#667085]">
-              Leave this blank to show the popup on every page. To show it only
-              on one page, enter that page path, for example
-              <span className="ml-1 font-black text-[#172033]">/community/manual</span>.
+              Leave this blank to show the popup on every page. To show it only on one page, enter that exact page path, for example
+              <span className="font-black text-[#172033]"> /community/manual</span>.
             </p>
 
-            <div className="mt-2 flex flex-wrap gap-2">
+            {editingBanner && (
+              <p className="mt-2 text-[11px] font-black text-[#B64032]">
+                Editing location: {displayLocation.trim() || "All Pages"}
+              </p>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
               {[
-                ["All Pages", "all"],
-                ["Home", "/"],
-                ["Community", "/community"],
-                ["Events", "/events"],
-                ["Manual", "/community/manual"],
-              ].map(([label, value]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setDisplayLocation(value)}
-                  className={`rounded-full border px-3 py-1.5 text-[11px] font-black transition ${
-                    displayLocation === value ||
-                    (value === "all" && !displayLocation.trim())
-                      ? "border-[#172033] bg-[#172033] text-white"
-                      : "border-[#D9CFC2] bg-white text-[#667085] hover:border-[#172033]"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+                { label: "All Pages", value: "" },
+                { label: "Home", value: "/" },
+                { label: "Community", value: "/community" },
+                { label: "Events", value: "/events" },
+                { label: "Manual", value: "/community/manual" },
+              ].map((location) => {
+                const selected = displayLocation.trim() === location.value;
+
+                return (
+                  <button
+                    key={location.label}
+                    type="button"
+                    onClick={() => setDisplayLocation(location.value)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-black transition active:scale-[0.98] ${
+                      selected
+                        ? "border-[#172033] bg-[#172033] text-white"
+                        : "border-[#D9CFC2] bg-white text-[#172033] hover:bg-[#FCFAF7]"
+                    }`}
+                  >
+                    {location.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -2233,11 +2266,17 @@ export default function BannerManagementPage() {
                       </div>
 
                       <p className="mt-1 text-xs font-medium text-[#667085]">
-                        순서 {banner.display_order} · {
-                          !banner.display_location || banner.display_location === "all"
-                            ? "All Pages"
-                            : banner.display_location
-                        }
+                        순서 {banner.display_order} · {(() => {
+                          const location = String(banner.display_location || "").trim();
+
+                          if (!location || location === "all") return "All Pages";
+                          if (location === "home" || location === "/") return "Home";
+                          if (location === "community" || location === "/community") return "Community";
+                          if (location === "events" || location === "/events") return "Events";
+                          if (location === "/community/manual") return "Manual (/community/manual)";
+
+                          return location;
+                        })()}
                         {banner.starts_at
                           ? ` · 시작 ${new Date(
                               banner.starts_at,

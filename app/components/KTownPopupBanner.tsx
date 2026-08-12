@@ -6,14 +6,9 @@ import { usePathname } from "next/navigation";
 type TextAlign = "left" | "center" | "right";
 type ImageFit = "contain" | "cover" | "fill";
 
-type DisplayLocation =
-  | "all"
-  | "home"
-  | "community"
-  | "events";
-
 type PublicBanner = {
   id: number;
+
   title?: string | null;
   subtitle?: string | null;
   button_text?: string | null;
@@ -44,10 +39,16 @@ type PublicBanner = {
   image_fit?: ImageFit | null;
   image_zoom?: number | null;
 
+  /*
+   * 기존 공용 Text 위치
+   */
   text_x?: number | null;
   text_y?: number | null;
   text_width?: number | null;
 
+  /*
+   * 개별 요소 위치
+   */
   title_x?: number | null;
   title_y?: number | null;
   title_width?: number | null;
@@ -62,12 +63,26 @@ type PublicBanner = {
   button_height?: number | null;
 
   button_enabled?: boolean | null;
+
   hide_24h_enabled?: boolean | null;
   hide_days?: number | null;
 
   is_active?: boolean | null;
 
-  display_location?: DisplayLocation | null;
+  /*
+   * 이제 고정된 home/community/events 타입이 아니라
+   * 실제 URL 경로를 저장합니다.
+   *
+   * 예:
+   * /
+   * /community
+   * /community/manual
+   * /community/map
+   *
+   * 빈 값 또는 all = 모든 페이지
+   */
+  display_location?: string | null;
+
   display_order?: number | null;
 
   starts_at?: string | null;
@@ -82,6 +97,9 @@ type ApiResponse = {
 const HIDE_PREFIX =
   "ktown_popup_hide_until_";
 
+/*
+ * Popup Shadow
+ */
 function pxShadow(
   name?: string | null,
 ) {
@@ -103,7 +121,10 @@ function pxShadow(
   }
 }
 
-function isHiddenFor24Hours(
+/*
+ * 사용자가 일정 기간 숨김을 선택했는지 확인
+ */
+function isHiddenForPeriod(
   id: number,
 ) {
   if (
@@ -125,7 +146,9 @@ function isHiddenFor24Hours(
     Number(raw);
 
   if (
-    !Number.isFinite(hideUntil)
+    !Number.isFinite(
+      hideUntil,
+    )
   ) {
     localStorage.removeItem(
       `${HIDE_PREFIX}${id}`,
@@ -147,6 +170,9 @@ function isHiddenFor24Hours(
   return true;
 }
 
+/*
+ * 숫자 안전 처리
+ */
 function safeNumber(
   value: unknown,
   fallback: number,
@@ -154,16 +180,23 @@ function safeNumber(
   const parsed =
     Number(value);
 
-  return Number.isFinite(parsed)
+  return Number.isFinite(
+    parsed,
+  )
     ? parsed
     : fallback;
 }
 
+/*
+ * 링크 URL 정리
+ */
 function normalizeUrl(
   url?: string | null,
 ) {
   const value =
-    String(url || "").trim();
+    String(
+      url || "",
+    ).trim();
 
   if (!value) {
     return "";
@@ -171,10 +204,18 @@ function normalizeUrl(
 
   if (
     value.startsWith("/") ||
-    value.startsWith("http://") ||
-    value.startsWith("https://") ||
-    value.startsWith("mailto:") ||
-    value.startsWith("tel:")
+    value.startsWith(
+      "http://",
+    ) ||
+    value.startsWith(
+      "https://",
+    ) ||
+    value.startsWith(
+      "mailto:",
+    ) ||
+    value.startsWith(
+      "tel:",
+    )
   ) {
     return value;
   }
@@ -183,112 +224,152 @@ function normalizeUrl(
 }
 
 /*
- * 현재 페이지가 어느 Display Location에
- * 속하는지 판별합니다.
+ * Display Location 정리
  *
- * Community는 /community 아래의 모든 페이지를
- * 포함합니다.
+ * 새로운 방식:
+ *
+ * 빈칸 = 모든 페이지
+ * all = 모든 페이지
+ *
+ * / = 메인만
+ * /community = Community 메인만
+ * /community/manual = Manual 페이지에서만
+ *
+ * 정확하게 같은 주소에서만 표시합니다.
+ *
+ * 기존 DB 데이터와의 호환을 위해
+ * home/community/events도 처리합니다.
  */
-function currentDisplayLocation(
-  pathname: string,
-): Exclude<
-  DisplayLocation,
-  "all"
-> | null {
-  /*
-   * HOME
-   */
-  if (pathname === "/") {
-    return "home";
-  }
+function normalizeDisplayLocation(
+  value?: string | null,
+) {
+  const target =
+    String(
+      value || "",
+    ).trim();
 
   /*
-   * COMMUNITY
-   *
-   * 포함:
-   * /community
-   * /community/map
-   * /community/hub
-   * /community/events
-   * /community/manual
-   * /community/search
-   * /community/... 모든 하위 페이지
+   * 빈칸 / all = 모든 페이지
    */
   if (
-    pathname === "/community" ||
-    pathname.startsWith(
-      "/community/",
-    )
+    !target ||
+    target.toLowerCase() ===
+      "all"
   ) {
-    return "community";
+    return "";
   }
 
   /*
-   * EVENTS
+   * 기존 값 호환
    */
   if (
-    pathname === "/events" ||
-    pathname.startsWith(
-      "/events/",
-    ) ||
-    pathname ===
-      "/business-events" ||
-    pathname.startsWith(
-      "/business-events/",
-    ) ||
-    pathname ===
-      "/grand-openings" ||
-    pathname.startsWith(
-      "/grand-openings/",
-    )
+    target.toLowerCase() ===
+    "home"
   ) {
-    return "events";
+    return "/";
+  }
+
+  if (
+    target.toLowerCase() ===
+    "community"
+  ) {
+    return "/community";
+  }
+
+  if (
+    target.toLowerCase() ===
+    "events"
+  ) {
+    return "/events";
   }
 
   /*
-   * 위 그룹에 포함되지 않는 페이지에서는
-   * 현재 popup 시스템을 표시하지 않습니다.
+   * URL 앞에 /가 없는 경우 자동 추가
    */
-  return null;
+  if (
+    !target.startsWith("/")
+  ) {
+    return `/${target}`;
+  }
+
+  /*
+   * 끝의 / 제거
+   * 단 메인 /는 유지
+   */
+  if (
+    target.length > 1 &&
+    target.endsWith("/")
+  ) {
+    return target.replace(
+      /\/+$/,
+      "",
+    );
+  }
+
+  return target;
 }
 
 /*
- * Banner가 현재 페이지의 Display Location과
- * 일치하는지 확인합니다.
- *
- * all:
- * Home / Community / Events 모두 표시
- *
- * home:
- * 메인 홈만
- *
- * community:
- * /community 및 모든 하위 페이지
- *
- * events:
- * 이벤트 그룹
+ * 현재 pathname도 비교하기 쉽게 정리
  */
-function bannerMatchesLocation(
-  banner: PublicBanner,
-  location: Exclude<
-    DisplayLocation,
-    "all"
-  > | null,
+function normalizeCurrentPath(
+  pathname: string,
 ) {
-  if (!location) {
-    return false;
+  if (
+    pathname === "/"
+  ) {
+    return "/";
   }
 
+  return pathname.replace(
+    /\/+$/,
+    "",
+  );
+}
+
+/*
+ * 핵심:
+ * Popup이 현재 주소에서 보여야 하는지 확인
+ *
+ * 예:
+ *
+ * display_location = /community/manual
+ *
+ * /community/manual      → 표시
+ * /community             → 표시 안 함
+ * /community/map         → 표시 안 함
+ * /community/manual/abc  → 표시 안 함
+ * /                      → 표시 안 함
+ *
+ * display_location 빈칸
+ * → 모든 페이지 표시
+ */
+function bannerMatchesPath(
+  banner: PublicBanner,
+  pathname: string,
+) {
   const target =
-    banner.display_location;
+    normalizeDisplayLocation(
+      banner.display_location,
+    );
 
+  /*
+   * 빈칸 / all = 모든 페이지
+   */
   if (!target) {
-    return false;
+    return true;
   }
 
+  const currentPath =
+    normalizeCurrentPath(
+      pathname,
+    );
+
+  /*
+   * 정확한 URL 일치만 허용
+   */
   return (
-    target === "all" ||
-    target === location
+    currentPath === target
   );
 }
 
@@ -296,27 +377,38 @@ export default function KTownPopupBanner() {
   const pathname =
     usePathname();
 
-  const [banners, setBanners] =
-    useState<PublicBanner[]>(
-      [],
-    );
+  const [
+    banners,
+    setBanners,
+  ] =
+    useState<
+      PublicBanner[]
+    >([]);
 
   const [
     currentIndex,
     setCurrentIndex,
   ] = useState(0);
 
-  const [closed, setClosed] =
-    useState(false);
+  const [
+    closed,
+    setClosed,
+  ] = useState(false);
 
   const [
     hideForPeriod,
     setHideForPeriod,
   ] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
+  /*
+   * pathname이 바뀔 때마다
+   * Popup 목록을 다시 확인합니다.
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -324,33 +416,21 @@ export default function KTownPopupBanner() {
       try {
         setLoading(true);
 
-        const pageLocation =
-          currentDisplayLocation(
-            pathname,
-          );
-
         /*
-         * Home / Community / Events 그룹에
-         * 속하지 않는 페이지는 popup 조회 자체를
-         * 하지 않습니다.
+         * 중요:
+         *
+         * 예전처럼
+         * ?location=home
+         * ?location=community
+         *
+         * 를 보내지 않습니다.
+         *
+         * 전체 활성 Popup을 받은 뒤
+         * 현재 실제 pathname과 정확하게 비교합니다.
          */
-        if (!pageLocation) {
-          if (!cancelled) {
-            setBanners([]);
-            setCurrentIndex(0);
-            setClosed(false);
-            setHideForPeriod(false);
-            setLoading(false);
-          }
-
-          return;
-        }
-
         const response =
           await fetch(
-            `/api/banners?location=${encodeURIComponent(
-              pageLocation,
-            )}`,
+            "/api/banners",
             {
               method: "GET",
               cache: "no-store",
@@ -372,18 +452,31 @@ export default function KTownPopupBanner() {
             payload.banners ||
             []
           )
-            .filter((item) =>
-              bannerMatchesLocation(
-                item,
-                pageLocation,
-              ),
-            )
+            /*
+             * 실제 URL과 정확히 같은
+             * Display Location만 표시
+             */
             .filter(
               (item) =>
-                !isHiddenFor24Hours(
+                bannerMatchesPath(
+                  item,
+                  pathname,
+                ),
+            )
+
+            /*
+             * 일정 기간 숨김 여부
+             */
+            .filter(
+              (item) =>
+                !isHiddenForPeriod(
                   item.id,
                 ),
             )
+
+            /*
+             * Display Order
+             */
             .sort(
               (a, b) =>
                 safeNumber(
@@ -397,10 +490,19 @@ export default function KTownPopupBanner() {
             );
 
         if (!cancelled) {
-          setBanners(visible);
-          setCurrentIndex(0);
+          setBanners(
+            visible,
+          );
+
+          setCurrentIndex(
+            0,
+          );
+
           setClosed(false);
-          setHideForPeriod(false);
+
+          setHideForPeriod(
+            false,
+          );
         }
       } catch (error) {
         console.error(
@@ -412,7 +514,9 @@ export default function KTownPopupBanner() {
           setBanners([]);
           setCurrentIndex(0);
           setClosed(false);
-          setHideForPeriod(false);
+          setHideForPeriod(
+            false,
+          );
         }
       } finally {
         if (!cancelled) {
@@ -428,16 +532,21 @@ export default function KTownPopupBanner() {
     };
   }, [pathname]);
 
-  const banner = useMemo(
-    () =>
-      banners[currentIndex] ||
-      null,
-    [
-      banners,
-      currentIndex,
-    ],
-  );
+  const banner =
+    useMemo(
+      () =>
+        banners[
+          currentIndex
+        ] || null,
+      [
+        banners,
+        currentIndex,
+      ],
+    );
 
+  /*
+   * 표시할 Popup이 없으면 렌더링 안 함
+   */
   if (
     loading ||
     closed ||
@@ -465,7 +574,7 @@ export default function KTownPopupBanner() {
     );
 
   /*
-   * Circle popup은 정원 유지
+   * Circle Popup은 항상 정원
    */
   const isCirclePopup =
     banner.style_preset ===
@@ -479,6 +588,9 @@ export default function KTownPopupBanner() {
         ? `${popupWidth} / ${popupHeight}`
         : "1 / 1";
 
+  /*
+   * 기존 공용 Text 위치
+   */
   const baseTextX =
     safeNumber(
       banner.text_x,
@@ -497,6 +609,9 @@ export default function KTownPopupBanner() {
       84,
     );
 
+  /*
+   * Title
+   */
   const titleX =
     safeNumber(
       banner.title_x,
@@ -515,6 +630,9 @@ export default function KTownPopupBanner() {
       baseTextWidth,
     );
 
+  /*
+   * Subtitle
+   */
   const subtitleX =
     safeNumber(
       banner.subtitle_x,
@@ -533,6 +651,9 @@ export default function KTownPopupBanner() {
       baseTextWidth,
     );
 
+  /*
+   * Button
+   */
   const buttonX =
     safeNumber(
       banner.button_x,
@@ -557,6 +678,9 @@ export default function KTownPopupBanner() {
       9,
     );
 
+  /*
+   * Image
+   */
   const imageZoom =
     Math.max(
       25,
@@ -573,11 +697,17 @@ export default function KTownPopupBanner() {
     banner.image_fit ||
     "cover";
 
+  /*
+   * Button Link
+   */
   const link =
     normalizeUrl(
       banner.link_url,
     );
 
+  /*
+   * 숨김 기간
+   */
   const hideDays =
     Math.max(
       1,
@@ -590,7 +720,13 @@ export default function KTownPopupBanner() {
       ),
     );
 
+  /*
+   * Popup 닫기
+   */
   function closePopup() {
+    /*
+     * Don't show again 체크
+     */
     if (
       hideForPeriod &&
       banner.hide_24h_enabled !==
@@ -609,19 +745,30 @@ export default function KTownPopupBanner() {
       );
     }
 
+    /*
+     * 다음 Popup 확인
+     */
     const next =
       banners.findIndex(
-        (item, index) =>
+        (
+          item,
+          index,
+        ) =>
           index >
             currentIndex &&
-          !isHiddenFor24Hours(
+          !isHiddenForPeriod(
             item.id,
           ),
       );
 
     if (next >= 0) {
-      setCurrentIndex(next);
-      setHideForPeriod(false);
+      setCurrentIndex(
+        next,
+      );
+
+      setHideForPeriod(
+        false,
+      );
 
       return;
     }
@@ -630,7 +777,8 @@ export default function KTownPopupBanner() {
   }
 
   const backgroundStyle:
-    React.CSSProperties = {};
+    React.CSSProperties =
+      {};
 
   return (
     <div
@@ -644,6 +792,9 @@ export default function KTownPopupBanner() {
       onMouseDown={(
         event,
       ) => {
+        /*
+         * Popup 바깥을 누르면 닫기
+         */
         if (
           event.currentTarget ===
           event.target
@@ -676,6 +827,7 @@ export default function KTownPopupBanner() {
           ...backgroundStyle,
         }}
       >
+        {/* Background Image */}
         {banner.image_url &&
           banner.image_position ===
             "background" && (
@@ -704,6 +856,7 @@ export default function KTownPopupBanner() {
             </div>
           )}
 
+        {/* Normal Image */}
         {banner.image_url &&
           banner.image_position !==
             "background" && (
@@ -735,6 +888,7 @@ export default function KTownPopupBanner() {
             </div>
           )}
 
+        {/* Close */}
         <button
           type="button"
           onClick={
@@ -746,6 +900,7 @@ export default function KTownPopupBanner() {
           ×
         </button>
 
+        {/* Title */}
         {!!banner.title && (
           <div
             className="absolute z-20 whitespace-pre-wrap break-words"
@@ -787,6 +942,7 @@ export default function KTownPopupBanner() {
           </div>
         )}
 
+        {/* Description */}
         {!!banner.subtitle && (
           <div
             className="absolute z-20 whitespace-pre-wrap break-words"
@@ -824,10 +980,13 @@ export default function KTownPopupBanner() {
                 "left",
             }}
           >
-            {banner.subtitle}
+            {
+              banner.subtitle
+            }
           </div>
         )}
 
+        {/* Button */}
         {banner.button_enabled !==
           false &&
           !!banner.button_text &&
@@ -930,6 +1089,7 @@ export default function KTownPopupBanner() {
             </div>
           ))}
 
+        {/* Don't show again */}
         {banner.hide_24h_enabled !==
           false && (
           <label className="absolute bottom-3 left-1/2 z-50 flex -translate-x-1/2 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-black/70 px-4 py-2 text-xs font-bold text-white shadow-lg backdrop-blur">
@@ -949,8 +1109,8 @@ export default function KTownPopupBanner() {
               className="h-4 w-4 accent-white"
             />
 
-            Don't show again for{" "}
-            {hideDays}{" "}
+            Don't show again
+            for {hideDays}{" "}
             {hideDays === 1
               ? "day"
               : "days"}
