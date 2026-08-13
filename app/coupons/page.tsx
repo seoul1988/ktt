@@ -37,6 +37,7 @@ export default function CouponsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [mapBusiness, setMapBusiness] = useState<Business | null>(null);
 
   useEffect(() => {
     void loadData();
@@ -285,59 +286,163 @@ export default function CouponsPage() {
                 const firstCoupon = coupons[0];
 
                 return (
-                  <button
-                    type="button"
+                  <div
                     key={business.id}
-                    onClick={() => {
-                      window.location.href = `/coupons/business/${business.id}`;
-                    }}
-                    className="flex w-full items-center gap-3 border-b border-[#EEEEEE] px-1 py-2.5 text-left active:bg-[#FAFAFA]"
+                    className="border-b border-[#EEEEEE]"
                   >
-                    <div className="h-[62px] w-[82px] shrink-0 overflow-hidden rounded-[6px] bg-[#F2F2F2]">
-                      {image ? (
-                        <img
-                          src={image}
-                          alt={business.name || ""}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-2xl">
-                          🏪
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.location.href = `/coupons/business/${business.id}`;
+                      }}
+                      className="flex w-full items-center gap-3 px-1 py-2.5 text-left active:bg-[#FAFAFA]"
+                    >
+                      <div className="h-[62px] w-[82px] shrink-0 overflow-hidden rounded-[6px] bg-[#F2F2F2]">
+                        {image ? (
+                          <img
+                            src={image}
+                            alt={business.name || ""}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-2xl">
+                            🏪
+                          </div>
+                        )}
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[10px] font-black uppercase text-[#3C424D]">
-                        {business.name || "LOCAL BUSINESS"}
-                      </p>
-
-                      <h3 className="mt-0.5 line-clamp-2 text-[14px] font-black leading-[1.15] text-[#111827]">
-                        {firstCoupon?.title || "SPECIAL COUPON"}
-                      </h3>
-
-                      {firstCoupon?.description && (
-                        <p className="mt-1 line-clamp-1 text-[9px] font-semibold text-[#777E88]">
-                          {firstCoupon.description}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[10px] font-black uppercase text-[#3C424D]">
+                          {business.name || "LOCAL BUSINESS"}
                         </p>
-                      )}
-                    </div>
 
-                    <div className="flex min-w-[56px] shrink-0 flex-col items-end justify-center">
-                      <span className="text-[9px] font-black text-[#444B55]">
-                        {coupons.length} Coupons
-                      </span>
-                      <span className="mt-1 text-[18px] font-light text-[#B5BAC2]">
-                        ›
-                      </span>
-                    </div>
-                  </button>
+                        <h3 className="mt-0.5 line-clamp-2 text-[14px] font-black leading-[1.15] text-[#111827]">
+                          {firstCoupon?.title || "SPECIAL COUPON"}
+                        </h3>
+
+                        {firstCoupon?.description && (
+                          <p className="mt-1 line-clamp-1 text-[9px] font-semibold text-[#777E88]">
+                            {firstCoupon.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex min-w-[72px] shrink-0 flex-col items-end justify-center gap-1">
+                        <span className="text-[9px] font-black text-[#444B55]">
+                          {coupons.length} Coupons
+                        </span>
+
+                        {business.address && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setMapBusiness(business);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setMapBusiness(business);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] bg-[#F8F9FA] px-2.5 py-1 text-[9px] font-black text-[#4B5563] active:scale-[0.98]"
+                          >
+                            <span className="text-[10px]">📍</span>
+                            MAP
+                          </span>
+                        )}
+
+                        <span className="text-[16px] font-light leading-none text-[#B5BAC2]">
+                          ›
+                        </span>
+                      </div>
+                    </button>
+                  </div>
                 );
               })}
             </div>
           )}
         </section>
       </div>
+
+      {mapBusiness && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-3 sm:items-center"
+          onClick={() => setMapBusiness(null)}
+        >
+          <div
+            className="w-full max-w-[430px] overflow-hidden rounded-[24px] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#EEEEEE] px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#EB4A45]">
+                  Store Location
+                </p>
+                <h2 className="truncate text-[17px] font-black text-[#171A22]">
+                  {mapBusiness.name || "Business"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMapBusiness(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[20px] font-bold text-[#4B5563]"
+                aria-label="Close map"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="h-[300px] w-full bg-[#F3F4F6]">
+              <iframe
+                title={`${mapBusiness.name || "Business"} map`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(
+                  mapBusiness.address || "",
+                )}&output=embed`}
+                className="h-full w-full border-0"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+
+            <div className="p-4">
+              <p className="text-[12px] font-bold leading-5 text-[#5F6672]">
+                📍 {mapBusiness.address}
+              </p>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMapBusiness(null)}
+                  className="rounded-2xl border border-[#E3E5E8] bg-white px-4 py-3 text-[12px] font-black text-[#4B5563]"
+                >
+                  CLOSE
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const destination = encodeURIComponent(
+                      mapBusiness.address || "",
+                    );
+                    window.open(
+                      `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                  className="rounded-2xl bg-[#EB4A45] px-4 py-3 text-[12px] font-black text-white active:scale-[0.98]"
+                >
+                  DIRECTIONS
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </main>
