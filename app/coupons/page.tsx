@@ -38,6 +38,12 @@ export default function CouponsPage() {
   const [category, setCategory] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [mapBusiness, setMapBusiness] = useState<Business | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
   useEffect(() => {
     void loadData();
@@ -163,9 +169,43 @@ export default function CouponsPage() {
     );
   }, [businesses, coupons, search, category]);
 
+  function openMap(business: Business) {
+    openMap(business);
+    setLocationError("");
+
+    if (!navigator.geolocation) {
+      setLocationError("Your device does not support location.");
+      return;
+    }
+
+    setLocationLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocationLoading(false);
+      },
+      () => {
+        setUserLocation(null);
+        setLocationLoading(false);
+        setLocationError(
+          "Location access was not allowed. Store location is shown only.",
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      },
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F5F5F5] pb-20 text-[#151821]">
-      <div className="mx-auto min-h-screen w-full max-w-[430px] bg-white">
+      <div className="mx-auto min-h-screen w-full max-w-xl bg-white">
         <header className="sticky top-0 z-30 border-b border-[#ECECEC] bg-white">
           <div className="flex h-12 items-center justify-between px-4">
             <button
@@ -338,13 +378,13 @@ export default function CouponsPage() {
                             tabIndex={0}
                             onClick={(event) => {
                               event.stopPropagation();
-                              setMapBusiness(business);
+                              openMap(business);
                             }}
                             onKeyDown={(event) => {
                               if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
                                 event.stopPropagation();
-                                setMapBusiness(business);
+                                openMap(business);
                               }
                             }}
                             className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] bg-[#F8F9FA] px-2.5 py-1 text-[9px] font-black text-[#4B5563] active:scale-[0.98]"
@@ -399,9 +439,15 @@ export default function CouponsPage() {
             <div className="h-[300px] w-full bg-[#F3F4F6]">
               <iframe
                 title={`${mapBusiness.name || "Business"} map`}
-                src={`https://www.google.com/maps?q=${encodeURIComponent(
-                  mapBusiness.address || "",
-                )}&output=embed`}
+                src={
+                  userLocation
+                    ? `https://www.google.com/maps?saddr=${userLocation.latitude},${userLocation.longitude}&daddr=${encodeURIComponent(
+                        mapBusiness.address || "",
+                      )}&output=embed`
+                    : `https://www.google.com/maps?q=${encodeURIComponent(
+                        mapBusiness.address || "",
+                      )}&output=embed`
+                }
                 className="h-full w-full border-0"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
@@ -412,6 +458,27 @@ export default function CouponsPage() {
               <p className="text-[12px] font-bold leading-5 text-[#5F6672]">
                 📍 {mapBusiness.address}
               </p>
+
+              <div className="mt-2 flex items-center gap-2 rounded-xl bg-[#F7F8FA] px-3 py-2">
+                <span className="text-[13px]">🔵</span>
+                <p className="flex-1 text-[10px] font-bold text-[#6B7280]">
+                  {locationLoading
+                    ? "Finding your location..."
+                    : userLocation
+                      ? "Blue point / route starts from your current location."
+                      : locationError || "Current location not available."}
+                </p>
+
+                {!locationLoading && (
+                  <button
+                    type="button"
+                    onClick={() => openMap(mapBusiness)}
+                    className="shrink-0 rounded-lg bg-white px-2 py-1 text-[9px] font-black text-[#EB4A45] shadow-sm"
+                  >
+                    MY LOCATION
+                  </button>
+                )}
+              </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
@@ -428,8 +495,13 @@ export default function CouponsPage() {
                     const destination = encodeURIComponent(
                       mapBusiness.address || "",
                     );
+
+                    const origin = userLocation
+                      ? `&origin=${userLocation.latitude},${userLocation.longitude}`
+                      : "";
+
                     window.open(
-                      `https://www.google.com/maps/dir/?api=1&destination=${destination}`,
+                      `https://www.google.com/maps/dir/?api=1${origin}&destination=${destination}`,
                       "_blank",
                       "noopener,noreferrer",
                     );
