@@ -37,6 +37,26 @@ export default async function CommunityPage() {
     console.error("community deals error:", dealsError);
   }
 
+  const now = new Date().toISOString();
+
+  const { data: communityCoupons, error: communityCouponsError } = await supabase
+    .from("coupons")
+    .select("id,business_id,usage_limit,used_count,active,start_date,end_date")
+    .eq("active", true)
+    .lte("start_date", now)
+    .or(`end_date.is.null,end_date.gte.${now}`);
+
+  if (communityCouponsError) {
+    console.error("community coupons error:", communityCouponsError);
+  }
+
+  const activeCouponCount = (communityCoupons || []).filter((coupon: any) => {
+    const usageLimit = Number(coupon.usage_limit || 0);
+    const usedCount = Number(coupon.used_count || 0);
+
+    return !(usageLimit > 0 && usedCount >= usageLimit);
+  }).length;
+
   // 두 번째 소스: /community/news에 직접 등록된 뉴스/공연·문화.
   // 위의 자동 Community News(community_news)가 아니라 business_news에서
   // 가장 최근 등록된 1건을 가져옵니다.
@@ -243,6 +263,74 @@ export default async function CommunityPage() {
           koreaNews={koreaNews as any[]}
           usNews={usNews as any[]}
         />
+
+        {/* KTown Coupon Book */}
+        <section className="mb-5">
+          <Link
+            href="/coupons"
+            className="group relative block overflow-hidden rounded-[22px] border border-dashed border-[#E8B85E] bg-gradient-to-r from-[#FFF9E9] via-[#FFFDF7] to-[#F7F1FF] shadow-sm transition hover:border-[#D99A2B] hover:shadow-md active:scale-[0.995]"
+          >
+            <div className="absolute left-0 top-0 z-10 rounded-br-xl bg-red-500 px-2.5 py-1 text-[8px] font-black uppercase tracking-wide text-white">
+              NEW!
+            </div>
+
+            <div className="pointer-events-none absolute inset-[5px] rounded-[17px] border border-dashed border-[#E8B85E]/70" />
+
+            <div className="flex items-center gap-3 px-3 pb-2.5 pt-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#112B58] text-[24px] text-white shadow-sm">
+                🎟
+              </div>
+
+              <div className="min-w-0 flex-1 pl-1">
+                <h2 className="truncate text-[18px] font-black tracking-[-0.02em] text-[#112B58]">
+                  KTOWN COUPON BOOK
+                </h2>
+
+                <p className="mt-0.5 text-[11px] font-black text-orange-500">
+                  Eat · Shop · Save
+                </p>
+
+                <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold text-[#52617A]">
+                  Triangle Local Deals in One Place!
+                </p>
+              </div>
+
+              {activeCouponCount > 0 ? (
+                <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-full bg-red-500 text-white shadow-sm">
+                  <span className="text-[15px] font-black leading-none">
+                    {activeCouponCount}
+                  </span>
+                  <span className="mt-0.5 text-[6px] font-black uppercase leading-none">
+                    Coupons
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 px-3 pb-3">
+              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
+                <p className="text-[13px] font-black text-green-600">25% OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Cleaners</p>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
+                <p className="text-[13px] font-black text-amber-700">BOGO</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Coffee</p>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
+                <p className="text-[13px] font-black text-rose-500">$5 OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Bakery</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center border-t border-violet-100 bg-white/70 px-3 py-2">
+              <span className="rounded-full bg-[#112B58] px-4 py-1.5 text-[10px] font-black text-white shadow-sm transition group-hover:translate-x-0.5">
+                🎟 OPEN COUPON BOOK →
+              </span>
+            </div>
+          </Link>
+        </section>
 
         {/* Upcoming Events */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">

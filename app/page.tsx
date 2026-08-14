@@ -844,8 +844,10 @@ const kdramaNews = (todaysKoreaPosts || [])
         <section className="mx-auto mb-4 max-w-xl">
           <Link
             href="/coupons"
-            className="group relative block overflow-hidden rounded-[22px] border border-violet-200 bg-gradient-to-r from-[#FFF9E9] via-[#FFFDF7] to-[#F7F1FF] shadow-sm transition hover:border-violet-300 hover:shadow-md active:scale-[0.995]"
+            className="group relative block overflow-hidden rounded-[22px] bg-gradient-to-r from-[#FFF9E9] via-[#FFFDF7] to-[#F7F1FF] shadow-sm transition hover:shadow-md active:scale-[0.995]"
           >
+            <div className="pointer-events-none absolute inset-[6px] rounded-[16px] border-2 border-dashed border-[#E8B85E]" />
+
             <div className="absolute left-0 top-0 z-10 rounded-br-xl bg-red-500 px-2.5 py-1 text-[8px] font-black uppercase tracking-wide text-white">
               NEW!
             </div>

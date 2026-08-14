@@ -253,7 +253,7 @@ export default function CommunityNewsCarousel({
   return (
     <>
       <section
-        className="mb-8 rounded-[26px] border border-[#D6DEE9] bg-white px-3 pb-3 pt-4 shadow-sm"
+        className="mb-8 rounded-[26px] border border-[#D6DEE9] bg-white px-3 pb-2 pt-4 shadow-sm"
         style={{
           width: "100%",
           minWidth: 0,
@@ -325,7 +325,7 @@ export default function CommunityNewsCarousel({
                   1500,
                 );
               }}
-              className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3"
+              className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1"
               style={{
                 display: "flex",
                 width: "100%",
@@ -445,21 +445,14 @@ export default function CommunityNewsCarousel({
                       </div>
 
                       <div
-                        className="flex flex-col px-3 pb-3 pt-3"
+                        className="px-3 pb-3 pt-3"
                         style={{
                           width: "174px",
-                          minHeight: "112px",
                         }}
                       >
                         <h3 className="line-clamp-3 text-[13px] font-medium leading-[1.35] text-[#111827]">
                           {title}
                         </h3>
-
-                        <p className="mt-auto pt-4 text-[10px] font-normal text-[#8A93A3]">
-                          {formatDate(
-                            news.published_at,
-                          )}
-                        </p>
                       </div>
                     </button>
                   );
@@ -494,7 +487,7 @@ export default function CommunityNewsCarousel({
             ) : null}
 
             {activeNews.length > 1 ? (
-              <div className="mt-1 flex justify-center gap-1.5">
+              <div className="mt-0.5 flex justify-center gap-1.5">
                 {activeNews.map(
                   (news, index) => (
                     <button
