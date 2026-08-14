@@ -39,6 +39,7 @@ type Coupon = {
   used_count: number;
   active: boolean;
   pin_code?: string | null;
+  info_text?: string | null;
   image_url?: string | null;
   created_at?: string | null;
 };
@@ -61,6 +62,7 @@ type CouponDraft = {
   endDate: string;
   pinRequired: boolean;
   pinCode: string;
+  infoText: string;
   imageUrl: string;
   buyQty: number;
   buyItem: string;
@@ -93,6 +95,7 @@ function makeDraft(seed?: Partial<CouponDraft>): CouponDraft {
     endDate: "",
     pinRequired: false,
     pinCode: "",
+    infoText: "First visit? Ask a staff member to stamp this coupon.",
     imageUrl: "",
     buyQty: 1,
     buyItem: "",
@@ -181,7 +184,7 @@ export default function NewCouponPage() {
     const { data: couponData, error: couponError } = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,image_url,created_at",
+        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,info_text,image_url,created_at",
       )
       .order("created_at", { ascending: false });
 
@@ -376,6 +379,7 @@ export default function NewCouponPage() {
             endDate: previous.endDate,
             pinRequired: previous.pinRequired,
             pinCode: previous.pinCode,
+            infoText: previous.infoText,
             imageUrl: previous.imageUrl,
           })
         : makeDraft({
@@ -414,6 +418,7 @@ export default function NewCouponPage() {
           endDate: target.endDate,
           pinRequired: target.pinRequired,
           pinCode: target.pinCode,
+          infoText: target.infoText,
           imageUrl: target.imageUrl,
           buyQty: target.buyQty,
           buyItem: target.buyItem,
@@ -655,6 +660,10 @@ export default function NewCouponPage() {
             : null,
           active: true,
           pin_code: draft.pinRequired ? draft.pinCode : null,
+          info_text:
+            draft.activationMode === "staff_stamp"
+              ? draft.infoText.trim() || null
+              : null,
           image_url: draft.imageUrl || null,
         }));
 
@@ -710,6 +719,10 @@ export default function NewCouponPage() {
               ? new Date(draft.endDate).toISOString()
               : null,
             pin_code: draft.pinRequired ? draft.pinCode : null,
+            info_text:
+              draft.activationMode === "staff_stamp"
+                ? draft.infoText.trim() || null
+                : null,
             image_url: draft.imageUrl || null,
           })
           .eq("id", draft.editingId);
@@ -830,6 +843,9 @@ export default function NewCouponPage() {
         coupon.activation_mode === "staff_stamp"
           ? ""
           : coupon.pin_code || "",
+      infoText:
+        coupon.info_text ||
+        "First visit? Ask a staff member to stamp this coupon.",
       imageUrl: coupon.image_url || "",
       buyQty: buyGet.buyQty,
       buyItem: buyGet.buyItem,
@@ -1596,6 +1612,26 @@ export default function NewCouponPage() {
                                     </p>
                                   </div>
                                 </div>
+                              </div>
+
+                              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                                <label className="mb-1 block text-xs font-black text-amber-800">
+                                  ⓘ 말풍선 안내문
+                                </label>
+                                <input
+                                  value={draft.infoText}
+                                  maxLength={120}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      infoText: event.target.value,
+                                    })
+                                  }
+                                  placeholder="예: First visit? Ask a staff member to stamp this coupon."
+                                  className="w-full rounded-2xl border border-amber-200 bg-white p-3 font-bold"
+                                />
+                                <p className="mt-1 text-[10px] font-semibold text-amber-700/70">
+                                  고객 쿠폰 화면의 깜박이는 ⓘ 아이콘을 누르면 이 문구가 말풍선으로 표시됩니다.
+                                </p>
                               </div>
 
                               <div className="rounded-xl bg-white px-4 py-3">

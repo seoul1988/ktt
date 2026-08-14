@@ -654,7 +654,7 @@ export default function CouponsPage() {
                       }}
                       className="flex w-full items-center gap-3 px-1 py-2.5 text-left active:bg-[#FAFAFA]"
                     >
-                      <div className="relative h-[76px] w-[100px] shrink-0">
+                      <div className="relative h-[82px] w-[108px] shrink-0">
                         <div
                           role="button"
                           tabIndex={0}
@@ -686,7 +686,7 @@ export default function CouponsPage() {
                             <img
                               src={image}
                               alt={business.name || ""}
-                              className="h-full w-full object-cover"
+                              className="absolute left-1/2 top-1/2 block h-[118%] w-[118%] max-w-none -translate-x-1/2 -translate-y-1/2 object-cover object-center"
                             />
                           ) : (
                             <div className="flex h-full items-center justify-center text-2xl">
