@@ -40,6 +40,9 @@ type Coupon = {
   active: boolean;
   pin_code?: string | null;
   info_text?: string | null;
+  promo_code?: string | null;
+  order_url?: string | null;
+  order_button_text?: string | null;
   image_url?: string | null;
   created_at?: string | null;
 };
@@ -54,7 +57,7 @@ type CouponDraft = {
   minimumPurchase: number;
   usageLimit: number;
   repeatable: boolean;
-  activationMode: "immediate" | "staff_stamp";
+  activationMode: "immediate" | "staff_stamp" | "online_order";
   stampValidDays: number;
   stampCode: string;
   stampText: string;
@@ -63,6 +66,9 @@ type CouponDraft = {
   pinRequired: boolean;
   pinCode: string;
   infoText: string;
+  promoCode: string;
+  orderUrl: string;
+  orderButtonText: string;
   imageUrl: string;
   buyQty: number;
   buyItem: string;
@@ -96,6 +102,9 @@ function makeDraft(seed?: Partial<CouponDraft>): CouponDraft {
     pinRequired: false,
     pinCode: "",
     infoText: "First visit? Ask a staff member to stamp this coupon.",
+    promoCode: "",
+    orderUrl: "",
+    orderButtonText: "ORDER NOW",
     imageUrl: "",
     buyQty: 1,
     buyItem: "",
@@ -184,7 +193,7 @@ export default function NewCouponPage() {
     const { data: couponData, error: couponError } = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,info_text,image_url,created_at",
+        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,info_text,promo_code,order_url,order_button_text,image_url,created_at",
       )
       .order("created_at", { ascending: false });
 
@@ -380,6 +389,9 @@ export default function NewCouponPage() {
             pinRequired: previous.pinRequired,
             pinCode: previous.pinCode,
             infoText: previous.infoText,
+            promoCode: previous.promoCode,
+            orderUrl: previous.orderUrl,
+            orderButtonText: previous.orderButtonText,
             imageUrl: previous.imageUrl,
           })
         : makeDraft({
@@ -419,6 +431,9 @@ export default function NewCouponPage() {
           pinRequired: target.pinRequired,
           pinCode: target.pinCode,
           infoText: target.infoText,
+          promoCode: target.promoCode,
+          orderUrl: target.orderUrl,
+          orderButtonText: target.orderButtonText,
           imageUrl: target.imageUrl,
           buyQty: target.buyQty,
           buyItem: target.buyItem,
@@ -555,6 +570,16 @@ export default function NewCouponPage() {
       }
     }
 
+    if (draft.activationMode === "online_order") {
+      if (!draft.promoCode.trim()) {
+        return `Coupon #${index + 1}: 온라인 주문용 Promo Code를 입력하세요.`;
+      }
+
+      if (!draft.orderUrl.trim()) {
+        return `Coupon #${index + 1}: 온라인 주문 URL을 입력하세요.`;
+      }
+    }
+
     if (draft.couponType === "spend_save") {
       if (!(Number(draft.value) > 0)) {
         return `Coupon #${index + 1}: 할인 금액을 입력하세요.`;
@@ -664,6 +689,18 @@ export default function NewCouponPage() {
             draft.activationMode === "staff_stamp"
               ? draft.infoText.trim() || null
               : null,
+          promo_code:
+            draft.activationMode === "online_order"
+              ? draft.promoCode.trim().toUpperCase()
+              : null,
+          order_url:
+            draft.activationMode === "online_order"
+              ? draft.orderUrl.trim()
+              : null,
+          order_button_text:
+            draft.activationMode === "online_order"
+              ? draft.orderButtonText.trim() || "ORDER NOW"
+              : null,
           image_url: draft.imageUrl || null,
         }));
 
@@ -722,6 +759,18 @@ export default function NewCouponPage() {
             info_text:
               draft.activationMode === "staff_stamp"
                 ? draft.infoText.trim() || null
+                : null,
+            promo_code:
+              draft.activationMode === "online_order"
+                ? draft.promoCode.trim().toUpperCase()
+                : null,
+            order_url:
+              draft.activationMode === "online_order"
+                ? draft.orderUrl.trim()
+                : null,
+            order_button_text:
+              draft.activationMode === "online_order"
+                ? draft.orderButtonText.trim() || "ORDER NOW"
                 : null,
             image_url: draft.imageUrl || null,
           })
@@ -829,7 +878,11 @@ export default function NewCouponPage() {
       usageLimit: Number(coupon.usage_limit || 0),
       repeatable: Boolean(coupon.repeatable),
       activationMode:
-        coupon.activation_mode === "staff_stamp" ? "staff_stamp" : "immediate",
+        coupon.activation_mode === "staff_stamp"
+          ? "staff_stamp"
+          : coupon.activation_mode === "online_order"
+            ? "online_order"
+            : "immediate",
       stampValidDays: Number(coupon.stamp_valid_days || 31),
       stampCode: coupon.stamp_code || "",
       stampText: coupon.stamp_text || "THANK YOU! See you again soon!",
@@ -846,6 +899,9 @@ export default function NewCouponPage() {
       infoText:
         coupon.info_text ||
         "First visit? Ask a staff member to stamp this coupon.",
+      promoCode: coupon.promo_code || "",
+      orderUrl: coupon.order_url || "",
+      orderButtonText: coupon.order_button_text || "ORDER NOW",
       imageUrl: coupon.image_url || "",
       buyQty: buyGet.buyQty,
       buyItem: buyGet.buyItem,
@@ -1441,7 +1497,7 @@ export default function NewCouponPage() {
                             한 고객이 같은 쿠폰을 다시 사용할 수 있는지 선택하세요.
                           </p>
 
-                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
                             <button
                               type="button"
                               onClick={() =>
@@ -1529,7 +1585,112 @@ export default function NewCouponPage() {
                                 첫 방문 코드 입력 → 스탬프 → 다음 방문 사용
                               </p>
                             </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, {
+                                  activationMode: "online_order",
+                                  stampCode: "",
+                                  pinRequired: false,
+                                  pinCode: "",
+                                  promoCode: draft.promoCode || "",
+                                  orderButtonText:
+                                    draft.orderButtonText || "ORDER NOW",
+                                })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                draft.activationMode === "online_order"
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">🛒 Online order code</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                Promo Code 복사 → 주문 페이지 이동
+                              </p>
+                            </button>
                           </div>
+
+                          {draft.activationMode === "online_order" && (
+                            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                              <p className="text-sm font-black text-blue-800">
+                                Online Order Coupon
+                              </p>
+                              <p className="mt-1 text-xs font-semibold text-blue-700/70">
+                                고객은 코드를 복사한 뒤 ORDER NOW를 눌러 매장 주문 사이트에서 사용합니다.
+                              </p>
+
+                              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <label className="mb-1 block text-xs font-black text-gray-600">
+                                    Promo Code
+                                  </label>
+                                  <input
+                                    value={draft.promoCode}
+                                    onChange={(event) =>
+                                      updateDraft(draft.localId, {
+                                        promoCode: event.target.value
+                                          .toUpperCase()
+                                          .replace(/\s/g, "")
+                                          .slice(0, 30),
+                                      })
+                                    }
+                                    placeholder="예: SAVE10"
+                                    className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.12em]"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="mb-1 block text-xs font-black text-gray-600">
+                                    버튼 문구
+                                  </label>
+                                  <input
+                                    value={draft.orderButtonText}
+                                    maxLength={24}
+                                    onChange={(event) =>
+                                      updateDraft(draft.localId, {
+                                        orderButtonText: event.target.value,
+                                      })
+                                    }
+                                    placeholder="ORDER NOW"
+                                    className="w-full rounded-2xl border p-3 font-black"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="mt-3">
+                                <label className="mb-1 block text-xs font-black text-gray-600">
+                                  Online Order URL
+                                </label>
+                                <input
+                                  value={draft.orderUrl}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      orderUrl: event.target.value,
+                                    })
+                                  }
+                                  placeholder="https://..."
+                                  className="w-full rounded-2xl border p-3 font-semibold"
+                                />
+                              </div>
+
+                              <div className="mt-4 rounded-2xl bg-white p-4 text-center shadow-sm">
+                                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-600">
+                                  PROMO CODE
+                                </p>
+                                <p className="mt-1 text-2xl font-black tracking-[0.12em] text-[#172033]">
+                                  {draft.promoCode || "SAVE10"}
+                                </p>
+                                <button
+                                  type="button"
+                                  className="mt-3 rounded-xl bg-[#EB4A45] px-5 py-2 text-xs font-black text-white"
+                                >
+                                  {draft.orderButtonText || "ORDER NOW"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           {draft.activationMode === "staff_stamp" && (
                             <div className="mt-4 space-y-3 rounded-2xl border border-red-100 bg-red-50/50 p-4">

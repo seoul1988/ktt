@@ -32,6 +32,9 @@ type Coupon = {
   stamp_code?: string | null;
   stamp_text?: string | null;
   info_text?: string | null;
+  promo_code?: string | null;
+  order_url?: string | null;
+  order_button_text?: string | null;
   image_url: string | null;
 };
 
@@ -83,6 +86,7 @@ export default function BusinessCouponsPage() {
   const [storeCode, setStoreCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [infoCouponId, setInfoCouponId] = useState<string | null>(null);
+  const [copiedCouponId, setCopiedCouponId] = useState<string | null>(null);
 
   useEffect(() => {
     if (Number.isFinite(businessId) && businessId > 0) {
@@ -214,6 +218,39 @@ export default function BusinessCouponsPage() {
     closeStoreCode();
   }
 
+  async function copyPromoCode(coupon: Coupon) {
+    const code = String(coupon.promo_code || "").trim();
+    if (!code) return;
+
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = code;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+
+    setCopiedCouponId(String(coupon.id));
+    window.setTimeout(() => {
+      setCopiedCouponId((current) =>
+        current === String(coupon.id) ? null : current,
+      );
+    }, 1800);
+  }
+
+  function openOrderPage(coupon: Coupon) {
+    const raw = String(coupon.order_url || "").trim();
+    if (!raw) return;
+
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   async function loadData() {
     setLoading(true);
     setErrorText("");
@@ -235,7 +272,7 @@ export default function BusinessCouponsPage() {
     const couponResult = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,used_count,active,activation_mode,stamp_valid_days,stamp_code,stamp_text,info_text,image_url",
+        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,used_count,active,activation_mode,stamp_valid_days,stamp_code,stamp_text,info_text,promo_code,order_url,order_button_text,image_url",
       )
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
@@ -406,18 +443,20 @@ export default function BusinessCouponsPage() {
                 const stampedInfo = stampedMap[String(coupon.id)];
                 const isStaffStamp =
                   coupon.activation_mode === "staff_stamp";
+                const isOnlineOrder =
+                  coupon.activation_mode === "online_order";
                 const isStamped = Boolean(stampedInfo);
 
                 return (
                   <article
                     key={coupon.id}
-                    className={`flex items-center gap-3.5 rounded-[14px] border p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] ${
+                    className={`flex items-center gap-3 rounded-[13px] border p-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] ${
                       usedOnThisDevice
                         ? "border-[#E5E7EB] bg-[#F7F7F7] opacity-70"
                         : "border-[#ECECEC] bg-white"
                     }`}
                   >
-                    <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-[11px] bg-[#F2F2F2]">
+                    <div className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]">
                       {coupon.image_url ? (
                         <img
                           src={coupon.image_url}
@@ -452,35 +491,67 @@ export default function BusinessCouponsPage() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h2 className="line-clamp-2 text-[15px] font-black leading-[1.15]">
+                      <h2 className="line-clamp-2 text-[13px] font-black leading-[1.15]">
                         {coupon.title}
                       </h2>
 
                       {coupon.description && (
-                        <p className="mt-1 line-clamp-2 text-[10px] font-semibold leading-[1.35] text-[#777E88]">
+                        <p className="mt-1 line-clamp-2 text-[9px] font-semibold leading-[1.3] text-[#777E88]">
                           {coupon.description}
                         </p>
                       )}
 
                       {usedOnThisDevice && redeemedInfo ? (
-                        <p className="mt-1.5 text-[10px] font-black text-[#6B7280]">
+                        <p className="mt-1.5 text-[9px] font-black text-[#6B7280]">
                           {formatUsedDateTime(redeemedInfo.redeemedAt)}
                         </p>
                       ) : isStaffStamp && isStamped && stampedInfo ? (
-                        <p className="mt-1.5 text-[10px] font-black text-green-700">
+                        <p className="mt-1.5 text-[9px] font-black text-green-700">
                           ✓ STAMPED · Use by {formatDate(stampedInfo.expiresAt)}
                         </p>
                       ) : isStaffStamp ? (
-                        <p className="mt-1.5 text-[9px] font-bold text-[#E74742]">
+                        <p className="mt-1.5 text-[8px] font-bold text-[#E74742]">
                           Store code required
                         </p>
+                      ) : isOnlineOrder ? (
+                        <p className="mt-1.5 text-[9px] font-black text-blue-600">
+                          Online order promo code
+                        </p>
                       ) : coupon.end_date ? (
-                        <p className="mt-1.5 text-[9px] font-bold text-[#9BA1AA]">
+                        <p className="mt-1.5 text-[8px] font-bold text-[#9BA1AA]">
                           Exp. {formatDate(coupon.end_date)}
                         </p>
                       ) : null}
                     </div>
 
+                    {isOnlineOrder ? (
+                      <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => void copyPromoCode(coupon)}
+                          className="rounded-[9px] border border-blue-200 bg-blue-50 px-3 py-2 text-[9px] font-black text-blue-700 active:scale-[0.98]"
+                        >
+                          {copiedCouponId === String(coupon.id)
+                            ? "✓ COPIED"
+                            : coupon.promo_code
+                              ? `COPY ${coupon.promo_code}`
+                              : "COPY CODE"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!coupon.order_url}
+                          onClick={() => openOrderPage(coupon)}
+                          className={`rounded-[9px] px-3 py-2 text-[9px] font-black ${
+                            coupon.order_url
+                              ? "bg-[#EB4A45] text-white active:scale-[0.98]"
+                              : "bg-gray-200 text-gray-400"
+                          }`}
+                        >
+                          {coupon.order_button_text || "ORDER NOW"}
+                        </button>
+                      </div>
+                    ) : (
                     <div className="relative flex shrink-0 flex-col items-end gap-1">
                       {isStaffStamp && !usedOnThisDevice && !isStamped && (
                         <button
@@ -533,7 +604,7 @@ export default function BusinessCouponsPage() {
 
                             window.location.href = `/coupons/redeem/${coupon.id}`;
                           }}
-                          className={`rounded-[10px] px-3.5 py-2.5 text-[10px] font-black shadow-sm ${
+                          className={`rounded-[10px] px-3.5 py-2.5 text-[9px] font-black shadow-sm ${
                             usedOnThisDevice
                               ? "border border-[#D1D5DB] bg-[#E5E7EB] text-[#6B7280]"
                               : disabled
@@ -557,6 +628,7 @@ export default function BusinessCouponsPage() {
                         </button>
                       </div>
                     </div>
+                    )}
                   </article>
                 );
               })}
