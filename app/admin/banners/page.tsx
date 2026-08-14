@@ -2185,15 +2185,35 @@ export default function BannerManagementPage() {
               )}
 
               {hide24HoursEnabled && (
-                <label className="absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[11px] font-black text-[#172033] shadow">
-                  <input
-                    type="checkbox"
-                    checked={previewHideChecked}
-                    onChange={(event) => setPreviewHideChecked(event.target.checked)}
-                    className="h-4 w-4 shrink-0 cursor-pointer accent-green-600"
-                  />
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={previewHideChecked}
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onPointerUp={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setPreviewHideChecked((current) => !current);
+                  }}
+                  className="absolute bottom-8 left-1/2 z-40 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full bg-white/95 px-3 py-2 text-[11px] font-black text-[#172033] shadow-lg"
+                >
+                  <span
+                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 text-[11px] font-black leading-none ${
+                      previewHideChecked
+                        ? "border-green-600 bg-green-600 text-white"
+                        : "border-gray-500 bg-white text-transparent"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    ✓
+                  </span>
                   {Math.max(1, Math.min(31, Number(hideDays) || 1))} Days — Do Not Show This Popup
-                </label>
+                </button>
               )}
             </div>
           </section>
