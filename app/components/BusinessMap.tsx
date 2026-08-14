@@ -1749,7 +1749,7 @@ useEffect(() => {
   return (
     <div className="relative min-h-[100dvh] overflow-hidden">
       <div
-        className={`fixed left-4 right-4 z-[1500] flex items-center gap-3 landscape:left-3 landscape:right-3 ${
+        className={`fixed left-4 right-4 z-[1200] flex items-center gap-3 landscape:left-3 landscape:right-3 ${
           keyboardOpen ? "top-2" : "top-[calc(env(safe-area-inset-top)+12px)]"
         } landscape:top-3`}
       >
@@ -1812,7 +1812,10 @@ useEffect(() => {
       </div>
 
       {categoryPanelOpen && (
-        <div className="fixed right-2 top-24 z-[9999] w-[72px] overflow-visible rounded-2xl bg-white/95 shadow-2xl landscape:right-2 landscape:top-16 landscape:w-[68px]">
+        <div
+          className="fixed right-2 top-24 w-[72px] overflow-visible rounded-2xl bg-white/95 shadow-2xl landscape:right-2 landscape:top-16 landscape:w-[68px]"
+          style={{ zIndex: 2147483647, position: "fixed" }}
+        >
           <div
             ref={categoryScrollRef}
             onScroll={updateCategoryArrows}
@@ -1941,7 +1944,8 @@ useEffect(() => {
       {!categoryPanelOpen && (
         <button
           onClick={openCategoryPanel}
-          className="fixed right-0 top-1/2 z-[9999] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl landscape:py-5"
+          style={{ zIndex: 2147483647, position: "fixed" }}
+          className="fixed right-0 top-1/2 -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl landscape:py-5"
         >
           ☰
         </button>
@@ -1950,7 +1954,7 @@ useEffect(() => {
       <button
         type="button"
         onClick={toggleTrafficFlow}
-        className={`fixed right-[92px] top-[calc(env(safe-area-inset-top)+76px)] z-[1450] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-[18px] shadow-xl transition active:scale-90 landscape:right-[84px] landscape:top-[64px] ${
+        className={`fixed right-[92px] top-[calc(env(safe-area-inset-top)+76px)] z-[1200] flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-[18px] shadow-xl transition active:scale-90 landscape:right-[84px] landscape:top-[64px] ${
           showTrafficFlow
             ? "bg-emerald-600 ring-2 ring-emerald-300/70"
             : "bg-[#172033]/95"
@@ -1963,7 +1967,7 @@ useEffect(() => {
       </button>
 
       {trafficNotice && (
-        <div className="fixed right-[72px] top-[calc(env(safe-area-inset-top)+122px)] z-[1500] w-[min(320px,calc(100vw-24px))] rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 shadow-xl landscape:top-[110px]">
+        <div className="fixed right-[72px] top-[calc(env(safe-area-inset-top)+122px)] z-[1200] w-[min(320px,calc(100vw-24px))] rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 shadow-xl landscape:top-[110px]">
           <div className="flex items-start justify-between gap-3">
             <span>{trafficNotice}</span>
             <button
@@ -1982,7 +1986,7 @@ useEffect(() => {
   <button
     type="button"
     onClick={openCategoryPanel}
- className="fixed left-4 top-[88px] z-[1100]
+ className="fixed left-4 top-[88px] z-[1200]
 rounded-full
 bg-sky-500
 px-4 py-2
@@ -2173,7 +2177,7 @@ landscape:top-[62px]"
       <div
         ref={cardScrollRef}
         onScroll={handleScroll}
-        className={`fixed z-[1000] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 landscape:left-3 landscape:right-auto landscape:top-[76px] landscape:bottom-5 landscape:w-[210px] landscape:flex-col landscape:gap-2 landscape:overflow-y-auto landscape:overflow-x-hidden landscape:px-0 landscape:pb-0 landscape:pt-0 ${
+        className={`fixed z-[900] flex snap-x gap-4 overflow-x-auto px-4 pb-3 pt-2 transition-all duration-300 landscape:left-3 landscape:right-auto landscape:top-[76px] landscape:bottom-5 landscape:w-[210px] landscape:flex-col landscape:gap-2 landscape:overflow-y-auto landscape:overflow-x-hidden landscape:px-0 landscape:pb-0 landscape:pt-0 ${
           showCards
             ? "left-0 right-0 bottom-[82px] opacity-100"
             : "left-0 right-0 bottom-[-360px] opacity-0 landscape:left-[-190px] landscape:right-auto landscape:bottom-5"
