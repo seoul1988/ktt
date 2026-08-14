@@ -7,7 +7,6 @@ import BottomNav from "../../components/BottomNav";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import BusinessMediaViewer from "../../components/BusinessMediaViewer";
 import ProfileButton from "../../components/ProfileButton";
-import BusinessCouponPopup from "../../components/BusinessCouponPopup";
 import BusinessCopyButton from "../../components/BusinessCopyButton";
 import BusinessDirectionsButton from "../../components/BusinessDirectionsButton";
 
@@ -438,7 +437,7 @@ export default async function BusinessPage({
         />
 
         <section className="px-5 pb-32 pt-5">
-          {/* 카테고리, 도시, 영업 상태, 관리 버튼 */}
+          {/* 카테고리, 도시, 영업 상태, 쿠폰, 관리 버튼 */}
           <div className="flex w-full items-center gap-3">
             <p className="min-w-0 flex-1 text-sm text-gray-600">
               {spot.category} · {spot.city || "Triangle"} ·{" "}
@@ -453,16 +452,32 @@ export default async function BusinessPage({
               </span>
             </p>
 
-            {canManage && (
-              <div className="ml-auto flex shrink-0">
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {availableCoupons.length > 0 && (
+                <Link
+                  href="/coupons"
+                  aria-label={`View coupons for ${spot.name}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-[#F1C7C2] bg-[#FFF1EF] px-3 py-1.5 text-xs font-extrabold tracking-[0.04em] text-[#B9362A] shadow-sm transition active:scale-95"
+                >
+                  <span aria-hidden="true">🎟️</span>
+                  <span>COUPON</span>
+                  {availableCoupons.length > 1 && (
+                    <span className="rounded-full bg-[#B9362A] px-1.5 py-0.5 text-[10px] leading-none text-white">
+                      {availableCoupons.length}
+                    </span>
+                  )}
+                </Link>
+              )}
+
+              {canManage && (
                 <Link
                   href={`/business/${spot.id}/edit`}
                   className="rounded bg-blue-600 px-3 py-1 text-xs font-bold text-white"
                 >
                   Edit
                 </Link>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           <div className="mt-6 grid grid-cols-5 items-start text-center text-[11px] font-semibold text-gray-700">
@@ -718,11 +733,6 @@ export default async function BusinessPage({
             </div>
           </section>
 
-          {availableCoupons.length > 0 && (
-            <BusinessCouponPopup
-              coupons={availableCoupons}
-            />
-          )}
         </section>
       </div>
 

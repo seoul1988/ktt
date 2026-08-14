@@ -15,6 +15,7 @@ type Business = {
   id: number;
   name: string | null;
   category: string | null;
+  owner_id?: string | null;
   address?: string | null;
   image_url?: string | null;
   image_urls?: string[] | null;
@@ -152,6 +153,8 @@ export default function NewCouponPage() {
   const [showRegistered, setShowRegistered] = useState(true);
   const [showNotRegistered, setShowNotRegistered] = useState(true);
   const [loadingBusinesses, setLoadingBusinesses] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [accessRole, setAccessRole] = useState<"admin" | "owner" | "blocked" | "loading">("loading");
 
   const [drafts, setDrafts] = useState<CouponDraft[]>([makeDraft()]);
   const [savingAll, setSavingAll] = useState(false);
@@ -177,25 +180,72 @@ export default function NewCouponPage() {
       return;
     }
 
-    // 전체 등록 업체: owner_id 필터 없음
-    const { data: businessData, error: businessError } = await supabase
+    setCurrentUserId(user.id);
+
+    // 관리자 여부 확인
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("profile role check failed:", profileError);
+    }
+
+    const role = String(profileData?.role || "").trim().toLowerCase();
+    const isAdmin = role === "admin";
+
+    // 관리자는 모든 업체, 일반 오너는 본인 업체만 불러옵니다.
+    let businessQuery = supabase
       .from("businesses")
-      .select("id,name,category,address,image_url,image_urls")
+      .select("id,name,category,address,image_url,image_urls,owner_id");
+
+    if (!isAdmin) {
+      businessQuery = businessQuery.eq("owner_id", user.id);
+    }
+
+    const { data: businessData, error: businessError } = await businessQuery
       .order("category", { ascending: true, nullsFirst: false })
       .order("name", { ascending: true, nullsFirst: false });
 
     if (businessError) {
       setLoadingBusinesses(false);
+      setAccessRole("blocked");
       alert(businessError.message);
       return;
     }
 
-    const { data: couponData, error: couponError } = await supabase
+    const allowedBusinesses = (businessData || []) as Business[];
+
+    // admin 또는 실제로 소유한 업체가 있는 owner만 쿠폰 관리 가능
+    if (!isAdmin && allowedBusinesses.length === 0) {
+      setBusinesses([]);
+      setAllCoupons([]);
+      setAccessRole("blocked");
+      setLoadingBusinesses(false);
+      return;
+    }
+
+    setAccessRole(isAdmin ? "admin" : "owner");
+
+    const allowedBusinessIds = allowedBusinesses.map((business) => business.id);
+
+    let couponQuery = supabase
       .from("coupons")
       .select(
         "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,info_text,promo_code,order_url,order_button_text,image_url,created_at",
-      )
-      .order("created_at", { ascending: false });
+      );
+
+    // owner는 자기 업체 쿠폰만 조회
+    if (!isAdmin) {
+      couponQuery = couponQuery.in("business_id", allowedBusinessIds);
+    }
+
+    const { data: couponData, error: couponError } = await couponQuery.order(
+      "created_at",
+      { ascending: false },
+    );
 
     if (couponError) {
       setLoadingBusinesses(false);
@@ -203,9 +253,30 @@ export default function NewCouponPage() {
       return;
     }
 
-    setBusinesses((businessData || []) as Business[]);
+    setBusinesses(allowedBusinesses);
     setAllCoupons((couponData || []) as Coupon[]);
     setLoadingBusinesses(false);
+  }
+
+  function canManageBusiness(targetBusinessId: number | string) {
+    const numericId = Number(targetBusinessId);
+
+    if (accessRole === "admin") return true;
+
+    return (
+      accessRole === "owner" &&
+      businesses.some(
+        (business) =>
+          business.id === numericId && business.owner_id === currentUserId,
+      )
+    );
+  }
+
+  function requireBusinessPermission(targetBusinessId: number | string) {
+    if (canManageBusiness(targetBusinessId)) return true;
+
+    alert("본인 업체의 쿠폰만 등록·수정·삭제할 수 있습니다.");
+    return false;
   }
 
   async function loadBusinessCoupons(selectedBusinessId: string) {
@@ -337,6 +408,8 @@ export default function NewCouponPage() {
   }, [allCoupons, businessId]);
 
   async function chooseBusiness(business: Business) {
+    if (!requireBusinessPermission(business.id)) return;
+
     setBusinessId(String(business.id));
 
     const defaultImage = uniqueStrings([
@@ -617,6 +690,8 @@ export default function NewCouponPage() {
       alert("업체를 선택하세요.");
       return;
     }
+
+    if (!requireBusinessPermission(businessId)) return;
 
     if (drafts.length === 0) {
       alert("등록할 쿠폰이 없습니다.");
@@ -920,6 +995,7 @@ export default function NewCouponPage() {
   }
 
   async function deleteCoupon(id: number) {
+    if (!requireBusinessPermission(businessId)) return;
     if (!confirm("이 쿠폰을 삭제할까요?")) return;
 
     const { error } = await supabase.from("coupons").delete().eq("id", id);
@@ -932,6 +1008,8 @@ export default function NewCouponPage() {
   }
 
   async function toggleActive(coupon: Coupon) {
+    if (!requireBusinessPermission(coupon.business_id)) return;
+
     const { error } = await supabase
       .from("coupons")
       .update({ active: !coupon.active })
@@ -982,6 +1060,49 @@ export default function NewCouponPage() {
     }
 
     return draft.title.trim() || "COUPON";
+  }
+
+  if (accessRole === "blocked") {
+    return (
+      <main className="min-h-screen bg-[#F8F3EC] px-4 pb-28 pt-5 text-[#172033]">
+        <div className="mx-auto max-w-xl">
+          <div className="mb-5 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/coupons";
+              }}
+              className="rounded-full bg-white px-4 py-2 text-sm font-black shadow-sm"
+            >
+              ← Back
+            </button>
+            <ProfileButton />
+          </div>
+
+          <div className="rounded-[28px] border border-[#E8DED2] bg-white p-8 text-center shadow-sm">
+            <div className="text-5xl">🔒</div>
+            <h1 className="mt-4 text-2xl font-black">Coupon Registration</h1>
+            <p className="mt-3 text-sm font-bold leading-6 text-gray-500">
+              Coupon registration is available only to verified business owners
+              and administrators.
+            </p>
+            <p className="mt-2 text-xs font-semibold text-gray-400">
+              일반 사용자는 쿠폰을 등록할 수 없습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = "/coupons";
+              }}
+              className="mt-6 rounded-2xl bg-[#EB4A45] px-5 py-3 text-sm font-black text-white"
+            >
+              OPEN COUPON BOOK
+            </button>
+          </div>
+        </div>
+        <BottomNav />
+      </main>
+    );
   }
 
   return (
