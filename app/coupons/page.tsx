@@ -686,7 +686,13 @@ export default function CouponsPage() {
                             <img
                               src={image}
                               alt={business.name || ""}
-                              className="absolute left-1/2 top-1/2 block h-[118%] w-[118%] max-w-none -translate-x-1/2 -translate-y-1/2 object-cover object-center"
+                              className="absolute inset-0 block max-w-none"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                objectPosition: "center",
+                              }}
                             />
                           ) : (
                             <div className="flex h-full items-center justify-center text-2xl">

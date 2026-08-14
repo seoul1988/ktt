@@ -1706,9 +1706,7 @@ export default function NewCouponPage() {
                         <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
                           <p className="text-sm font-black">매장 확인 방식</p>
                           <p className="mt-1 text-xs font-semibold text-gray-500">
-                            {draft.activationMode === "staff_stamp"
-                              ? "스탬프 쿠폰은 위의 스탬프 코드만 사용합니다. 추가 PIN은 사용할 수 없습니다."
-                              : "일반 쿠폰은 직원이 REDEEM NOW만 누르면 됩니다. 필요할 때만 PIN을 사용하세요."}
+                            일반 쿠폰은 직원이 REDEEM NOW만 누르면 됩니다. 필요할 때만 PIN을 사용하세요.
                           </p>
 
                           <div className="mt-3 grid gap-2 sm:grid-cols-2">
