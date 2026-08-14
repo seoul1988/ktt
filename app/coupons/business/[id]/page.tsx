@@ -86,7 +86,6 @@ export default function BusinessCouponsPage() {
   const [storeCode, setStoreCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [infoCouponId, setInfoCouponId] = useState<string | null>(null);
-  const [copiedCouponId, setCopiedCouponId] = useState<string | null>(null);
 
   useEffect(() => {
     if (Number.isFinite(businessId) && businessId > 0) {
@@ -218,37 +217,20 @@ export default function BusinessCouponsPage() {
     closeStoreCode();
   }
 
-  async function copyPromoCode(coupon: Coupon) {
-    const code = String(coupon.promo_code || "").trim();
-    if (!code) return;
-
-    try {
-      await navigator.clipboard.writeText(code);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = code;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
-    }
-
-    setCopiedCouponId(String(coupon.id));
-    window.setTimeout(() => {
-      setCopiedCouponId((current) =>
-        current === String(coupon.id) ? null : current,
-      );
-    }, 1800);
-  }
-
   function openOrderPage(coupon: Coupon) {
     const raw = String(coupon.order_url || "").trim();
     if (!raw) return;
 
+    const code = String(coupon.promo_code || "").trim();
+
+    if (code && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(code).catch(() => {
+        // 주문 페이지 이동은 계속 진행합니다.
+      });
+    }
+
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.location.href = url;
   }
 
   async function loadData() {
@@ -514,9 +496,16 @@ export default function BusinessCouponsPage() {
                           Store code required
                         </p>
                       ) : isOnlineOrder ? (
-                        <p className="mt-1.5 text-[9px] font-black text-blue-600">
-                          Online order promo code
-                        </p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] font-black text-blue-600">
+                            ONLINE ORDER
+                          </span>
+                          {coupon.promo_code && (
+                            <span className="rounded-md border border-dashed border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-blue-700">
+                              CODE {coupon.promo_code}
+                            </span>
+                          )}
+                        </div>
                       ) : coupon.end_date ? (
                         <p className="mt-1.5 text-[8px] font-bold text-[#9BA1AA]">
                           Exp. {formatDate(coupon.end_date)}
@@ -525,31 +514,25 @@ export default function BusinessCouponsPage() {
                     </div>
 
                     {isOnlineOrder ? (
-                      <div className="flex shrink-0 flex-col items-stretch gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => void copyPromoCode(coupon)}
-                          className="rounded-[9px] border border-blue-200 bg-blue-50 px-3 py-2 text-[9px] font-black text-blue-700 active:scale-[0.98]"
-                        >
-                          {copiedCouponId === String(coupon.id)
-                            ? "✓ COPIED"
-                            : coupon.promo_code
-                              ? `COPY ${coupon.promo_code}`
-                              : "COPY CODE"}
-                        </button>
-
+                      <div className="flex shrink-0 flex-col items-end gap-1">
                         <button
                           type="button"
                           disabled={!coupon.order_url}
                           onClick={() => openOrderPage(coupon)}
-                          className={`rounded-[9px] px-3 py-2 text-[9px] font-black ${
+                          className={`rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
                             coupon.order_url
                               ? "bg-[#EB4A45] text-white active:scale-[0.98]"
                               : "bg-gray-200 text-gray-400"
                           }`}
                         >
-                          {coupon.order_button_text || "ORDER NOW"}
+                          🛒 {coupon.order_button_text || "ORDER NOW"}
                         </button>
+
+                        {coupon.promo_code && (
+                          <span className="text-[8px] font-bold text-[#8A9099]">
+                            Code copied on order
+                          </span>
+                        )}
                       </div>
                     ) : (
                     <div className="relative flex shrink-0 flex-col items-end gap-1">
