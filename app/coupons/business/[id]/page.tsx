@@ -304,18 +304,32 @@ export default function BusinessCouponsPage() {
                         : "border-[#ECECEC] bg-white"
                     }`}
                   >
-                    <div className="h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]">
+                    <div className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]">
                       {coupon.image_url ? (
                         <img
                           src={coupon.image_url}
                           alt=""
-                          className="h-full w-full object-cover"
+                          className="absolute inset-0 h-full w-full object-cover object-center"
+                          style={{
+                            width: "130%",
+                            height: "130%",
+                            maxWidth: "none",
+                            left: "-15%",
+                            top: "-15%",
+                          }}
                         />
                       ) : business.image_url ? (
                         <img
                           src={business.image_url}
                           alt=""
-                          className="h-full w-full object-cover"
+                          className="absolute inset-0 h-full w-full object-cover object-center"
+                          style={{
+                            width: "130%",
+                            height: "130%",
+                            maxWidth: "none",
+                            left: "-15%",
+                            top: "-15%",
+                          }}
                         />
                       ) : (
                         <div className="flex h-full items-center justify-center text-xl">
