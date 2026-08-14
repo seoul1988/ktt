@@ -2205,7 +2205,7 @@ export default function BannerManagementPage() {
                   <span
                     className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 text-[11px] font-black leading-none ${
                       previewHideChecked
-                        ? "border-green-600 bg-green-600 text-white"
+                        ? "border-red-600 bg-white text-red-600"
                         : "border-gray-500 bg-white text-transparent"
                     }`}
                     aria-hidden="true"
