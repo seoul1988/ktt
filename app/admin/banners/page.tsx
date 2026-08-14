@@ -387,6 +387,7 @@ export default function BannerManagementPage() {
   const [buttonHeight, setButtonHeight] = useState(10);
   const [hide24HoursEnabled, setHide24HoursEnabled] = useState(true);
   const [hideDays, setHideDays] = useState("1");
+  const [previewHideChecked, setPreviewHideChecked] = useState(false);
   const [imageX, setImageX] = useState(0);
   const [imageY, setImageY] = useState(0);
   const [imageWidth, setImageWidth] = useState(100);
@@ -560,6 +561,7 @@ export default function BannerManagementPage() {
     setButtonHeight(10);
     setHide24HoursEnabled(true);
     setHideDays("1");
+    setPreviewHideChecked(false);
     setImageX(0);
     setImageY(0);
     setImageWidth(100);
@@ -648,6 +650,7 @@ export default function BannerManagementPage() {
     setButtonHeight(Number(banner.button_height) || 10);
     setHide24HoursEnabled(banner.hide_24h_enabled !== false);
     setHideDays(String(Math.max(1, Math.min(31, Number(banner.hide_days) || 1))));
+    setPreviewHideChecked(false);
     setImageX(Number(banner.image_x) || 0);
     setImageY(Number(banner.image_y) || 0);
     setImageWidth(Number(banner.image_width) || 100);
@@ -2185,8 +2188,8 @@ export default function BannerManagementPage() {
                 <label className="absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[11px] font-black text-[#172033] shadow">
                   <input
                     type="checkbox"
-                    checked={hide24HoursEnabled}
-                    onChange={(event) => setHide24HoursEnabled(event.target.checked)}
+                    checked={previewHideChecked}
+                    onChange={(event) => setPreviewHideChecked(event.target.checked)}
                     className="h-4 w-4 shrink-0 cursor-pointer accent-green-600"
                   />
                   {Math.max(1, Math.min(31, Number(hideDays) || 1))} Days — Do Not Show This Popup
