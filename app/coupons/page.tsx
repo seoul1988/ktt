@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import BottomNav from "../components/BottomNav";
 import ProfileButton from "../components/ProfileButton";
@@ -12,6 +12,10 @@ type Business = {
   address: string | null;
   image_url: string | null;
   image_urls: string[] | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
 };
 
 type Coupon = {
@@ -29,6 +33,245 @@ function categoriesOf(value: string | null) {
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean);
+}
+
+
+declare global {
+  interface Window {
+    L?: any;
+  }
+}
+
+type LatLng = {
+  latitude: number;
+  longitude: number;
+};
+
+let leafletLoader: Promise<any> | null = null;
+
+function loadLeaflet() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Leaflet is available only in the browser."));
+  }
+
+  if (window.L) return Promise.resolve(window.L);
+  if (leafletLoader) return leafletLoader;
+
+  leafletLoader = new Promise((resolve, reject) => {
+    const existingCss = document.querySelector<HTMLLinkElement>(
+      'link[data-ktown-leaflet="css"]',
+    );
+
+    if (!existingCss) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      link.dataset.ktownLeaflet = "css";
+      document.head.appendChild(link);
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[data-ktown-leaflet="js"]',
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.L));
+      existingScript.addEventListener("error", () =>
+        reject(new Error("Unable to load the map library.")),
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.async = true;
+    script.dataset.ktownLeaflet = "js";
+    script.onload = () => resolve(window.L);
+    script.onerror = () => reject(new Error("Unable to load the map library."));
+    document.body.appendChild(script);
+  });
+
+  return leafletLoader;
+}
+
+function getBusinessCoordinates(business: Business | null): LatLng | null {
+  if (!business) return null;
+
+  const latitude = Number(business.latitude ?? business.lat);
+  const longitude = Number(business.longitude ?? business.lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return { latitude, longitude };
+}
+
+function TwoPointMap({
+  business,
+  userLocation,
+}: {
+  business: Business;
+  userLocation: LatLng | null;
+}) {
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const storeCoords = getBusinessCoordinates(business);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function drawMap() {
+      if (!mapElementRef.current || !storeCoords) return;
+
+      try {
+        const L = await loadLeaflet();
+        if (cancelled || !mapElementRef.current || !L) return;
+
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        }
+
+        const map = L.map(mapElementRef.current, {
+          zoomControl: true,
+          attributionControl: true,
+        });
+
+        mapInstanceRef.current = map;
+
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
+
+        const storeIcon = L.divIcon({
+          className: "",
+          html: `
+            <div style="
+              width:34px;
+              height:34px;
+              border-radius:50% 50% 50% 0;
+              transform:rotate(-45deg);
+              background:#EB4A45;
+              border:3px solid white;
+              box-shadow:0 2px 8px rgba(0,0,0,.30);
+              display:flex;
+              align-items:center;
+              justify-content:center;
+            ">
+              <div style="
+                width:10px;
+                height:10px;
+                border-radius:999px;
+                background:white;
+              "></div>
+            </div>
+          `,
+          iconSize: [34, 34],
+          iconAnchor: [17, 34],
+        });
+
+        L.marker([storeCoords.latitude, storeCoords.longitude], {
+          icon: storeIcon,
+        })
+          .addTo(map)
+          .bindPopup(
+            `<strong>${String(business.name || "Store")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")}</strong><br/>Store`,
+          );
+
+        const points: [number, number][] = [
+          [storeCoords.latitude, storeCoords.longitude],
+        ];
+
+        if (userLocation) {
+          const myLocationIcon = L.divIcon({
+            className: "",
+            html: `
+              <div style="
+                width:24px;
+                height:24px;
+                border-radius:999px;
+                background:#2563EB;
+                border:4px solid white;
+                box-shadow:0 0 0 2px rgba(37,99,235,.28),0 2px 8px rgba(0,0,0,.25);
+              "></div>
+            `,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+          });
+
+          L.marker([userLocation.latitude, userLocation.longitude], {
+            icon: myLocationIcon,
+          })
+            .addTo(map)
+            .bindPopup("<strong>Your Location</strong>");
+
+          points.push([userLocation.latitude, userLocation.longitude]);
+
+          L.polyline(points, {
+            color: "#7C3AED",
+            weight: 3,
+            opacity: 0.65,
+            dashArray: "7 7",
+          }).addTo(map);
+        }
+
+        if (points.length === 2) {
+          map.fitBounds(L.latLngBounds(points), {
+            padding: [45, 45],
+            maxZoom: 15,
+          });
+        } else {
+          map.setView(
+            [storeCoords.latitude, storeCoords.longitude],
+            15,
+          );
+        }
+
+        window.setTimeout(() => {
+          map.invalidateSize();
+        }, 100);
+      } catch (error) {
+        console.error("Map load error:", error);
+      }
+    }
+
+    void drawMap();
+
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [
+    business.id,
+    storeCoords?.latitude,
+    storeCoords?.longitude,
+    userLocation?.latitude,
+    userLocation?.longitude,
+  ]);
+
+  if (!storeCoords) {
+    return (
+      <iframe
+        title={`${business.name || "Business"} map`}
+        src={`https://www.google.com/maps?q=${encodeURIComponent(
+          business.address || "",
+        )}&output=embed`}
+        className="h-full w-full border-0"
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    );
+  }
+
+  return <div ref={mapElementRef} className="h-full w-full" />;
 }
 
 export default function CouponsPage() {
@@ -55,7 +298,7 @@ export default function CouponsPage() {
     const [businessResult, couponResult] = await Promise.all([
       supabase
         .from("businesses")
-        .select("id,name,category,address,image_url,image_urls")
+        .select("*")
         .order("name", { ascending: true }),
       supabase
         .from("coupons")
@@ -436,22 +679,30 @@ export default function CouponsPage() {
               </button>
             </div>
 
-            <div className="h-[300px] w-full bg-[#F3F4F6]">
-              <iframe
-                title={`${mapBusiness.name || "Business"} map`}
-                src={
-                  userLocation
-                    ? `https://www.google.com/maps?saddr=${userLocation.latitude},${userLocation.longitude}&daddr=${encodeURIComponent(
-                        mapBusiness.address || "",
-                      )}&output=embed`
-                    : `https://www.google.com/maps?q=${encodeURIComponent(
-                        mapBusiness.address || "",
-                      )}&output=embed`
-                }
-                className="h-full w-full border-0"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
+            <div className="relative h-[320px] w-full bg-[#F3F4F6]">
+              <TwoPointMap
+                business={mapBusiness}
+                userLocation={userLocation}
               />
+
+              {locationLoading && (
+                <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-black text-[#4B5563] shadow">
+                  Finding your location...
+                </div>
+              )}
+
+              {getBusinessCoordinates(mapBusiness) && (
+                <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex gap-2 rounded-xl bg-white/95 px-3 py-2 text-[9px] font-black shadow">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                    YOU
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                    STORE
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="p-4">
@@ -465,7 +716,9 @@ export default function CouponsPage() {
                   {locationLoading
                     ? "Finding your location..."
                     : userLocation
-                      ? "Blue point / route starts from your current location."
+                      ? getBusinessCoordinates(mapBusiness)
+                        ? "Blue marker is you. Red marker is the store."
+                        : "Your location was found, but this store has no saved map coordinates."
                       : locationError || "Current location not available."}
                 </p>
 
