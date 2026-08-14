@@ -215,14 +215,14 @@ export default function TodaysKoreaNewsModal({
           </div>
         </div>
 
-        <div className="px-4 pb-4 pt-3">
+        <div className="px-4 pb-3 pt-3">
           <div className="relative">
             {activePosts.length > 0 ? (
               <>
                 <div
                   ref={sliderRef}
                   onScroll={handleSliderScroll}
-                  className="flex snap-x snap-mandatory items-stretch gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="flex snap-x snap-mandatory items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
                   {activePosts.map((post) => (
                     <button
@@ -259,7 +259,7 @@ export default function TodaysKoreaNewsModal({
                       </div>
 
                       <h5
-                        className="mt-2 min-h-[58px] overflow-hidden break-words text-[12px] font-medium leading-[1.5] tracking-[-0.01em] text-slate-800"
+                        className="mt-2 min-h-[54px] overflow-hidden break-words text-[12px] font-medium leading-[1.5] tracking-[-0.01em] text-slate-800"
                         style={{
                           display: "-webkit-box",
                           WebkitLineClamp: 3,
@@ -269,10 +269,6 @@ export default function TodaysKoreaNewsModal({
                         {post.title}
                       </h5>
 
-                      <p className="mt-1 text-[10px] font-normal text-gray-400">
-                        {formatNewsDate(post.published_at) ||
-                          "Latest"}
-                      </p>
                     </button>
                   ))}
                 </div>
@@ -299,7 +295,7 @@ export default function TodaysKoreaNewsModal({
                   </>
                 )}
 
-                <div className="mt-2 flex items-center justify-center gap-1">
+                <div className="mt-1 flex items-center justify-center gap-1">
                   {activePosts.map((post, index) => (
                     <button
                       key={post.id}

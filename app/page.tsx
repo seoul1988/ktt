@@ -145,7 +145,7 @@ function SectionTitle({
 }) {
   return (
     <div
-      className={`mb-1 flex items-center justify-between gap-3 rounded-2xl border px-3 py-3 shadow-sm ${bgColor}`}
+      className={`mb-2 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 shadow-sm ${bgColor}`}
     >
       <div className="flex min-w-0 items-center gap-2">
         <div className={`h-9 w-1 shrink-0 rounded-full ${color}`} />
@@ -155,7 +155,7 @@ function SectionTitle({
             {label}
           </p>
 
-          <h2 className="mt-0.5 break-keep text-[22px] font-black leading-tight text-[#172033]">
+          <h2 className="mt-0.5 break-keep text-[17px] font-black leading-tight text-[#172033]">
             {emoji} {title}
           </h2>
         </div>
@@ -698,6 +698,12 @@ export default async function Home() {
       .filter(Boolean)
   );
 
+  const activeCouponCount = couponBusinesses.filter((coupon: any) => {
+    const usageLimit = Number(coupon.usage_limit || 0);
+    const usedCount = Number(coupon.used_count || 0);
+    return !(usageLimit > 0 && usedCount >= usageLimit);
+  }).length;
+
   /*
    * spots에는 Main 허용 비즈니스만 있으므로
    * Featured Sponsor와 Trending에도 B2B/Hidden이 나타나지 않습니다.
@@ -774,11 +780,13 @@ const trending = [...spots]
 
 const kpopNews = (todaysKoreaPosts || [])
   .filter((post: any) => post.category === "kpop")
-  .slice(0, 12);
+  .slice(0, 12)
+  .map((post: any) => ({ ...post, published_at: null }));
 
 const kdramaNews = (todaysKoreaPosts || [])
   .filter((post: any) => post.category === "kdrama")
-  .slice(0, 12);
+  .slice(0, 12)
+  .map((post: any) => ({ ...post, published_at: null }));
 
   const mainEvent = businessEvents[0];
   const mainGrandOpening = grandOpenings[0];
@@ -833,172 +841,156 @@ const kdramaNews = (todaysKoreaPosts || [])
           </section>
         )}
 
-        {SHOW_TEMP_COMING_SOON_196 && comingSoonBusiness ? (
-          <section className="mx-auto mb-6 max-w-xl">
-            <div className="rounded-[26px] border border-amber-200 bg-[#FFF4D8] p-3 shadow-sm sm:p-4">
-              <div className="flex items-center justify-between gap-3 px-1 pb-4 pt-1">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-xl shadow-sm">
-                    🎉
-                  </div>
+        <section className="mx-auto mb-4 max-w-xl">
+          <Link
+            href="/coupons"
+            className="group relative block overflow-hidden rounded-[22px] border border-violet-200 bg-gradient-to-r from-[#FFF9E9] via-[#FFFDF7] to-[#F7F1FF] shadow-sm transition hover:border-violet-300 hover:shadow-md active:scale-[0.995]"
+          >
+            <div className="absolute left-0 top-0 z-10 rounded-br-xl bg-red-500 px-2.5 py-1 text-[8px] font-black uppercase tracking-wide text-white">
+              NEW!
+            </div>
 
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
-                      Featured
-                    </p>
-
-                    <h2 className="mt-0.5 truncate text-[22px] font-black leading-tight text-[#071A3D]">
-                      Coming Soon
-                    </h2>
-                  </div>
-                </div>
-
-                <Link
-                  href="/business/196"
-                  aria-label="View coming soon business"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-base font-black text-amber-700 shadow-sm transition hover:scale-105 hover:bg-amber-50 active:scale-95"
-                >
-                  →
-                </Link>
+            <div className="flex items-center gap-3 px-3 pb-2.5 pt-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#112B58] text-[24px] text-white shadow-sm">
+                🎟
               </div>
 
-              <Link
-                href="/business/196"
-                className="block overflow-hidden rounded-[24px] border border-amber-100 bg-white shadow-sm transition hover:shadow-md active:scale-[0.995]"
-              >
-                <div className="relative aspect-[16/8.8] w-full overflow-hidden bg-[#F8F3EC]">
-                  <img
-                    src={comingSoonImage}
-                    alt={comingSoonBusiness.name || "Coming Soon"}
-                    loading="lazy"
-                    decoding="async"
-                    className="block h-full w-full object-cover object-center"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      objectPosition: "center",
-                    }}
-                  />
+              <div className="min-w-0 flex-1 pl-1">
+                <h2 className="truncate text-[18px] font-black tracking-[-0.02em] text-[#112B58]">
+                  KTOWN COUPON BOOK
+                </h2>
+                <p className="mt-0.5 text-[11px] font-black text-orange-500">
+                  Eat · Shop · Save
+                </p>
+                <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold text-[#52617A]">
+                  Triangle Local Deals in One Place!
+                </p>
+              </div>
 
-                  <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#071A3D] shadow-sm">
-                    Coming Soon
+              {activeCouponCount > 0 && (
+                <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-full bg-red-500 text-white shadow-sm">
+                  <span className="text-[15px] font-black leading-none">
+                    {activeCouponCount}
+                  </span>
+                  <span className="mt-0.5 text-[6px] font-black uppercase leading-none">
+                    Coupons
                   </span>
                 </div>
-
-                <div className="border-t border-gray-100 bg-white px-4 py-4 sm:px-5">
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="line-clamp-1 text-[18px] font-black uppercase leading-tight text-[#071A3D]">
-                        {comingSoonBusiness.name || "Coming Soon"}
-                      </h3>
-
-                      <p className="mt-2 line-clamp-1 text-[13px] font-bold uppercase text-[#6B5848]">
-                        {comingSoonBusiness.category || "New Business"}
-                      </p>
-                    </div>
-
-                    <p className="shrink-0 text-right text-[11px] font-black text-amber-700">
-                      Coming Soon
-                    </p>
-                  </div>
-                </div>
-              </Link>
+              )}
             </div>
+
+            <div className="grid grid-cols-3 gap-2 px-3 pb-3">
+              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
+                <p className="text-[13px] font-black text-green-600">25% OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Cleaners</p>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
+                <p className="text-[13px] font-black text-amber-700">BOGO</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Coffee</p>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
+                <p className="text-[13px] font-black text-rose-500">$5 OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Bakery</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center border-t border-violet-100 bg-white/70 px-3 py-2">
+              <span className="rounded-full bg-[#112B58] px-4 py-1.5 text-[10px] font-black text-white shadow-sm transition group-hover:translate-x-0.5">
+                🎟 OPEN COUPON BOOK →
+              </span>
+            </div>
+          </Link>
+        </section>
+
+        {SHOW_TEMP_COMING_SOON_196 && comingSoonBusiness ? (
+          <section className="mx-auto mb-4 max-w-xl">
+            <Link
+              href="/business/196"
+              className="flex items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-white p-2.5 shadow-sm transition hover:shadow-md active:scale-[0.995]"
+            >
+              <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
+                <img
+                  src={comingSoonImage}
+                  alt={comingSoonBusiness.name || "Coming Soon"}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover object-center"
+                />
+                <span className="absolute left-1.5 top-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase text-[#071A3D]">
+                  Soon
+                </span>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
+                  ✨ Coming Soon
+                </p>
+                <h2 className="mt-0.5 line-clamp-1 text-[17px] font-black text-[#071A3D]">
+                  {comingSoonBusiness.name || "Coming Soon"}
+                </h2>
+                <p className="mt-1 line-clamp-1 text-[12px] font-semibold text-gray-500">
+                  {comingSoonBusiness.category || "New Business"}
+                </p>
+              </div>
+
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-50 text-sm font-black text-amber-700">
+                →
+              </span>
+            </Link>
           </section>
         ) : mainGrandOpening ? (
-          <section className="mx-auto mb-6 max-w-xl">
-            <div className="rounded-[26px] border border-amber-200 bg-[#FFF4D8] p-3 shadow-sm sm:p-4">
-              <div className="flex items-center justify-between gap-3 px-1 pb-4 pt-1">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-xl shadow-sm">
-                    🎉
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
-                      Featured
-                    </p>
-
-                    <h2 className="mt-0.5 truncate text-[22px] font-black leading-tight text-[#071A3D]">
-                      Grand Opening
-                    </h2>
-                  </div>
-                </div>
-
-                <Link
-                  href="/grand-openings"
-                  aria-label="More grand openings"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-base font-black text-amber-700 shadow-sm transition hover:scale-105 hover:bg-amber-50 active:scale-95"
-                >
-                  →
-                </Link>
+          <section className="mx-auto mb-4 max-w-xl">
+            <Link
+              href={`/grand-openings/${mainGrandOpening.id}`}
+              className="flex items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-white p-2.5 shadow-sm transition hover:shadow-md active:scale-[0.995]"
+            >
+              <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
+                <img
+                  src={grandOpeningImage}
+                  alt={mainGrandOpening.title || "Grand Opening"}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover object-center"
+                />
               </div>
-
-              <Link
-                href={`/grand-openings/${mainGrandOpening.id}`}
-                className="block overflow-hidden rounded-[24px] border border-amber-100 bg-white shadow-sm transition hover:shadow-md active:scale-[0.995]"
-              >
-                <div className="relative aspect-[16/8.8] w-full overflow-hidden bg-[#F8F3EC]">
-                  <img
-                    src={grandOpeningImage}
-                    alt={mainGrandOpening.title || "Grand Opening"}
-                    loading="lazy"
-                    decoding="async"
-                    className="block h-full w-full object-cover object-center"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      objectPosition: "center",
-                    }}
-                  />
-
-                  <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-3 py-1 text-[10px] font-black uppercase tracking-wide text-[#071A3D] shadow-sm">
-                    Grand Opening
-                  </span>
-                </div>
-
-                <div className="border-t border-gray-100 bg-white px-4 py-4 sm:px-5">
-                  <div className="flex items-end justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="line-clamp-1 text-[18px] font-black uppercase leading-tight text-[#071A3D]">
-                        {mainGrandOpening.business_name || "Grand Opening"}
-                      </h3>
-
-                      <p className="mt-2 line-clamp-1 text-[13px] font-bold uppercase text-[#6B5848]">
-                        {mainGrandOpening.title || "Now Open"}
-                      </p>
-                    </div>
-
-                    <p className="shrink-0 text-right text-[11px] font-black text-amber-700">
-                      {mainGrandOpening.opening_date
-                        ? `Opens ${mainGrandOpening.opening_date}`
-                        : "Coming Soon"}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
+                  🎉 Grand Opening
+                </p>
+                <h2 className="mt-0.5 line-clamp-1 text-[17px] font-black text-[#071A3D]">
+                  {mainGrandOpening.business_name || "Grand Opening"}
+                </h2>
+                <p className="mt-1 line-clamp-1 text-[12px] font-semibold text-gray-500">
+                  {mainGrandOpening.title || "Now Open"}
+                </p>
+              </div>
+              <span className="text-sm font-black text-amber-700">→</span>
+            </Link>
           </section>
         ) : null}
 
         {mainEvent && (
-          <section className="mx-auto mb-10 max-w-xl">
-            <SectionTitle
-              label="Upcoming"
-              title="Events"
-              emoji="📅"
-              color="bg-blue-600"
-              bgColor="border-blue-200 bg-blue-50"
-              moreHref="/business-events"
-            />
+          <section className="mx-auto mb-4 max-w-xl">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-base">📅</span>
+                <h2 className="text-[17px] font-black text-[#172033]">Events</h2>
+              </div>
+              <Link
+                href="/business-events"
+                className="text-[11px] font-black text-blue-600"
+              >
+                View all →
+              </Link>
+            </div>
 
             <Link
               href={`/business-events/${mainEvent.id}`}
-              className="block overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-xl"
+              className="flex items-center gap-3 overflow-hidden rounded-2xl border border-blue-100 bg-white p-2.5 shadow-sm transition hover:shadow-md active:scale-[0.995]"
             >
-              <div className="h-64 w-full overflow-hidden bg-white">
+              <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-gray-100">
                 <VideoFirstMedia
                   videoUrl={mainEvent.video_url}
                   imageUrl={mainEvent.image_url || "/event.png"}
@@ -1007,24 +999,26 @@ const kdramaNews = (todaysKoreaPosts || [])
                 />
               </div>
 
-              <div className="bg-slate-50 p-5">
-                <p className="text-xs font-black uppercase tracking-wider text-blue-600">
-                  Event · {mainEvent.event_date || "Coming Soon"}
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-600">
+                  Upcoming · {mainEvent.event_date || "Coming Soon"}
                 </p>
-
-                <h3 className="mt-1 text-xl font-black">{mainEvent.title}</h3>
-
-                <p className="mt-2 line-clamp-2 text-sm text-gray-600">
+                <h3 className="mt-0.5 line-clamp-1 text-[15px] font-black text-[#172033]">
+                  {mainEvent.title}
+                </h3>
+                <p className="mt-1 line-clamp-1 text-[11px] text-gray-500">
                   {mainEvent.description}
                 </p>
               </div>
+
+              <span className="text-sm font-black text-blue-600">→</span>
             </Link>
           </section>
         )}
 
-        <section className="mx-auto mb-10 max-w-xl">
-          <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-red-100 bg-red-50 px-4 py-3">
+        <section className="mx-auto mb-5 max-w-xl">
+          <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-red-100 bg-red-50 px-3 py-2">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="h-10 w-1 shrink-0 rounded-full bg-red-500" />
 
@@ -1033,7 +1027,7 @@ const kdramaNews = (todaysKoreaPosts || [])
                     Limited Time
                   </p>
 
-                  <h2 className="mt-0.5 break-keep text-[22px] font-black leading-tight text-[#172033]">
+                  <h2 className="mt-0.5 break-keep text-[17px] font-black leading-tight text-[#172033]">
                     🔥 Deals Near You
                   </h2>
                 </div>
@@ -1053,9 +1047,9 @@ const kdramaNews = (todaysKoreaPosts || [])
                 <Link
                   key={deal.id}
                   href={`/deals/${deal.id}`}
-                  className="flex gap-4 p-4 transition hover:bg-red-50/40 active:bg-red-50"
+                  className="flex gap-3 p-3 transition hover:bg-red-50/40 active:bg-red-50"
                 >
-                  <div className="h-28 w-36 shrink-0 overflow-hidden rounded-2xl bg-white">
+                  <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-white">
                     <DealMedia
                       deal={deal}
                       className="block h-full w-full object-cover object-center"
