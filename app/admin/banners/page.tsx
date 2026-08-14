@@ -2182,8 +2182,13 @@ export default function BannerManagementPage() {
               )}
 
               {hide24HoursEnabled && (
-                <label className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[11px] font-black text-[#172033] shadow">
-                  <input type="checkbox" className="h-4 w-4" onChange={() => undefined} />
+                <label className="absolute bottom-6 left-1/2 z-30 flex -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[11px] font-black text-[#172033] shadow">
+                  <input
+                    type="checkbox"
+                    checked={hide24HoursEnabled}
+                    onChange={(event) => setHide24HoursEnabled(event.target.checked)}
+                    className="h-4 w-4 shrink-0 cursor-pointer accent-green-600"
+                  />
                   {Math.max(1, Math.min(31, Number(hideDays) || 1))} Days — Do Not Show This Popup
                 </label>
               )}
