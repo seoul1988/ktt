@@ -49,6 +49,7 @@ type CouponDraft = {
   repeatable: boolean;
   startDate: string;
   endDate: string;
+  pinRequired: boolean;
   pinCode: string;
   imageUrl: string;
   buyQty: number;
@@ -75,6 +76,7 @@ function makeDraft(seed?: Partial<CouponDraft>): CouponDraft {
     repeatable: false,
     startDate: "",
     endDate: "",
+    pinRequired: false,
     pinCode: "",
     imageUrl: "",
     buyQty: 1,
@@ -349,8 +351,10 @@ export default function NewCouponPage() {
       const next = copyPrevious && previous
         ? makeDraft({
             usageLimit: previous.usageLimit,
+            repeatable: previous.repeatable,
             startDate: previous.startDate,
             endDate: previous.endDate,
+            pinRequired: previous.pinRequired,
             pinCode: previous.pinCode,
             imageUrl: previous.imageUrl,
           })
@@ -380,8 +384,10 @@ export default function NewCouponPage() {
           couponType: target.couponType,
           value: target.value,
           usageLimit: target.usageLimit,
+          repeatable: target.repeatable,
           startDate: target.startDate,
           endDate: target.endDate,
+          pinRequired: target.pinRequired,
           pinCode: target.pinCode,
           imageUrl: target.imageUrl,
           buyQty: target.buyQty,
@@ -501,8 +507,8 @@ export default function NewCouponPage() {
       return `Coupon #${index + 1}: 제목을 입력하세요.`;
     }
 
-    if (draft.pinCode.length !== 4) {
-      return `Coupon #${index + 1}: 4자리 PIN을 입력하세요.`;
+    if (draft.pinRequired && draft.pinCode.length !== 4) {
+      return `Coupon #${index + 1}: PIN 사용을 선택했으면 4자리 PIN을 입력하세요.`;
     }
 
     if (
@@ -578,7 +584,7 @@ export default function NewCouponPage() {
             ? new Date(draft.endDate).toISOString()
             : null,
           active: true,
-          pin_code: draft.pinCode,
+          pin_code: draft.pinRequired ? draft.pinCode : null,
           image_url: draft.imageUrl || null,
         }));
 
@@ -616,7 +622,7 @@ export default function NewCouponPage() {
             end_date: draft.endDate
               ? new Date(draft.endDate).toISOString()
               : null,
-            pin_code: draft.pinCode,
+            pin_code: draft.pinRequired ? draft.pinCode : null,
             image_url: draft.imageUrl || null,
           })
           .eq("id", draft.editingId);
@@ -639,23 +645,94 @@ export default function NewCouponPage() {
     }
   }
 
+  function inferCouponType(coupon: Coupon) {
+    const title = String(coupon.title || "").toUpperCase();
+    const description = String(coupon.description || "").toUpperCase();
+    const combined = `${title} ${description}`;
+
+    // 기존 데이터가 Percent로 잘못 저장되어 있어도
+    // FREE / BUY X GET Y 형태면 편집 화면에서는 올바른 종류로 복구합니다.
+    if (
+      /\bBUY\s+\d+\b/.test(combined) &&
+      /\bGET\s+\d+\b/.test(combined) &&
+      combined.includes("FREE")
+    ) {
+      return "buy_get_free";
+    }
+
+    if (
+      combined.includes("FREE") &&
+      !combined.includes("% OFF") &&
+      !combined.includes("$")
+    ) {
+      return "free";
+    }
+
+    if (
+      coupon.coupon_type === "percent" ||
+      coupon.coupon_type === "fixed" ||
+      coupon.coupon_type === "free" ||
+      coupon.coupon_type === "buy_get_free" ||
+      coupon.coupon_type === "custom"
+    ) {
+      return coupon.coupon_type;
+    }
+
+    return "custom";
+  }
+
+  function parseBuyGetFields(coupon: Coupon) {
+    const combined = `${coupon.title || ""} ${coupon.description || ""}`.toUpperCase();
+
+    const match = combined.match(
+      /BUY\s+(\d+)\s+(.+?)\s+(?:\/|·|→|\-|,)?\s*GET\s+(\d+)\s+(.+?)\s+FREE\b/,
+    );
+
+    if (!match) {
+      return {
+        buyQty: 1,
+        buyItem: "",
+        getQty: 1,
+        getItem: "",
+      };
+    }
+
+    return {
+      buyQty: Math.max(1, Number(match[1]) || 1),
+      buyItem: String(match[2] || "").trim(),
+      getQty: Math.max(1, Number(match[3]) || 1),
+      getItem: String(match[4] || "").trim(),
+    };
+  }
+
   function editExistingCoupon(coupon: Coupon) {
+    const inferredType = inferCouponType(coupon);
+    const buyGet = parseBuyGetFields(coupon);
+
     const draft = makeDraft({
       editingId: coupon.id,
       title: coupon.title,
       description: coupon.description || "",
-      couponType: coupon.coupon_type,
-      value: Number(coupon.value || 0),
+      couponType: inferredType,
+
+      // Percent / Amount 쿠폰만 숫자 값을 사용합니다.
+      // FREE / BUY X GET Y / Custom은 기존에 99 같은 잘못된 값이 있어도 0으로 정리합니다.
+      value:
+        inferredType === "percent" || inferredType === "fixed"
+          ? Number(coupon.value || 0)
+          : 0,
+
       usageLimit: Number(coupon.usage_limit || 0),
       repeatable: Boolean(coupon.repeatable),
       startDate: toLocalInputDate(coupon.start_date),
       endDate: toLocalInputDate(coupon.end_date),
+      pinRequired: Boolean(String(coupon.pin_code || "").trim()),
       pinCode: coupon.pin_code || "",
       imageUrl: coupon.image_url || "",
-      buyQty: 1,
-      buyItem: "",
-      getQty: 1,
-      getItem: "",
+      buyQty: buyGet.buyQty,
+      buyItem: buyGet.buyItem,
+      getQty: buyGet.getQty,
+      getItem: buyGet.getItem,
     });
 
     setDrafts([draft]);
@@ -1025,11 +1102,17 @@ export default function NewCouponPage() {
                             </label>
                             <select
                               value={draft.couponType}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                const nextType = event.target.value;
+
                                 updateDraft(draft.localId, {
-                                  couponType: event.target.value,
-                                })
-                              }
+                                  couponType: nextType,
+                                  value:
+                                    nextType === "percent" || nextType === "fixed"
+                                      ? draft.value || 0
+                                      : 0,
+                                });
+                              }}
                               className="w-full rounded-2xl border p-3 font-bold"
                             >
                               <option value="percent">Percent (%)</option>
@@ -1063,7 +1146,11 @@ export default function NewCouponPage() {
                               />
                             ) : (
                               <div className="flex h-[50px] items-center rounded-2xl border bg-gray-50 px-3 text-sm font-bold text-gray-400">
-                                숫자 입력 필요 없음
+                                {draft.couponType === "free"
+                                  ? "FREE 쿠폰 — 할인 숫자 없음"
+                                  : draft.couponType === "buy_get_free"
+                                    ? "BUY/GET 쿠폰 — 할인 숫자 없음"
+                                    : "숫자 입력 필요 없음"}
                               </div>
                             )}
                           </div>
@@ -1242,23 +1329,75 @@ export default function NewCouponPage() {
                           </div>
                         </div>
 
-                        <label className="mb-1 mt-3 block text-sm font-black">
-                          매장 확인용 4-Digit PIN
-                        </label>
-                        <input
-                          value={draft.pinCode}
-                          inputMode="numeric"
-                          maxLength={4}
-                          onChange={(event) =>
-                            updateDraft(draft.localId, {
-                              pinCode: event.target.value
-                                .replace(/\D/g, "")
-                                .slice(0, 4),
-                            })
-                          }
-                          placeholder="예: 1234"
-                          className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.4em]"
-                        />
+                        <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
+                          <p className="text-sm font-black">매장 확인 방식</p>
+                          <p className="mt-1 text-xs font-semibold text-gray-500">
+                            일반 쿠폰은 직원이 REDEEM NOW만 누르면 됩니다. 필요할 때만 PIN을 사용하세요.
+                          </p>
+
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, {
+                                  pinRequired: false,
+                                  pinCode: "",
+                                })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                !draft.pinRequired
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">✓ Staff taps REDEEM NOW</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                PIN 없이 직원이 버튼만 눌러 사용 처리
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, {
+                                  pinRequired: true,
+                                })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                draft.pinRequired
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">🔒 Require 4-digit PIN</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                고가 혜택 등 추가 확인이 필요한 쿠폰
+                              </p>
+                            </button>
+                          </div>
+
+                          {draft.pinRequired && (
+                            <div className="mt-3">
+                              <label className="mb-1 block text-sm font-black">
+                                4-Digit PIN
+                              </label>
+                              <input
+                                value={draft.pinCode}
+                                inputMode="numeric"
+                                maxLength={4}
+                                onChange={(event) =>
+                                  updateDraft(draft.localId, {
+                                    pinCode: event.target.value
+                                      .replace(/\D/g, "")
+                                      .slice(0, 4),
+                                  })
+                                }
+                                placeholder="1234"
+                                className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.4em]"
+                              />
+                            </div>
+                          )}
+                        </div>
 
                         <div className="mt-4 rounded-2xl border bg-[#FCFAF7] p-4">
                           <p className="mb-2 text-sm font-black">쿠폰 사진</p>
@@ -1406,6 +1545,16 @@ export default function NewCouponPage() {
                             </div>
 
                             <div className="mt-4 border-t border-dashed pt-3 text-[11px] font-semibold text-gray-500">
+                              <p>
+                                {draft.repeatable
+                                  ? "Multiple uses allowed."
+                                  : "One time use per customer."}
+                              </p>
+                              <p>
+                                {draft.pinRequired
+                                  ? "4-digit store PIN required."
+                                  : "Staff approval required at redemption."}
+                              </p>
                               <p>Not valid with any other offers.</p>
                               {draft.endDate && (
                                 <p>
@@ -1432,7 +1581,7 @@ export default function NewCouponPage() {
                 >
                   ＋ ADD ANOTHER COUPON
                   <span className="mt-1 block text-xs font-bold text-gray-500">
-                    기간 · PIN · 사진을 이전 쿠폰에서 복사
+                    기간 · 사용 방식 · 확인 방식 · 사진을 이전 쿠폰에서 복사
                   </span>
                 </button>
 
@@ -1549,6 +1698,17 @@ export default function NewCouponPage() {
                               사용 {coupon.used_count || 0} /{" "}
                               {coupon.usage_limit || 0}
                             </p>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
+                                {inferCouponType(coupon)}
+                              </span>
+                              <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
+                                {coupon.repeatable ? "Multiple uses" : "One time"}
+                              </span>
+                              <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
+                                {coupon.pin_code ? "PIN" : "Staff tap"}
+                              </span>
+                            </div>
                           </div>
                         </div>
 

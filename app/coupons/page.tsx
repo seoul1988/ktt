@@ -654,7 +654,7 @@ export default function CouponsPage() {
                       }}
                       className="flex w-full items-center gap-3 px-1 py-2.5 text-left active:bg-[#FAFAFA]"
                     >
-                      <div className="relative h-[62px] w-[82px] shrink-0">
+                      <div className="relative h-[76px] w-[100px] shrink-0">
                         <div
                           role="button"
                           tabIndex={0}
@@ -970,7 +970,7 @@ export default function CouponsPage() {
                               name: business.name || "Business",
                             });
                           }}
-                          className="h-[62px] w-[82px] shrink-0 overflow-hidden rounded-[8px] bg-[#F2F2F2]"
+                          className="h-[76px] w-[100px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]"
                         >
                           {image ? (
                             <img
