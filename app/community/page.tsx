@@ -268,65 +268,61 @@ export default async function CommunityPage() {
         <section className="mb-5">
           <Link
             href="/coupons"
-            className="group relative block overflow-hidden rounded-[22px] border border-dashed border-[#E8B85E] bg-gradient-to-r from-[#FFF9E9] via-[#FFFDF7] to-[#F7F1FF] shadow-sm transition hover:border-[#D99A2B] hover:shadow-md active:scale-[0.995]"
+            className="group relative block overflow-hidden rounded-[22px] bg-[#FFFDF8] shadow-sm transition hover:shadow-md active:scale-[0.995]"
           >
-            <div className="absolute left-0 top-0 z-10 rounded-br-xl bg-red-500 px-2.5 py-1 text-[8px] font-black uppercase tracking-wide text-white">
-              NEW!
-            </div>
+            <div className="pointer-events-none absolute inset-[6px] rounded-[16px] border-2 border-dashed border-[#E8B85E]" />
 
-            <div className="pointer-events-none absolute inset-[5px] rounded-[17px] border border-dashed border-[#E8B85E]/70" />
-
-            <div className="flex items-center gap-3 px-3 pb-2.5 pt-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#112B58] text-[24px] text-white shadow-sm">
+            <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#112B58] text-[22px] text-white shadow-sm">
                 🎟
               </div>
 
-              <div className="min-w-0 flex-1 pl-1">
+              <div className="min-w-0 flex-1">
                 <h2 className="truncate text-[18px] font-black tracking-[-0.02em] text-[#112B58]">
                   KTOWN COUPON BOOK
                 </h2>
 
-                <p className="mt-0.5 text-[11px] font-black text-orange-500">
+                <p className="mt-0.5 text-[11px] font-black text-[#C4483A]">
                   Eat · Shop · Save
                 </p>
 
-                <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold text-[#52617A]">
-                  Triangle Local Deals in One Place!
+                <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold text-[#6B7280]">
+                  Triangle Local Deals in One Place
                 </p>
               </div>
 
-              {activeCouponCount > 0 ? (
-                <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-full bg-red-500 text-white shadow-sm">
-                  <span className="text-[15px] font-black leading-none">
+              {activeCouponCount > 0 && (
+                <div className="shrink-0 rounded-full border border-[#F0D6B5] bg-[#FFF8EC] px-2.5 py-1 text-center">
+                  <span className="text-[11px] font-black text-[#C4483A]">
                     {activeCouponCount}
                   </span>
-                  <span className="mt-0.5 text-[6px] font-black uppercase leading-none">
+                  <span className="ml-1 text-[8px] font-black uppercase tracking-wide text-[#8A8176]">
                     Coupons
                   </span>
                 </div>
-              ) : null}
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-2 px-3 pb-3">
-              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
-                <p className="text-[13px] font-black text-green-600">25% OFF</p>
-                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Cleaners</p>
+              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+                <p className="text-[13px] font-black text-[#C4483A]">25% OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Cleaners</p>
               </div>
 
-              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
-                <p className="text-[13px] font-black text-amber-700">BOGO</p>
-                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Coffee</p>
+              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+                <p className="text-[13px] font-black text-[#C4483A]">BOGO</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Coffee</p>
               </div>
 
-              <div className="rounded-xl border border-violet-100 bg-white px-2 py-2 text-center shadow-sm">
-                <p className="text-[13px] font-black text-rose-500">$5 OFF</p>
-                <p className="mt-0.5 text-[9px] font-bold text-[#172033]">Bakery</p>
+              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+                <p className="text-[13px] font-black text-[#C4483A]">$5 OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Bakery</p>
               </div>
             </div>
 
-            <div className="flex items-center justify-center border-t border-violet-100 bg-white/70 px-3 py-2">
-              <span className="rounded-full bg-[#112B58] px-4 py-1.5 text-[10px] font-black text-white shadow-sm transition group-hover:translate-x-0.5">
-                🎟 OPEN COUPON BOOK →
+            <div className="px-3 pb-3">
+              <span className="flex w-full items-center justify-center rounded-xl bg-[#112B58] px-4 py-2.5 text-[11px] font-black tracking-wide text-white shadow-sm transition group-hover:bg-[#1A3D73]">
+                VIEW ALL COUPONS →
               </span>
             </div>
           </Link>

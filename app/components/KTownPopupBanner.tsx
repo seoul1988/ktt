@@ -249,14 +249,19 @@ function normalizeDisplayLocation(
     ).trim();
 
   /*
-   * 빈칸 / all = 모든 페이지
+   * 중요:
+   * 빈 값은 더 이상 "모든 페이지"로 취급하지 않습니다.
+   * 잘못 저장된 빈 display_location 때문에 모든 페이지에
+   * 팝업이 노출되는 문제를 막습니다.
+   *
+   * 모든 페이지 노출은 DB에 "all"이 명시된 경우에만 허용합니다.
    */
-  if (
-    !target ||
-    target.toLowerCase() ===
-      "all"
-  ) {
-    return "";
+  if (!target) {
+    return null;
+  }
+
+  if (target.toLowerCase() === "all") {
+    return "all";
   }
 
   /*
@@ -354,9 +359,14 @@ function bannerMatchesPath(
     );
 
   /*
-   * 빈칸 / all = 모든 페이지
+   * 빈 display_location은 노출하지 않습니다.
+   * "all"이 명시된 경우에만 모든 페이지에 표시합니다.
    */
   if (!target) {
+    return false;
+  }
+
+  if (target === "all") {
     return true;
   }
 
@@ -428,9 +438,11 @@ export default function KTownPopupBanner() {
          * 전체 활성 Popup을 받은 뒤
          * 현재 실제 pathname과 정확하게 비교합니다.
          */
+        const currentPath = normalizeCurrentPath(pathname);
+
         const response =
           await fetch(
-            "/api/banners",
+            `/api/banners?location=${encodeURIComponent(currentPath)}`,
             {
               method: "GET",
               cache: "no-store",

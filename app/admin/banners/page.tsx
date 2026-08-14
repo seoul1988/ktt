@@ -249,7 +249,11 @@ function toIsoOrNull(value: string) {
 function normalizeDisplayLocationForEditor(value: unknown) {
   const raw = String(value || "").trim();
 
-  if (!raw || raw.toLowerCase() === "all") return "";
+  // 예전 빈 값은 안전하게 Home으로 처리합니다.
+  if (!raw) return "/";
+
+  // All Pages는 빈 문자열이 아니라 명시적으로 "all"을 유지합니다.
+  if (raw.toLowerCase() === "all") return "all";
 
   if (raw.toLowerCase() === "home") return "/";
   if (raw.toLowerCase() === "community") return "/community";
@@ -412,9 +416,9 @@ export default function BannerManagementPage() {
   const [formBackgroundColor, setFormBackgroundColor] = useState("#FFFFFF");
   const [leadExpandedMode, setLeadExpandedMode] = useState(true);
   const [dragging, setDragging] = useState<"title" | "subtitle" | "button" | "image" | null>(null);
-  // 비워두면 모든 페이지에 표시됩니다. 특정 페이지에만 표시하려면 경로를 입력합니다.
-  // 예: /community/manual
-  const [displayLocation, setDisplayLocation] = useState<DisplayLocation>("");
+  // 기본 위치는 Home(/)입니다.
+  // 모든 페이지는 반드시 "all"을 명시적으로 선택합니다.
+  const [displayLocation, setDisplayLocation] = useState<DisplayLocation>("/");
   const [displayOrder, setDisplayOrder] = useState(1);
   const [isActive, setIsActive] = useState(true);
   const [startsAt, setStartsAt] = useState("");
@@ -583,7 +587,7 @@ export default function BannerManagementPage() {
     setRewardSignupUrl("");
     setFormBackgroundColor("#FFFFFF");
     setLeadExpandedMode(true);
-    setDisplayLocation("");
+    setDisplayLocation("/");
     setDisplayOrder(banners.length + 1);
     setIsActive(true);
     setStartsAt("");
@@ -709,6 +713,11 @@ export default function BannerManagementPage() {
   }
 
   async function saveBanner() {
+    if (!displayLocation.trim()) {
+      alert('Display Location을 선택하세요. Home은 "/", 전체 페이지는 "all"입니다.');
+      return;
+    }
+
     if (leadCaptureEnabled && !emailPlaceholder.trim()) {
       alert("Please enter the email placeholder text.");
       return;
@@ -810,8 +819,19 @@ export default function BannerManagementPage() {
       formData.append("reward_signup_url", rewardSignupUrl.trim());
       formData.append("form_background_color", formBackgroundColor);
       formData.append("lead_expanded_mode", String(leadExpandedMode));
-      // 빈 값 = 모든 페이지. 특정 경로를 입력하면 그 페이지에서만 표시합니다.
-      formData.append("display_location", displayLocation.trim());
+      // 위치는 빈 값으로 저장하지 않습니다.
+      // "/" = Home, "all" = 모든 페이지, 기타 값 = 정확한 해당 경로.
+      const normalizedDisplayLocation =
+        normalizeDisplayLocationForEditor(displayLocation);
+
+      // Home은 DB에 "/" 대신 "home"으로 저장합니다.
+      // "/"가 저장 과정에서 all로 바뀌는 문제를 피하기 위한 명시적 값입니다.
+      formData.append(
+        "display_location",
+        normalizedDisplayLocation === "/"
+          ? "home"
+          : normalizedDisplayLocation,
+      );
       formData.append(
         "display_order",
         String(displayOrder),
@@ -1081,43 +1101,44 @@ export default function BannerManagementPage() {
             <div className="flex gap-2">
               <input
                 value={displayLocation}
-                onChange={(event) => setDisplayLocation(event.target.value)}
-                placeholder="Leave blank for all pages, or enter /community/manual"
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setDisplayLocation(value || "/");
+                }}
+                placeholder='Home: /   All Pages: all   Example: /community/manual'
                 className="min-w-0 flex-1 rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-bold text-[#172033] outline-none focus:border-[#172033]"
               />
-
-              {displayLocation.trim() && (
-                <button
-                  type="button"
-                  onClick={() => setDisplayLocation("")}
-                  className="shrink-0 rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-xs font-black text-[#B64032] transition hover:bg-[#FFF8EF] active:scale-[0.98]"
-                  title="Clear to show on all pages"
-                >
-                  Clear
-                </button>
-              )}
             </div>
 
             <p className="mt-2 text-[11px] font-bold leading-5 text-[#667085]">
-              Leave this blank to show the popup on every page. To show it only on one page, enter that exact page path, for example
+              Home은 <span className="font-black text-[#172033]">/</span>,
+              모든 페이지는 <span className="font-black text-[#172033]">all</span>,
+              특정 페이지는 정확한 경로를 입력하세요. 예:
               <span className="font-black text-[#172033]"> /community/manual</span>.
             </p>
 
             {editingBanner && (
               <p className="mt-2 text-[11px] font-black text-[#B64032]">
-                Editing location: {displayLocation.trim() || "All Pages"}
+                Editing location:{" "}
+                {displayLocation.trim() === "all"
+                  ? "All Pages"
+                  : displayLocation.trim() === "/"
+                    ? "Home (/)"
+                    : displayLocation.trim()}
               </p>
             )}
 
             <div className="mt-3 flex flex-wrap gap-2">
               {[
-                { label: "All Pages", value: "" },
+                { label: "All Pages", value: "all" },
                 { label: "Home", value: "/" },
                 { label: "Community", value: "/community" },
                 { label: "Events", value: "/events" },
                 { label: "Manual", value: "/community/manual" },
               ].map((location) => {
-                const selected = displayLocation.trim() === location.value;
+                const selected =
+                  normalizeDisplayLocationForEditor(displayLocation) ===
+                  location.value;
 
                 return (
                   <button

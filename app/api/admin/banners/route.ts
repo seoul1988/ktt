@@ -233,17 +233,43 @@ function validImageFit(value: unknown) {
 }
 
 function validDisplayLocation(value: unknown) {
-  const location = String(value || "").trim();
+  let location = String(value || "").trim();
 
-  if (
-    location === "home" ||
-    location === "community" ||
-    location === "events"
-  ) {
-    return location;
+  // 빈 값은 Home으로 안전 처리
+  if (!location) {
+    return "home";
   }
 
-  return "all";
+  const lower = location.toLowerCase();
+
+  // All Pages는 명시적으로 all인 경우에만
+  if (lower === "all") {
+    return "all";
+  }
+
+  // Home은 DB에 literal "home"으로 저장
+  if (lower === "home" || location === "/") {
+    return "home";
+  }
+
+  if (lower === "community") {
+    return "/community";
+  }
+
+  if (lower === "events") {
+    return "/events";
+  }
+
+  // 실제 페이지 경로
+  if (!location.startsWith("/")) {
+    location = `/${location}`;
+  }
+
+  if (location.length > 1) {
+    location = location.replace(/\/+$/, "");
+  }
+
+  return location;
 }
 
 function validColor(value: unknown, fallback: string) {

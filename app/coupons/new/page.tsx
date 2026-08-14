@@ -27,10 +27,15 @@ type Coupon = {
   description: string | null;
   coupon_type: string;
   value: number;
+  minimum_purchase?: number | null;
   start_date: string | null;
   end_date: string | null;
   usage_limit: number;
   repeatable?: boolean | null;
+  activation_mode?: string | null;
+  stamp_valid_days?: number | null;
+  stamp_code?: string | null;
+  stamp_text?: string | null;
   used_count: number;
   active: boolean;
   pin_code?: string | null;
@@ -45,8 +50,13 @@ type CouponDraft = {
   description: string;
   couponType: string;
   value: number;
+  minimumPurchase: number;
   usageLimit: number;
   repeatable: boolean;
+  activationMode: "immediate" | "staff_stamp";
+  stampValidDays: number;
+  stampCode: string;
+  stampText: string;
   startDate: string;
   endDate: string;
   pinRequired: boolean;
@@ -72,8 +82,13 @@ function makeDraft(seed?: Partial<CouponDraft>): CouponDraft {
     description: "",
     couponType: "percent",
     value: 10,
+    minimumPurchase: 0,
     usageLimit: 100,
     repeatable: false,
+    activationMode: "immediate",
+    stampValidDays: 31,
+    stampCode: "",
+    stampText: "THANK YOU! See you again soon!",
     startDate: "",
     endDate: "",
     pinRequired: false,
@@ -166,7 +181,7 @@ export default function NewCouponPage() {
     const { data: couponData, error: couponError } = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,repeatable,used_count,active,pin_code,image_url,created_at",
+        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,image_url,created_at",
       )
       .order("created_at", { ascending: false });
 
@@ -350,8 +365,13 @@ export default function NewCouponPage() {
 
       const next = copyPrevious && previous
         ? makeDraft({
+            minimumPurchase: previous.minimumPurchase,
             usageLimit: previous.usageLimit,
             repeatable: previous.repeatable,
+            activationMode: previous.activationMode,
+            stampValidDays: previous.stampValidDays,
+            stampCode: previous.stampCode,
+            stampText: previous.stampText,
             startDate: previous.startDate,
             endDate: previous.endDate,
             pinRequired: previous.pinRequired,
@@ -383,8 +403,13 @@ export default function NewCouponPage() {
           description: target.description,
           couponType: target.couponType,
           value: target.value,
+          minimumPurchase: target.minimumPurchase,
           usageLimit: target.usageLimit,
           repeatable: target.repeatable,
+          activationMode: target.activationMode,
+          stampValidDays: target.stampValidDays,
+          stampCode: target.stampCode,
+          stampText: target.stampText,
           startDate: target.startDate,
           endDate: target.endDate,
           pinRequired: target.pinRequired,
@@ -511,6 +536,34 @@ export default function NewCouponPage() {
       return `Coupon #${index + 1}: PIN 사용을 선택했으면 4자리 PIN을 입력하세요.`;
     }
 
+    if (draft.activationMode === "staff_stamp") {
+      if (draft.stampCode.length !== 4) {
+        return `Coupon #${index + 1}: 스탬프용 4자리 코드를 입력하세요.`;
+      }
+
+      if (!draft.stampText.trim()) {
+        return `Coupon #${index + 1}: 스탬프에 표시할 문구를 입력하세요.`;
+      }
+
+      if (Number(draft.stampValidDays) < 1) {
+        return `Coupon #${index + 1}: 스탬프 후 유효기간을 1일 이상 입력하세요.`;
+      }
+    }
+
+    if (draft.couponType === "spend_save") {
+      if (!(Number(draft.value) > 0)) {
+        return `Coupon #${index + 1}: 할인 금액을 입력하세요.`;
+      }
+
+      if (!(Number(draft.minimumPurchase) > 0)) {
+        return `Coupon #${index + 1}: 최소 구매 금액을 입력하세요.`;
+      }
+
+      if (Number(draft.minimumPurchase) <= Number(draft.value)) {
+        return `Coupon #${index + 1}: 최소 구매 금액은 할인 금액보다 커야 합니다.`;
+      }
+    }
+
     if (
       draft.couponType === "buy_get_free" &&
       (!draft.buyItem.trim() || !draft.getItem.trim())
@@ -572,11 +625,28 @@ export default function NewCouponPage() {
               : draft.description.trim() || null,
           coupon_type: draft.couponType,
           value:
-            draft.couponType === "percent" || draft.couponType === "fixed"
+            draft.couponType === "percent" ||
+            draft.couponType === "fixed" ||
+            draft.couponType === "spend_save"
               ? Number(draft.value)
               : 0,
+          minimum_purchase:
+            draft.couponType === "spend_save"
+              ? Number(draft.minimumPurchase)
+              : null,
           usage_limit: Number(draft.usageLimit),
           repeatable: draft.repeatable,
+          activation_mode: draft.activationMode,
+          stamp_valid_days:
+            draft.activationMode === "staff_stamp"
+              ? Math.max(1, Number(draft.stampValidDays) || 31)
+              : null,
+          stamp_code:
+            draft.activationMode === "staff_stamp" ? draft.stampCode : null,
+          stamp_text:
+            draft.activationMode === "staff_stamp"
+              ? draft.stampText.trim()
+              : null,
           start_date: draft.startDate
             ? new Date(draft.startDate).toISOString()
             : null,
@@ -611,11 +681,28 @@ export default function NewCouponPage() {
                 : draft.description.trim() || null,
             coupon_type: draft.couponType,
             value:
-              draft.couponType === "percent" || draft.couponType === "fixed"
+              draft.couponType === "percent" ||
+              draft.couponType === "fixed" ||
+              draft.couponType === "spend_save"
                 ? Number(draft.value)
                 : 0,
+            minimum_purchase:
+              draft.couponType === "spend_save"
+                ? Number(draft.minimumPurchase)
+                : null,
             usage_limit: Number(draft.usageLimit),
             repeatable: draft.repeatable,
+            activation_mode: draft.activationMode,
+            stamp_valid_days:
+              draft.activationMode === "staff_stamp"
+                ? Math.max(1, Number(draft.stampValidDays) || 31)
+                : null,
+            stamp_code:
+              draft.activationMode === "staff_stamp" ? draft.stampCode : null,
+            stamp_text:
+              draft.activationMode === "staff_stamp"
+                ? draft.stampText.trim()
+                : null,
             start_date: draft.startDate
               ? new Date(draft.startDate).toISOString()
               : null,
@@ -673,6 +760,7 @@ export default function NewCouponPage() {
       coupon.coupon_type === "fixed" ||
       coupon.coupon_type === "free" ||
       coupon.coupon_type === "buy_get_free" ||
+      coupon.coupon_type === "spend_save" ||
       coupon.coupon_type === "custom"
     ) {
       return coupon.coupon_type;
@@ -718,16 +806,30 @@ export default function NewCouponPage() {
       // Percent / Amount 쿠폰만 숫자 값을 사용합니다.
       // FREE / BUY X GET Y / Custom은 기존에 99 같은 잘못된 값이 있어도 0으로 정리합니다.
       value:
-        inferredType === "percent" || inferredType === "fixed"
+        inferredType === "percent" ||
+        inferredType === "fixed" ||
+        inferredType === "spend_save"
           ? Number(coupon.value || 0)
           : 0,
 
+      minimumPurchase: Number(coupon.minimum_purchase || 0),
       usageLimit: Number(coupon.usage_limit || 0),
       repeatable: Boolean(coupon.repeatable),
+      activationMode:
+        coupon.activation_mode === "staff_stamp" ? "staff_stamp" : "immediate",
+      stampValidDays: Number(coupon.stamp_valid_days || 31),
+      stampCode: coupon.stamp_code || "",
+      stampText: coupon.stamp_text || "THANK YOU! See you again soon!",
       startDate: toLocalInputDate(coupon.start_date),
       endDate: toLocalInputDate(coupon.end_date),
-      pinRequired: Boolean(String(coupon.pin_code || "").trim()),
-      pinCode: coupon.pin_code || "",
+      pinRequired:
+        coupon.activation_mode === "staff_stamp"
+          ? false
+          : Boolean(String(coupon.pin_code || "").trim()),
+      pinCode:
+        coupon.activation_mode === "staff_stamp"
+          ? ""
+          : coupon.pin_code || "",
       imageUrl: coupon.image_url || "",
       buyQty: buyGet.buyQty,
       buyItem: buyGet.buyItem,
@@ -787,6 +889,10 @@ export default function NewCouponPage() {
 
     if (draft.couponType === "fixed") {
       return `$${draft.value || 0} OFF`;
+    }
+
+    if (draft.couponType === "spend_save") {
+      return `GET $${draft.value || 0} OFF`;
     }
 
     if (draft.couponType === "free") {
@@ -1108,8 +1214,14 @@ export default function NewCouponPage() {
                                 updateDraft(draft.localId, {
                                   couponType: nextType,
                                   value:
-                                    nextType === "percent" || nextType === "fixed"
+                                    nextType === "percent" ||
+                                    nextType === "fixed" ||
+                                    nextType === "spend_save"
                                       ? draft.value || 0
+                                      : 0,
+                                  minimumPurchase:
+                                    nextType === "spend_save"
+                                      ? draft.minimumPurchase || 0
                                       : 0,
                                 });
                               }}
@@ -1119,6 +1231,7 @@ export default function NewCouponPage() {
                               <option value="fixed">Amount ($)</option>
                               <option value="free">Free Item</option>
                               <option value="buy_get_free">Buy X Get Y Free</option>
+                              <option value="spend_save">Spend $X, Get $Y Off</option>
                               <option value="custom">Custom Offer</option>
                             </select>
                           </div>
@@ -1129,11 +1242,14 @@ export default function NewCouponPage() {
                                 ? "할인 퍼센트"
                                 : draft.couponType === "fixed"
                                   ? "할인 금액"
-                                  : "할인 값"}
+                                  : draft.couponType === "spend_save"
+                                    ? "할인 금액 ($)"
+                                    : "할인 값"}
                             </label>
 
                             {draft.couponType === "percent" ||
-                            draft.couponType === "fixed" ? (
+                            draft.couponType === "fixed" ||
+                            draft.couponType === "spend_save" ? (
                               <input
                                 type="number"
                                 value={draft.value}
@@ -1237,6 +1353,72 @@ export default function NewCouponPage() {
                           </div>
                         )}
 
+                        {draft.couponType === "spend_save" && (
+                          <div className="mt-4 rounded-2xl border border-red-100 bg-red-50/50 p-4">
+                            <p className="text-sm font-black text-red-700">
+                              Spend & Save 설정
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-gray-500">
+                              예: $60 이상 구매하면 $20 할인
+                            </p>
+
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <div>
+                                <label className="mb-1 block text-xs font-black text-gray-600">
+                                  최소 구매 금액 ($)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={draft.minimumPurchase}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      minimumPurchase: Math.max(
+                                        0,
+                                        Number(event.target.value) || 0,
+                                      ),
+                                    })
+                                  }
+                                  placeholder="60"
+                                  className="w-full rounded-2xl border p-3 font-bold"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-xs font-black text-gray-600">
+                                  할인 금액 ($)
+                                </label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={draft.value}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      value: Math.max(
+                                        0,
+                                        Number(event.target.value) || 0,
+                                      ),
+                                    })
+                                  }
+                                  placeholder="20"
+                                  className="w-full rounded-2xl border p-3 font-bold"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="mt-3 rounded-xl bg-white px-3 py-3 text-center">
+                              <p className="text-lg font-black text-red-600">
+                                GET ${draft.value || 0} OFF
+                              </p>
+                              <p className="mt-1 text-xs font-black text-gray-600">
+                                WHEN YOU SPEND ${draft.minimumPurchase || 0}+
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
                           <p className="text-sm font-black">고객별 사용 방식</p>
                           <p className="mt-1 text-xs font-semibold text-gray-500">
@@ -1278,6 +1460,160 @@ export default function NewCouponPage() {
                               </p>
                             </button>
                           </div>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
+                          <p className="text-sm font-black">Coupon Activation</p>
+                          <p className="mt-1 text-xs font-semibold text-gray-500">
+                            일반 쿠폰은 바로 사용하고, 재방문 쿠폰은 첫 방문 때 직원이 코드를 입력해 스탬프를 찍습니다.
+                          </p>
+
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, {
+                                  activationMode: "immediate",
+                                  stampCode: "",
+                                })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                draft.activationMode === "immediate"
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">⚡ Use immediately</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                현재 방문에서 바로 사용
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, {
+                                  activationMode: "staff_stamp",
+                                  stampValidDays: draft.stampValidDays || 31,
+                                  stampText:
+                                    draft.stampText ||
+                                    "THANK YOU! See you again soon!",
+                                  pinRequired: false,
+                                  pinCode: "",
+                                })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                draft.activationMode === "staff_stamp"
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">🔖 Staff stamp required</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                첫 방문 코드 입력 → 스탬프 → 다음 방문 사용
+                              </p>
+                            </button>
+                          </div>
+
+                          {draft.activationMode === "staff_stamp" && (
+                            <div className="mt-4 space-y-3 rounded-2xl border border-red-100 bg-red-50/50 p-4">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <label className="mb-1 block text-xs font-black text-gray-600">
+                                    스탬프 코드 (매장용 4자리)
+                                  </label>
+                                  <input
+                                    value={draft.stampCode}
+                                    inputMode="numeric"
+                                    maxLength={4}
+                                    onChange={(event) =>
+                                      updateDraft(draft.localId, {
+                                        stampCode: event.target.value
+                                          .replace(/\D/g, "")
+                                          .slice(0, 4),
+                                        pinRequired: false,
+                                        pinCode: "",
+                                      })
+                                    }
+                                    placeholder="예: 2580"
+                                    className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.35em]"
+                                  />
+                                  <p className="mt-1 text-[10px] font-semibold text-gray-400">
+                                    첫 방문 때 직원이 고객 화면에 이 코드를 입력합니다.
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <label className="mb-1 block text-xs font-black text-gray-600">
+                                    스탬프 후 유효기간
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={365}
+                                      value={draft.stampValidDays}
+                                      onChange={(event) =>
+                                        updateDraft(draft.localId, {
+                                          stampValidDays: Math.max(
+                                            1,
+                                            Number(event.target.value) || 31,
+                                          ),
+                                        })
+                                      }
+                                      className="w-full rounded-2xl border p-3 text-center font-black"
+                                    />
+                                    <span className="shrink-0 text-sm font-black text-gray-600">
+                                      days
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-xs font-black text-gray-600">
+                                  스탬프 문구
+                                </label>
+                                <input
+                                  value={draft.stampText}
+                                  maxLength={100}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      stampText: event.target.value,
+                                    })
+                                  }
+                                  placeholder="THANK YOU! See you again soon!"
+                                  className="w-full rounded-2xl border p-3 font-bold"
+                                />
+                                <div className="mt-3 flex justify-center">
+                                  <div className="flex h-32 w-32 rotate-[-7deg] flex-col items-center justify-center rounded-full border-4 border-green-700 bg-white text-center text-green-800 shadow-sm">
+                                    <p className="text-[13px] font-black uppercase">
+                                      {draft.stampText || "THANK YOU!"}
+                                    </p>
+                                    <p className="mt-1 text-2xl">✓</p>
+                                    <p className="text-[10px] font-black">
+                                      STAMPED
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl bg-white px-4 py-3">
+                                <p className="text-[11px] font-black text-red-600">
+                                  FIRST VISIT
+                                </p>
+                                <p className="mt-1 text-xs font-bold text-gray-700">
+                                  Show this coupon to a staff member and enter the store stamp code.
+                                </p>
+                                <p className="mt-3 text-[11px] font-black text-red-600">
+                                  NEXT VISIT
+                                </p>
+                                <p className="mt-1 text-xs font-bold text-gray-700">
+                                  Use your stamped coupon within {draft.stampValidDays || 31} days.
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         <label className="mb-1 mt-3 block text-sm font-black">
@@ -1329,10 +1665,14 @@ export default function NewCouponPage() {
                           </div>
                         </div>
 
+                        {draft.activationMode === "immediate" && (
+                          <>
                         <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
                           <p className="text-sm font-black">매장 확인 방식</p>
                           <p className="mt-1 text-xs font-semibold text-gray-500">
-                            일반 쿠폰은 직원이 REDEEM NOW만 누르면 됩니다. 필요할 때만 PIN을 사용하세요.
+                            {draft.activationMode === "staff_stamp"
+                              ? "스탬프 쿠폰은 위의 스탬프 코드만 사용합니다. 추가 PIN은 사용할 수 없습니다."
+                              : "일반 쿠폰은 직원이 REDEEM NOW만 누르면 됩니다. 필요할 때만 PIN을 사용하세요."}
                           </p>
 
                           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1358,46 +1698,64 @@ export default function NewCouponPage() {
 
                             <button
                               type="button"
-                              onClick={() =>
+                              disabled={draft.activationMode === "staff_stamp"}
+                              onClick={() => {
+                                if (draft.activationMode === "staff_stamp") return;
+
                                 updateDraft(draft.localId, {
                                   pinRequired: true,
-                                })
-                              }
-                              className={`rounded-2xl border px-4 py-3 text-left ${
-                                draft.pinRequired
-                                  ? "border-red-500 bg-red-50 text-red-700"
-                                  : "border-gray-200 bg-white text-gray-600"
+                                });
+                              }}
+                              className={`rounded-2xl border px-4 py-3 text-left transition ${
+                                draft.activationMode === "staff_stamp"
+                                  ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-300 opacity-60"
+                                  : draft.pinRequired
+                                    ? "border-red-500 bg-red-50 text-red-700"
+                                    : "border-gray-200 bg-white text-gray-600"
                               }`}
                             >
                               <p className="text-sm font-black">🔒 Require 4-digit PIN</p>
                               <p className="mt-1 text-[11px] font-semibold opacity-75">
-                                고가 혜택 등 추가 확인이 필요한 쿠폰
+                                {draft.activationMode === "staff_stamp"
+                                  ? "스탬프 코드 사용 중 — 비활성화"
+                                  : "고가 혜택 등 추가 확인이 필요한 쿠폰"}
                               </p>
                             </button>
                           </div>
 
-                          {draft.pinRequired && (
-                            <div className="mt-3">
-                              <label className="mb-1 block text-sm font-black">
-                                4-Digit PIN
-                              </label>
-                              <input
-                                value={draft.pinCode}
-                                inputMode="numeric"
-                                maxLength={4}
-                                onChange={(event) =>
-                                  updateDraft(draft.localId, {
-                                    pinCode: event.target.value
-                                      .replace(/\D/g, "")
-                                      .slice(0, 4),
-                                  })
-                                }
-                                placeholder="1234"
-                                className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.4em]"
-                              />
+                          {draft.activationMode === "staff_stamp" ? (
+                            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
+                              <p className="text-[11px] font-black text-blue-700">
+                                ℹ 이 쿠폰은 스탬프 코드가 등록되어 있어 4-Digit PIN을 추가로 입력할 수 없습니다.
+                              </p>
                             </div>
+                          ) : (
+                            draft.pinRequired && (
+                              <div className="mt-3">
+                                <label className="mb-1 block text-sm font-black">
+                                  4-Digit PIN
+                                </label>
+                                <input
+                                  value={draft.pinCode}
+                                  inputMode="numeric"
+                                  maxLength={4}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      pinCode: event.target.value
+                                        .replace(/\D/g, "")
+                                        .slice(0, 4),
+                                    })
+                                  }
+                                  placeholder="1234"
+                                  className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.4em]"
+                                />
+                              </div>
+                            )
                           )}
                         </div>
+
+                          </>
+                        )}
 
                         <div className="mt-4 rounded-2xl border bg-[#FCFAF7] p-4">
                           <p className="mb-2 text-sm font-black">쿠폰 사진</p>
@@ -1524,6 +1882,12 @@ export default function NewCouponPage() {
                               {couponValueText(draft)}
                             </p>
 
+                            {draft.couponType === "spend_save" && (
+                              <p className="mt-1 text-sm font-black text-[#172033]">
+                                When you spend ${draft.minimumPurchase || 0}+
+                              </p>
+                            )}
+
                             {draft.description && (
                               <p className="mt-1 text-sm font-black">
                                 {draft.description}
@@ -1550,11 +1914,29 @@ export default function NewCouponPage() {
                                   ? "Multiple uses allowed."
                                   : "One time use per customer."}
                               </p>
-                              <p>
-                                {draft.pinRequired
-                                  ? "4-digit store PIN required."
-                                  : "Staff approval required at redemption."}
-                              </p>
+                              {draft.activationMode === "staff_stamp" ? (
+                                <>
+                                  <p className="mt-2 font-black text-red-600">
+                                    FIRST VISIT: Get a staff stamp.
+                                  </p>
+                                  <p className="font-black text-red-600">
+                                    NEXT VISIT: Use within {draft.stampValidDays || 31} days.
+                                  </p>
+                                  <p className="mt-1 font-black text-green-700">
+                                    {draft.stampText || "THANK YOU! See you again soon!"}
+                                  </p>
+                                </>
+                              ) : (
+                                <p>Available for immediate use.</p>
+                              )}
+
+                              {draft.activationMode === "immediate" && (
+                                <p>
+                                  {draft.pinRequired
+                                    ? "4-digit store PIN required."
+                                    : "Staff approval required at redemption."}
+                                </p>
+                              )}
                               <p>Not valid with any other offers.</p>
                               {draft.endDate && (
                                 <p>
@@ -1693,6 +2075,13 @@ export default function NewCouponPage() {
                                 {expired ? "Expired" : "Active"}
                               </span>
                             </div>
+
+                            {coupon.coupon_type === "spend_save" && (
+                              <p className="mt-2 text-xs font-black text-red-600">
+                                ${coupon.value || 0} OFF · Spend $
+                                {coupon.minimum_purchase || 0}+
+                              </p>
+                            )}
 
                             <p className="mt-2 text-xs font-bold text-gray-500">
                               사용 {coupon.used_count || 0} /{" "}
