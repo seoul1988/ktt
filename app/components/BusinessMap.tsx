@@ -1812,7 +1812,7 @@ useEffect(() => {
       </div>
 
       {categoryPanelOpen && (
-        <div className="fixed right-2 top-24 z-[1300] w-[72px] overflow-visible rounded-2xl bg-white/95 shadow-2xl landscape:right-2 landscape:top-16 landscape:w-[68px]">
+        <div className="fixed right-2 top-24 z-[9999] w-[72px] overflow-visible rounded-2xl bg-white/95 shadow-2xl landscape:right-2 landscape:top-16 landscape:w-[68px]">
           <div
             ref={categoryScrollRef}
             onScroll={updateCategoryArrows}
@@ -1941,7 +1941,7 @@ useEffect(() => {
       {!categoryPanelOpen && (
         <button
           onClick={openCategoryPanel}
-          className="fixed right-0 top-1/2 z-[1400] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl landscape:py-5"
+          className="fixed right-0 top-1/2 z-[9999] -translate-y-1/2 rounded-l-2xl bg-[#172033] px-2 py-7 text-sm font-black text-white shadow-2xl landscape:py-5"
         >
           ☰
         </button>
