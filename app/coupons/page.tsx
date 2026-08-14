@@ -751,7 +751,7 @@ export default function CouponsPage() {
 
                       <div className="flex min-w-[72px] shrink-0 flex-col items-end justify-center gap-1">
                         <span className="text-[9px] font-black text-[#444B55]">
-                          {coupons.length} Coupons
+                          {coupons.length} {coupons.length === 1 ? "Coupon" : "Coupons"}
                         </span>
 
                         {business.address && (
@@ -1006,7 +1006,7 @@ export default function CouponsPage() {
                             {firstCoupon?.title || "SPECIAL COUPON"}
                           </p>
                           <p className="mt-1 text-[9px] font-bold text-[#90959E]">
-                            {coupons.length} Coupons
+                            {coupons.length} {coupons.length === 1 ? "Coupon" : "Coupons"}
                           </p>
                         </button>
 
