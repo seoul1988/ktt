@@ -1732,40 +1732,27 @@ export default function NewCouponPage() {
 
                             <button
                               type="button"
-                              disabled={draft.activationMode === "staff_stamp"}
                               onClick={() => {
-                                if (draft.activationMode === "staff_stamp") return;
 
                                 updateDraft(draft.localId, {
                                   pinRequired: true,
                                 });
                               }}
                               className={`rounded-2xl border px-4 py-3 text-left transition ${
-                                draft.activationMode === "staff_stamp"
-                                  ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-300 opacity-60"
-                                  : draft.pinRequired
-                                    ? "border-red-500 bg-red-50 text-red-700"
-                                    : "border-gray-200 bg-white text-gray-600"
+                                draft.pinRequired
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
                               }`}
                             >
                               <p className="text-sm font-black">🔒 Require 4-digit PIN</p>
                               <p className="mt-1 text-[11px] font-semibold opacity-75">
-                                {draft.activationMode === "staff_stamp"
-                                  ? "스탬프 코드 사용 중 — 비활성화"
-                                  : "고가 혜택 등 추가 확인이 필요한 쿠폰"}
+                                고가 혜택 등 추가 확인이 필요한 쿠폰
                               </p>
                             </button>
                           </div>
 
-                          {draft.activationMode === "staff_stamp" ? (
-                            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5">
-                              <p className="text-[11px] font-black text-blue-700">
-                                ℹ 이 쿠폰은 스탬프 코드가 등록되어 있어 4-Digit PIN을 추가로 입력할 수 없습니다.
-                              </p>
-                            </div>
-                          ) : (
-                            draft.pinRequired && (
-                              <div className="mt-3">
+                          {draft.pinRequired && (
+                            <div className="mt-3">
                                 <label className="mb-1 block text-sm font-black">
                                   4-Digit PIN
                                 </label>
@@ -1784,7 +1771,6 @@ export default function NewCouponPage() {
                                   className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.4em]"
                                 />
                               </div>
-                            )
                           )}
                         </div>
 
