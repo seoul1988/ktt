@@ -165,7 +165,7 @@ export default function BusinessCouponsPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-[#F5F5F5]">
-        <div className="mx-auto min-h-screen max-w-[430px] bg-white px-4 py-20 text-center text-sm font-bold text-gray-400">
+        <div className="mx-auto min-h-screen max-w-xl bg-white px-4 py-20 text-center text-sm font-bold text-gray-400">
           Loading coupons...
         </div>
       </main>
@@ -175,7 +175,7 @@ export default function BusinessCouponsPage() {
   if (!business) {
     return (
       <main className="min-h-screen bg-[#F5F5F5]">
-        <div className="mx-auto min-h-screen max-w-[430px] bg-white px-4 py-20 text-center">
+        <div className="mx-auto min-h-screen max-w-xl bg-white px-4 py-20 text-center">
           <p className="font-black">Business not found.</p>
           {errorText && (
             <p className="mt-2 text-xs font-semibold text-red-500">{errorText}</p>
@@ -187,7 +187,7 @@ export default function BusinessCouponsPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F5F5] text-[#171A22]">
-      <div className="mx-auto min-h-screen max-w-[430px] bg-white pb-8">
+      <div className="mx-auto min-h-screen max-w-xl bg-white pb-8">
         <div className="relative h-[210px] overflow-hidden bg-[#EEE]">
           {heroImage ? (
             <img

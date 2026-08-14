@@ -287,9 +287,31 @@ export default function CouponsPage() {
   } | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState("");
+  const [imageModal, setImageModal] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
+  const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<number[]>([]);
+  const [showSavedModal, setShowSavedModal] = useState(false);
 
   useEffect(() => {
     void loadData();
+
+    try {
+      const raw = window.localStorage.getItem("ktown_coupon_favorite_businesses");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setFavoriteBusinessIds(
+            parsed
+              .map((value) => Number(value))
+              .filter((value) => Number.isFinite(value)),
+          );
+        }
+      }
+    } catch {
+      // Ignore unavailable or invalid browser storage.
+    }
   }, []);
 
   async function loadData() {
@@ -410,10 +432,35 @@ export default function CouponsPage() {
     return Array.from(map.values()).sort((a, b) =>
       String(a.business.name || "").localeCompare(String(b.business.name || "")),
     );
-  }, [businesses, coupons, search, category]);
+  }, [
+    businesses,
+    coupons,
+    search,
+    category,
+  ]);
+
+  function toggleFavorite(businessId: number) {
+    setFavoriteBusinessIds((current) => {
+      const exists = current.includes(businessId);
+      const next = exists
+        ? current.filter((id) => id !== businessId)
+        : [...current, businessId];
+
+      try {
+        window.localStorage.setItem(
+          "ktown_coupon_favorite_businesses",
+          JSON.stringify(next),
+        );
+      } catch {
+        // Ignore unavailable browser storage.
+      }
+
+      return next;
+    });
+  }
 
   function openMap(business: Business) {
-    openMap(business);
+    setMapBusiness(business);
     setLocationError("");
 
     if (!navigator.geolocation) {
@@ -446,6 +493,14 @@ export default function CouponsPage() {
     );
   }
 
+  function openSavedList() {
+    setShowSavedModal(true);
+  }
+
+  const savedGroups = groups.filter(({ business }) =>
+    favoriteBusinessIds.includes(business.id),
+  );
+
   return (
     <main className="min-h-screen bg-[#F5F5F5] pb-20 text-[#151821]">
       <div className="mx-auto min-h-screen w-full max-w-xl bg-white">
@@ -461,79 +516,98 @@ export default function CouponsPage() {
             </button>
 
             <h1 className="text-[15px] font-black tracking-[0.02em] text-[#E9413B]">
-              COUPONS
+              "COUPONS"
             </h1>
 
-            <div className="scale-90">
-              <ProfileButton />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={openSavedList}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full text-[22px] text-[#8B9098] transition hover:bg-[#FFF0EF] hover:text-[#EB4A45]"
+                aria-label="Saved coupons"
+                title="Saved stores"
+              >
+                {favoriteBusinessIds.length > 0 ? "♥" : "♡"}
+                {favoriteBusinessIds.length > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EB4A45] px-1 text-[8px] font-black text-white">
+                    {favoriteBusinessIds.length}
+                  </span>
+                )}
+              </button>
+
+              <div className="scale-90">
+                <ProfileButton />
+              </div>
             </div>
           </div>
 
-          <div className="px-4 pb-3">
-            <div className="relative">
-              <svg
-                viewBox="0 0 24 24"
-                className="pointer-events-none absolute left-3 top-1/2 h-[17px] w-[17px] -translate-y-1/2 fill-none stroke-[#9CA3AF]"
-                strokeWidth="2"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m16.5 16.5 4 4" />
-              </svg>
+            <div className="px-4 pb-3">
+              <div className="relative">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="pointer-events-none absolute left-3 top-1/2 h-[17px] w-[17px] -translate-y-1/2 fill-none stroke-[#9CA3AF]"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m16.5 16.5 4 4" />
+                </svg>
 
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search stores or coupons"
-                className="h-10 w-full rounded-[10px] border border-[#E4E6E8] bg-white pl-9 pr-3 text-[12px] font-semibold outline-none placeholder:text-[#A7ADB7] focus:border-[#F06A64]"
-              />
-            </div>
-
-            <div className="mt-3">
-              <div className="grid grid-cols-6 gap-1">
-                {appCategories.map((item) => {
-                  const selected = category === item.id;
-
-                  return (
-                    <button
-                      type="button"
-                      key={item.id}
-                      onClick={() => setCategory(item.id)}
-                      className="flex min-w-0 flex-col items-center gap-1"
-                    >
-                      <span
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-[14px] leading-none ${
-                          selected
-                            ? "bg-[#EB4A45] text-white"
-                            : "bg-[#F2F3F5] text-[#555]"
-                        }`}
-                      >
-                        {item.icon}
-                      </span>
-
-                      <span
-                        className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap text-center text-[9px] font-bold ${
-                          selected ? "text-[#EB4A45]" : "text-[#737984]"
-                        }`}
-                      >
-                        {item.label}
-                      </span>
-                    </button>
-                  );
-                })}
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search stores or coupons"
+                  className="h-10 w-full rounded-[10px] border border-[#E4E6E8] bg-white pl-9 pr-3 text-[12px] font-semibold outline-none placeholder:text-[#A7ADB7] focus:border-[#F06A64]"
+                />
               </div>
 
-              {category === "FOOD" && (
-                <div className="mt-2 flex items-center gap-4 overflow-x-auto border-t border-[#F1F1F1] pt-2 text-[9px] font-bold text-[#6F7580] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                  <span className="shrink-0 text-[#EB4A45]">All</span>
-                  <span className="shrink-0">Korean</span>
-                  <span className="shrink-0">Chicken</span>
-                  <span className="shrink-0">Chinese</span>
-                  <span className="shrink-0">Japanese</span>
-                  <span className="shrink-0">Snack</span>
-                  <span className="shrink-0">Cafe</span>
+              <div className="mt-3">
+                <div className="grid grid-cols-6 gap-1">
+                  {appCategories.map((item) => {
+                    const selected = category === item.id;
+
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => setCategory(item.id)}
+                        className="flex min-w-0 flex-col items-center gap-1"
+                      >
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-[14px] leading-none ${
+                            selected
+                              ? "bg-[#EB4A45] text-white"
+                              : "bg-[#F2F3F5] text-[#555]"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+
+                        <span
+                          className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap text-center text-[9px] font-bold ${
+                            selected ? "text-[#EB4A45]" : "text-[#737984]"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>          </div>
+
+                {category === "FOOD" && (
+                  <div className="mt-2 flex items-center gap-4 overflow-x-auto border-t border-[#F1F1F1] pt-2 text-[9px] font-bold text-[#6F7580] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <span className="shrink-0 text-[#EB4A45]">All</span>
+                    <span className="shrink-0">Korean</span>
+                    <span className="shrink-0">Chicken</span>
+                    <span className="shrink-0">Chinese</span>
+                    <span className="shrink-0">Japanese</span>
+                    <span className="shrink-0">Snack</span>
+                    <span className="shrink-0">Cafe</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
         </header>
 
         <section className="px-3 pb-4 pt-2">
@@ -552,11 +626,11 @@ export default function CouponsPage() {
             </div>
           ) : groups.length === 0 ? (
             <div className="py-20 text-center">
-  <div className="text-5xl">🎟️</div>
-  <p className="mt-4 text-[16px] font-black">
-    No coupons available.
-  </p>
-</div>
+              <div className="text-5xl">🎟️</div>
+              <p className="mt-4 text-[16px] font-black">
+                No coupons available.
+              </p>
+            </div>
           ) : (
             <div>
               {groups.map(({ business, coupons }) => {
@@ -580,18 +654,71 @@ export default function CouponsPage() {
                       }}
                       className="flex w-full items-center gap-3 px-1 py-2.5 text-left active:bg-[#FAFAFA]"
                     >
-                      <div className="h-[62px] w-[82px] shrink-0 overflow-hidden rounded-[6px] bg-[#F2F2F2]">
-                        {image ? (
-                          <img
-                            src={image}
-                            alt={business.name || ""}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-2xl">
-                            🏪
-                          </div>
-                        )}
+                      <div className="relative h-[62px] w-[82px] shrink-0">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (image) {
+                              setImageModal({
+                                url: image,
+                                name: business.name || "Business",
+                              });
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if ((event.key === "Enter" || event.key === " ") && image) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setImageModal({
+                                url: image,
+                                name: business.name || "Business",
+                              });
+                            }
+                          }}
+                          className={`h-full w-full overflow-hidden rounded-[6px] bg-[#F2F2F2] ${
+                            image ? "cursor-zoom-in" : ""
+                          }`}
+                          title={image ? "View larger image" : undefined}
+                        >
+                          {image ? (
+                            <img
+                              src={image}
+                              alt={business.name || ""}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-2xl">
+                              🏪
+                            </div>
+                          )}
+                        </div>
+
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleFavorite(business.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              toggleFavorite(business.id);
+                            }
+                          }}
+                          className={`absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border bg-white text-[18px] shadow ${
+                            favoriteBusinessIds.includes(business.id)
+                              ? "border-[#F8B7B3] text-[#EB4A45]"
+                              : "border-[#E5E7EB] text-[#777E88]"
+                          }`}
+                          aria-label="Save store"
+                          title="Save store"
+                        >
+                          {favoriteBusinessIds.includes(business.id) ? "♥" : "♡"}
+                        </span>
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -606,6 +733,12 @@ export default function CouponsPage() {
                         {firstCoupon?.description && (
                           <p className="mt-1 line-clamp-1 text-[9px] font-semibold text-[#777E88]">
                             {firstCoupon.description}
+                          </p>
+                        )}
+
+                        {favoriteBusinessIds.includes(business.id) && (
+                          <p className="mt-1 text-[9px] font-black text-[#EB4A45]">
+                            ♥ SAVED
                           </p>
                         )}
                       </div>
@@ -656,7 +789,7 @@ export default function CouponsPage() {
           onClick={() => setMapBusiness(null)}
         >
           <div
-            className="w-full max-w-[430px] overflow-hidden rounded-[24px] bg-white shadow-2xl"
+            className="w-full max-w-xl overflow-hidden rounded-[24px] bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[#EEEEEE] px-4 py-3">
@@ -765,6 +898,159 @@ export default function CouponsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showSavedModal && (
+        <div
+          className="fixed inset-0 z-[115] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+          onClick={() => setShowSavedModal(false)}
+        >
+          <div
+            className="w-full max-w-xl overflow-hidden rounded-[26px] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#EEEEEE] px-5 py-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#EB4A45]">
+                  ♥ Saved
+                </p>
+                <h2 className="mt-1 text-xl font-black text-[#171A22]">
+                  Saved Coupons
+                </h2>
+                <p className="mt-0.5 text-[10px] font-semibold text-[#8A9099]">
+                  {savedGroups.length} saved stores
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSavedModal(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6] text-xl font-black text-[#555]"
+                aria-label="Close saved list"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[68vh] overflow-y-auto p-3">
+              {savedGroups.length === 0 ? (
+                <div className="py-14 text-center">
+                  <div className="text-5xl text-[#D1D5DB]">♡</div>
+                  <p className="mt-3 text-sm font-black text-[#3F4650]">
+                    No saved stores yet.
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold text-[#9AA0A8]">
+                    Tap a heart to save a store here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {savedGroups.map(({ business, coupons }) => {
+                    const image =
+                      coupons.find((coupon) => coupon.image_url)?.image_url ||
+                      business.image_url ||
+                      business.image_urls?.[0] ||
+                      "";
+                    const firstCoupon = coupons[0];
+
+                    return (
+                      <div
+                        key={business.id}
+                        className="flex items-center gap-3 rounded-2xl border border-[#ECECEC] bg-white p-2.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!image) return;
+                            setShowSavedModal(false);
+                            setImageModal({
+                              url: image,
+                              name: business.name || "Business",
+                            });
+                          }}
+                          className="h-[62px] w-[82px] shrink-0 overflow-hidden rounded-[8px] bg-[#F2F2F2]"
+                        >
+                          {image ? (
+                            <img
+                              src={image}
+                              alt={business.name || ""}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-2xl">
+                              🏪
+                            </div>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSavedModal(false);
+                            window.location.href = `/coupons/business/${business.id}`;
+                          }}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-[10px] font-black uppercase text-[#454B55]">
+                            {business.name || "LOCAL BUSINESS"}
+                          </p>
+                          <p className="mt-0.5 line-clamp-1 text-[13px] font-black text-[#111827]">
+                            {firstCoupon?.title || "SPECIAL COUPON"}
+                          </p>
+                          <p className="mt-1 text-[9px] font-bold text-[#90959E]">
+                            {coupons.length} Coupons
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(business.id)}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF0EF] text-xl text-[#EB4A45]"
+                          aria-label="Remove saved store"
+                        >
+                          ♥
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageModal && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setImageModal(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setImageModal(null)}
+              className="absolute -right-2 -top-12 flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl font-black text-[#333] shadow"
+              aria-label="Close image"
+            >
+              ×
+            </button>
+
+            <div className="overflow-hidden rounded-[22px] bg-black shadow-2xl">
+              <img
+                src={imageModal.url}
+                alt={imageModal.name}
+                className="max-h-[78vh] w-full object-contain"
+              />
+            </div>
+
+            <p className="mt-3 text-center text-sm font-black text-white">
+              {imageModal.name}
+            </p>
           </div>
         </div>
       )}

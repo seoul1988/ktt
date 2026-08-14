@@ -11,6 +11,7 @@ type Coupon = {
   description: string | null;
   active: boolean;
   usage_limit: number | null;
+  repeatable?: boolean | null;
   used_count: number | null;
   end_date: string | null;
   image_url: string | null;
@@ -66,7 +67,7 @@ export default function RedeemCouponPage() {
     const { data, error } = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,active,usage_limit,used_count,end_date,image_url",
+        "id,business_id,title,description,active,usage_limit,repeatable,used_count,end_date,image_url",
       )
       .eq("id", couponId)
       .maybeSingle();
@@ -158,17 +159,19 @@ export default function RedeemCouponPage() {
       return;
     }
 
-    try {
-      window.localStorage.setItem(
-        `ktown_coupon_redeemed_${coupon.id}`,
-        JSON.stringify({
-          couponId: String(coupon.id),
-          businessId: coupon.business_id,
-          redeemedAt: now,
-        }),
-      );
-    } catch {
-      // If browser storage is unavailable, redemption still succeeds in Supabase.
+    if (!coupon.repeatable) {
+      try {
+        window.localStorage.setItem(
+          `ktown_coupon_redeemed_${coupon.id}`,
+          JSON.stringify({
+            couponId: String(coupon.id),
+            businessId: coupon.business_id,
+            redeemedAt: now,
+          }),
+        );
+      } catch {
+        // If browser storage is unavailable, redemption still succeeds in Supabase.
+      }
     }
 
     setRedeemedAt(now);
@@ -330,7 +333,7 @@ export default function RedeemCouponPage() {
           }
         `}</style>
 
-        <div className="mx-auto flex min-h-[80vh] max-w-sm flex-col items-center justify-center text-center">
+        <div className="mx-auto flex min-h-[80vh] max-w-xl flex-col items-center justify-center text-center">
           {!redeemAnimationDone ? (
             <div className="relative w-full max-w-[330px]">
               <div className="cut-paper relative overflow-visible rounded-[24px] bg-white p-5 text-[#171A22] shadow-xl">
@@ -456,7 +459,7 @@ export default function RedeemCouponPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F5F5] px-4 py-5 text-[#171A22]">
-      <div className="mx-auto max-w-sm overflow-hidden rounded-[24px] bg-white shadow-sm">
+      <div className="mx-auto max-w-xl overflow-hidden rounded-[24px] bg-white shadow-sm">
         <div className="relative h-[300px] bg-[#F0F0F0]">
           {image ? (
             <img
@@ -512,7 +515,7 @@ export default function RedeemCouponPage() {
 
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 px-3 pb-3 sm:items-center sm:pb-0">
-          <div className="w-full max-w-sm rounded-[26px] bg-white p-5 text-center shadow-2xl">
+          <div className="w-full max-w-xl rounded-[26px] bg-white p-5 text-center shadow-2xl">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF0EF] text-2xl">
               🎟️
             </div>

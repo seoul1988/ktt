@@ -30,6 +30,7 @@ type Coupon = {
   start_date: string | null;
   end_date: string | null;
   usage_limit: number;
+  repeatable?: boolean | null;
   used_count: number;
   active: boolean;
   pin_code?: string | null;
@@ -45,6 +46,7 @@ type CouponDraft = {
   couponType: string;
   value: number;
   usageLimit: number;
+  repeatable: boolean;
   startDate: string;
   endDate: string;
   pinCode: string;
@@ -70,6 +72,7 @@ function makeDraft(seed?: Partial<CouponDraft>): CouponDraft {
     couponType: "percent",
     value: 10,
     usageLimit: 100,
+    repeatable: false,
     startDate: "",
     endDate: "",
     pinCode: "",
@@ -161,7 +164,7 @@ export default function NewCouponPage() {
     const { data: couponData, error: couponError } = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,used_count,active,pin_code,image_url,created_at",
+        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,repeatable,used_count,active,pin_code,image_url,created_at",
       )
       .order("created_at", { ascending: false });
 
@@ -567,6 +570,7 @@ export default function NewCouponPage() {
               ? Number(draft.value)
               : 0,
           usage_limit: Number(draft.usageLimit),
+          repeatable: draft.repeatable,
           start_date: draft.startDate
             ? new Date(draft.startDate).toISOString()
             : null,
@@ -605,6 +609,7 @@ export default function NewCouponPage() {
                 ? Number(draft.value)
                 : 0,
             usage_limit: Number(draft.usageLimit),
+            repeatable: draft.repeatable,
             start_date: draft.startDate
               ? new Date(draft.startDate).toISOString()
               : null,
@@ -642,6 +647,7 @@ export default function NewCouponPage() {
       couponType: coupon.coupon_type,
       value: Number(coupon.value || 0),
       usageLimit: Number(coupon.usage_limit || 0),
+      repeatable: Boolean(coupon.repeatable),
       startDate: toLocalInputDate(coupon.start_date),
       endDate: toLocalInputDate(coupon.end_date),
       pinCode: coupon.pin_code || "",
@@ -726,33 +732,18 @@ export default function NewCouponPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-4 pb-28 pt-5 text-[#172033]">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-5">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => window.history.back()}
-              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-[#E1D7CC] bg-white px-4 py-2 text-sm font-black text-[#172033] shadow-sm transition hover:bg-[#F3ECE4] active:scale-[0.98]"
-            >
-              ← 뒤로가기
-            </button>
-
-            <h1 className="min-w-0 flex-1 truncate text-center text-2xl font-black sm:text-3xl">
-              Coupon Book Manager
-            </h1>
-
-            <div className="flex shrink-0 justify-end">
-              <ProfileButton />
-            </div>
-          </div>
-
-          <div className="mt-3 text-center">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-red-600">
               KTown Triangle
             </p>
+            <h1 className="text-3xl font-black">Coupon Book Manager</h1>
             <p className="mt-1 text-sm font-semibold text-gray-500">
               업체를 한 번 선택한 뒤 여러 쿠폰을 한꺼번에 등록할 수 있습니다.
             </p>
           </div>
+
+          <ProfileButton />
         </div>
 
         <section className="mb-6 rounded-[28px] border border-[#E8DED2] bg-white p-4 shadow-sm">
@@ -1159,11 +1150,55 @@ export default function NewCouponPage() {
                           </div>
                         )}
 
+                        <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
+                          <p className="text-sm font-black">고객별 사용 방식</p>
+                          <p className="mt-1 text-xs font-semibold text-gray-500">
+                            한 고객이 같은 쿠폰을 다시 사용할 수 있는지 선택하세요.
+                          </p>
+
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, { repeatable: false })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                !draft.repeatable
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">✓ One time only</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                고객당 1회만 사용
+                              </p>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, { repeatable: true })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                draft.repeatable
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">↻ Multiple uses</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                같은 고객도 반복 사용 가능
+                              </p>
+                            </button>
+                          </div>
+                        </div>
+
                         <label className="mb-1 mt-3 block text-sm font-black">
                           쿠폰 전체 사용 한도
                         </label>
                         <input
                           type="number"
+                          min={0}
                           value={draft.usageLimit}
                           onChange={(event) =>
                             updateDraft(draft.localId, {
