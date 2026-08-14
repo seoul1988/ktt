@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import BottomNav from "../../../components/BottomNav";
 
 type Business = {
   id: number;
@@ -187,7 +188,7 @@ export default function BusinessCouponsPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F5F5] text-[#171A22]">
-      <div className="mx-auto min-h-screen max-w-xl bg-white pb-8">
+      <div className="mx-auto min-h-screen max-w-xl bg-white pb-24">
         <div className="relative h-[210px] overflow-hidden bg-[#EEE]">
           {heroImage ? (
             <img
@@ -372,6 +373,8 @@ export default function BusinessCouponsPage() {
           )}
         </section>
       </div>
+
+      <BottomNav />
     </main>
   );
 }
