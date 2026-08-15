@@ -647,6 +647,12 @@ export default function BusinessCouponsPage() {
                     }`}
                   >
                     <div className="relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[12px] bg-[#F2F2F2]">
+                      {isReservation && (
+                        <div className="absolute left-1.5 top-1.5 z-20 rounded-full bg-amber-500 px-2 py-1 text-[8px] font-black uppercase tracking-wide text-white shadow-md">
+                          📅 RESV.
+                        </div>
+                      )}
+
                       {coupon.image_url ? (
                         <img
                           src={coupon.image_url}
