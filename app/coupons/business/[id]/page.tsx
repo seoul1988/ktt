@@ -793,32 +793,40 @@ export default function BusinessCouponsPage() {
                       </div>
                     ) : isReservation ? (
                       <div className="flex w-[150px] shrink-0 flex-col items-end gap-1.5">
-                        <button
-                          type="button"
-                          disabled={!coupon.order_url}
-                          onClick={() => openReservationPage(coupon)}
-                          className={`w-full rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
-                            coupon.order_url
-                              ? "bg-amber-500 text-white active:scale-[0.98]"
-                              : "bg-gray-200 text-gray-400"
-                          }`}
-                        >
-                          📅 {coupon.order_button_text || "RESERVE NOW"}
-                        </button>
-
-                        {coupon.promo_code && (
-                          <span className="max-w-[150px] whitespace-nowrap text-right text-[8px] font-bold text-[#8A9099]">
-                            <span className="sm:hidden">Code copied · Add to notes</span>
-                            <span className="hidden sm:inline">Code copied · enter in reservation notes</span>
-                          </span>
-                        )}
-
-                        {reservationStarted && !usedOnThisDevice && (
+                        {!reservationStarted && !usedOnThisDevice ? (
+                          <button
+                            type="button"
+                            disabled={!coupon.order_url}
+                            onClick={() => openReservationPage(coupon)}
+                            className={`w-full rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
+                              coupon.order_url
+                                ? "bg-amber-500 text-white active:scale-[0.98]"
+                                : "bg-gray-200 text-gray-400"
+                            }`}
+                          >
+                            📅 {coupon.order_button_text || "RESERVE NOW"}
+                          </button>
+                        ) : reservationStarted && !usedOnThisDevice ? (
                           <>
+                            <div className="w-full rounded-[10px] border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-center">
+                              <p className="whitespace-nowrap text-[8px] font-black text-emerald-700">
+                                ✓ RESERVATION STARTED
+                              </p>
+                              <button
+                                type="button"
+                                disabled={!coupon.order_url}
+                                onClick={() => openReservationPage(coupon)}
+                                className="mt-1 text-[8px] font-black text-amber-700 underline decoration-dotted underline-offset-2 disabled:text-gray-400"
+                              >
+                                Need to retry? Book directly
+                              </button>
+                            </div>
+
                             <p className="mt-1 whitespace-nowrap text-right text-[8px] font-bold text-[#8A9099]">
                               <span className="sm:hidden">At restaurant · Staff marks used</span>
                               <span className="hidden sm:inline">At the restaurant, ask staff to mark this coupon used.</span>
                             </p>
+
                             <button
                               type="button"
                               onClick={() => {
@@ -829,7 +837,7 @@ export default function BusinessCouponsPage() {
                               ✓ MARK AS USED
                             </button>
                           </>
-                        )}
+                        ) : null}
 
                         {usedOnThisDevice && (
                           <div className="w-full rounded-[10px] border border-[#D1D5DB] bg-[#E5E7EB] px-3 py-2 text-center text-[9px] font-black text-[#6B7280]">
