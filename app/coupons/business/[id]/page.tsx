@@ -99,6 +99,34 @@ export default function BusinessCouponsPage() {
     }
   }, [businessId]);
 
+  useEffect(() => {
+    if (!coupons.length) return;
+
+    const refreshLocalUsageState = () => {
+      loadRedeemedFromThisDevice(coupons);
+      loadStampedFromThisDevice(coupons);
+      loadReservationStartedFromThisDevice(coupons);
+    };
+
+    window.addEventListener("pageshow", refreshLocalUsageState);
+    window.addEventListener("focus", refreshLocalUsageState);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshLocalUsageState();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", refreshLocalUsageState);
+      window.removeEventListener("focus", refreshLocalUsageState);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [coupons]);
+
+
   function getUsageMode(coupon: Coupon) {
     if (coupon.usage_mode === "yearly") return "yearly";
     if (coupon.usage_mode === "multiple" || coupon.repeatable) return "multiple";
@@ -116,12 +144,22 @@ export default function BusinessCouponsPage() {
 
   function loadRedeemedFromThisDevice(couponRows: Coupon[]) {
     const next: Record<string, RedeemedInfo> = {};
+    const currentYear = new Date().getFullYear();
 
     for (const coupon of couponRows) {
       try {
-        const raw = window.localStorage.getItem(
+        const keysToCheck = [
+          `ktown_coupon_redeemed_${coupon.id}`,
+          `ktown_coupon_redeemed_${coupon.id}_${currentYear}`,
           redeemedStorageKey(coupon),
-        );
+        ];
+
+        let raw: string | null = null;
+
+        for (const key of Array.from(new Set(keysToCheck))) {
+          raw = window.localStorage.getItem(key);
+          if (raw) break;
+        }
 
         if (!raw) continue;
 
