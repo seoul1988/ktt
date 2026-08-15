@@ -332,7 +332,7 @@ export default function BusinessCouponsPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F5F5] text-[#171A22]">
-      <div className="mx-auto min-h-screen max-w-xl bg-white pb-24">
+      <div className="mx-auto min-h-screen max-w-2xl bg-white pb-24">
         <div className="relative h-[210px] overflow-hidden bg-[#EEE]">
           {heroImage ? (
             <img
@@ -450,13 +450,13 @@ export default function BusinessCouponsPage() {
                 return (
                   <article
                     key={coupon.id}
-                    className={`flex items-center gap-3 rounded-[13px] border p-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] ${
+                    className={`flex items-start gap-4 rounded-[15px] border p-3 shadow-[0_2px_8px_rgba(0,0,0,0.03)] ${
                       usedOnThisDevice
                         ? "border-[#E5E7EB] bg-[#F7F7F7] opacity-70"
                         : "border-[#ECECEC] bg-white"
                     }`}
                   >
-                    <div className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]">
+                    <div className="relative h-[92px] w-[92px] shrink-0 overflow-hidden rounded-[12px] bg-[#F2F2F2]">
                       {coupon.image_url ? (
                         <img
                           src={coupon.image_url}
@@ -491,12 +491,12 @@ export default function BusinessCouponsPage() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h2 className="line-clamp-2 text-[13px] font-black leading-[1.15]">
+                      <h2 className="text-[15px] font-black leading-[1.2]">
                         {coupon.title}
                       </h2>
 
                       {coupon.description && (
-                        <p className="mt-1 line-clamp-2 text-[9px] font-semibold leading-[1.3] text-[#777E88]">
+                        <p className="mt-1.5 text-[10px] font-semibold leading-[1.45] text-[#777E88]">
                           {coupon.description}
                         </p>
                       )}
@@ -543,7 +543,7 @@ export default function BusinessCouponsPage() {
                     </div>
 
                     {isOnlineOrder ? (
-                      <div className="flex shrink-0 flex-col items-end gap-1">
+                      <div className="flex w-[150px] shrink-0 flex-col items-end gap-1.5">
                         <button
                           type="button"
                           disabled={!coupon.order_url}
@@ -564,7 +564,7 @@ export default function BusinessCouponsPage() {
                         )}
                       </div>
                     ) : isReservation ? (
-                      <div className="flex shrink-0 flex-col items-end gap-1">
+                      <div className="flex w-[150px] shrink-0 flex-col items-end gap-1.5">
                         <button
                           type="button"
                           disabled={!coupon.order_url}
@@ -579,7 +579,7 @@ export default function BusinessCouponsPage() {
                         </button>
 
                         {coupon.promo_code && (
-                          <span className="max-w-[140px] text-right text-[8px] font-bold leading-tight text-[#8A9099]">
+                          <span className="max-w-[150px] text-right text-[9px] font-bold leading-[1.35] text-[#8A9099]">
                             Code copied · enter in reservation notes
                           </span>
                         )}
