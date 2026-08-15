@@ -365,7 +365,7 @@ export default function BusinessCouponsPage() {
         </div>
 
         <section className="relative px-4 pb-3 pt-4">
-          <div className="absolute -top-8 left-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white shadow">
+          <div className="absolute -top-8 left-4 flex h-[110px] w-[110px] items-center justify-center overflow-hidden rounded-full border-4 border-white bg-white shadow">
             {business.image_url ? (
               <img
                 src={business.image_url}
@@ -378,10 +378,10 @@ export default function BusinessCouponsPage() {
           </div>
 
           <div className="pl-[76px]">
-            <h1 className="text-[21px] font-black leading-tight">
+            <h1 className="text-[21px] font-black leading-[1.45]">
               {business.name}
             </h1>
-            <p className="mt-1 text-[11px] font-semibold text-gray-500">
+            <p className="mt-1 text-[12px] font-semibold text-gray-500">
               {business.category || "Local Business"}
             </p>
           </div>
@@ -389,7 +389,7 @@ export default function BusinessCouponsPage() {
           <div className="mt-4 flex items-center justify-between rounded-xl bg-[#F8F8F8] px-3 py-2">
             <div className="min-w-0">
               {business.address && (
-                <p className="truncate text-[10px] font-semibold text-gray-500">
+                <p className="truncate text-[12px] font-semibold text-gray-500">
                   {business.address}
                 </p>
               )}
@@ -456,7 +456,7 @@ export default function BusinessCouponsPage() {
                         : "border-[#ECECEC] bg-white"
                     }`}
                   >
-                    <div className="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]">
+                    <div className="relative h-[110px] w-[110px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]">
                       {coupon.image_url ? (
                         <img
                           src={coupon.image_url}
@@ -490,13 +490,13 @@ export default function BusinessCouponsPage() {
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <h2 className="line-clamp-2 text-sm font-black leading-[1.15]">
+                    <div className="min-w-0 flex-1 pr-2">
+                      <h2 className="line-clamp-2 text-[16px] font-black leading-[1.15]">
                         {coupon.title}
                       </h2>
 
                       {coupon.description && (
-                        <p className="mt-1 text-[9px] font-semibold leading-[1.3] text-[#777E88]">
+                        <p className="mt-1 text-[12px] font-semibold leading-[1.3] text-[#777E88]">
                           {coupon.description}
                         </p>
                       )}
@@ -579,7 +579,7 @@ export default function BusinessCouponsPage() {
                         </button>
 
                         {coupon.promo_code && (
-                          <span className="max-w-[140px] text-right text-[8px] font-bold leading-tight text-[#8A9099]">
+                          <span className="max-w-[140px] text-right text-[8px] font-bold leading-[1.45] text-[#8A9099]">
                             Code copied · enter in reservation notes
                           </span>
                         )}
@@ -724,7 +724,7 @@ export default function BusinessCouponsPage() {
               type="button"
               disabled={storeCode.length !== 4}
               onClick={submitStoreCode}
-              className={`mt-4 w-full rounded-2xl py-3.5 text-sm font-black ${
+              className={`mt-4 w-full rounded-2xl py-3.5 text-[16px] font-black ${
                 storeCode.length === 4
                   ? "bg-[#EB4A45] text-white active:scale-[0.99]"
                   : "bg-gray-200 text-gray-400"
