@@ -98,6 +98,76 @@ const HIDE_PREFIX =
   "ktown_popup_hide_until_";
 
 /*
+ * KTownTriangle 공용 팝업은 KTownTriangle 본 사이트에서만 표시합니다.
+ *
+ * 중요:
+ * 커스텀 비즈니스 도메인(예: bunsofchapelhill.com)은
+ * 내부적으로 pathname이 "/"로 보일 수 있으므로 pathname만 비교하면
+ * Home(/) 팝업이 잘못 표시될 수 있습니다.
+ */
+function isKtownTriangleHost() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  const hostname =
+    window.location.hostname
+      .trim()
+      .toLowerCase();
+
+  /*
+   * 실제 KTownTriangle 도메인
+   */
+  if (
+    hostname === "ktowntriangle.com" ||
+    hostname === "www.ktowntriangle.com"
+  ) {
+    return true;
+  }
+
+  /*
+   * 로컬 개발 환경에서는 팝업 테스트 허용
+   */
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("172.16.") ||
+    hostname.startsWith("172.17.") ||
+    hostname.startsWith("172.18.") ||
+    hostname.startsWith("172.19.") ||
+    hostname.startsWith("172.20.") ||
+    hostname.startsWith("172.21.") ||
+    hostname.startsWith("172.22.") ||
+    hostname.startsWith("172.23.") ||
+    hostname.startsWith("172.24.") ||
+    hostname.startsWith("172.25.") ||
+    hostname.startsWith("172.26.") ||
+    hostname.startsWith("172.27.") ||
+    hostname.startsWith("172.28.") ||
+    hostname.startsWith("172.29.") ||
+    hostname.startsWith("172.30.") ||
+    hostname.startsWith("172.31.")
+  ) {
+    return true;
+  }
+
+  /*
+   * Vercel preview에서 테스트가 필요하면 허용
+   */
+  if (hostname.endsWith(".vercel.app")) {
+    return true;
+  }
+
+  /*
+   * 그 외 커스텀 도메인에서는 KTown 공용 팝업 차단
+   */
+  return false;
+}
+
+/*
  * Popup Shadow
  */
 function pxShadow(
@@ -425,6 +495,25 @@ export default function KTownPopupBanner() {
     async function load() {
       try {
         setLoading(true);
+
+        /*
+         * 커스텀 비즈니스 도메인에서는 공용 KTown 팝업을 표시하지 않습니다.
+         *
+         * 예:
+         * bunsofchapelhill.com 의 현재 pathname이 "/"여도
+         * KTown Home(/) 배너와 매칭시키지 않습니다.
+         */
+        if (!isKtownTriangleHost()) {
+          if (!cancelled) {
+            setBanners([]);
+            setCurrentIndex(0);
+            setClosed(false);
+            setHideForPeriod(false);
+            setLoading(false);
+          }
+
+          return;
+        }
 
         /*
          * 중요:
