@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
+import TrafficImageModal from "./TrafficImageModal";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -87,7 +88,7 @@ export default function CommunityTrafficPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-xl px-5 pb-16 pt-6">
+      <section className="mx-auto max-w-xl px-5 pb-24 pt-6">
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4483A]">
@@ -112,12 +113,17 @@ export default function CommunityTrafficPage() {
         {/* Traffic introduction */}
         <div className="mb-5 rounded-2xl border border-[#E8DED1] bg-[#FBF7F1] px-4 py-4 text-center">
           <p className="text-[13px] font-bold leading-6 text-[#4F493F]">
-            KTown Triangle은 <span className="font-black text-[#172033]">7월 12일 사이트 오픈</span> 이후,
-            매일 약 <span className="font-black text-[#C4483A]">150명의 중복을 제외한 방문자</span>가
-            꾸준히 방문하고 있습니다.
+            KTown Triangle은{" "}
+            <span className="font-black text-[#172033]">7월 12일 사이트 오픈</span> 이후,
+            매일 약{" "}
+            <span className="font-black text-[#C4483A]">
+              150명의 중복을 제외한 방문자
+            </span>
+            가 꾸준히 방문하고 있습니다.
           </p>
           <p className="mt-2 text-[13px] font-black leading-6 text-[#172033]">
-            오픈한 지 한 달 만에 많은 분들이 방문해 주시고 사랑해 주셔서 진심으로 감사합니다.
+            오픈한 지 한 달 만에 많은 분들이 방문해 주시고 사랑해 주셔서
+            진심으로 감사합니다.
           </p>
         </div>
 
@@ -137,27 +143,19 @@ export default function CommunityTrafficPage() {
                       {displayName(shot.name)}
                     </p>
                   </div>
+
                   <span className="rounded-full bg-[#FFF4E5] px-2.5 py-1 text-[9px] font-black text-[#9A5A00]">
                     ORIGINAL SCREENSHOT
                   </span>
                 </div>
 
-                <a
-                  href={shot.src}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block bg-[#F3EEE7] p-2"
-                  aria-label={`${displayName(shot.name)} 원본 이미지 크게 보기`}
-                >
-                  <img
-                    src={shot.src}
-                    alt={`KTown Triangle 방문자 통계 실제 캡처 - ${displayName(shot.name)}`}
-                    className="h-auto w-full rounded-2xl bg-white object-contain"
-                  />
-                </a>
+                <TrafficImageModal
+                  src={shot.src}
+                  alt={`KTown Triangle 방문자 통계 실제 캡처 - ${displayName(shot.name)}`}
+                />
 
                 <p className="px-4 py-3 text-center text-[10px] font-semibold text-[#7C746A]">
-                  이미지를 누르면 원본 크기로 확인할 수 있습니다.
+                  이미지를 누르면 크게 볼 수 있습니다.
                 </p>
               </article>
             ))}
@@ -165,14 +163,18 @@ export default function CommunityTrafficPage() {
         ) : (
           <div className="rounded-3xl border border-dashed border-[#D8C9B5] bg-white px-6 py-12 text-center shadow-sm">
             <div className="text-4xl">📸</div>
-            <h2 className="mt-4 text-lg font-black">아직 등록된 통계 캡처가 없습니다.</h2>
+            <h2 className="mt-4 text-lg font-black">
+              아직 등록된 통계 캡처가 없습니다.
+            </h2>
             <p className="mt-2 text-sm font-semibold leading-6 text-[#6B6257]">
-              public/traffic 폴더에 PNG 또는 JPG 캡처 이미지를 넣으면 파일명의 촬영 시간 기준으로 오래된 이미지부터 자동으로 표시됩니다.
+              public/traffic 폴더에 PNG 또는 JPG 캡처 이미지를 넣으면 파일명의
+              촬영 시간 기준으로 오래된 이미지부터 자동으로 표시됩니다.
             </p>
           </div>
         )}
       </section>
-	  <CommunityBottomNav  />
+
+      <CommunityBottomNav />
     </main>
   );
 }
