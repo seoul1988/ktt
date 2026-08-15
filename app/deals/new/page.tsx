@@ -34,6 +34,8 @@ function makeEmptyItem(): DealItemForm {
 export default function NewDealPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessId] = useState("");
+  const [businessSearch, setBusinessSearch] = useState("");
+  const [businessSearchOpen, setBusinessSearchOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -50,24 +52,66 @@ export default function NewDealPage() {
   }, []);
 
   async function loadBusinesses() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (!user) return;
+      if (!session?.access_token) {
+        console.error("Business load failed: 로그인 세션이 없습니다.");
+        return;
+      }
 
-    const { data } = await supabase
-      .from("businesses")
-      .select("id, name")
-      .eq("owner_id", user.id)
-      .order("name", { ascending: true });
+      const response = await fetch("/api/deals/businesses", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: "no-store",
+      });
 
-    const rows = (data || []) as Business[];
+      const contentType = response.headers.get("content-type") || "";
+      const rawText = await response.text();
 
-    setBusinesses(rows);
+      let result: any = null;
 
-    if (rows.length === 1) {
-      setBusinessId(String(rows[0].id));
+      if (contentType.includes("application/json")) {
+        try {
+          result = rawText ? JSON.parse(rawText) : {};
+        } catch (parseError) {
+          console.error("Business API JSON parse failed:", parseError, rawText);
+          return;
+        }
+      } else {
+        console.error(
+          "Business API returned non-JSON:",
+          response.status,
+          contentType,
+          rawText.slice(0, 500)
+        );
+        alert(
+          `업소 목록을 불러오지 못했습니다. API 응답: ${response.status}. ` +
+            "브라우저 Console에서 Business API returned non-JSON 내용을 확인하세요."
+        );
+        return;
+      }
+
+      if (!response.ok) {
+        console.error("Business load failed:", result);
+        alert(result?.error || "업소 목록을 불러오지 못했습니다.");
+        return;
+      }
+
+      const rows = (result.businesses || []) as Business[];
+
+      setBusinesses(rows);
+
+      if (rows.length === 1) {
+        setBusinessId(String(rows[0].id));
+        setBusinessSearch(rows[0].name || `Business #${rows[0].id}`);
+      }
+    } catch (error) {
+      console.error("Business load error:", error);
     }
   }
 
@@ -255,9 +299,20 @@ export default function NewDealPage() {
     }
   }
 
+  const normalizedBusinessSearch = businessSearch.trim().toLowerCase();
+
+  const filteredBusinesses = normalizedBusinessSearch
+    ? businesses.filter((business) =>
+        (business.name || `Business #${business.id}`)
+          .trimStart()
+          .toLowerCase()
+          .startsWith(normalizedBusinessSearch)
+      )
+    : businesses;
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-xl">
         <div className="relative mb-5 flex items-center justify-center">
           <Link
             href="/"
@@ -322,19 +377,51 @@ export default function NewDealPage() {
           onSubmit={submitDeal}
           className="space-y-4 rounded-3xl bg-white p-5 shadow-xl"
         >
-          <select
-            value={businessId}
-            onChange={(e) => setBusinessId(e.target.value)}
-            className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-          >
-            <option value="">Business 선택</option>
+          <div className="relative">
+            <input
+              type="text"
+              value={businessSearch}
+              placeholder="Business 검색 (예: s, se)"
+              autoComplete="off"
+              onFocus={() => setBusinessSearchOpen(true)}
+              onChange={(e) => {
+                setBusinessSearch(e.target.value);
+                setBusinessId("");
+                setBusinessSearchOpen(true);
+              }}
+              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
+            />
 
-            {businesses.map((business) => (
-              <option key={business.id} value={business.id}>
-                {business.name || `Business #${business.id}`}
-              </option>
-            ))}
-          </select>
+            {businessSearchOpen && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-2xl border bg-white shadow-xl">
+                {filteredBusinesses.length > 0 ? (
+                  filteredBusinesses.map((business) => {
+                    const label =
+                      business.name || `Business #${business.id}`;
+
+                    return (
+                      <button
+                        key={business.id}
+                        type="button"
+                        onClick={() => {
+                          setBusinessId(String(business.id));
+                          setBusinessSearch(label);
+                          setBusinessSearchOpen(false);
+                        }}
+                        className="block w-full border-b px-4 py-3 text-left text-sm font-bold last:border-b-0 hover:bg-gray-100"
+                      >
+                        {label}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="px-4 py-3 text-sm font-bold text-gray-400">
+                    검색 결과가 없습니다.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <input
             type="text"
