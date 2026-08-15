@@ -801,15 +801,17 @@ export default function BusinessCouponsPage() {
                         </button>
 
                         {coupon.promo_code && (
-                          <span className="max-w-[150px] text-right text-[9px] font-bold leading-[1.35] text-[#8A9099]">
-                            Code copied · enter in reservation notes
+                          <span className="max-w-[150px] whitespace-nowrap text-right text-[8px] font-bold text-[#8A9099]">
+                            <span className="sm:hidden">Code copied · Add to notes</span>
+                            <span className="hidden sm:inline">Code copied · enter in reservation notes</span>
                           </span>
                         )}
 
                         {reservationStarted && !usedOnThisDevice && (
                           <>
-                            <p className="mt-1 text-right text-[8px] font-bold leading-[1.3] text-[#8A9099]">
-                              At the restaurant, ask staff to mark this coupon used.
+                            <p className="mt-1 whitespace-nowrap text-right text-[8px] font-bold text-[#8A9099]">
+                              <span className="sm:hidden">At restaurant · Staff marks used</span>
+                              <span className="hidden sm:inline">At the restaurant, ask staff to mark this coupon used.</span>
                             </p>
                             <button
                               type="button"
