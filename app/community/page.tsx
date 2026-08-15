@@ -264,6 +264,55 @@ export default async function CommunityPage() {
           usNews={usNews as any[]}
         />
 
+        {/* Community Traffic Snapshot - 2026-08-14 10 PM */}
+        <Link
+          href="/community/traffic"
+          className="mb-5 block overflow-hidden rounded-[22px] border border-[#F0DFC5] bg-[#FFF9EF] px-3 py-4 shadow-sm transition hover:shadow-md active:scale-[0.995]"
+          aria-label="KTown Triangle 방문자 통계 실제 캡처 보기"
+        >
+          <div className="text-center">
+            <h2 className="text-[15px] font-black tracking-[-0.02em] text-[#172033]">
+              🔥 KTown Triangle 이용 현황
+            </h2>
+            <p className="mt-0.5 text-[9px] font-semibold text-[#6B6257]">
+              KTown Triangle Community is Growing!
+            </p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-4 divide-x divide-[#E7DCCB]">
+            <div className="px-1 text-center">
+              <div className="text-[18px] leading-none">👥</div>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#6D28D9]">169</p>
+              <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">오늘 방문자 수</p>
+              <p className="mt-0.5 text-[8px] font-bold leading-tight text-[#6B6257]">(중복 제외)</p>
+            </div>
+
+            <div className="px-1 text-center">
+              <div className="text-[18px] leading-none">👣</div>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#0F9F6E]">411</p>
+              <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">오늘 페이지뷰</p>
+            </div>
+
+            <div className="px-1 text-center">
+              <div className="text-[18px] leading-none">👥</div>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#1473E6]">3,719</p>
+              <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">7/12 이후 방문자 수</p>
+              <p className="mt-0.5 text-[8px] font-bold leading-tight text-[#6B6257]">(중복 제외)</p>
+            </div>
+
+            <div className="px-1 text-center">
+              <div className="text-[18px] leading-none">📈</div>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#F97316]">12,695</p>
+              <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">총 페이지뷰</p>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-center gap-1.5 text-[8px] font-semibold text-[#7C746A]">
+            <span>2026. 07. 12 ~ 2026. 08. 14 · 10 PM 기준</span>
+            <span className="font-black text-[#C4483A]">실제 캡처 보기 →</span>
+          </div>
+        </Link>
+
         {/* KTown Coupon Book */}
         <section className="mb-5">
           <Link
