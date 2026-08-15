@@ -16,6 +16,7 @@ type Coupon = {
   used_count: number | null;
   end_date: string | null;
   image_url: string | null;
+  activation_mode?: string | null;
 };
 
 type Business = {
@@ -134,7 +135,7 @@ export default function RedeemCouponPage() {
     const { data, error } = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,active,usage_limit,repeatable,usage_mode,used_count,end_date,image_url",
+        "id,business_id,title,description,active,usage_limit,repeatable,usage_mode,used_count,end_date,image_url,activation_mode",
       )
       .eq("id", couponId)
       .maybeSingle();
@@ -230,6 +231,28 @@ export default function RedeemCouponPage() {
       setMessage(error.message);
       setRedeeming(false);
       return;
+    }
+
+    // Reservation coupons always get a dedicated device-side USED marker.
+    // This is independent of usage_mode so MARK AS USED -> REDEEM NOW
+    // reliably changes the coupon card to USED.
+    if (coupon.activation_mode === "reservation") {
+      try {
+        window.localStorage.setItem(
+          `ktown_coupon_reservation_used_${coupon.id}`,
+          JSON.stringify({
+            couponId: String(coupon.id),
+            businessId: coupon.business_id,
+            redeemedAt: now,
+          }),
+        );
+
+        window.localStorage.removeItem(
+          `ktown_coupon_reservation_started_${coupon.id}`,
+        );
+      } catch {
+        // Supabase redemption already succeeded; continue normally.
+      }
     }
 
     const usageMode = getUsageMode(coupon);

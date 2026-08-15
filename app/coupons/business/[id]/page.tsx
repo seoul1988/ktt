@@ -148,6 +148,28 @@ export default function BusinessCouponsPage() {
 
     for (const coupon of couponRows) {
       try {
+        // Reservation coupons use a dedicated "used" marker so that
+        // MARK AS USED -> REDEEM NOW always becomes USED, regardless of
+        // one_time / multiple / yearly settings.
+        if (coupon.activation_mode === "reservation") {
+          const reservationRaw = window.localStorage.getItem(
+            reservationUsedKey(coupon.id),
+          );
+
+          if (reservationRaw) {
+            const reservationParsed = JSON.parse(reservationRaw) as {
+              redeemedAt?: string;
+            };
+
+            if (reservationParsed.redeemedAt) {
+              next[String(coupon.id)] = {
+                redeemedAt: reservationParsed.redeemedAt,
+              };
+              continue;
+            }
+          }
+        }
+
         const keysToCheck = [
           `ktown_coupon_redeemed_${coupon.id}`,
           `ktown_coupon_redeemed_${coupon.id}_${currentYear}`,
@@ -291,6 +313,10 @@ export default function BusinessCouponsPage() {
 
   function reservationStartedKey(couponId: string | number) {
     return `ktown_coupon_reservation_started_${couponId}`;
+  }
+
+  function reservationUsedKey(couponId: string | number) {
+    return `ktown_coupon_reservation_used_${couponId}`;
   }
 
   function markReservationStarted(coupon: Coupon) {
@@ -596,8 +622,6 @@ export default function BusinessCouponsPage() {
 
                 const disabled = coupon.active === false || expired || soldOut;
                 const redeemedInfo = redeemedMap[String(coupon.id)];
-                const usedOnThisDevice =
-                  getUsageMode(coupon) !== "multiple" && Boolean(redeemedInfo);
                 const stampedInfo = stampedMap[String(coupon.id)];
                 const isStaffStamp =
                   coupon.activation_mode === "staff_stamp";
@@ -605,6 +629,10 @@ export default function BusinessCouponsPage() {
                   coupon.activation_mode === "online_order";
                 const isReservation =
                   coupon.activation_mode === "reservation";
+                const usedOnThisDevice =
+                  isReservation
+                    ? Boolean(redeemedInfo)
+                    : getUsageMode(coupon) !== "multiple" && Boolean(redeemedInfo);
                 const reservationStarted = Boolean(reservationStartedMap[String(coupon.id)]);
                 const isStamped = Boolean(stampedInfo);
 
