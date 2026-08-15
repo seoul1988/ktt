@@ -25,6 +25,8 @@ type Coupon = {
   start_date: string | null;
   end_date: string | null;
   usage_limit: number | null;
+  repeatable?: boolean | null;
+  usage_mode?: "one_time" | "multiple" | "yearly" | null;
   used_count: number | null;
   active: boolean | null;
   activation_mode?: string | null;
@@ -97,13 +99,28 @@ export default function BusinessCouponsPage() {
     }
   }, [businessId]);
 
+  function getUsageMode(coupon: Coupon) {
+    if (coupon.usage_mode === "yearly") return "yearly";
+    if (coupon.usage_mode === "multiple" || coupon.repeatable) return "multiple";
+    return "one_time";
+  }
+
+  function redeemedStorageKey(coupon: Coupon) {
+    const mode = getUsageMode(coupon);
+    const year = new Date().getFullYear();
+
+    return mode === "yearly"
+      ? `ktown_coupon_redeemed_${coupon.id}_${year}`
+      : `ktown_coupon_redeemed_${coupon.id}`;
+  }
+
   function loadRedeemedFromThisDevice(couponRows: Coupon[]) {
     const next: Record<string, RedeemedInfo> = {};
 
     for (const coupon of couponRows) {
       try {
         const raw = window.localStorage.getItem(
-          `ktown_coupon_redeemed_${coupon.id}`,
+          redeemedStorageKey(coupon),
         );
 
         if (!raw) continue;
@@ -373,7 +390,7 @@ export default function BusinessCouponsPage() {
     const couponResult = await supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,used_count,active,activation_mode,stamp_valid_days,stamp_code,stamp_text,info_text,promo_code,order_url,order_button_text,image_url",
+        "id,business_id,title,description,coupon_type,value,start_date,end_date,usage_limit,repeatable,usage_mode,used_count,active,activation_mode,stamp_valid_days,stamp_code,stamp_text,info_text,promo_code,order_url,order_button_text,image_url",
       )
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
@@ -541,7 +558,8 @@ export default function BusinessCouponsPage() {
 
                 const disabled = coupon.active === false || expired || soldOut;
                 const redeemedInfo = redeemedMap[String(coupon.id)];
-                const usedOnThisDevice = Boolean(redeemedInfo);
+                const usedOnThisDevice =
+                  getUsageMode(coupon) !== "multiple" && Boolean(redeemedInfo);
                 const stampedInfo = stampedMap[String(coupon.id)];
                 const isStaffStamp =
                   coupon.activation_mode === "staff_stamp";
