@@ -307,9 +307,11 @@ export default async function CommunityPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-center gap-1.5 text-[8px] font-semibold text-[#7C746A]">
+          <div className="mt-4 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#7C746A] sm:text-[12px]">
             <span>2026. 07. 12 ~ 2026. 08. 14 · 10 PM 기준</span>
-            <span className="font-black text-[#C4483A]">실제 캡처 보기 →</span>
+            <span className="font-black text-[11px] text-[#C4483A] sm:text-[12px]">
+              캡처 보기 →
+            </span>
           </div>
         </Link>
 
