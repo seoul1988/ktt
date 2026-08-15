@@ -840,8 +840,24 @@ export default function BusinessCouponsPage() {
                         ) : null}
 
                         {usedOnThisDevice && (
-                          <div className="w-full rounded-[10px] border border-[#D1D5DB] bg-[#E5E7EB] px-3 py-2 text-center text-[9px] font-black text-[#6B7280]">
-                            ✓ USED
+                          <div className="w-full rounded-[10px] border border-[#D1D5DB] bg-[#E5E7EB] px-3 py-2 text-center text-[#6B7280]">
+                            <div className="text-[9px] font-black">
+                              ✓ USED
+                            </div>
+                            {redeemedInfo?.redeemedAt && (
+                              <div className="mt-1 text-[8px] font-bold leading-tight text-[#8A9099]">
+                                {new Date(redeemedInfo.redeemedAt).toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })}
+                                {" · "}
+                                {new Date(redeemedInfo.redeemedAt).toLocaleTimeString("en-US", {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
