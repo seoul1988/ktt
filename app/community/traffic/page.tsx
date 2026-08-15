@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import Link from "next/link";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -171,6 +172,7 @@ export default function CommunityTrafficPage() {
           </div>
         )}
       </section>
+	  <CommunityBottomNav  />
     </main>
   );
 }
