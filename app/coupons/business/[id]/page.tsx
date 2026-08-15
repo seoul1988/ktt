@@ -86,6 +86,7 @@ export default function BusinessCouponsPage() {
   const [storeCode, setStoreCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [infoCouponId, setInfoCouponId] = useState<string | null>(null);
+  const [reservationStartedMap, setReservationStartedMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (Number.isFinite(businessId) && businessId > 0) {
@@ -233,9 +234,50 @@ export default function BusinessCouponsPage() {
     window.location.href = url;
   }
 
+  function reservationStartedKey(couponId: string | number) {
+    return `ktown_coupon_reservation_started_${couponId}`;
+  }
+
+  function markReservationStarted(coupon: Coupon) {
+    const key = String(coupon.id);
+
+    try {
+      window.localStorage.setItem(
+        reservationStartedKey(coupon.id),
+        JSON.stringify({ startedAt: new Date().toISOString() }),
+      );
+    } catch {
+      // Keep current-screen state even if browser storage is unavailable.
+    }
+
+    setReservationStartedMap((prev) => ({
+      ...prev,
+      [key]: true,
+    }));
+  }
+
+  function loadReservationStartedFromThisDevice(couponRows: Coupon[]) {
+    const next: Record<string, boolean> = {};
+
+    for (const coupon of couponRows) {
+      if (coupon.activation_mode !== "reservation") continue;
+
+      try {
+        const raw = window.localStorage.getItem(reservationStartedKey(coupon.id));
+        if (raw) next[String(coupon.id)] = true;
+      } catch {
+        // Ignore unavailable browser storage.
+      }
+    }
+
+    setReservationStartedMap(next);
+  }
+
   function openReservationPage(coupon: Coupon) {
     const raw = String(coupon.order_url || "").trim();
     if (!raw) return;
+
+    markReservationStarted(coupon);
 
     const code = String(coupon.promo_code || "").trim();
 
@@ -285,6 +327,7 @@ export default function BusinessCouponsPage() {
     setCoupons(couponRows);
     loadRedeemedFromThisDevice(couponRows);
     loadStampedFromThisDevice(couponRows);
+    loadReservationStartedFromThisDevice(couponRows);
     setLoading(false);
   }
 
@@ -445,6 +488,7 @@ export default function BusinessCouponsPage() {
                   coupon.activation_mode === "online_order";
                 const isReservation =
                   coupon.activation_mode === "reservation";
+                const reservationStarted = Boolean(reservationStartedMap[String(coupon.id)]);
                 const isStamped = Boolean(stampedInfo);
 
                 return (
@@ -530,9 +574,28 @@ export default function BusinessCouponsPage() {
                             RESERVATION REQUIRED
                           </span>
                           {coupon.promo_code && (
-                            <span className="rounded-md border border-dashed border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-amber-800">
+                            <button
+                              type="button"
+                              title="Tap to copy code"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                const code = String(coupon.promo_code || "").trim();
+                                if (!code) return;
+
+                                if (navigator.clipboard?.writeText) {
+                                  void navigator.clipboard.writeText(code).then(() => {
+                                    alert(`Code ${code} copied!`);
+                                  }).catch(() => {
+                                    window.prompt("Copy this code:", code);
+                                  });
+                                } else {
+                                  window.prompt("Copy this code:", code);
+                                }
+                              }}
+                              className="cursor-pointer rounded-md border border-dashed border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-amber-800 active:scale-95"
+                            >
                               CODE {coupon.promo_code}
-                            </span>
+                            </button>
                           )}
                         </div>
                       ) : coupon.end_date ? (
@@ -569,7 +632,7 @@ export default function BusinessCouponsPage() {
                           type="button"
                           disabled={!coupon.order_url}
                           onClick={() => openReservationPage(coupon)}
-                          className={`rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
+                          className={`w-full rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
                             coupon.order_url
                               ? "bg-amber-500 text-white active:scale-[0.98]"
                               : "bg-gray-200 text-gray-400"
@@ -582,6 +645,29 @@ export default function BusinessCouponsPage() {
                           <span className="max-w-[150px] text-right text-[9px] font-bold leading-[1.35] text-[#8A9099]">
                             Code copied · enter in reservation notes
                           </span>
+                        )}
+
+                        {reservationStarted && !usedOnThisDevice && (
+                          <>
+                            <p className="mt-1 text-right text-[8px] font-bold leading-[1.3] text-[#8A9099]">
+                              At the restaurant, ask staff to mark this coupon used.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.location.href = `/coupons/redeem/${coupon.id}`;
+                              }}
+                              className="w-full rounded-[10px] bg-[#EB4A45] px-3 py-2.5 text-[9px] font-black text-white shadow-sm active:scale-[0.98]"
+                            >
+                              ✓ MARK AS USED
+                            </button>
+                          </>
+                        )}
+
+                        {usedOnThisDevice && (
+                          <div className="w-full rounded-[10px] border border-[#D1D5DB] bg-[#E5E7EB] px-3 py-2 text-center text-[9px] font-black text-[#6B7280]">
+                            ✓ USED
+                          </div>
                         )}
                       </div>
                     ) : (
