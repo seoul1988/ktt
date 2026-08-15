@@ -233,6 +233,22 @@ export default function BusinessCouponsPage() {
     window.location.href = url;
   }
 
+  function openReservationPage(coupon: Coupon) {
+    const raw = String(coupon.order_url || "").trim();
+    if (!raw) return;
+
+    const code = String(coupon.promo_code || "").trim();
+
+    if (code && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(code).catch(() => {
+        // 예약 페이지 이동은 계속 진행합니다.
+      });
+    }
+
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    window.location.href = url;
+  }
+
   async function loadData() {
     setLoading(true);
     setErrorText("");
@@ -427,6 +443,8 @@ export default function BusinessCouponsPage() {
                   coupon.activation_mode === "staff_stamp";
                 const isOnlineOrder =
                   coupon.activation_mode === "online_order";
+                const isReservation =
+                  coupon.activation_mode === "reservation";
                 const isStamped = Boolean(stampedInfo);
 
                 return (
@@ -506,6 +524,17 @@ export default function BusinessCouponsPage() {
                             </span>
                           )}
                         </div>
+                      ) : isReservation ? (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] font-black text-amber-700">
+                            RESERVATION REQUIRED
+                          </span>
+                          {coupon.promo_code && (
+                            <span className="rounded-md border border-dashed border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-amber-800">
+                              CODE {coupon.promo_code}
+                            </span>
+                          )}
+                        </div>
                       ) : coupon.end_date ? (
                         <p className="mt-1.5 text-[8px] font-bold text-[#9BA1AA]">
                           Exp. {formatDate(coupon.end_date)}
@@ -531,6 +560,27 @@ export default function BusinessCouponsPage() {
                         {coupon.promo_code && (
                           <span className="text-[8px] font-bold text-[#8A9099]">
                             Code copied on order
+                          </span>
+                        )}
+                      </div>
+                    ) : isReservation ? (
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <button
+                          type="button"
+                          disabled={!coupon.order_url}
+                          onClick={() => openReservationPage(coupon)}
+                          className={`rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
+                            coupon.order_url
+                              ? "bg-amber-500 text-white active:scale-[0.98]"
+                              : "bg-gray-200 text-gray-400"
+                          }`}
+                        >
+                          📅 {coupon.order_button_text || "RESERVE NOW"}
+                        </button>
+
+                        {coupon.promo_code && (
+                          <span className="max-w-[140px] text-right text-[8px] font-bold leading-tight text-[#8A9099]">
+                            Code copied · enter in reservation notes
                           </span>
                         )}
                       </div>
