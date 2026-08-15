@@ -222,7 +222,12 @@ export default function TodaysKoreaNewsModal({
                 <div
                   ref={sliderRef}
                   onScroll={handleSliderScroll}
-                  className="flex snap-x snap-mandatory items-stretch gap-3 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  className="flex touch-pan-x snap-x snap-proximity items-stretch gap-3 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  style={{
+                    WebkitOverflowScrolling: "touch",
+                    touchAction: "pan-x",
+                    scrollBehavior: "smooth",
+                  }}
                 >
                   {activePosts.map((post) => (
                     <button
@@ -230,7 +235,7 @@ export default function TodaysKoreaNewsModal({
                       type="button"
                       data-news-card
                       onClick={() => setSelectedId(post.id)}
-                      className="flex w-[calc((100%_-_12px)/2)] min-w-[calc((100%_-_12px)/2)] shrink-0 snap-start flex-col text-left sm:w-[calc((100%_-_24px)/3)] sm:min-w-[calc((100%_-_24px)/3)]"
+                      className="flex w-[calc((100%_-_12px)/2)] min-w-[calc((100%_-_12px)/2)] shrink-0 snap-start touch-pan-x flex-col text-left sm:w-[calc((100%_-_24px)/3)] sm:min-w-[calc((100%_-_24px)/3)]"
                     >
                       <div className="relative h-[120px] w-full shrink-0 overflow-hidden rounded-xl bg-gray-100">
                         <img
