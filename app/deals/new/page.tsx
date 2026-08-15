@@ -9,10 +9,15 @@ import BottomNav from "../../components/BottomNav";
 type Business = {
   id: number;
   name: string | null;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zip_code: string | null;
+  address?: string | null;
+  street_address?: string | null;
+  address1?: string | null;
+  address2?: string | null;
+  city?: string | null;
+  zip?: string | null;
+  zipcode?: string | null;
+  postal_code?: string | null;
+  [key: string]: unknown;
 };
 
 type DealItemForm = {
@@ -122,14 +127,25 @@ export default function NewDealPage() {
   }
 
   function formatBusinessAddress(business: Business) {
-    const street = String(business.address || "").trim();
+    const street = String(
+      business.address ||
+        business.street_address ||
+        business.address1 ||
+        ""
+    ).trim();
+
+    const address2 = String(business.address2 || "").trim();
     const city = String(business.city || "").trim();
-    const state = String(business.state || "").trim();
-    const zip = String(business.zip_code || "").trim();
+    const zip = String(
+      business.zip ||
+        business.zipcode ||
+        business.postal_code ||
+        ""
+    ).trim();
 
-    const cityLine = [city, state, zip].filter(Boolean).join(" ");
+    const cityLine = [city, zip].filter(Boolean).join(" ");
 
-    return [street, cityLine].filter(Boolean).join(", ");
+    return [street, address2, cityLine].filter(Boolean).join(", ");
   }
 
   function handleImage(file: File | null) {

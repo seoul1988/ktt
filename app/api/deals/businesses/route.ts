@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await admin
       .from("businesses")
-      .select("id, name, address, city, state, zip_code")
+      .select("*")
       .order("name", { ascending: true })
       .range(0, 4999);
 
@@ -86,10 +86,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const businesses = (data || []).map((row: any) => ({
+      id: row.id,
+      name: row.name ?? null,
+      address: row.address ?? null,
+      street_address: row.street_address ?? null,
+      address1: row.address1 ?? null,
+      address2: row.address2 ?? null,
+      city: row.city ?? null,
+      zip: row.zip ?? null,
+      zipcode: row.zipcode ?? null,
+      postal_code: row.postal_code ?? null,
+    }));
+
     return NextResponse.json(
       {
-        businesses: data || [],
-        count: data?.length || 0,
+        businesses,
+        count: businesses.length,
       },
       { headers: noStoreHeaders() },
     );
