@@ -89,6 +89,7 @@ export default function BusinessCouponsPage() {
   const [codeError, setCodeError] = useState("");
   const [infoCouponId, setInfoCouponId] = useState<string | null>(null);
   const [reservationStartedMap, setReservationStartedMap] = useState<Record<string, boolean>>({});
+  const [mobileDetailCoupon, setMobileDetailCoupon] = useState<Coupon | null>(null);
 
   useEffect(() => {
     if (Number.isFinite(businessId) && businessId > 0) {
@@ -685,9 +686,24 @@ export default function BusinessCouponsPage() {
                       </h2>
 
                       {coupon.description && (
-                        <p className="mt-1.5 text-[10px] font-semibold leading-[1.45] text-[#777E88]">
-                          {coupon.description}
-                        </p>
+                        <>
+                          <p className="mt-1.5 hidden text-[10px] font-semibold leading-[1.45] text-[#777E88] sm:block">
+                            {coupon.description}
+                          </p>
+
+                          <div className="mt-1.5 sm:hidden">
+                            <p className="line-clamp-2 text-[10px] font-semibold leading-[1.4] text-[#777E88]">
+                              {coupon.description}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setMobileDetailCoupon(coupon)}
+                              className="mt-1 inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-[9px] font-black text-[#555B66] shadow-sm active:scale-[0.98]"
+                            >
+                              VIEW DETAILS
+                            </button>
+                          </div>
+                        </>
                       )}
 
                       {usedOnThisDevice && redeemedInfo ? (
@@ -900,6 +916,52 @@ export default function BusinessCouponsPage() {
           )}
         </section>
       </div>
+
+      {mobileDetailCoupon && (
+        <div
+          className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 px-3 pb-3 sm:hidden"
+          onClick={() => setMobileDetailCoupon(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-[24px] bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#E74742]">
+                  Coupon Details
+                </p>
+                <h2 className="mt-1 text-lg font-black leading-tight text-[#171A22]">
+                  {mobileDetailCoupon.title}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMobileDetailCoupon(null)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-500"
+                aria-label="Close coupon details"
+              >
+                ×
+              </button>
+            </div>
+
+            {mobileDetailCoupon.description && (
+              <p className="mt-4 whitespace-pre-line text-sm font-semibold leading-6 text-[#555B66]">
+                {mobileDetailCoupon.description}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setMobileDetailCoupon(null)}
+              className="mt-5 w-full rounded-2xl bg-[#171A22] px-4 py-3 text-sm font-black text-white active:scale-[0.99]"
+            >
+              CLOSE
+            </button>
+          </div>
+        </div>
+      )}
 
       {codeCoupon && (
         <div
