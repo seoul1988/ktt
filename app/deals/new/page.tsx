@@ -9,6 +9,10 @@ import BottomNav from "../../components/BottomNav";
 type Business = {
   id: number;
   name: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
 };
 
 type DealItemForm = {
@@ -36,6 +40,7 @@ export default function NewDealPage() {
   const [businessId, setBusinessId] = useState("");
   const [businessSearch, setBusinessSearch] = useState("");
   const [businessSearchOpen, setBusinessSearchOpen] = useState(false);
+  const [businessAddress, setBusinessAddress] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -109,10 +114,22 @@ export default function NewDealPage() {
       if (rows.length === 1) {
         setBusinessId(String(rows[0].id));
         setBusinessSearch(rows[0].name || `Business #${rows[0].id}`);
+        setBusinessAddress(formatBusinessAddress(rows[0]));
       }
     } catch (error) {
       console.error("Business load error:", error);
     }
+  }
+
+  function formatBusinessAddress(business: Business) {
+    const street = String(business.address || "").trim();
+    const city = String(business.city || "").trim();
+    const state = String(business.state || "").trim();
+    const zip = String(business.zip_code || "").trim();
+
+    const cityLine = [city, state, zip].filter(Boolean).join(" ");
+
+    return [street, cityLine].filter(Boolean).join(", ");
   }
 
   function handleImage(file: File | null) {
@@ -387,6 +404,7 @@ export default function NewDealPage() {
               onChange={(e) => {
                 setBusinessSearch(e.target.value);
                 setBusinessId("");
+                setBusinessAddress("");
                 setBusinessSearchOpen(true);
               }}
               className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
@@ -406,6 +424,7 @@ export default function NewDealPage() {
                         onClick={() => {
                           setBusinessId(String(business.id));
                           setBusinessSearch(label);
+                          setBusinessAddress(formatBusinessAddress(business));
                           setBusinessSearchOpen(false);
                         }}
                         className="block w-full border-b px-4 py-3 text-left text-sm font-bold last:border-b-0 hover:bg-gray-100"
@@ -422,6 +441,14 @@ export default function NewDealPage() {
               </div>
             )}
           </div>
+
+          <input
+            type="text"
+            placeholder="Business Address"
+            value={businessAddress}
+            readOnly
+            className="w-full rounded-2xl border bg-gray-50 px-4 py-3 text-sm font-bold text-gray-700"
+          />
 
           <input
             type="text"

@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await admin
       .from("businesses")
-      .select("id, name")
+      .select("id, name, address, city, state, zip_code")
       .order("name", { ascending: true })
       .range(0, 4999);
 
