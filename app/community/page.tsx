@@ -282,27 +282,27 @@ export default async function CommunityPage() {
           <div className="mt-4 grid grid-cols-4 divide-x divide-[#E7DCCB]">
             <div className="px-1 text-center">
               <div className="text-[18px] leading-none">👥</div>
-              <p className="mt-1 text-[21px] font-black leading-none text-[#6D28D9]">169</p>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#6D28D9]">172</p>
               <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">오늘 방문자 수</p>
               <p className="mt-0.5 text-[8px] font-bold leading-tight text-[#6B6257]">(중복 제외)</p>
             </div>
 
             <div className="px-1 text-center">
               <div className="text-[18px] leading-none">👣</div>
-              <p className="mt-1 text-[21px] font-black leading-none text-[#0F9F6E]">411</p>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#0F9F6E]">417</p>
               <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">오늘 페이지뷰</p>
             </div>
 
             <div className="px-1 text-center">
               <div className="text-[18px] leading-none">👥</div>
-              <p className="mt-1 text-[21px] font-black leading-none text-[#1473E6]">3,719</p>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#1473E6]">3,722</p>
               <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">7/12 이후 방문자 수</p>
               <p className="mt-0.5 text-[8px] font-bold leading-tight text-[#6B6257]">(중복 제외)</p>
             </div>
 
             <div className="px-1 text-center">
               <div className="text-[18px] leading-none">📈</div>
-              <p className="mt-1 text-[21px] font-black leading-none text-[#F97316]">12,695</p>
+              <p className="mt-1 text-[21px] font-black leading-none text-[#F97316]">12,701</p>
               <p className="mt-2 text-[9px] font-black leading-tight text-[#172033]">총 페이지뷰</p>
             </div>
           </div>
