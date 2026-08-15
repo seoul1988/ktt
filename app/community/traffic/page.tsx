@@ -96,7 +96,7 @@ export default function CommunityTrafficPage() {
               KTown Triangle 방문 현황
             </h1>
             <p className="mt-1 text-xs font-semibold leading-5 text-[#6B6257]">
-              실제 관리자 통계 화면을 캡처한 이미지입니다.
+              관리자 통계 화면을 캡처한 이미지입니다.
             </p>
           </div>
 
@@ -106,6 +106,18 @@ export default function CommunityTrafficPage() {
           >
             ← 돌아가기
           </Link>
+        </div>
+
+        {/* Traffic introduction */}
+        <div className="mb-5 rounded-2xl border border-[#E8DED1] bg-[#FBF7F1] px-4 py-4 text-center">
+          <p className="text-[13px] font-bold leading-6 text-[#4F493F]">
+            KTown Triangle은 <span className="font-black text-[#172033]">7월 12일 사이트 오픈</span> 이후,
+            매일 약 <span className="font-black text-[#C4483A]">150명의 중복을 제외한 방문자</span>가
+            꾸준히 방문하고 있습니다.
+          </p>
+          <p className="mt-2 text-[13px] font-black leading-6 text-[#172033]">
+            오픈한 지 한 달 만에 많은 분들이 방문해 주시고 사랑해 주셔서 진심으로 감사합니다.
+          </p>
         </div>
 
         {screenshots.length > 0 ? (
