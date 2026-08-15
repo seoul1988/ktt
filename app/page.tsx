@@ -570,7 +570,6 @@ export default async function Home() {
   const { data: allBusinessEvents, error: eventError } = await supabase
     .from("business_events")
     .select("*")
-    .eq("status", "approved")
     .eq("active", true)
     .gte("event_date", today)
     .order("event_date", { ascending: true });
@@ -608,7 +607,6 @@ export default async function Home() {
       )
     `
     )
-    .eq("status", "approved")
     .eq("active", true)
     .or("deal_scope.is.null,deal_scope.neq.community")
     .lte("start_date", today)
@@ -638,8 +636,7 @@ export default async function Home() {
     await supabase
       .from("deals")
       .select("id, business_id")
-      .eq("status", "approved")
-      .eq("active", true)
+        .eq("active", true)
       .or("deal_scope.is.null,deal_scope.neq.community")
       .lte("start_date", today)
       .or(`end_date.is.null,end_date.gte.${today}`);

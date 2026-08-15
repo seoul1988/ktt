@@ -47,7 +47,7 @@ export default async function DealDetailPage({
   if (!deal) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-5 text-[#172033]">
-        <div className="mx-auto max-w-md">
+        <div className="mx-auto max-w-xl">
           <Link
             href="/deals"
             className="mb-5 inline-block rounded-full bg-white px-4 py-2 text-sm font-black shadow"
@@ -118,7 +118,7 @@ export default async function DealDetailPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-xl">
         <div className="mb-4 flex items-center justify-between">
           <Link
             href="/deals"
