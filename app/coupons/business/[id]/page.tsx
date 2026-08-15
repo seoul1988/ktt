@@ -240,11 +240,30 @@ export default function BusinessCouponsPage() {
 
   function markReservationStarted(coupon: Coupon) {
     const key = String(coupon.id);
+    const startedAt = new Date();
+
+    // MARK AS USED is available for up to 30 days after RESERVE NOW.
+    // If the coupon itself expires sooner, use the coupon end date instead.
+    const thirtyDaysLater = new Date(
+      startedAt.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
+
+    const couponEnd = coupon.end_date ? new Date(coupon.end_date) : null;
+    const hasValidCouponEnd =
+      couponEnd && Number.isFinite(couponEnd.getTime());
+
+    const expiresAt =
+      hasValidCouponEnd && couponEnd!.getTime() < thirtyDaysLater.getTime()
+        ? couponEnd!
+        : thirtyDaysLater;
 
     try {
       window.localStorage.setItem(
         reservationStartedKey(coupon.id),
-        JSON.stringify({ startedAt: new Date().toISOString() }),
+        JSON.stringify({
+          startedAt: startedAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+        }),
       );
     } catch {
       // Keep current-screen state even if browser storage is unavailable.
@@ -258,15 +277,57 @@ export default function BusinessCouponsPage() {
 
   function loadReservationStartedFromThisDevice(couponRows: Coupon[]) {
     const next: Record<string, boolean> = {};
+    const now = Date.now();
 
     for (const coupon of couponRows) {
       if (coupon.activation_mode !== "reservation") continue;
 
       try {
-        const raw = window.localStorage.getItem(reservationStartedKey(coupon.id));
-        if (raw) next[String(coupon.id)] = true;
+        const storageKey = reservationStartedKey(coupon.id);
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) continue;
+
+        const parsed = JSON.parse(raw) as {
+          startedAt?: string;
+          expiresAt?: string;
+        };
+
+        // Backward compatibility for reservation flags saved before
+        // the 30-day expiration feature was added.
+        let expiresAtMs = parsed.expiresAt
+          ? new Date(parsed.expiresAt).getTime()
+          : Number.NaN;
+
+        if (!Number.isFinite(expiresAtMs) && parsed.startedAt) {
+          const startedAtMs = new Date(parsed.startedAt).getTime();
+          if (Number.isFinite(startedAtMs)) {
+            expiresAtMs = startedAtMs + 30 * 24 * 60 * 60 * 1000;
+          }
+        }
+
+        // Never allow MARK AS USED past the coupon's own end date.
+        if (coupon.end_date) {
+          const couponEndMs = new Date(coupon.end_date).getTime();
+          if (Number.isFinite(couponEndMs)) {
+            expiresAtMs = Number.isFinite(expiresAtMs)
+              ? Math.min(expiresAtMs, couponEndMs)
+              : couponEndMs;
+          }
+        }
+
+        if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now) {
+          window.localStorage.removeItem(storageKey);
+          continue;
+        }
+
+        next[String(coupon.id)] = true;
       } catch {
-        // Ignore unavailable browser storage.
+        // Remove corrupt reservation state and hide MARK AS USED.
+        try {
+          window.localStorage.removeItem(reservationStartedKey(coupon.id));
+        } catch {
+          // Ignore unavailable browser storage.
+        }
       }
     }
 
