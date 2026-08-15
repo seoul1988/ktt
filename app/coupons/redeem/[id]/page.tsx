@@ -491,12 +491,12 @@ export default function BusinessCouponsPage() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h2 className="line-clamp-2 text-[13px] font-black leading-[1.15]">
+                      <h2 className="line-clamp-2 text-sm font-black leading-[1.15]">
                         {coupon.title}
                       </h2>
 
                       {coupon.description && (
-                        <p className="mt-1 line-clamp-2 text-[9px] font-semibold leading-[1.3] text-[#777E88]">
+                        <p className="mt-1 text-[9px] font-semibold leading-[1.3] text-[#777E88]">
                           {coupon.description}
                         </p>
                       )}
@@ -548,7 +548,7 @@ export default function BusinessCouponsPage() {
                           type="button"
                           disabled={!coupon.order_url}
                           onClick={() => openOrderPage(coupon)}
-                          className={`rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
+                          className={`rounded-xl px-4 py-3 text-[11px] font-black shadow-sm ${
                             coupon.order_url
                               ? "bg-[#EB4A45] text-white active:scale-[0.98]"
                               : "bg-gray-200 text-gray-400"
@@ -569,7 +569,7 @@ export default function BusinessCouponsPage() {
                           type="button"
                           disabled={!coupon.order_url}
                           onClick={() => openReservationPage(coupon)}
-                          className={`rounded-[10px] px-4 py-2.5 text-[10px] font-black shadow-sm ${
+                          className={`rounded-xl px-4 py-3 text-[11px] font-black shadow-sm ${
                             coupon.order_url
                               ? "bg-amber-500 text-white active:scale-[0.98]"
                               : "bg-gray-200 text-gray-400"
