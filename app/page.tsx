@@ -609,7 +609,7 @@ export default async function Home() {
     )
     .eq("active", true)
     .or("deal_scope.is.null,deal_scope.neq.community")
-    .lte("start_date", today)
+    .or(`start_date.is.null,start_date.lte.${today}`)
     .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false });
 
@@ -623,11 +623,9 @@ export default async function Home() {
         ? deal.businesses[0]
         : deal.businesses;
 
-      if (!business?.id) return false;
-
-      return visibleBusinessIds.has(String(business.id));
+      return Boolean(business?.id);
     })
-    .slice(0, 3);
+    .slice(0, 1);
 
   /*
    * Deal badge용 데이터도 Main 허용 비즈니스만 남깁니다.
@@ -638,7 +636,7 @@ export default async function Home() {
       .select("id, business_id")
         .eq("active", true)
       .or("deal_scope.is.null,deal_scope.neq.community")
-      .lte("start_date", today)
+      .or(`start_date.is.null,start_date.lte.${today}`)
       .or(`end_date.is.null,end_date.gte.${today}`);
 
   if (dealBusinessesError) {
@@ -648,8 +646,7 @@ export default async function Home() {
   const dealBusinesses = (allDealBusinesses || []).filter(
     (deal: any) =>
       deal.business_id !== null &&
-      deal.business_id !== undefined &&
-      visibleBusinessIds.has(String(deal.business_id))
+      deal.business_id !== undefined
   );
 
   /*

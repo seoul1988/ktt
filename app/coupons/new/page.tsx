@@ -33,6 +33,7 @@ type Coupon = {
   end_date: string | null;
   usage_limit: number;
   repeatable?: boolean | null;
+  usage_mode?: "one_time" | "multiple" | "yearly" | null;
   activation_mode?: string | null;
   stamp_valid_days?: number | null;
   stamp_code?: string | null;
@@ -58,7 +59,8 @@ type CouponDraft = {
   minimumPurchase: number;
   usageLimit: number;
   repeatable: boolean;
-  activationMode: "immediate" | "staff_stamp" | "online_order";
+  usageMode: "one_time" | "multiple" | "yearly";
+  activationMode: "immediate" | "staff_stamp" | "online_order" | "reservation";
   stampValidDays: number;
   stampCode: string;
   stampText: string;
@@ -94,6 +96,7 @@ function makeDraft(seed?: Partial<CouponDraft>): CouponDraft {
     minimumPurchase: 0,
     usageLimit: 100,
     repeatable: false,
+    usageMode: "one_time",
     activationMode: "immediate",
     stampValidDays: 31,
     stampCode: "",
@@ -234,7 +237,7 @@ export default function NewCouponPage() {
     let couponQuery = supabase
       .from("coupons")
       .select(
-        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,info_text,promo_code,order_url,order_button_text,image_url,created_at",
+        "id,business_id,title,description,coupon_type,value,minimum_purchase,start_date,end_date,usage_limit,repeatable,usage_mode,activation_mode,stamp_valid_days,stamp_code,stamp_text,used_count,active,pin_code,info_text,promo_code,order_url,order_button_text,image_url,created_at",
       );
 
     // owner는 자기 업체 쿠폰만 조회
@@ -453,6 +456,7 @@ export default function NewCouponPage() {
             minimumPurchase: previous.minimumPurchase,
             usageLimit: previous.usageLimit,
             repeatable: previous.repeatable,
+            usageMode: previous.usageMode,
             activationMode: previous.activationMode,
             stampValidDays: previous.stampValidDays,
             stampCode: previous.stampCode,
@@ -495,6 +499,7 @@ export default function NewCouponPage() {
           minimumPurchase: target.minimumPurchase,
           usageLimit: target.usageLimit,
           repeatable: target.repeatable,
+          usageMode: target.usageMode,
           activationMode: target.activationMode,
           stampValidDays: target.stampValidDays,
           stampCode: target.stampCode,
@@ -653,6 +658,12 @@ export default function NewCouponPage() {
       }
     }
 
+    if (draft.activationMode === "reservation") {
+      if (!draft.orderUrl.trim()) {
+        return `Coupon #${index + 1}: 예약 페이지 URL을 입력하세요.`;
+      }
+    }
+
     if (draft.couponType === "spend_save") {
       if (!(Number(draft.value) > 0)) {
         return `Coupon #${index + 1}: 할인 금액을 입력하세요.`;
@@ -740,7 +751,8 @@ export default function NewCouponPage() {
               ? Number(draft.minimumPurchase)
               : null,
           usage_limit: Number(draft.usageLimit),
-          repeatable: draft.repeatable,
+          repeatable: draft.usageMode === "multiple",
+          usage_mode: draft.usageMode,
           activation_mode: draft.activationMode,
           stamp_valid_days:
             draft.activationMode === "staff_stamp"
@@ -765,16 +777,16 @@ export default function NewCouponPage() {
               ? draft.infoText.trim() || null
               : null,
           promo_code:
-            draft.activationMode === "online_order"
+            (draft.activationMode === "online_order" || draft.activationMode === "reservation")
               ? draft.promoCode.trim().toUpperCase()
               : null,
           order_url:
-            draft.activationMode === "online_order"
+            (draft.activationMode === "online_order" || draft.activationMode === "reservation")
               ? draft.orderUrl.trim()
               : null,
           order_button_text:
-            draft.activationMode === "online_order"
-              ? draft.orderButtonText.trim() || "ORDER NOW"
+            (draft.activationMode === "online_order" || draft.activationMode === "reservation")
+              ? draft.orderButtonText.trim() || (draft.activationMode === "reservation" ? "RESERVE NOW" : "ORDER NOW")
               : null,
           image_url: draft.imageUrl || null,
         }));
@@ -812,7 +824,8 @@ export default function NewCouponPage() {
                 ? Number(draft.minimumPurchase)
                 : null,
             usage_limit: Number(draft.usageLimit),
-            repeatable: draft.repeatable,
+            repeatable: draft.usageMode === "multiple",
+            usage_mode: draft.usageMode,
             activation_mode: draft.activationMode,
             stamp_valid_days:
               draft.activationMode === "staff_stamp"
@@ -836,16 +849,16 @@ export default function NewCouponPage() {
                 ? draft.infoText.trim() || null
                 : null,
             promo_code:
-              draft.activationMode === "online_order"
+              (draft.activationMode === "online_order" || draft.activationMode === "reservation")
                 ? draft.promoCode.trim().toUpperCase()
                 : null,
             order_url:
-              draft.activationMode === "online_order"
+              (draft.activationMode === "online_order" || draft.activationMode === "reservation")
                 ? draft.orderUrl.trim()
                 : null,
             order_button_text:
-              draft.activationMode === "online_order"
-                ? draft.orderButtonText.trim() || "ORDER NOW"
+              (draft.activationMode === "online_order" || draft.activationMode === "reservation")
+                ? draft.orderButtonText.trim() || (draft.activationMode === "reservation" ? "RESERVE NOW" : "ORDER NOW")
                 : null,
             image_url: draft.imageUrl || null,
           })
@@ -951,13 +964,23 @@ export default function NewCouponPage() {
 
       minimumPurchase: Number(coupon.minimum_purchase || 0),
       usageLimit: Number(coupon.usage_limit || 0),
-      repeatable: Boolean(coupon.repeatable),
+      repeatable: coupon.usage_mode
+        ? coupon.usage_mode === "multiple"
+        : Boolean(coupon.repeatable),
+      usageMode:
+        coupon.usage_mode === "yearly"
+          ? "yearly"
+          : coupon.usage_mode === "multiple" || coupon.repeatable
+            ? "multiple"
+            : "one_time",
       activationMode:
         coupon.activation_mode === "staff_stamp"
           ? "staff_stamp"
           : coupon.activation_mode === "online_order"
             ? "online_order"
-            : "immediate",
+            : coupon.activation_mode === "reservation"
+              ? "reservation"
+              : "immediate",
       stampValidDays: Number(coupon.stamp_valid_days || 31),
       stampCode: coupon.stamp_code || "",
       stampText: coupon.stamp_text || "THANK YOU! See you again soon!",
@@ -1615,43 +1638,36 @@ export default function NewCouponPage() {
                         <div className="mt-4 rounded-2xl border border-[#E6DCD1] bg-[#FCFAF7] p-4">
                           <p className="text-sm font-black">고객별 사용 방식</p>
                           <p className="mt-1 text-xs font-semibold text-gray-500">
-                            한 고객이 같은 쿠폰을 다시 사용할 수 있는지 선택하세요.
+                            고객 한 명이 같은 쿠폰을 얼마나 자주 사용할 수 있는지 선택하세요.
                           </p>
 
                           <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateDraft(draft.localId, { repeatable: false })
-                              }
-                              className={`rounded-2xl border px-4 py-3 text-left ${
-                                !draft.repeatable
-                                  ? "border-red-500 bg-red-50 text-red-700"
-                                  : "border-gray-200 bg-white text-gray-600"
-                              }`}
-                            >
-                              <p className="text-sm font-black">✓ One time only</p>
-                              <p className="mt-1 text-[11px] font-semibold opacity-75">
-                                고객당 1회만 사용
-                              </p>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateDraft(draft.localId, { repeatable: true })
-                              }
-                              className={`rounded-2xl border px-4 py-3 text-left ${
-                                draft.repeatable
-                                  ? "border-red-500 bg-red-50 text-red-700"
-                                  : "border-gray-200 bg-white text-gray-600"
-                              }`}
-                            >
-                              <p className="text-sm font-black">↻ Multiple uses</p>
-                              <p className="mt-1 text-[11px] font-semibold opacity-75">
-                                같은 고객도 반복 사용 가능
-                              </p>
-                            </button>
+                            {[
+                              ["one_time", "✓ One time only", "고객당 전체 기간 1회"],
+                              ["multiple", "↻ Multiple uses", "같은 고객 반복 사용 가능"],
+                              ["yearly", "🎂 Once per year", "고객당 매년 1회 사용"],
+                            ].map(([mode, title, desc]) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() =>
+                                  updateDraft(draft.localId, {
+                                    usageMode: mode as CouponDraft["usageMode"],
+                                    repeatable: mode === "multiple",
+                                  })
+                                }
+                                className={`rounded-2xl border px-4 py-3 text-left ${
+                                  draft.usageMode === mode
+                                    ? "border-red-500 bg-red-50 text-red-700"
+                                    : "border-gray-200 bg-white text-gray-600"
+                                }`}
+                              >
+                                <p className="text-sm font-black">{title}</p>
+                                <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                  {desc}
+                                </p>
+                              </button>
+                            ))}
                           </div>
                         </div>
 
@@ -1731,7 +1747,95 @@ export default function NewCouponPage() {
                                 Promo Code 복사 → 주문 페이지 이동
                               </p>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateDraft(draft.localId, {
+                                  activationMode: "reservation",
+                                  promoCode: draft.promoCode || "",
+                                  orderButtonText:
+                                    draft.orderButtonText === "ORDER NOW"
+                                      ? "RESERVE NOW"
+                                      : draft.orderButtonText || "RESERVE NOW",
+                                })
+                              }
+                              className={`rounded-2xl border px-4 py-3 text-left ${
+                                draft.activationMode === "reservation"
+                                  ? "border-red-500 bg-red-50 text-red-700"
+                                  : "border-gray-200 bg-white text-gray-600"
+                              }`}
+                            >
+                              <p className="text-sm font-black">📅 Reservation only</p>
+                              <p className="mt-1 text-[11px] font-semibold opacity-75">
+                                예약 필수 · Promo Code 등록 가능
+                              </p>
+                            </button>
                           </div>
+
+                          {draft.activationMode === "reservation" && (
+                            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                              <p className="text-sm font-black text-amber-800">
+                                Reservation Coupon
+                              </p>
+                              <p className="mt-1 text-xs font-semibold text-amber-700/70">
+                                예약이 필요한 프로모션입니다. Promo Code가 있으면 함께 등록하세요.
+                              </p>
+
+                              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                <div>
+                                  <label className="mb-1 block text-xs font-black text-gray-600">
+                                    Promo Code (선택)
+                                  </label>
+                                  <input
+                                    value={draft.promoCode}
+                                    onChange={(event) =>
+                                      updateDraft(draft.localId, {
+                                        promoCode: event.target.value
+                                          .toUpperCase()
+                                          .replace(/\s/g, "")
+                                          .slice(0, 30),
+                                      })
+                                    }
+                                    placeholder="예: SEOL2310"
+                                    className="w-full rounded-2xl border p-3 text-center text-lg font-black tracking-[0.12em]"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="mb-1 block text-xs font-black text-gray-600">
+                                    버튼 문구
+                                  </label>
+                                  <input
+                                    value={draft.orderButtonText}
+                                    maxLength={24}
+                                    onChange={(event) =>
+                                      updateDraft(draft.localId, {
+                                        orderButtonText: event.target.value,
+                                      })
+                                    }
+                                    placeholder="RESERVE NOW"
+                                    className="w-full rounded-2xl border p-3 font-black"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="mt-3">
+                                <label className="mb-1 block text-xs font-black text-gray-600">
+                                  Reservation URL
+                                </label>
+                                <input
+                                  value={draft.orderUrl}
+                                  onChange={(event) =>
+                                    updateDraft(draft.localId, {
+                                      orderUrl: event.target.value,
+                                    })
+                                  }
+                                  placeholder="https://..."
+                                  className="w-full rounded-2xl border p-3 font-semibold"
+                                />
+                              </div>
+                            </div>
+                          )}
 
                           {draft.activationMode === "online_order" && (
                             <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
@@ -2212,9 +2316,11 @@ export default function NewCouponPage() {
 
                             <div className="mt-4 border-t border-dashed pt-3 text-[11px] font-semibold text-gray-500">
                               <p>
-                                {draft.repeatable
-                                  ? "Multiple uses allowed."
-                                  : "One time use per customer."}
+                                {draft.usageMode === "yearly"
+                                  ? "Once per year per customer."
+                                  : draft.usageMode === "multiple"
+                                    ? "Multiple uses allowed."
+                                    : "One time use per customer."}
                               </p>
                               {draft.activationMode === "staff_stamp" ? (
                                 <>
@@ -2228,6 +2334,19 @@ export default function NewCouponPage() {
                                     {draft.stampText || "THANK YOU! See you again soon!"}
                                   </p>
                                 </>
+                              ) : draft.activationMode === "reservation" ? (
+                                <>
+                                  <p className="mt-2 font-black text-amber-700">
+                                    RESERVATION REQUIRED
+                                  </p>
+                                  {draft.promoCode && (
+                                    <p className="font-black text-amber-700">
+                                      Promo Code: {draft.promoCode}
+                                    </p>
+                                  )}
+                                </>
+                              ) : draft.activationMode === "online_order" ? (
+                                <p>Online order promo code required.</p>
                               ) : (
                                 <p>Available for immediate use.</p>
                               )}
@@ -2394,7 +2513,11 @@ export default function NewCouponPage() {
                                 {inferCouponType(coupon)}
                               </span>
                               <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
-                                {coupon.repeatable ? "Multiple uses" : "One time"}
+                                {coupon.usage_mode === "yearly"
+                                  ? "Once per year"
+                                  : coupon.usage_mode === "multiple" || coupon.repeatable
+                                    ? "Multiple uses"
+                                    : "One time"}
                               </span>
                               <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-600">
                                 {coupon.pin_code ? "PIN" : "Staff tap"}
