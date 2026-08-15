@@ -692,13 +692,10 @@ export default function BusinessCouponsPage() {
                           </p>
 
                           <div className="mt-1.5 sm:hidden">
-                            <p className="line-clamp-2 text-[10px] font-semibold leading-[1.4] text-[#777E88]">
-                              {coupon.description}
-                            </p>
                             <button
                               type="button"
                               onClick={() => setMobileDetailCoupon(coupon)}
-                              className="mt-1 inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-[9px] font-black text-[#555B66] shadow-sm active:scale-[0.98]"
+                              className="inline-flex items-center rounded-md border border-gray-200 bg-white px-2 py-1 text-[9px] font-black text-[#555B66] shadow-sm active:scale-[0.98]"
                             >
                               VIEW DETAILS
                             </button>
@@ -731,8 +728,9 @@ export default function BusinessCouponsPage() {
                         </div>
                       ) : isReservation ? (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[9px] font-black text-amber-700">
-                            RESERVATION REQUIRED
+                          <span className="whitespace-nowrap text-[9px] font-black text-amber-700">
+                            <span className="sm:hidden">RESV. REQUIRED</span>
+                            <span className="hidden sm:inline">RESERVATION REQUIRED</span>
                           </span>
                           {coupon.promo_code && (
                             <button
@@ -919,7 +917,7 @@ export default function BusinessCouponsPage() {
 
       {mobileDetailCoupon && (
         <div
-          className="fixed inset-0 z-[120] flex items-end justify-center bg-black/55 px-3 pb-3 sm:hidden"
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 px-4 py-6 sm:hidden"
           onClick={() => setMobileDetailCoupon(null)}
         >
           <div
