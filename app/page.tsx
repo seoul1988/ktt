@@ -1029,10 +1029,9 @@ const kdramaNews = (todaysKoreaPosts || [])
 
               <Link
                 href="/deals"
-                aria-label="More deals"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-lg font-black text-[#172033] shadow-sm transition hover:scale-105 hover:bg-gray-50"
+                className="shrink-0 text-[11px] font-black text-red-600 transition hover:text-red-700"
               >
-                →
+                View all →
               </Link>
             </div>
 
