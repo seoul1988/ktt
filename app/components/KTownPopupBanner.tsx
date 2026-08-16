@@ -908,7 +908,8 @@ export default function KTownPopupBanner() {
         role="dialog"
         aria-modal="true"
         aria-label={banner.title || "KTownTriangle hanging donut popup"}
-        onMouseDown={(event) => {
+        onPointerDown={(event) => {
+          // 팝업(도넛) 바깥의 어두운 배경을 클릭/터치하면 닫습니다.
           if (event.currentTarget === event.target) closePopup();
         }}
       >
@@ -930,7 +931,7 @@ export default function KTownPopupBanner() {
         `}</style>
 
         <div
-          className="ktown-hanging-donut-intrinsic absolute left-1/2 top-0 overflow-visible"
+          className="ktown-hanging-donut-intrinsic pointer-events-none absolute left-1/2 top-0 overflow-visible"
           style={{
             /*
              * Hanging Donut도 관리자 미리보기에서 저장한 popup 크기를 기준으로
@@ -981,7 +982,7 @@ export default function KTownPopupBanner() {
           <button
             type="button"
             onClick={closePopup}
-            className="absolute right-[2%] top-[6%] z-50 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-xl font-black text-white shadow-lg"
+            className="pointer-events-auto absolute right-[2%] top-[6%] z-50 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-xl font-black text-white shadow-lg"
             aria-label="Close popup"
           >
             ×
@@ -1030,7 +1031,7 @@ export default function KTownPopupBanner() {
                 href={link}
                 target={link.startsWith("http") ? "_blank" : undefined}
                 rel={link.startsWith("http") ? "noreferrer" : undefined}
-                className="absolute z-30 flex items-center justify-center overflow-hidden px-3 text-center font-black shadow-md active:scale-[0.98]"
+                className="pointer-events-auto absolute z-30 flex items-center justify-center overflow-hidden px-3 text-center font-black shadow-md active:scale-[0.98]"
                 style={{
                   left: `${buttonX}%`,
                   top: `${buttonY}%`,
@@ -1046,7 +1047,7 @@ export default function KTownPopupBanner() {
               </a>
             ) : (
               <div
-                className="absolute z-30 flex items-center justify-center overflow-hidden px-3 text-center font-black shadow-md"
+                className="pointer-events-auto absolute z-30 flex items-center justify-center overflow-hidden px-3 text-center font-black shadow-md"
                 style={{
                   left: `${buttonX}%`,
                   top: `${buttonY}%`,
@@ -1064,7 +1065,14 @@ export default function KTownPopupBanner() {
 
           {banner.hide_24h_enabled !== false && (
             <label
-              className="fixed bottom-[92px] left-1/2 z-[10001] flex -translate-x-1/2 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-black/80 px-4 py-2 text-xs font-bold text-white shadow-lg sm:bottom-6"
+              className="pointer-events-auto absolute left-1/2 z-50 flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-black/80 px-4 py-2 text-xs font-bold text-white shadow-lg"
+              style={{
+                // 화면 하단이 아니라 Hanging Donut 이미지의 맨 아래에 항상 붙입니다.
+                // 이미지/팝업이 화면 크기에 따라 축소되어도 이 체크박스도 같이 따라갑니다.
+                left: "50%",
+                bottom: 0,
+                transform: "translate(-50%, 50%)",
+              }}
             >
               <input
                 type="checkbox"
@@ -1092,7 +1100,7 @@ export default function KTownPopupBanner() {
         banner.title ||
         "KTownTriangle popup"
       }
-      onMouseDown={(
+      onPointerDown={(
         event,
       ) => {
         /*
