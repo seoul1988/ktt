@@ -893,15 +893,6 @@ export default function KTownPopupBanner() {
       {};
 
   if (isHangingDonut) {
-    // Hanging Donut PNG is visually tall (rope + donut + hide control).
-    // A short saved popupHeight such as 400 must not crop that tall artwork.
-    // Keep the editor's percentage coordinates, but render the public popup on
-    // a minimum 800px-tall design stage and scale that whole stage down to fit
-    // the current viewport. This is the same geometry that looked correct when
-    // popupHeight was manually set to 800, without requiring the admin value
-    // itself to be changed to 800.
-    const hangingDesignHeight = Math.max(800, popupHeight);
-
     return (
       <div
         className="fixed inset-0 z-[9999] overflow-visible bg-black/35"
@@ -931,29 +922,14 @@ export default function KTownPopupBanner() {
         `}</style>
 
         <div
-          className="ktown-hanging-donut-intrinsic pointer-events-none absolute left-1/2 top-0 overflow-visible"
+          className="ktown-hanging-donut-intrinsic pointer-events-none absolute left-1/2 top-0 inline-block overflow-visible"
           style={{
-            /*
-             * Hanging Donut도 관리자 미리보기에서 저장한 popup 크기를 기준으로
-             * 하나의 디자인 캔버스를 만듭니다.
-             *
-             * 이전 코드는 이미지 원본(intrinsic) 크기만 사용해서 popupHeight를
-             * 무시했고, 짧은 화면에서는 아래쪽이 잘려 보일 수 있었습니다.
-             * 이제 popupWidth / popupHeight 안에 이미지를 contain으로 맞추므로
-             * 400px 높이로 디자인해도 전체 이미지가 화면 안에 축소되어 보입니다.
-             */
-            // Scale proportionally from the design stage instead of forcing
-            // the image into popupHeight. For example, 720x400 is rendered
-            // using a 720x800 hanging stage, then reduced as one unit so the
-            // bottom of the donut is always visible.
-            // IMPORTANT: give the stage an explicit width AND height.
-            // Some browsers were resolving height:auto + aspectRatio back to the
-            // saved 720x400 geometry, which is why the donut was still cut at a
-            // straight horizontal line. These two min() expressions use the same
-            // scale factor, so the stage always remains popupWidth:hangingDesignHeight
-            // while fitting both the viewport width and height.
-            width: `min(88vw, calc((100dvh - 24px) * ${popupWidth} / ${hangingDesignHeight}), ${Math.max(240, popupWidth)}px)`,
-            height: `min(calc(88vw * ${hangingDesignHeight} / ${popupWidth}), calc(100dvh - 24px), ${hangingDesignHeight}px)`,
+            // IMPORTANT: the image itself determines this wrapper's height.
+            // Therefore the checkbox can be anchored to the REAL image bottom
+            // on phone, tablet and desktop with no viewport-specific percentages.
+            width: "auto",
+            height: "auto",
+            maxWidth: "92vw",
             background: "transparent",
             border: "none",
             outline: "none",
@@ -967,8 +943,12 @@ export default function KTownPopupBanner() {
             <img
               src={banner.image_url}
               alt=""
-              className="pointer-events-none block h-full w-full"
+              className="pointer-events-none block"
               style={{
+                width: "auto",
+                height: "auto",
+                maxWidth: `min(92vw, ${Math.max(240, popupWidth)}px)`,
+                maxHeight: "calc(100dvh - 52px)",
                 objectFit: "contain",
                 objectPosition: "top center",
                 background: "transparent",
@@ -1067,11 +1047,12 @@ export default function KTownPopupBanner() {
             <label
               className="pointer-events-auto absolute left-1/2 z-50 flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-black/80 px-4 py-2 text-xs font-bold text-white shadow-lg"
               style={{
-                // 화면 하단이 아니라 Hanging Donut 이미지의 맨 아래에 항상 붙입니다.
-                // 이미지/팝업이 화면 크기에 따라 축소되어도 이 체크박스도 같이 따라갑니다.
+                // 폰/태블릿/데스크탑 모두 동일:
+                // wrapper의 높이를 실제 <img>가 만들기 때문에 bottom: 0은
+                // 투명한 800px 디자인 캔버스가 아니라 실제 표시 이미지의 맨 아래입니다.
                 left: "50%",
                 bottom: 0,
-                transform: "translate(-50%, 50%)",
+                transform: "translate(-50%, calc(100% + 6px))",
               }}
             >
               <input
