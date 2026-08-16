@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import ProfileButton from "../components/ProfileButton";
 import BottomNav from "../components/BottomNav";
+import ProfileButton from "../components/ProfileButton";
 
 type Business = {
   id: number;
   name: string | null;
-  image_url?: string | null;
-  image_urls?: string[] | null;
+  category: string | null;
+  address: string | null;
+  image_url: string | null;
+  image_urls: string[] | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
 };
 
 type Coupon = {
@@ -18,104 +24,278 @@ type Coupon = {
   title: string;
   description: string | null;
   end_date: string | null;
-  active: boolean | null;
-  activation_mode?: string | null;
-  promo_code?: string | null;
-  order_url?: string | null;
-  order_button_text?: string | null;
-  image_url?: string | null;
-  businesses?: Business | Business[] | null;
+  active: boolean;
+  image_url: string | null;
 };
 
-type StampedInfo = {
-  stampedAt: string;
-  expiresAt: string;
-};
-
-type RedeemedInfo = {
-  redeemedAt: string;
-};
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+function categoriesOf(value: string | null) {
+  return String(value || "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
 }
 
-function businessOf(coupon: Coupon) {
-  if (Array.isArray(coupon.businesses)) {
-    return coupon.businesses[0] || null;
+
+declare global {
+  interface Window {
+    L?: any;
+  }
+}
+
+type LatLng = {
+  latitude: number;
+  longitude: number;
+};
+
+let leafletLoader: Promise<any> | null = null;
+
+function loadLeaflet() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Leaflet is available only in the browser."));
   }
 
-  return coupon.businesses || null;
+  if (window.L) return Promise.resolve(window.L);
+  if (leafletLoader) return leafletLoader;
+
+  leafletLoader = new Promise((resolve, reject) => {
+    const existingCss = document.querySelector<HTMLLinkElement>(
+      'link[data-ktown-leaflet="css"]',
+    );
+
+    if (!existingCss) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      link.dataset.ktownLeaflet = "css";
+      document.head.appendChild(link);
+    }
+
+    const existingScript = document.querySelector<HTMLScriptElement>(
+      'script[data-ktown-leaflet="js"]',
+    );
+
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(window.L));
+      existingScript.addEventListener("error", () =>
+        reject(new Error("Unable to load the map library.")),
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.async = true;
+    script.dataset.ktownLeaflet = "js";
+    script.onload = () => resolve(window.L);
+    script.onerror = () => reject(new Error("Unable to load the map library."));
+    document.body.appendChild(script);
+  });
+
+  return leafletLoader;
 }
 
-function reservationUsedKey(couponId: string | number) {
-  return `ktown_coupon_reservation_used_${couponId}`;
+function getBusinessCoordinates(business: Business | null): LatLng | null {
+  if (!business) return null;
+
+  const latitude = Number(business.latitude ?? business.lat);
+  const longitude = Number(business.longitude ?? business.lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return { latitude, longitude };
 }
 
-export default function MyCouponsPage() {
+function TwoPointMap({
+  business,
+  userLocation,
+}: {
+  business: Business;
+  userLocation: LatLng | null;
+}) {
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const storeCoords = getBusinessCoordinates(business);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function drawMap() {
+      if (!mapElementRef.current || !storeCoords) return;
+
+      try {
+        const L = await loadLeaflet();
+        if (cancelled || !mapElementRef.current || !L) return;
+
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+        }
+
+        const map = L.map(mapElementRef.current, {
+          zoomControl: true,
+          attributionControl: true,
+        });
+
+        mapInstanceRef.current = map;
+
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
+
+        const storeIcon = L.divIcon({
+          className: "",
+          html: `
+            <div style="
+              width:34px;
+              height:34px;
+              border-radius:50% 50% 50% 0;
+              transform:rotate(-45deg);
+              background:#EB4A45;
+              border:3px solid white;
+              box-shadow:0 2px 8px rgba(0,0,0,.30);
+              display:flex;
+              align-items:center;
+              justify-content:center;
+            ">
+              <div style="
+                width:10px;
+                height:10px;
+                border-radius:999px;
+                background:white;
+              "></div>
+            </div>
+          `,
+          iconSize: [34, 34],
+          iconAnchor: [17, 34],
+        });
+
+        L.marker([storeCoords.latitude, storeCoords.longitude], {
+          icon: storeIcon,
+        })
+          .addTo(map)
+          .bindPopup(
+            `<strong>${String(business.name || "Store")
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")}</strong><br/>Store`,
+          );
+
+        const points: [number, number][] = [
+          [storeCoords.latitude, storeCoords.longitude],
+        ];
+
+        if (userLocation) {
+          const myLocationIcon = L.divIcon({
+            className: "",
+            html: `
+              <div style="
+                width:24px;
+                height:24px;
+                border-radius:999px;
+                background:#2563EB;
+                border:4px solid white;
+                box-shadow:0 0 0 2px rgba(37,99,235,.28),0 2px 8px rgba(0,0,0,.25);
+              "></div>
+            `,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12],
+          });
+
+          L.marker([userLocation.latitude, userLocation.longitude], {
+            icon: myLocationIcon,
+          })
+            .addTo(map)
+            .bindPopup("<strong>Your Location</strong>");
+
+          points.push([userLocation.latitude, userLocation.longitude]);
+
+          L.polyline(points, {
+            color: "#7C3AED",
+            weight: 3,
+            opacity: 0.65,
+            dashArray: "7 7",
+          }).addTo(map);
+        }
+
+        if (points.length === 2) {
+          map.fitBounds(L.latLngBounds(points), {
+            padding: [45, 45],
+            maxZoom: 15,
+          });
+        } else {
+          map.setView(
+            [storeCoords.latitude, storeCoords.longitude],
+            15,
+          );
+        }
+
+        window.setTimeout(() => {
+          map.invalidateSize();
+        }, 100);
+      } catch (error) {
+        console.error("Map load error:", error);
+      }
+    }
+
+    void drawMap();
+
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [
+    business.id,
+    storeCoords?.latitude,
+    storeCoords?.longitude,
+    userLocation?.latitude,
+    userLocation?.longitude,
+  ]);
+
+  if (!storeCoords) {
+    return (
+      <iframe
+        title={`${business.name || "Business"} map`}
+        src={`https://www.google.com/maps?q=${encodeURIComponent(
+          business.address || "",
+        )}&output=embed`}
+        className="h-full w-full border-0"
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    );
+  }
+
+  return <div ref={mapElementRef} className="h-full w-full" />;
+}
+
+export default function CouponsPage() {
+  const [businesses, setBusinesses] = useState<Business[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<number[]>([]);
-  const [stampedMap, setStampedMap] = useState<Record<string, StampedInfo>>({});
-  const [redeemedMap, setRedeemedMap] = useState<Record<string, RedeemedInfo>>({});
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("ALL");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"saved" | "stamped" | "used">("saved");
+  const [mapBusiness, setMapBusiness] = useState<Business | null>(null);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState("");
+  const [imageModal, setImageModal] = useState<{
+    url: string;
+    name: string;
+  } | null>(null);
+  const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<number[]>([]);
+  const [showSavedModal, setShowSavedModal] = useState(false);
 
   useEffect(() => {
     void loadData();
-  }, []);
-
-  async function loadData() {
-    setLoading(true);
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("coupons")
-      .select(`
-        id,
-        business_id,
-        title,
-        description,
-        end_date,
-        active,
-        activation_mode,
-        promo_code,
-        order_url,
-        order_button_text,
-        image_url,
-        businesses (
-          id,
-          name,
-          image_url,
-          image_urls
-        )
-      `)
-      .eq("active", true)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
-
-    const rows = (data || []) as Coupon[];
-    setCoupons(rows);
 
     try {
       const raw = window.localStorage.getItem("ktown_coupon_favorite_businesses");
@@ -130,337 +310,756 @@ export default function MyCouponsPage() {
         }
       }
     } catch {
-      // ignore invalid storage
+      // Ignore unavailable or invalid browser storage.
     }
+  }, []);
 
-    const stampedNext: Record<string, StampedInfo> = {};
-    const redeemedNext: Record<string, RedeemedInfo> = {};
-    const now = Date.now();
+  async function loadData() {
+    setLoading(true);
 
-    for (const coupon of rows) {
-      try {
-        const stampedRaw = window.localStorage.getItem(
-          `ktown_coupon_stamped_${coupon.id}`,
-        );
+    const [businessResult, couponResult] = await Promise.all([
+      supabase
+        .from("businesses")
+        .select("*")
+        .order("name", { ascending: true }),
+      supabase
+        .from("coupons")
+        .select("id,business_id,title,description,end_date,active,image_url")
+        .eq("active", true)
+        .order("created_at", { ascending: false }),
+    ]);
 
-        if (stampedRaw) {
-          const parsed = JSON.parse(stampedRaw) as Partial<StampedInfo>;
-          const expiresAtMs = parsed.expiresAt
-            ? new Date(parsed.expiresAt).getTime()
-            : NaN;
-
-          if (
-            parsed.stampedAt &&
-            parsed.expiresAt &&
-            Number.isFinite(expiresAtMs) &&
-            expiresAtMs >= now
-          ) {
-            stampedNext[String(coupon.id)] = {
-              stampedAt: parsed.stampedAt,
-              expiresAt: parsed.expiresAt,
-            };
-          }
-        }
-      } catch {
-        // ignore invalid storage
-      }
-
-      try {
-        const currentYear = new Date().getFullYear();
-
-        // Reservation coupons are saved with a dedicated USED key.
-        // Also check the normal and yearly redemption keys so My Coupons
-        // matches the business coupon page and the redeem page.
-        const keysToCheck = [
-          reservationUsedKey(coupon.id),
-          `ktown_coupon_redeemed_${coupon.id}`,
-          `ktown_coupon_redeemed_${coupon.id}_${currentYear}`,
-        ];
-
-        let redeemedRaw: string | null = null;
-
-        for (const key of keysToCheck) {
-          redeemedRaw = window.localStorage.getItem(key);
-          if (redeemedRaw) break;
-        }
-
-        if (redeemedRaw) {
-          const parsed = JSON.parse(redeemedRaw) as Partial<RedeemedInfo>;
-          if (parsed.redeemedAt) {
-            redeemedNext[String(coupon.id)] = {
-              redeemedAt: parsed.redeemedAt,
-            };
-          }
-        }
-      } catch {
-        // ignore invalid storage
-      }
-    }
-
-    setStampedMap(stampedNext);
-    setRedeemedMap(redeemedNext);
-    setLoading(false);
-  }
-
-  const savedCoupons = useMemo(() => {
-    return coupons.filter((coupon) =>
-      favoriteBusinessIds.includes(Number(coupon.business_id)),
-    );
-  }, [coupons, favoriteBusinessIds]);
-
-  const stampedCoupons = useMemo(() => {
-    return coupons.filter(
-      (coupon) =>
-        Boolean(stampedMap[String(coupon.id)]) &&
-        !Boolean(redeemedMap[String(coupon.id)]),
-    );
-  }, [coupons, stampedMap, redeemedMap]);
-
-  const usedCoupons = useMemo(() => {
-    return coupons.filter((coupon) =>
-      Boolean(redeemedMap[String(coupon.id)]),
-    );
-  }, [coupons, redeemedMap]);
-
-  const currentItems =
-    activeTab === "saved"
-      ? savedCoupons
-      : activeTab === "stamped"
-        ? stampedCoupons
-        : usedCoupons;
-
-  function openCoupon(coupon: Coupon) {
-    if (coupon.activation_mode === "online_order") {
-      const raw = String(coupon.order_url || "").trim();
-      if (!raw) return;
-
-      const code = String(coupon.promo_code || "").trim();
-
-      if (code && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(code).catch(() => {
-          // 주문 페이지 이동은 계속 진행
-        });
-      }
-
-      const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
-      window.location.href = url;
+    if (businessResult.error) {
+      alert(businessResult.error.message);
+      setLoading(false);
       return;
     }
 
-    window.location.href = `/coupons/business/${coupon.business_id}`;
+    if (couponResult.error) {
+      alert(couponResult.error.message);
+      setLoading(false);
+      return;
+    }
+
+    setBusinesses((businessResult.data || []) as Business[]);
+    setCoupons((couponResult.data || []) as Coupon[]);
+    setLoading(false);
   }
 
+  const appCategories = [
+    { id: "ALL", label: "All", icon: "◉" },
+    { id: "FOOD", label: "Food", icon: "🍴" },
+    { id: "MARKET", label: "Market", icon: "🛒" },
+    { id: "BEAUTY", label: "Beauty", icon: "✂" },
+    { id: "AUTO", label: "Auto", icon: "🚗" },
+    { id: "OTHER", label: "Other", icon: "•••" },
+  ] as const;
+
+  function matchesAppCategory(business: Business, selected: string) {
+    if (selected === "ALL") return true;
+
+    const values = categoriesOf(business.category).map((v) => v.toLowerCase());
+    const joined = values.join(" ");
+
+    const food =
+      joined.includes("restaurant") ||
+      joined.includes("food") ||
+      joined.includes("cafe") ||
+      joined.includes("bakery") ||
+      joined.includes("chicken") ||
+      joined.includes("korean") ||
+      joined.includes("chinese") ||
+      joined.includes("japanese") ||
+      joined.includes("dessert");
+
+    const market =
+      joined.includes("market") ||
+      joined.includes("grocery") ||
+      joined.includes("mart");
+
+    const beauty =
+      joined.includes("beauty") ||
+      joined.includes("hair") ||
+      joined.includes("salon") ||
+      joined.includes("spa") ||
+      joined.includes("nail");
+
+    const auto =
+      joined.includes("auto") ||
+      joined.includes("car") ||
+      joined.includes("automotive");
+
+    if (selected === "FOOD") return food;
+    if (selected === "MARKET") return market;
+    if (selected === "BEAUTY") return beauty;
+    if (selected === "AUTO") return auto;
+    if (selected === "OTHER") return !food && !market && !beauty && !auto;
+
+    return true;
+  }
+
+  const groups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const businessMap = new Map(businesses.map((b) => [b.id, b]));
+    const map = new Map<number, { business: Business; coupons: Coupon[] }>();
+
+    coupons.forEach((coupon) => {
+      if (coupon.end_date && new Date(coupon.end_date) < new Date()) return;
+
+      const business = businessMap.get(coupon.business_id);
+      if (!business) return;
+
+      if (!matchesAppCategory(business, category)) return;
+
+      const text = [
+        business.name,
+        business.category,
+        business.address,
+        coupon.title,
+        coupon.description,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (q && !text.includes(q)) return;
+
+      const existing = map.get(business.id);
+      if (existing) existing.coupons.push(coupon);
+      else map.set(business.id, { business, coupons: [coupon] });
+    });
+
+    return Array.from(map.values()).sort((a, b) =>
+      String(a.business.name || "").localeCompare(String(b.business.name || "")),
+    );
+  }, [
+    businesses,
+    coupons,
+    search,
+    category,
+  ]);
+
+  function toggleFavorite(businessId: number) {
+    setFavoriteBusinessIds((current) => {
+      const exists = current.includes(businessId);
+      const next = exists
+        ? current.filter((id) => id !== businessId)
+        : [...current, businessId];
+
+      try {
+        window.localStorage.setItem(
+          "ktown_coupon_favorite_businesses",
+          JSON.stringify(next),
+        );
+      } catch {
+        // Ignore unavailable browser storage.
+      }
+
+      return next;
+    });
+  }
+
+  function openMap(business: Business) {
+    setMapBusiness(business);
+    setLocationError("");
+
+    if (!navigator.geolocation) {
+      setLocationError("Your device does not support location.");
+      return;
+    }
+
+    setLocationLoading(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        setLocationLoading(false);
+      },
+      () => {
+        setUserLocation(null);
+        setLocationLoading(false);
+        setLocationError(
+          "Location access was not allowed. Store location is shown only.",
+        );
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      },
+    );
+  }
+
+  function openSavedList() {
+    setShowSavedModal(true);
+  }
+
+  const savedGroups = groups.filter(({ business }) =>
+    favoriteBusinessIds.includes(business.id),
+  );
+
   return (
-    <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
-      <div className="mx-auto min-h-screen w-full max-w-xl bg-[#F8F3EC]">
-        <div className="sticky top-0 z-30 border-b border-[#E9DFD4] bg-[#F8F3EC]/95 px-4 pb-3 pt-4 backdrop-blur">
-          <div className="relative flex h-11 items-center">
+    <main className="min-h-screen bg-[#F5F5F5] pb-20 text-[#151821]">
+      <div className="mx-auto min-h-screen w-full max-w-xl bg-white">
+        <header className="sticky top-0 z-30 border-b border-[#ECECEC] bg-white">
+          <div className="flex h-12 items-center justify-between px-4">
             <button
               type="button"
-              onClick={() => {
-                window.location.href = "/";
-              }}
-              className="rounded-full bg-white px-4 py-2 text-sm font-black shadow-sm"
+              onClick={() => history.back()}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-[26px] leading-none text-[#222]"
+              aria-label="Back"
             >
-              ← Back
+              ‹
             </button>
 
-            <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[28px] font-black">
-              My Coupons
+            <h1 className="text-[15px] font-black tracking-[0.02em] text-[#E9413B]">
+              "COUPONS"
             </h1>
 
-            <div className="ml-auto">
-              <ProfileButton />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={openSavedList}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full text-[22px] text-[#8B9098] transition hover:bg-[#FFF0EF] hover:text-[#EB4A45]"
+                aria-label="Saved coupons"
+                title="Saved stores"
+              >
+                {favoriteBusinessIds.length > 0 ? "♥" : "♡"}
+                {favoriteBusinessIds.length > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EB4A45] px-1 text-[8px] font-black text-white">
+                    {favoriteBusinessIds.length}
+                  </span>
+                )}
+              </button>
+
+              <div className="scale-90">
+                <ProfileButton />
+              </div>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 rounded-2xl bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setActiveTab("saved")}
-              className={`rounded-xl px-2 py-2.5 text-xs font-black ${
-                activeTab === "saved"
-                  ? "bg-[#EB4A45] text-white"
-                  : "text-[#646B76]"
-              }`}
-            >
-              ♥ Saved {savedCoupons.length}
-            </button>
+            <div className="px-4 pb-3">
+              <div className="relative">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="pointer-events-none absolute left-3 top-1/2 h-[17px] w-[17px] -translate-y-1/2 fill-none stroke-[#9CA3AF]"
+                  strokeWidth="2"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m16.5 16.5 4 4" />
+                </svg>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab("stamped")}
-              className={`rounded-xl px-2 py-2.5 text-xs font-black ${
-                activeTab === "stamped"
-                  ? "bg-[#EB4A45] text-white"
-                  : "text-[#646B76]"
-              }`}
-            >
-              ✓ Stamped {stampedCoupons.length}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("used")}
-              className={`rounded-xl px-2 py-2.5 text-xs font-black ${
-                activeTab === "used"
-                  ? "bg-[#EB4A45] text-white"
-                  : "text-[#646B76]"
-              }`}
-            >
-              Used {usedCoupons.length}
-            </button>
-          </div>
-        </div>
-
-        <section className="px-4 py-4">
-          {loading ? (
-            <div className="rounded-3xl bg-white p-8 text-center text-sm font-bold text-gray-400 shadow-sm">
-              Loading coupons...
-            </div>
-          ) : currentItems.length === 0 ? (
-            <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
-              <div className="text-5xl">
-                {activeTab === "saved" ? "♡" : activeTab === "stamped" ? "✓" : "🎟️"}
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search stores or coupons"
+                  className="h-10 w-full rounded-[10px] border border-[#E4E6E8] bg-white pl-9 pr-3 text-[12px] font-semibold outline-none placeholder:text-[#A7ADB7] focus:border-[#F06A64]"
+                />
               </div>
 
-              <p className="mt-4 text-lg font-black">
-                {activeTab === "saved"
-                  ? "No saved coupons yet."
-                  : activeTab === "stamped"
-                    ? "No stamped coupons yet."
-                    : "No used coupons yet."}
-              </p>
+              <div className="mt-3">
+                <div className="grid grid-cols-6 gap-1">
+                  {appCategories.map((item) => {
+                    const selected = category === item.id;
 
-              <p className="mt-2 text-sm font-semibold text-gray-500">
-                {activeTab === "saved"
-                  ? "Tap the heart on a store in Coupon Book to save it."
-                  : activeTab === "stamped"
-                    ? "First-visit coupons will appear here after staff stamps them."
-                    : "Redeemed coupons will appear here."}
-              </p>
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => setCategory(item.id)}
+                        className="flex min-w-0 flex-col items-center gap-1"
+                      >
+                        <span
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-[14px] leading-none ${
+                            selected
+                              ? "bg-[#EB4A45] text-white"
+                              : "bg-[#F2F3F5] text-[#555]"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
 
-              {activeTab === "saved" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = "/coupons";
-                  }}
-                  className="mt-5 rounded-2xl bg-[#EB4A45] px-5 py-3 text-sm font-black text-white"
-                >
-                  OPEN COUPON BOOK
-                </button>
-              )}
+                        <span
+                          className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap text-center text-[9px] font-bold ${
+                            selected ? "text-[#EB4A45]" : "text-[#737984]"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {category === "FOOD" && (
+                  <div className="mt-2 flex items-center gap-4 overflow-x-auto border-t border-[#F1F1F1] pt-2 text-[9px] font-bold text-[#6F7580] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <span className="shrink-0 text-[#EB4A45]">All</span>
+                    <span className="shrink-0">Korean</span>
+                    <span className="shrink-0">Chicken</span>
+                    <span className="shrink-0">Chinese</span>
+                    <span className="shrink-0">Japanese</span>
+                    <span className="shrink-0">Snack</span>
+                    <span className="shrink-0">Cafe</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+        </header>
+
+        <section className="px-3 pb-4 pt-2">
+          <div className="mb-1 flex items-center justify-between px-1">
+            <span className="text-[10px] font-black text-[#EB4A45]">
+              {appCategories.find((item) => item.id === category)?.label || "All"}
+            </span>
+            <span className="text-[9px] font-bold text-[#A0A6AF]">
+              {groups.length} stores
+            </span>
+          </div>
+
+          {loading ? (
+            <div className="py-16 text-center text-[12px] font-bold text-gray-400">
+              Loading coupons...
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="py-20 text-center">
+              <div className="text-5xl">🎟️</div>
+              <p className="mt-4 text-[16px] font-black">
+                No coupons available.
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {currentItems.map((coupon) => {
-                const business = businessOf(coupon);
-                const stampedInfo = stampedMap[String(coupon.id)];
-                const redeemedInfo = redeemedMap[String(coupon.id)];
+            <div>
+              {groups.map(({ business, coupons }) => {
                 const image =
-                  coupon.image_url ||
-                  business?.image_url ||
-                  business?.image_urls?.[0] ||
+                  coupons.find((c) => c.image_url)?.image_url ||
+                  business.image_url ||
+                  business.image_urls?.[0] ||
                   "";
 
-                const isOnline = coupon.activation_mode === "online_order";
+                const firstCoupon = coupons[0];
 
                 return (
-                  <article
-                    key={`${activeTab}-${coupon.id}`}
-                    className={`overflow-hidden rounded-3xl border bg-white shadow-sm ${
-                      redeemedInfo
-                        ? "border-[#E5E7EB] opacity-70"
-                        : "border-[#ECE5DD]"
-                    }`}
+                  <div
+                    key={business.id}
+                    className="border-b border-[#EEEEEE]"
                   >
-                    <div className="flex gap-3 p-3">
-                      <div className="h-[82px] w-[92px] shrink-0 overflow-hidden rounded-2xl bg-[#F1F1F1]">
-                        {image ? (
-                          <img
-                            src={image}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-3xl">
-                            🎟️
-                          </div>
-                        )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.location.href = `/coupons/business/${business.id}`;
+                      }}
+                      className="flex w-full items-center gap-3 px-1 py-2.5 text-left active:bg-[#FAFAFA]"
+                    >
+                      <div className="relative h-[82px] w-[108px] shrink-0">
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (image) {
+                              setImageModal({
+                                url: image,
+                                name: business.name || "Business",
+                              });
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if ((event.key === "Enter" || event.key === " ") && image) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setImageModal({
+                                url: image,
+                                name: business.name || "Business",
+                              });
+                            }
+                          }}
+                          className={`h-full w-full overflow-hidden rounded-[6px] bg-[#F2F2F2] ${
+                            image ? "cursor-zoom-in" : ""
+                          }`}
+                          title={image ? "View larger image" : undefined}
+                        >
+                          {image ? (
+                            <img
+                              src={image}
+                              alt={business.name || ""}
+                              className="absolute inset-0 block max-w-none"
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                objectPosition: "center",
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-2xl">
+                              🏪
+                            </div>
+                          )}
+                        </div>
+
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleFavorite(business.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              toggleFavorite(business.id);
+                            }
+                          }}
+                          className={`absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border bg-white text-[18px] shadow ${
+                            favoriteBusinessIds.includes(business.id)
+                              ? "border-[#F8B7B3] text-[#EB4A45]"
+                              : "border-[#E5E7EB] text-[#777E88]"
+                          }`}
+                          aria-label="Save store"
+                          title="Save store"
+                        >
+                          {favoriteBusinessIds.includes(business.id) ? "♥" : "♡"}
+                        </span>
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[10px] font-black uppercase text-[#7A808A]">
-                          {business?.name || "Local Business"}
+                        <p className="truncate text-[10px] font-black uppercase text-[#3C424D]">
+                          {business.name || "LOCAL BUSINESS"}
                         </p>
 
-                        <h2 className="mt-0.5 line-clamp-2 text-[16px] font-black leading-tight">
-                          {coupon.title}
-                        </h2>
+                        <h3 className="mt-0.5 line-clamp-2 text-[14px] font-black leading-[1.15] text-[#111827]">
+                          {firstCoupon?.title || "SPECIAL COUPON"}
+                        </h3>
 
-                        {coupon.description && (
-                          <p className="mt-1 line-clamp-2 text-[10px] font-semibold leading-4 text-[#747B85]">
-                            {coupon.description}
+                        {firstCoupon?.description && (
+                          <p className="mt-1 line-clamp-1 text-[9px] font-semibold text-[#777E88]">
+                            {firstCoupon.description}
                           </p>
                         )}
 
-                        {redeemedInfo ? (
-                          <p className="mt-2 text-[10px] font-black text-gray-500">
-                            ✓ USED · {formatDate(redeemedInfo.redeemedAt)}
+                        {favoriteBusinessIds.includes(business.id) && (
+                          <p className="mt-1 text-[9px] font-black text-[#EB4A45]">
+                            ♥ SAVED
                           </p>
-                        ) : stampedInfo ? (
-                          <p className="mt-2 text-[10px] font-black text-green-700">
-                            ✓ STAMPED · Use by {formatDate(stampedInfo.expiresAt)}
-                          </p>
-                        ) : isOnline ? (
-                          <p className="mt-2 text-[10px] font-black text-blue-600">
-                            ONLINE ORDER
-                            {coupon.promo_code ? ` · CODE ${coupon.promo_code}` : ""}
-                          </p>
-                        ) : coupon.end_date ? (
-                          <p className="mt-2 text-[10px] font-bold text-gray-400">
-                            Exp. {formatDate(coupon.end_date)}
-                          </p>
-                        ) : null}
+                        )}
                       </div>
-                    </div>
 
-                    <div className="border-t border-[#F0ECE7] p-3">
-                      {redeemedInfo ? (
-                        <div className="rounded-2xl bg-[#F3F4F6] py-3 text-center text-xs font-black text-[#737983]">
-                          USED
-                        </div>
-                      ) : isOnline ? (
-                        <button
-                          type="button"
-                          disabled={!coupon.order_url}
-                          onClick={() => openCoupon(coupon)}
-                          className={`w-full rounded-2xl py-3 text-xs font-black ${
-                            coupon.order_url
-                              ? "bg-[#EB4A45] text-white active:scale-[0.99]"
-                              : "bg-gray-200 text-gray-400"
-                          }`}
-                        >
-                          🛒 {coupon.order_button_text || "ORDER NOW"}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => openCoupon(coupon)}
-                          className="w-full rounded-2xl bg-[#EB4A45] py-3 text-xs font-black text-white active:scale-[0.99]"
-                        >
-                          {stampedInfo ? "USE COUPON" : "VIEW COUPON"}
-                        </button>
-                      )}
-                    </div>
-                  </article>
+                      <div className="flex min-w-[72px] shrink-0 flex-col items-end justify-center gap-1">
+                        <span className="text-[9px] font-black text-[#444B55]">
+                          {coupons.length} {coupons.length === 1 ? "Coupon" : "Coupons"}
+                        </span>
+
+                        {business.address && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openMap(business);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openMap(business);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 rounded-full border border-[#E5E7EB] bg-[#F8F9FA] px-2.5 py-1 text-[9px] font-black text-[#4B5563] active:scale-[0.98]"
+                          >
+                            <span className="text-[10px]">📍</span>
+                            MAP
+                          </span>
+                        )}
+
+                        <span className="text-[16px] font-light leading-none text-[#B5BAC2]">
+                          ›
+                        </span>
+                      </div>
+                    </button>
+                  </div>
                 );
               })}
             </div>
           )}
         </section>
       </div>
+
+      {mapBusiness && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-3 sm:items-center"
+          onClick={() => setMapBusiness(null)}
+        >
+          <div
+            className="w-full max-w-xl overflow-hidden rounded-[24px] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#EEEEEE] px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#EB4A45]">
+                  Store Location
+                </p>
+                <h2 className="truncate text-[17px] font-black text-[#171A22]">
+                  {mapBusiness.name || "Business"}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMapBusiness(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F3F4F6] text-[20px] font-bold text-[#4B5563]"
+                aria-label="Close map"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="relative h-[320px] w-full bg-[#F3F4F6]">
+              <TwoPointMap
+                business={mapBusiness}
+                userLocation={userLocation}
+              />
+
+              {locationLoading && (
+                <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-black text-[#4B5563] shadow">
+                  Finding your location...
+                </div>
+              )}
+
+              {getBusinessCoordinates(mapBusiness) && (
+                <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex gap-2 rounded-xl bg-white/95 px-3 py-2 text-[9px] font-black shadow">
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                    YOU
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
+                    STORE
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4">
+              <p className="text-[12px] font-bold leading-5 text-[#5F6672]">
+                📍 {mapBusiness.address}
+              </p>
+
+              <div className="mt-2 flex items-center gap-2 rounded-xl bg-[#F7F8FA] px-3 py-2">
+                <span className="text-[13px]">🔵</span>
+                <p className="flex-1 text-[10px] font-bold text-[#6B7280]">
+                  {locationLoading
+                    ? "Finding your location..."
+                    : userLocation
+                      ? getBusinessCoordinates(mapBusiness)
+                        ? "Blue marker is you. Red marker is the store."
+                        : "Your location was found, but this store has no saved map coordinates."
+                      : locationError || "Current location not available."}
+                </p>
+
+                {!locationLoading && (
+                  <button
+                    type="button"
+                    onClick={() => openMap(mapBusiness)}
+                    className="shrink-0 rounded-lg bg-white px-2 py-1 text-[9px] font-black text-[#EB4A45] shadow-sm"
+                  >
+                    MY LOCATION
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMapBusiness(null)}
+                  className="rounded-2xl border border-[#E3E5E8] bg-white px-4 py-3 text-[12px] font-black text-[#4B5563]"
+                >
+                  CLOSE
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const destination = encodeURIComponent(
+                      mapBusiness.address || "",
+                    );
+
+                    const origin = userLocation
+                      ? `&origin=${userLocation.latitude},${userLocation.longitude}`
+                      : "";
+
+                    window.open(
+                      `https://www.google.com/maps/dir/?api=1${origin}&destination=${destination}`,
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                  className="rounded-2xl bg-[#EB4A45] px-4 py-3 text-[12px] font-black text-white active:scale-[0.98]"
+                >
+                  DIRECTIONS
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSavedModal && (
+        <div
+          className="fixed inset-0 z-[115] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+          onClick={() => setShowSavedModal(false)}
+        >
+          <div
+            className="w-full max-w-xl overflow-hidden rounded-[26px] bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#EEEEEE] px-5 py-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#EB4A45]">
+                  ♥ Saved
+                </p>
+                <h2 className="mt-1 text-xl font-black text-[#171A22]">
+                  Saved Coupons
+                </h2>
+                <p className="mt-0.5 text-[10px] font-semibold text-[#8A9099]">
+                  {savedGroups.length} saved stores
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSavedModal(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F3F4F6] text-xl font-black text-[#555]"
+                aria-label="Close saved list"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[68vh] overflow-y-auto p-3">
+              {savedGroups.length === 0 ? (
+                <div className="py-14 text-center">
+                  <div className="text-5xl text-[#D1D5DB]">♡</div>
+                  <p className="mt-3 text-sm font-black text-[#3F4650]">
+                    No saved stores yet.
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold text-[#9AA0A8]">
+                    Tap a heart to save a store here.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {savedGroups.map(({ business, coupons }) => {
+                    const image =
+                      coupons.find((coupon) => coupon.image_url)?.image_url ||
+                      business.image_url ||
+                      business.image_urls?.[0] ||
+                      "";
+                    const firstCoupon = coupons[0];
+
+                    return (
+                      <div
+                        key={business.id}
+                        className="flex items-center gap-3 rounded-2xl border border-[#ECECEC] bg-white p-2.5"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!image) return;
+                            setShowSavedModal(false);
+                            setImageModal({
+                              url: image,
+                              name: business.name || "Business",
+                            });
+                          }}
+                          className="h-[76px] w-[100px] shrink-0 overflow-hidden rounded-[10px] bg-[#F2F2F2]"
+                        >
+                          {image ? (
+                            <img
+                              src={image}
+                              alt={business.name || ""}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-2xl">
+                              🏪
+                            </div>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSavedModal(false);
+                            window.location.href = `/coupons/business/${business.id}`;
+                          }}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-[10px] font-black uppercase text-[#454B55]">
+                            {business.name || "LOCAL BUSINESS"}
+                          </p>
+                          <p className="mt-0.5 line-clamp-1 text-[13px] font-black text-[#111827]">
+                            {firstCoupon?.title || "SPECIAL COUPON"}
+                          </p>
+                          <p className="mt-1 text-[9px] font-bold text-[#90959E]">
+                            {coupons.length} {coupons.length === 1 ? "Coupon" : "Coupons"}
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleFavorite(business.id)}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF0EF] text-xl text-[#EB4A45]"
+                          aria-label="Remove saved store"
+                        >
+                          ♥
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageModal && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setImageModal(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setImageModal(null)}
+              className="absolute -right-2 -top-12 flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl font-black text-[#333] shadow"
+              aria-label="Close image"
+            >
+              ×
+            </button>
+
+            <div className="overflow-hidden rounded-[22px] bg-black shadow-2xl">
+              <img
+                src={imageModal.url}
+                alt={imageModal.name}
+                className="max-h-[78vh] w-full object-contain"
+              />
+            </div>
+
+            <p className="mt-3 text-center text-sm font-black text-white">
+              {imageModal.name}
+            </p>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </main>

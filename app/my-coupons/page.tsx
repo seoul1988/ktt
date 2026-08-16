@@ -56,6 +56,10 @@ function businessOf(coupon: Coupon) {
   return coupon.businesses || null;
 }
 
+function reservationUsedKey(couponId: string | number) {
+  return `ktown_coupon_reservation_used_${couponId}`;
+}
+
 export default function MyCouponsPage() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [favoriteBusinessIds, setFavoriteBusinessIds] = useState<number[]>([]);
@@ -162,9 +166,23 @@ export default function MyCouponsPage() {
       }
 
       try {
-        const redeemedRaw = window.localStorage.getItem(
+        const currentYear = new Date().getFullYear();
+
+        // Reservation coupons are saved with a dedicated USED key.
+        // Also check the normal and yearly redemption keys so My Coupons
+        // matches the business coupon page and the redeem page.
+        const keysToCheck = [
+          reservationUsedKey(coupon.id),
           `ktown_coupon_redeemed_${coupon.id}`,
-        );
+          `ktown_coupon_redeemed_${coupon.id}_${currentYear}`,
+        ];
+
+        let redeemedRaw: string | null = null;
+
+        for (const key of keysToCheck) {
+          redeemedRaw = window.localStorage.getItem(key);
+          if (redeemedRaw) break;
+        }
 
         if (redeemedRaw) {
           const parsed = JSON.parse(redeemedRaw) as Partial<RedeemedInfo>;
