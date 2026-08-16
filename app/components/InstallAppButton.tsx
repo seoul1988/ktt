@@ -294,32 +294,16 @@ export default function InstallAppButton({
   }
 
   function getInstalledState() {
-    const standalone = getStandaloneState();
-
-    return (
-      standalone ||
-      getSavedInstalledState() ||
-      getInstalledCookieState()
-    );
+    /*
+     * 실제 실행 모드만 설치 상태로 판단합니다.
+     * localStorage/cookie 기록은 앱 삭제 후에도 남기 때문에
+     * 설치 여부 판단에는 사용하지 않습니다.
+     */
+    return getStandaloneState();
   }
 
   function checkInstalledState() {
-    const standalone = getStandaloneState();
-
-    /*
-     * 실제 설치된 앱(PWA)으로 실행되면 localStorage와 cookie 양쪽에
-     * 설치 완료 상태를 남깁니다. 이후 일반 Chrome 탭에서도
-     * 같은 origin이면 설치 버튼을 다시 표시하지 않습니다.
-     */
-    if (standalone) {
-      saveInstalledState(true);
-      saveInstalledCookie(true);
-    }
-
-    const installed =
-      standalone ||
-      getSavedInstalledState() ||
-      getInstalledCookieState();
+    const installed = getStandaloneState();
 
     setIsInstalled(installed);
     setHasCheckedInstallState(true);
@@ -454,20 +438,12 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * 과거에 설치 완료 상태가 저장되어 있으면
-       * beforeinstallprompt가 들어와도 설치 버튼을 다시 보여주지 않습니다.
+       * 이 이벤트가 발생했다는 것은 Chrome이 현재 설치 가능 상태로
+       * 판단했다는 뜻이므로 즉시 미설치 상태로 전환합니다.
        */
-      if (getSavedInstalledState() || getStandaloneState()) {
-        installPromptRef.current = null;
-        setInstallPrompt(null);
-        setIsInstalled(true);
-        setHasCheckedInstallState(true);
-        setShowBanner(false);
-        return;
-      }
-
       setIsInstalled(false);
       setHasCheckedInstallState(true);
+
 
 
       try {
@@ -489,8 +465,6 @@ export default function InstallAppButton({
       console.log("✅ appinstalled fired");
 
       installPromptRef.current = null;
-      saveInstalledState(true);
-      saveInstalledCookie(true);
       setIsInstalled(true);
       setHasCheckedInstallState(true);
       setInstallPrompt(null);
@@ -675,8 +649,6 @@ export default function InstallAppButton({
          * 여기서는 설치창만 닫습니다.
          * 설치 완료 안내는 실제 appinstalled 이벤트에서 한 번만 표시합니다.
          */
-        saveInstalledState(true);
-        saveInstalledCookie(true);
         setIsInstalled(true);
         setInstallMessage("");
         setShowBanner(false);
@@ -827,22 +799,24 @@ export default function InstallAppButton({
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={openBanner}
-          className="fixed z-[100000] flex h-20 w-8 items-center justify-center rounded-l-full bg-[#A8A8A8] shadow-md transition active:scale-95"
-          style={{
-            position: "fixed",
-            right: 0,
-            top: "50dvh",
-            transform: "translateY(-50%)",
-          }}
-          aria-label="Open install panel"
-        >
-          <span className="block text-center text-[14px] font-black text-white">
-            ≡
-          </span>
-        </button>
+        (isIOS || installPrompt !== null) ? (
+          <button
+            type="button"
+            onClick={openBanner}
+            className="fixed z-[100000] flex h-20 w-8 items-center justify-center rounded-l-full bg-[#A8A8A8] shadow-md transition active:scale-95"
+            style={{
+              position: "fixed",
+              right: 0,
+              top: "50dvh",
+              transform: "translateY(-50%)",
+            }}
+            aria-label="Open install panel"
+          >
+            <span className="block text-center text-[14px] font-black text-white">
+              ≡
+            </span>
+          </button>
+        ) : null
       )}
 
       {showIOSGuide && isIOS && (
