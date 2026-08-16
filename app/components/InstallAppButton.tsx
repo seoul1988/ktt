@@ -238,6 +238,31 @@ export default function InstallAppButton({
     }
   }
 
+  function getInstalledCookieState() {
+    try {
+      return document.cookie
+        .split(";")
+        .map((value) => value.trim())
+        .some((value) => value === "ktt_pwa_installed=true");
+    } catch {
+      return false;
+    }
+  }
+
+  function saveInstalledCookie(installed: boolean) {
+    try {
+      if (installed) {
+        document.cookie =
+          "ktt_pwa_installed=true; Max-Age=31536000; Path=/; SameSite=Lax";
+      } else {
+        document.cookie =
+          "ktt_pwa_installed=; Max-Age=0; Path=/; SameSite=Lax";
+      }
+    } catch {
+      // cookie를 사용할 수 없는 브라우저에서는 무시합니다.
+    }
+  }
+
   function showInstallationCompleteNotice() {
     if (installedNoticeShownRef.current) {
       return;
@@ -257,7 +282,7 @@ export default function InstallAppButton({
     }, 4000);
   }
 
-  function getInstalledState() {
+  function getStandaloneState() {
     const displayModeStandalone = window.matchMedia(
       "(display-mode: standalone)",
     ).matches;
@@ -265,30 +290,36 @@ export default function InstallAppButton({
     const iosStandalone =
       (window.navigator as IOSNavigator).standalone === true;
 
-    const businessId = getBusinessIdFromPath();
+    return displayModeStandalone || iosStandalone;
+  }
 
-    /*
-     * 비즈니스 웹에서는 메인 KTown 앱의 standalone 상태를
-     * 해당 비즈니스 앱 설치 상태로 사용하면 안 됩니다.
-     * 비즈니스별 저장 키만 확인합니다.
-     */
-    if (businessId) {
-      return (
-        displayModeStandalone ||
-        iosStandalone ||
-        getSavedInstalledState()
-      );
-    }
+  function getInstalledState() {
+    const standalone = getStandaloneState();
 
     return (
-      displayModeStandalone ||
-      iosStandalone ||
-      getSavedInstalledState()
+      standalone ||
+      getSavedInstalledState() ||
+      getInstalledCookieState()
     );
   }
 
   function checkInstalledState() {
-    const installed = getInstalledState();
+    const standalone = getStandaloneState();
+
+    /*
+     * 실제 설치된 앱(PWA)으로 실행되면 localStorage와 cookie 양쪽에
+     * 설치 완료 상태를 남깁니다. 이후 일반 Chrome 탭에서도
+     * 같은 origin이면 설치 버튼을 다시 표시하지 않습니다.
+     */
+    if (standalone) {
+      saveInstalledState(true);
+      saveInstalledCookie(true);
+    }
+
+    const installed =
+      standalone ||
+      getSavedInstalledState() ||
+      getInstalledCookieState();
 
     setIsInstalled(installed);
     setHasCheckedInstallState(true);
@@ -423,12 +454,18 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * beforeinstallprompt가 발생했다는 것은 현재 브라우저에서
-       * 이 PWA를 다시 설치할 수 있다는 뜻입니다.
-       * 앱을 삭제해도 localStorage의 과거 설치 기록은 남을 수 있으므로
-       * 브라우저의 실제 설치 가능 상태를 우선합니다.
+       * 과거에 설치 완료 상태가 저장되어 있으면
+       * beforeinstallprompt가 들어와도 설치 버튼을 다시 보여주지 않습니다.
        */
-      saveInstalledState(false);
+      if (getSavedInstalledState() || getStandaloneState()) {
+        installPromptRef.current = null;
+        setInstallPrompt(null);
+        setIsInstalled(true);
+        setHasCheckedInstallState(true);
+        setShowBanner(false);
+        return;
+      }
+
       setIsInstalled(false);
       setHasCheckedInstallState(true);
 
@@ -453,6 +490,7 @@ export default function InstallAppButton({
 
       installPromptRef.current = null;
       saveInstalledState(true);
+      saveInstalledCookie(true);
       setIsInstalled(true);
       setHasCheckedInstallState(true);
       setInstallPrompt(null);
@@ -638,6 +676,7 @@ export default function InstallAppButton({
          * 설치 완료 안내는 실제 appinstalled 이벤트에서 한 번만 표시합니다.
          */
         saveInstalledState(true);
+        saveInstalledCookie(true);
         setIsInstalled(true);
         setInstallMessage("");
         setShowBanner(false);
@@ -678,6 +717,19 @@ export default function InstallAppButton({
     }
 
     setTouchStartX(null);
+  }
+
+  /*
+   * 설치 버튼은 KTown 메인 홈(/)에서만 표시합니다.
+   * 다른 모든 경로에서는 businessName 전달 여부와 관계없이
+   * 설치 버튼, 설치 배너, iOS 설치 안내를 전부 렌더링하지 않습니다.
+   */
+  const isMainHomePage =
+    typeof window !== "undefined" &&
+    window.location.pathname === "/";
+
+  if (!isMainHomePage) {
+    return null;
   }
 
   if (!portalReady) {
