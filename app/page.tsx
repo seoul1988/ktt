@@ -874,17 +874,17 @@ const kdramaNews = (todaysKoreaPosts || [])
             </div>
 
             <div className="grid grid-cols-3 gap-2 px-3 pb-3">
-              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+              <div className="rounded-xl border border-[#E8DCCB] bg-[#F8F1E7] px-2 py-2.5 text-center">
                 <p className="text-[13px] font-black text-[#C4483A]">25% OFF</p>
                 <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Cleaners</p>
               </div>
 
-              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+              <div className="rounded-xl border border-[#E8DCCB] bg-[#F8F1E7] px-2 py-2.5 text-center">
                 <p className="text-[13px] font-black text-[#C4483A]">BOGO</p>
                 <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Coffee</p>
               </div>
 
-              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+              <div className="rounded-xl border border-[#E8DCCB] bg-[#F8F1E7] px-2 py-2.5 text-center">
                 <p className="text-[13px] font-black text-[#C4483A]">$5 OFF</p>
                 <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Bakery</p>
               </div>
@@ -898,217 +898,249 @@ const kdramaNews = (todaysKoreaPosts || [])
           </Link>
         </section>
 
-        {SHOW_TEMP_COMING_SOON_196 && comingSoonBusiness ? (
-          <section className="mx-auto mb-4 max-w-xl">
-            <Link
-              href="/business/196"
-              className="flex items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-white p-2.5 shadow-sm transition hover:shadow-md active:scale-[0.995]"
-            >
-              <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
-                <img
-                  src={comingSoonImage}
-                  alt={comingSoonBusiness.name || "Coming Soon"}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover object-center"
-                />
-                <span className="absolute left-1.5 top-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase text-[#071A3D]">
-                  Soon
-                </span>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
-                  ✨ Coming Soon
-                </p>
-                <h2 className="mt-0.5 line-clamp-1 text-[17px] font-black text-[#071A3D]">
-                  {comingSoonBusiness.name || "Coming Soon"}
-                </h2>
-                <p className="mt-1 line-clamp-1 text-[12px] font-semibold text-gray-500">
-                  {comingSoonBusiness.category || "New Business"}
-                </p>
-              </div>
-
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-50 text-sm font-black text-amber-700">
-                →
-              </span>
-            </Link>
-          </section>
-        ) : mainGrandOpening ? (
-          <section className="mx-auto mb-4 max-w-xl">
-            <Link
-              href={`/grand-openings/${mainGrandOpening.id}`}
-              className="flex items-center gap-3 overflow-hidden rounded-2xl border border-amber-200 bg-white p-2.5 shadow-sm transition hover:shadow-md active:scale-[0.995]"
-            >
-              <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
-                <img
-                  src={grandOpeningImage}
-                  alt={mainGrandOpening.title || "Grand Opening"}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover object-center"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-amber-700">
-                  🎉 Grand Opening
-                </p>
-                <h2 className="mt-0.5 line-clamp-1 text-[17px] font-black text-[#071A3D]">
-                  {mainGrandOpening.business_name || "Grand Opening"}
-                </h2>
-                <p className="mt-1 line-clamp-1 text-[12px] font-semibold text-gray-500">
-                  {mainGrandOpening.title || "Now Open"}
-                </p>
-              </div>
-              <span className="text-sm font-black text-amber-700">→</span>
-            </Link>
-          </section>
-        ) : null}
-
-        {mainEvent && (
-          <section className="mx-auto mb-4 max-w-xl">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <div className="flex items-center gap-2">
-                <span className="text-base">📅</span>
-                <h2 className="text-[17px] font-black text-[#172033]">Events</h2>
-              </div>
-              <Link
-                href="/business-events"
-                className="text-[11px] font-black text-blue-600"
-              >
-                View all →
-              </Link>
-            </div>
-
-            <Link
-              href={`/business-events/${mainEvent.id}`}
-              className="flex items-center gap-3 overflow-hidden rounded-2xl border border-blue-100 bg-white p-2.5 shadow-sm transition hover:shadow-md active:scale-[0.995]"
-            >
-              <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-gray-100">
-                <VideoFirstMedia
-                  videoUrl={mainEvent.video_url}
-                  imageUrl={mainEvent.image_url || "/event.png"}
-                  alt={mainEvent.title || "Business Event"}
-                  className="h-full w-full"
-                />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-blue-600">
-                  Upcoming · {mainEvent.event_date || "Coming Soon"}
-                </p>
-                <h3 className="mt-0.5 line-clamp-1 text-[15px] font-black text-[#172033]">
-                  {mainEvent.title}
-                </h3>
-                <p className="mt-1 line-clamp-1 text-[11px] text-gray-500">
-                  {mainEvent.description}
-                </p>
-              </div>
-
-              <span className="text-sm font-black text-blue-600">→</span>
-            </Link>
-          </section>
-        )}
-
         <section className="mx-auto mb-5 max-w-xl">
-          <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-red-100 bg-red-50 px-3 py-2">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="h-10 w-1 shrink-0 rounded-full bg-red-500" />
-
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">
-                    Limited Time
-                  </p>
-
-                  <h2 className="mt-0.5 break-keep text-[17px] font-black leading-tight text-[#172033]">
-                    🔥 Deals Near You
-                  </h2>
-                </div>
-              </div>
-
-              <Link
-                href="/deals"
-                className="shrink-0 text-[11px] font-black text-red-600 transition hover:text-red-700"
+          <div className="overflow-hidden rounded-[22px] border border-[#E7E1D8] bg-white shadow-sm">
+            {SHOW_TEMP_COMING_SOON_196 && comingSoonBusiness ? (
+              <div
+                className="group relative flex min-h-[108px] items-center gap-3 border-b border-[#EEE9E2] px-3 py-3 transition hover:bg-[#FFFDF9] active:bg-[#FFF9EE]"
               >
-                View all →
-              </Link>
-            </div>
+                <div className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-blue-500" />
 
-            <div className="divide-y divide-red-100">
-              {deals.map((deal) => (
                 <Link
-                  key={deal.id}
-                  href={`/deals/${deal.id}`}
-                  className="flex gap-3 p-3 transition hover:bg-red-50/40 active:bg-red-50"
+                  href={`/business/${comingSoonBusiness.id}`}
+                  className="relative ml-1 h-[82px] w-[100px] shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]"
                 >
-                  <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-white">
+                  <img
+                    src={comingSoonImage}
+                    alt={comingSoonBusiness.name || "Coming Soon"}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover object-center"
+                  />
+                  <span className="absolute left-1.5 top-1.5 rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase text-[#071A3D]">
+                    Soon
+                  </span>
+                </Link>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[13px]">
+                        🏪
+                      </span>
+                      <p className="text-[15px] font-black tracking-[-0.01em] text-blue-600">
+                        Coming Soon
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href={`/business/${comingSoonBusiness.id}`}>
+                    <h2 className="mt-1 line-clamp-1 text-[17px] font-black leading-tight text-[#071A3D]">
+                      {comingSoonBusiness.name || "Coming Soon"}
+                    </h2>
+                  </Link>
+
+                  <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-gray-500">
+                    {comingSoonBusiness.category || "New Business"}
+                  </p>
+                </div>
+
+                <Link
+                  href="/coming-soon"
+                  aria-label="View all coming soon businesses"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg font-black text-[#071A3D] transition group-hover:bg-blue-50 group-hover:text-blue-600"
+                >
+                  ›
+                </Link>
+              </div>
+            ) : mainGrandOpening ? (
+              <Link
+                href={`/grand-openings/${mainGrandOpening.id}`}
+                className="group relative flex min-h-[108px] items-center gap-3 border-b border-[#EEE9E2] px-3 py-3 transition hover:bg-[#FFFDF9] active:bg-[#FFF9EE]"
+              >
+                <div className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-blue-500" />
+
+                <div className="ml-1 h-[82px] w-[100px] shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
+                  <img
+                    src={grandOpeningImage}
+                    alt={mainGrandOpening.title || "Grand Opening"}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover object-center"
+                  />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[11px]">
+                      🎉
+                    </span>
+                    <p className="text-[10px] font-black uppercase tracking-[0.15em] text-blue-600">
+                      Grand Opening
+                    </p>
+                  </div>
+
+                  <h2 className="mt-1 line-clamp-1 text-[17px] font-black leading-tight text-[#071A3D]">
+                    {mainGrandOpening.business_name || "Grand Opening"}
+                  </h2>
+
+                  <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-gray-500">
+                    {mainGrandOpening.title || "Now Open"}
+                  </p>
+                </div>
+
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg font-black text-[#071A3D] transition group-hover:bg-blue-50 group-hover:text-blue-600">
+                  ›
+                </span>
+              </Link>
+            ) : null}
+
+            {mainEvent && (
+              <div
+                className="group relative flex min-h-[108px] items-center gap-3 border-b border-[#EEE9E2] px-3 py-3 transition hover:bg-[#FFFDF9] active:bg-[#F7F4FF]"
+              >
+                <div className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-violet-500" />
+
+                <Link
+                  href={`/business-events/${mainEvent.id}`}
+                  className="ml-1 h-[82px] w-[100px] shrink-0 overflow-hidden rounded-xl bg-gray-100"
+                >
+                  <VideoFirstMedia
+                    videoUrl={mainEvent.video_url}
+                    imageUrl={mainEvent.image_url || "/event.png"}
+                    alt={mainEvent.title || "Business Event"}
+                    className="h-full w-full"
+                  />
+                </Link>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-50 text-[13px]">
+                        📅
+                      </span>
+                      <p className="text-[15px] font-black tracking-[-0.01em] text-violet-600">
+                        Events
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link href={`/business-events/${mainEvent.id}`}>
+                    <h3 className="mt-1 line-clamp-1 text-[16px] font-black leading-tight text-[#172033]">
+                      {mainEvent.title}
+                    </h3>
+                  </Link>
+
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-[1.35] text-gray-500">
+                    {mainEvent.description}
+                  </p>
+                </div>
+
+                <Link
+                  href="/business-events"
+                  aria-label="View all events"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg font-black text-[#071A3D] transition group-hover:bg-violet-50 group-hover:text-violet-600"
+                >
+                  ›
+                </Link>
+              </div>
+            )}
+
+            {deals.length > 0 ? (
+              deals.map((deal) => (
+                <div
+                  key={deal.id}
+                  className="group relative flex min-h-[112px] items-center gap-3 px-3 py-3 transition hover:bg-[#FFFDFD] active:bg-red-50"
+                >
+                  <div className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-red-500" />
+
+                  <Link
+                    href={`/deals/${deal.id}`}
+                    className="ml-1 h-[84px] w-[100px] shrink-0 overflow-hidden rounded-xl bg-white"
+                  >
                     <DealMedia
                       deal={deal}
                       className="block h-full w-full object-cover object-center"
                     />
-                  </div>
+                  </Link>
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-black uppercase tracking-wider text-red-500">
-                          Special Deal
+                    <div className="flex justify-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-50 text-[13px]">
+                          🏷️
+                        </span>
+                        <p className="text-[15px] font-black tracking-[-0.01em] text-red-600">
+                          Deals
                         </p>
-
-                        <h4 className="mt-1 line-clamp-1 font-black">
-                          {deal.title || deal.businesses?.name || "Deal"}
-                        </h4>
                       </div>
+                    </div>
+
+                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                      <Link href={`/deals/${deal.id}`} className="min-w-0 flex-1">
+                        <h3 className="truncate text-[16px] font-black leading-tight text-[#172033]">
+                          {deal.title || deal.businesses?.name || "Deal"}
+                        </h3>
+                      </Link>
 
                       {(deal.businesses?.rating ||
                         deal.businesses?.review_count) && (
-                        <div className="flex shrink-0 items-center gap-1 whitespace-nowrap pt-0.5 text-sm">
+                        <div className="flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px]">
                           <span className="text-yellow-500">⭐</span>
-
-                          <span className="font-bold text-gray-900">
+                          <span className="font-black text-gray-900">
                             {Number(deal.businesses?.rating || 0).toFixed(1)}
                           </span>
-
                           {deal.businesses?.review_count ? (
-                            <span className="text-gray-500">
+                            <span className="hidden text-gray-500 min-[390px]:inline">
                               (
                               {Number(
                                 deal.businesses.review_count,
                               ).toLocaleString()}{" "}
                               Reviews)
                             </span>
-                          ) : (
-                            <span className="text-gray-400">
-                              No Reviews
-                            </span>
-                          )}
+                          ) : null}
                         </div>
                       )}
                     </div>
 
-                    <p className="mt-2 line-clamp-2 text-xs font-bold text-gray-500">
+                    <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-[1.35] text-gray-500">
                       {deal.description || "Tap to view deal details"}
                     </p>
                   </div>
-                </Link>
-              ))}
 
-              {deals.length === 0 && (
-                <div className="px-5 py-10 text-center text-sm font-bold text-gray-400">
-                  New deals are coming soon.
+                  <Link
+                    href="/deals"
+                    aria-label="View all deals"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg font-black text-[#071A3D] transition group-hover:bg-red-50 group-hover:text-red-600"
+                  >
+                    ›
+                  </Link>
                 </div>
-              )}
-            </div>
+              ))
+            ) : (
+              <div className="relative flex min-h-[96px] items-center px-4 py-4">
+                <div className="absolute bottom-3 left-0 top-3 w-1 rounded-r-full bg-red-500" />
+                <div className="ml-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-600">
+                    Deals Near You
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-gray-400">
+                    New deals are coming soon.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
         {featuredSponsors.length > 0 && (
-          <FeaturedSponsorSlider
-            sponsors={featuredSponsors}
-            dealBusinessEntries={Array.from(dealBusinessMap.entries())}
-            couponBusinessIds={Array.from(couponBusinessIds)}
-          />
+          <section className="mx-auto mb-5 max-w-xl overflow-hidden rounded-[22px] border border-[#D5D5D5] bg-[#E5E7EB] px-3 pb-1 pt-3 shadow-sm">
+            <FeaturedSponsorSlider
+              sponsors={featuredSponsors}
+              dealBusinessEntries={Array.from(dealBusinessMap.entries())}
+              couponBusinessIds={Array.from(couponBusinessIds)}
+            />
+          </section>
         )}
 
       <section className="mx-auto max-w-xl">
