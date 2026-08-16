@@ -18,7 +18,8 @@ type PopupPresetId =
   | "glass"
   | "iphone"
   | "coupon"
-  | "circle";
+  | "circle"
+  | "hanging-donut";
 type PopupShadow = "none" | "small" | "medium" | "large" | "glass";
 
 type Banner = {
@@ -213,6 +214,18 @@ const POPUP_STYLE_PRESETS: PopupStylePreset[] = [
     buttonRadius: 999,
     shadow: "large",
   },
+  {
+    id: "hanging-donut",
+    icon: "🍩",
+    name: "Hanging Donut",
+    description: "Transparent donut + rope drops from the top and stops in the center",
+    popupRadius: 0,
+    imageRadius: 0,
+    buttonRadius: 999,
+    shadow: "none",
+    backgroundColor: "transparent",
+    textColor: "#172033",
+  },
 ];
 
 function getPopupShadow(shadow: PopupShadow) {
@@ -334,6 +347,65 @@ async function resizeBannerImage(file: File) {
           : reject(new Error("Image conversion failed.")),
       "image/webp",
       0.82,
+    );
+  });
+}
+
+
+async function resizePopupImagePreservingPng(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please select an image file only.");
+  }
+
+  if (file.size > 20 * 1024 * 1024) {
+    throw new Error("The original file must be 20MB or smaller.");
+  }
+
+  const image = await loadImage(file);
+  const maxWidth = 1600;
+  const maxHeight = 1600;
+  const scale = Math.min(
+    maxWidth / image.naturalWidth,
+    maxHeight / image.naturalHeight,
+    1,
+  );
+
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Image processing is unavailable.");
+  }
+
+  context.clearRect(0, 0, width, height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(image, 0, 0, width, height);
+
+  const isPng =
+    file.type === "image/png" ||
+    file.name.toLowerCase().endsWith(".png");
+
+  return new Promise<{ blob: Blob; extension: "png" | "webp" }>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Image conversion failed."));
+          return;
+        }
+
+        resolve({
+          blob,
+          extension: isPng ? "png" : "webp",
+        });
+      },
+      isPng ? "image/png" : "image/webp",
+      isPng ? undefined : 0.82,
     );
   });
 }
@@ -521,6 +593,21 @@ export default function BannerManagementPage() {
       setTitleColor(preset.textColor);
       setSubtitleColor(preset.textColor);
     }
+
+    if (preset.id === "hanging-donut") {
+      setBackgroundColor("transparent");
+      // 도넛 구멍 안에서 쉽게 움직일 수 있도록 텍스트/버튼 박스를 작게 시작합니다.
+      setTitleWidth(38);
+      setSubtitleWidth(42);
+      setButtonWidth(24);
+      setTitleX(31);
+      setTitleY(43);
+      setSubtitleX(29);
+      setSubtitleY(51);
+      setButtonX(38);
+      setButtonY(59);
+      setTextAlign("center");
+    }
   }
 
   function applyTemplate(template: Template) {
@@ -665,11 +752,29 @@ export default function BannerManagementPage() {
         : "contain",
     );
     setImageZoom(Math.max(25, Math.min(300, Number(banner.image_zoom) || 100)));
-    setStylePreset(
-      POPUP_STYLE_PRESETS.some((item) => item.id === banner.style_preset)
-        ? banner.style_preset
-        : "rounded",
-    );
+    const looksLikeHangingDonut =
+      banner.style_preset === "hanging-donut" ||
+      (
+        Number(banner.popup_radius) === 0 &&
+        Number(banner.image_radius) === 0 &&
+        Number(banner.button_radius) === 999 &&
+        banner.popup_shadow === "none"
+      );
+
+    const restoredStylePreset: PopupPresetId =
+      looksLikeHangingDonut
+        ? "hanging-donut"
+        : POPUP_STYLE_PRESETS.some((item) => item.id === banner.style_preset)
+          ? banner.style_preset
+          : "rounded";
+
+    setStylePreset(restoredStylePreset);
+
+    // 서버가 "transparent" 문자열을 색상값으로 보존하지 않더라도
+    // Hanging Donut 편집 화면에서는 투명 배경으로 복원합니다.
+    if (looksLikeHangingDonut) {
+      setBackgroundColor("transparent");
+    }
     setPopupRadius(Math.max(0, Math.min(999, Number(banner.popup_radius) || 28)));
     setImageRadius(Math.max(0, Math.min(999, Number(banner.image_radius) || 18)));
     setButtonRadius(Math.max(0, Math.min(999, Number(banner.button_radius) || 12)));
@@ -859,16 +964,23 @@ export default function BannerManagementPage() {
       const isUploadingNewImage = Boolean(imageFile);
 
       if (imageFile) {
-        setImageStatus("Converting the image to WEBP and uploading...");
+        const isPng =
+          imageFile.type === "image/png" ||
+          imageFile.name.toLowerCase().endsWith(".png");
 
-        const resized = await resizeBannerImage(
-          imageFile,
+        setImageStatus(
+          isPng
+            ? "Keeping PNG transparency and uploading..."
+            : "Converting the image to WEBP and uploading...",
         );
+
+        const { blob: resized, extension } =
+          await resizePopupImagePreservingPng(imageFile);
 
         formData.append(
           "image",
           resized,
-          `popup-${Date.now()}.webp`,
+          `popup-${Date.now()}.${extension}`,
         );
       }
 
@@ -1247,6 +1359,12 @@ export default function BannerManagementPage() {
           .popup-design-scroll::-webkit-scrollbar-thumb:hover {
             background: #a99886;
           }
+          @keyframes donutAdminDrop {
+            0% { transform: translateY(-120%); }
+            72% { transform: translateY(4%); }
+            86% { transform: translateY(-2%); }
+            100% { transform: translateY(0); }
+          }
         `}</style>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_420px]">
@@ -1429,6 +1547,23 @@ export default function BannerManagementPage() {
                 </label>
               </div>
 
+              <label className="flex items-center justify-between gap-3 rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] px-4 py-3">
+                <div>
+                  <div className="text-sm font-black text-[#172033]">Transparent Background</div>
+                  <p className="mt-1 text-[11px] font-bold text-[#667085]">
+                    팝업의 흰색/사각 배경을 없애고 이미지와 텍스트만 표시합니다.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={backgroundColor === "transparent"}
+                  onChange={(event) =>
+                    setBackgroundColor(event.target.checked ? "transparent" : "#FFFFFF")
+                  }
+                  className="h-5 w-5 shrink-0 accent-green-600"
+                />
+              </label>
+
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {[
                   ["Background", backgroundColor, setBackgroundColor],
@@ -1443,7 +1578,7 @@ export default function BannerManagementPage() {
                     </span>
                     <input
                       type="color"
-                      value={String(value)}
+                      value={String(value) === "transparent" ? "#FFFFFF" : String(value)}
                       onChange={(event) =>
                         (setter as (value: string) => void)(
                           event.target.value,
@@ -1458,11 +1593,11 @@ export default function BannerManagementPage() {
               <div className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
                 <div className="text-sm font-black text-[#172033]">Element Position & Size</div>
                 <p className="mt-1 text-[11px] font-bold leading-5 text-[#667085]">
-                  미리보기에서 Title, Description, 버튼을 각각 직접 드래그해 위치를 바꿀 수 있습니다. 아래에서는 각 요소의 가로 크기를 조절합니다.
+                  미리보기에서 Title, Description, 버튼을 각각 직접 드래그해 위치를 바꿀 수 있습니다. 아래에서 각 박스의 가로 폭을 5%까지 줄일 수 있습니다. Hanging Donut에서는 먼저 폭을 줄인 뒤 도넛 구멍 안으로 드래그하세요.
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                  <NumberControl label="Title 가로 (%)" value={titleWidth} min={10} max={100} onChange={setTitleWidth} />
-                  <NumberControl label="Description 가로 (%)" value={subtitleWidth} min={10} max={100} onChange={setSubtitleWidth} />
+                  <NumberControl label="Title 가로 (%)" value={titleWidth} min={5} max={100} onChange={setTitleWidth} />
+                  <NumberControl label="Description 가로 (%)" value={subtitleWidth} min={5} max={100} onChange={setSubtitleWidth} />
                   <NumberControl label="Button Width (%)" value={buttonWidth} min={8} max={100} onChange={setButtonWidth} />
                 </div>
               </div>
@@ -2069,13 +2204,13 @@ export default function BannerManagementPage() {
             </p>
 
             <div
-              className="relative mt-4 overflow-hidden border border-black/10"
+              className={`relative mt-4 overflow-hidden ${stylePreset === "hanging-donut" ? "border-0 bg-transparent" : "border border-black/10"}`}
               style={{
                 maxWidth: `${popupWidth}px`,
-                borderRadius: `${popupRadius}px`,
-                boxShadow: getPopupShadow(popupShadow),
+                borderRadius: stylePreset === "hanging-donut" ? "0px" : `${popupRadius}px`,
+                boxShadow: stylePreset === "hanging-donut" ? "none" : getPopupShadow(popupShadow),
                 height: `${popupHeight}px`,
-                backgroundColor,
+                backgroundColor: stylePreset === "hanging-donut" ? "transparent" : backgroundColor,
                 touchAction: "none",
               }}
               onPointerMove={handlePreviewPointerMove}
@@ -2098,9 +2233,11 @@ export default function BannerManagementPage() {
                 </div>
               )}
 
-              <div className="absolute bottom-2 right-2 z-30 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-[#172033] shadow">
-                팝업 {popupWidth}px × {popupHeight}px
-              </div>
+              {stylePreset !== "hanging-donut" && (
+                <div className="absolute bottom-2 right-2 z-30 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-black text-[#172033] shadow">
+                  팝업 {popupWidth}px × {popupHeight}px
+                </div>
+              )}
 
               <button
                 type="button"
@@ -2116,7 +2253,7 @@ export default function BannerManagementPage() {
                     event.currentTarget.setPointerCapture(event.pointerId);
                     setDragging("image");
                   }}
-                  className="absolute z-10 cursor-move overflow-hidden border-2 border-dashed border-amber-400 bg-white shadow-lg"
+                  className={`absolute z-10 cursor-move overflow-hidden ${stylePreset === "hanging-donut" ? "border-0 bg-transparent shadow-none animate-[donutAdminDrop_900ms_cubic-bezier(0.22,1,0.36,1)_both]" : "border-2 border-dashed border-amber-400 bg-white shadow-lg"}`}
                   style={{
                     borderRadius: `${imageRadius}px`,
                     left: `${imageX}%`,

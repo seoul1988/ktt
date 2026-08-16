@@ -113,7 +113,7 @@ async function ensureBucket(
       await supabase.storage.createBucket(BUCKET, {
         public: true,
         fileSizeLimit: "5MB",
-        allowedMimeTypes: ["image/webp"],
+        allowedMimeTypes: ["image/webp", "image/png"],
       });
 
     if (createError) {
@@ -129,7 +129,7 @@ async function ensureBucket(
     await supabase.storage.updateBucket(BUCKET, {
       public: true,
       fileSizeLimit: "5MB",
-      allowedMimeTypes: ["image/webp"],
+      allowedMimeTypes: ["image/webp", "image/png"],
     });
 
   if (updateError) {
@@ -215,7 +215,16 @@ function validImagePosition(value: unknown) {
 }
 
 function validPopupPreset(value: unknown) {
-  return ["square", "rounded", "modern", "glass", "iphone", "coupon", "circle"].includes(String(value))
+  return [
+    "square",
+    "rounded",
+    "modern",
+    "glass",
+    "iphone",
+    "coupon",
+    "circle",
+    "hanging-donut",
+  ].includes(String(value))
     ? String(value)
     : "rounded";
 }
@@ -272,8 +281,16 @@ function validDisplayLocation(value: unknown) {
   return location;
 }
 
-function validColor(value: unknown, fallback: string) {
+function validColor(
+  value: unknown,
+  fallback: string,
+  allowTransparent = false,
+) {
   const text = String(value || "").trim();
+
+  if (allowTransparent && text.toLowerCase() === "transparent") {
+    return "transparent";
+  }
 
   return /^#[0-9A-Fa-f]{6}$/.test(text)
     ? text
@@ -284,12 +301,17 @@ async function uploadImage(
   supabase: ReturnType<typeof getAdminClient>,
   file: File,
 ) {
-  if (
-    file.type !== "image/webp" &&
-    !file.name.toLowerCase().endsWith(".webp")
-  ) {
+  const lowerName = file.name.toLowerCase();
+  const isWebp =
+    file.type === "image/webp" ||
+    lowerName.endsWith(".webp");
+  const isPng =
+    file.type === "image/png" ||
+    lowerName.endsWith(".png");
+
+  if (!isWebp && !isPng) {
     throw new Error(
-      `WEBP 이미지가 아닙니다. 받은 형식: ${file.type || "unknown"}`,
+      `PNG 또는 WEBP 이미지만 업로드할 수 있습니다. 받은 형식: ${file.type || "unknown"}`,
     );
   }
 
@@ -305,8 +327,11 @@ async function uploadImage(
 
   await ensureBucket(supabase);
 
+  const extension = isPng ? "png" : "webp";
+  const contentType = isPng ? "image/png" : "image/webp";
+
   const path =
-    `site/${Date.now()}-${randomUUID()}.webp`;
+    `site/${Date.now()}-${randomUUID()}.${extension}`;
 
   const bytes = new Uint8Array(
     await file.arrayBuffer(),
@@ -316,7 +341,7 @@ async function uploadImage(
     await supabase.storage
       .from(BUCKET)
       .upload(path, bytes, {
-        contentType: "image/webp",
+        contentType,
         cacheControl: "31536000",
         upsert: false,
       });
@@ -461,6 +486,7 @@ export async function POST(request: Request) {
           background_color: validColor(
             formData.get("background_color"),
             "#172033",
+            true,
           ),
           text_color: validColor(
             formData.get("text_color"),
@@ -751,8 +777,13 @@ export async function PATCH(request: Request) {
     const image = formData.get("image");
     const imageRequested =
       image instanceof File && image.size > 0;
+
+    const removeImageRequested =
+      parseBoolean(formData.get("remove_image"));
+
     let nextImagePath = existing.image_path;
 
+    // 새 이미지를 올리는 경우가 가장 우선입니다.
     if (imageRequested) {
       nextImagePath = await uploadImage(
         supabase,
@@ -764,6 +795,9 @@ export async function PATCH(request: Request) {
           "이미지 업로드 후 경로를 받지 못했습니다.",
         );
       }
+    } else if (removeImageRequested) {
+      // 새 이미지 없이 "이미지 삭제"를 저장하면 DB의 image_path를 비웁니다.
+      nextImagePath = null;
     }
 
     const { data: banner, error: updateError } =
@@ -792,6 +826,7 @@ export async function PATCH(request: Request) {
           background_color: validColor(
             formData.get("background_color"),
             "#172033",
+            true,
           ),
           text_color: validColor(
             formData.get("text_color"),
@@ -973,8 +1008,11 @@ export async function PATCH(request: Request) {
     }
 
     if (
-      nextImagePath !== existing.image_path
+      nextImagePath !== existing.image_path &&
+      existing.image_path
     ) {
+      // 새 이미지로 교체했거나 이미지 삭제를 저장한 경우
+      // 기존 Storage 파일도 함께 제거합니다.
       await removeImage(
         supabase,
         existing.image_path,

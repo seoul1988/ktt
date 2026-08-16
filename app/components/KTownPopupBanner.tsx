@@ -877,9 +877,211 @@ export default function KTownPopupBanner() {
     setClosed(true);
   }
 
+  // Public API 응답에는 image_radius / button_radius가 빠질 수 있습니다.
+  // 그래서 실제로 PublicBanner에 들어오는 값만으로 Hanging Donut을 판별합니다.
+  // Hanging Donut은 popup_radius=0 + popup_shadow="none" 조합을 사용합니다.
+  const isHangingDonut =
+    banner.style_preset === "hanging-donut" ||
+    String(banner.background_color || "").toLowerCase() === "transparent" ||
+    (
+      safeNumber(banner.popup_radius, 28) === 0 &&
+      banner.popup_shadow === "none"
+    );
+
   const backgroundStyle:
     React.CSSProperties =
       {};
+
+  if (isHangingDonut) {
+    // Hanging Donut PNG is visually tall (rope + donut + hide control).
+    // A short saved popupHeight such as 400 must not crop that tall artwork.
+    // Keep the editor's percentage coordinates, but render the public popup on
+    // a minimum 800px-tall design stage and scale that whole stage down to fit
+    // the current viewport. This is the same geometry that looked correct when
+    // popupHeight was manually set to 800, without requiring the admin value
+    // itself to be changed to 800.
+    const hangingDesignHeight = Math.max(800, popupHeight);
+
+    return (
+      <div
+        className="fixed inset-0 z-[9999] overflow-visible bg-black/35"
+        role="dialog"
+        aria-modal="true"
+        aria-label={banner.title || "KTownTriangle hanging donut popup"}
+        onMouseDown={(event) => {
+          if (event.currentTarget === event.target) closePopup();
+        }}
+      >
+        <style>{`
+          @keyframes ktownDonutDropIntrinsic {
+            0% { transform: translate(-50%, -120%); }
+            72% { transform: translate(-50%, 1.2vh); }
+            86% { transform: translate(-50%, -0.35vh); }
+            94% { transform: translate(-50%, 0.25vh); }
+            100% { transform: translate(-50%, 0); }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .ktown-hanging-donut-intrinsic {
+              animation: none !important;
+              transform: translate(-50%, 0) !important;
+            }
+          }
+        `}</style>
+
+        <div
+          className="ktown-hanging-donut-intrinsic absolute left-1/2 top-0 overflow-visible"
+          style={{
+            /*
+             * Hanging Donut도 관리자 미리보기에서 저장한 popup 크기를 기준으로
+             * 하나의 디자인 캔버스를 만듭니다.
+             *
+             * 이전 코드는 이미지 원본(intrinsic) 크기만 사용해서 popupHeight를
+             * 무시했고, 짧은 화면에서는 아래쪽이 잘려 보일 수 있었습니다.
+             * 이제 popupWidth / popupHeight 안에 이미지를 contain으로 맞추므로
+             * 400px 높이로 디자인해도 전체 이미지가 화면 안에 축소되어 보입니다.
+             */
+            // Scale proportionally from the design stage instead of forcing
+            // the image into popupHeight. For example, 720x400 is rendered
+            // using a 720x800 hanging stage, then reduced as one unit so the
+            // bottom of the donut is always visible.
+            // IMPORTANT: give the stage an explicit width AND height.
+            // Some browsers were resolving height:auto + aspectRatio back to the
+            // saved 720x400 geometry, which is why the donut was still cut at a
+            // straight horizontal line. These two min() expressions use the same
+            // scale factor, so the stage always remains popupWidth:hangingDesignHeight
+            // while fitting both the viewport width and height.
+            width: `min(88vw, calc((100dvh - 24px) * ${popupWidth} / ${hangingDesignHeight}), ${Math.max(240, popupWidth)}px)`,
+            height: `min(calc(88vw * ${hangingDesignHeight} / ${popupWidth}), calc(100dvh - 24px), ${hangingDesignHeight}px)`,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            boxShadow: "none",
+            animation:
+              "ktownDonutDropIntrinsic 1.15s cubic-bezier(0.22,1,0.36,1) both",
+          }}
+        >
+          {banner.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={banner.image_url}
+              alt=""
+              className="pointer-events-none block h-full w-full"
+              style={{
+                objectFit: "contain",
+                objectPosition: "top center",
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                boxShadow: "none",
+              }}
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={closePopup}
+            className="absolute right-[2%] top-[6%] z-50 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-xl font-black text-white shadow-lg"
+            aria-label="Close popup"
+          >
+            ×
+          </button>
+
+          {!!banner.title && (
+            <div
+              className="absolute z-20 whitespace-pre-wrap break-words"
+              style={{
+                left: `${titleX}%`,
+                top: `${titleY}%`,
+                width: `${titleWidth}%`,
+                color: banner.title_color || "#172033",
+                fontSize: `${safeNumber(banner.title_font_size, 32)}px`,
+                fontWeight: safeNumber(banner.title_font_weight, 900),
+                lineHeight: 1.1,
+                textAlign: banner.text_align || "center",
+              }}
+            >
+              {banner.title}
+            </div>
+          )}
+
+          {!!banner.subtitle && (
+            <div
+              className="absolute z-20 whitespace-pre-wrap break-words"
+              style={{
+                left: `${subtitleX}%`,
+                top: `${subtitleY}%`,
+                width: `${subtitleWidth}%`,
+                color: banner.subtitle_color || "#172033",
+                fontSize: `${safeNumber(banner.subtitle_font_size, 16)}px`,
+                fontWeight: safeNumber(banner.subtitle_font_weight, 500),
+                lineHeight: 1.35,
+                textAlign: banner.text_align || "center",
+              }}
+            >
+              {banner.subtitle}
+            </div>
+          )}
+
+          {banner.button_enabled !== false &&
+            !!banner.button_text &&
+            (link ? (
+              <a
+                href={link}
+                target={link.startsWith("http") ? "_blank" : undefined}
+                rel={link.startsWith("http") ? "noreferrer" : undefined}
+                className="absolute z-30 flex items-center justify-center overflow-hidden px-3 text-center font-black shadow-md active:scale-[0.98]"
+                style={{
+                  left: `${buttonX}%`,
+                  top: `${buttonY}%`,
+                  width: `${buttonWidth}%`,
+                  minHeight: "34px",
+                  backgroundColor: banner.button_color || "#172033",
+                  color: banner.button_text_color || "#fff",
+                  fontSize: `${safeNumber(banner.button_font_size, 14)}px`,
+                  borderRadius: "999px",
+                }}
+              >
+                {banner.button_text}
+              </a>
+            ) : (
+              <div
+                className="absolute z-30 flex items-center justify-center overflow-hidden px-3 text-center font-black shadow-md"
+                style={{
+                  left: `${buttonX}%`,
+                  top: `${buttonY}%`,
+                  width: `${buttonWidth}%`,
+                  minHeight: "34px",
+                  backgroundColor: banner.button_color || "#172033",
+                  color: banner.button_text_color || "#fff",
+                  fontSize: `${safeNumber(banner.button_font_size, 14)}px`,
+                  borderRadius: "999px",
+                }}
+              >
+                {banner.button_text}
+              </div>
+            ))}
+
+          {banner.hide_24h_enabled !== false && (
+            <label
+              className="fixed bottom-[92px] left-1/2 z-[10001] flex -translate-x-1/2 cursor-pointer items-center gap-2 whitespace-nowrap rounded-full bg-black/80 px-4 py-2 text-xs font-bold text-white shadow-lg sm:bottom-6"
+            >
+              <input
+                type="checkbox"
+                checked={hideForPeriod}
+                onChange={(event) =>
+                  setHideForPeriod(event.target.checked)
+                }
+                className="h-4 w-4 accent-white"
+              />
+              Don't show again for {hideDays}{" "}
+              {hideDays === 1 ? "day" : "days"}
+            </label>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
