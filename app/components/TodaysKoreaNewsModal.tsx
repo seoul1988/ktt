@@ -51,6 +51,7 @@ export default function TodaysKoreaNewsModal({
     string | number | null
   >(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [autoResetKey, setAutoResetKey] = useState(0);
 
   const sliderRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,24 +86,57 @@ export default function TodaysKoreaNewsModal({
     setSelectedId(allPosts[nextIndex].id);
   }
 
-  function scrollSlider(direction: -1 | 1) {
+  function getSliderMetrics() {
     const slider = sliderRef.current;
 
-    if (!slider) {
-      return;
-    }
+    if (!slider) return null;
 
     const card =
       slider.querySelector<HTMLElement>("[data-news-card]");
 
-    const amount = card
-      ? card.offsetWidth + 12
-      : slider.clientWidth * 0.8;
+    if (!card) return null;
 
-    slider.scrollBy({
-      left: direction * amount,
+    const step = card.offsetWidth + 12;
+    const maxSlide = Math.max(
+      0,
+      Math.ceil((slider.scrollWidth - slider.clientWidth) / step),
+    );
+
+    return { slider, step, maxSlide };
+  }
+
+  function scrollToSlide(index: number, userInitiated = false) {
+    const metrics = getSliderMetrics();
+
+    if (!metrics) return;
+
+    const { slider, step, maxSlide } = metrics;
+    const safeIndex = Math.max(0, Math.min(index, maxSlide));
+
+    slider.scrollTo({
+      left: safeIndex * step,
       behavior: "smooth",
     });
+
+    setActiveSlide(safeIndex);
+
+    if (userInitiated) {
+      setAutoResetKey((value) => value + 1);
+    }
+  }
+
+  function scrollSlider(direction: -1 | 1, userInitiated = true) {
+    const metrics = getSliderMetrics();
+
+    if (!metrics) return;
+
+    const { maxSlide } = metrics;
+    let nextIndex = activeSlide + direction;
+
+    if (nextIndex > maxSlide) nextIndex = 0;
+    if (nextIndex < 0) nextIndex = maxSlide;
+
+    scrollToSlide(nextIndex, userInitiated);
   }
 
   function handleSliderScroll() {
@@ -120,14 +154,13 @@ export default function TodaysKoreaNewsModal({
     }
 
     const step = card.offsetWidth + 12;
+    const maxSlide = Math.max(
+      0,
+      Math.ceil((slider.scrollWidth - slider.clientWidth) / step),
+    );
     const nextIndex = Math.round(slider.scrollLeft / step);
 
-    setActiveSlide(
-      Math.max(
-        0,
-        Math.min(nextIndex, activePosts.length - 1),
-      ),
-    );
+    setActiveSlide(Math.max(0, Math.min(nextIndex, maxSlide)));
   }
 
   useEffect(() => {
@@ -140,6 +173,25 @@ export default function TodaysKoreaNewsModal({
       });
     }
   }, [activeType]);
+
+  useEffect(() => {
+    if (activePosts.length <= 1 || selectedPost) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const metrics = getSliderMetrics();
+
+      if (!metrics || metrics.maxSlide <= 0) return;
+
+      const nextIndex =
+        activeSlide >= metrics.maxSlide ? 0 : activeSlide + 1;
+
+      scrollToSlide(nextIndex, false);
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [activeSlide, activeType, activePosts.length, selectedPost, autoResetKey]);
 
   useEffect(() => {
     if (!selectedPost) {
@@ -222,6 +274,8 @@ export default function TodaysKoreaNewsModal({
                 <div
                   ref={sliderRef}
                   onScroll={handleSliderScroll}
+                  onTouchStart={() => setAutoResetKey((value) => value + 1)}
+                  onPointerDown={() => setAutoResetKey((value) => value + 1)}
                   className="flex touch-pan-x snap-x snap-proximity items-stretch gap-3 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   style={{
                     WebkitOverflowScrolling: "touch",
@@ -307,22 +361,7 @@ export default function TodaysKoreaNewsModal({
                       type="button"
                       aria-label={`${index + 1}번째 뉴스`}
                       onClick={() => {
-                        const slider = sliderRef.current;
-
-                        const card =
-                          slider?.querySelector<HTMLElement>(
-                            "[data-news-card]",
-                          );
-
-                        if (!slider || !card) {
-                          return;
-                        }
-
-                        slider.scrollTo({
-                          left:
-                            index * (card.offsetWidth + 12),
-                          behavior: "smooth",
-                        });
+                        scrollToSlide(index, true);
                       }}
                       className={`h-1.5 rounded-full transition-all ${
                         activeSlide === index
