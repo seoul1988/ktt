@@ -46,6 +46,70 @@ export default function RedeemCouponPage() {
   }, [couponId]);
 
   useEffect(() => {
+    const redirectIfAlreadyRedeemed = () => {
+      if (!couponId) return;
+
+      try {
+        const currentYear = new Date().getFullYear();
+        const genericKey = `ktown_coupon_redeemed_${couponId}`;
+        const yearlyKey = `ktown_coupon_redeemed_${couponId}_${currentYear}`;
+        const reservationKey = `ktown_coupon_reservation_used_${couponId}`;
+
+        const alreadyRedeemed =
+          window.localStorage.getItem(genericKey) ||
+          window.localStorage.getItem(yearlyKey) ||
+          window.localStorage.getItem(reservationKey);
+
+        if (alreadyRedeemed) {
+          const businessIdFromStorage = (() => {
+            try {
+              const raw =
+                window.localStorage.getItem(reservationKey) ||
+                window.localStorage.getItem(yearlyKey) ||
+                window.localStorage.getItem(genericKey);
+
+              if (!raw) return null;
+
+              const parsed = JSON.parse(raw) as {
+                businessId?: number | string | null;
+              };
+
+              return parsed?.businessId ? Number(parsed.businessId) : null;
+            } catch {
+              return null;
+            }
+          })();
+
+          if (businessIdFromStorage) {
+            window.location.replace(`/coupons/business/${businessIdFromStorage}`);
+          } else {
+            window.location.replace("/coupons");
+          }
+        }
+      } catch {
+        // Ignore unavailable browser storage.
+      }
+    };
+
+    const handlePopState = () => {
+      redirectIfAlreadyRedeemed();
+    };
+
+    const handlePageShow = () => {
+      redirectIfAlreadyRedeemed();
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [couponId]);
+
+
+  useEffect(() => {
     if (!redeemedAt || !coupon?.business_id) return;
 
     setRedeemAnimationDone(false);
@@ -55,7 +119,7 @@ export default function RedeemCouponPage() {
     }, 5400);
 
     const returnTimer = window.setTimeout(() => {
-      window.location.href = `/coupons/business/${coupon.business_id}`;
+      window.location.replace(`/coupons/business/${coupon.business_id}`);
     }, 9000);
 
     return () => {
@@ -538,7 +602,7 @@ export default function RedeemCouponPage() {
                 type="button"
                 onClick={() => {
                   if (coupon.business_id) {
-                    window.location.href = `/coupons/business/${coupon.business_id}`;
+                    window.location.replace(`/coupons/business/${coupon.business_id}`);
                   } else {
                     window.location.href = "/coupons";
                   }
