@@ -1049,10 +1049,10 @@ export default function KTownPopupBanner() {
               style={{
                 // 폰/태블릿/데스크탑 모두 동일:
                 // wrapper의 높이를 실제 <img>가 만들기 때문에 bottom: 0은
-                // 투명한 800px 디자인 캔버스가 아니라 실제 표시 이미지의 맨 아래입니다.
+                // 실제 표시 이미지의 맨 아래 기준입니다. 체크박스를 약 10px 위로 붙입니다.
                 left: "50%",
                 bottom: 0,
-                transform: "translate(-50%, calc(100% + 6px))",
+                transform: "translate(-50%, calc(100% - 10px))",
               }}
             >
               <input
