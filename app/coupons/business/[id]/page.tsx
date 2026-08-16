@@ -824,7 +824,7 @@ export default function BusinessCouponsPage() {
 
                             <p className="mt-1 whitespace-nowrap text-right text-[8px] font-bold text-[#8A9099]">
                               <span className="sm:hidden">At restaurant · Staff marks used</span>
-                              <span className="hidden sm:inline">At the restaurant, ask staff to mark this coupon used.</span>
+                              <span className="hidden sm:inline">Ask staff to mark this coupon used.</span>
                             </p>
 
                             <button
