@@ -257,7 +257,7 @@ export default function InstallAppButton({
     }, 4000);
   }
 
-  function getStandaloneState() {
+  function getInstalledState() {
     const displayModeStandalone = window.matchMedia(
       "(display-mode: standalone)",
     ).matches;
@@ -265,28 +265,30 @@ export default function InstallAppButton({
     const iosStandalone =
       (window.navigator as IOSNavigator).standalone === true;
 
-    return displayModeStandalone || iosStandalone;
-  }
+    const businessId = getBusinessIdFromPath();
 
-  function getInstalledState() {
-    const standalone = getStandaloneState();
+    /*
+     * 비즈니스 웹에서는 메인 KTown 앱의 standalone 상태를
+     * 해당 비즈니스 앱 설치 상태로 사용하면 안 됩니다.
+     * 비즈니스별 저장 키만 확인합니다.
+     */
+    if (businessId) {
+      return (
+        displayModeStandalone ||
+        iosStandalone ||
+        getSavedInstalledState()
+      );
+    }
 
-    return standalone || getSavedInstalledState();
+    return (
+      displayModeStandalone ||
+      iosStandalone ||
+      getSavedInstalledState()
+    );
   }
 
   function checkInstalledState() {
-    const standalone = getStandaloneState();
-
-    /*
-     * 앱(PWA)으로 실제 실행된 적이 있으면 설치 완료 상태를 저장합니다.
-     * 이후 같은 기기의 Chrome에서 웹사이트를 열어도
-     * 설치 버튼이 다시 나타나지 않도록 하기 위함입니다.
-     */
-    if (standalone) {
-      saveInstalledState(true);
-    }
-
-    const installed = standalone || getSavedInstalledState();
+    const installed = getInstalledState();
 
     setIsInstalled(installed);
     setHasCheckedInstallState(true);
@@ -421,18 +423,12 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * 과거에 설치 완료 상태가 저장되어 있으면
-       * beforeinstallprompt가 들어와도 설치 버튼을 다시 보여주지 않습니다.
+       * beforeinstallprompt가 발생했다는 것은 현재 브라우저에서
+       * 이 PWA를 다시 설치할 수 있다는 뜻입니다.
+       * 앱을 삭제해도 localStorage의 과거 설치 기록은 남을 수 있으므로
+       * 브라우저의 실제 설치 가능 상태를 우선합니다.
        */
-      if (getSavedInstalledState() || getStandaloneState()) {
-        installPromptRef.current = null;
-        setInstallPrompt(null);
-        setIsInstalled(true);
-        setHasCheckedInstallState(true);
-        setShowBanner(false);
-        return;
-      }
-
+      saveInstalledState(false);
       setIsInstalled(false);
       setHasCheckedInstallState(true);
 
