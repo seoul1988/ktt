@@ -423,19 +423,15 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * 이미 설치 완료 기록이 있으면 브라우저가 중복으로 전달한
-       * beforeinstallprompt 때문에 설치 상태를 다시 해제하지 않습니다.
+       * beforeinstallprompt가 발생했다는 것은 현재 브라우저에서
+       * 이 PWA를 다시 설치할 수 있다는 뜻입니다.
+       * 앱을 삭제해도 localStorage의 과거 설치 기록은 남을 수 있으므로
+       * 브라우저의 실제 설치 가능 상태를 우선합니다.
        */
-      if (getInstalledState()) {
-        installPromptRef.current = null;
-        setInstallPrompt(null);
-        setIsInstalled(true);
-        setHasCheckedInstallState(true);
-        setShowBanner(false);
-        return;
-      }
-
+      saveInstalledState(false);
+      setIsInstalled(false);
       setHasCheckedInstallState(true);
+
 
       try {
         localStorage.removeItem(getHideStorageKey());
