@@ -76,10 +76,105 @@ function normalizeDashboardStats(value: unknown): DashboardStats {
   };
 }
 
+function getEasternDateKey(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+
+  return `${year}-${month}-${day}`;
+}
+
+function detectDevice(userAgent: string | null | undefined) {
+  const ua = String(userAgent ?? "");
+
+  if (/iPhone|iPad|iPod/i.test(ua)) {
+    return "🍎 iPhone / iPad";
+  }
+
+  if (/Android/i.test(ua)) {
+    return "🤖 Android";
+  }
+
+  if (/Windows/i.test(ua)) {
+    return "🪟 Windows";
+  }
+
+  if (/Macintosh|Mac OS X/i.test(ua)) {
+    return "🖥️ Mac";
+  }
+
+  if (/Linux/i.test(ua)) {
+    return "🐧 Linux";
+  }
+
+  return "💻 Other / Unknown";
+}
+
+async function getTodayUniqueDeviceStats(): Promise<StatItem[]> {
+  const now = new Date();
+  const todayEastern = getEasternDateKey(now);
+  const from = new Date(now.getTime() - 36 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from("visitor_logs")
+    .select("visitor_key,user_id,ip_address,user_agent,created_at,is_bot")
+    .gte("created_at", from)
+    .lte("created_at", now.toISOString());
+
+  if (error) {
+    console.error("today unique device stats error:", error);
+    return [];
+  }
+
+  const deviceVisitors = new Map<string, Set<string>>();
+
+  for (const row of data ?? []) {
+    if (row.is_bot === true) continue;
+    if (!row.created_at) continue;
+
+    const createdAt = new Date(row.created_at);
+
+    if (getEasternDateKey(createdAt) !== todayEastern) {
+      continue;
+    }
+
+    const dedupKey =
+      String(row.visitor_key ?? "").trim() ||
+      String(row.user_id ?? "").trim() ||
+      String(row.ip_address ?? "").trim();
+
+    if (!dedupKey) continue;
+
+    const device = detectDevice(row.user_agent);
+
+    if (!deviceVisitors.has(device)) {
+      deviceVisitors.set(device, new Set<string>());
+    }
+
+    deviceVisitors.get(device)!.add(dedupKey);
+  }
+
+  return Array.from(deviceVisitors.entries())
+    .map(([label, visitors]) => ({
+      label,
+      count: visitors.size,
+    }))
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
 export default async function AdminVisitorsPage() {
-  const { data, error } = await supabase.rpc(
-    "get_visitor_dashboard_stats",
-  );
+  const [{ data, error }, todayUniqueDeviceStats] = await Promise.all([
+    supabase.rpc("get_visitor_dashboard_stats"),
+    getTodayUniqueDeviceStats(),
+  ]);
 
   if (error) {
     return (
@@ -124,6 +219,7 @@ export default async function AdminVisitorsPage() {
   }
 
   const stats = normalizeDashboardStats(data);
+  stats.todayDeviceStats = todayUniqueDeviceStats;
 
   const cardClass =
     "rounded-3xl border border-gray-100 bg-white p-5 shadow-sm";
@@ -191,9 +287,14 @@ export default async function AdminVisitorsPage() {
           </div>
 
           <div className={cardClass}>
-            <h2 className="mb-4 text-xl font-black text-[#172033]">
-              📱 Today&apos;s Devices
-            </h2>
+            <div className="mb-4">
+              <h2 className="text-xl font-black text-[#172033]">
+                📱 Today&apos;s Devices
+              </h2>
+              <p className="mt-1 text-[11px] font-bold text-[#7C746A]">
+                중복 제외 방문자 기준
+              </p>
+            </div>
 
             <StatsList
               stats={stats.todayDeviceStats}
