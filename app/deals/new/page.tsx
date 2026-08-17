@@ -25,6 +25,14 @@ type DealItemForm = {
   originalPrice: string;
   salePrice: string;
   description: string;
+
+  // 각 메뉴마다 적용 조건을 따로 설정합니다.
+  scheduleType: "weekly" | "date";
+  weekdays: string[];
+  dealDate: string;
+  startTime: string;
+  endTime: string;
+
   imageFile: File | null;
   imagePreview: string;
 };
@@ -35,6 +43,11 @@ function makeEmptyItem(): DealItemForm {
     originalPrice: "",
     salePrice: "",
     description: "",
+    scheduleType: "weekly",
+    weekdays: [],
+    dealDate: "",
+    startTime: "",
+    endTime: "",
     imageFile: null,
     imagePreview: "",
   };
@@ -163,7 +176,7 @@ export default function NewDealPage() {
   function updateItem(
     index: number,
     field: keyof DealItemForm,
-    value: string | File | null
+    value: string | string[] | File | null
   ) {
     setItems((prev) =>
       prev.map((item, i) => {
@@ -182,6 +195,23 @@ export default function NewDealPage() {
         return {
           ...item,
           [field]: value,
+        };
+      })
+    );
+  }
+
+  function toggleItemWeekday(index: number, day: string) {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+
+        const weekdays = item.weekdays.includes(day)
+          ? item.weekdays.filter((value) => value !== day)
+          : [...item.weekdays, day];
+
+        return {
+          ...item,
+          weekdays,
         };
       })
     );
@@ -252,6 +282,25 @@ export default function NewDealPage() {
       return;
     }
 
+    for (let i = 0; i < validItems.length; i++) {
+      const item = validItems[i];
+
+      if (item.scheduleType === "weekly" && item.weekdays.length === 0) {
+        alert(`메뉴 ${i + 1}의 적용 요일을 선택하세요.`);
+        return;
+      }
+
+      if (item.scheduleType === "date" && !item.dealDate) {
+        alert(`메뉴 ${i + 1}의 적용 날짜를 선택하세요.`);
+        return;
+      }
+
+      if (!item.startTime || !item.endTime) {
+        alert(`메뉴 ${i + 1}의 시작/종료 시간을 입력하세요.`);
+        return;
+      }
+    }
+
     setSaving(true);
 
     try {
@@ -309,6 +358,14 @@ export default function NewDealPage() {
           original_price: item.originalPrice ? Number(item.originalPrice) : null,
           sale_price: item.salePrice ? Number(item.salePrice) : null,
           description: item.description.trim() || null,
+
+          // 메뉴별 적용 조건
+          schedule_type: item.scheduleType,
+          weekdays: item.scheduleType === "weekly" ? item.weekdays : null,
+          deal_date: item.scheduleType === "date" ? item.dealDate : null,
+          start_time: item.startTime || null,
+          end_time: item.endTime || null,
+
           image_url: itemImageUrl,
           sort_order: i,
         });
@@ -575,6 +632,114 @@ export default function NewDealPage() {
                     onChange={(e) => updateItem(index, "name", e.target.value)}
                     className="mb-2 w-full rounded-2xl border px-4 py-3 text-sm font-bold"
                   />
+
+                  <div className="mb-3 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                    <p className="mb-2 text-xs font-black text-gray-600">
+                      이 메뉴는 언제 적용되나요?
+                    </p>
+
+                    <div className="mb-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateItem(index, "scheduleType", "weekly");
+                          updateItem(index, "dealDate", "");
+                        }}
+                        className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                          item.scheduleType === "weekly"
+                            ? "border-[#172033] bg-[#172033] text-white"
+                            : "bg-white text-[#172033]"
+                        }`}
+                      >
+                        요일별 반복
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateItem(index, "scheduleType", "date");
+                          updateItem(index, "weekdays", []);
+                        }}
+                        className={`rounded-xl border px-3 py-2 text-xs font-black ${
+                          item.scheduleType === "date"
+                            ? "border-[#172033] bg-[#172033] text-white"
+                            : "bg-white text-[#172033]"
+                        }`}
+                      >
+                        특정 날짜
+                      </button>
+                    </div>
+
+                    {item.scheduleType === "weekly" ? (
+                      <div className="mb-3 grid grid-cols-7 gap-1">
+                        {[
+                          ["Sun", "일"],
+                          ["Mon", "월"],
+                          ["Tue", "화"],
+                          ["Wed", "수"],
+                          ["Thu", "목"],
+                          ["Fri", "금"],
+                          ["Sat", "토"],
+                        ].map(([value, label]) => {
+                          const selected = item.weekdays.includes(value);
+
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => toggleItemWeekday(index, value)}
+                              className={`rounded-lg border py-2 text-xs font-black ${
+                                selected
+                                  ? "border-[#172033] bg-[#172033] text-white"
+                                  : "bg-white text-gray-600"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <input
+                        type="date"
+                        value={item.dealDate}
+                        onChange={(e) =>
+                          updateItem(index, "dealDate", e.target.value)
+                        }
+                        className="mb-3 w-full rounded-xl border bg-white px-3 py-2 text-sm font-bold"
+                      />
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="mb-1 text-[11px] font-black text-gray-500">
+                          시작 시간
+                        </p>
+                        <input
+                          type="time"
+                          value={item.startTime}
+                          onChange={(e) =>
+                            updateItem(index, "startTime", e.target.value)
+                          }
+                          className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <p className="mb-1 text-[11px] font-black text-gray-500">
+                          종료 시간
+                        </p>
+                        <input
+                          type="time"
+                          value={item.endTime}
+                          onChange={(e) =>
+                            updateItem(index, "endTime", e.target.value)
+                          }
+                          className="w-full rounded-xl border bg-white px-3 py-2 text-sm font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="mb-2 grid grid-cols-2 gap-2">
                     <input
