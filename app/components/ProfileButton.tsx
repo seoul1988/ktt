@@ -22,17 +22,31 @@ type BusinessOwnerRow = {
 
 function timeout<T>(
   promise: PromiseLike<T>,
-  ms = 5000,
+  ms = 10000,
 ): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<T>((_, reject) =>
-      setTimeout(
-        () => reject(new Error("Request timeout")),
-        ms,
-      ),
-    ),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error("Request timeout"));
+    }, ms);
+
+    Promise.resolve(promise)
+      .then((value) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 export default function ProfileButton() {
@@ -59,6 +73,10 @@ export default function ProfileButton() {
   const menuRef =
     useRef<HTMLDivElement | null>(null);
 
+  const loadingRef = useRef(false);
+  const lastLoadedAtRef = useRef(0);
+  const mountedRef = useRef(true);
+
   const isUser = role === "user";
   const isOwner = role === "owner";
   const isAdmin = role === "admin";
@@ -83,12 +101,14 @@ export default function ProfileButton() {
     currentUserId: string,
     currentRole: string,
   ) {
-    try {
-      if (currentRole === "admin") {
+    if (currentRole === "admin") {
+      if (mountedRef.current) {
         resetBusinessState();
-        return;
       }
+      return;
+    }
 
+    try {
       const { data, error } =
         await timeout(
           supabase
@@ -103,11 +123,15 @@ export default function ProfileButton() {
               "user_id",
               currentUserId,
             ),
-          5000,
+          10000,
         );
 
       if (error) {
         throw error;
+      }
+
+      if (!mountedRef.current) {
+        return;
       }
 
       const rows =
@@ -154,19 +178,41 @@ export default function ProfileButton() {
         error,
       );
 
-      resetBusinessState();
+      // 기존 상태를 유지합니다.
+      // 일시적인 timeout 때문에 관리 메뉴가 사라지는 것을 방지합니다.
     }
   }
 
-  async function loadUser() {
+  async function loadUser(force = false) {
+    const now = Date.now();
+
+    if (loadingRef.current) {
+      return;
+    }
+
+    if (
+      !force &&
+      now - lastLoadedAtRef.current < 3000
+    ) {
+      return;
+    }
+
+    loadingRef.current = true;
+
     try {
-      setChecking(true);
+      if (mountedRef.current) {
+        setChecking(true);
+      }
 
       const sessionResult =
         await timeout(
           supabase.auth.getSession(),
-          5000,
+          10000,
         );
+
+      if (!mountedRef.current) {
+        return;
+      }
 
       const user =
         sessionResult.data.session
@@ -177,12 +223,13 @@ export default function ProfileButton() {
         setRole(null);
         resetBusinessState();
         setOpen(false);
+        lastLoadedAtRef.current = Date.now();
         return;
       }
 
       setUserId(user.id);
 
-      let loadedRole = "user";
+      let loadedRole = role || "user";
 
       try {
         const { data, error } =
@@ -192,11 +239,15 @@ export default function ProfileButton() {
               .select("role")
               .eq("id", user.id)
               .maybeSingle<Profile>(),
-            5000,
+            10000,
           );
 
         if (error) {
           throw error;
+        }
+
+        if (!mountedRef.current) {
+          return;
         }
 
         loadedRole =
@@ -207,7 +258,13 @@ export default function ProfileButton() {
           error,
         );
 
-        loadedRole = "user";
+        // 프로필 조회 timeout 시 기존 role을 유지합니다.
+        // 기존 role이 없다면 user로만 fallback 합니다.
+        loadedRole = role || "user";
+      }
+
+      if (!mountedRef.current) {
+        return;
       }
 
       setRole(loadedRole);
@@ -223,76 +280,85 @@ export default function ProfileButton() {
       } else {
         resetBusinessState();
       }
+
+      lastLoadedAtRef.current = Date.now();
     } catch (error) {
       console.error(
         "Failed to load user:",
         error,
       );
 
-      setUserId(null);
-      setRole(null);
-      resetBusinessState();
-      setOpen(false);
+      // 중요:
+      // timeout이나 일시적인 네트워크 오류만으로
+      // 현재 로그인 상태를 강제로 지우지 않습니다.
     } finally {
-      setChecking(false);
+      loadingRef.current = false;
+
+      if (mountedRef.current) {
+        setChecking(false);
+      }
     }
   }
 
   useEffect(() => {
-    let alive = true;
+    mountedRef.current = true;
 
-    async function safeLoad() {
-      if (!alive) {
-        return;
-      }
-
-      await loadUser();
-    }
-
-    void safeLoad();
+    void loadUser(true);
 
     const {
       data: { subscription },
     } =
       supabase.auth.onAuthStateChange(
         () => {
-          void safeLoad();
+          void loadUser(true);
         },
       );
 
+    const handleOnline = () => {
+      void loadUser(true);
+    };
+
+    const handleFocus = () => {
+      void loadUser(false);
+    };
+
+    const handlePageShow = () => {
+      void loadUser(false);
+    };
+
     window.addEventListener(
       "online",
-      safeLoad,
+      handleOnline,
     );
 
     window.addEventListener(
       "focus",
-      safeLoad,
+      handleFocus,
     );
 
     window.addEventListener(
       "pageshow",
-      safeLoad,
+      handlePageShow,
     );
 
     return () => {
-      alive = false;
+      mountedRef.current = false;
 
       subscription.unsubscribe();
 
       window.removeEventListener(
         "online",
-        safeLoad,
+        handleOnline,
       );
 
       window.removeEventListener(
         "focus",
-        safeLoad,
+        handleFocus,
       );
 
       window.removeEventListener(
         "pageshow",
-        safeLoad,
+        handlePageShow,
       );
     };
   }, []);
