@@ -558,7 +558,7 @@ export default function ProfileButton() {
               </Link>
 
               <Link
-                href="/grand-opening/new"
+                href="/grand-openings/new"
                 className="block px-4 py-3 hover:bg-[#F8F3EC]"
                 onClick={() =>
                   setOpen(false)

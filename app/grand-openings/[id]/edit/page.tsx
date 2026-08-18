@@ -118,6 +118,9 @@ export default function EditGrandOpeningPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [optimizingImages, setOptimizingImages] = useState(false);
+  const [showOnMain, setShowOnMain] = useState(true);
+  const [showOnCommunity, setShowOnCommunity] = useState(true);
+  const [showInList, setShowInList] = useState(true);
 
   const [title, setTitle] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -191,6 +194,9 @@ export default function EditGrandOpeningPage() {
     setImagePreviews([]);
     setVideoFile(null);
     setVideoPreview(null);
+    setShowOnMain(data.show_on_main ?? true);
+    setShowOnCommunity(data.show_on_community ?? true);
+    setShowInList(data.show_in_list ?? true);
 
     setLoading(false);
   }
@@ -419,6 +425,9 @@ async function deleteStorageImages(urls: string[]) {
         images: finalImages,
         video_url: uploadedVideoUrl || videoUrl.trim() || null,
         link_url: linkUrl.trim() || null,
+        show_on_main: showOnMain,
+        show_on_community: showOnCommunity,
+        show_in_list: showInList,
       })
       .eq("id", id)
       .select("id, images")
@@ -690,6 +699,66 @@ async function deleteStorageImages(urls: string[]) {
               rows={5}
               className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
             />
+          </div>
+
+          <div className="rounded-2xl border border-[#E8DED1] bg-[#F8F3EC] p-4">
+            <p className="text-sm font-black text-[#172033]">
+              표시 위치
+            </p>
+
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              체크한 곳에만 이 Grand Opening을 표시합니다.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  showOnMain
+                    ? "border-[#172033] bg-white text-[#172033]"
+                    : "border-[#E8DED1] bg-[#FFFDF8] text-gray-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showOnMain}
+                  onChange={(e) => setShowOnMain(e.target.checked)}
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                메인에 표시
+              </label>
+
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  showOnCommunity
+                    ? "border-[#172033] bg-white text-[#172033]"
+                    : "border-[#E8DED1] bg-[#FFFDF8] text-gray-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showOnCommunity}
+                  onChange={(e) => setShowOnCommunity(e.target.checked)}
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                커뮤니티에 표시
+              </label>
+
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  showInList
+                    ? "border-[#172033] bg-white text-[#172033]"
+                    : "border-[#E8DED1] bg-[#FFFDF8] text-gray-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showInList}
+                  onChange={(e) => setShowInList(e.target.checked)}
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                리스트에 표시
+              </label>
+            </div>
           </div>
 
           <button

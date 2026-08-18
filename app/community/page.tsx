@@ -23,6 +23,26 @@ export default async function CommunityPage() {
     console.error("community events error:", eventsError);
   }
 
+  // Community Grand Opening:
+  // 커뮤니티 + 리스트에 모두 체크된 항목 중 가장 최근 1개만 표시합니다.
+  const { data: grandOpeningData, error: grandOpeningError } = await supabase
+    .from("grand_openings")
+    .select("*")
+    .eq("show_on_community", true)
+    .eq("show_in_list", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (grandOpeningError) {
+    console.error("community grand opening error:", grandOpeningError);
+  }
+
+  const latestGrandOpening = grandOpeningData?.[0] ?? null;
+  const grandOpeningImage =
+    latestGrandOpening?.images?.[0] ||
+    latestGrandOpening?.image_url ||
+    "/event.png";
+
   const { data: deals, error: dealsError } = await supabase
     .from("deals")
     .select("*")
@@ -486,6 +506,79 @@ export default async function CommunityPage() {
             )}
           </div>
         </section>
+
+        {/* Grand Opening — latest community/list enabled item */}
+        {latestGrandOpening && (
+          <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FFF1EE] p-3 shadow-sm">
+            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F3CFC7] bg-white text-xl shadow-sm">
+                  🎉
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
+                    Grand Opening
+                  </p>
+
+                  <h2 className="text-xl font-black text-[#172033]">
+                    Grand Opening
+                  </h2>
+                </div>
+              </div>
+
+              <Link
+                href="/grand-openings"
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
+              >
+                →
+              </Link>
+            </div>
+
+            <Link
+              href={`/grand-openings/${latestGrandOpening.id}`}
+              className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+            >
+              <div className="relative h-64 w-full overflow-hidden bg-[#E8DED1]">
+                <img
+                  src={grandOpeningImage}
+                  alt={
+                    latestGrandOpening.business_name ||
+                    latestGrandOpening.title ||
+                    "Grand Opening"
+                  }
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+
+                <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                  GRAND OPENING
+                </div>
+              </div>
+
+              <div className="p-5">
+                <h3 className="line-clamp-2 text-2xl font-black leading-tight">
+                  {latestGrandOpening.business_name ||
+                    latestGrandOpening.title ||
+                    "Grand Opening"}
+                </h3>
+
+                {latestGrandOpening.title && (
+                  <p className="mt-2 line-clamp-1 text-sm font-black text-[#C4483A]">
+                    {latestGrandOpening.title}
+                  </p>
+                )}
+
+                {latestGrandOpening.description && (
+                  <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-[#6B6257]">
+                    {latestGrandOpening.description}
+                  </p>
+                )}
+              </div>
+            </Link>
+          </section>
+        )}
 
         {/* Community Deals / fallback: latest News & Performance */}
         {dealCount > 0 ? (

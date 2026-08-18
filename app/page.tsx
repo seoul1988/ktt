@@ -545,6 +545,8 @@ export default async function Home() {
   const { data: allGrandOpenings, error: grandOpeningError } = await supabase
     .from("grand_openings")
     .select("*")
+    .eq("show_on_main", true)
+    .eq("show_in_list", true)
     .order("created_at", { ascending: false })
     .limit(1);
 

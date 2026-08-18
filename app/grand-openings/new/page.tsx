@@ -115,6 +115,8 @@ export default function NewGrandOpeningPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [optimizingImages, setOptimizingImages] = useState(false);
+  const [showOnMain, setShowOnMain] = useState(true);
+  const [showOnCommunity, setShowOnCommunity] = useState(true);
 
   useEffect(() => {
     async function loadUser() {
@@ -307,6 +309,8 @@ export default function NewGrandOpeningPage() {
         images: imageUrls,
         video_url: uploadedVideoUrl || videoUrl.trim() || null,
         link_url: linkUrl.trim() || null,
+        show_on_main: showOnMain,
+        show_on_community: showOnCommunity,
         status: "pending",
       });
 
@@ -492,8 +496,16 @@ export default function NewGrandOpeningPage() {
                   multiple
                   disabled={optimizingImages}
                   onChange={async (e) => {
-                    await handleImages(e.target.files);
-                    e.target.value = "";
+                    const input = e.currentTarget;
+                    const files = input.files;
+
+                    if (!files || files.length === 0) return;
+
+                    try {
+                      await handleImages(files);
+                    } finally {
+                      input.value = "";
+                    }
                   }}
                   className="hidden"
                 />
@@ -545,6 +557,50 @@ export default function NewGrandOpeningPage() {
               className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
               placeholder="Tell people about the grand opening, special offers, hours, etc."
             />
+          </div>
+
+          <div className="rounded-2xl border border-[#E8DED1] bg-[#F8F3EC] p-4">
+            <p className="text-sm font-black text-[#172033]">
+              표시 위치
+            </p>
+
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              체크한 곳에만 이 Grand Opening을 표시합니다.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  showOnMain
+                    ? "border-[#172033] bg-white text-[#172033]"
+                    : "border-[#E8DED1] bg-[#FFFDF8] text-gray-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showOnMain}
+                  onChange={(e) => setShowOnMain(e.target.checked)}
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                메인에 표시
+              </label>
+
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-black transition ${
+                  showOnCommunity
+                    ? "border-[#172033] bg-white text-[#172033]"
+                    : "border-[#E8DED1] bg-[#FFFDF8] text-gray-500"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={showOnCommunity}
+                  onChange={(e) => setShowOnCommunity(e.target.checked)}
+                  className="h-5 w-5 accent-[#172033]"
+                />
+                커뮤니티에 표시
+              </label>
+            </div>
           </div>
 
           <button
