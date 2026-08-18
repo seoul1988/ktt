@@ -230,6 +230,15 @@ export default function BusinessMediaViewer({
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
 
+  // Fullscreen image pinch zoom / pan
+  const [scale, setScale] = useState(1);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const pinchStartDistance = useRef(0);
+  const pinchStartScale = useRef(1);
+  const panStart = useRef({ x: 0, y: 0 });
+  const translateStart = useRef({ x: 0, y: 0 });
+  const lastTapTime = useRef(0);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -302,6 +311,125 @@ export default function BusinessMediaViewer({
     };
   }, [isOpen, media.length]);
 
+  useEffect(() => {
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  }, [isOpen, currentIndex]);
+
+  function resetZoom() {
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  }
+
+  function getTouchDistance(touches: React.TouchList) {
+    if (touches.length < 2) return 0;
+
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+
+    return Math.hypot(dx, dy);
+  }
+
+  function handleFullscreenTouchStart(event: React.TouchEvent) {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      pinchStartDistance.current = getTouchDistance(event.touches);
+      pinchStartScale.current = scale;
+      return;
+    }
+
+    if (event.touches.length === 1) {
+      touchStartX.current = event.touches[0].clientX;
+      touchStartY.current = event.touches[0].clientY;
+
+      panStart.current = {
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY,
+      };
+
+      translateStart.current = { ...translate };
+    }
+  }
+
+  function handleFullscreenTouchMove(event: React.TouchEvent) {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+
+      const distance = getTouchDistance(event.touches);
+      if (!pinchStartDistance.current) return;
+
+      const nextScale = Math.min(
+        5,
+        Math.max(
+          1,
+          pinchStartScale.current *
+            (distance / pinchStartDistance.current),
+        ),
+      );
+
+      setScale(nextScale);
+
+      if (nextScale <= 1) {
+        setTranslate({ x: 0, y: 0 });
+      }
+
+      return;
+    }
+
+    if (event.touches.length === 1 && scale > 1) {
+      event.preventDefault();
+
+      const dx = event.touches[0].clientX - panStart.current.x;
+      const dy = event.touches[0].clientY - panStart.current.y;
+
+      setTranslate({
+        x: translateStart.current.x + dx,
+        y: translateStart.current.y + dy,
+      });
+    }
+  }
+
+  function handleFullscreenTouchEnd(event: React.TouchEvent) {
+    if (event.touches.length > 0) return;
+
+    pinchStartDistance.current = 0;
+
+    if (scale > 1) return;
+
+    const changed = event.changedTouches[0];
+    if (!changed) return;
+
+    const diffX = touchStartX.current - changed.clientX;
+    const diffY = touchStartY.current - changed.clientY;
+
+    if (Math.abs(diffX) <= Math.abs(diffY)) return;
+
+    if (diffX > 50) goNext();
+    if (diffX < -50) goPrev();
+  }
+
+  function handleImageDoubleTap(event: React.TouchEvent) {
+    if (event.changedTouches.length !== 1) return;
+
+    const now = Date.now();
+
+    if (now - lastTapTime.current < 300) {
+      event.preventDefault();
+
+      if (scale > 1) {
+        resetZoom();
+      } else {
+        setScale(2.5);
+        setTranslate({ x: 0, y: 0 });
+      }
+
+      lastTapTime.current = 0;
+      return;
+    }
+
+    lastTapTime.current = now;
+  }
+
   if (media.length === 0) return null;
 
   const current = media[currentIndex];
@@ -372,10 +500,6 @@ export default function BusinessMediaViewer({
             onClick={() =>
               setIsOpen(false)
             }
-            onTouchStart={
-              handleTouchStart
-            }
-            onTouchEnd={handleTouchEnd}
             className="
               fixed inset-0
               z-[2147483647]
@@ -395,11 +519,37 @@ export default function BusinessMediaViewer({
                 pt-[calc(70px+env(safe-area-inset-top))]
               "
             >
-              <MediaDisplay
-                item={current}
-                name={name}
-                full
-              />
+              {current.type === "image" ? (
+                <div
+                  className="flex h-full w-full items-center justify-center overflow-hidden"
+                  onTouchStart={handleFullscreenTouchStart}
+                  onTouchMove={handleFullscreenTouchMove}
+                  onTouchEnd={(event) => {
+                    handleImageDoubleTap(event);
+                    handleFullscreenTouchEnd(event);
+                  }}
+                  style={{ touchAction: "none" }}
+                >
+                  <img
+                    src={current.url}
+                    alt={name}
+                    draggable={false}
+                    className="max-h-[calc(100dvh-120px)] max-w-[calc(100vw-24px)] select-none object-contain"
+                    style={{
+                      transform: `translate3d(${translate.x}px, ${translate.y}px, 0) scale(${scale})`,
+                      transformOrigin: "center center",
+                      transition:
+                        scale === 1 ? "transform 160ms ease-out" : "none",
+                    }}
+                  />
+                </div>
+              ) : (
+                <MediaDisplay
+                  item={current}
+                  name={name}
+                  full
+                />
+              )}
             </div>
 
             <button
