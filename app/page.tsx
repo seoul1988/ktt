@@ -784,10 +784,33 @@ const kdramaNews = (todaysKoreaPosts || [])
     mainGrandOpening?.image_url ||
     "/event.png";
 
-  // Keep the existing Coming Soon row (Lotte Plaza Market / business 196)
-  const comingSoonBusiness = (allSpots || []).find(
-    (business: any) => Number(business.id) === 196
-  );
+  // Coming Soon:
+  // 특정 Business ID를 고정하지 않고,
+  // Coming Soon으로 등록된 비즈니스 중 하나를 랜덤으로 표시합니다.
+  const comingSoonBusinesses = (allSpots || []).filter((business: any) => {
+    const categories = [
+      ...splitCategories(business?.category),
+      ...splitCategories(business?.category_name),
+      ...splitCategories(business?.categories),
+    ].map((value) => normalizeCategory(value));
+
+    return (
+      categories.some(
+        (category) =>
+          category === "coming soon" ||
+          category.includes("coming soon"),
+      ) ||
+      business?.coming_soon === true ||
+      business?.is_coming_soon === true
+    );
+  });
+
+  const comingSoonBusiness =
+    comingSoonBusinesses.length > 0
+      ? comingSoonBusinesses[
+          Math.floor(Math.random() * comingSoonBusinesses.length)
+        ]
+      : null;
 
   const comingSoonImage =
     comingSoonBusiness?.thumbnail_url ||
@@ -940,51 +963,7 @@ const kdramaNews = (todaysKoreaPosts || [])
               </div>
             )}
 
-            {/* 2. COMING SOON */}
-            {comingSoonBusiness && (
-              <div className="relative flex min-h-[106px] overflow-hidden border-b border-gray-200 bg-white">
-                <div className="absolute bottom-3 left-0 top-3 z-10 w-1 rounded-r-full bg-blue-500" />
-
-                <Link
-                  href={`/business/${comingSoonBusiness.id}`}
-                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 transition hover:bg-blue-50/30 active:bg-blue-50"
-                >
-                  <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
-                    <img
-                      src={comingSoonImage}
-                      alt={comingSoonBusiness.name || "Coming Soon"}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-cover object-center"
-                    />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-50 text-[13px]">🏬</span>
-                      <p className="text-[16px] font-black text-blue-600">Coming Soon</p>
-                    </div>
-                    <h2 className="line-clamp-1 text-[17px] font-black text-[#071A3D]">
-                      {comingSoonBusiness.name || "Coming Soon"}
-                    </h2>
-                    <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-gray-500">
-                      {comingSoonBusiness.category || "COMING SOON"}
-                      {comingSoonBusiness.city ? `, ${comingSoonBusiness.city}` : ""}
-                    </p>
-                  </div>
-                </Link>
-
-                <Link
-                  href="/coming-soon"
-                  aria-label="View all Coming Soon"
-                  className="flex w-12 shrink-0 items-center justify-center border-l border-blue-100 bg-blue-50/70 text-xl font-black text-blue-600 transition hover:bg-blue-100 active:bg-blue-200"
-                >
-                  ›
-                </Link>
-              </div>
-            )}
-
-            {/* 3. EVENTS */}
+            {/* 2. EVENTS */}
             {mainEvent && (
               <div className="relative flex min-h-[106px] overflow-hidden border-b border-gray-200 bg-white">
                 <div className="absolute bottom-3 left-0 top-3 z-10 w-1 rounded-r-full bg-purple-500" />
@@ -1022,10 +1001,10 @@ const kdramaNews = (todaysKoreaPosts || [])
               </div>
             )}
 
-            {/* 4. DEALS */}
+            {/* 3. DEALS */}
             {deals.length > 0 ? (
               deals.map((deal) => (
-                <div key={deal.id} className="relative flex min-h-[106px] overflow-hidden bg-white">
+                <div key={deal.id} className="relative flex min-h-[106px] overflow-hidden border-b border-gray-200 bg-white">
                   <div className="absolute bottom-3 left-0 top-3 z-10 w-1 rounded-r-full bg-red-500" />
 
                   <Link
@@ -1082,6 +1061,51 @@ const kdramaNews = (todaysKoreaPosts || [])
                 New deals are coming soon.
               </div>
             )}
+
+            {/* 4. COMING SOON */}
+            {comingSoonBusiness && (
+              <div className="relative flex min-h-[106px] overflow-hidden bg-white">
+                <div className="absolute bottom-3 left-0 top-3 z-10 w-1 rounded-r-full bg-blue-500" />
+
+                <Link
+                  href={`/business/${comingSoonBusiness.id}`}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 transition hover:bg-blue-50/30 active:bg-blue-50"
+                >
+                  <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
+                    <img
+                      src={comingSoonImage}
+                      alt={comingSoonBusiness.name || "Coming Soon"}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover object-center"
+                    />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center justify-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-50 text-[13px]">🏬</span>
+                      <p className="text-[16px] font-black text-blue-600">Coming Soon</p>
+                    </div>
+                    <h2 className="line-clamp-1 text-[17px] font-black text-[#071A3D]">
+                      {comingSoonBusiness.name || "Coming Soon"}
+                    </h2>
+                    <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-gray-500">
+                      {comingSoonBusiness.category || "COMING SOON"}
+                      {comingSoonBusiness.city ? `, ${comingSoonBusiness.city}` : ""}
+                    </p>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/coming-soon"
+                  aria-label="View all Coming Soon"
+                  className="flex w-12 shrink-0 items-center justify-center border-l border-blue-100 bg-blue-50/70 text-xl font-black text-blue-600 transition hover:bg-blue-100 active:bg-blue-200"
+                >
+                  ›
+                </Link>
+              </div>
+            )}
+
           </div>
         </section>
 
