@@ -32,6 +32,13 @@ function getStoragePath(url: string) {
   return decodeURIComponent(url.slice(index + marker.length).split("?")[0]);
 }
 
+function cleanDescription(value: string) {
+  return value
+    .replace(/\*\*/g, "")
+    .replace(/^[ \t]+/gm, "")
+    .trim();
+}
+
 export default function GrandOpeningDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -135,6 +142,10 @@ export default function GrandOpeningDetailPage() {
   const phone =
     item.phone || item.phone_number || item.contact_phone || "";
 
+  const description = item.description
+    ? cleanDescription(item.description)
+    : "";
+
   return (
     <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
       <div className="mx-auto max-w-xl">
@@ -212,59 +223,69 @@ export default function GrandOpeningDetailPage() {
             </div>
           </div>
 
-          {item.description && (
-            <>
-              <hr className="my-5 border-gray-200" />
+          {description && (
+            <div className="mt-5 overflow-hidden rounded-2xl border border-[#E8DED1] bg-white shadow-sm">
+              <div className="border-b border-[#EFE5D8] bg-[#FFF8EF] px-4 py-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#C4483A]">
+                  About
+                </p>
 
-              <p className="whitespace-pre-line text-[15px] leading-7 text-gray-700">
-                {item.description}
-              </p>
-            </>
-          )}
+                <h3 className="mt-1 text-[17px] font-black text-[#172033]">
+                  {item.business_name || title}
+                </h3>
+              </div>
 
-          <hr className="my-5 border-gray-200" />
-
-          {item.link_url && (
-            <div className="space-y-3 text-[15px] leading-6">
-              <p>
-                <span className="font-semibold">Website: </span>
-                <a
-                  href={item.link_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="break-words text-[#2453A6] underline"
-                >
-                  {item.link_url}
-                </a>
-              </p>
+              <div className="px-4 py-4">
+                <p className="whitespace-pre-line text-[14px] font-medium leading-7 text-[#4B5563]">
+                  {description}
+                </p>
+              </div>
             </div>
           )}
 
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <a
-              href={phone ? `tel:${phone}` : "#"}
-              onClick={(e) => {
-                if (!phone) {
-                  e.preventDefault();
-                  alert("전화번호가 등록되어 있지 않습니다.");
-                }
-              }}
-              className="rounded-2xl bg-black px-4 py-3 text-center text-sm font-extrabold text-white"
-            >
-              ☎ Call
-            </a>
+          {(item.link_url || phone || mapQuery) && (
+            <div className="mt-5 rounded-2xl border border-[#E8DED1] bg-white p-4 shadow-sm">
+              {item.link_url && (
+                <p className="text-[14px] leading-6">
+                  <span className="font-black text-[#172033]">Website: </span>
+                  <a
+                    href={item.link_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="break-words font-semibold text-[#2453A6] underline"
+                  >
+                    {item.link_url}
+                  </a>
+                </p>
+              )}
 
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                mapQuery,
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-2xl bg-[#8A5A20] px-4 py-3 text-center text-sm font-extrabold text-white"
-            >
-              ↱ Directions
-            </a>
-          </div>
+              <div className={`${item.link_url ? "mt-4" : ""} grid grid-cols-2 gap-3`}>
+                <a
+                  href={phone ? `tel:${phone}` : "#"}
+                  onClick={(e) => {
+                    if (!phone) {
+                      e.preventDefault();
+                      alert("전화번호가 등록되어 있지 않습니다.");
+                    }
+                  }}
+                  className="rounded-2xl bg-black px-4 py-3 text-center text-sm font-extrabold text-white"
+                >
+                  ☎ Call
+                </a>
+
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                    mapQuery,
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-2xl bg-[#8A5A20] px-4 py-3 text-center text-sm font-extrabold text-white"
+                >
+                  ↱ Directions
+                </a>
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
