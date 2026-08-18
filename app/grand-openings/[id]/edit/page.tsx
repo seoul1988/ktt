@@ -603,9 +603,16 @@ async function deleteStorageImages(urls: string[]) {
                   accept="image/*"
                   multiple
                   onChange={async (e) => {
-                    const files = e.currentTarget.files;
-                    await handleImages(files);
-                    e.currentTarget.value = "";
+                    const input = e.currentTarget;
+                    const files = input.files;
+
+                    if (!files || files.length === 0) return;
+
+                    try {
+                      await handleImages(files);
+                    } finally {
+                      input.value = "";
+                    }
                   }}
                   className="hidden"
                 />
