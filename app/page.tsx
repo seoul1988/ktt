@@ -483,8 +483,17 @@ function isMainVisibleBusiness(
 
 
 export default async function Home() {
-  const now = new Date().toISOString();
-  const today = now.slice(0, 10);
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+
+  // Deal 날짜 비교는 Triangle 지역 기준(America/New_York)으로 처리합니다.
+  // UTC 날짜를 그대로 쓰면 저녁 시간대에 다음 날로 넘어가는 문제가 생길 수 있습니다.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(nowDate);
 
   /*
    * Main App Map이 체크된 카테고리만 허용합니다.

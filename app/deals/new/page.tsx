@@ -242,18 +242,84 @@ export default function NewDealPage() {
     );
   }
 
+  async function compressImage(file: File) {
+    const MAX_SIZE = 1200;
+    const QUALITY = 0.82;
+
+    const objectUrl = URL.createObjectURL(file);
+
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("이미지를 불러올 수 없습니다."));
+        img.src = objectUrl;
+      });
+
+      let width = image.naturalWidth;
+      let height = image.naturalHeight;
+
+      if (width > MAX_SIZE || height > MAX_SIZE) {
+        const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        throw new Error("이미지 처리에 실패했습니다.");
+      }
+
+      ctx.drawImage(image, 0, 0, width, height);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (result) => {
+            if (result) {
+              resolve(result);
+            } else {
+              reject(new Error("이미지 압축에 실패했습니다."));
+            }
+          },
+          "image/webp",
+          QUALITY
+        );
+      });
+
+      const baseName =
+        file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]/g, "-") ||
+        "deal-image";
+
+      return new File([blob], `${baseName}.webp`, {
+        type: "image/webp",
+        lastModified: Date.now(),
+      });
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
   async function uploadImage(file: File, userId: string) {
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    // 원본 파일은 Storage에 올리지 않고,
+    // 브라우저에서 먼저 최대 1200px WebP로 축소/압축한 파일만 업로드합니다.
+    const optimizedFile = await compressImage(file);
+
     const filePath = `${userId}/${Date.now()}-${Math.random()
       .toString(36)
-      .slice(2)}.${ext}`;
+      .slice(2)}.webp`;
 
     const { error: uploadError } = await supabase.storage
       .from("deal-images")
-      .upload(filePath, file, {
+      .upload(filePath, optimizedFile, {
         cacheControl: "3600",
         upsert: false,
-        contentType: file.type,
+        contentType: "image/webp",
       });
 
     if (uploadError) {
@@ -272,6 +338,16 @@ export default function NewDealPage() {
 
     if (!title.trim()) {
       alert("Deal 제목을 입력하세요.");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      alert("Deal 시작 날짜와 종료 날짜를 입력하세요.");
+      return;
+    }
+
+    if (startDate > endDate) {
+      alert("종료 날짜는 시작 날짜보다 빠를 수 없습니다.");
       return;
     }
 
@@ -531,20 +607,51 @@ export default function NewDealPage() {
             className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
           />
 
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-            />
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-black">Deal 기간</span>
 
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded-2xl border px-4 py-3 text-sm font-bold"
-            />
+              {(startDate || endDate) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate("");
+                    setEndDate("");
+                  }}
+                  className="text-xs font-black text-red-600"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-black text-gray-500">
+                  시작 날짜
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  max={endDate || undefined}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-black text-gray-500">
+                  종료 날짜
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full rounded-2xl border bg-white px-4 py-3 text-sm font-bold"
+                />
+              </div>
+            </div>
           </div>
 
           <div>
