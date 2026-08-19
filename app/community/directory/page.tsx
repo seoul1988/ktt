@@ -518,7 +518,7 @@ export default async function CommunityDirectoryPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-3 pb-28 pt-5 text-[#172033]">
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-xl">
         <div className="mb-5 flex items-center justify-between">
   <Link
     href={safeBackHref}
