@@ -6,6 +6,7 @@ import ProfileButton from "../components/ProfileButton";
 
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
 import CommunityNewsCarousel from "../components/CommunityNewsCarousel";
+import CommunityAdsSlider from "../components/CommunityAdsSlider";
 
 
 export const dynamic = "force-dynamic";
@@ -145,6 +146,26 @@ export default async function CommunityPage() {
 
   const koreaNews = koreaNewsData ?? [];
   const usNews = usNewsData ?? [];
+
+  // Latest 5 ads for the Community page
+  const { data: latestAdsData, error: latestAdsError } = await supabase
+    .from("ads")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (latestAdsError) {
+    console.error("community ads error:", latestAdsError);
+  }
+
+  const latestAds = (latestAdsData ?? []).filter((ad: any) =>
+    Boolean(
+      ad?.image_url ||
+      ad?.image ||
+      ad?.banner_url ||
+      ad?.thumbnail_url
+    ),
+  );
 
   const { data: allBusinesses } = await supabase
     .from("businesses")
@@ -563,18 +584,6 @@ export default async function CommunityPage() {
                     latestGrandOpening.title ||
                     "Grand Opening"}
                 </h3>
-
-                {latestGrandOpening.title && (
-                  <p className="mt-2 line-clamp-1 text-sm font-black text-[#C4483A]">
-                    {latestGrandOpening.title}
-                  </p>
-                )}
-
-                {latestGrandOpening.description && (
-                  <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-[#6B6257]">
-                    {latestGrandOpening.description}
-                  </p>
-                )}
               </div>
             </Link>
           </section>
@@ -733,23 +742,6 @@ export default async function CommunityPage() {
                   <h3 className="line-clamp-3 text-xl font-black leading-tight">
                     {latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
                   </h3>
-
-                  {latestRegisteredNews.summary ? (
-                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-[#6B6257]">
-                      {latestRegisteredNews.summary}
-                    </p>
-                  ) : null}
-
-                  <div className="mt-3 flex items-center justify-between gap-3 text-xs font-bold text-[#6B6257]">
-                    <span className="line-clamp-1">
-                      {latestRegisteredNews.category || "등록 뉴스"}
-                    </span>
-                    {latestRegisteredNews.published_at ? (
-                      <span className="shrink-0">
-                        {new Date(latestRegisteredNews.published_at).toLocaleDateString()}
-                      </span>
-                    ) : null}
-                  </div>
                 </div>
               </Link>
             ) : (
@@ -774,6 +766,10 @@ export default async function CommunityPage() {
 
         <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
 
+        {/* Latest Ads */}
+        {latestAds.length > 0 && (
+          <CommunityAdsSlider ads={latestAds as any[]} />
+        )}
 
         {/* New in Raleigh */}
         <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">

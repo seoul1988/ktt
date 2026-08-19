@@ -5,6 +5,7 @@ import { supabase } from "../../../lib/supabase";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
 import ScrollToTopButton from "../../components/ScrollToTopButton";
 import ProfileButton from "@/app/components/ProfileButton";
+import CommunityDirectorySearch from "../../components/CommunityDirectorySearch";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -117,6 +118,7 @@ function PhoneIcon() {
 
 type SearchParams = Promise<{
   back?: string;
+  q?: string;
 }>;
 
 export default async function CommunityDirectoryPage({
@@ -124,7 +126,8 @@ export default async function CommunityDirectoryPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const { back } = await searchParams;
+  const { back, q } = await searchParams;
+  const searchQuery = String(q || "").trim();
 
   const safeBackHref =
     typeof back === "string" &&
@@ -404,9 +407,31 @@ export default async function CommunityDirectoryPage({
       })
       .filter(Boolean) || [];
 
+  const filteredBusinessList = searchQuery
+    ? businessList.filter((business: any) => {
+        const needle = searchQuery.toLowerCase();
+        const searchable = [
+          business.name,
+          business.category,
+          business.categories,
+          business.business_category,
+          business.type,
+          business.tags,
+          business.city,
+          getAddress(business),
+          ...(business.matched_categories || []),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return searchable.includes(needle);
+      })
+    : businessList;
+
   const categoryNames = Array.from(
     new Set(
-      businessList.flatMap(
+      filteredBusinessList.flatMap(
         (business: any) =>
           business.matched_categories || [],
       ),
@@ -421,7 +446,7 @@ export default async function CommunityDirectoryPage({
       const normalizedCategory =
         normalizeCategory(categoryName);
 
-      const items = businessList
+      const items = filteredBusinessList
         .filter((business: any) =>
           business.matched_categories.some(
             (category: string) =>
@@ -509,8 +534,8 @@ export default async function CommunityDirectoryPage({
   <ProfileButton />
 </div>
 
-        <div className="mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
-          <div className="flex items-start justify-between gap-3">
+        <div className="relative mb-5 rounded-3xl bg-[#C4483A] px-5 py-4 text-white shadow-lg">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-xl font-black">
                 🌐 모두보기
@@ -530,6 +555,13 @@ export default async function CommunityDirectoryPage({
                 {registeredBusinessCount.toLocaleString()}
               </p>
             </div>
+          </div>
+
+          <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
+            <CommunityDirectorySearch
+              initialQuery={searchQuery}
+              back={back}
+            />
           </div>
         </div>
 
