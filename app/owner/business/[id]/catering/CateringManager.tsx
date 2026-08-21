@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 
 type CateringSettings = {
   is_enabled: boolean;
@@ -12,6 +13,9 @@ type CateringSettings = {
   pickup_enabled: boolean;
   delivery_enabled: boolean;
   quote_enabled: boolean;
+  notification_email: string;
+  notification_phone: string;
+  sender_email?: string;
 };
 
 type Category = {
@@ -106,30 +110,6 @@ type ItemForm = {
   delivery_fee: string;
 };
 
-const CATERING_CATEGORY_PRESETS = [
-  "Party Trays",
-  "Catering Packages",
-  "Boxed Meals",
-  "Appetizers",
-  "Entrees",
-  "BBQ & Grilled",
-  "Chicken & Wings",
-  "Burgers & Sandwiches",
-  "Rice & Noodles",
-  "Soups & Stews",
-  "Seafood",
-  "Sushi & Rolls",
-  "Tacos & Mexican",
-  "Pizza & Pasta",
-  "Salads",
-  "Vegetarian & Vegan",
-  "Breakfast & Brunch",
-  "Kids Meals",
-  "Sides",
-  "Sauces & Extras",
-  "Desserts",
-  "Drinks",
-] as const;
 
 const EMPTY_ITEM: ItemForm = {
   category_id: "",
@@ -159,7 +139,7 @@ async function resizeCateringImage(
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = () =>
-          reject(new Error("이미지를 읽지 못했습니다."));
+          reject(new Error("Could not read the image."));
         img.src = objectUrl;
       },
     );
@@ -168,7 +148,7 @@ async function resizeCateringImage(
     const sourceHeight = image.naturalHeight || image.height;
 
     if (!sourceWidth || !sourceHeight) {
-      throw new Error("이미지 크기를 확인하지 못했습니다.");
+      throw new Error("Could not determine the image size.");
     }
 
     const scale = Math.min(
@@ -193,7 +173,7 @@ async function resizeCateringImage(
     const context = canvas.getContext("2d");
 
     if (!context) {
-      throw new Error("이미지를 축소하지 못했습니다.");
+      throw new Error("Could not resize the image.");
     }
 
     context.drawImage(image, 0, 0, width, height);
@@ -207,7 +187,7 @@ async function resizeCateringImage(
     );
 
     if (!blob) {
-      throw new Error("이미지를 WebP로 변환하지 못했습니다.");
+      throw new Error("Could not convert the image to WebP.");
     }
 
     const baseName =
@@ -242,6 +222,9 @@ export default function CateringManager({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [itemSaveMessage, setItemSaveMessage] = useState("");
+  const [itemSaveMessageType, setItemSaveMessageType] =
+    useState<"error" | "success" | "info">("info");
 
   const [categoryPreset, setCategoryPreset] = useState("");
   const [newCategory, setNewCategory] = useState("");
@@ -278,11 +261,23 @@ export default function CateringManager({
 
       if (!cateringRes.ok) {
         throw new Error(
-          cateringData?.error || "캐터링 정보를 불러오지 못했습니다.",
+          cateringData?.error || "Could not load catering information.",
         );
       }
 
-      setSettings(cateringData.settings);
+      setSettings(
+        cateringData.settings
+          ? {
+              ...cateringData.settings,
+              notification_email:
+                cateringData.settings.notification_email ?? "",
+              notification_phone:
+                cateringData.settings.notification_phone ?? "",
+              sender_email:
+                cateringData.settings.sender_email ?? "",
+            }
+          : null,
+      );
       setCategories(cateringData.categories || []);
       setItems(cateringData.items || []);
 
@@ -359,7 +354,7 @@ export default function CateringManager({
         setMenuOptionChoices([]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "오류가 발생했습니다.");
+      setError(e instanceof Error ? e.message : "An error occurred.");
     } finally {
       setLoading(false);
     }
@@ -399,12 +394,21 @@ export default function CateringManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "설정을 저장하지 못했습니다.");
+        throw new Error(data?.error || "Could not save the settings.");
       }
 
-      setSettings(data.settings);
+      setSettings(
+        data.settings
+          ? {
+              ...data.settings,
+              notification_email: data.settings.notification_email ?? "",
+              notification_phone: data.settings.notification_phone ?? "",
+              sender_email: data.settings.sender_email ?? "",
+            }
+          : null,
+      );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "설정 저장 오류");
+      setError(e instanceof Error ? e.message : "Settings save error");
       await load();
     } finally {
       setSaving(false);
@@ -463,7 +467,7 @@ export default function CateringManager({
         : categoryPreset.trim();
 
     if (!name) {
-      throw new Error("카테고리를 선택하거나 직접 입력하세요.");
+      throw new Error("Select a category or enter one manually.");
     }
 
     const existing = categories.find(
@@ -501,14 +505,14 @@ export default function CateringManager({
 
     if (!res.ok) {
       throw new Error(
-        data?.error || "카테고리를 생성하지 못했습니다.",
+        data?.error || "Could not create the category.",
       );
     }
 
     const categoryId = Number(data.category?.id);
 
     if (!Number.isInteger(categoryId) || categoryId <= 0) {
-      throw new Error("생성된 카테고리 정보를 확인할 수 없습니다.");
+      throw new Error("Could not verify the newly created category.");
     }
 
     setSelectedCategoryId(String(categoryId));
@@ -539,7 +543,7 @@ export default function CateringManager({
         : categoryPreset.trim();
 
     if (!name) {
-      setError("카테고리를 선택하거나 직접 입력하세요.");
+      setError("Select a category or enter one manually.");
       return;
     }
 
@@ -550,7 +554,7 @@ export default function CateringManager({
     );
 
     if (alreadyExists) {
-      setError(`"${name}" 카테고리는 이미 등록되어 있습니다.`);
+      setError(`"${name}" category is already registered.`);
       return;
     }
 
@@ -581,7 +585,7 @@ export default function CateringManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "카테고리를 추가하지 못했습니다.");
+        throw new Error(data?.error || "Could not add the category.");
       }
 
       setCategoryPreset("");
@@ -602,14 +606,14 @@ export default function CateringManager({
         });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "카테고리 추가 오류");
+      setError(e instanceof Error ? e.message : "Category add error");
     } finally {
       setSaving(false);
     }
   }
 
   async function deleteCategory(categoryId: number) {
-    if (!confirm("이 카테고리를 삭제할까요? 이 카테고리의 메뉴는 삭제되지 않고 미분류로 이동합니다.")) {
+    if (!confirm("Delete this category? Its menu items will not be deleted and will be moved to Uncategorized.")) {
       return;
     }
 
@@ -624,7 +628,7 @@ export default function CateringManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "카테고리를 삭제하지 못했습니다.");
+        throw new Error(data?.error || "Could not delete the category.");
       }
 
       if (Number(selectedCategoryId) === categoryId) {
@@ -633,7 +637,7 @@ export default function CateringManager({
 
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "카테고리 삭제 오류");
+      setError(e instanceof Error ? e.message : "Category delete error");
     } finally {
       setSaving(false);
     }
@@ -643,14 +647,14 @@ export default function CateringManager({
     const categoryId = Number(selectedCategoryId);
 
     if (!Number.isInteger(categoryId) || categoryId <= 0) {
-      setError("수정할 카테고리를 선택하세요.");
+      setError("Select a category to edit.");
       return;
     }
 
     const name = categoryEditName.trim();
 
     if (!name) {
-      setError("카테고리 이름을 입력하세요.");
+      setError("Enter a category name.");
       return;
     }
 
@@ -679,7 +683,7 @@ export default function CateringManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "카테고리를 수정하지 못했습니다.");
+        throw new Error(data?.error || "Could not update the category.");
       }
 
       await load();
@@ -689,7 +693,7 @@ export default function CateringManager({
       setCategoryEditSortOrder(String(data.category?.sort_order ?? 0));
       setCategoryEditActive(data.category?.is_active !== false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "카테고리 수정 오류");
+      setError(e instanceof Error ? e.message : "Category update error");
     } finally {
       setSaving(false);
     }
@@ -711,7 +715,6 @@ export default function CateringManager({
       { package_name: "", serving_label: "", price: "" },
     ]);
     setOptionGroups([]);
-    setError("");
   }
 
   function editItem(item: Item) {
@@ -784,13 +787,13 @@ export default function CateringManager({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setError("이미지 파일만 선택할 수 있습니다.");
+      setError("Only image files can be selected.");
       event.target.value = "";
       return;
     }
 
     if (file.size > 8 * 1024 * 1024) {
-      setError("이미지는 8MB 이하로 올려주세요.");
+      setError("Please upload an image smaller than 8 MB.");
       event.target.value = "";
       return;
     }
@@ -836,7 +839,7 @@ export default function CateringManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "이미지를 업로드하지 못했습니다.");
+        throw new Error(data?.error || "Could not upload the image.");
       }
 
       return {
@@ -851,7 +854,7 @@ export default function CateringManager({
   async function removeCurrentImage() {
     if (!itemForm.image_url && !selectedImage) return;
 
-    if (!confirm("현재 이미지를 삭제할까요?")) return;
+    if (!confirm("Delete the current image?")) return;
 
     try {
       setSaving(true);
@@ -882,7 +885,7 @@ export default function CateringManager({
         const data = await res.json();
 
         if (!res.ok) {
-          throw new Error(data?.error || "이미지를 삭제하지 못했습니다.");
+          throw new Error(data?.error || "Could not delete the image.");
         }
       }
 
@@ -902,7 +905,7 @@ export default function CateringManager({
         await load();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "이미지 삭제 오류");
+      setError(e instanceof Error ? e.message : "Image delete error");
     } finally {
       setSaving(false);
     }
@@ -1042,13 +1045,13 @@ export default function CateringManager({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setError("이미지 파일만 선택할 수 있습니다.");
+      setError("Only image files can be selected.");
       event.target.value = "";
       return;
     }
 
     if (file.size > 8 * 1024 * 1024) {
-      setError("이미지는 8MB 이하로 올려주세요.");
+      setError("Please upload an image smaller than 8 MB.");
       event.target.value = "";
       return;
     }
@@ -1114,7 +1117,7 @@ export default function CateringManager({
 
     if (!res.ok) {
       throw new Error(
-        data?.error || "옵션 이미지를 업로드하지 못했습니다.",
+        data?.error || "Could not upload the option image.",
       );
     }
 
@@ -1131,7 +1134,7 @@ export default function CateringManager({
     const choice = optionGroups[groupIndex]?.choices[choiceIndex];
     if (!choice) return;
 
-    if (!confirm("이 옵션 이미지를 삭제할까요?")) return;
+    if (!confirm("Delete this option image?")) return;
 
     try {
       setSaving(true);
@@ -1153,7 +1156,7 @@ export default function CateringManager({
 
         if (!res.ok) {
           throw new Error(
-            data?.error || "옵션 이미지를 삭제하지 못했습니다.",
+            data?.error || "Could not delete the option image.",
           );
         }
       }
@@ -1172,7 +1175,7 @@ export default function CateringManager({
       setError(
         e instanceof Error
           ? e.message
-          : "옵션 이미지 삭제 오류",
+          : "Option image delete error",
       );
     } finally {
       setSaving(false);
@@ -1210,9 +1213,21 @@ export default function CateringManager({
     return prepared;
   }
 
+  function showItemSaveMessage(
+    message: string,
+    type: "error" | "success" | "info" = "info",
+  ) {
+    setItemSaveMessage(message);
+    setItemSaveMessageType(type);
+
+    if (type === "error") {
+      setError(message);
+    }
+  }
+
   async function saveItem() {
     if (!itemForm.name.trim()) {
-      setError("메뉴 이름을 입력하세요.");
+      showItemSaveMessage("Enter a menu item name.", "error");
       return;
     }
 
@@ -1221,7 +1236,7 @@ export default function CateringManager({
       itemForm.pricing_type !== "package" &&
       itemForm.base_price.trim() === ""
     ) {
-      setError("가격을 입력하세요.");
+      showItemSaveMessage("Enter a price.", "error");
       return;
     }
 
@@ -1231,13 +1246,14 @@ export default function CateringManager({
         (p) => p.package_name.trim() && p.price.trim() !== "",
       )
     ) {
-      setError("패키지를 하나 이상 입력하세요.");
+      showItemSaveMessage("Add at least one package.", "error");
       return;
     }
 
     try {
       setSaving(true);
       setError("");
+      showItemSaveMessage("Saving...", "info");
 
       const categoryId = await ensureSelectedCategory();
       const uploadedImage = await uploadSelectedImage();
@@ -1334,30 +1350,56 @@ export default function CateringManager({
         })
         .filter((group) => group.choices.length > 0);
 
-      const res = await fetch(apiUrl, {
-        method: editingItemId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "item",
-          item: payloadItem,
-          packages: normalizedPackages,
-          option_groups: normalizedOptionGroups,
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 20000);
 
-      const data = await res.json();
+      let res: Response;
+
+      try {
+        res = await fetch(apiUrl, {
+          method: editingItemId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "item",
+            item: payloadItem,
+            packages: normalizedPackages,
+            option_groups: normalizedOptionGroups,
+          }),
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+
+      const responseText = await res.text();
+      let data: any = {};
+
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { error: responseText };
+        }
+      }
 
       if (!res.ok) {
         throw new Error(
           data?.error ||
             (editingItemId
-              ? "캐터링 메뉴를 수정하지 못했습니다."
-              : "캐터링 메뉴를 추가하지 못했습니다."),
+              ? "Could not update the catering menu item."
+              : "Could not add the catering menu item."),
         );
       }
 
       const keepCategoryId =
         selectedCategoryId || itemForm.category_id;
+
+      showItemSaveMessage(
+        editingItemId
+          ? "Catering menu item updated."
+          : "Catering menu item saved.",
+        "success",
+      );
 
       resetItemForm();
       await load();
@@ -1366,7 +1408,14 @@ export default function CateringManager({
         selectExistingCategory(String(keepCategoryId));
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "메뉴 저장 오류");
+      const message =
+        e instanceof DOMException && e.name === "AbortError"
+          ? "The save request timed out. Check the API response."
+          : e instanceof Error
+            ? e.message
+            : "Menu save error";
+
+      showItemSaveMessage(message, "error");
     } finally {
       setSaving(false);
       setUploading(false);
@@ -1374,7 +1423,7 @@ export default function CateringManager({
   }
 
   async function deleteItem(itemId: number) {
-    if (!confirm("이 캐터링 메뉴를 삭제할까요? 등록된 이미지도 함께 삭제됩니다.")) {
+    if (!confirm("Delete this catering menu item? Its uploaded image will also be deleted.")) {
       return;
     }
 
@@ -1388,7 +1437,7 @@ export default function CateringManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.error || "메뉴를 삭제하지 못했습니다.");
+        throw new Error(data?.error || "Could not delete the menu item.");
       }
 
       if (editingItemId === itemId) {
@@ -1397,7 +1446,7 @@ export default function CateringManager({
 
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "메뉴 삭제 오류");
+      setError(e instanceof Error ? e.message : "Menu delete error");
     } finally {
       setSaving(false);
     }
@@ -1419,7 +1468,7 @@ export default function CateringManager({
   const registeredOptionChoices = useMemo<OptionChoiceRow[]>(() => {
     const unique = new Map<string, OptionChoiceRow>();
 
-    // 1) 일반 메뉴에 등록된 옵션을 먼저 넣습니다.
+    // 1) Add options registered in the regular menu first.
     for (const choice of menuOptionChoices) {
       const name = String(choice.name || "").trim();
       if (!name) continue;
@@ -1430,7 +1479,7 @@ export default function CateringManager({
       }
     }
 
-    // 2) 캐터링에만 등록된 옵션도 뒤에 합칩니다.
+    // 2) Then include options registered only for catering.
     for (const item of items) {
       for (const group of item.option_groups ?? []) {
         for (const choice of group.choices ?? []) {
@@ -1501,7 +1550,7 @@ export default function CateringManager({
     return (
       <main className="min-h-screen bg-[#F8F5F0] p-6">
         <div className="mx-auto max-w-5xl rounded-3xl bg-white p-8">
-          캐터링 정보를 불러오는 중...
+          Loading catering information...
         </div>
       </main>
     );
@@ -1516,21 +1565,21 @@ export default function CateringManager({
               href={`/owner/business/${businessId}/manage`}
               className="text-sm font-black text-[#B64032]"
             >
-              ← 관리 화면
+              ← Management
             </a>
 
             <h1 className="mt-3 text-3xl font-black text-[#172033]">
-              캐터링 관리
+              Catering Management
             </h1>
 
             <p className="mt-2 text-sm font-medium text-[#667085]">
-              카테고리, 메뉴, 이미지, 패키지/사이즈와 주문 조건을 관리합니다.
+              Manage categories, menu items, images, packages/sizes, and ordering requirements.
             </p>
           </div>
 
           {(saving || uploading) && (
             <div className="text-sm font-bold text-[#667085]">
-              {uploading ? "이미지 업로드 중..." : "저장 중..."}
+              {uploading ? "Uploading image..." : "Saving..."}
             </div>
           )}
         </div>
@@ -1546,10 +1595,10 @@ export default function CateringManager({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-xl font-black text-[#172033]">
-                  캐터링 사용 설정
+                  Catering Settings
                 </h2>
                 <p className="mt-1 text-sm text-[#667085]">
-                  주문 가능한 최소 금액과 최소 인원을 각각 설정합니다.
+                  Set minimum order amount, minimum guest count, and advance notice.
                 </p>
               </div>
 
@@ -1566,13 +1615,13 @@ export default function CateringManager({
                     : "bg-gray-100 text-gray-600"
                 }`}
               >
-                {settings.is_enabled ? "활성화 ON" : "비활성화 OFF"}
+                {settings.is_enabled ? "Enabled" : "Disabled"}
               </button>
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <label className="text-sm font-bold text-[#344054]">
-                최소 주문금액 ($)
+                Minimum Order Amount ($)
                 <input
                   type="number"
                   min="0"
@@ -1595,7 +1644,7 @@ export default function CateringManager({
               </label>
 
               <label className="text-sm font-bold text-[#344054]">
-                최소 주문인원
+                Minimum Guests
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="number"
@@ -1616,12 +1665,12 @@ export default function CateringManager({
                     }
                     className="w-full rounded-xl border border-[#D9CFC2] px-3 py-2"
                   />
-                  <span className="whitespace-nowrap text-sm">명</span>
+                  <span className="whitespace-nowrap text-sm">guests</span>
                 </div>
               </label>
 
               <label className="text-sm font-bold text-[#344054]">
-                사전 주문시간
+                Advance Notice
                 <div className="mt-2 flex items-center gap-2">
                   <input
                     type="number"
@@ -1641,7 +1690,7 @@ export default function CateringManager({
                     }
                     className="w-full rounded-xl border border-[#D9CFC2] px-3 py-2"
                   />
-                  <span className="whitespace-nowrap text-sm">시간 전</span>
+                  <span className="whitespace-nowrap text-sm">hours</span>
                 </div>
               </label>
             </div>
@@ -1650,7 +1699,7 @@ export default function CateringManager({
               {[
                 ["pickup_enabled", "Pickup"],
                 ["delivery_enabled", "Delivery"],
-                ["quote_enabled", "견적 문의"],
+                ["quote_enabled", "Request Quote"],
               ].map(([key, label]) => (
                 <label
                   key={key}
@@ -1671,17 +1720,99 @@ export default function CateringManager({
                 </label>
               ))}
             </div>
+
+            <div className="mt-5 border-t border-[#EEE6DC] pt-5">
+              <h3 className="text-base font-black text-[#172033]">
+                Catering Request Contact
+              </h3>
+              <p className="mt-1 text-sm text-[#667085]">
+                Set where catering requests are delivered and which verified sender address is used.
+              </p>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <label className="text-sm font-bold text-[#344054]">
+                  Notification Email
+                  <input
+                    type="email"
+                    value={settings.notification_email ?? ""}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        notification_email: e.target.value,
+                      })
+                    }
+                    onBlur={() =>
+                      void saveSettings({
+                        notification_email:
+                          (settings.notification_email ?? "").trim(),
+                      })
+                    }
+                    placeholder="orders@restaurant.com"
+                    className="mt-2 w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-2"
+                  />
+                  <span className="mt-1 block text-[11px] font-medium text-[#667085]">
+                    Catering requests will be delivered to this address.
+                  </span>
+                </label>
+
+                <label className="text-sm font-bold text-[#344054]">
+                  Sender Email
+                  <input
+                    type="email"
+                    value={settings.sender_email ?? ""}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        sender_email: e.target.value,
+                      })
+                    }
+                    onBlur={() =>
+                      void saveSettings({
+                        sender_email: (settings.sender_email ?? "").trim(),
+                      })
+                    }
+                    placeholder="catering@restaurant-domain.com"
+                    className="mt-2 w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-2"
+                  />
+                  <span className="mt-1 block text-[11px] font-medium text-[#667085]">
+                    Use an address on a domain verified in the KTown Resend account.
+                  </span>
+                </label>
+
+                <label className="text-sm font-bold text-[#344054]">
+                  Catering Phone
+                  <input
+                    type="tel"
+                    value={settings.notification_phone ?? ""}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        notification_phone: e.target.value,
+                      })
+                    }
+                    onBlur={() =>
+                      void saveSettings({
+                        notification_phone:
+                          (settings.notification_phone ?? "").trim(),
+                      })
+                    }
+                    placeholder="919-555-1234"
+                    className="mt-2 w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-2"
+                  />
+                </label>
+              </div>
+            </div>
           </section>
         )}
 
         <section className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
           <h2 className="text-xl font-black text-[#172033]">
-            카테고리
+            Category
           </h2>
 
           <p className="mt-1 text-sm text-[#667085]">
-            카테고리를 선택하면 바로 아래에 해당 카테고리 정보가 표시됩니다.
-            등록되지 않은 종류를 선택하면 새 카테고리 정보 입력 화면이 표시됩니다.
+            Select a category to view and edit its details below.
+            Choose an unused preset to create a new category.
           </p>
 
           <select
@@ -1742,23 +1873,23 @@ export default function CateringManager({
             }}
             className="mt-4 w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-2.5 text-sm font-bold text-[#172033]"
           >
-            <option value="">카테고리 선택</option>
+            <option value="">Select Category</option>
 
             {categories.length > 0 && (
-              <optgroup label="등록된 카테고리">
+              <optgroup label="Registered Categories">
                 {categories.map((category) => (
                   <option
                     key={`existing-${category.id}`}
                     value={`existing:${category.id}`}
                   >
                     {category.name}
-                    {!category.is_active ? " (숨김)" : ""}
+                    {!category.is_active ? " (Hidden)" : ""}
                   </option>
                 ))}
               </optgroup>
             )}
 
-            <optgroup label="새 카테고리">
+            <optgroup label="New Categories">
               {CATERING_CATEGORY_PRESETS.filter(
                 (preset) =>
                   !categories.some(
@@ -1776,7 +1907,7 @@ export default function CateringManager({
               ))}
 
               <option value="preset:__custom__">
-                + 목록에 없음 / 직접 입력
+                + Custom Category
               </option>
             </optgroup>
           </select>
@@ -1787,13 +1918,13 @@ export default function CateringManager({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-xs font-black uppercase tracking-wide text-[#B64032]">
-                      선택된 카테고리
+                      Selected Category
                     </div>
                     <div className="mt-1 text-xl font-black text-[#172033]">
                       {categoryEditName}
                     </div>
                     <div className="mt-1 text-sm text-[#667085]">
-                      등록 메뉴 {(itemsByCategory.get(Number(selectedCategoryId)) ?? []).length}개
+                      Menu Items {(itemsByCategory.get(Number(selectedCategoryId)) ?? []).length}
                     </div>
                   </div>
 
@@ -1802,7 +1933,7 @@ export default function CateringManager({
                     onClick={resetItemForm}
                     className="rounded-xl bg-[#172033] px-4 py-2.5 text-sm font-black text-white"
                   >
-                    + 새 메뉴 등록
+                    + Add Menu Item
                   </button>
                 </div>
 
@@ -1820,7 +1951,7 @@ export default function CateringManager({
 
                   {(itemsByCategory.get(Number(selectedCategoryId)) ?? []).length === 0 && (
                     <div className="rounded-xl border border-dashed border-[#D9CFC2] bg-white px-4 py-5 text-center text-sm font-bold text-[#98A2B3]">
-                      이 카테고리에 등록된 메뉴가 없습니다. 아래에서 첫 메뉴를 등록하세요.
+                      No menu items are registered in this category. Add the first item below.
                     </div>
                   )}
                 </div>
@@ -1828,13 +1959,13 @@ export default function CateringManager({
 
               <details className="rounded-2xl border border-[#E9DED0] bg-white">
                 <summary className="cursor-pointer px-4 py-3 text-sm font-black text-[#172033]">
-                  카테고리 이름·설명·순서·공개상태 수정
+                  Edit Category Name, Description, Order & Visibility
                 </summary>
 
                 <div className="border-t border-[#EEE6DC] p-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="text-sm font-bold text-[#344054]">
-                      카테고리 이름
+                      Category Name
                       <input
                         value={categoryEditName}
                         onChange={(e) =>
@@ -1845,7 +1976,7 @@ export default function CateringManager({
                     </label>
 
                     <label className="text-sm font-bold text-[#344054]">
-                      표시 순서
+                      Display Order
                       <input
                         type="number"
                         min="0"
@@ -1859,7 +1990,7 @@ export default function CateringManager({
                   </div>
 
                   <label className="mt-4 block text-sm font-bold text-[#344054]">
-                    설명
+                    Description
                     <textarea
                       rows={2}
                       value={categoryEditDescription}
@@ -1878,7 +2009,7 @@ export default function CateringManager({
                         setCategoryEditActive(e.target.checked)
                       }
                     />
-                    공개 페이지에 이 카테고리 표시
+                    Show this category on the public page
                   </label>
 
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1888,7 +2019,7 @@ export default function CateringManager({
                       disabled={saving}
                       className="rounded-xl bg-[#172033] px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"
                     >
-                      카테고리 수정 저장
+                      Save Category Changes
                     </button>
 
                     <button
@@ -1899,7 +2030,7 @@ export default function CateringManager({
                       disabled={saving}
                       className="rounded-xl border border-red-200 bg-white px-5 py-2.5 text-sm font-black text-red-600 disabled:opacity-50"
                     >
-                      카테고리 삭제
+                      Delete Category
                     </button>
                   </div>
                 </div>
@@ -1912,12 +2043,12 @@ export default function CateringManager({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-black uppercase tracking-wide text-[#B64032]">
-                    새 카테고리 선택됨
+                    New Category Selected
                   </div>
 
                   {categoryPreset === "__custom__" ? (
                     <label className="mt-2 block text-sm font-bold text-[#344054]">
-                      카테고리 이름
+                      Category Name
                       <input
                         autoFocus
                         value={newCategory}
@@ -1925,7 +2056,7 @@ export default function CateringManager({
                           setNewCategory(e.target.value);
                           setCategoryEditName(e.target.value);
                         }}
-                        placeholder="카테고리 이름 입력"
+                        placeholder="Enter category name"
                         className="mt-2 w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-2"
                       />
                     </label>
@@ -1936,19 +2067,19 @@ export default function CateringManager({
                   )}
 
                   <p className="mt-1 text-sm text-[#667085]">
-                    아래에서 이미지, 가격, 패키지와 옵션을 입력해 첫 메뉴를 저장하면
-                    이 카테고리도 자동으로 생성됩니다.
+                    Enter the image, price, packages, and options below. When you save the first menu item,
+                    this category will be created automatically.
                   </p>
                 </div>
 
                 <details className="sm:w-[260px]">
                   <summary className="cursor-pointer rounded-xl border border-[#D9CFC2] bg-white px-4 py-2.5 text-center text-sm font-black text-[#172033]">
-                    카테고리 세부 설정
+                    Category Details
                   </summary>
 
                   <div className="mt-2 rounded-xl border border-[#E9DED0] bg-white p-3">
                     <label className="block text-xs font-black text-[#475467]">
-                      표시 순서
+                      Display Order
                       <input
                         type="number"
                         min="0"
@@ -1961,7 +2092,7 @@ export default function CateringManager({
                     </label>
 
                     <label className="mt-3 block text-xs font-black text-[#475467]">
-                      설명
+                      Description
                       <textarea
                         rows={2}
                         value={categoryEditDescription}
@@ -1980,7 +2111,7 @@ export default function CateringManager({
                           setCategoryEditActive(e.target.checked)
                         }
                       />
-                      공개 페이지에 표시
+                      Show on public page
                     </label>
                   </div>
                 </details>
@@ -1995,8 +2126,8 @@ export default function CateringManager({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-black text-[#172033]">
               {editingItemId
-                ? `${categoryEditName || newCategory || categoryPreset} 메뉴 수정`
-                : `${categoryEditName || newCategory || categoryPreset} 메뉴 추가`}
+                ? `${categoryEditName || newCategory || categoryPreset} Menu Item Edit`
+                : `${categoryEditName || newCategory || categoryPreset} Menu Item Add`}
             </h2>
 
             {editingItemId && (
@@ -2005,21 +2136,21 @@ export default function CateringManager({
                 onClick={resetItemForm}
                 className="rounded-xl border border-[#D9CFC2] px-4 py-2 text-sm font-black"
               >
-                수정 취소
+                Cancel Edit
               </button>
             )}
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-bold">
-              카테고리
+              Category
               <div className="mt-2 flex h-[42px] items-center rounded-xl border border-[#D9CFC2] bg-[#F7F7F7] px-3 text-sm font-black text-[#172033]">
                 {categoryEditName || newCategory || categoryPreset}
               </div>
             </label>
 
             <label className="text-sm font-bold">
-              메뉴 이름
+              Menu Item Name
               <input
                 value={itemForm.name}
                 onChange={(e) =>
@@ -2028,14 +2159,14 @@ export default function CateringManager({
                     name: e.target.value,
                   })
                 }
-                placeholder="예: Bulgogi Party Tray"
+                placeholder="e.g. Bulgogi Party Tray"
                 className="mt-2 w-full rounded-xl border border-[#D9CFC2] px-3 py-2"
               />
             </label>
           </div>
 
           <label className="mt-4 block text-sm font-bold">
-            설명
+            Description
             <textarea
               value={itemForm.description}
               onChange={(e) =>
@@ -2051,7 +2182,7 @@ export default function CateringManager({
 
           <div className="mt-5">
             <div className="text-sm font-black text-[#344054]">
-              메뉴 이미지
+              Menu Image
             </div>
 
             <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -2059,12 +2190,12 @@ export default function CateringManager({
                 {imagePreview ? (
                   <img
                     src={imagePreview}
-                    alt="캐터링 메뉴 미리보기"
+                    alt="Catering menu preview"
                     className="h-full w-full object-cover"
                   />
                 ) : (
                   <div className="text-center text-sm font-bold text-[#98A2B3]">
-                    이미지 없음
+                    No image
                   </div>
                 )}
               </div>
@@ -2078,7 +2209,7 @@ export default function CateringManager({
                 />
 
                 <p className="mt-2 text-xs text-[#667085]">
-                  JPG, PNG, WEBP 등 이미지 파일 · 최대 8MB · 저장 시 자동 축소(WebP)
+                  JPG, PNG, or WEBP · Maximum 8 MB · Automatically resized to WebP when saved
                 </p>
 
                 {imagePreview && (
@@ -2087,7 +2218,7 @@ export default function CateringManager({
                     onClick={() => void removeCurrentImage()}
                     className="mt-3 rounded-xl border border-red-200 px-4 py-2 text-sm font-black text-red-600"
                   >
-                    이미지 삭제
+                    Delete Image
                   </button>
                 )}
               </div>
@@ -2096,7 +2227,7 @@ export default function CateringManager({
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-bold">
-              가격 방식
+              Pricing Type
               <select
                 value={itemForm.pricing_type}
                 onChange={(e) =>
@@ -2108,18 +2239,18 @@ export default function CateringManager({
                 }
                 className="mt-2 w-full rounded-xl border border-[#D9CFC2] px-3 py-2"
               >
-                <option value="fixed">고정 가격</option>
-                <option value="package">사이즈 / 패키지</option>
-                <option value="per_person">1인당</option>
-                <option value="per_item">개당</option>
-                <option value="quote">견적 문의</option>
+                <option value="fixed">Fixed Price</option>
+                <option value="package">Size / Package</option>
+                <option value="per_person">Per Person</option>
+                <option value="per_item">Per Item</option>
+                <option value="quote">Request Quote</option>
               </select>
             </label>
 
             {itemForm.pricing_type !== "package" &&
               itemForm.pricing_type !== "quote" && (
                 <label className="text-sm font-bold">
-                  기본 가격
+                  Base Price
                   <input
                     type="number"
                     min="0"
@@ -2141,14 +2272,14 @@ export default function CateringManager({
             <div className="mt-5 rounded-2xl bg-[#FFF9F1] p-4">
               <div className="flex items-center justify-between">
                 <h3 className="font-black text-[#172033]">
-                  패키지 / 사이즈
+                  Packages / Sizes
                 </h3>
                 <button
                   type="button"
                   onClick={addPackageRow}
                   className="text-sm font-black text-[#B64032]"
                 >
-                  + 패키지 추가
+                  + Add Package
                 </button>
               </div>
 
@@ -2188,7 +2319,7 @@ export default function CateringManager({
                           price: e.target.value,
                         })
                       }
-                      placeholder="가격"
+                      placeholder="Price"
                       className="rounded-lg border border-[#D9CFC2] px-3 py-2"
                     />
                     <button
@@ -2211,7 +2342,7 @@ export default function CateringManager({
                   Add-ons / Options
                 </h3>
                 <p className="mt-1 text-xs text-[#667085]">
-                  예: Extra Rice +$10, Sauce 선택, Cheese +$1/person, Utensils +$5
+                  e.g. Extra Rice +$10, Sauce choice, Cheese +$1/person, Utensils +$5
                 </p>
               </div>
 
@@ -2220,13 +2351,13 @@ export default function CateringManager({
                 onClick={addOptionGroup}
                 className="rounded-xl bg-[#172033] px-4 py-2 text-sm font-black text-white"
               >
-                + 옵션 그룹 추가
+                + Add Option Group
               </button>
             </div>
 
             {optionGroups.length === 0 ? (
               <div className="mt-4 rounded-xl border border-dashed border-[#D9CFC2] bg-white px-4 py-5 text-center text-sm font-bold text-[#98A2B3]">
-                등록된 옵션이 없습니다.
+                No options are registered.
               </div>
             ) : (
               <div className="mt-4 space-y-4">
@@ -2238,7 +2369,7 @@ export default function CateringManager({
                     <div className="flex items-start justify-between gap-3">
                       <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                         <label className="text-xs font-black text-[#475467]">
-                          옵션 그룹 이름
+                          Option Group Name
                           <input
                             value={group.name}
                             onChange={(e) =>
@@ -2246,13 +2377,13 @@ export default function CateringManager({
                                 name: e.target.value,
                               })
                             }
-                            placeholder="예: Sauce / Add-ons"
+                            placeholder="e.g. Sauce / Add-ons"
                             className="mt-1 w-full rounded-lg border border-[#D9CFC2] px-3 py-2 text-sm"
                           />
                         </label>
 
                         <label className="text-xs font-black text-[#475467]">
-                          선택 방식
+                          Selection Type
                           <select
                             value={group.selection_type}
                             onChange={(e) => {
@@ -2269,10 +2400,10 @@ export default function CateringManager({
                             className="mt-1 w-full rounded-lg border border-[#D9CFC2] px-3 py-2 text-sm"
                           >
                             <option value="single">
-                              하나 선택
+                              Single Selection
                             </option>
                             <option value="multiple">
-                              여러 개 선택
+                              Multiple Selection
                             </option>
                           </select>
                         </label>
@@ -2284,14 +2415,14 @@ export default function CateringManager({
                           removeOptionGroup(groupIndex)
                         }
                         className="rounded-lg px-2 py-1 text-lg font-black text-red-500"
-                        aria-label="옵션 그룹 삭제"
+                        aria-label="Delete option group"
                       >
                         ×
                       </button>
                     </div>
 
                     <label className="mt-3 block text-xs font-black text-[#475467]">
-                      그룹 설명
+                      Group Description
                       <input
                         value={group.description}
                         onChange={(e) =>
@@ -2299,14 +2430,14 @@ export default function CateringManager({
                             description: e.target.value,
                           })
                         }
-                        placeholder="예: 원하는 소스를 선택하세요."
+                        placeholder="e.g. Choose your preferred sauce."
                         className="mt-1 w-full rounded-lg border border-[#D9CFC2] px-3 py-2 text-sm"
                       />
                     </label>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <label className="text-xs font-black text-[#475467]">
-                        최소 선택
+                        Minimum Selections
                         <input
                           type="number"
                           min="0"
@@ -2321,7 +2452,7 @@ export default function CateringManager({
                       </label>
 
                       <label className="text-xs font-black text-[#475467]">
-                        최대 선택
+                        Maximum Selections
                         <input
                           type="number"
                           min="0"
@@ -2338,7 +2469,7 @@ export default function CateringManager({
                               max_select: e.target.value,
                             })
                           }
-                          placeholder="0 = 등록된 옵션 전체"
+                          placeholder="0 = all registered options"
                           className="mt-1 w-full rounded-lg border border-[#D9CFC2] px-3 py-2 text-sm disabled:bg-gray-100"
                         />
                       </label>
@@ -2347,7 +2478,7 @@ export default function CateringManager({
                     <div className="mt-4">
                       <div className="flex items-center justify-between gap-3">
                         <div className="text-sm font-black text-[#172033]">
-                          선택 항목
+                          Choices
                         </div>
                         <button
                           type="button"
@@ -2356,7 +2487,7 @@ export default function CateringManager({
                           }
                           className="text-sm font-black text-[#B64032]"
                         >
-                          + 항목 추가
+                          + Add Choice
                         </button>
                       </div>
 
@@ -2365,10 +2496,10 @@ export default function CateringManager({
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="text-xs font-black text-[#172033]">
-                                등록된 옵션에서 선택
+                                Choose from Registered Options
                               </div>
                               <div className="mt-0.5 text-[11px] font-semibold text-[#667085]">
-                                일반 메뉴와 캐터링에 등록된 옵션을 이름 기준 중복 없이 보여줍니다. 클릭하면 아래 선택 항목에 추가됩니다.
+                                Shows unique options from the regular menu and catering menu. Click an option to add it below.
                               </div>
                             </div>
                           </div>
@@ -2394,7 +2525,7 @@ export default function CateringManager({
                                     )
                                   }
                                   className="inline-flex items-center gap-2 rounded-full border border-[#D9CFC2] bg-[#FFF9F1] px-3 py-2 text-xs font-black text-[#172033] hover:border-[#B64032] hover:bg-[#FFF3E6]"
-                                  title="이 옵션을 현재 그룹에 추가"
+                                  title="Add this option to the current group"
                                 >
                                   <span>+ {registeredChoice.name}</span>
                                   {Number(registeredChoice.price_delta || 0) > 0 && (
@@ -2415,7 +2546,7 @@ export default function CateringManager({
                               ),
                             ) && (
                               <div className="text-xs font-bold text-[#98A2B3]">
-                                등록된 옵션을 모두 추가했습니다.
+                                All registered options have been added.
                               </div>
                             )}
                           </div>
@@ -2439,18 +2570,18 @@ export default function CateringManager({
                                           choice.image_preview ||
                                           choice.image_url
                                         }
-                                        alt={choice.name || "옵션 이미지"}
+                                        alt={choice.name || "Option image"}
                                         className="h-full w-full object-cover"
                                       />
                                     ) : (
                                       <div className="flex h-full w-full items-center justify-center px-2 text-center text-[10px] font-bold text-[#98A2B3]">
-                                        이미지 없음
+                                        No image
                                       </div>
                                     )}
                                   </div>
 
                                   <label className="cursor-pointer rounded-lg border border-[#D9CFC2] bg-white px-2 py-1.5 text-center text-[10px] font-black text-[#344054]">
-                                    이미지 선택
+                                    Choose Image
                                     <input
                                       type="file"
                                       accept="image/*"
@@ -2477,7 +2608,7 @@ export default function CateringManager({
                                       }
                                       className="rounded-lg border border-red-200 bg-white px-2 py-1.5 text-[10px] font-black text-red-600"
                                     >
-                                      이미지 삭제
+                                      Delete Image
                                     </button>
                                   )}
                                 </div>
@@ -2507,7 +2638,7 @@ export default function CateringManager({
                                     },
                                   )
                                 }
-                                placeholder="설명 (선택)"
+                                placeholder="Description (optional)"
                                 className="rounded-lg border border-[#D9CFC2] bg-white px-3 py-2 text-sm"
                               />
 
@@ -2526,7 +2657,7 @@ export default function CateringManager({
                                     },
                                   )
                                 }
-                                placeholder="추가금"
+                                placeholder="Additional Charge"
                                 className="rounded-lg border border-[#D9CFC2] bg-white px-3 py-2 text-sm"
                               />
 
@@ -2548,13 +2679,13 @@ export default function CateringManager({
                                 className="rounded-lg border border-[#D9CFC2] bg-white px-3 py-2 text-sm"
                               >
                                 <option value="flat">
-                                  고정 추가금
+                                  Flat Charge
                                 </option>
                                 <option value="per_person">
-                                  1인당
+                                  Per Person
                                 </option>
                                 <option value="per_item">
-                                  개당
+                                  Per Item
                                 </option>
                               </select>
 
@@ -2567,14 +2698,14 @@ export default function CateringManager({
                                   )
                                 }
                                 className="rounded-lg text-red-500"
-                                aria-label="옵션 항목 삭제"
+                                aria-label="Delete option choice"
                               >
                                 ×
                               </button>
                               </div>
 
                               <p className="mt-2 text-[10px] font-semibold text-[#667085]">
-                                옵션 이미지도 저장 시 자동 축소됩니다.
+                                Option images are also resized automatically when saved.
                               </p>
                             </div>
                           ),
@@ -2589,7 +2720,7 @@ export default function CateringManager({
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-bold">
-              최소 주문수량
+              Minimum Quantity
               <input
                 type="number"
                 min="1"
@@ -2605,7 +2736,7 @@ export default function CateringManager({
             </label>
 
             <label className="text-sm font-bold">
-              별도 사전 주문시간
+              Custom Advance Notice
               <input
                 type="number"
                 min="0"
@@ -2616,7 +2747,7 @@ export default function CateringManager({
                     advance_notice_hours: e.target.value,
                   })
                 }
-                placeholder="비우면 전체 설정 사용"
+                placeholder="Leave blank to use the global setting"
                 className="mt-2 w-full rounded-xl border border-[#D9CFC2] px-3 py-2"
               />
             </label>
@@ -2678,14 +2809,39 @@ export default function CateringManager({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => void saveItem()}
-            disabled={saving || uploading}
-            className="mt-5 rounded-xl bg-[#B64032] px-5 py-3 text-sm font-black text-white disabled:opacity-50"
-          >
-            {editingItemId ? "수정 저장" : "캐터링 메뉴 저장"}
-          </button>
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => {
+                if (saving || uploading) return;
+                void saveItem();
+              }}
+              disabled={saving || uploading}
+              className="rounded-xl bg-[#B64032] px-5 py-3 text-sm font-black text-white disabled:cursor-wait disabled:opacity-50"
+            >
+              {saving || uploading
+                ? uploading
+                  ? "Uploading image..."
+                  : "Saving..."
+                : editingItemId
+                  ? "Save Changes"
+                  : "Save Catering Menu"}
+            </button>
+
+            {itemSaveMessage ? (
+              <div
+                className={`mt-3 rounded-xl border px-4 py-3 text-sm font-bold ${
+                  itemSaveMessageType === "error"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : itemSaveMessageType === "success"
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-blue-200 bg-blue-50 text-blue-700"
+                }`}
+              >
+                {itemSaveMessage}
+              </div>
+            ) : null}
+          </div>
         </section>
           </>
         )}
@@ -2706,13 +2862,13 @@ function ItemCard({
 }) {
   const priceLabel =
     item.pricing_type === "quote"
-      ? "견적 문의"
+      ? "Request Quote"
       : item.pricing_type === "package"
         ? item.packages?.length
           ? `$${Math.min(
               ...item.packages.map((p) => Number(p.price)),
             ).toFixed(2)}~`
-          : "패키지 가격"
+          : "Package Pricing"
         : item.base_price != null
           ? `$${Number(item.base_price).toFixed(2)}`
           : "-";
@@ -2768,7 +2924,7 @@ function ItemCard({
         {item.option_groups &&
           item.option_groups.length > 0 && (
             <div className="mt-2 text-xs font-bold text-[#667085]">
-              옵션:{" "}
+              Options:{" "}
               {item.option_groups
                 .map((group) => group.name)
                 .join(" · ")}
@@ -2782,7 +2938,7 @@ function ItemCard({
           onClick={() => onEdit(item)}
           className="rounded-xl border border-[#D9CFC2] px-3 py-2 text-sm font-black text-[#172033]"
         >
-          수정
+          Edit
         </button>
 
         <button
@@ -2790,7 +2946,7 @@ function ItemCard({
           onClick={() => void onDelete(item.id)}
           className="rounded-xl border border-red-200 px-3 py-2 text-sm font-black text-red-600"
         >
-          삭제
+          Delete
         </button>
       </div>
     </div>

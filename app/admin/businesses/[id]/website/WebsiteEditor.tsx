@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
+import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 
 // KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
 // inline 이미지의 baseline 때문에 생기는 3~4px 하단 틈을 방지합니다.
@@ -43,6 +44,15 @@ type OverlayButton = {
   font_size: number;
   height: number;
   full_width?: boolean;
+  x_percent?: number;
+  y_percent?: number;
+
+  /** 모바일에서만 사용하는 버튼 위치(%) */
+  mobile_x_percent?: number;
+  mobile_y_percent?: number;
+
+  /** 페이지 버튼에서 Catering Request Form으로 넘길 카테고리 */
+  category_query?: string;
 };
 
 type GalleryImageItem = {
@@ -145,7 +155,8 @@ type GridCell = {
     | "service-card"
     | "business-hours"
     | "restaurant-menu"
-    | "catering-menu";
+    | "catering-menu"
+    | "catering-request-form";
 
   /** DoorDash 스타일 메뉴 셀에서 사용할 방식 */
   restaurant_menu_menu_enabled?: boolean;
@@ -608,6 +619,7 @@ type CateringSettingsPayload = {
   pickup_enabled?: boolean;
   delivery_enabled?: boolean;
   quote_enabled?: boolean;
+  notification_phone?: string | null;
 };
 
 type CateringMenuPayload = {
@@ -2128,8 +2140,18 @@ function getLegacyOverlayButtonTarget(urlValue: unknown): {
   };
 }
 
+function sanitizeCateringCategoryQuery(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (!CATERING_CATEGORY_PRESETS.includes(raw as any)) return "";
+  return raw;
+}
+
 function buildOverlayButtonUrl(
-  button: Pick<OverlayButton, "link_type" | "link_value" | "url">,
+  button: Pick<
+    OverlayButton,
+    "link_type" | "link_value" | "url" | "category_query"
+  >,
   businessId: string | number,
 ) {
   const legacy = getLegacyOverlayButtonTarget(button.url);
@@ -2144,11 +2166,19 @@ function buildOverlayButtonUrl(
   if (type === "page") {
     const slug = slugifyMenuValue(value);
 
-    if (!slug || slug === "home") {
-      return `/business/${businessId}/website`;
-    }
+    const baseUrl =
+      !slug || slug === "home"
+        ? `/business/${businessId}/website`
+        : `/business/${businessId}/website/${encodeURIComponent(slug)}`;
 
-    return `/business/${businessId}/website/${encodeURIComponent(slug)}`;
+    const category =
+      "category_query" in button
+        ? String((button as OverlayButton).category_query || "").trim()
+        : "";
+
+    return category
+      ? `${baseUrl}?category=${encodeURIComponent(category)}`
+      : baseUrl;
   }
 
   return normalizeExternalUrl(value || button.url || "");
@@ -2204,6 +2234,7 @@ function buildCellButtonUrl(
       link_type: target.type,
       link_value: target.value,
       url: String(cell.url || ""),
+      category_query: undefined,
     },
     businessId,
   );
@@ -4330,6 +4361,589 @@ function CateringMenuDisplay({
   );
 }
 
+
+function CateringRequestFormDisplay({
+  businessId,
+  businessName,
+  compact = false,
+  editorPreview = false,
+}: {
+  businessId: number;
+  businessName?: string | null;
+  compact?: boolean;
+  editorPreview?: boolean;
+}) {
+  const [payload, setPayload] = useState<CateringMenuPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCateringRequestData() {
+      setLoading(true);
+      setLoadError("");
+
+      try {
+        const isAdmin =
+          typeof window !== "undefined" &&
+          window.location.pathname.startsWith("/admin/");
+
+        const url = isAdmin
+          ? `/api/owner/business/${businessId}/catering`
+          : `/api/business/${businessId}/catering`;
+
+        const response = await fetch(url, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "캐터링 요청 정보를 불러오지 못했습니다.",
+          );
+        }
+
+        if (cancelled) return;
+
+        const nextPayload: CateringMenuPayload = {
+          settings: data?.settings ?? null,
+          categories: Array.isArray(data?.categories) ? data.categories : [],
+          items: Array.isArray(data?.items) ? data.items : [],
+        };
+
+        setPayload(nextPayload);
+
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          const queryCategory =
+            params.get("category") || params.get("category_id") || "";
+          const queryItem = params.get("item") || params.get("item_id") || "";
+
+          if (queryCategory) {
+            const normalizedQueryCategory = queryCategory
+              .trim()
+              .toLowerCase();
+
+            const matchedCategory = nextPayload.categories.find(
+              (category) =>
+                String(category.id) === queryCategory ||
+                String(category.name || "")
+                  .trim()
+                  .toLowerCase() === normalizedQueryCategory,
+            );
+
+            if (matchedCategory) {
+              setSelectedCategoryId(String(matchedCategory.id));
+              setSelectedItemId("");
+            }
+          }
+
+          if (
+            queryItem &&
+            nextPayload.items.some(
+              (item) =>
+                String(item.id) === queryItem ||
+                String(item.name || "")
+                  .trim()
+                  .toLowerCase() === queryItem.trim().toLowerCase(),
+            )
+          ) {
+            const normalizedQueryItem = queryItem.trim().toLowerCase();
+
+            const matchedItem = nextPayload.items.find(
+              (item) =>
+                String(item.id) === queryItem ||
+                String(item.name || "")
+                  .trim()
+                  .toLowerCase() === normalizedQueryItem,
+            );
+
+            if (matchedItem) {
+              setSelectedItemId(String(matchedItem.id));
+
+              if (matchedItem.category_id != null) {
+                setSelectedCategoryId(String(matchedItem.category_id));
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "캐터링 요청 정보를 불러오지 못했습니다.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadCateringRequestData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  const visibleCategories = useMemo(
+    () =>
+      [...(payload?.categories ?? [])]
+        .filter((category) => category.is_active !== false)
+        .sort(
+          (a, b) =>
+            Number(a.sort_order ?? 0) -
+              Number(b.sort_order ?? 0) ||
+            Number(a.id) - Number(b.id),
+        ),
+    [payload?.categories],
+  );
+
+  const visibleItems = useMemo(
+    () =>
+      [...(payload?.items ?? [])]
+        .filter((item) => item.is_active !== false)
+        .filter(
+          (item) =>
+            !selectedCategoryId ||
+            String(item.category_id ?? "") === selectedCategoryId,
+        )
+        .sort(
+          (a, b) =>
+            Number(a.sort_order ?? 0) -
+              Number(b.sort_order ?? 0) ||
+            Number(a.id) - Number(b.id),
+        ),
+    [payload?.items, selectedCategoryId],
+  );
+
+  useEffect(() => {
+    if (
+      selectedItemId &&
+      !visibleItems.some((item) => String(item.id) === selectedItemId)
+    ) {
+      setSelectedItemId("");
+    }
+  }, [selectedCategoryId, selectedItemId, visibleItems]);
+
+  const settings = payload?.settings;
+
+  const selectedItem = useMemo(
+    () =>
+      selectedItemId
+        ? (payload?.items ?? []).find(
+            (item) => String(item.id) === selectedItemId,
+          ) ?? null
+        : null,
+    [payload?.items, selectedItemId],
+  );
+
+  /*
+   * 서비스 방식은 메뉴가 선택된 경우 해당 메뉴의 설정을 우선합니다.
+   * 메뉴가 아직 선택되지 않았다면 전체 Catering 설정을 사용합니다.
+   */
+  const pickupAvailable =
+    selectedItem != null
+      ? selectedItem.pickup_enabled !== false
+      : settings?.pickup_enabled !== false;
+
+  const deliveryAvailable =
+    selectedItem != null
+      ? selectedItem.delivery_enabled === true
+      : settings?.delivery_enabled === true;
+
+  const selectedDeliveryFee =
+    selectedItem != null
+      ? Math.max(0, Number(selectedItem.delivery_fee || 0))
+      : 0;
+
+  const minPeople = Math.max(0, Number(settings?.minimum_order_people || 0));
+  const advanceHours = Math.max(0, Number(settings?.advance_notice_hours || 0));
+  const minAmount = Math.max(0, Number(settings?.minimum_order_amount || 0));
+  const phone = String(settings?.notification_phone || "").trim();
+
+  if (loading) {
+    return (
+      <div className="w-full rounded-2xl border border-gray-200 bg-white px-6 py-10 text-center text-sm font-black text-gray-400">
+        Loading catering request form....
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="w-full rounded-2xl border border-red-200 bg-red-50 px-6 py-8 text-center text-sm font-bold text-red-700">
+        {loadError}
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="mx-auto w-full max-w-[980px] rounded-3xl border border-gray-200 bg-white p-5 text-left shadow-sm sm:p-8"
+      onSubmit={async (event) => {
+        event.preventDefault();
+
+        if (submitting) return;
+
+        setSubmitting(true);
+        setSubmitSuccess(false);
+        setSubmitMessage(
+          editorPreview
+            ? "테스트 이메일을 전송하고 있습니다..."
+            : "캐터링 요청을 전송하고 있습니다...",
+        );
+
+        try {
+          const form = event.currentTarget;
+          const formData = new FormData(form);
+
+          const category = visibleCategories.find(
+            (row) => String(row.id) === selectedCategoryId,
+          );
+          const item = (payload?.items ?? []).find(
+            (row) => String(row.id) === selectedItemId,
+          );
+
+          const body = {
+            business_id: businessId,
+            business_name: String(
+              businessName || `Business ${businessId}`,
+            ),
+            is_test: editorPreview,
+
+            customer_name: String(
+              formData.get("customer_name") || "",
+            ).trim(),
+            customer_phone: String(
+              formData.get("customer_phone") || "",
+            ).trim(),
+            customer_email: String(
+              formData.get("customer_email") || "",
+            ).trim(),
+            company: String(formData.get("company") || "").trim(),
+
+            event_date: String(
+              formData.get("event_date") || "",
+            ).trim(),
+            event_time: String(
+              formData.get("event_time") || "",
+            ).trim(),
+            guest_count: Number(formData.get("guest_count") || 0),
+            occasion: String(formData.get("occasion") || "").trim(),
+
+            category_id: selectedCategoryId
+              ? Number(selectedCategoryId)
+              : null,
+            category_name: String(category?.name || "").trim(),
+            item_id: selectedItemId
+              ? Number(selectedItemId)
+              : null,
+            item_name: String(item?.name || "").trim(),
+
+            service_type: String(
+              formData.get("service_type") || "",
+            ).trim(),
+            delivery_fee:
+              String(formData.get("service_type") || "") === "delivery"
+                ? Math.max(0, Number(item?.delivery_fee || 0))
+                : 0,
+
+            budget_per_person: String(
+              formData.get("budget_per_person") || "",
+            ).trim(),
+            notes: String(formData.get("notes") || "").trim(),
+          };
+
+          const response = await fetch(
+            `/api/business/${businessId}/catering/request`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              credentials: "include",
+              body: JSON.stringify(body),
+            },
+          );
+
+          const responseText = await response.text();
+          let data: any = {};
+
+          if (responseText) {
+            try {
+              data = JSON.parse(responseText);
+            } catch {
+              data = { error: responseText };
+            }
+          }
+
+          if (!response.ok) {
+            throw new Error(
+              data?.error || "캐터링 요청 이메일 전송에 실패했습니다.",
+            );
+          }
+
+          setSubmitSuccess(true);
+          setSubmitMessage(
+            editorPreview
+              ? `테스트 이메일을 전송했습니다${
+                  data?.recipient ? ` → ${data.recipient}` : ""
+                }.`
+              : "캐터링 요청이 전송되었습니다. 담당자가 확인 후 연락드립니다.",
+          );
+        } catch (error) {
+          setSubmitSuccess(false);
+          setSubmitMessage(
+            error instanceof Error
+              ? error.message
+              : "캐터링 요청 이메일 전송 중 오류가 발생했습니다.",
+          );
+        } finally {
+          setSubmitting(false);
+        }
+      }}
+    >
+      <div className="border-b border-gray-200 pb-5">
+        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-orange-600">
+          Catering Request
+        </p>
+        <h2 className={`${compact ? "text-2xl" : "text-3xl"} mt-1 font-black text-gray-950`}>
+          {String(settings?.page_title || "Catering Request")}
+        </h2>
+        <p className="mt-2 text-sm font-semibold leading-6 text-gray-500">
+          Tell us about your event and we will contact you to confirm availability and details.
+        </p>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {minAmount > 0 ? (
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
+              Minimum ${minAmount.toFixed(2)}
+            </span>
+          ) : null}
+          {minPeople > 0 ? (
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
+              Minimum {minPeople} guests
+            </span>
+          ) : null}
+          {advanceHours > 0 ? (
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
+              {advanceHours} hr advance notice
+            </span>
+          ) : null}
+          {phone ? (
+            <a
+              href={`tel:${phone.replace(/[^0-9+]/g, "")}`}
+              className="rounded-full bg-gray-950 px-3 py-1.5 text-xs font-black text-white no-underline"
+            >
+              ☎ {phone}
+            </a>
+          ) : null}
+        </div>
+      </div>
+
+      <div className={`mt-6 grid gap-4 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}>
+        <label className="text-sm font-black text-gray-700">
+          Full Name *
+          <input required name="customer_name" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Phone *
+          <input required type="tel" name="customer_phone" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Email *
+          <input required type="email" name="customer_email" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Company / Organization
+          <input name="company" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Event Date *
+          <input required type="date" name="event_date" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Event Time *
+          <input required type="time" name="event_time" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Number of Guests *
+          <input
+            required
+            type="number"
+            min={minPeople > 0 ? minPeople : 1}
+            defaultValue={minPeople > 0 ? minPeople : undefined}
+            name="guest_count"
+            className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
+          />
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Occasion
+          <select name="occasion" className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
+            <option value="">Select</option>
+            <option>Corporate / Business</option>
+            <option>Birthday</option>
+            <option>Wedding</option>
+            <option>School / University</option>
+            <option>Family Gathering</option>
+            <option>Other</option>
+          </select>
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Interested Category
+          <select
+            name="category_id"
+            value={selectedCategoryId}
+            onChange={(event) => {
+              setSelectedCategoryId(event.target.value);
+              setSelectedItemId("");
+            }}
+            className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+          >
+            <option value="">Select category</option>
+            {visibleCategories.map((category) => (
+              <option key={category.id} value={String(category.id)}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-sm font-black text-gray-700">
+          Interested Menu
+          <select
+            name="item_id"
+            value={selectedItemId}
+            onChange={(event) => setSelectedItemId(event.target.value)}
+            className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+          >
+            <option value="">Select menu</option>
+            {visibleItems.map((item) => (
+              <option key={item.id} value={String(item.id)}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <fieldset className="sm:col-span-2">
+          <legend className="text-sm font-black text-gray-700">
+            Catering Service *
+          </legend>
+
+          <div className="mt-2 flex flex-wrap gap-4 rounded-xl border border-gray-200 px-4 py-3">
+            {pickupAvailable ? (
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+                <input
+                  required
+                  type="radio"
+                  name="service_type"
+                  value="pickup"
+                  defaultChecked={pickupAvailable}
+                />
+                Pickup
+              </label>
+            ) : null}
+
+            {deliveryAvailable ? (
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+                <input
+                  required
+                  type="radio"
+                  name="service_type"
+                  value="delivery"
+                  defaultChecked={!pickupAvailable}
+                />
+                Delivery
+                {selectedDeliveryFee > 0 ? (
+                  <span className="text-xs font-black text-gray-500">
+                    (+${selectedDeliveryFee.toFixed(2)})
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
+              <input
+                required
+                type="radio"
+                name="service_type"
+                value="quote"
+                defaultChecked={!pickupAvailable && !deliveryAvailable}
+              />
+              Request Quote
+            </label>
+          </div>
+
+          {selectedItem ? (
+            <p className="mt-1.5 text-[11px] font-semibold text-gray-500">
+              {selectedItem.name}에 설정된 주문 방식을 사용합니다.
+            </p>
+          ) : null}
+        </fieldset>
+
+        <label className="text-sm font-black text-gray-700 sm:col-span-2">
+          Budget Per Person
+          <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+
+        <label className="text-sm font-black text-gray-700 sm:col-span-2">
+          Description / Special Requests
+          <textarea name="notes" rows={5} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-gray-950 px-5 py-3 text-sm font-black text-white disabled:cursor-wait disabled:opacity-60"
+      >
+        {submitting
+          ? editorPreview
+            ? "SENDING TEST EMAIL..."
+            : "SENDING..."
+          : editorPreview
+            ? "SEND TEST CATERING REQUEST"
+            : "SUBMIT CATERING REQUEST"}
+      </button>
+
+      {submitMessage ? (
+        <p
+          className={`mt-3 text-center text-xs font-black ${
+            submitSuccess ? "text-green-700" : "text-amber-700"
+          }`}
+        >
+          {submitMessage}
+        </p>
+      ) : null}
+
+      {editorPreview ? (
+        <p className="mt-3 text-center text-[11px] font-semibold text-gray-400">
+          Editor preview · {String(businessName || `Business ${businessId}`)}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+
 function LinkPageContent({
   section,
   editable = false,
@@ -6154,6 +6768,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [business, setBusiness] = useState<Business | null>(null);
   const [sections, setSections] = useState<BusinessSection[]>([]);
   const [selection, setSelection] = useState<Selection>({ area: "header" });
+  const [cellEditModalOpen, setCellEditModalOpen] = useState(false);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -6360,6 +6975,12 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
     return layout ? findCellRecursive(layout.cells, selection.cellId) : null;
   }, [selection, headerGrid, heroLayouts, sections]);
+
+  useEffect(() => {
+    if (selection.cellId && selectedCell) {
+      setCellEditModalOpen(true);
+    }
+  }, [selection.cellId, selection.layoutId, selection.area, selectedCell?.id]);
 
   const selectedSection = useMemo(
     () =>
@@ -10018,7 +10639,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           </div>
         </section>
 
-        <aside className="border-l border-gray-200 bg-white p-4 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:p-5">
+        {!selectedCell ? (
+          <aside className="border-l border-gray-200 bg-white p-4 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:p-5">
           <RightPanel
             editorDevice={device}
             selection={selection}
@@ -10121,10 +10743,448 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               setImageGuide({ area, cellId, title })
             }
           />
+          </aside>
+        ) : (
+          <aside className="border-l border-gray-200 bg-white p-3 lg:sticky lg:top-[65px] lg:h-[calc(100vh-65px)] lg:self-start">
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold text-blue-900">
+              선택한 셀은 모달창에서 편집합니다.
+              <button
+                type="button"
+                onClick={() => setCellEditModalOpen(true)}
+                className="mt-3 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700"
+              >
+                셀 편집 열기
+              </button>
+            </div>
+          </aside>
+        )}
 
-          {message ? <p className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</p> : null}
-          {error ? <p className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-700">{error}</p> : null}
-        </aside>
+        {selectedCell && cellEditModalOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div className="pointer-events-none fixed inset-0 z-[100000]">
+                <div className="pointer-events-auto fixed bottom-0 right-0 top-[65px] flex w-[min(560px,96vw)] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-18px_0_40px_rgba(15,23,42,0.18)]">
+                  <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
+                        Cell Editor
+                      </div>
+                      <h2 className="mt-1 text-xl font-black text-gray-950">
+                        셀 입력 · 수정
+                      </h2>
+                      <p className="mt-1 text-xs font-semibold text-gray-500">
+                        선택한 셀의 모든 설정을 이 창에서 수정합니다.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setCellEditModalOpen(false)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-xl font-black text-gray-600 hover:bg-gray-100"
+                      aria-label="셀 편집 닫기"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-gray-50 p-4 sm:p-5">
+                    <div className="mb-5 rounded-2xl border-2 border-blue-200 bg-blue-50/60 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-blue-950">
+                            현재 셀 내용
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-blue-700">
+                            현재 저장되어 있는 값을 바로 보고 수정할 수 있습니다.
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-black uppercase text-blue-700">
+                          {selectedCell.display_mode || selectedCell.type}
+                        </span>
+                      </div>
+
+
+                      {/* 본문 위에 얹힌 추가 글/버튼을 먼저 보여줍니다. */}
+                      {String(selectedCell.overlay_text || "").trim() ? (
+                        <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-black text-violet-950">추가 글</p>
+                              <p className="mt-1 text-[11px] font-semibold text-violet-700">
+                                왼쪽 화면의 “새 글”입니다.
+                              </p>
+                            </div>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-violet-700">
+                              OVERLAY TEXT
+                            </span>
+                          </div>
+                          <input
+                            value={selectedCell.overlay_text || ""}
+                            onChange={(event) =>
+                              updateCell(
+                                selection.area as "header" | "hero",
+                                selectedCell.id,
+                                { overlay_text: event.target.value },
+                                selection.layoutId,
+                              )
+                            }
+                            className="mt-3 w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-violet-500"
+                          />
+                        </div>
+                      ) : null}
+
+                      {(selectedCell.type === "title" || selectedCell.type === "text") &&
+                      selectedCell.display_mode !== "restaurant-menu" &&
+                      selectedCell.display_mode !== "catering-menu" &&
+                      selectedCell.display_mode !== "catering-request-form" ? (
+                        <div className="mt-4">
+                          <label className="block text-xs font-black text-gray-700">
+                            글 내용
+                          </label>
+                          <div
+                            key={`${selectedCell.id}-${device}`}
+                            contentEditable
+                            suppressContentEditableWarning
+                            dangerouslySetInnerHTML={{
+                              __html:
+                                sanitizeCellRichTextHtml(
+                                  String(selectedCell.rich_text_html || ""),
+                                ) ||
+                                escapeCellText(String(selectedCell.text || "")),
+                            }}
+                            onInput={(event) => {
+                              const html = sanitizeCellRichTextHtml(
+                                event.currentTarget.innerHTML,
+                              );
+                              updateCell(
+                                selection.area as "header" | "hero",
+                                selectedCell.id,
+                                {
+                                  rich_text_html: html,
+                                  text: richTextToPlainText(html),
+                                },
+                                selection.layoutId,
+                              );
+                            }}
+                            className="mt-2 min-h-[140px] max-h-[240px] w-full overflow-y-auto rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-7 text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          />
+                          <p className="mt-2 text-[11px] font-semibold text-gray-500">
+                            위 내용을 수정하는 즉시 왼쪽 편집 화면에 반영됩니다.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {selectedCell.type === "button" ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="text-xs font-black text-gray-700">
+                            버튼 문구
+                            <input
+                              value={selectedCell.text || ""}
+                              onChange={(event) =>
+                                updateCell(
+                                  selection.area as "header" | "hero",
+                                  selectedCell.id,
+                                  { text: event.target.value },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
+                            />
+                          </label>
+                          <label className="text-xs font-black text-gray-700">
+                            링크
+                            <input
+                              value={
+                                selectedCell.button_link_value ||
+                                selectedCell.url ||
+                                ""
+                              }
+                              onChange={(event) =>
+                                updateCell(
+                                  selection.area as "header" | "hero",
+                                  selectedCell.id,
+                                  {
+                                    button_link_value: event.target.value,
+                                    url: event.target.value,
+                                  },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+
+                      {selectedCell.type === "phone" ? (
+                        <label className="mt-4 block text-xs font-black text-gray-700">
+                          전화번호
+                          <input
+                            type="tel"
+                            value={selectedCell.phone_number || selectedCell.text || ""}
+                            onChange={(event) =>
+                              updateCell(
+                                selection.area as "header" | "hero",
+                                selectedCell.id,
+                                {
+                                  phone_number: event.target.value,
+                                  text: event.target.value,
+                                },
+                                selection.layoutId,
+                              )
+                            }
+                            className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
+                          />
+                        </label>
+                      ) : null}
+
+                      {(selectedCell.type === "image" ||
+                        selectedCell.type === "logo") ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                            {selectedCell.image_url ? (
+                              <img
+                                src={selectedCell.image_url}
+                                alt=""
+                                className="h-36 w-full object-contain"
+                              />
+                            ) : (
+                              <div className="flex h-36 items-center justify-center text-xs font-bold text-gray-400">
+                                이미지 없음
+                              </div>
+                            )}
+                          </div>
+                          <label className="text-xs font-black text-gray-700">
+                            이미지 URL
+                            <input
+                              value={selectedCell.image_url || ""}
+                              onChange={(event) =>
+                                updateCell(
+                                  selection.area as "header" | "hero",
+                                  selectedCell.id,
+                                  { image_url: event.target.value },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold"
+                            />
+                            <span className="mt-2 block text-[11px] font-semibold text-gray-500">
+                              파일 업로드·크기·위치·팝업 설정은 아래 상세 설정에서 그대로 사용할 수 있습니다.
+                            </span>
+                          </label>
+                        </div>
+                      ) : null}
+
+                      {selectedCell.type === "map" ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="text-xs font-black text-gray-700">
+                            제목
+                            <input
+                              value={selectedCell.map_title || ""}
+                              onChange={(event) =>
+                                updateCell(
+                                  selection.area as "header" | "hero",
+                                  selectedCell.id,
+                                  { map_title: event.target.value },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold"
+                            />
+                          </label>
+                          <label className="text-xs font-black text-gray-700">
+                            전화
+                            <input
+                              value={selectedCell.map_phone || ""}
+                              onChange={(event) =>
+                                updateCell(
+                                  selection.area as "header" | "hero",
+                                  selectedCell.id,
+                                  { map_phone: event.target.value },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold"
+                            />
+                          </label>
+                          <label className="text-xs font-black text-gray-700 sm:col-span-2">
+                            주소
+                            <input
+                              value={selectedCell.map_address || ""}
+                              onChange={(event) =>
+                                updateCell(
+                                  selection.area as "header" | "hero",
+                                  selectedCell.id,
+                                  { map_address: event.target.value },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold"
+                            />
+                          </label>
+                        </div>
+                      ) : null}
+
+                      {selectedCell.type === "menu" ? (
+                        <div className="mt-4 rounded-xl border border-gray-200 bg-white p-3">
+                          <p className="text-xs font-black text-gray-700">
+                            현재 메뉴 항목
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {normalizeMenuItems(selectedCell).map((item) => (
+                              <span
+                                key={item.id}
+                                className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-xs font-bold text-gray-700"
+                              >
+                                {item.label}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-[11px] font-semibold text-gray-500">
+                            메뉴 항목·링크 수정은 바로 아래 상세 설정에서 현재 값이 그대로 표시됩니다.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {selectedCell.display_mode === "restaurant-menu" ? (
+                        <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm font-bold text-orange-900">
+                          Restaurant Menu가 연결된 셀입니다. 아래 상세 설정에 현재 Menu / Pickup / Delivery 값이 그대로 표시됩니다.
+                        </div>
+                      ) : null}
+
+                      {selectedCell.display_mode === "catering-menu" ? (
+                        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-bold text-emerald-900">
+                          Catering Menu가 연결된 셀입니다. Owner의 캐터링 데이터가 이 셀에 자동 표시됩니다.
+                        </div>
+                      ) : null}
+
+                      {selectedCell.display_mode === "catering-request-form" ? (
+                        <div className="mt-4 rounded-xl border border-blue-200 bg-white p-3 text-sm font-bold text-blue-900">
+                          Catering Request Form이 연결된 셀입니다. Owner에 저장된 캐터링 설정·카테고리·메뉴를 자동으로 읽습니다.
+                        </div>
+                      ) : null}
+                    </div>
+
+              <RightPanel
+                editorDevice={device}
+                selection={selection}
+                selectedCell={resolveCellForDevice(selectedCell, device)}
+                selectedSection={selectedSection}
+                heroSection={heroSection}
+                business={business}
+                websiteSettings={websiteSettings}
+                sections={sections}
+                onUpdateBusiness={updateBusiness}
+                onUpdateWebsiteSettings={updateWebsiteSettings}
+                onUpdateSection={updateSection}
+                onUpdateSectionContent={updateSectionContent}
+                onUpdateCell={updateCell}
+                onMergeCell={mergeCell}
+                onSplitCell={splitCell}
+                onSetGridColumns={setGridColumnCount}
+                onSetGridRows={setGridRowCount}
+                onSetSelectedCellRows={setSelectedCellRowCount}
+                onSetSelectedCellColumns={setSelectedCellColumnCount}
+                gridRowCount={heroLayouts.length}
+                gridColumnCount={
+                  selection.area === "header"
+                    ? headerGrid.cells.length
+                    : selection.area === "hero"
+                      ? heroLayouts.find((layout) => layout.id === selection.layoutId)?.cells.length || 1
+                      : 1
+                }
+                onDuplicateCell={duplicateCell}
+                onClearCell={clearCell}
+                selectedLayoutHeight={
+                  selection.area === "hero"
+                    ? Number(
+                        heroLayouts.find(
+                          (layout) => layout.id === selection.layoutId,
+                        )?.[
+                          device === "mobile"
+                            ? "mobile_height_px"
+                            : "height_px"
+                        ] ||
+                          heroLayouts.find(
+                            (layout) => layout.id === selection.layoutId,
+                          )?.height_px ||
+                          560,
+                      )
+                    : selection.area === "header"
+                      ? Number(headerGrid.height_px || 104)
+                      : 560
+                }
+                onResizeSelectedLayoutHeight={(heightPx) => {
+                  if (selection.area === "header") {
+                    updateGridHeight("header", heightPx);
+                    return;
+                  }
+              
+                  if (selection.area === "hero" && selection.layoutId) {
+                    updateGridHeight("hero", heightPx, selection.layoutId);
+                  }
+                }}
+                selectedLayoutSpacing={
+                  selection.area === "hero" && selection.layoutId
+                    ? Number(
+                        device === "mobile"
+                          ? heroLayouts.find((layout) => layout.id === selection.layoutId)
+                              ?.mobile_margin_bottom_px ??
+                              heroLayouts.find((layout) => layout.id === selection.layoutId)
+                                ?.margin_bottom_px ??
+                              0
+                          : heroLayouts.find((layout) => layout.id === selection.layoutId)
+                              ?.margin_bottom_px ?? 0,
+                      )
+                    : 0
+                }
+                onResizeSelectedLayoutSpacing={(spacingPx) => {
+                  if (selection.area !== "hero" || !selection.layoutId) return;
+              
+                  const safeSpacing = Math.max(
+                    0,
+                    Math.min(500, Math.round(Number(spacingPx) || 0)),
+                  );
+              
+                  updateGrid(
+                    "hero",
+                    (grid) =>
+                      device === "mobile"
+                        ? {
+                            ...grid,
+                            mobile_margin_bottom_px: safeSpacing,
+                          }
+                        : {
+                            ...grid,
+                            margin_bottom_px: safeSpacing,
+                          },
+                    selection.layoutId,
+                  );
+                }}
+                businessId={businessId}
+                adminKey={adminKey}
+                onShowImageGuide={(area, cellId, title) =>
+                  setImageGuide({ area, cellId, title })
+                }
+              />
+                  </div>
+
+                  <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-200 bg-white px-5 py-3 sm:px-6">
+                    <p className="text-[11px] font-bold text-gray-500">
+                      왼쪽 편집 화면을 보면서 수정값이 바로 반영됩니다.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setCellEditModalOpen(false)}
+                      className="rounded-xl bg-gray-950 px-5 py-2.5 text-sm font-black text-white"
+                    >
+                      완료
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
 
       {layerAddOpen ? (
@@ -12673,7 +13733,9 @@ function UniversalOverlayButtons({
   const dragRef = useRef<{
     kind: "text" | "button";
     pointerId: number;
+    buttonId?: string;
   } | null>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
   const [draggingKind, setDraggingKind] = useState<
     "text" | "button" | null
   >(null);
@@ -12683,6 +13745,12 @@ function UniversalOverlayButtons({
     cell.overlay_buttons_visible ??
     Boolean(cell.overlay_buttons?.length);
   const textVisible = Boolean(cell.overlay_text?.trim());
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
 
   /*
    * 일반 이미지와 background-image는 기존 이미지 전용 렌더러가 이미
@@ -12725,88 +13793,132 @@ function UniversalOverlayButtons({
         ? 50
         : 85;
 
+  /*
+   * 버튼 X 위치는 셀 실제 폭의 %를 그대로 쓰면
+   * 편집기(오른쪽 패널 때문에 좁음)와 공개/미리보기(더 넓음)에서
+   * 버튼 사이의 픽셀 간격이 달라집니다.
+   *
+   * 저장값(x_percent)은 그대로 유지하되, 화면에 그릴 때는
+   * 고정된 디자인 기준 폭을 기준으로 중앙에서 px offset으로 환산합니다.
+   * 따라서 편집기와 공개 미리보기의 셀 폭이 달라도 버튼 간격은 동일합니다.
+   */
+  const buttonDesignWidth =
+    previewDevice === "mobile" ? 360 : 520;
+
+  function getButtonLeftStyle(xPercent: number) {
+    const safePercent = Math.max(2, Math.min(98, Number(xPercent) || 50));
+    const offsetPx =
+      ((safePercent - 50) / 100) * buttonDesignWidth;
+
+    return `calc(50% + ${offsetPx.toFixed(2)}px)`;
+  }
+
+  function updateDragPosition(
+    kind: "text" | "button",
+    clientX: number,
+    clientY: number,
+    buttonId?: string,
+  ) {
+    const host = hostRef.current;
+    if (!host || !onUpdate) return;
+
+    const rect = host.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    const centerX = rect.left + rect.width / 2;
+    const x = Math.max(
+      2,
+      Math.min(
+        98,
+        50 + ((clientX - centerX) / buttonDesignWidth) * 100,
+      ),
+    );
+    const y = Math.max(
+      2,
+      Math.min(98, ((clientY - rect.top) / rect.height) * 100),
+    );
+
+    if (kind === "text") {
+      onUpdate({
+        overlay_text_x_percent: Number(x.toFixed(2)),
+        overlay_text_y_percent: Number(y.toFixed(2)),
+      });
+      return;
+    }
+
+    if (!buttonId) return;
+
+    onUpdate({
+      overlay_buttons: normalizeOverlayButtons(cell).map((button) =>
+        button.id === buttonId
+          ? previewDevice === "mobile"
+            ? {
+                ...button,
+                mobile_x_percent: Number(x.toFixed(2)),
+                mobile_y_percent: Number(y.toFixed(2)),
+              }
+            : {
+                ...button,
+                x_percent: Number(x.toFixed(2)),
+                y_percent: Number(y.toFixed(2)),
+              }
+          : button,
+      ),
+      overlay_buttons_visible: true,
+    });
+  }
+
   function startDrag(
     event: React.PointerEvent<HTMLElement>,
     kind: "text" | "button",
+    buttonId?: string,
   ) {
     if (!canDrag) return;
 
     event.preventDefault();
     event.stopPropagation();
 
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      kind,
-      pointerId: event.pointerId,
-    };
+    dragCleanupRef.current?.();
+
+    const pointerId = event.pointerId;
+    dragRef.current = { kind, pointerId, buttonId };
     setDraggingKind(kind);
-  }
 
-  function moveDrag(event: React.PointerEvent<HTMLElement>) {
-    const drag = dragRef.current;
-    const host = hostRef.current;
-
-    if (
-      !drag ||
-      !host ||
-      drag.pointerId !== event.pointerId ||
-      !onUpdate
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const rect = host.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-
-    // 가장자리에서도 요소 전체가 어느 정도 보이도록 2~98%로 제한합니다.
-    const x = Math.max(
-      2,
-      Math.min(
-        98,
-        ((event.clientX - rect.left) / rect.width) * 100,
-      ),
-    );
-    const y = Math.max(
-      2,
-      Math.min(
-        98,
-        ((event.clientY - rect.top) / rect.height) * 100,
-      ),
+    updateDragPosition(
+      kind,
+      event.clientX,
+      event.clientY,
+      buttonId,
     );
 
-    if (drag.kind === "text") {
-      onUpdate({
-        overlay_text_x_percent: Number(x.toFixed(2)),
-        overlay_text_y_percent: Number(y.toFixed(2)),
-      });
-    } else {
-      onUpdate({
-        overlay_button_x_percent: Number(x.toFixed(2)),
-        overlay_button_y_percent: Number(y.toFixed(2)),
-      });
-    }
-  }
+    const handleMove = (nativeEvent: PointerEvent) => {
+      if (nativeEvent.pointerId !== pointerId) return;
+      nativeEvent.preventDefault();
+      updateDragPosition(
+        kind,
+        nativeEvent.clientX,
+        nativeEvent.clientY,
+        buttonId,
+      );
+    };
 
-  function stopDrag(event: React.PointerEvent<HTMLElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
+    const finish = (nativeEvent?: PointerEvent) => {
+      if (nativeEvent && nativeEvent.pointerId !== pointerId) return;
 
-    event.preventDefault();
-    event.stopPropagation();
+      document.removeEventListener("pointermove", handleMove);
+      document.removeEventListener("pointerup", finish);
+      document.removeEventListener("pointercancel", finish);
 
-    try {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    } catch {
-      // 이미 capture가 해제된 경우 무시합니다.
-    }
+      dragCleanupRef.current = null;
+      dragRef.current = null;
+      setDraggingKind(null);
+    };
 
-    dragRef.current = null;
-    setDraggingKind(null);
+    document.addEventListener("pointermove", handleMove, { passive: false });
+    document.addEventListener("pointerup", finish, { passive: false });
+    document.addEventListener("pointercancel", finish, { passive: false });
+
+    dragCleanupRef.current = () => finish();
   }
 
   return (
@@ -12835,9 +13947,6 @@ function UniversalOverlayButtons({
             userSelect: "none",
           }}
           onPointerDown={(event) => startDrag(event, "text")}
-          onPointerMove={moveDrag}
-          onPointerUp={stopDrag}
-          onPointerCancel={stopDrag}
           title={canDrag ? "드래그해서 글씨 위치 이동" : undefined}
         >
           <div
@@ -12875,105 +13984,120 @@ function UniversalOverlayButtons({
         </div>
       ) : null}
 
-      {buttonsVisible && buttons.length > 0 ? (
-        <div
-          className="absolute z-[73]"
-          style={{
-            left: `${Number(
-              cell.overlay_button_x_percent ?? fallbackButtonX,
-            )}%`,
-            top: `${Number(
+      {buttonsVisible && buttons.length > 0
+        ? buttons.map((button, index) => {
+            const style =
+              cell.overlay_button_group_style ??
+              button.style ??
+              "rounded";
+            const backgroundColor =
+              cell.overlay_button_group_color ??
+              button.background_color ??
+              "#111827";
+            const textColor =
+              cell.overlay_button_group_text_color ??
+              button.text_color ??
+              "#ffffff";
+
+            const radius =
+              style === "square"
+                ? "4px"
+                : style === "pill"
+                  ? "9999px"
+                  : "12px";
+
+            const href = buildOverlayButtonUrl(button, business.id);
+
+            const defaultX = Math.max(
+              5,
+              Math.min(
+                95,
+                Number(cell.overlay_button_x_percent ?? fallbackButtonX) +
+                  (index - (buttons.length - 1) / 2) * 18,
+              ),
+            );
+            const defaultY = Number(
               cell.overlay_button_y_percent ?? fallbackButtonY,
-            )}%`,
-            transform: "translate(-50%, -50%)",
-            pointerEvents: "auto",
-            cursor: canDrag
-              ? draggingKind === "button"
-                ? "grabbing"
-                : "grab"
-              : "default",
-            touchAction: canDrag ? "none" : "auto",
-            userSelect: "none",
-          }}
-          onPointerDown={(event) => startDrag(event, "button")}
-          onPointerMove={moveDrag}
-          onPointerUp={stopDrag}
-          onPointerCancel={stopDrag}
-          title={canDrag ? "드래그해서 버튼 위치 이동" : undefined}
-        >
-          <div
-            className={`relative flex max-w-[96vw] ${
-              (cell.overlay_button_direction ?? "row") === "row"
-                ? "flex-row flex-wrap"
-                : "flex-col"
-            }`}
-            style={{
-              gap: `${cell.overlay_button_gap ?? 10}px`,
-              outline:
-                draggingKind === "button"
-                  ? "2px solid #2563eb"
-                  : "none",
-              outlineOffset: "3px",
-              borderRadius: "10px",
-            }}
-          >
-            {canDrag ? (
-              <span
-                className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white shadow"
+            );
+
+            const mobileAutoX =
+              buttons.length <= 1
+                ? 50
+                : buttons.length === 2
+                  ? index === 0
+                    ? 28
+                    : 72
+                  : 15 + (70 / Math.max(1, buttons.length - 1)) * index;
+
+            const buttonX =
+              previewDevice === "mobile"
+                ? Number.isFinite(Number(button.mobile_x_percent))
+                  ? Number(button.mobile_x_percent)
+                  : mobileAutoX
+                : Number.isFinite(Number(button.x_percent))
+                  ? Number(button.x_percent)
+                  : defaultX;
+
+            const buttonY =
+              previewDevice === "mobile"
+                ? Number.isFinite(Number(button.mobile_y_percent))
+                  ? Number(button.mobile_y_percent)
+                  : Math.min(90, Math.max(10, defaultY))
+                : Number.isFinite(Number(button.y_percent))
+                  ? Number(button.y_percent)
+                  : defaultY;
+
+            return (
+              <div
+                key={button.id}
+                className="absolute z-[73]"
+                style={{
+                  left: getButtonLeftStyle(buttonX),
+                  top: `${buttonY}%`,
+                  transform: "translate(-50%, -50%)",
+                  pointerEvents: "auto",
+                  cursor: canDrag
+                    ? draggingKind === "button" &&
+                      dragRef.current?.buttonId === button.id
+                      ? "grabbing"
+                      : "grab"
+                    : "default",
+                  touchAction: canDrag ? "none" : "auto",
+                  userSelect: "none",
+                }}
+                onPointerDown={(event) =>
+                  startDrag(event, "button", button.id)
+                }
+                title={
+                  canDrag
+                    ? `${button.text || "버튼"} · 따로 드래그해서 이동`
+                    : undefined
+                }
               >
-                잡고 이동
-              </span>
-            ) : null}
-            {buttons.map((button) => {
-              const style =
-                cell.overlay_button_group_style ??
-                button.style ??
-                "rounded";
-              const backgroundColor =
-                cell.overlay_button_group_color ??
-                button.background_color ??
-                "#111827";
-              const textColor =
-                cell.overlay_button_group_text_color ??
-                button.text_color ??
-                "#ffffff";
+                {canDrag ? (
+                  <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-black text-white shadow">
+                    따로 이동
+                  </span>
+                ) : null}
 
-              const radius =
-                style === "square"
-                  ? "4px"
-                  : style === "pill"
-                    ? "9999px"
-                    : "12px";
-
-              const href = buildOverlayButtonUrl(
-                button,
-                business.id,
-              );
-
-              return (
                 <a
-                  key={button.id}
                   href={href || "#"}
                   draggable={false}
                   onDragStart={(event) => event.preventDefault()}
-                  onPointerDown={(event) => {
-                    if (canDrag) {
-                      // 버튼 자체를 잡아도 부모 드래그가 바로 시작되게 합니다.
-                      event.preventDefault();
-                    }
-                  }}
                   onClick={(event) => {
-                    // 편집 중에는 링크 이동을 막습니다.
-                    if (canDrag) {
-                      event.preventDefault();
-                    }
+                    if (canDrag) event.preventDefault();
                     event.stopPropagation();
                   }}
                   className="inline-flex shrink-0 items-center justify-center whitespace-nowrap px-4 font-black shadow-lg"
                   style={{
                     width: `${Math.max(
                       70,
-                      Number(cell.overlay_button_width ?? 140),
+                      previewDevice === "mobile"
+                        ? Math.min(
+                            130,
+                            Number(cell.overlay_button_width ?? 120),
+                          )
+                        : Number(cell.overlay_button_width ?? 140),
                     )}px`,
                     height: `${Math.max(
                       20,
@@ -13003,17 +14127,22 @@ function UniversalOverlayButtons({
                     )}px`,
                   }}
                 >
-                  {previewDevice === "mobile"
-                    ? String(button.mobile_text || "").trim() ||
-                      button.text ||
-                      "버튼"
-                    : button.text || "버튼"}
+                  {String(
+                    button.url || button.link_value || "",
+                  )
+                    .toLowerCase()
+                    .startsWith("tel:")
+                    ? button.text || "CALL"
+                    : previewDevice === "mobile"
+                      ? String(button.mobile_text || "").trim() ||
+                        button.text ||
+                        "버튼"
+                      : button.text || "버튼"}
                 </a>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+              </div>
+            );
+          })
+        : null}
     </div>
   );
 }
@@ -13154,12 +14283,12 @@ function ReadOnlyCellContent({
   return (
     <div
       className={`relative flex w-full min-h-0 min-w-0 ${
-        (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu") ||
+        (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form") ||
         (previewDevice === "mobile" && cell.display_mode === "auto-slider")
           ? "h-auto"
           : "h-full"
       } ${
-        (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
+        (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
           ? "overflow-visible"
           : "overflow-hidden"
       }`}
@@ -13617,7 +14746,7 @@ function ReadOnlyGrid({
   // 저장된 레이어 height_px가 더 커도 빈 공간을 만들지 않습니다.
   const autoRestaurantMenu =
     area !== "header" &&
-    (gridContainsDisplayMode(deviceGrid, "restaurant-menu") || gridContainsDisplayMode(deviceGrid, "catering-menu"));
+    (gridContainsDisplayMode(deviceGrid, "restaurant-menu") || gridContainsDisplayMode(deviceGrid, "catering-menu") || gridContainsDisplayMode(deviceGrid, "catering-request-form"));
   const autoSliderCells = getCellsByDisplayMode(
     deviceGrid.cells,
     "auto-slider",
@@ -13739,7 +14868,7 @@ function ReadOnlyGrid({
               : autoContentHeight
                 ? "flex overflow-visible"
                 : autoRestaurantMenu &&
-                    (cellContainsDisplayMode(cell, "restaurant-menu") || cellContainsDisplayMode(cell, "catering-menu"))
+                    (cellContainsDisplayMode(cell, "restaurant-menu") || cellContainsDisplayMode(cell, "catering-menu") || cellContainsDisplayMode(cell, "catering-request-form"))
                   ? "flex h-auto overflow-visible"
                   : autoMobileBusinessHours &&
                       cellContainsDisplayMode(cell, "business-hours")
@@ -13803,7 +14932,7 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
+                : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
                   ? "transparent"
                   : cell.type === "image"
                     ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
@@ -13813,7 +14942,7 @@ function ReadOnlyGrid({
               cell.child_cells?.length ||
               cell.type === "image" ||
               cellContainsDisplayMode(cell, "auto-slider") ||
-              (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu") ||
+              (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form") ||
               (cell.type === "title" &&
                 (cell.display_mode === "background-image" ||
                   cell.display_mode === "service-card"))
@@ -14134,6 +15263,7 @@ function EditableCellContent({ cell, selectedCellId, onSelect, onUpdateCell, bus
         onResizeSizes={onResizeNestedSizes}
         onResizeHeight={onResizeNestedHeight}
         onMergeNested={onMergeNested}
+        onUpdateCell={onUpdateCell}
       />
     );
   }
@@ -14179,6 +15309,7 @@ function NestedEditableCellsV2({
   onResizeSizes,
   onResizeHeight,
   onMergeNested,
+  onUpdateCell,
 }: {
   parentCell: GridCell;
   selectedCellId?: string;
@@ -14191,6 +15322,7 @@ function NestedEditableCellsV2({
   onResizeSizes?: (parentCellId: string, sizes: Record<string, number>) => void;
   onResizeHeight?: (parentCellId: string, heightPx: number) => void;
   onMergeNested?: (cellId: string) => void;
+  onUpdateCell?: (cellId: string, patch: Partial<GridCell>) => void;
 }) {
   const children = parentCell.child_cells || [];
   const originalDirection =
@@ -14703,6 +15835,7 @@ function NestedEditableCellsV2({
               onResizeNestedSizes={onResizeSizes}
               onResizeNestedHeight={onResizeHeight}
               onMergeNested={onMergeNested}
+              onUpdateCell={onUpdateCell}
             />
 
             {renderedChild.type === "empty" &&
@@ -14927,7 +16060,7 @@ function EditableGrid({
 
   const autoRestaurantMenu =
     area !== "header" &&
-    (gridContainsDisplayMode(deviceGrid, "restaurant-menu") || gridContainsDisplayMode(deviceGrid, "catering-menu"));
+    (gridContainsDisplayMode(deviceGrid, "restaurant-menu") || gridContainsDisplayMode(deviceGrid, "catering-menu") || gridContainsDisplayMode(deviceGrid, "catering-request-form"));
 
   const autoSliderCells = getCellsByDisplayMode(
     deviceGrid.cells,
@@ -15148,14 +16281,14 @@ function EditableGrid({
                 (autoMobileBusinessHours &&
                   cellContainsDisplayMode(cell, "business-hours")) ||
                 (autoRestaurantMenu &&
-                  (cellContainsDisplayMode(cell, "restaurant-menu") || cellContainsDisplayMode(cell, "catering-menu")))
+                  (cellContainsDisplayMode(cell, "restaurant-menu") || cellContainsDisplayMode(cell, "catering-menu") || cellContainsDisplayMode(cell, "catering-request-form")))
                   ? "h-auto min-h-0"
                   : "h-full min-h-0"
               } w-full overflow-visible transition ${
                 selected
                   ? isLogo
                     ? "bg-red-50/20 ring-2 ring-inset ring-red-600"
-                    : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
+                    : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
                       ? "bg-transparent ring-2 ring-inset ring-blue-600"
                       : "bg-blue-50/15 ring-2 ring-inset ring-blue-600"
                   : cellContainsDisplayMode(cell, "auto-slider")
@@ -15182,7 +16315,7 @@ function EditableGrid({
                 background:
                   area === "header"
                     ? "transparent"
-                    : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
+                    : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
                       ? "transparent"
                       : normalizeVisibleBackgroundColor(cell.background_color) ||
                         gridFrameBackgroundColor,
@@ -15191,7 +16324,7 @@ function EditableGrid({
                   cell.type === "image" ||
                   cellContainsDisplayMode(cell, "auto-slider") ||
                   cell.display_mode === "map-section" ||
-                  (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu") ||
+                  (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form") ||
                   (cell.type === "title" &&
                     (cell.display_mode === "background-image" ||
                       cell.display_mode === "service-card"))
@@ -16953,6 +18086,19 @@ function CellPreview({
             businessId={business.id}
             businessPhone={business.phone == null ? null : String(business.phone)}
             compact={previewDevice === "mobile"}
+          />
+        </div>
+      );
+    }
+
+    if (cell.display_mode === "catering-request-form") {
+      return (
+        <div className="relative h-auto min-h-0 w-full overflow-visible rounded-[10px] bg-white">
+          <CateringRequestFormDisplay
+            businessId={business.id}
+            businessName={business.name}
+            compact={previewDevice === "mobile"}
+            editorPreview={true}
           />
         </div>
       );
@@ -23535,6 +24681,35 @@ function RightPanel(props: {
                   </span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        type: "title",
+                        display_mode: "catering-request-form",
+                        text: "Catering Request Form",
+                        background_color: "#ffffff",
+                        color: "#111827",
+                      },
+                      selection.layoutId,
+                    );
+                    setCellTypePickerOpen(false);
+                  }}
+                  className={`rounded-xl border p-2 text-center ${
+                    selectedCell.display_mode === "catering-request-form"
+                      ? "border-blue-600 bg-blue-50 text-blue-800"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50"
+                  }`}
+                >
+                  <span className="block text-xl">📝</span>
+                  <span className="mt-1 block text-[11px] font-black leading-tight">
+                    Catering Request Form
+                  </span>
+                </button>
+
                 {CELL_TYPES.map((entry) => (
                   <button
                     key={entry.value}
@@ -23587,6 +24762,71 @@ function RightPanel(props: {
                             ...(currentType === "image"
                               ? { image_overlay_enabled: true }
                               : {}),
+                          },
+                          selection.layoutId,
+                        );
+
+                        setCellTypePickerOpen(false);
+                        return;
+                      }
+
+                      // 전화도 내용이 있는 셀에 추가할 수 있게 합니다.
+                      // 기존 제목/글을 지우지 않고, 전화 연결용 오버레이 버튼으로 추가합니다.
+                      if (nextType === "phone" && currentType !== "empty") {
+                        const currentButtons =
+                          Array.isArray(selectedCell.overlay_buttons) &&
+                          selectedCell.overlay_buttons.length > 0
+                            ? normalizeOverlayButtons(selectedCell)
+                            : [];
+
+                        const businessPhone = getBusinessContactValue(
+                          business,
+                          ["phone", "phone_number", "telephone"],
+                        );
+
+                        const phoneText = "Call";
+
+                        const phoneHref = businessPhone
+                          ? normalizePhoneHref(String(businessPhone))
+                          : "tel:";
+
+                        const phoneButton: OverlayButton = {
+                          ...createOverlayButton(currentButtons.length),
+                          text: phoneText,
+                          mobile_text: phoneText,
+                          link_type: "external",
+                          link_value: phoneHref,
+                          url: phoneHref,
+                          background_color: "#111827",
+                          text_color: "#ffffff",
+                        };
+
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          {
+                            overlay_buttons: [
+                              ...currentButtons,
+                              phoneButton,
+                            ],
+                            overlay_buttons_visible: true,
+                            overlay_button_horizontal:
+                              selectedCell.overlay_button_horizontal ??
+                              "center",
+                            overlay_button_vertical:
+                              selectedCell.overlay_button_vertical ??
+                              "bottom",
+                            overlay_button_direction:
+                              selectedCell.overlay_button_direction ??
+                              "row",
+                            overlay_button_gap:
+                              selectedCell.overlay_button_gap ?? 10,
+                            overlay_button_x_percent:
+                              selectedCell.overlay_button_x_percent ??
+                              50,
+                            overlay_button_y_percent:
+                              selectedCell.overlay_button_y_percent ??
+                              80,
                           },
                           selection.layoutId,
                         );
@@ -23890,8 +25130,19 @@ function RightPanel(props: {
                                   item.id === button.id
                                     ? {
                                         ...item,
-                                        text: event.target
-                                          .value,
+                                        text: event.target.value,
+                                        ...(String(
+                                          item.url ||
+                                            item.link_value ||
+                                            "",
+                                        )
+                                          .toLowerCase()
+                                          .startsWith("tel:")
+                                          ? {
+                                              mobile_text:
+                                                event.target.value,
+                                            }
+                                          : {}),
                                       }
                                     : item,
                                 ),
@@ -23903,36 +25154,267 @@ function RightPanel(props: {
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
                       />
 
-                      <input
-                        value={button.url || ""}
-                        onChange={(event) =>
-                          props.onUpdateCell(
-                            area,
-                            selectedCell.id,
-                            {
-                              overlay_buttons:
-                                normalizeOverlayButtons(
-                                  selectedCell,
-                                ).map((item) =>
-                                  item.id === button.id
-                                    ? {
-                                        ...item,
-                                        url: event.target
-                                          .value,
-                                        link_type:
-                                          "external",
-                                        link_value:
-                                          event.target.value,
-                                      }
-                                    : item,
+                      {String(button.url || button.link_value || "")
+                        .toLowerCase()
+                        .startsWith("tel:") ? (
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600">
+                          전화 버튼 · 등록된 전화번호로 연결됩니다.
+                        </div>
+                      ) : (
+                        <>
+                          <label className="text-[11px] font-black text-gray-700">
+                            연결할 PAGE
+                            <select
+                              value={
+                                button.link_type === "page"
+                                  ? slugifyMenuValue(button.link_value || "")
+                                  : ""
+                              }
+                              onChange={(event) => {
+                                const pageSlug = event.target.value;
+
+                                props.onUpdateCell(
+                                  area,
+                                  selectedCell.id,
+                                  {
+                                    overlay_buttons:
+                                      normalizeOverlayButtons(
+                                        selectedCell,
+                                      ).map((item) =>
+                                        item.id === button.id
+                                          ? {
+                                              ...item,
+                                              link_type: "page",
+                                              link_value: pageSlug,
+                                              url: "",
+                                            }
+                                          : item,
+                                      ),
+                                  },
+                                  selection.layoutId,
+                                );
+                              }}
+                              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-bold"
+                            >
+                              <option value="">PAGE 선택</option>
+                              {props.sections
+                                .filter(
+                                  (section) =>
+                                    section.content?.page_type === "link-page" &&
+                                    section.is_visible !== false,
+                                )
+                                .sort(
+                                  (a, b) =>
+                                    Number(a.sort_order) -
+                                    Number(b.sort_order),
+                                )
+                                .map((section) => {
+                                  const pageSlug = slugifyMenuValue(
+                                    String(
+                                      section.content?.page_slug ||
+                                        section.title ||
+                                        "",
+                                    ),
+                                  );
+
+                                  if (!pageSlug) return null;
+
+                                  return (
+                                    <option
+                                      key={`overlay-page-${section.id}`}
+                                      value={pageSlug}
+                                    >
+                                      {String(
+                                        section.title ||
+                                          section.content?.page_slug ||
+                                          `PAGE ${section.id}`,
+                                      )}
+                                    </option>
+                                  );
+                                })}
+                            </select>
+                          </label>
+
+                          <label className="text-[11px] font-black text-gray-700">
+                            카테고리
+                            <select
+                              value={sanitizeCateringCategoryQuery(
+                                button.category_query,
+                              )}
+                              onChange={(event) =>
+                                props.onUpdateCell(
+                                  area,
+                                  selectedCell.id,
+                                  {
+                                    overlay_buttons:
+                                      normalizeOverlayButtons(
+                                        selectedCell,
+                                      ).map((item) =>
+                                        item.id === button.id
+                                          ? {
+                                              ...item,
+                                              category_query:
+                                                event.target.value,
+                                            }
+                                          : item,
+                                      ),
+                                  },
+                                  selection.layoutId,
+                                )
+                              }
+                              className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold"
+                            >
+                              <option value="">카테고리 선택</option>
+                              {CATERING_CATEGORY_PRESETS.map((category) => (
+                                <option key={category} value={category}>
+                                  {category}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          {button.link_type === "page" &&
+                          String(button.link_value || "").trim() ? (
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-bold leading-5 text-blue-800">
+                              자동 링크:{" "}
+                              {buildOverlayButtonUrl(
+                                button,
+                                props.businessId,
+                              )}
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <label className="text-[11px] font-black text-gray-700">
+                          이 버튼 가로 위치 (%)
+                          <input
+                            type="number"
+                            min="2"
+                            max="98"
+                            step="0.5"
+                            value={Number(
+                              button.x_percent ??
+                                Math.max(
+                                  5,
+                                  Math.min(
+                                    95,
+                                    Number(
+                                      selectedCell.overlay_button_x_percent ??
+                                        50,
+                                    ) +
+                                      (index -
+                                        (normalizeOverlayButtons(selectedCell)
+                                          .length -
+                                          1) /
+                                          2) *
+                                        18,
+                                  ),
                                 ),
-                            },
-                            selection.layoutId,
-                          )
-                        }
-                        placeholder="링크 주소 또는 /페이지"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                      />
+                            )}
+                            onChange={(event) =>
+                              props.onUpdateCell(
+                                area,
+                                selectedCell.id,
+                                {
+                                  overlay_buttons:
+                                    normalizeOverlayButtons(
+                                      selectedCell,
+                                    ).map((item) =>
+                                      item.id === button.id
+                                        ? device === "mobile"
+                                          ? {
+                                              ...item,
+                                              mobile_x_percent: Math.max(
+                                                2,
+                                                Math.min(
+                                                  98,
+                                                  Number(
+                                                    event.target.value || 50,
+                                                  ),
+                                                ),
+                                              ),
+                                            }
+                                          : {
+                                              ...item,
+                                              x_percent: Math.max(
+                                                2,
+                                                Math.min(
+                                                  98,
+                                                  Number(
+                                                    event.target.value || 50,
+                                                  ),
+                                                ),
+                                              ),
+                                            }
+                                        : item,
+                                    ),
+                                },
+                                selection.layoutId,
+                              )
+                            }
+                            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
+                          />
+                        </label>
+
+                        <label className="text-[11px] font-black text-gray-700">
+                          이 버튼 세로 위치 (%)
+                          <input
+                            type="number"
+                            min="2"
+                            max="98"
+                            step="0.5"
+                            value={Number(
+                              button.y_percent ??
+                                selectedCell.overlay_button_y_percent ??
+                                80,
+                            )}
+                            onChange={(event) =>
+                              props.onUpdateCell(
+                                area,
+                                selectedCell.id,
+                                {
+                                  overlay_buttons:
+                                    normalizeOverlayButtons(
+                                      selectedCell,
+                                    ).map((item) =>
+                                      item.id === button.id
+                                        ? device === "mobile"
+                                          ? {
+                                              ...item,
+                                              mobile_y_percent: Math.max(
+                                                2,
+                                                Math.min(
+                                                  98,
+                                                  Number(
+                                                    event.target.value || 80,
+                                                  ),
+                                                ),
+                                              ),
+                                            }
+                                          : {
+                                              ...item,
+                                              y_percent: Math.max(
+                                                2,
+                                                Math.min(
+                                                  98,
+                                                  Number(
+                                                    event.target.value || 80,
+                                                  ),
+                                                ),
+                                              ),
+                                            }
+                                        : item,
+                                    ),
+                                },
+                                selection.layoutId,
+                              )
+                            }
+                            className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
                 ),
@@ -24014,6 +25496,167 @@ function RightPanel(props: {
                   }
                 />
               </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <Field label="버튼 넓이">
+                  <div className="space-y-2">
+                    <input
+                      type="range"
+                      min="60"
+                      max="500"
+                      step="1"
+                      value={Math.max(
+                        60,
+                        Number(selectedCell.overlay_button_width ?? 140),
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          {
+                            overlay_button_width: Number(event.target.value),
+                          },
+                          selection.layoutId,
+                        )
+                      }
+                      className="w-full"
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="60"
+                        max="500"
+                        value={Math.max(
+                          60,
+                          Number(selectedCell.overlay_button_width ?? 140),
+                        )}
+                        onChange={(event) =>
+                          props.onUpdateCell(
+                            area,
+                            selectedCell.id,
+                            {
+                              overlay_button_width: Math.max(
+                                60,
+                                Math.min(500, Number(event.target.value || 60)),
+                              ),
+                            },
+                            selection.layoutId,
+                          )
+                        }
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                      />
+                      <span className="text-xs font-black text-gray-500">px</span>
+                    </div>
+                  </div>
+                </Field>
+
+                <Field label="버튼 높이">
+                  <div className="space-y-2">
+                    <input
+                      type="range"
+                      min="24"
+                      max="160"
+                      step="1"
+                      value={Math.max(
+                        24,
+                        Number(selectedCell.overlay_button_height ?? 44),
+                      )}
+                      onChange={(event) =>
+                        props.onUpdateCell(
+                          area,
+                          selectedCell.id,
+                          {
+                            overlay_button_height: Number(event.target.value),
+                          },
+                          selection.layoutId,
+                        )
+                      }
+                      className="w-full"
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="24"
+                        max="160"
+                        value={Math.max(
+                          24,
+                          Number(selectedCell.overlay_button_height ?? 44),
+                        )}
+                        onChange={(event) =>
+                          props.onUpdateCell(
+                            area,
+                            selectedCell.id,
+                            {
+                              overlay_button_height: Math.max(
+                                24,
+                                Math.min(160, Number(event.target.value || 24)),
+                              ),
+                            },
+                            selection.layoutId,
+                          )
+                        }
+                        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                      />
+                      <span className="text-xs font-black text-gray-500">px</span>
+                    </div>
+                  </div>
+                </Field>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <Field label="버튼 글자 크기">
+                  <input
+                    type="number"
+                    min="8"
+                    max="72"
+                    value={Math.max(
+                      8,
+                      Number(selectedCell.overlay_button_font_size ?? 16),
+                    )}
+                    onChange={(event) =>
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        {
+                          overlay_button_font_size: Math.max(
+                            8,
+                            Math.min(72, Number(event.target.value || 8)),
+                          ),
+                        },
+                        selection.layoutId,
+                      )
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                  />
+                </Field>
+
+                <Field label="버튼 모양">
+                  <select
+                    value={
+                      selectedCell.overlay_button_group_style ??
+                      "rounded"
+                    }
+                    onChange={(event) =>
+                      props.onUpdateCell(
+                        area,
+                        selectedCell.id,
+                        {
+                          overlay_button_group_style:
+                            event.target
+                              .value as GridCell["overlay_button_group_style"],
+                        },
+                        selection.layoutId,
+                      )
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-bold"
+                  >
+                    <option value="rounded">둥근 사각형</option>
+                    <option value="pill">Pill</option>
+                    <option value="square">사각형</option>
+                    <option value="outline">외곽선</option>
+                  </select>
+                </Field>
+              </div>
             </div>
 
             <div className="mt-4 flex items-center justify-between rounded-xl bg-white px-3 py-2">
@@ -24054,6 +25697,12 @@ function RightPanel(props: {
                         overlay_button_horizontal:
                           event.target
                             .value as GridCell["overlay_button_horizontal"],
+                        overlay_button_x_percent:
+                          event.target.value === "left"
+                            ? 15
+                            : event.target.value === "right"
+                              ? 85
+                              : 50,
                       },
                       selection.layoutId,
                     )
@@ -24080,6 +25729,12 @@ function RightPanel(props: {
                         overlay_button_vertical:
                           event.target
                             .value as GridCell["overlay_button_vertical"],
+                        overlay_button_y_percent:
+                          event.target.value === "top"
+                            ? 15
+                            : event.target.value === "middle"
+                              ? 50
+                              : 85,
                       },
                       selection.layoutId,
                     )
@@ -30314,7 +31969,8 @@ function TitleCellEditor({
     | "service-card"
     | "business-hours"
     | "restaurant-menu"
-    | "catering-menu";
+    | "catering-menu"
+    | "catering-request-form";
 
   const mode: SectionMode =
     cell.display_mode === "background-image" ||
@@ -30325,7 +31981,7 @@ function TitleCellEditor({
     cell.display_mode === "map-section" ||
     cell.display_mode === "service-card" ||
     cell.display_mode === "business-hours" ||
-    (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu")
+    (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
       ? cell.display_mode
       : "text";
 
@@ -30600,6 +32256,16 @@ function TitleCellEditor({
           cell.restaurant_menu_pickup_enabled ?? false,
         restaurant_menu_delivery_enabled:
           cell.restaurant_menu_delivery_enabled ?? false,
+      });
+      return;
+    }
+
+    if (nextMode === "catering-request-form") {
+      onUpdate({
+        display_mode: "catering-request-form",
+        text: "Catering Request Form",
+        background_color: "#ffffff",
+        color: "#111827",
       });
       return;
     }
@@ -32265,6 +33931,18 @@ function TitleCellEditor({
                                 horizontal as GridCell["overlay_button_horizontal"],
                               overlay_button_vertical:
                                 vertical as GridCell["overlay_button_vertical"],
+                              overlay_button_x_percent:
+                                horizontal === "left"
+                                  ? 15
+                                  : horizontal === "right"
+                                    ? 85
+                                    : 50,
+                              overlay_button_y_percent:
+                                vertical === "top"
+                                  ? 15
+                                  : vertical === "middle"
+                                    ? 50
+                                    : 85,
                             })
                           }
                           className={`rounded-xl border px-2 py-2 text-[11px] font-black ${

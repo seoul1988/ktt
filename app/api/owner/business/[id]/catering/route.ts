@@ -11,7 +11,7 @@ function getSupabase() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    throw new Error("Supabase 환경변수가 없습니다.");
+    throw new Error("Supabase environment variables are missing.");
   }
 
   return createClient(url, key, {
@@ -27,7 +27,7 @@ async function getBusinessId(context: RouteContext) {
   const businessId = Number(id);
 
   if (!Number.isInteger(businessId) || businessId <= 0) {
-    throw new Error("잘못된 business id 입니다.");
+    throw new Error("Invalid business ID.");
   }
 
   await requireBusinessManagementAccess(businessId);
@@ -45,13 +45,13 @@ function normalizeItem(input: any, businessId: number) {
   ];
 
   if (!allowedPricingTypes.includes(pricingType)) {
-    throw new Error("잘못된 가격 방식입니다.");
+    throw new Error("Invalid pricing type.");
   }
 
   const name = String(input.name ?? "").trim();
 
   if (!name) {
-    throw new Error("메뉴 이름을 입력하세요.");
+    throw new Error("Enter a menu item name.");
   }
 
   return {
@@ -358,6 +358,9 @@ export async function GET(
           pickup_enabled: true,
           delivery_enabled: false,
           quote_enabled: true,
+          notification_email: null,
+          notification_phone: null,
+          sender_email: null,
         })
         .select("*")
         .single();
@@ -432,7 +435,7 @@ export async function GET(
         error:
           error instanceof Error
             ? error.message
-            : "캐터링 정보를 불러오지 못했습니다.",
+            : "Could not load catering information.",
       },
       { status: 500 },
     );
@@ -455,14 +458,14 @@ export async function PATCH(
 
       if (!Number.isInteger(categoryId) || categoryId <= 0) {
         return NextResponse.json(
-          { error: "수정할 카테고리 id가 없습니다." },
+          { error: "Category ID is required for updating." },
           { status: 400 },
         );
       }
 
       if (!name) {
         return NextResponse.json(
-          { error: "카테고리 이름을 입력하세요." },
+          { error: "Enter a category name." },
           { status: 400 },
         );
       }
@@ -483,7 +486,7 @@ export async function PATCH(
 
       if (duplicate) {
         return NextResponse.json(
-          { error: `"${name}" 카테고리는 이미 등록되어 있습니다.` },
+          { error: `Category "${name}" is already registered.` },
           { status: 409 },
         );
       }
@@ -515,33 +518,84 @@ export async function PATCH(
     if (body?.action === "settings") {
       const input = body.settings ?? {};
 
+      const currentResult = await supabase
+        .from("business_catering_settings")
+        .select("*")
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+      if (currentResult.error) {
+        throw currentResult.error;
+      }
+
+      const current = currentResult.data ?? {};
+
       const payload = {
         business_id: businessId,
-        is_enabled: Boolean(input.is_enabled),
+        is_enabled:
+          typeof input.is_enabled === "boolean"
+            ? input.is_enabled
+            : Boolean(current.is_enabled),
         page_title:
-          typeof input.page_title === "string" &&
-          input.page_title.trim()
+          typeof input.page_title === "string" && input.page_title.trim()
             ? input.page_title.trim()
-            : "Catering",
+            : String(current.page_title || "Catering"),
         page_subtitle:
           typeof input.page_subtitle === "string"
             ? input.page_subtitle.trim() || null
-            : null,
+            : current.page_subtitle ?? null,
         minimum_order_amount: Math.max(
           0,
-          Number(input.minimum_order_amount ?? 0),
+          Number(
+            input.minimum_order_amount ??
+              current.minimum_order_amount ??
+              0,
+          ),
         ),
         minimum_order_people: Math.max(
           0,
-          Math.floor(Number(input.minimum_order_people ?? 0)),
+          Math.floor(
+            Number(
+              input.minimum_order_people ??
+                current.minimum_order_people ??
+                0,
+            ),
+          ),
         ),
         advance_notice_hours: Math.max(
           0,
-          Math.floor(Number(input.advance_notice_hours ?? 24)),
+          Math.floor(
+            Number(
+              input.advance_notice_hours ??
+                current.advance_notice_hours ??
+                24,
+            ),
+          ),
         ),
-        pickup_enabled: Boolean(input.pickup_enabled),
-        delivery_enabled: Boolean(input.delivery_enabled),
-        quote_enabled: Boolean(input.quote_enabled),
+        pickup_enabled:
+          typeof input.pickup_enabled === "boolean"
+            ? input.pickup_enabled
+            : Boolean(current.pickup_enabled),
+        delivery_enabled:
+          typeof input.delivery_enabled === "boolean"
+            ? input.delivery_enabled
+            : Boolean(current.delivery_enabled),
+        quote_enabled:
+          typeof input.quote_enabled === "boolean"
+            ? input.quote_enabled
+            : Boolean(current.quote_enabled),
+        notification_email:
+          typeof input.notification_email === "string"
+            ? input.notification_email.trim() || null
+            : current.notification_email ?? null,
+        notification_phone:
+          typeof input.notification_phone === "string"
+            ? input.notification_phone.trim() || null
+            : current.notification_phone ?? null,
+        sender_email:
+          typeof input.sender_email === "string"
+            ? input.sender_email.trim() || null
+            : current.sender_email ?? null,
       };
 
       const { data, error } = await supabase
@@ -554,7 +608,14 @@ export async function PATCH(
 
       if (error) throw error;
 
-      return NextResponse.json({ settings: data });
+      return NextResponse.json({
+        settings: data,
+        saved: {
+          notification_email: data.notification_email ?? null,
+          notification_phone: data.notification_phone ?? null,
+          sender_email: data.sender_email ?? null,
+        },
+      });
     }
 
     if (body?.action === "item") {
@@ -562,7 +623,7 @@ export async function PATCH(
 
       if (!Number.isInteger(itemId) || itemId <= 0) {
         return NextResponse.json(
-          { error: "수정할 메뉴 id가 없습니다." },
+          { error: "Menu item ID is required for updating." },
           { status: 400 },
         );
       }
@@ -610,7 +671,7 @@ export async function PATCH(
     }
 
     return NextResponse.json(
-      { error: "지원하지 않는 작업입니다." },
+      { error: "Unsupported action." },
       { status: 400 },
     );
   } catch (error) {
@@ -621,7 +682,7 @@ export async function PATCH(
         error:
           error instanceof Error
             ? error.message
-            : "캐터링 정보를 저장하지 못했습니다.",
+            : "Could not save catering information.",
       },
       { status: 500 },
     );
@@ -644,7 +705,7 @@ export async function POST(
 
       if (!name) {
         return NextResponse.json(
-          { error: "카테고리 이름을 입력하세요." },
+          { error: "Enter a category name." },
           { status: 400 },
         );
       }
@@ -667,7 +728,7 @@ export async function POST(
 
       if (duplicate) {
         return NextResponse.json(
-          { error: `"${name}" 카테고리는 이미 등록되어 있습니다.` },
+          { error: `Category "${name}" is already registered.` },
           { status: 409 },
         );
       }
@@ -787,7 +848,7 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { error: "지원하지 않는 작업입니다." },
+      { error: "Unsupported action." },
       { status: 400 },
     );
   } catch (error) {
@@ -798,7 +859,7 @@ export async function POST(
         error:
           error instanceof Error
             ? error.message
-            : "캐터링 정보를 저장하지 못했습니다.",
+            : "Could not save catering information.",
       },
       { status: 500 },
     );
@@ -821,7 +882,7 @@ export async function DELETE(
 
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json(
-        { error: "잘못된 id 입니다." },
+        { error: "Invalid ID." },
         { status: 400 },
       );
     }
@@ -918,7 +979,7 @@ export async function DELETE(
     }
 
     return NextResponse.json(
-      { error: "지원하지 않는 삭제 작업입니다." },
+      { error: "Unsupported delete action." },
       { status: 400 },
     );
   } catch (error) {
@@ -929,7 +990,7 @@ export async function DELETE(
         error:
           error instanceof Error
             ? error.message
-            : "삭제하지 못했습니다.",
+            : "Could not delete the requested record.",
       },
       { status: 500 },
     );
