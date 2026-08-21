@@ -25323,7 +25323,7 @@ function RightPanel(props: {
                                       selectedCell,
                                     ).map((item) =>
                                       item.id === button.id
-                                        ? device === "mobile"
+                                        ? props.editorDevice === "mobile"
                                           ? {
                                               ...item,
                                               mobile_x_percent: Math.max(
@@ -25380,7 +25380,7 @@ function RightPanel(props: {
                                       selectedCell,
                                     ).map((item) =>
                                       item.id === button.id
-                                        ? device === "mobile"
+                                        ? props.editorDevice === "mobile"
                                           ? {
                                               ...item,
                                               mobile_y_percent: Math.max(
