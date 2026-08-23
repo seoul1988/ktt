@@ -29,41 +29,75 @@ type FailedBusiness = {
   placeId?: string;
 };
 
-const supabaseUrl = process.env.SUPABASE_URL?.trim();
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-const googleKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
+function requireEnv(name: string): string {
+  const value = process.env[name]?.trim();
 
-if (!supabaseUrl) throw new Error("SUPABASE_URL is missing");
-if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing");
-if (!googleKey) throw new Error("GOOGLE_PLACES_API_KEY is missing");
+  if (!value) {
+    throw new Error(`${name} is missing`);
+  }
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+  return value;
+}
 
-async function fetchJson<T>(url: string, timeoutMs = 20000): Promise<T> {
+const supabaseUrl = requireEnv("SUPABASE_URL");
+
+const serviceRoleKey = requireEnv(
+  "SUPABASE_SERVICE_ROLE_KEY",
+);
+
+const googleKey = requireEnv(
+  "GOOGLE_PLACES_API_KEY",
+);
+
+const supabase = createClient(
+  supabaseUrl,
+  serviceRoleKey,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  },
+);
+
+async function fetchJson<T>(
+  url: string,
+  timeoutMs = 20000,
+): Promise<T> {
   const response = await fetch(url, {
     method: "GET",
     signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
-    throw new Error(`Google API HTTP error: ${response.status}`);
+    throw new Error(
+      `Google API HTTP error: ${response.status}`,
+    );
   }
 
   return (await response.json()) as T;
 }
 
 async function runGoogleRatingsUpdate() {
-  const { data: businesses, error } = await supabase
-    .from("businesses")
-    .select("id, name, address, city, google_place_id")
-    .order("id", { ascending: true });
+  const { data: businesses, error } =
+    await supabase
+      .from("businesses")
+      .select(
+        "id, name, address, city, google_place_id",
+      )
+      .order("id", {
+        ascending: true,
+      });
 
-  if (error) throw new Error(`Business load failed: ${error.message}`);
+  if (error) {
+    throw new Error(
+      `Business load failed: ${error.message}`,
+    );
+  }
 
   let updated = 0;
   let placeIdSaved = 0;
+
   const failed: FailedBusiness[] = [];
 
   for (const business of businesses || []) {
@@ -72,7 +106,12 @@ async function runGoogleRatingsUpdate() {
         ? business.google_place_id.trim()
         : "";
 
-    const searchText = [business.name, business.address, business.city, "NC"]
+    const searchText = [
+      business.name,
+      business.address,
+      business.city,
+      "NC",
+    ]
       .filter(Boolean)
       .map((value) => String(value).trim())
       .filter(Boolean)
@@ -85,8 +124,10 @@ async function runGoogleRatingsUpdate() {
             id: business.id,
             name: business.name,
             step: "find_place",
-            message: "Business name or address is missing.",
+            message:
+              "Business name or address is missing.",
           });
+
           continue;
         }
 
@@ -97,7 +138,10 @@ async function runGoogleRatingsUpdate() {
           "&fields=place_id,name,formatted_address" +
           `&key=${encodeURIComponent(googleKey)}`;
 
-        const findData = await fetchJson<GoogleFindPlaceResponse>(findUrl);
+        const findData =
+          await fetchJson<GoogleFindPlaceResponse>(
+            findUrl,
+          );
 
         if (findData.status !== "OK") {
           failed.push({
@@ -105,13 +149,18 @@ async function runGoogleRatingsUpdate() {
             name: business.name,
             step: "find_place",
             status: findData.status,
-            message: findData.error_message || "No place found",
+            message:
+              findData.error_message ||
+              "No place found",
             searchText,
           });
+
           continue;
         }
 
-        placeId = findData.candidates?.[0]?.place_id?.trim() || "";
+        placeId =
+          findData.candidates?.[0]?.place_id?.trim() ||
+          "";
 
         if (!placeId) {
           failed.push({
@@ -121,13 +170,17 @@ async function runGoogleRatingsUpdate() {
             message: "No place_id returned",
             searchText,
           });
+
           continue;
         }
 
-        const { error: placeUpdateError } = await supabase
-          .from("businesses")
-          .update({ google_place_id: placeId })
-          .eq("id", business.id);
+        const { error: placeUpdateError } =
+          await supabase
+            .from("businesses")
+            .update({
+              google_place_id: placeId,
+            })
+            .eq("id", business.id);
 
         if (placeUpdateError) {
           failed.push({
@@ -137,6 +190,7 @@ async function runGoogleRatingsUpdate() {
             message: placeUpdateError.message,
             placeId,
           });
+
           continue;
         }
 
@@ -149,7 +203,10 @@ async function runGoogleRatingsUpdate() {
         "&fields=rating,user_ratings_total" +
         `&key=${encodeURIComponent(googleKey)}`;
 
-      const detailData = await fetchJson<GooglePlaceDetailsResponse>(detailUrl);
+      const detailData =
+        await fetchJson<GooglePlaceDetailsResponse>(
+          detailUrl,
+        );
 
       if (detailData.status !== "OK") {
         failed.push({
@@ -157,16 +214,25 @@ async function runGoogleRatingsUpdate() {
           name: business.name,
           step: "details",
           status: detailData.status,
-          message: detailData.error_message || "No details found",
+          message:
+            detailData.error_message ||
+            "No details found",
           placeId,
         });
+
         continue;
       }
 
-      const rating = detailData.result?.rating;
-      const reviewCount = detailData.result?.user_ratings_total;
+      const rating =
+        detailData.result?.rating;
 
-      if (typeof rating !== "number" || !Number.isFinite(rating)) {
+      const reviewCount =
+        detailData.result?.user_ratings_total;
+
+      if (
+        typeof rating !== "number" ||
+        !Number.isFinite(rating)
+      ) {
         failed.push({
           id: business.id,
           name: business.name,
@@ -174,22 +240,26 @@ async function runGoogleRatingsUpdate() {
           message: "No valid rating returned",
           placeId,
         });
+
         continue;
       }
 
       const normalizedReviewCount =
-        typeof reviewCount === "number" && Number.isFinite(reviewCount)
+        typeof reviewCount === "number" &&
+        Number.isFinite(reviewCount)
           ? Math.max(0, Math.floor(reviewCount))
           : 0;
 
-      const { error: ratingUpdateError } = await supabase
-        .from("businesses")
-        .update({
-          rating,
-          review_count: normalizedReviewCount,
-          rating_updated: new Date().toISOString(),
-        })
-        .eq("id", business.id);
+      const { error: ratingUpdateError } =
+        await supabase
+          .from("businesses")
+          .update({
+            rating,
+            review_count: normalizedReviewCount,
+            rating_updated:
+              new Date().toISOString(),
+          })
+          .eq("id", business.id);
 
       if (ratingUpdateError) {
         failed.push({
@@ -199,6 +269,7 @@ async function runGoogleRatingsUpdate() {
           message: ratingUpdateError.message,
           placeId,
         });
+
         continue;
       }
 
@@ -208,7 +279,10 @@ async function runGoogleRatingsUpdate() {
         id: business.id,
         name: business.name,
         step: "unexpected",
-        message: error instanceof Error ? error.message : String(error),
+        message:
+          error instanceof Error
+            ? error.message
+            : String(error),
         searchText,
         placeId: placeId || undefined,
       });
@@ -233,6 +307,10 @@ async function runGoogleRatingsUpdate() {
 }
 
 runGoogleRatingsUpdate().catch((error) => {
-  console.error("Google ratings update failed:", error);
+  console.error(
+    "Google ratings update failed:",
+    error,
+  );
+
   process.exitCode = 1;
 });
