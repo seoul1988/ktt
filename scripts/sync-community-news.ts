@@ -1164,12 +1164,12 @@ async function replaceRegionNews(
 }
 
 async function main() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
     );
   }
 
@@ -1228,8 +1228,9 @@ async function main() {
     ).values(),
   ).slice(0, NEWS_LIMIT);
 
-  const translation = await translateUsNews(admin, rawUsItems);
-  const finalItems = [...koreaItems, ...translation.items];
+  // Argos 번역은 사용하지 않습니다. 미국 뉴스는 원문 그대로 저장합니다.
+  const usItems = rawUsItems;
+  const finalItems = [...koreaItems, ...usItems];
 
   const koreaSucceeded = successful.some(
     (result) => result.feed.region === "korea",
@@ -1244,11 +1245,11 @@ async function main() {
       : { saved: 0, deleted: 0, retained: 0 };
 
   const usResult =
-    usSucceeded && translation.items.length > 0
+    usSucceeded && usItems.length > 0
       ? await replaceRegionNews(admin, "us", finalItems)
       : { saved: 0, deleted: 0, retained: 0 };
 
-  const usSourceCounts = translation.items.reduce<Record<string, number>>(
+  const usSourceCounts = usItems.reduce<Record<string, number>>(
     (counts, item) => {
       counts[item.source] = (counts[item.source] ?? 0) + 1;
       return counts;
@@ -1256,7 +1257,7 @@ async function main() {
     {},
   );
 
-  if (koreaItems.length === 0 && translation.items.length === 0) {
+  if (koreaItems.length === 0 && usItems.length === 0) {
     throw new Error(
       `No news items were collected. Feed errors: ${JSON.stringify(feedErrors)}`,
     );
@@ -1274,14 +1275,12 @@ async function main() {
         },
         usSources: usSourceCounts,
         usImages: {
-          available: translation.items.filter((item) => Boolean(item.image_url))
-            .length,
-          missing: translation.items.filter((item) => !item.image_url).length,
+          available: usItems.filter((item) => Boolean(item.image_url)).length,
+          missing: usItems.filter((item) => !item.image_url).length,
         },
         translation: {
-          translated: translation.translated,
-          reused: translation.reused,
-          warning: translation.warning,
+          enabled: false,
+          note: "Argos translation disabled; US news saved in source language",
         },
         feedErrors,
         syncedAt: new Date().toISOString(),
