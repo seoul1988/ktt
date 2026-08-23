@@ -35,10 +35,8 @@ jobs:
 
       - name: Run Community News Sync Directly
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ARGOS_TRANSLATE_URL: ${{ secrets.ARGOS_TRANSLATE_URL }}
-          ARGOS_TRANSLATE_API_KEY: ${{ secrets.ARGOS_TRANSLATE_API_KEY }}
         run: npx --yes tsx scripts/sync-community-news.ts
 
   # =========================================================
@@ -65,7 +63,7 @@ jobs:
 
       - name: Run Today's Korea Directly
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx --yes tsx scripts/update-todays-korea.ts
 
@@ -127,4 +125,5 @@ jobs:
       - name: Google Ratings skipped
         if: steps.ratings-time.outputs.should_run != 'true'
         run: echo "Google Ratings was skipped."
+
 
