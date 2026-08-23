@@ -2,10 +2,8 @@ name: KTown Triangle Auto Update
 
 on:
   schedule:
-    # 매시간 7분에 실행
+    # 매시간 7분에 실행 (UTC 기준 cron)
     - cron: "7 * * * *"
-
-  # GitHub Actions 화면에서 수동 실행
   workflow_dispatch:
 
 concurrency:
@@ -15,87 +13,65 @@ concurrency:
 jobs:
   # =========================================================
   # RSS 한국·미국 뉴스
-  # 매 1시간
+  # GitHub Runner가 직접 처리 -> Vercel API 호출 없음
   # =========================================================
   community-news:
     name: Update Korea and US News
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
-      - name: Call Community News API
-        shell: bash
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Community News Sync Directly
         env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
-            exit 1
-          fi
-
-          echo "Updating Korea and US news..."
-
-          curl \
-            --fail-with-body \
-            --show-error \
-            --location \
-            --connect-timeout 15 \
-            --max-time 120 \
-            --retry 1 \
-            --retry-delay 5 \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/cron/sync-community-news"
-
-          echo ""
-          echo "Korea and US news update completed."
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ARGOS_TRANSLATE_URL: ${{ secrets.ARGOS_TRANSLATE_URL }}
+          ARGOS_TRANSLATE_API_KEY: ${{ secrets.ARGOS_TRANSLATE_API_KEY }}
+        run: npx --yes tsx scripts/sync-community-news.ts
 
   # =========================================================
   # Today's Korea
-  # 매 1시간
+  # GitHub Runner가 직접 처리 -> Vercel API 호출 없음
   # =========================================================
   todays-korea:
     name: Update Celebrity News
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
-      - name: Call Today's Korea API
-        shell: bash
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Today's Korea Directly
         env:
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
-            exit 1
-          fi
-
-          echo "Updating Today's Korea..."
-
-          curl \
-            --fail-with-body \
-            --show-error \
-            --location \
-            --connect-timeout 15 \
-            --max-time 120 \
-            --retry 1 \
-            --retry-delay 5 \
-            -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
-            "https://www.ktowntriangle.com/api/todays-korea/update"
-
-          echo ""
-          echo "Today's Korea update completed."
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npx --yes tsx scripts/update-todays-korea.ts
 
   # =========================================================
   # Google Ratings
-  # 매일 미국 동부시간 12:00 AM 시간대에 1번
-  # 현재 전체 Workflow가 :07에 실행되므로 실제 실행은 약 12:07 AM ET
-  # 수동 실행에서는 실행하지 않음
+  # 하루 1회만 실행. 현재 API 방식 유지.
   # =========================================================
   google-ratings:
     name: Update Google Ratings
@@ -136,8 +112,6 @@ jobs:
             exit 1
           fi
 
-          echo "Updating Google ratings..."
-
           curl \
             --fail-with-body \
             --show-error \
@@ -150,13 +124,7 @@ jobs:
             -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
             "https://www.ktowntriangle.com/api/update-google-ratings"
 
-          echo ""
-          echo "Google ratings update completed."
-
       - name: Google Ratings skipped
         if: steps.ratings-time.outputs.should_run != 'true'
-        shell: bash
-        run: |
-          echo "Google Ratings was skipped."
-          echo "Automatic update runs once daily around 12:07 AM Eastern Time."
-          echo "Manual workflow runs do not update Google Ratings."
+        run: echo "Google Ratings was skipped."
+
