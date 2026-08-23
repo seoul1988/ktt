@@ -1,0 +1,238 @@
+import { createClient } from "@supabase/supabase-js";
+
+type GoogleFindPlaceResponse = {
+  status?: string;
+  error_message?: string;
+  candidates?: Array<{
+    place_id?: string;
+    name?: string;
+    formatted_address?: string;
+  }>;
+};
+
+type GooglePlaceDetailsResponse = {
+  status?: string;
+  error_message?: string;
+  result?: {
+    rating?: number;
+    user_ratings_total?: number;
+  };
+};
+
+type FailedBusiness = {
+  id: string | number;
+  name: string | null;
+  step: string;
+  status?: string;
+  message: string;
+  searchText?: string;
+  placeId?: string;
+};
+
+const supabaseUrl = process.env.SUPABASE_URL?.trim();
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+const googleKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
+
+if (!supabaseUrl) throw new Error("SUPABASE_URL is missing");
+if (!serviceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY is missing");
+if (!googleKey) throw new Error("GOOGLE_PLACES_API_KEY is missing");
+
+const supabase = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+
+async function fetchJson<T>(url: string, timeoutMs = 20000): Promise<T> {
+  const response = await fetch(url, {
+    method: "GET",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Google API HTTP error: ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function runGoogleRatingsUpdate() {
+  const { data: businesses, error } = await supabase
+    .from("businesses")
+    .select("id, name, address, city, google_place_id")
+    .order("id", { ascending: true });
+
+  if (error) throw new Error(`Business load failed: ${error.message}`);
+
+  let updated = 0;
+  let placeIdSaved = 0;
+  const failed: FailedBusiness[] = [];
+
+  for (const business of businesses || []) {
+    let placeId =
+      typeof business.google_place_id === "string"
+        ? business.google_place_id.trim()
+        : "";
+
+    const searchText = [business.name, business.address, business.city, "NC"]
+      .filter(Boolean)
+      .map((value) => String(value).trim())
+      .filter(Boolean)
+      .join(" ");
+
+    try {
+      if (!placeId) {
+        if (!searchText) {
+          failed.push({
+            id: business.id,
+            name: business.name,
+            step: "find_place",
+            message: "Business name or address is missing.",
+          });
+          continue;
+        }
+
+        const findUrl =
+          "https://maps.googleapis.com/maps/api/place/findplacefromtext/json" +
+          `?input=${encodeURIComponent(searchText)}` +
+          "&inputtype=textquery" +
+          "&fields=place_id,name,formatted_address" +
+          `&key=${encodeURIComponent(googleKey)}`;
+
+        const findData = await fetchJson<GoogleFindPlaceResponse>(findUrl);
+
+        if (findData.status !== "OK") {
+          failed.push({
+            id: business.id,
+            name: business.name,
+            step: "find_place",
+            status: findData.status,
+            message: findData.error_message || "No place found",
+            searchText,
+          });
+          continue;
+        }
+
+        placeId = findData.candidates?.[0]?.place_id?.trim() || "";
+
+        if (!placeId) {
+          failed.push({
+            id: business.id,
+            name: business.name,
+            step: "find_place",
+            message: "No place_id returned",
+            searchText,
+          });
+          continue;
+        }
+
+        const { error: placeUpdateError } = await supabase
+          .from("businesses")
+          .update({ google_place_id: placeId })
+          .eq("id", business.id);
+
+        if (placeUpdateError) {
+          failed.push({
+            id: business.id,
+            name: business.name,
+            step: "save_place_id",
+            message: placeUpdateError.message,
+            placeId,
+          });
+          continue;
+        }
+
+        placeIdSaved += 1;
+      }
+
+      const detailUrl =
+        "https://maps.googleapis.com/maps/api/place/details/json" +
+        `?place_id=${encodeURIComponent(placeId)}` +
+        "&fields=rating,user_ratings_total" +
+        `&key=${encodeURIComponent(googleKey)}`;
+
+      const detailData = await fetchJson<GooglePlaceDetailsResponse>(detailUrl);
+
+      if (detailData.status !== "OK") {
+        failed.push({
+          id: business.id,
+          name: business.name,
+          step: "details",
+          status: detailData.status,
+          message: detailData.error_message || "No details found",
+          placeId,
+        });
+        continue;
+      }
+
+      const rating = detailData.result?.rating;
+      const reviewCount = detailData.result?.user_ratings_total;
+
+      if (typeof rating !== "number" || !Number.isFinite(rating)) {
+        failed.push({
+          id: business.id,
+          name: business.name,
+          step: "rating",
+          message: "No valid rating returned",
+          placeId,
+        });
+        continue;
+      }
+
+      const normalizedReviewCount =
+        typeof reviewCount === "number" && Number.isFinite(reviewCount)
+          ? Math.max(0, Math.floor(reviewCount))
+          : 0;
+
+      const { error: ratingUpdateError } = await supabase
+        .from("businesses")
+        .update({
+          rating,
+          review_count: normalizedReviewCount,
+          rating_updated: new Date().toISOString(),
+        })
+        .eq("id", business.id);
+
+      if (ratingUpdateError) {
+        failed.push({
+          id: business.id,
+          name: business.name,
+          step: "save_rating",
+          message: ratingUpdateError.message,
+          placeId,
+        });
+        continue;
+      }
+
+      updated += 1;
+    } catch (error) {
+      failed.push({
+        id: business.id,
+        name: business.name,
+        step: "unexpected",
+        message: error instanceof Error ? error.message : String(error),
+        searchText,
+        placeId: placeId || undefined,
+      });
+    }
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        completedAt: new Date().toISOString(),
+        totalBusinesses: businesses?.length || 0,
+        updated,
+        placeIdSaved,
+        failedCount: failed.length,
+        failed: failed.slice(0, 20),
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+runGoogleRatingsUpdate().catch((error) => {
+  console.error("Google ratings update failed:", error);
+  process.exitCode = 1;
+});
