@@ -2,20 +2,15 @@ name: KTown Triangle Auto Update
 
 on:
   schedule:
-    # 매시간 7분에 실행 (UTC 기준 cron)
     - cron: "7 * * * *"
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ktown-auto-update
   cancel-in-progress: true
 
 jobs:
-  # =========================================================
-  # RSS 한국·미국 뉴스
-  # GitHub Runner가 직접 처리 -> Vercel API 호출 없음
-  # =========================================================
-  community-news:
+  community_news:
     name: Update Korea and US News
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -28,22 +23,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
 
-     - name: Install dependencies
-       run: npm install --no-audit --no-fund
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
 
-      - name: Run Community News Sync Directly
+      - name: Run Community News
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx --yes tsx scripts/sync-community-news.ts
 
-  # =========================================================
-  # Today's Korea
-  # GitHub Runner가 직접 처리 -> Vercel API 호출 없음
-  # =========================================================
-  todays-korea:
+  todays_korea:
     name: Update Celebrity News
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -56,74 +46,47 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
-      - name: Run Today's Korea Directly
+      - name: Run Today's Korea
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npx --yes tsx scripts/update-todays-korea.ts
 
-  # =========================================================
-  # Google Ratings
-  # 하루 1회만 실행. 현재 API 방식 유지.
-  # =========================================================
-  google-ratings:
+  google_ratings:
     name: Update Google Ratings
     runs-on: ubuntu-latest
     timeout-minutes: 7
 
     steps:
-      - name: Check Google Ratings schedule
-        id: ratings-time
+      - name: Check schedule
+        id: ratings_time
         shell: bash
         run: |
-          set -euo pipefail
-
           EVENT_NAME="${{ github.event_name }}"
           ET_HOUR=$(TZ=America/New_York date +%-H)
 
-          echo "Event: ${EVENT_NAME}"
-          echo "Eastern hour: ${ET_HOUR}"
-
           if [ "$EVENT_NAME" = "schedule" ] && [ "$ET_HOUR" = "0" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Google Ratings will run."
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Google Ratings will be skipped."
           fi
 
       - name: Call Google Ratings API
-        if: steps.ratings-time.outputs.should_run == 'true'
-        shell: bash
+        if: steps.ratings_time.outputs.should_run == 'true'
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          set -euo pipefail
-
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "::error::CRON_SECRET GitHub Secret이 비어 있습니다."
-            exit 1
-          fi
-
           curl \
             --fail-with-body \
             --show-error \
             --location \
-            --connect-timeout 20 \
-            --max-time 300 \
-            --retry 1 \
-            --retry-delay 10 \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            -H "User-Agent: KTownTriangle-GitHub-Actions/1.0" \
             "https://www.ktowntriangle.com/api/update-google-ratings"
 
       - name: Google Ratings skipped
-        if: steps.ratings-time.outputs.should_run != 'true'
+        if: steps.ratings_time.outputs.should_run != 'true'
         run: echo "Google Ratings was skipped."
-
-
