@@ -107,7 +107,8 @@ export default function NewGrandOpeningPage() {
   const [lng, setLng] = useState<number | null>(null);
   const [phone, setPhone] = useState("");
   const [openingDate, setOpeningDate] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
+    const [endDate, setEndDate] = useState("");
+const [linkUrl, setLinkUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
@@ -286,7 +287,10 @@ export default function NewGrandOpeningPage() {
     if (!userId) return alert("Please login first.");
     if (!businessName.trim()) return alert("Business name is required.");
     if (!title.trim()) return alert("Title is required.");
-    if (optimizingImages) return alert("이미지를 처리하고 있습니다. 잠시만 기다려주세요.");
+        if (openingDate && endDate && endDate < openingDate) {
+      return alert("End date cannot be earlier than the opening date.");
+    }
+if (optimizingImages) return alert("이미지를 처리하고 있습니다. 잠시만 기다려주세요.");
 
     setSaving(true);
 
@@ -306,7 +310,8 @@ export default function NewGrandOpeningPage() {
         lng,
         phone: phone.trim() || null,
         opening_date: openingDate || null,
-        images: imageUrls,
+                end_date: endDate || null,
+images: imageUrls,
         video_url: uploadedVideoUrl || videoUrl.trim() || null,
         link_url: linkUrl.trim() || null,
         show_on_main: showOnMain,
@@ -378,6 +383,27 @@ export default function NewGrandOpeningPage() {
               onChange={(e) => setOpeningDate(e.target.value)}
               className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
             />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-black">
+              Sale / Event End Date
+              <span className="ml-2 text-xs font-bold text-gray-400">
+                Optional
+              </span>
+            </label>
+
+            <input
+              type="date"
+              value={endDate}
+              min={openingDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
+            />
+
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              Grand Opening과 함께 할인·프로모션을 진행하는 경우 종료일을 입력하세요.
+            </p>
           </div>
 
           <div>

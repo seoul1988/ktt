@@ -556,6 +556,9 @@ export default async function Home() {
     .select("*")
     .eq("show_on_main", true)
     .eq("show_in_list", true)
+    // Sale / Event End Date가 없으면 계속 표시합니다.
+    // 종료일이 있으면 해당 날짜까지 표시하고, 다음 날부터 홈에서 숨깁니다.
+    .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -934,7 +937,7 @@ const kdramaNews = (todaysKoreaPosts || [])
                   href={`/grand-openings/${mainGrandOpening.id}`}
                   className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3 transition hover:bg-red-50/30 active:bg-red-50"
                 >
-                  <div className="h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
+                  <div className="w-28 aspect-video shrink-0 overflow-hidden rounded-xl bg-[#F8F3EC]">
                     <img
                       src={grandOpeningImage}
                       alt={
@@ -944,7 +947,7 @@ const kdramaNews = (todaysKoreaPosts || [])
                       }
                       loading="lazy"
                       decoding="async"
-                      className="h-full w-full object-cover object-center"
+                      className="h-full w-full object-contain object-center"
                     />
                   </div>
 

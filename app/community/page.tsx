@@ -31,6 +31,9 @@ export default async function CommunityPage() {
     .select("*")
     .eq("show_on_community", true)
     .eq("show_in_list", true)
+    // Sale / Event End Date가 없으면 계속 표시,
+    // 날짜가 있으면 오늘까지 포함해서 표시하고 다음 날부터 숨깁니다.
+    .or(`end_date.is.null,end_date.gte.${today}`)
     .order("created_at", { ascending: false })
     .limit(1);
 

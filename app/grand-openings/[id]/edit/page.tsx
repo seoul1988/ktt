@@ -130,7 +130,8 @@ export default function EditGrandOpeningPage() {
   const [lng, setLng] = useState<number | null>(null);
   const [phone, setPhone] = useState("");
   const [openingDate, setOpeningDate] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
+    const [endDate, setEndDate] = useState("");
+const [linkUrl, setLinkUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
 
   const [oldImages, setOldImages] = useState<string[]>([]);
@@ -186,7 +187,8 @@ export default function EditGrandOpeningPage() {
     setLng(data.lng || null);
     setPhone(data.phone || "");
     setOpeningDate(data.opening_date || "");
-    setLinkUrl(data.link_url || "");
+        setEndDate(data.end_date || "");
+setLinkUrl(data.link_url || "");
     setVideoUrl(data.video_url || "");
     setOldImages(Array.isArray(data.images) ? data.images.filter(Boolean) : []);
     setDeletedImages([]);
@@ -393,7 +395,11 @@ async function deleteStorageImages(urls: string[]) {
   if (!businessName.trim()) return alert("Business name is required.");
   if (!title.trim()) return alert("Title is required.");
 
-  if (optimizingImages) {
+  
+  if (openingDate && endDate && endDate < openingDate) {
+    return alert("End date cannot be earlier than the opening date.");
+  }
+if (optimizingImages) {
     alert("이미지 축소 작업이 끝날 때까지 기다려 주세요.");
     return;
   }
@@ -422,7 +428,8 @@ async function deleteStorageImages(urls: string[]) {
         lng,
         phone: phone.trim() || null,
         opening_date: openingDate || null,
-        images: finalImages,
+                end_date: endDate || null,
+images: finalImages,
         video_url: uploadedVideoUrl || videoUrl.trim() || null,
         link_url: linkUrl.trim() || null,
         show_on_main: showOnMain,
@@ -512,6 +519,27 @@ async function deleteStorageImages(urls: string[]) {
               onChange={(e) => setOpeningDate(e.target.value)}
               className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
             />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-black">
+              Sale / Event End Date
+              <span className="ml-2 text-xs font-bold text-gray-400">
+                Optional
+              </span>
+            </label>
+
+            <input
+              type="date"
+              value={endDate}
+              min={openingDate || undefined}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-xl border border-[#E8DED1] px-4 py-3 text-sm outline-none"
+            />
+
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              할인·프로모션 종료일이 있으면 입력하세요. 종료일 이후에는 메인/커뮤니티 Grand Opening에서 자동으로 숨겨집니다.
+            </p>
           </div>
 
           <div>
