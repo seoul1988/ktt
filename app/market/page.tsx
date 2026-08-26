@@ -12,6 +12,7 @@ type MarketItem = {
   id: number;
   title: string;
   price: number | null;
+  previous_price?: number | null;
   status: string | null;
   location: string | null;
   category: string | null;
@@ -200,6 +201,7 @@ export default async function MarketPage() {
       id,
       title,
       price,
+      previous_price,
       status,
       location,
       category,
@@ -412,12 +414,43 @@ export default async function MarketPage() {
                       </h2>
 
                       <div className="mt-1 flex items-center justify-between gap-2">
-                        <p className="text-sm font-black text-red-400">
-                          $
-                          {Number(
-                            item.price || 0,
-                          ).toLocaleString()}
-                        </p>
+                        <div className="min-w-0">
+                          {item.previous_price !== null &&
+                          item.previous_price !== undefined &&
+                          Number(item.previous_price) !== Number(item.price || 0) ? (
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <span className="text-[11px] font-bold text-white/60 line-through">
+                                ${Number(item.previous_price).toLocaleString()}
+                              </span>
+
+                              <span className="text-sm font-black text-red-400">
+                                ${Number(item.price || 0).toLocaleString()}
+                              </span>
+
+                              <span
+                                className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${
+                                  Number(item.price || 0) < Number(item.previous_price)
+                                    ? "bg-red-500/20 text-red-300"
+                                    : "bg-blue-500/20 text-blue-200"
+                                }`}
+                              >
+                                {Number(item.price || 0) < Number(item.previous_price)
+                                  ? `↓ $${(
+                                      Number(item.previous_price) -
+                                      Number(item.price || 0)
+                                    ).toLocaleString()} 인하`
+                                  : `↑ $${(
+                                      Number(item.price || 0) -
+                                      Number(item.previous_price)
+                                    ).toLocaleString()} 인상`}
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-sm font-black text-red-400">
+                              ${Number(item.price || 0).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
 
                         {entry.isBundle ? (
                           <span className="line-clamp-1 text-[10px] font-black leading-tight text-purple-200">
