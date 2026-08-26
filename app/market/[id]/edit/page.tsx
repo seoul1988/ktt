@@ -28,6 +28,7 @@ const [email, setEmail] = useState("");
 const [description, setDescription] = useState("");
   
   const [status, setStatus] = useState("available");
+  const [sellerId, setSellerId] = useState<string | null>(null);
 
   const [images, setImages] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -316,7 +317,6 @@ const [description, setDescription] = useState("");
       .from("market_items")
       .select("*")
       .eq("id", id)
-      .eq("seller_id", user.id)
       .maybeSingle();
 
     if (error || !data) {
@@ -324,6 +324,34 @@ const [description, setDescription] = useState("");
       router.push("/market/my");
       return;
     }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role,is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const role = String(profile?.role || "")
+      .trim()
+      .toLowerCase();
+
+    const isAdmin =
+      role === "admin" ||
+      role === "super_admin" ||
+      profile?.is_admin === true;
+
+    const itemSellerId =
+      typeof data.seller_id === "string"
+        ? data.seller_id
+        : null;
+
+    if (itemSellerId !== user.id && !isAdmin) {
+      alert("이 상품을 수정할 권한이 없습니다.");
+      router.push(`/market/${id}`);
+      return;
+    }
+
+    setSellerId(itemSellerId);
 
     setTitle(data.title || "");
     setPrice(String(data.price || ""));
@@ -511,8 +539,11 @@ setDescription(data.description || "");
       return;
     }
 
+    // 가격이 오르거나 내려간 경우 모두 직전 가격을 저장합니다.
+    // 예: 350 -> 300 이면 previous_price = 350
+    // 예: 300 -> 350 이면 previous_price = 300
     const nextPreviousPrice =
-      nextPrice < loadedPrice
+      nextPrice !== loadedPrice
         ? loadedPrice
         : previousPrice;
 
@@ -526,6 +557,28 @@ setDescription(data.description || "");
       if (!user) {
         alert("로그인이 필요합니다.");
         router.push("/login");
+        return;
+      }
+
+      // 저장 직전에도 다시 권한 확인
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role,is_admin")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const role = String(profile?.role || "")
+        .trim()
+        .toLowerCase();
+
+      const isAdmin =
+        role === "admin" ||
+        role === "super_admin" ||
+        profile?.is_admin === true;
+
+      if (sellerId !== user.id && !isAdmin) {
+        alert("이 상품을 수정할 권한이 없습니다.");
+        router.push(`/market/${id}`);
         return;
       }
 
@@ -583,8 +636,7 @@ setDescription(data.description || "");
           video_url: finalVideoUrl,
           status,
         })
-        .eq("id", id)
-        .eq("seller_id", user.id);
+        .eq("id", id);
 
       if (error) throw error;
 

@@ -117,6 +117,35 @@ export default async function MarketDetailPage({
 
   const selectedItem = selectedItemData as MarketItem;
 
+  // 현재 로그인 사용자 및 관리자 여부 확인
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profile } = user
+    ? await supabase
+        .from("profiles")
+        .select("role,is_admin")
+        .eq("id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const role = String(profile?.role || "")
+    .trim()
+    .toLowerCase();
+
+  const isAdmin =
+    role === "admin" ||
+    role === "super_admin" ||
+    profile?.is_admin === true;
+
+  const canManageSelectedItem =
+    !!user &&
+    (
+      selectedItem.seller_id === user.id ||
+      isAdmin
+    );
+
   const bundleId =
     typeof selectedItem.bundle_id === "string"
       ? selectedItem.bundle_id.trim()
@@ -180,22 +209,22 @@ export default async function MarketDetailPage({
           </summary>
 
           <div className="absolute right-0 top-12 z-[99999] w-44 overflow-hidden rounded-2xl bg-white text-sm font-bold shadow-xl">
-            {selectedItem.seller_id && (
-              <>
-                <Link
-                  href={`/market/${selectedItem.id}/edit`}
-                  className="block px-4 py-3 text-blue-600 hover:bg-blue-50"
-                >
-                  ✏️ 상품 수정
-                </Link>
+            {canManageSelectedItem && (
+              <Link
+                href={`/market/${selectedItem.id}/edit`}
+                className="block px-4 py-3 text-blue-600 hover:bg-blue-50"
+              >
+                ✏️ 상품 수정
+              </Link>
+            )}
 
-                <Link
-                  href={`/market/seller/${selectedItem.seller_id}`}
-                  className="block px-4 py-3 text-[#172033] hover:bg-gray-100"
-                >
-                  판매자 상품
-                </Link>
-              </>
+            {selectedItem.seller_id && (
+              <Link
+                href={`/market/seller/${selectedItem.seller_id}`}
+                className="block px-4 py-3 text-[#172033] hover:bg-gray-100"
+              >
+                판매자 상품
+              </Link>
             )}
 
             <Link
@@ -335,15 +364,16 @@ export default async function MarketDetailPage({
                   </div>
                 )}
 
-                {item.seller_id && (
-                  <Link
-                    href={`/market/${item.id}/edit`}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-base font-black text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]"
-                  >
-                    <span aria-hidden="true">✏️</span>
-                    <span>상품 수정</span>
-                  </Link>
-                )}
+                {!!user &&
+                  (item.seller_id === user.id || isAdmin) && (
+                    <Link
+                      href={`/market/${item.id}/edit`}
+                      className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-base font-black text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]"
+                    >
+                      <span aria-hidden="true">✏️</span>
+                      <span>상품 수정</span>
+                    </Link>
+                  )}
 
                 <MarketItemActions
                   itemId={item.id}
