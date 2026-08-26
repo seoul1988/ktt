@@ -17,6 +17,8 @@ export default function EditMarketItemPage() {
 
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState("");
+  const [loadedPrice, setLoadedPrice] = useState<number>(0);
+  const [previousPrice, setPreviousPrice] = useState<number | null>(null);
   const [category, setCategory] = useState("");
   const [condition, setCondition] = useState("");
   
@@ -325,6 +327,10 @@ const [description, setDescription] = useState("");
 
     setTitle(data.title || "");
     setPrice(String(data.price || ""));
+    setLoadedPrice(Number(data.price || 0));
+    setPreviousPrice(
+      typeof data.previous_price === "number" ? data.previous_price : null,
+    );
     setCategory(data.category || "");
     setCondition(data.condition || "");
   setLocation(data.location || "");
@@ -498,6 +504,20 @@ setDescription(data.description || "");
       return;
     }
 
+    const nextPrice = Number(price || 0);
+
+    if (Number.isNaN(nextPrice) || nextPrice < 0) {
+      alert("가격을 올바르게 입력하세요.");
+      return;
+    }
+
+    // 현재 저장된 가격보다 낮아졌을 때만 직전 가격을 보관합니다.
+    // 예: 350 -> 300 이면 previous_price = 350
+    const nextPreviousPrice =
+      nextPrice < loadedPrice
+        ? loadedPrice
+        : previousPrice;
+
     setSaving(true);
 
     try {
@@ -552,7 +572,8 @@ setDescription(data.description || "");
         .from("market_items")
         .update({
           title: title.trim(),
-          price: Number(price || 0),
+          price: nextPrice,
+          previous_price: nextPreviousPrice,
           category,
           condition,
           location: location.trim(),
