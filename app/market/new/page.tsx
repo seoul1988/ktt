@@ -32,7 +32,7 @@ const CONDITIONS = [
 ];
 
 const MAX_ITEMS = 20;
-const MAX_IMAGES_PER_INDIVIDUAL_ITEM = 4;
+const MAX_IMAGES_PER_INDIVIDUAL_ITEM = 6;
 const MAX_IMAGES_PER_BUNDLE_ITEM = 3;
 
 type RegistrationMode =
@@ -678,6 +678,9 @@ export default function NewMarketItemPage() {
           return item;
         }
 
+        // 사용자가 한 번에 제한보다 많은 사진을 선택해도
+        // 실제 상태에는 남은 개수까지만 들어가도록 강제로 제한합니다.
+        // 예: 개별 등록에서 8장을 선택해도 최대 6장만 저장됩니다.
         const filesToAdd =
           onlyImages.slice(
             0,
@@ -690,8 +693,8 @@ export default function NewMarketItemPage() {
           alert(
             registrationMode ===
               "bundle"
-              ? `묶음 등록에서는 상품마다 사진을 최대 ${MAX_IMAGES_PER_BUNDLE_ITEM}장까지 등록할 수 있습니다.`
-              : `개별 등록에서는 상품마다 사진을 최대 ${MAX_IMAGES_PER_INDIVIDUAL_ITEM}장까지 등록할 수 있습니다.`,
+              ? `사진은 최대 ${MAX_IMAGES_PER_BUNDLE_ITEM}장까지 선택할 수 있습니다. 초과한 사진은 추가되지 않았습니다.`
+              : `사진은 최대 ${MAX_IMAGES_PER_INDIVIDUAL_ITEM}장까지 선택할 수 있습니다. 초과한 사진은 추가되지 않았습니다.`,
           );
         }
 
@@ -1475,7 +1478,7 @@ export default function NewMarketItemPage() {
                       </label>
 
                       <p className="text-xs font-bold text-gray-500">
-                        한 번에 여러 장 선택 가능
+                        한 번에 여러 장 선택 가능 · 최대 {currentMaxImages}장
                       </p>
                     </div>
 

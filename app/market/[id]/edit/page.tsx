@@ -31,11 +31,12 @@ const [description, setDescription] = useState("");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
 
-  const [newImageFiles, setNewImageFiles] = useState<FileList | null>(null);
+  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
   const [newVideoFile, setNewVideoFile] = useState<File | null>(null);
   const [newVideoPreview, setNewVideoPreview] = useState<string | null>(null);
 
+  const MAX_IMAGES = 6;
   const MAX_IMAGE_SIZE = 1600;
   const IMAGE_QUALITY = 0.82;
 
@@ -340,18 +341,58 @@ setDescription(data.description || "");
   }
 
   function handleNewImageChange(files: FileList | null) {
-    setNewImageFiles(files);
-
     if (!files || files.length === 0) {
-      setNewImagePreviews([]);
       return;
     }
 
-    const previews = Array.from(files).map((file) =>
-      URL.createObjectURL(file)
+    const selectedImages = Array.from(files).filter((file) =>
+      file.type.startsWith("image/"),
     );
 
-    setNewImagePreviews(previews);
+    if (selectedImages.length === 0) {
+      alert("이미지 파일만 선택할 수 있습니다.");
+      return;
+    }
+
+    const currentTotal = images.length + newImageFiles.length;
+    const remaining = MAX_IMAGES - currentTotal;
+
+    if (remaining <= 0) {
+      alert(`상품 사진은 최대 ${MAX_IMAGES}장까지 등록할 수 있습니다.`);
+      return;
+    }
+
+    const filesToAdd = selectedImages.slice(0, remaining);
+    const previewsToAdd = filesToAdd.map((file) =>
+      URL.createObjectURL(file),
+    );
+
+    setNewImageFiles((prev) => [...prev, ...filesToAdd]);
+    setNewImagePreviews((prev) => [...prev, ...previewsToAdd]);
+
+    if (selectedImages.length > remaining) {
+      alert(
+        `상품 사진은 최대 ${MAX_IMAGES}장까지 가능합니다. 초과한 사진은 추가되지 않았습니다.`,
+      );
+    }
+  }
+
+  function removeNewImage(imageIndex: number) {
+    if (saving) return;
+
+    setNewImagePreviews((prev) => {
+      const previewUrl = prev[imageIndex];
+
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+
+      return prev.filter((_, index) => index !== imageIndex);
+    });
+
+    setNewImageFiles((prev) =>
+      prev.filter((_, index) => index !== imageIndex),
+    );
   }
 
   function handleNewVideoChange(file: File | null) {
@@ -391,11 +432,11 @@ setDescription(data.description || "");
   }
 
   async function uploadImages(userId: string) {
-    if (!newImageFiles || newImageFiles.length === 0) return [];
+    if (newImageFiles.length === 0) return [];
 
     const urls: string[] = [];
 
-    for (const originalFile of Array.from(newImageFiles)) {
+    for (const originalFile of newImageFiles) {
       const resizedFile = await resizeImage(originalFile);
       const ext =
         resizedFile.type === "image/webp"
@@ -452,6 +493,11 @@ setDescription(data.description || "");
       return;
     }
 
+    if (images.length + newImageFiles.length > MAX_IMAGES) {
+      alert(`상품 사진은 최대 ${MAX_IMAGES}장까지 등록할 수 있습니다.`);
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -493,7 +539,7 @@ setDescription(data.description || "");
           const firstImageSource =
             images.length > 0
               ? finalImages[0]
-              : newImageFiles?.[0] || finalImages[0];
+              : newImageFiles[0] || finalImages[0];
 
           finalThumbnailUrl = await uploadMarketThumbnail(
             id,
@@ -624,7 +670,13 @@ setDescription(data.description || "");
         />
 
         <div className="mb-4">
-          <p className="mb-2 text-sm font-black text-[#172033]">현재 이미지</p>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-sm font-black text-[#172033]">현재 이미지</p>
+
+            <span className="text-xs font-bold text-gray-500">
+              기존 {images.length}장
+            </span>
+          </div>
 
           {images.length === 0 ? (
             <p className="rounded-2xl border p-3 text-sm text-gray-500">
@@ -654,25 +706,47 @@ setDescription(data.description || "");
         </div>
 
         <div className="mb-4">
-          <p className="mb-1 text-sm font-black text-[#172033]">이미지 추가</p>
-          <p className="mb-2 text-xs font-semibold text-gray-500">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <p className="text-sm font-black text-[#172033]">이미지 추가</p>
+
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-[#172033]">
+              {images.length + newImageFiles.length}/{MAX_IMAGES}
+            </span>
+          </div>
+
+          <p className="mb-2 text-xs font-semibold leading-5 text-gray-500">
+            상품 사진은 최대 {MAX_IMAGES}장까지 등록할 수 있습니다.
+            <br />
             새 이미지는 최대 1600px WebP로 자동 축소됩니다.
           </p>
 
           <div className="flex items-center gap-2">
             <div className="flex-1 rounded-2xl border p-3 text-sm text-gray-500">
-              {newImageFiles && newImageFiles.length > 0
-                ? `${newImageFiles.length}개 선택됨`
-                : "선택된 이미지 없음"}
+              {newImageFiles.length > 0
+                ? `새 이미지 ${newImageFiles.length}개 선택됨`
+                : "선택된 새 이미지 없음"}
             </div>
 
-            <label className="cursor-pointer rounded-2xl bg-[#172033] px-4 py-3 text-sm font-black text-white">
+            <label
+              className={`rounded-2xl px-4 py-3 text-sm font-black text-white ${
+                images.length + newImageFiles.length >= MAX_IMAGES || saving
+                  ? "cursor-not-allowed bg-gray-400"
+                  : "cursor-pointer bg-[#172033]"
+              }`}
+            >
               첨부
+
               <input
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(e) => handleNewImageChange(e.target.files)}
+                disabled={
+                  images.length + newImageFiles.length >= MAX_IMAGES || saving
+                }
+                onChange={(e) => {
+                  handleNewImageChange(e.target.files);
+                  e.target.value = "";
+                }}
                 className="hidden"
               />
             </label>
@@ -681,12 +755,26 @@ setDescription(data.description || "");
           {newImagePreviews.length > 0 && (
             <div className="mt-3 grid grid-cols-3 gap-2">
               {newImagePreviews.map((src, index) => (
-                <img
-                  key={index}
-                  src={src}
-                  alt={`preview-${index}`}
-                  className="h-24 w-full rounded-xl border object-cover"
-                />
+                <div
+                  key={`${src}-${index}`}
+                  className="relative overflow-hidden rounded-xl border"
+                >
+                  <img
+                    src={src}
+                    alt={`새 상품 이미지 ${index + 1}`}
+                    className="h-24 w-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => removeNewImage(index)}
+                    className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-sm font-black text-white disabled:opacity-50"
+                    aria-label="새 이미지 삭제"
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           )}
