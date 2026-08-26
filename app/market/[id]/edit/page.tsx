@@ -511,8 +511,6 @@ setDescription(data.description || "");
       return;
     }
 
-    // 현재 저장된 가격보다 낮아졌을 때만 직전 가격을 보관합니다.
-    // 예: 350 -> 300 이면 previous_price = 350
     const nextPreviousPrice =
       nextPrice < loadedPrice
         ? loadedPrice
@@ -631,12 +629,55 @@ setDescription(data.description || "");
           onChange={(e) => setTitle(e.target.value)}
         />
 
-        <input
-          className="mb-3 w-full rounded-xl border p-3"
-          placeholder="가격"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-        />
+        <div className="mb-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <p className="mb-3 text-sm font-black text-[#172033]">가격 수정</p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <p className="mb-1 text-xs font-bold text-gray-500">
+                수정 전 단가
+              </p>
+
+              <div className="flex h-12 items-center rounded-xl border border-gray-200 bg-gray-100 px-3 text-base font-black text-gray-700">
+                ${loadedPrice.toLocaleString()}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-1 text-xs font-bold text-gray-500">
+                수정 후 단가
+              </p>
+
+              <div className="flex h-12 items-center rounded-xl border border-gray-300 bg-white px-3">
+                <span className="mr-2 font-black text-gray-500">$</span>
+
+                <input
+                  className="w-full bg-transparent text-base font-black outline-none"
+                  placeholder="수정 후 가격"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {price.trim() !== "" &&
+            !Number.isNaN(Number(price)) &&
+            Number(price) !== loadedPrice && (
+              <div
+                className={`mt-3 rounded-xl px-3 py-3 text-center text-sm font-black ${
+                  Number(price) < loadedPrice
+                    ? "bg-red-50 text-red-600"
+                    : "bg-blue-50 text-blue-600"
+                }`}
+              >
+                {Number(price) < loadedPrice ? "↓" : "↑"} $
+                {Math.abs(Number(price) - loadedPrice).toLocaleString()}{" "}
+                {Number(price) < loadedPrice ? "가격 인하" : "가격 인상"}
+              </div>
+            )}
+        </div>
 
         <input
           className="mb-3 w-full rounded-xl border p-3"
