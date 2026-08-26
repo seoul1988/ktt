@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { supabase } from "../../../lib/supabase";
 import MarketMediaSlider from "../../components/MarketMediaSlider";
 import CommunityBottomNav from "../../components/CommunityBottomNav";
@@ -118,26 +120,52 @@ export default async function MarketDetailPage({
   const selectedItem = selectedItemData as MarketItem;
 
   // 현재 로그인 사용자 및 관리자 여부 확인
+  // Server Component에서도 로그인 세션을 정확히 읽도록
+  // Next.js 쿠키를 사용하는 Supabase SSR client를 생성합니다.
+  const cookieStore = await cookies();
+
+  const authSupabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {
+          // 이 페이지에서는 세션을 읽기만 하므로 쿠키 쓰기는 하지 않습니다.
+        },
+      },
+    },
+  );
+
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await authSupabase.auth.getUser();
 
-  const { data: profile } = user
-    ? await supabase
-        .from("profiles")
-        .select("role,is_admin")
-        .eq("id", user.id)
-        .maybeSingle()
-    : { data: null };
+  let isAdmin = false;
 
-  const role = String(profile?.role || "")
-    .trim()
-    .toLowerCase();
+  if (user) {
+    const { data: profile } = await authSupabase
+      .from("profiles")
+      .select("role,is_admin")
+      .eq("id", user.id)
+      .maybeSingle();
 
-  const isAdmin =
-    role === "admin" ||
-    role === "super_admin" ||
-    profile?.is_admin === true;
+    const role = String(
+      profile?.role ??
+        user.app_metadata?.role ??
+        user.user_metadata?.role ??
+        "",
+    )
+      .trim()
+      .toLowerCase();
+
+    isAdmin =
+      role === "admin" ||
+      role === "super_admin" ||
+      profile?.is_admin === true;
+  }
 
   const canManageSelectedItem =
     !!user &&
