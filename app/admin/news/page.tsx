@@ -1648,7 +1648,7 @@ function AdminBusinessNewsContent() {
 
   return (
     <main className="min-h-screen bg-[#F7F7F7] px-3 py-4 text-[#172033]">
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="mb-4 flex items-center">
           <button
             type="button"

@@ -23,7 +23,7 @@ export default async function CommunityDealsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-xl px-5 pb-28 pt-4">
+      <section className="mx-auto max-w-2xl px-5 pb-28 pt-4">
         <div className="relative mb-5 flex h-10 items-center border-b border-[#E8DED1] pb-3">
   {/* 왼쪽 */}
   <BackButton />

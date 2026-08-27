@@ -616,7 +616,7 @@ export default function BusinessNewsDetailPage() {
   return (
     <main className="min-h-screen bg-[#F7F7F7] text-[#172033]">
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-md items-center px-3">
+        <div className="mx-auto flex h-14 w-full max-w-2xl items-center px-3">
           <button
             type="button"
             onClick={() => router.back()}
@@ -652,7 +652,7 @@ export default function BusinessNewsDetailPage() {
       </header>
 
       {!isLocked && (
-        <article className="mx-auto w-full max-w-xl px-4 py-4">
+        <article className="mx-auto w-full max-w-2xl px-4 py-4">
           <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
             <div className="relative overflow-hidden bg-gray-100">
               <button

@@ -193,7 +193,7 @@ export default function OwnerRequestsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
           <BackButton />
 

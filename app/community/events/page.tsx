@@ -37,7 +37,7 @@ export default async function CommunityEventsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
+      <section className="mx-auto w-full max-w-2xl px-4 pb-28 pt-5">
         {/* HEADER */}
         <div className="relative mb-5 flex min-h-10 items-center justify-center">
           <div className="absolute left-0">

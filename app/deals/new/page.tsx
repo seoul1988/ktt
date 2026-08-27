@@ -478,7 +478,7 @@ export default function NewDealPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-32 text-[#172033]">
-      <div className="mx-auto max-w-xl">
+      <div className="mx-auto max-w-2xl">
         <div className="relative mb-5 flex items-center justify-center">
           <Link
             href="/"

@@ -210,7 +210,7 @@ export default async function MarketDetailPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-3 py-4 pb-72 sm:px-5">
-      <div className="mx-auto mb-4 flex w-full max-w-xl items-center justify-between">
+      <div className="mx-auto mb-4 flex w-full max-w-2xl items-center justify-between">
         <Link
           href="/market"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-xl font-black text-[#172033] shadow"

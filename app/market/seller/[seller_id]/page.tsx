@@ -25,7 +25,7 @@ export default async function SellerMarketPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
-      <div className="mx-auto mb-4 flex max-w-md items-center justify-between">
+      <div className="mx-auto mb-4 flex max-w-2xl items-center justify-between">
         <Link
           href="/market"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-[#172033] shadow"

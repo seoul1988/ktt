@@ -397,7 +397,7 @@ export default function CommunityHubPage() {
        * 헤더를 sticky/fixed로 두지 않고 본문과 같은 흐름에 넣어
        * 스크롤하면 헤더와 카드가 함께 위로 사라지게 합니다.
        */}
-     <section className="mx-auto w-full max-w-xl px-4 pt-4">
+     <section className="mx-auto w-full max-w-2xl px-4 pt-4">
         <header className="border-b border-gray-200 bg-white/95 backdrop-blur">
           <div className="flex h-14 w-full items-center justify-between px-1">
             <button

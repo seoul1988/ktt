@@ -336,7 +336,7 @@ export default function OwnerBusinessMatchingPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-3 py-6 pb-28 text-[#172033] sm:px-5 sm:py-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-3xl">
         <div className="relative mb-5 flex h-11 items-center border-b border-[#E8DED1] pb-3">
           <BackButton />
 

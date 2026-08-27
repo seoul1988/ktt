@@ -835,7 +835,7 @@ const kdramaNews = (todaysKoreaPosts || [])
    
 
       <main className="min-h-[100dvh] w-full max-w-[100vw] overflow-x-hidden bg-[#F8F3EC] px-4 pb-40 pt-6 text-[#172033]">
-       <div className="mx-auto mb-1 flex max-w-xl items-center justify-between gap-4">
+       <div className="mx-auto mb-1 flex max-w-2xl items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#C4483A]">KTT</p>
             <h1 className="text-[30px] font-black leading-tight">KTown Triangle</h1>
@@ -853,7 +853,7 @@ const kdramaNews = (todaysKoreaPosts || [])
 
 
         {(kpopNews.length > 0 || kdramaNews.length > 0) && (
-          <section className="mx-auto mb-2 max-w-xl">
+          <section className="mx-auto mb-2 max-w-2xl">
             
 
             <TodaysKoreaNewsModal
@@ -863,7 +863,7 @@ const kdramaNews = (todaysKoreaPosts || [])
           </section>
         )}
 
-        <section className="mx-auto mb-4 max-w-xl">
+        <section className="mx-auto mb-4 max-w-2xl">
           <Link
             href="/coupons"
             className="group relative block overflow-hidden rounded-[22px] bg-[#FFFDF8] shadow-sm transition hover:shadow-md active:scale-[0.995]"
@@ -926,7 +926,7 @@ const kdramaNews = (todaysKoreaPosts || [])
           </Link>
         </section>
 
-        <section className="mx-auto mb-5 max-w-xl">
+        <section className="mx-auto mb-5 max-w-2xl">
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             {/* 1. GRAND OPENING */}
             {mainGrandOpening && (
@@ -1122,14 +1122,16 @@ const kdramaNews = (todaysKoreaPosts || [])
         </section>
 
         {featuredSponsors.length > 0 && (
+		  <section className="mx-auto w-full max-w-2xl [&>*]:!w-full [&>*]:!max-w-none">
           <FeaturedSponsorSlider
             sponsors={featuredSponsors}
             dealBusinessEntries={Array.from(dealBusinessMap.entries())}
             couponBusinessIds={Array.from(couponBusinessIds)}
           />
+		   </section>
         )}
 
-      <section className="mx-auto max-w-xl">
+      <section className="mx-auto max-w-2xl">
   <SectionTitle
     label="Popular"
     title="Trending Now"

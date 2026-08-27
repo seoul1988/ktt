@@ -412,7 +412,7 @@ export default function EditCategoryPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 pb-28 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-2xl">
         <div className="mb-6 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-4">
             <button

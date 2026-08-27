@@ -83,7 +83,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F2EC] pb-28">
-      <div className="mx-auto w-full max-w-3xl px-4 py-4">
+      <div className="mx-auto w-full max-w-2xl px-4 py-4">
         {/* HEADER */}
         <div className="relative mb-5 flex min-h-[48px] items-center">
           <Link

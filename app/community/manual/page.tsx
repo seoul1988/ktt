@@ -329,7 +329,7 @@ export default function CommunityManualPage() {
 
   return (
     <main className="min-h-[100dvh] bg-[#F7F7F7] pb-24 text-[#172033]">
-      <section className="mx-auto w-full max-w-xl px-4 pt-4">
+      <section className="mx-auto w-full max-w-2xl px-4 pt-4">
         <header className="border-b border-gray-200 bg-white/95 backdrop-blur">
           <div className="flex h-14 w-full items-center justify-between px-1">
             <button

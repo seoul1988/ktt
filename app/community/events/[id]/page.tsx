@@ -187,7 +187,7 @@ export default async function CommunityEventDetailPage({
   if (error || !event) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] px-5 py-10 text-[#172033]">
-        <div className="mx-auto w-full max-w-xl">
+        <div className="mx-auto w-full max-w-2xl">
           <h1 className="text-2xl font-black">
             Event not found
           </h1>
@@ -296,7 +296,7 @@ export default async function CommunityEventDetailPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto w-full max-w-xl px-4 pb-28 pt-5">
+      <section className="mx-auto w-full max-w-2xl px-4 pb-28 pt-5">
         <div className="relative mb-4 flex min-h-10 items-center justify-center">
           <div className="absolute left-0">
             <BackButton />

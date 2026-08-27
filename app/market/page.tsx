@@ -222,7 +222,7 @@ export default async function MarketPage() {
   if (error) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] p-6 text-[#172033]">
-        <div className="mx-auto max-w-xl rounded-2xl bg-white p-5 shadow-sm">
+        <div className="mx-auto max-w-2xl rounded-2xl bg-white p-5 shadow-sm">
           상품 불러오기 실패: {error.message}
         </div>
 
@@ -236,7 +236,7 @@ export default async function MarketPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-4 pb-28">
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="relative mb-5 flex items-center justify-between">
           <Link
             href="/community/hub"
