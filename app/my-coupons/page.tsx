@@ -252,7 +252,7 @@ export default function MyCouponsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] pb-28 text-[#172033]">
-      <div className="mx-auto min-h-screen w-full max-w-xl bg-[#F8F3EC]">
+      <div className="mx-auto min-h-screen w-full max-w-2xl bg-[#F8F3EC]">
         <div className="sticky top-0 z-30 border-b border-[#E9DFD4] bg-[#F8F3EC]/95 px-4 pb-3 pt-4 backdrop-blur">
           <div className="relative flex h-11 items-center">
             <button

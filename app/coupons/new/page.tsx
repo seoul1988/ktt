@@ -1088,7 +1088,7 @@ export default function NewCouponPage() {
   if (accessRole === "blocked") {
     return (
       <main className="min-h-screen bg-[#F8F3EC] px-4 pb-28 pt-5 text-[#172033]">
-        <div className="mx-auto max-w-xl">
+        <div className="mx-auto max-w-2xl">
           <div className="mb-5 flex items-center justify-between">
             <button
               type="button"

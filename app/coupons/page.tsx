@@ -503,7 +503,7 @@ export default function CouponsPage() {
 
   return (
     <main className="min-h-screen bg-[#F5F5F5] pb-20 text-[#151821]">
-      <div className="mx-auto min-h-screen w-full max-w-xl bg-white">
+      <div className="mx-auto min-h-screen w-full max-w-2xl bg-white">
         <header className="sticky top-0 z-30 border-b border-[#ECECEC] bg-white">
           <div className="flex h-12 items-center justify-between px-4">
             <button

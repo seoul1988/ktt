@@ -177,7 +177,7 @@ export default function OwnerBusinessEditPage({
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-5 py-8 text-[#172033]">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-2xl">
         <button
           type="button"
           onClick={() => {

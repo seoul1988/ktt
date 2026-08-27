@@ -500,7 +500,7 @@ export default function RedeemCouponPage() {
           }
         `}</style>
 
-        <div className="mx-auto flex min-h-[80vh] max-w-xl flex-col items-center justify-center text-center">
+        <div className="mx-auto flex min-h-[80vh] max-w-2xl flex-col items-center justify-center text-center">
           {!redeemAnimationDone ? (
             <div className="relative w-full max-w-[330px]">
               <div className="cut-paper relative overflow-visible rounded-[24px] bg-white p-5 text-[#171A22] shadow-xl">
