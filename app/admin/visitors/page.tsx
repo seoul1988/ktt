@@ -226,7 +226,7 @@ export default async function AdminVisitorsPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F3EC] p-5 pb-32">
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-2xl">
         <div className="relative mb-6 flex h-10 items-center border-b border-[#E8DED1] pb-3">
           <Link
             href="/admin"
