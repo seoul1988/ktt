@@ -6802,6 +6802,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   // 색상 선택, 텍스트 수정, 링크 해시 변경 등 편집 작업으로는 자동 전환하지 않습니다.
   const [draftMessage, setDraftMessage] = useState("");
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState("");
+  const [sharedDraftBusy, setSharedDraftBusy] = useState<
+    "save-owner" | "save-admin" | "load-owner" | "load-admin" | null
+  >(null);
+
+  // 같은 WebsiteEditor를 Owner/Admin 화면에서 함께 사용할 때 현재 역할을 구분합니다.
+  // 역할별 Draft는 서버 백업 저장소에 따로 보관되며 공개 사이트에는 반영되지 않습니다.
+  const editorRole: "owner" | "admin" =
+    typeof window !== "undefined" && window.location.pathname.includes("/owner/")
+      ? "owner"
+      : "admin";
   const [deletedLayer, setDeletedLayer] = useState<{
     section: BusinessSection;
     index: number;
@@ -7487,6 +7497,231 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       setError("");
     } catch {
       setError("중간 저장에 실패했습니다. 브라우저 저장 공간을 확인해주세요.");
+    }
+  }
+
+  function getSharedDraftPrefix(role: "owner" | "admin") {
+    return `shared-draft-${role}-business-${businessId}_`;
+  }
+
+  async function saveSharedDraft(role: "owner" | "admin") {
+    if (!business || sharedDraftBusy) return;
+
+    const busyKey = role === "owner" ? "save-owner" : "save-admin";
+    setSharedDraftBusy(busyKey);
+    setError("");
+    setMessage("");
+
+    try {
+      // 기존 백업 API를 이용하지만 backup_reason은 지원 중인 manual 값을 유지합니다.
+      // 실제 Draft 구분은 backup_name의 고정 prefix로 합니다.
+      const payload = createBrowserServerBackupPayload(
+        businessId,
+        business,
+        sections,
+        "manual",
+      );
+      payload.backup_name = `${getSharedDraftPrefix(role)}${Date.now()}`;
+
+      const response = await fetch(
+        `/api/admin/businesses/${businessId}/website/backups`,
+        {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      const result = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(
+          String(
+            result.error ||
+              result.message ||
+              `공유 작업본을 저장하지 못했습니다. HTTP ${response.status}`,
+          ),
+        );
+      }
+
+      const savedAt = String(result.backed_up_at || payload.backed_up_at);
+      setDraftMessage(
+        `${role === "owner" ? "오너" : "관리자"} 공유 작업본 저장 완료 · ${formatDraftTime(savedAt)}`,
+      );
+      setMessage(
+        role === "owner"
+          ? "오너 작업본을 서버에 보관했습니다. 관리자가 '오너 작업본 불러오기'로 가져올 수 있습니다."
+          : "관리자 작업본을 서버에 보관했습니다. 오너가 '관리자 작업본 불러오기'로 가져올 수 있습니다.",
+      );
+    } catch (sharedDraftError) {
+      setError(
+        sharedDraftError instanceof Error
+          ? sharedDraftError.message
+          : "공유 작업본 저장에 실패했습니다.",
+      );
+    } finally {
+      setSharedDraftBusy(null);
+    }
+  }
+
+  async function loadLatestSharedDraft(role: "owner" | "admin") {
+    if (sharedDraftBusy) return;
+
+    const busyKey = role === "owner" ? "load-owner" : "load-admin";
+    setSharedDraftBusy(busyKey);
+    setError("");
+    setMessage("");
+
+    try {
+      const listResponse = await fetch(
+        `/api/admin/businesses/${businessId}/website/backups?limit=100`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+      const listResult = await readApiResponse(listResponse);
+
+      if (!listResponse.ok) {
+        throw new Error(
+          String(
+            listResult.error ||
+              listResult.message ||
+              `공유 작업본 목록을 불러오지 못했습니다. HTTP ${listResponse.status}`,
+          ),
+        );
+      }
+
+      const prefix = getSharedDraftPrefix(role);
+      const latest = (Array.isArray(listResult.backups)
+        ? (listResult.backups as WebsiteBackupSummary[])
+        : []
+      )
+        .filter((item) => String(item.backup_name || "").startsWith(prefix))
+        .sort(
+          (a, b) =>
+            new Date(b.backed_up_at).getTime() - new Date(a.backed_up_at).getTime(),
+        )[0];
+
+      if (!latest) {
+        throw new Error(
+          `${role === "owner" ? "오너" : "관리자"}가 서버에 저장한 공유 작업본이 아직 없습니다.`,
+        );
+      }
+
+      const detailResponse = await fetch(
+        `/api/admin/businesses/${businessId}/website/backups/${latest.id}`,
+        {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
+      const detailResult = await readApiResponse(detailResponse);
+
+      if (!detailResponse.ok || !detailResult.backup) {
+        throw new Error(
+          String(
+            detailResult.error ||
+              detailResult.message ||
+              `공유 작업본 내용을 불러오지 못했습니다. HTTP ${detailResponse.status}`,
+          ),
+        );
+      }
+
+      const draft = detailResult.backup as WebsiteBackupDetail;
+      const draftBusiness = draft.business_data as unknown as Business;
+      const draftSections = Array.isArray(draft.sections_data)
+        ? (draft.sections_data as BusinessSection[])
+        : [];
+
+      // 현재 PC의 작업을 먼저 로컬 백업합니다. 잘못 불러와도 기존 작업을 되돌릴 수 있습니다.
+      const currentLocalDraft = loadWebsiteDraft(businessId);
+      backupWebsiteDraft(
+        businessId,
+        currentLocalDraft,
+        `${role === "owner" ? "오너" : "관리자"} 공유 작업본 불러오기 전 백업`,
+      );
+      if (business) {
+        const nowDraft: LocalWebsiteDraft = {
+          business,
+          sections,
+          savedAt: new Date().toISOString(),
+        };
+        backupWebsiteDraft(
+          businessId,
+          nowDraft,
+          `${role === "owner" ? "오너" : "관리자"} 공유 작업본 불러오기 직전 현재 화면`,
+        );
+      }
+
+      const normalizedDraftBusiness: Business = {
+        ...draftBusiness,
+        website_settings: normalizeSettings(
+          draftBusiness.website_settings,
+          draftBusiness.name || business?.name || "",
+        ),
+      };
+
+      const normalizedDraftSections = ensureDefaultHomeSection(
+        draftSections.map((section) =>
+          section.section_type === "hero"
+            ? {
+                ...section,
+                content: {
+                  ...(section.content ?? {}),
+                  background_type:
+                    section.content?.background_type ||
+                    (section.content?.image_url ? "image" : "gradient"),
+                  grid: normalizeGrid(section.content?.grid, createDefaultHero()),
+                  layouts: normalizeHeroLayouts(section.content),
+                },
+              }
+            : section,
+        ),
+        businessId,
+      );
+
+      suppressNextAutoSaveRef.current = true;
+      setBusiness(normalizedDraftBusiness);
+      setSections(normalizedDraftSections);
+      setDeletedLayer(null);
+
+      const firstHome = normalizedDraftSections
+        .filter((section) => section.content?.page_type !== "link-page")
+        .sort((a, b) => a.sort_order - b.sort_order)[0];
+      if (firstHome) {
+        const layouts = normalizeHeroLayouts(firstHome.content);
+        setSelection({
+          area: "hero",
+          sectionId: firstHome.id,
+          layoutId: layouts[0]?.id,
+          cellId: layouts[0]?.cells[0]?.id,
+        });
+      }
+
+      const localSavedAt = saveWebsiteDraft(
+        businessId,
+        normalizedDraftBusiness,
+        normalizedDraftSections,
+      );
+      setLastDraftSavedAt(localSavedAt);
+      setDraftMessage(
+        `${role === "owner" ? "오너" : "관리자"} 작업본 불러옴 · ${formatDraftTime(draft.backed_up_at)}`,
+      );
+      setMessage(
+        "공유 작업본을 현재 편집기로 가져왔습니다. 아직 공개 사이트에는 반영되지 않았습니다. 확인 후 필요할 때만 '서버 저장'을 누르세요.",
+      );
+    } catch (sharedDraftError) {
+      setError(
+        sharedDraftError instanceof Error
+          ? sharedDraftError.message
+          : "공유 작업본을 불러오지 못했습니다.",
+      );
+    } finally {
+      setSharedDraftBusy(null);
     }
   }
 
@@ -9740,8 +9975,37 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               type="button"
               onClick={saveDraftNow}
               className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-800 hover:bg-amber-100"
+              title="현재 컴퓨터 브라우저에만 중간 저장합니다."
             >
               중간 저장
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(sharedDraftBusy)}
+              onClick={() => void saveSharedDraft(editorRole)}
+              className="rounded-full border border-teal-300 bg-teal-50 px-4 py-2 text-sm font-black text-teal-800 hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="현재 작업을 서버의 공유 Draft에 저장합니다. 공개 사이트에는 반영되지 않습니다."
+            >
+              {sharedDraftBusy === (editorRole === "owner" ? "save-owner" : "save-admin")
+                ? "공유 저장 중..."
+                : editorRole === "owner"
+                  ? "오너 작업본 공유"
+                  : "관리자 작업본 공유"}
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(sharedDraftBusy)}
+              onClick={() =>
+                void loadLatestSharedDraft(editorRole === "owner" ? "admin" : "owner")
+              }
+              className="rounded-full border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-black text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-50"
+              title="상대방이 서버에 공유한 가장 최근 작업본을 현재 편집기로 가져옵니다. 공개 사이트는 바뀌지 않습니다."
+            >
+              {sharedDraftBusy === (editorRole === "owner" ? "load-admin" : "load-owner")
+                ? "불러오는 중..."
+                : editorRole === "owner"
+                  ? "관리자 작업본 불러오기"
+                  : "오너 작업본 불러오기"}
             </button>
             {previewUrl ? (
               <a
