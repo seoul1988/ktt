@@ -172,6 +172,10 @@ type GridCell = {
   restaurant_menu_pickup_enabled?: boolean;
   restaurant_menu_delivery_enabled?: boolean;
 
+  /** Catering Request Form 전용 배경색 */
+  catering_request_outer_background_color?: string;
+  catering_request_form_background_color?: string;
+
   /** Catering Request Form에서 각 입력 항목을 웹사이트에 표시할지 여부 */
   catering_request_fields?: {
     customer_name?: boolean;
@@ -4408,12 +4412,16 @@ function CateringRequestFormDisplay({
   compact = false,
   editorPreview = false,
   fieldVisibility,
+  outerBackgroundColor = "#ffffff",
+  formBackgroundColor = "#ffffff",
 }: {
   businessId: number;
   businessName?: string | null;
   compact?: boolean;
   editorPreview?: boolean;
   fieldVisibility?: GridCell["catering_request_fields"];
+  outerBackgroundColor?: string;
+  formBackgroundColor?: string;
 }) {
   const [payload, setPayload] = useState<CateringMenuPayload | null>(null);
 
@@ -4662,8 +4670,18 @@ function CateringRequestFormDisplay({
   }
 
   return (
+    <div
+      className="w-full min-w-0"
+      style={{
+        backgroundColor: outerBackgroundColor || "#ffffff",
+        padding: compact ? "12px" : "20px",
+      }}
+    >
     <form
-      className="mx-auto w-full max-w-[980px] rounded-3xl border border-gray-200 bg-white p-5 text-left shadow-sm sm:p-8"
+      className="mx-auto min-w-0 w-full max-w-[980px] rounded-3xl border border-gray-200 p-4 text-left shadow-sm sm:p-8"
+      style={{
+        backgroundColor: formBackgroundColor || "#ffffff",
+      }}
       onSubmit={async (event) => {
         event.preventDefault();
 
@@ -4825,49 +4843,56 @@ function CateringRequestFormDisplay({
         </div>
       </div>
 
-      <div className={`mt-6 grid gap-4 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}>
-        <label className="text-sm font-black text-gray-700">
+      <div
+        className="mt-6 grid gap-4"
+        style={{
+          gridTemplateColumns: compact
+            ? "minmax(0, 1fr)"
+            : "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
+        }}
+      >
+        <label className="block min-w-0 w-full text-sm font-black text-gray-700">
           Full Name *
-          <input required name="customer_name" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          <input required name="customer_name" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
         </label>
 
         {isFieldVisible("customer_phone") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Phone *
-            <input required type="tel" name="customer_phone" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="tel" name="customer_phone" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("customer_email") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Email *
-            <input required type="email" name="customer_email" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="email" name="customer_email" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("company") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Company / Organization
-            <input name="company" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input name="company" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("event_date") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Event Date *
-            <input required type="date" name="event_date" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="date" name="event_date" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("event_time") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Event Time *
-            <input required type="time" name="event_time" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="time" name="event_time" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("guest_count") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Number of Guests *
             <input
               required
@@ -4875,15 +4900,15 @@ function CateringRequestFormDisplay({
               min={minPeople > 0 ? minPeople : 1}
               defaultValue={minPeople > 0 ? minPeople : undefined}
               name="guest_count"
-              className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
+              className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
             />
           </label>
         ) : null}
 
         {isFieldVisible("occasion") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Occasion
-            <select name="occasion" className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
+            <select name="occasion" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
               <option value="">Select</option>
               <option>Corporate / Business</option>
               <option>Birthday</option>
@@ -4896,7 +4921,7 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("interested_category") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Interested Category
             <select
               name="category_id"
@@ -4905,7 +4930,7 @@ function CateringRequestFormDisplay({
                 setSelectedCategoryId(event.target.value);
                 setSelectedItemId("");
               }}
-              className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+              className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
             >
               <option value="">Select category</option>
               {visibleCategories.map((category) => (
@@ -4918,13 +4943,13 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("interested_menu") ? (
-          <label className="text-sm font-black text-gray-700">
+          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
             Interested Menu
             <select
               name="item_id"
               value={selectedItemId}
               onChange={(event) => setSelectedItemId(event.target.value)}
-              className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+              className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
             >
               <option value="">Select menu</option>
               {visibleItems.map((item) => (
@@ -4937,12 +4962,12 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("catering_service") ? (
-        <fieldset className="sm:col-span-2">
-          <legend className="text-sm font-black text-gray-700">
+        <fieldset className="min-w-0 w-full" style={{ gridColumn: "1 / -1" }}>
+          <legend className="block min-w-0 w-full text-sm font-black text-gray-700">
             Catering Service *
           </legend>
 
-          <div className="mt-2 flex flex-wrap gap-4 rounded-xl border border-gray-200 px-4 py-3">
+          <div className="mt-2 flex min-w-0 flex-wrap gap-3 rounded-xl border border-gray-200 px-3 py-3">
             {pickupAvailable ? (
               <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
                 <input
@@ -4995,16 +5020,22 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("budget_per_person") ? (
-          <label className="text-sm font-black text-gray-700 sm:col-span-2">
+          <label
+            className="block min-w-0 w-full text-sm font-black text-gray-700"
+            style={{ gridColumn: "1 / -1" }}
+          >
             Budget Per Person
-            <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("notes") ? (
-          <label className="text-sm font-black text-gray-700 sm:col-span-2">
+          <label
+            className="block min-w-0 w-full text-sm font-black text-gray-700"
+            style={{ gridColumn: "1 / -1" }}
+          >
             Description / Special Requests
-            <textarea name="notes" rows={5} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
+            <textarea name="notes" rows={5} className="mt-2 block min-w-0 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
       </div>
@@ -5039,6 +5070,7 @@ function CateringRequestFormDisplay({
         </p>
       ) : null}
     </form>
+    </div>
   );
 }
 
@@ -6876,6 +6908,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [fullLayoutEditorOpen, setFullLayoutEditorOpen] = useState(false);
+  const [fullLayoutTarget, setFullLayoutTarget] = useState<string>("home");
   // 링크 페이지 카드의 "미리보기"를 눌렀을 때 서버 저장 여부와 관계없이
   // 현재 브라우저 메모리의 sections 상태에서 해당 페이지를 바로 엽니다.
   const [previewInitialPageSlug, setPreviewInitialPageSlug] = useState("");
@@ -6986,6 +7019,45 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       ),
     [sortedSections],
   );
+
+  const fullLayoutSections = useMemo(() => {
+    if (fullLayoutTarget === "home") {
+      return homeSections.filter(
+        (section) => section.is_visible !== false,
+      );
+    }
+
+    const sectionId = Number(
+      fullLayoutTarget.replace(/^page:/, ""),
+    );
+
+    return linkPageSections.filter(
+      (section) =>
+        section.id === sectionId &&
+        section.is_visible !== false,
+    );
+  }, [
+    fullLayoutTarget,
+    homeSections,
+    linkPageSections,
+  ]);
+
+  const fullLayoutTargetLabel = useMemo(() => {
+    if (fullLayoutTarget === "home") return "메인 페이지";
+
+    const sectionId = Number(
+      fullLayoutTarget.replace(/^page:/, ""),
+    );
+    const target = linkPageSections.find(
+      (section) => section.id === sectionId,
+    );
+
+    return (
+      target?.title ||
+      target?.content?.page_slug ||
+      "별도 페이지"
+    );
+  }, [fullLayoutTarget, linkPageSections]);
 
   const heroSection = useMemo(() => {
     /*
@@ -9606,6 +9678,223 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     setError("");
   }
 
+
+  function addOrOpenCateringRequestPage() {
+    const createRequestCell = (): GridCell => ({
+      ...defaultCell("title", "Catering Request Form", 4),
+      width_percent: 100,
+      display_mode: "catering-request-form",
+      background_color: "#ffffff",
+      catering_request_outer_background_color: "#ffffff",
+      catering_request_form_background_color: "#ffffff",
+      color: "#111827",
+      catering_request_fields: {
+        customer_name: true,
+        customer_phone: true,
+        customer_email: true,
+        company: true,
+        event_date: true,
+        event_time: true,
+        guest_count: true,
+        occasion: true,
+        interested_category: true,
+        interested_menu: true,
+        catering_service: true,
+        budget_per_person: true,
+        notes: true,
+      },
+    });
+
+    /*
+     * 현재 편집 중인 레이어/레이아웃이 있으면 새 페이지를 만들지 않고
+     * 그 위치에 Catering Request Form을 넣습니다.
+     *
+     * 사용자가 "레이아웃 2" 같은 빈 레이아웃을 선택한 뒤 버튼을 누르면
+     * 그 레이아웃이 요청폼 전용 레이아웃으로 바뀝니다.
+     */
+    if (
+      selection.area === "hero" &&
+      selection.sectionId != null &&
+      selection.layoutId
+    ) {
+      const targetSection = sections.find(
+        (section) => section.id === selection.sectionId,
+      );
+
+      if (targetSection) {
+        const layouts = normalizeHeroLayouts(targetSection.content);
+        const targetLayout = layouts.find(
+          (layout) => layout.id === selection.layoutId,
+        );
+
+        if (targetLayout) {
+          const existingRequestCell = targetLayout.cells.find((cell) =>
+            cellContainsDisplayMode(cell, "catering-request-form"),
+          );
+
+          if (existingRequestCell) {
+            setSelection({
+              area: "hero",
+              sectionId: targetSection.id,
+              layoutId: targetLayout.id,
+              cellId: existingRequestCell.id,
+            });
+            setMessage(
+              "현재 레이아웃에 이미 Catering Request Form이 있습니다.",
+            );
+            setError("");
+            return;
+          }
+
+          const requestCell = createRequestCell();
+
+          /*
+           * 선택한 레이아웃을 요청폼 전용으로 사용합니다.
+           * 빈 레이아웃/기본 제목을 따로 남기지 않아 사진처럼
+           * '새 제목을 입력하세요'가 요청폼 위에 남는 현상을 막습니다.
+           */
+          const nextLayouts = layouts.map((layout) =>
+            layout.id === targetLayout.id
+              ? {
+                  ...layout,
+                  height: "medium" as const,
+                  auto_height: true,
+                  margin_bottom_px: layout.margin_bottom_px ?? 0,
+                  layout_width_mode:
+                    layout.layout_width_mode || ("container" as const),
+                  cells: [requestCell],
+                }
+              : layout,
+          );
+
+          setSections((current) =>
+            current.map((section) =>
+              section.id === targetSection.id
+                ? {
+                    ...section,
+                    content: {
+                      ...section.content,
+                      grid: nextLayouts[0],
+                      layouts: nextLayouts,
+                    },
+                    is_visible: true,
+                  }
+                : section,
+            ),
+          );
+
+          setSelection({
+            area: "hero",
+            sectionId: targetSection.id,
+            layoutId: targetLayout.id,
+            cellId: requestCell.id,
+          });
+
+          setMessage(
+            "선택한 레이아웃에 Catering Request Form을 넣었습니다. Owner Catering Settings의 최소 주문금액, 최소 인원, 사전 예약시간, 전화번호와 폼 표시/숨김 설정을 자동으로 사용합니다.",
+          );
+          setError("");
+
+          window.requestAnimationFrame(() => {
+            scrollEditorLayoutToTop(targetLayout.id || "");
+          });
+
+          return;
+        }
+      }
+    }
+
+    /*
+     * 현재 선택된 레이아웃이 없을 때만 기존 Catering Request 페이지를 찾습니다.
+     * 있으면 그 폼으로 이동하고, 없으면 새 페이지를 만듭니다.
+     */
+    const pageName = "Catering Request";
+    const pageSlug = "catering-request";
+
+    const existingPage = sections.find((section) =>
+      normalizeHeroLayouts(section.content).some((layout) =>
+        gridContainsDisplayMode(layout, "catering-request-form"),
+      ),
+    );
+
+    if (existingPage) {
+      const existingLayouts = normalizeHeroLayouts(existingPage.content);
+      const requestLayout = existingLayouts.find((layout) =>
+        gridContainsDisplayMode(layout, "catering-request-form"),
+      );
+
+      const requestCell =
+        requestLayout?.cells.find((cell) =>
+          cellContainsDisplayMode(cell, "catering-request-form"),
+        ) || requestLayout?.cells[0];
+
+      if (requestLayout) {
+        setSelection({
+          area: "hero",
+          sectionId: existingPage.id,
+          layoutId: requestLayout.id,
+          cellId: requestCell?.id,
+        });
+        setMessage("기존 Catering Request Form을 불러왔습니다.");
+        setError("");
+        return;
+      }
+    }
+
+    const maxOrder = sections.reduce(
+      (max, section) =>
+        Math.max(max, Number(section.sort_order) || 0),
+      0,
+    );
+
+    const requestCell = createRequestCell();
+    const requestLayout: GridData = {
+      id: createId("layout"),
+      height: "medium",
+      auto_height: true,
+      margin_bottom_px: 0,
+      layout_width_mode: "container",
+      cells: [requestCell],
+    };
+
+    const newSection: BusinessSection = {
+      id: -Date.now(),
+      business_id: Number(businessId),
+      section_type: "custom",
+      title: pageName,
+      content: {
+        page_type: "link-page",
+        page_slug: pageSlug,
+        link_page_kind: "blank",
+        background_type: "color",
+        background_color: "#ffffff",
+        grid: requestLayout,
+        layouts: [requestLayout],
+      },
+      settings: {
+        text_align: "left",
+        overlay: false,
+        overlay_opacity: 0,
+        height: "medium",
+      },
+      sort_order: maxOrder + 1,
+      is_visible: true,
+    };
+
+    setSections((current) => [...current, newSection]);
+    setSelection({
+      area: "hero",
+      sectionId: newSection.id,
+      layoutId: requestLayout.id,
+      cellId: requestCell.id,
+    });
+
+    setMessage(
+      "선택된 레이아웃이 없어서 새 Catering Request 페이지를 만들었습니다.",
+    );
+    setError("");
+  }
+
   function deleteSection(sectionId: number) {
     const ordered = [...sections].sort(
       (a, b) => a.sort_order - b.sort_order,
@@ -10164,12 +10453,36 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             </button>
             <button
               type="button"
+              onClick={addOrOpenCateringRequestPage}
+              className="rounded-full border border-sky-300 bg-sky-50 px-4 py-2 text-sm font-black text-sky-800 hover:bg-sky-100"
+              title="현재 선택한 레이어/레이아웃에 Catering Request Form을 넣습니다. 선택된 레이아웃이 없을 때만 기존 폼을 찾거나 새 페이지를 만듭니다."
+            >
+              📝 캐터링 요청폼 넣기
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setCellEditModalOpen(false);
+
+                const selectedSectionForLayout =
+                  selection.area === "hero" &&
+                  selection.sectionId != null
+                    ? sections.find(
+                        (section) =>
+                          section.id === selection.sectionId,
+                      )
+                    : null;
+
+                setFullLayoutTarget(
+                  selectedSectionForLayout?.content?.page_type ===
+                    "link-page"
+                    ? `page:${selectedSectionForLayout.id}`
+                    : "home",
+                );
                 setFullLayoutEditorOpen(true);
               }}
               className="rounded-full border border-fuchsia-300 bg-fuchsia-50 px-4 py-2 text-sm font-black text-fuchsia-800 hover:bg-fuchsia-100"
-              title="모든 홈페이지 레이어를 실제 순서대로 한 화면에서 보면서 높이·칸 폭·레이어 간격을 맞춥니다."
+              title="메인 페이지 또는 별도 페이지를 선택해서 전체 레이어의 높이·칸 폭·간격을 한 화면에서 맞춥니다."
             >
               ↕ 전체 레이어 맞춤
             </button>
@@ -10278,7 +10591,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     전체 레이어 간격 · 크기 맞춤
                   </h2>
                   <p className="mt-1 text-xs font-semibold text-gray-300">
-                    공개 사이트 순서대로 모두 보면서 칸 폭, 높이, 레이어 사이 간격을 바로 조절합니다.
+                    메인 페이지 또는 별도 페이지를 선택한 뒤 전체 레이아웃의 칸 폭, 높이, 간격을 한 화면에서 조절합니다.
                   </p>
                 </div>
 
@@ -10319,6 +10632,54 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 </div>
               </div>
 
+              <div className="shrink-0 border-b border-fuchsia-900/50 bg-gray-900 px-4 py-3 sm:px-6">
+                <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2">
+                  <span className="mr-1 text-xs font-black text-gray-300">
+                    맞출 페이지
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setFullLayoutTarget("home")}
+                    className={`rounded-full border px-3 py-2 text-xs font-black transition ${
+                      fullLayoutTarget === "home"
+                        ? "border-fuchsia-400 bg-fuchsia-600 text-white"
+                        : "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+                    }`}
+                  >
+                    🏠 메인 페이지
+                  </button>
+
+                  {linkPageSections.map((page) => {
+                    const pageValue = `page:${page.id}`;
+                    const pageLabel =
+                      page.title ||
+                      page.content?.page_slug ||
+                      `Page ${page.id}`;
+
+                    return (
+                      <button
+                        key={page.id}
+                        type="button"
+                        onClick={() =>
+                          setFullLayoutTarget(pageValue)
+                        }
+                        className={`rounded-full border px-3 py-2 text-xs font-black transition ${
+                          fullLayoutTarget === pageValue
+                            ? "border-sky-400 bg-sky-600 text-white"
+                            : "border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700"
+                        }`}
+                        title={String(
+                          page.content?.page_slug || pageLabel,
+                        )}
+                      >
+                        📄 {pageLabel}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#0d0d0d]">
                 <div
                   className={`mx-auto min-h-full bg-white shadow-2xl transition-[width] ${
@@ -10328,9 +10689,10 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   }`}
                 >
                   <div className="sticky top-0 z-[80] border-b border-blue-200 bg-blue-50/95 px-3 py-2 text-center text-[11px] font-black text-blue-800 backdrop-blur">
-                    파란 ↔ 손잡이 = 칸 폭 조절 · 아래 ↕ 손잡이 = 높이 조절 · 각 레이어 아래 슬라이더 = 다음 레이어와 간격
+                    현재: {fullLayoutTargetLabel} · 파란 ↔ 손잡이 = 칸 폭 · 아래 ↕ 손잡이 = 높이 · 각 레이아웃 아래 슬라이더 = 다음 간격
                   </div>
 
+                  {fullLayoutTarget === "home" ? (
                   <div
                     style={{
                       backgroundColor: String(
@@ -10370,10 +10732,22 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                       previewDevice={device}
                     />
                   </div>
+                  ) : null}
 
-                  {homeSections
-                    .filter((section) => section.is_visible !== false)
-                    .map((section, sectionIndex) => {
+                  {fullLayoutSections.length === 0 ? (
+                    <div className="flex min-h-[360px] items-center justify-center bg-white px-6 text-center">
+                      <div>
+                        <p className="text-lg font-black text-gray-900">
+                          이 페이지에 맞출 레이아웃이 없습니다.
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-gray-500">
+                          페이지에 레이아웃을 먼저 추가한 다음 다시 전체 레이어 맞춤을 열어주세요.
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {fullLayoutSections.map((section, sectionIndex) => {
                       const layouts = normalizeHeroLayouts(section.content);
 
                       return (
@@ -10381,13 +10755,31 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           key={section.id}
                           className="relative"
                           style={{
-                            ...(sectionContainsRestaurantMenu(section)
+                            ...(section.content?.page_type === "link-page"
                               ? {
-                                  backgroundColor: outerBackgroundColor,
+                                  backgroundColor: String(
+                                    section.content
+                                      ?.link_page_background_color ||
+                                      section.content?.background_color ||
+                                      outerBackgroundColor,
+                                  ),
                                   backgroundImage: "none",
                                 }
-                              : backgroundStyle(section, outerBackgroundColor)),
-                            minHeight: getVideoSectionMinHeight(section, device),
+                              : sectionContainsRestaurantMenu(section)
+                                ? {
+                                    backgroundColor:
+                                      outerBackgroundColor,
+                                    backgroundImage: "none",
+                                  }
+                                : backgroundStyle(
+                                    section,
+                                    outerBackgroundColor,
+                                  )),
+                            minHeight:
+                              getVideoSectionMinHeight(
+                                section,
+                                device,
+                              ),
                           }}
                         >
                           <VideoBackgroundLayer section={section} />
@@ -10560,7 +10952,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
               <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-800 bg-gray-950 px-4 py-3 text-white sm:px-6">
                 <p className="text-xs font-semibold text-gray-400">
-                  여기서 바꾼 크기와 간격은 원래 레이어 데이터에 바로 반영됩니다.
+                  현재 선택한 페이지의 크기와 간격이 원래 레이어 데이터에 바로 반영됩니다.
                 </p>
                 <button
                   type="button"
@@ -19405,6 +19797,14 @@ function CellPreview({
             compact={previewDevice === "mobile"}
             editorPreview={true}
             fieldVisibility={cell.catering_request_fields}
+          outerBackgroundColor={
+            cell.catering_request_outer_background_color ||
+            cell.background_color ||
+            "#ffffff"
+          }
+          formBackgroundColor={
+            cell.catering_request_form_background_color || "#ffffff"
+          }
           />
         </div>
       );
@@ -26120,6 +26520,73 @@ function RightPanel(props: {
           </details>
         ) : null}
 
+        {selectedCell.display_mode === "catering-request-form" ? (
+          <div className="mt-5 rounded-2xl border-2 border-sky-200 bg-sky-50 p-4">
+            <p className="text-sm font-black text-sky-950">
+              Catering Request 배경색
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-sky-700">
+              바깥 전체 배경과 가운데 둥근 폼 박스 배경을 각각 따로 바꿀 수 있습니다.
+            </p>
+
+            <div className="mt-4 grid gap-4">
+              <div className="rounded-xl border border-sky-200 bg-white p-3">
+                <p className="text-xs font-black text-gray-800">
+                  바깥 전체 배경
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-gray-500">
+                  Catering 폼의 왼쪽·오른쪽과 폼 주변 전체 영역 색상입니다.
+                </p>
+                <ColorInput
+                  label="바깥 전체 배경색"
+                  value={String(
+                    selectedCell.catering_request_outer_background_color ||
+                      selectedCell.background_color ||
+                      "#ffffff",
+                  )}
+                  onChange={(value) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        catering_request_outer_background_color: value,
+                        background_color: value,
+                      },
+                      selection.layoutId,
+                    )
+                  }
+                />
+              </div>
+
+              <div className="rounded-xl border border-sky-200 bg-white p-3">
+                <p className="text-xs font-black text-gray-800">
+                  폼 박스 배경
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-gray-500">
+                  Full Name, Phone 등이 들어 있는 가운데 둥근 박스의 배경색입니다.
+                </p>
+                <ColorInput
+                  label="폼 박스 배경색"
+                  value={String(
+                    selectedCell.catering_request_form_background_color ||
+                      "#ffffff",
+                  )}
+                  onChange={(value) =>
+                    props.onUpdateCell(
+                      area,
+                      selectedCell.id,
+                      {
+                        catering_request_form_background_color: value,
+                      },
+                      selection.layoutId,
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200 bg-white">
           <button
             type="button"
@@ -26291,6 +26758,12 @@ function RightPanel(props: {
                         display_mode: "catering-request-form",
                         text: "Catering Request Form",
                         background_color: "#ffffff",
+                        catering_request_outer_background_color:
+                          selectedCell.catering_request_outer_background_color ||
+                          "#ffffff",
+                        catering_request_form_background_color:
+                          selectedCell.catering_request_form_background_color ||
+                          "#ffffff",
                         color: "#111827",
                         catering_request_fields: {
                           customer_name: true,
@@ -34302,6 +34775,10 @@ function TitleCellEditor({
         display_mode: "catering-request-form",
         text: "Catering Request Form",
         background_color: "#ffffff",
+        catering_request_outer_background_color:
+          cell.catering_request_outer_background_color || "#ffffff",
+        catering_request_form_background_color:
+          cell.catering_request_form_background_color || "#ffffff",
         color: "#111827",
         catering_request_fields: {
           customer_name: cell.catering_request_fields?.customer_name ?? true,
