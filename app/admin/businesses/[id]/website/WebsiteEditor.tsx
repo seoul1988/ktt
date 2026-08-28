@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
 import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
@@ -124,6 +124,8 @@ type GridCell = {
   image_url?: string;
   image_size_percent?: number;
   image_fit?: "scale" | "width" | "contain" | "cover" | "fill";
+  /** true이면 같은 레이아웃의 빈 칸/옆 칸 폭을 무시하고 이 이미지를 레이어 전체 폭으로 표시 */
+  image_fill_layer?: boolean;
   /** 이미지 셀 안에서 마우스로 이동한 가로/세로 위치(%) */
   image_position_x?: number;
   image_position_y?: number;
@@ -138,10 +140,17 @@ type GridCell = {
   /** 휴대폰에서 이미지가 터치 가능함을 알려주는 움직이는 아이콘 */
   click_hint_enabled?: boolean;
   click_hint_icon?: "pointer" | "arrow" | "plus" | "zoom";
-  click_hint_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
-  click_hint_animation?: "pulse" | "bounce" | "slide";
+  click_hint_position?: "top-left" | "top-right" | "bottom-left" | "bottom-right" | "custom";
+  click_hint_x_percent?: number;
+  click_hint_y_percent?: number;
+  click_hint_size_px?: number;
+  click_hint_background_color?: string;
+  click_hint_text_color?: string;
+  click_hint_animation?: "none" | "pulse" | "bounce" | "slide";
   click_hint_interval_seconds?: number;
   click_hint_stop_after_tap?: boolean;
+  click_hint_link_type?: "none" | "external" | "page" | "section";
+  click_hint_link_value?: string;
   logo_size_px?: number;
   display_mode?:
     | "text"
@@ -495,6 +504,13 @@ type SectionContent = {
   initially_hidden?: boolean;
   close_button_enabled?: boolean;
   scroll_on_open?: boolean;
+
+  accordion_label?: string;
+  accordion_text_color?: string;
+  accordion_font_size?: number;
+  accordion_line_color?: string;
+  accordion_line_thickness?: number;
+  accordion_background_color?: string;
 
   // 레이어 외곽선 설정
   layer_border_enabled?: boolean;
@@ -6852,12 +6868,14 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   const [sections, setSections] = useState<BusinessSection[]>([]);
   const [selection, setSelection] = useState<Selection>({ area: "header" });
   const [cellEditModalOpen, setCellEditModalOpen] = useState(false);
+  const [cellEditPanelCollapsed, setCellEditPanelCollapsed] = useState(false);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [fullLayoutEditorOpen, setFullLayoutEditorOpen] = useState(false);
   // 링크 페이지 카드의 "미리보기"를 눌렀을 때 서버 저장 여부와 관계없이
   // 현재 브라우저 메모리의 sections 상태에서 해당 페이지를 바로 엽니다.
   const [previewInitialPageSlug, setPreviewInitialPageSlug] = useState("");
@@ -6880,6 +6898,28 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       );
       return Number.isInteger(saved) && saved > 0 ? saved : null;
     });
+
+  useEffect(() => {
+    const handleNestedImageEditorState = (event: Event) => {
+      const customEvent = event as CustomEvent<{ open?: boolean }>;
+      const isOpen = customEvent.detail?.open === true;
+
+      // 이미지 편집 모달이 열리면 오른쪽 Cell Editor는 자동으로 들어갑니다.
+      // 닫히면 다시 나옵니다. 모달이 열린 동안에도 우측 탭으로 수동 열기/닫기가 가능합니다.
+      setCellEditPanelCollapsed(isOpen);
+    };
+
+    window.addEventListener(
+      "website-builder-image-editor-state",
+      handleNestedImageEditorState,
+    );
+
+    return () =>
+      window.removeEventListener(
+        "website-builder-image-editor-state",
+        handleNestedImageEditorState,
+      );
+  }, []);
 
   // 미리보기는 사용자가 상단의 "작업 미리보기" 버튼을 직접 눌렀을 때만 엽니다.
   // 색상 선택, 텍스트 수정, 링크 해시 변경 등 편집 작업으로는 자동 전환하지 않습니다.
@@ -7888,6 +7928,100 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       layouts: nextLayouts,
       grid: nextLayouts[0],
     });
+  }
+
+  function updateSectionLayoutDirect(
+    sectionId: number,
+    layoutId: string | undefined,
+    updater: (grid: GridData) => GridData,
+  ) {
+    setSections((current) =>
+      current.map((section) => {
+        if (section.id !== sectionId) return section;
+
+        const layouts = normalizeHeroLayouts(section.content);
+        const targetId = layoutId || layouts[0]?.id;
+        const nextLayouts = layouts.map((layout) =>
+          layout.id === targetId ? updater(layout) : layout,
+        );
+
+        return {
+          ...section,
+          content: {
+            ...section.content,
+            layouts: nextLayouts,
+            grid: nextLayouts[0],
+          },
+        };
+      }),
+    );
+  }
+
+  function updateSectionLayoutWidthsDirect(
+    sectionId: number,
+    layoutId: string | undefined,
+    widths: Record<string, number>,
+  ) {
+    updateSectionLayoutDirect(sectionId, layoutId, (grid) => ({
+      ...grid,
+      cells: grid.cells.map((cell) => {
+        const currentWidth =
+          device === "mobile"
+            ? Number(cell.mobile_width_percent ?? cell.width_percent)
+            : Number(cell.width_percent);
+
+        const nextWidth =
+          typeof widths[cell.id] === "number"
+            ? widths[cell.id]
+            : currentWidth;
+
+        return device === "mobile"
+          ? { ...cell, mobile_width_percent: nextWidth }
+          : { ...cell, width_percent: nextWidth };
+      }),
+    }));
+  }
+
+  function updateSectionLayoutHeightDirect(
+    sectionId: number,
+    layoutId: string | undefined,
+    heightPx: number,
+  ) {
+    const safeHeight = Math.max(
+      20,
+      Math.min(3000, Math.round(Number(heightPx) || 20)),
+    );
+
+    updateSectionLayoutDirect(sectionId, layoutId, (grid) =>
+      device === "mobile"
+        ? {
+            ...grid,
+            mobile_height_px: safeHeight,
+            center_offset_y_px: 0,
+          }
+        : {
+            ...grid,
+            height_px: safeHeight,
+            center_offset_y_px: 0,
+          },
+    );
+  }
+
+  function updateSectionLayoutSpacingDirect(
+    sectionId: number,
+    layoutId: string | undefined,
+    spacingPx: number,
+  ) {
+    const safeSpacing = Math.max(
+      0,
+      Math.min(500, Math.round(Number(spacingPx) || 0)),
+    );
+
+    updateSectionLayoutDirect(sectionId, layoutId, (grid) =>
+      device === "mobile"
+        ? { ...grid, mobile_margin_bottom_px: safeSpacing }
+        : { ...grid, margin_bottom_px: safeSpacing },
+    );
   }
 
   function addHeroLayout() {
@@ -10031,6 +10165,18 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             <button
               type="button"
               onClick={() => {
+                setCellEditModalOpen(false);
+                setFullLayoutEditorOpen(true);
+              }}
+              className="rounded-full border border-fuchsia-300 bg-fuchsia-50 px-4 py-2 text-sm font-black text-fuchsia-800 hover:bg-fuchsia-100"
+              title="모든 홈페이지 레이어를 실제 순서대로 한 화면에서 보면서 높이·칸 폭·레이어 간격을 맞춥니다."
+            >
+              ↕ 전체 레이어 맞춤
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 // 상단 작업 미리보기는 현재 선택된 링크 페이지를 우선 열고,
                 // Home/일반 레이어를 선택한 상태라면 홈페이지부터 엽니다.
                 const selectedSection =
@@ -10119,6 +10265,315 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           onClose={() => setMenuImportOpen(false)}
         />
       ) : null}
+
+      {fullLayoutEditorOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className="fixed inset-0 z-[150000] flex flex-col bg-gray-950/80">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-700 bg-gray-950 px-4 py-3 text-white sm:px-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-fuchsia-300">
+                    Full Layout Editor
+                  </p>
+                  <h2 className="mt-1 text-lg font-black sm:text-xl">
+                    전체 레이어 간격 · 크기 맞춤
+                  </h2>
+                  <p className="mt-1 text-xs font-semibold text-gray-300">
+                    공개 사이트 순서대로 모두 보면서 칸 폭, 높이, 레이어 사이 간격을 바로 조절합니다.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="hidden rounded-full border border-gray-700 bg-gray-900 p-1 sm:flex">
+                    <button
+                      type="button"
+                      onClick={() => setDevice("desktop")}
+                      className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                        device === "desktop"
+                          ? "bg-white text-gray-950"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      Desktop
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDevice("mobile")}
+                      className={`rounded-full px-3 py-1.5 text-xs font-black ${
+                        device === "mobile"
+                          ? "bg-white text-gray-950"
+                          : "text-gray-300"
+                      }`}
+                    >
+                      Mobile
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setFullLayoutEditorOpen(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-gray-950"
+                    aria-label="전체 레이어 맞춤 닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#0d0d0d]">
+                <div
+                  className={`mx-auto min-h-full bg-white shadow-2xl transition-[width] ${
+                    device === "mobile"
+                      ? "w-[390px] max-w-full"
+                      : "w-full"
+                  }`}
+                >
+                  <div className="sticky top-0 z-[80] border-b border-blue-200 bg-blue-50/95 px-3 py-2 text-center text-[11px] font-black text-blue-800 backdrop-blur">
+                    파란 ↔ 손잡이 = 칸 폭 조절 · 아래 ↕ 손잡이 = 높이 조절 · 각 레이어 아래 슬라이더 = 다음 레이어와 간격
+                  </div>
+
+                  <div
+                    style={{
+                      backgroundColor: String(
+                        websiteSettings.header_background_color || "#ffffff",
+                      ),
+                    }}
+                  >
+                    <EditableGrid
+                      area="header"
+                      grid={headerGrid}
+                      selectedCellId={undefined}
+                      business={business}
+                      accentColor={String(websiteSettings.accent_color)}
+                      previewDevice={device}
+                      websiteSettings={websiteSettings}
+                      onSelect={() => {}}
+                      onUpdateCell={(cellId, patch) =>
+                        updateCell("header", cellId, patch)
+                      }
+                      onResizeWidths={(widths) =>
+                        updateGridWidths("header", widths)
+                      }
+                      onResizeHeight={(heightPx) =>
+                        updateGridHeight("header", heightPx)
+                      }
+                      onResizeNestedSizes={(parentCellId, sizes) =>
+                        updateNestedCellSizes("header", parentCellId, sizes)
+                      }
+                      onResizeNestedHeight={(parentCellId, heightPx) =>
+                        updateNestedCellHeight("header", parentCellId, heightPx)
+                      }
+                      onMergeNested={(cellId) => mergeCell("header", cellId)}
+                    />
+                    <HeaderSubmenu
+                      websiteSettings={websiteSettings}
+                      businessId={businessId}
+                      previewDevice={device}
+                    />
+                  </div>
+
+                  {homeSections
+                    .filter((section) => section.is_visible !== false)
+                    .map((section, sectionIndex) => {
+                      const layouts = normalizeHeroLayouts(section.content);
+
+                      return (
+                        <section
+                          key={section.id}
+                          className="relative"
+                          style={{
+                            ...(sectionContainsRestaurantMenu(section)
+                              ? {
+                                  backgroundColor: outerBackgroundColor,
+                                  backgroundImage: "none",
+                                }
+                              : backgroundStyle(section, outerBackgroundColor)),
+                            minHeight: getVideoSectionMinHeight(section, device),
+                          }}
+                        >
+                          <VideoBackgroundLayer section={section} />
+                          <VideoOverlayContent
+                            section={section}
+                            previewDevice={device}
+                            editorPreview
+                          />
+
+                          <div className="relative z-10">
+                            <div className="pointer-events-none absolute left-2 top-2 z-[70] rounded-full bg-fuchsia-700 px-3 py-1 text-[10px] font-black text-white shadow">
+                              {sectionIndex + 1}. {section.title || section.section_type}
+                            </div>
+
+                            {layouts.map((layout, layoutIndex) => {
+                              const spacing = getLayoutSpacingPx(layout, device);
+
+                              return (
+                                <div
+                                  key={layout.id}
+                                  className={`${getLayoutWidthClass(layout)} relative`}
+                                  style={{
+                                    ...getLayoutBorderStyle(layout),
+                                    marginBottom: `${spacing}px`,
+                                  }}
+                                >
+                                  <EditableGrid
+                                    area="hero"
+                                    grid={layout}
+                                    selectedCellId={undefined}
+                                    business={business}
+                                    accentColor={String(websiteSettings.accent_color)}
+                                    previewDevice={device}
+                                    websiteSettings={websiteSettings}
+                                    onSelect={() => {}}
+                                    onUpdateCell={(cellId, patch) =>
+                                      updateSectionLayoutDirect(
+                                        section.id,
+                                        layout.id,
+                                        (grid) => ({
+                                          ...grid,
+                                          cells: mapCellRecursive(
+                                            grid.cells,
+                                            cellId,
+                                            (cell) =>
+                                              applyCellPatchForDevice(
+                                                cell,
+                                                patch,
+                                                device,
+                                              ),
+                                          ),
+                                        }),
+                                      )
+                                    }
+                                    onResizeWidths={(widths) =>
+                                      updateSectionLayoutWidthsDirect(
+                                        section.id,
+                                        layout.id,
+                                        widths,
+                                      )
+                                    }
+                                    onResizeHeight={(heightPx) =>
+                                      updateSectionLayoutHeightDirect(
+                                        section.id,
+                                        layout.id,
+                                        heightPx,
+                                      )
+                                    }
+                                    onResizeNestedSizes={(parentCellId, sizes) =>
+                                      updateSectionLayoutDirect(
+                                        section.id,
+                                        layout.id,
+                                        (grid) => ({
+                                          ...grid,
+                                          cells: mapCellRecursive(
+                                            grid.cells,
+                                            parentCellId,
+                                            (cell) => ({
+                                              ...cell,
+                                              child_cells: (
+                                                cell.child_cells || []
+                                              ).map((child, childIndex) => ({
+                                                ...child,
+                                                size_percent:
+                                                  sizes[childIndex] ??
+                                                  child.size_percent,
+                                              })),
+                                            }),
+                                          ),
+                                        }),
+                                      )
+                                    }
+                                    onResizeNestedHeight={(parentCellId, heightPx) =>
+                                      updateSectionLayoutDirect(
+                                        section.id,
+                                        layout.id,
+                                        (grid) => ({
+                                          ...grid,
+                                          cells: mapCellRecursive(
+                                            grid.cells,
+                                            parentCellId,
+                                            (cell) =>
+                                              device === "mobile"
+                                                ? {
+                                                    ...cell,
+                                                    mobile_nested_height_px:
+                                                      heightPx,
+                                                  }
+                                                : {
+                                                    ...cell,
+                                                    nested_height_px: heightPx,
+                                                  },
+                                          ),
+                                        }),
+                                      )
+                                    }
+                                    onMergeNested={() => {}}
+                                  />
+
+                                  <div className="relative z-[75] flex items-center gap-3 border-t border-fuchsia-200 bg-fuchsia-50/95 px-3 py-2">
+                                    <span className="shrink-0 text-[10px] font-black text-fuchsia-800">
+                                      {section.title || "Layer"}
+                                      {layouts.length > 1
+                                        ? ` · layout ${layoutIndex + 1}`
+                                        : ""}
+                                      아래 간격
+                                    </span>
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={300}
+                                      step={1}
+                                      value={Math.max(0, Math.min(300, spacing))}
+                                      onChange={(event) =>
+                                        updateSectionLayoutSpacingDirect(
+                                          section.id,
+                                          layout.id,
+                                          Number(event.target.value),
+                                        )
+                                      }
+                                      className="min-w-0 flex-1 accent-fuchsia-600"
+                                    />
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={500}
+                                      value={spacing}
+                                      onChange={(event) =>
+                                        updateSectionLayoutSpacingDirect(
+                                          section.id,
+                                          layout.id,
+                                          Number(event.target.value),
+                                        )
+                                      }
+                                      className="w-20 rounded-lg border border-fuchsia-200 bg-white px-2 py-1 text-center text-xs font-black text-gray-800"
+                                    />
+                                    <span className="text-[10px] font-bold text-gray-500">
+                                      px
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      );
+                    })}
+                </div>
+              </div>
+
+              <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-800 bg-gray-950 px-4 py-3 text-white sm:px-6">
+                <p className="text-xs font-semibold text-gray-400">
+                  여기서 바꾼 크기와 간격은 원래 레이어 데이터에 바로 반영됩니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFullLayoutEditorOpen(false)}
+                  className="rounded-xl bg-fuchsia-600 px-5 py-2.5 text-sm font-black text-white hover:bg-fuchsia-500"
+                >
+                  완료
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {historyOpen && typeof document !== "undefined"
         ? createPortal(
@@ -10525,6 +10980,43 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     >
                       ↓
                     </button>
+                    {!isHero &&
+                    section.section_type !== "footer" &&
+                    section.section_type !== "map" ? (
+                      <button
+                        type="button"
+                        title="공개 사이트에서 제목 줄만 보이고 클릭하면 펼쳐지는 방식"
+                        onClick={() => {
+                          const nextCollapsible =
+                            section.content?.collapsible !== true;
+
+                          updateSectionContent(section.id, {
+                            collapsible: nextCollapsible,
+                            initially_hidden: nextCollapsible,
+                            close_button_enabled: false,
+                            scroll_on_open: false,
+                          });
+
+                          setMessage(
+                            nextCollapsible
+                              ? `"${layerName}" 레이어를 접기/펼치기 형식으로 변경했습니다. 저장하면 공개 사이트에서 제목 줄을 눌러 열고 닫을 수 있습니다.`
+                              : `"${layerName}" 레이어를 항상 펼쳐지는 일반 레이어로 변경했습니다.`,
+                          );
+                        }}
+                        className={`ml-auto rounded-lg px-2 py-1 text-[10px] font-black ${
+                          section.content?.collapsible === true
+                            ? "bg-violet-100 text-violet-700"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {section.content?.collapsible === true
+                          ? "접기식 ON"
+                          : "접기식"}
+                      </button>
+                    ) : (
+                      <span className="ml-auto" />
+                    )}
+
                     <button
                       type="button"
                       onClick={() =>
@@ -10532,7 +11024,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                           is_visible: !section.is_visible,
                         })
                       }
-                      className="ml-auto rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-700"
+                      className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-black text-gray-700"
                     >
                       {section.is_visible ? "숨기기" : "보이기"}
                     </button>
@@ -11109,7 +11601,29 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         {selectedCell && cellEditModalOpen && typeof document !== "undefined"
           ? createPortal(
               <div className="pointer-events-none fixed inset-0 z-[100000]">
-                <div className="pointer-events-auto fixed bottom-0 right-0 top-[65px] flex w-[min(560px,96vw)] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-18px_0_40px_rgba(15,23,42,0.18)]">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCellEditPanelCollapsed((current) => !current)
+                  }
+                  className={`pointer-events-auto fixed right-0 top-1/2 z-[100002] -translate-y-1/2 rounded-l-xl border border-r-0 border-gray-300 bg-white px-2 py-4 text-xs font-black text-gray-800 shadow-lg transition-all duration-300 hover:bg-gray-100 ${
+                    cellEditPanelCollapsed
+                      ? "translate-x-0"
+                      : "translate-x-full"
+                  }`}
+                  aria-label="셀 편집 메뉴 열기"
+                  title="셀 편집 메뉴 열기"
+                >
+                  ‹ 메뉴
+                </button>
+
+                <div
+                  className={`pointer-events-auto fixed bottom-0 right-0 top-[65px] flex w-[min(560px,96vw)] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-18px_0_40px_rgba(15,23,42,0.18)] transition-transform duration-300 ease-in-out ${
+                    cellEditPanelCollapsed
+                      ? "translate-x-full"
+                      : "translate-x-0"
+                  }`}
+                >
                   <div className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
                     <div>
                       <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
@@ -11123,14 +11637,29 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setCellEditModalOpen(false)}
-                      className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-xl font-black text-gray-600 hover:bg-gray-100"
-                      aria-label="셀 편집 닫기"
-                    >
-                      ×
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCellEditPanelCollapsed(true)}
+                        className="flex h-10 items-center justify-center rounded-full border border-gray-200 bg-white px-3 text-sm font-black text-gray-700 hover:bg-gray-100"
+                        aria-label="셀 편집 메뉴 오른쪽으로 넣기"
+                        title="오른쪽으로 넣기"
+                      >
+                        → 넣기
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCellEditModalOpen(false);
+                          setCellEditPanelCollapsed(false);
+                        }}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-xl font-black text-gray-600 hover:bg-gray-100"
+                        aria-label="셀 편집 닫기"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-gray-50 p-4 sm:p-5">
@@ -11184,9 +11713,30 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                       selectedCell.display_mode !== "catering-menu" &&
                       selectedCell.display_mode !== "catering-request-form" ? (
                         <div className="mt-4">
-                          <label className="block text-xs font-black text-gray-700">
-                            글 내용
-                          </label>
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="block text-xs font-black text-gray-700">
+                              글 내용
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent(
+                                    "website-builder-open-text-editor",
+                                    {
+                                      detail: {
+                                        cellId: selectedCell.id,
+                                      },
+                                    },
+                                  ),
+                                );
+                              }}
+                              className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-[11px] font-black text-blue-700 hover:border-blue-500 hover:bg-blue-100"
+                              title="HTML / Rich Text 편집기 열기"
+                            >
+                              ✎ 편집기
+                            </button>
+                          </div>
                           <div
                             key={`${selectedCell.id}-${device}`}
                             contentEditable
@@ -11983,6 +12533,14 @@ function getMobileButtonText(cell: GridCell) {
 function getMobileHeaderHeight(
   websiteSettings: WebsiteSettings | null | undefined,
 ) {
+  const savedMobileHeight = Number(
+    websiteSettings?.header_grid?.mobile_height_px,
+  );
+
+  if (Number.isFinite(savedMobileHeight) && savedMobileHeight > 0) {
+    return Math.max(56, Math.min(600, savedMobileHeight));
+  }
+
   const desktopHeaderHeight = Math.max(
     48,
     Math.min(
@@ -12006,13 +12564,9 @@ function getMobileHeaderHeight(
         )
       : 0;
 
-  /*
-   * Header 아래 메뉴 줄은 모바일에서 표시하지 않으므로,
-   * 데스크톱 헤더 높이에 포함된 서브메뉴 두께를 모바일 높이에서 뺍니다.
-   */
   return Math.max(
     56,
-    Math.min(240, desktopHeaderHeight - submenuHeight),
+    Math.min(600, desktopHeaderHeight - submenuHeight),
   );
 }
 
@@ -12067,6 +12621,7 @@ function HeaderSubmenu({
 
   return (
     <nav
+      data-header-submenu="true"
       className={`w-full border-t border-white/10 ${
         editable ? "ring-2 ring-inset ring-blue-400/40" : ""
       }`}
@@ -12876,9 +13431,22 @@ function CurrentWebsitePreview({
 
   return (
     <div
+      data-current-website-preview="true"
       className="fixed inset-0 z-[120] flex flex-col overflow-hidden"
       style={{ backgroundColor: previewBackgroundColor }}
     >
+      <style>{`
+        @media (max-width: 639px) {
+          [data-current-website-preview="true"] [data-header-submenu="true"] {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            border: 0 !important;
+          }
+        }
+      `}</style>
       <div className="flex min-h-16 items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3 shadow-sm">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">
@@ -13023,39 +13591,55 @@ function CurrentWebsitePreview({
 
                 <div className="relative z-10">
                   {normalizeHeroLayouts(previewLinkPage.content).map(
-                    (layout) => (
-                      <div
-                        key={layout.id}
-                        className={getLayoutWidthClass(layout)}
-                        style={{
-                          ...getLayoutBorderStyle(layout),
-                          // 마지막 레이아웃도 다음 섹션/레이어와 간격을 가져야 합니다.
-                          marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            borderRadius: "inherit",
-                            overflow: "hidden",
-                            clipPath: "inherit",
-                            WebkitClipPath: "inherit",
-                          }}
-                        >
-                          <ReadOnlyGrid
-                            area="hero"
-                            grid={layout}
-                            business={business}
-                            accentColor={String(
-                              websiteSettings.accent_color || "#d97706",
-                            )}
-                            previewDevice={device}
-                          />
-                        </div>
-                        <LayoutBorderOverlay layout={layout} />
-                      </div>
-                    ),
+                    (layout) => {
+                      const spacing = getLayoutSpacingPx(layout, device);
+
+                      return (
+                        <Fragment key={layout.id}>
+                          <div
+                            className={getLayoutWidthClass(layout)}
+                            style={{
+                              ...getLayoutBorderStyle(layout),
+                              marginBottom: 0,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "inherit",
+                                overflow: "hidden",
+                                clipPath: "inherit",
+                                WebkitClipPath: "inherit",
+                              }}
+                            >
+                              <ReadOnlyGrid
+                                area="hero"
+                                grid={layout}
+                                business={business}
+                                accentColor={String(
+                                  websiteSettings.accent_color || "#d97706",
+                                )}
+                                previewDevice={device}
+                                websiteSettings={websiteSettings}
+                              />
+                            </div>
+                            <LayoutBorderOverlay layout={layout} />
+                          </div>
+
+                          {spacing > 0 ? (
+                            <div
+                              aria-hidden="true"
+                              className="w-full"
+                              style={{
+                                height: `${spacing}px`,
+                                backgroundColor: previewBackgroundColor,
+                              }}
+                            />
+                          ) : null}
+                        </Fragment>
+                      );
+                    },
                   )}
                 </div>
               </section>
@@ -13089,41 +13673,55 @@ function CurrentWebsitePreview({
               />
 
               <div className="relative z-10">
-                {heroLayouts.map((layout) => (
-                  <div
-                    key={layout.id}
-                    className={
-                      getLayoutWidthClass(layout)
-                    }
-                    style={{
-                      ...getLayoutBorderStyle(layout),
-                      // 마지막 레이아웃 뒤의 값도 그대로 유지합니다.
-                      marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: "inherit",
-                        overflow: "hidden",
-                        clipPath: "inherit",
-                        WebkitClipPath: "inherit",
-                      }}
-                    >
-                      <ReadOnlyGrid
-                      area="hero"
-                      grid={layout}
-                      business={business}
-                      accentColor={String(
-                        websiteSettings.accent_color || "#d97706",
-                      )}
-                      previewDevice={device}
-                    />
-                    </div>
-                    <LayoutBorderOverlay layout={layout} />
-                  </div>
-                ))}
+                {heroLayouts.map((layout) => {
+                  const spacing = getLayoutSpacingPx(layout, device);
+
+                  return (
+                    <Fragment key={layout.id}>
+                      <div
+                        className={getLayoutWidthClass(layout)}
+                        style={{
+                          ...getLayoutBorderStyle(layout),
+                          marginBottom: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            borderRadius: "inherit",
+                            overflow: "hidden",
+                            clipPath: "inherit",
+                            WebkitClipPath: "inherit",
+                          }}
+                        >
+                          <ReadOnlyGrid
+                            area="hero"
+                            grid={layout}
+                            business={business}
+                            accentColor={String(
+                              websiteSettings.accent_color || "#d97706",
+                            )}
+                            previewDevice={device}
+                            websiteSettings={websiteSettings}
+                          />
+                        </div>
+                        <LayoutBorderOverlay layout={layout} />
+                      </div>
+
+                      {spacing > 0 ? (
+                        <div
+                          aria-hidden="true"
+                          className="w-full"
+                          style={{
+                            height: `${spacing}px`,
+                            backgroundColor: previewBackgroundColor,
+                          }}
+                        />
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -13150,8 +13748,6 @@ function CurrentWebsitePreview({
                   section.content?.initially_hidden === false ||
                   openedPreviewLayerIds.includes(section.id);
 
-                if (!isOpen) return null;
-
                 const sectionSlug =
                   slugifyMenuValue(
                     String(
@@ -13162,56 +13758,127 @@ function CurrentWebsitePreview({
                   ) || section.section_type;
 
                 return (
-                  <div
-                    key={section.id}
-                    id={isCollapsible ? sectionSlug : undefined}
-                    className={getSectionWidthClass(section)}
-                    style={{
-                      ...getSectionWidthStyle(section),
-                      marginBottom:
-                        sectionIndex < visibleSections.length - 1 ? "6px" : 0,
-                    }}
-                  >
-                    {isCollapsible &&
-                    section.content?.close_button_enabled !== false ? (
+                  <Fragment key={section.id}>
+                    <div
+                      id={isCollapsible ? `${sectionSlug}-wrapper` : undefined}
+                      className={getSectionWidthClass(section)}
+                      style={{
+                        ...getSectionWidthStyle(section),
+                        backgroundColor: previewBackgroundColor,
+                        marginBottom: 0,
+                      }}
+                    >
+                    {isCollapsible ? (
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={() =>
                           setOpenedPreviewLayerIds((current) =>
-                            current.filter(
-                              (id) => id !== section.id,
-                            ),
-                          );
-
-                          if (
-                            window.location.hash ===
-                            `#${sectionSlug}`
-                          ) {
-                            window.history.replaceState(
-                              null,
-                              "",
-                              window.location.pathname +
-                                window.location.search,
-                            );
-                          }
-                        }}
-                        className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-xl font-black text-white shadow-xl hover:bg-black"
-                        aria-label={`${section.title || "레이어"} 닫기`}
-                        title="닫기"
-                      >
-                        ×
+                            current.includes(section.id)
+                              ? current.filter((id) => id !== section.id)
+                              : [...current, section.id],
+                          )
+                        }
+                        className="mx-auto flex w-full max-w-[1120px] items-center gap-3 px-4 py-3 text-left transition"
+                  style={{
+                    backgroundColor: String(
+                      section.content?.accordion_background_color || "#ffffff",
+                    ),
+                    color: String(
+                      section.content?.accordion_text_color || "#111827",
+                    ),
+                  }}
+                  aria-expanded={isOpen}
+                  aria-controls={`${sectionSlug}-content`}
+                >
+                  <span
+                    className="flex-1"
+                    style={{
+                      height: `${Math.max(
+                        1,
+                        Math.min(
+                          12,
+                          Number(section.content?.accordion_line_thickness ?? 1),
+                        ),
+                      )}px`,
+                      backgroundColor: String(
+                        section.content?.accordion_line_color || "#d1d5db",
+                      ),
+                    }}
+                  />
+                  <span
+                    className="shrink-0 font-black"
+                    style={{
+                      fontSize: `${Math.max(
+                        10,
+                        Math.min(
+                          72,
+                          Number(section.content?.accordion_font_size ?? 16),
+                        ),
+                      )}px`,
+                    }}
+                  >
+                    {String(
+                      section.content?.accordion_label ||
+                        section.title ||
+                        section.section_type ||
+                        "Policy",
+                    )}
+                  </span>
+                  <span
+                    className="flex-1"
+                    style={{
+                      height: `${Math.max(
+                        1,
+                        Math.min(
+                          12,
+                          Number(section.content?.accordion_line_thickness ?? 1),
+                        ),
+                      )}px`,
+                      backgroundColor: String(
+                        section.content?.accordion_line_color || "#d1d5db",
+                      ),
+                    }}
+                  />
+                  <span
+                    className={`shrink-0 text-lg font-black transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  >
+                    ▾
+                  </span>
                       </button>
                     ) : null}
 
-                    <PreviewSection
-                      section={section}
-                      business={business}
-                      previewDevice={device}
-                      accentColor={String(
-                        websiteSettings.accent_color || "#d97706",
-                      )}
-                    />
-                  </div>
+                    {isOpen ? (
+                      <div
+                        id={isCollapsible ? `${sectionSlug}-content` : undefined}
+                        style={{ backgroundColor: previewBackgroundColor }}
+                      >
+                        <PreviewSection
+                          section={section}
+                          business={business}
+                          previewDevice={device}
+                          accentColor={String(
+                            websiteSettings.accent_color || "#d97706",
+                          )}
+                          outerBackgroundColor={previewBackgroundColor}
+                        />
+                      </div>
+                    ) : null}
+                    </div>
+
+                    {sectionIndex < visibleSections.length - 1 ? (
+                      <div
+                        aria-hidden="true"
+                        className="w-full"
+                        style={{
+                          height: "6px",
+                          backgroundColor: previewBackgroundColor,
+                        }}
+                      />
+                    ) : null}
+                  </Fragment>
                 );
               })}
           </div>
@@ -13234,6 +13901,9 @@ export function PublicWebsiteRenderer({
 }) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [openedLayerIds, setOpenedLayerIds] = useState<number[]>([]);
+  const publicHeaderRef = useRef<HTMLElement | null>(null);
+  const [mobileHeaderSpacerHeight, setMobileHeaderSpacerHeight] =
+    useState(0);
 
   useEffect(() => {
     const updateDevice = () =>
@@ -13364,6 +14034,53 @@ export function PublicWebsiteRenderer({
   // 공개 페이지도 바깥 영역은 사이트의 outer_background_color를 유지합니다.
   // Restaurant Menu 배경색은 가운데 메뉴 패널에만 적용됩니다.
   const publicPageBackgroundColor = outerBackgroundColor;
+
+  useEffect(() => {
+    if (device !== "mobile" || isMenuPage) {
+      setMobileHeaderSpacerHeight(0);
+      return;
+    }
+
+    const header = publicHeaderRef.current;
+    if (!header) return;
+
+    const measureHeader = () => {
+      const rect = header.getBoundingClientRect();
+      const measured = Math.max(
+        0,
+        Math.ceil(rect.height),
+      );
+
+      setMobileHeaderSpacerHeight((current) =>
+        current === measured ? current : measured,
+      );
+    };
+
+    // 로고/폰트/이미지가 늦게 로드되어 실제 높이가 변하는 경우까지 추적합니다.
+    measureHeader();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => measureHeader())
+        : null;
+
+    resizeObserver?.observe(header);
+    window.addEventListener("resize", measureHeader);
+    window.addEventListener("load", measureHeader);
+
+    const frame1 = window.requestAnimationFrame(measureHeader);
+    const frame2 = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(measureHeader);
+    });
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureHeader);
+      window.removeEventListener("load", measureHeader);
+      window.cancelAnimationFrame(frame1);
+      window.cancelAnimationFrame(frame2);
+    };
+  }, [device, isMenuPage, websiteSettings]);
 
   // 공개 페이지가 상위 layout의 max-width나 흰 배경 안에 들어가더라도
   // 브라우저 전체 좌우 여백에는 현재 페이지에 맞는 배경색을 적용합니다.
@@ -13534,6 +14251,22 @@ export function PublicWebsiteRenderer({
         [data-public-website-root] {
           background: var(--public-page-background, #e5e7eb) !important;
         }
+
+        /*
+         * 실제 휴대폰에서는 Header 아래 데스크톱 메뉴 줄을 절대 표시하지 않습니다.
+         * JS의 window.innerWidth 판정이 늦거나 모바일 브라우저의 viewport 값이
+         * 일시적으로 크게 잡혀도 CSS media query가 마지막 안전장치가 됩니다.
+         */
+        @media (max-width: 639px) {
+          [data-public-website-root] [data-header-submenu="true"] {
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            border: 0 !important;
+          }
+        }
       `}</style>
 
       <main
@@ -13578,6 +14311,7 @@ export function PublicWebsiteRenderer({
         }}
       >
         <header
+          ref={publicHeaderRef}
           className={
             device === "mobile" && !isMenuPage
               ? "fixed inset-x-0 top-0 z-[1000] w-full overflow-visible shadow-md"
@@ -13609,9 +14343,16 @@ export function PublicWebsiteRenderer({
         {device === "mobile" && !isMenuPage ? (
           <div
             aria-hidden="true"
-            className="w-full"
+            className="w-full shrink-0"
             style={{
-              height: `${getMobileHeaderHeight(websiteSettings)}px`,
+              height: `${
+                mobileHeaderSpacerHeight ||
+                getMobileHeaderHeight(websiteSettings)
+              }px`,
+              minHeight: `${
+                mobileHeaderSpacerHeight ||
+                getMobileHeaderHeight(websiteSettings)
+              }px`,
             }}
           />
         ) : null}
@@ -13645,6 +14386,7 @@ export function PublicWebsiteRenderer({
             }
             className={getSectionWidthClass(heroSection)}
             style={{
+              backgroundColor: publicPageBackgroundColor,
               ...(sectionContainsRestaurantMenu(heroSection)
                 ? {
                     background: outerBackgroundColor,
@@ -13667,43 +14409,59 @@ export function PublicWebsiteRenderer({
             />
 
             <div className="relative z-10">
-              {layouts.map((layout) => (
-                <div
-                  key={layout.id}
-                  className={getLayoutWidthClass(layout)}
-                  style={{
-                    ...getLayoutBorderStyle(layout),
-                    ...(gridContainsDisplayMode(layout, "restaurant-menu")
-                      ? {
-                          backgroundColor: outerBackgroundColor,
-                        }
-                      : {}),
-                    // 마지막 레이아웃의 간격도 다음 섹션 앞에 실제로 반영합니다.
-                    marginBottom: `${getLayoutSpacingPx(layout, device)}px`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      borderRadius: "inherit",
-                      overflow: "hidden",
-                      clipPath: "inherit",
-                      WebkitClipPath: "inherit",
-                    }}
-                  >
-                    <ReadOnlyGrid
-                    area="hero"
-                    grid={layout}
-                    business={business}
-                    accentColor={String(
-                      websiteSettings.accent_color || "#d97706",
-                    )}
-                    previewDevice={device}                    />
-                  </div>
-                    <LayoutBorderOverlay layout={layout} />
-                </div>
-              ))}
+              {layouts.map((layout) => {
+                const layoutSpacing = getLayoutSpacingPx(layout, device);
+
+                return (
+                  <Fragment key={layout.id}>
+                    <div
+                      className={getLayoutWidthClass(layout)}
+                      style={{
+                        ...getLayoutBorderStyle(layout),
+                        ...(gridContainsDisplayMode(layout, "restaurant-menu")
+                          ? {
+                              backgroundColor: outerBackgroundColor,
+                            }
+                          : {}),
+                        marginBottom: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: "inherit",
+                          overflow: "hidden",
+                          clipPath: "inherit",
+                          WebkitClipPath: "inherit",
+                        }}
+                      >
+                        <ReadOnlyGrid
+                          area="hero"
+                          grid={layout}
+                          business={business}
+                          accentColor={String(
+                            websiteSettings.accent_color || "#d97706",
+                          )}
+                          previewDevice={device}
+                        />
+                      </div>
+                      <LayoutBorderOverlay layout={layout} />
+                    </div>
+
+                    {layoutSpacing > 0 ? (
+                      <div
+                        aria-hidden="true"
+                        className="w-full"
+                        style={{
+                          height: `${layoutSpacing}px`,
+                          backgroundColor: publicPageBackgroundColor,
+                        }}
+                      />
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </div>
           </section>
         ) : (
@@ -13725,8 +14483,6 @@ export function PublicWebsiteRenderer({
             section.content?.initially_hidden === false ||
             openedLayerIds.includes(section.id);
 
-          if (!isOpen) return null;
-
           const sectionSlug =
             slugifyMenuValue(
               String(section.title || section.section_type || ""),
@@ -13735,42 +14491,113 @@ export function PublicWebsiteRenderer({
           return (
             <div
               key={section.id}
-              id={isCollapsible ? sectionSlug : undefined}
+              id={isCollapsible ? `${sectionSlug}-wrapper` : undefined}
               data-full-width-layer={
                 getSectionWidthMode(section) === "full" ? "true" : undefined
               }
               className={getSectionWidthClass(section)}
               style={{
                 ...getSectionWidthStyle(section, true),
+                backgroundColor: publicPageBackgroundColor,
                 marginBottom:
                   sectionIndex < remainingSections.length - 1 ? "6px" : 0,
               }}
             >
-              {isCollapsible &&
-              section.content?.close_button_enabled !== false ? (
+              {isCollapsible ? (
                 <button
                   type="button"
                   onClick={() =>
                     setOpenedLayerIds((current) =>
-                      current.filter((id) => id !== section.id),
+                      current.includes(section.id)
+                        ? current.filter((id) => id !== section.id)
+                        : [...current, section.id],
                     )
                   }
-                  className="absolute right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-black/80 text-xl font-black text-white shadow-xl hover:bg-black"
-                  aria-label={`${section.title || "레이어"} 닫기`}
-                  title="닫기"
+                  className="mx-auto flex w-full max-w-[1120px] items-center gap-3 px-4 py-3 text-left transition"
+                  style={{
+                    backgroundColor: String(
+                      section.content?.accordion_background_color || "#ffffff",
+                    ),
+                    color: String(
+                      section.content?.accordion_text_color || "#111827",
+                    ),
+                  }}
+                  aria-expanded={isOpen}
+                  aria-controls={`${sectionSlug}-content`}
                 >
-                  ×
+                  <span
+                    className="flex-1"
+                    style={{
+                      height: `${Math.max(
+                        1,
+                        Math.min(
+                          12,
+                          Number(section.content?.accordion_line_thickness ?? 1),
+                        ),
+                      )}px`,
+                      backgroundColor: String(
+                        section.content?.accordion_line_color || "#d1d5db",
+                      ),
+                    }}
+                  />
+                  <span
+                    className="shrink-0 font-black"
+                    style={{
+                      fontSize: `${Math.max(
+                        10,
+                        Math.min(
+                          72,
+                          Number(section.content?.accordion_font_size ?? 16),
+                        ),
+                      )}px`,
+                    }}
+                  >
+                    {String(
+                      section.content?.accordion_label ||
+                        section.title ||
+                        section.section_type ||
+                        "Policy",
+                    )}
+                  </span>
+                  <span
+                    className="flex-1"
+                    style={{
+                      height: `${Math.max(
+                        1,
+                        Math.min(
+                          12,
+                          Number(section.content?.accordion_line_thickness ?? 1),
+                        ),
+                      )}px`,
+                      backgroundColor: String(
+                        section.content?.accordion_line_color || "#d1d5db",
+                      ),
+                    }}
+                  />
+                  <span
+                    className={`shrink-0 text-lg font-black transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  >
+                    ▾
+                  </span>
                 </button>
               ) : null}
 
-              <PreviewSection
-                section={section}
-                business={business}
-                previewDevice={device}
-                accentColor={String(
-                  websiteSettings.accent_color || "#d97706",
-                )}
-              />
+              {isOpen ? (
+                <div id={isCollapsible ? `${sectionSlug}-content` : undefined}>
+                  <PreviewSection
+                    section={section}
+                    business={business}
+                    previewDevice={device}
+                    accentColor={String(
+                      websiteSettings.accent_color || "#d97706",
+                    )}
+                    outerBackgroundColor={publicPageBackgroundColor}
+                  />
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -15062,7 +15889,19 @@ function ReadOnlyGrid({
    * 위아래로 쌓였습니다. 이제 최상위 칸은 mobile_width_percent(없으면
    * width_percent)를 그대로 사용하며 자동 줄바꿈·자동 쌓기를 하지 않습니다.
    */
-  const renderedCells = deviceGrid.cells;
+  const fillLayerImageCell =
+    area !== "header"
+      ? deviceGrid.cells.find(
+          (cell) =>
+            cell.type === "image" &&
+            cell.image_url &&
+            cell.image_fill_layer === true,
+        ) || null
+      : null;
+
+  const renderedCells = fillLayerImageCell
+    ? [fillLayerImageCell]
+    : deviceGrid.cells;
 
   /*
    * 휴대폰 폭에서 두 칸 이상을 그대로 옆으로 압축하면 이미지가 잘리고
@@ -15163,12 +16002,14 @@ function ReadOnlyGrid({
         // border-box를 사용해 4px 여백 때문에 레이어 크기가 커지지 않게 합니다.
         boxSizing: "border-box",
         padding:
-          area === "hero" &&
-          !hasAutoSlider &&
-          !autoRestaurantMenu &&
-          !deviceGrid.cells.every(isVisualCell)
-            ? "4px"
-            : 0,
+          fillLayerImageCell
+            ? 0
+            : area === "hero" &&
+                !hasAutoSlider &&
+                !autoRestaurantMenu &&
+                !deviceGrid.cells.every(isVisualCell)
+              ? "4px"
+              : 0,
         /*
          * 자동 슬라이더는 이미지가 레이어 끝까지 붙도록 바깥 여백을
          * 만들지 않습니다.
@@ -15186,25 +16027,35 @@ function ReadOnlyGrid({
         // 데스크톱과 모바일 모두 저장된 칸 비율을 그대로 사용합니다.
         // 모바일에서는 resolveGridForDevice()가 mobile_width_percent를
         // width_percent로 치환하므로 편집 화면과 공개 미리보기의 비율이 같습니다.
-        gridTemplateColumns: shouldStackMobileCells
+        gridTemplateColumns: fillLayerImageCell
           ? "minmax(0, 1fr)"
-          : widths
-              .map((width) => `minmax(0, ${Math.max(width, 1)}fr)`)
-              .join(" "),
+          : shouldStackMobileCells
+            ? "minmax(0, 1fr)"
+            : widths
+                .map((width) => `minmax(0, ${Math.max(width, 1)}fr)`)
+                .join(" "),
         gridAutoRows: shouldStackMobileCells ? "auto" : undefined,
       }}
     >
       {renderedCells.map((cell) => {
         const stackedCell =
-          shouldStackMobileCells && cell.type === "image"
+          fillLayerImageCell && cell.id === fillLayerImageCell.id
             ? {
                 ...cell,
-                // 한 칸 전체 폭으로 내려온 이미지는 잘리지 않도록 전체 표시합니다.
-                image_fit: "contain" as const,
-                image_position_x: 0,
-                image_position_y: 0,
+                image_fit:
+                  cell.image_fit === "fill" ? ("fill" as const) : ("cover" as const),
+                image_size_percent: 100,
+                width_percent: 100,
               }
-            : cell;
+            : shouldStackMobileCells && cell.type === "image"
+              ? {
+                  ...cell,
+                  // 한 칸 전체 폭으로 내려온 이미지는 잘리지 않도록 전체 표시합니다.
+                  image_fit: "contain" as const,
+                  image_position_x: 0,
+                  image_position_y: 0,
+                }
+              : cell;
 
         return (
         <div
@@ -15323,11 +16174,13 @@ function PreviewSection({
   business,
   previewDevice,
   accentColor,
+  outerBackgroundColor = "transparent",
 }: {
   section: BusinessSection;
   business: Business;
   previewDevice: "desktop" | "mobile";
   accentColor: string;
+  outerBackgroundColor?: string;
 }) {
   const content = section.content ?? {};
   const title =
@@ -15369,6 +16222,7 @@ function PreviewSection({
   const sectionBackgroundColor =
     savedSectionBackground ||
     firstCellBackground ||
+    outerBackgroundColor ||
     "transparent";
 
   const isCollapsible = Boolean(content.collapsible);
@@ -15399,40 +16253,53 @@ function PreviewSection({
 
       {hasLayoutContent ? (
         <div className="w-full max-w-none px-0">
-          {sectionLayouts.map((layout) => (
-            <div
-              key={layout.id}
-              className={
-                `relative ${getLayoutWidthClass(layout)}`
-              }
-              style={{
-                ...getLayoutBorderStyle(layout),
-                // 섹션 안의 마지막 레이아웃도 다음 섹션과의 간격을 보존합니다.
-                marginBottom: `${getLayoutSpacingPx(layout, previewDevice)}px`,
-              }}
-            >
-              <div
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  borderRadius: "inherit",
-                  overflow: "hidden",
-                  clipPath: "inherit",
-                  WebkitClipPath: "inherit",
-                }}
-              >
-                <ReadOnlyGrid
-                  area="hero"
-                  grid={layout}
-                  business={business}
-                  accentColor={accentColor}
-                  previewDevice={previewDevice}
-                />
-              </div>
+          {sectionLayouts.map((layout) => {
+            const layoutSpacing = getLayoutSpacingPx(layout, previewDevice);
 
-              <LayoutBorderOverlay layout={layout} />
-            </div>
-          ))}
+            return (
+              <Fragment key={layout.id}>
+                <div
+                  className={`relative ${getLayoutWidthClass(layout)}`}
+                  style={{
+                    ...getLayoutBorderStyle(layout),
+                    marginBottom: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "inherit",
+                      overflow: "hidden",
+                      clipPath: "inherit",
+                      WebkitClipPath: "inherit",
+                    }}
+                  >
+                    <ReadOnlyGrid
+                      area="hero"
+                      grid={layout}
+                      business={business}
+                      accentColor={accentColor}
+                      previewDevice={previewDevice}
+                    />
+                  </div>
+
+                  <LayoutBorderOverlay layout={layout} />
+                </div>
+
+                {layoutSpacing > 0 ? (
+                  <div
+                    aria-hidden="true"
+                    className="w-full"
+                    style={{
+                      height: `${layoutSpacing}px`,
+                      backgroundColor: outerBackgroundColor,
+                    }}
+                  />
+                ) : null}
+              </Fragment>
+            );
+          })}
         </div>
       ) : null}
 
@@ -16304,6 +17171,19 @@ function EditableGrid({
   onMergeNested: (cellId: string) => void;
 }) {
   const deviceGrid = resolveGridForDevice(grid, previewDevice);
+  const fillLayerImageCell =
+    area !== "header"
+      ? deviceGrid.cells.find(
+          (cell) =>
+            cell.type === "image" &&
+            cell.image_url &&
+            cell.image_fill_layer === true,
+        ) || null
+      : null;
+  const editableCells = fillLayerImageCell
+    ? [fillLayerImageCell]
+    : deviceGrid.cells;
+
   const hasAutoSlider = gridContainsDisplayMode(
     deviceGrid,
     "auto-slider",
@@ -16566,7 +17446,11 @@ function EditableGrid({
         // 사방 4px 안쪽으로 띄웁니다.
         boxSizing: "border-box",
         padding:
-          area === "hero" && !hasAutoSlider && !autoRestaurantMenu ? "4px" : 0,
+          fillLayerImageCell
+            ? 0
+            : area === "hero" && !hasAutoSlider && !autoRestaurantMenu
+              ? "4px"
+              : 0,
         backgroundColor:
           area === "hero"
             ? hasAutoSlider
@@ -16578,21 +17462,24 @@ function EditableGrid({
                 : gridFrameBackgroundColor
             : undefined,
         minHeight: "40px",
-        gridTemplateColumns: shouldStackMobileEditorCells
+        gridTemplateColumns: fillLayerImageCell
           ? "minmax(0, 1fr)"
-          : localWidths
-              .map((width) => `${Math.max(width, 1)}fr`)
-              .join(" "),
+          : shouldStackMobileEditorCells
+            ? "minmax(0, 1fr)"
+            : localWidths
+                .map((width) => `${Math.max(width, 1)}fr`)
+                .join(" "),
         gridAutoRows: shouldStackMobileEditorCells ? "auto" : undefined,
       }}
     >
-      {deviceGrid.cells.map((cell, index) => {
+      {editableCells.map((cell, index) => {
         const selected = selectedCellId === cell.id;
         const isDragging = dragging?.cellId === cell.id;
         const isLogo = cell.type === "logo";
         const hasRightNeighbor =
+          !fillLayerImageCell &&
           !shouldStackMobileEditorCells &&
-          index < deviceGrid.cells.length - 1;
+          index < editableCells.length - 1;
         const handleColor = isLogo ? "red" : "blue";
         const visibleWidth = Math.round(localWidths[index] || 0);
 
@@ -16978,12 +17865,35 @@ function RichTextImagePopup({ html, className, style }: { html: string; classNam
   </>;
 }
 
+function getImageClickHintHref(cell: GridCell, businessId: number) {
+  const type = cell.click_hint_link_type || "none";
+  const value = String(cell.click_hint_link_value || "").trim();
+
+  if (type === "none" || !value) return "";
+
+  if (type === "section") {
+    const slug = slugifyMenuValue(value.replace(/^#/, ""));
+    return slug ? `#${slug}` : "";
+  }
+
+  if (type === "page") {
+    const slug = slugifyMenuValue(value.replace(/^\/+/, ""));
+    return slug ? `/business/${businessId}/website/${slug}` : "";
+  }
+
+  return normalizeButtonHref(value);
+}
+
 function MobileImageClickHint({
   cell,
   stopped,
+  businessId,
+  onHintTap,
 }: {
   cell: GridCell;
   stopped: boolean;
+  businessId: number;
+  onHintTap?: () => void;
 }) {
   if (cell.click_hint_enabled !== true || stopped) return null;
 
@@ -16995,21 +17905,59 @@ function MobileImageClickHint({
         : cell.click_hint_icon === "zoom"
           ? "⌕"
           : "👆";
+
   const position = cell.click_hint_position || "bottom-right";
   const interval = Math.max(
-    2,
-    Math.min(10, Number(cell.click_hint_interval_seconds || 3)),
+    1,
+    Math.min(15, Number(cell.click_hint_interval_seconds || 3)),
   );
   const animation = cell.click_hint_animation || "pulse";
+  const size = Math.max(24, Math.min(120, Number(cell.click_hint_size_px || 44)));
+  const href = getImageClickHintHref(cell, businessId);
+  const customX = Math.max(0, Math.min(100, Number(cell.click_hint_x_percent ?? 92)));
+  const customY = Math.max(0, Math.min(100, Number(cell.click_hint_y_percent ?? 88)));
 
   const positionClass =
-    position === "top-left"
-      ? "left-3 top-3"
-      : position === "top-right"
-        ? "right-3 top-3"
-        : position === "bottom-left"
-          ? "bottom-3 left-3"
-          : "bottom-3 right-3";
+    position === "custom"
+      ? ""
+      : position === "top-left"
+        ? "left-3 top-3"
+        : position === "top-right"
+          ? "right-3 top-3"
+          : position === "bottom-left"
+            ? "bottom-3 left-3"
+            : "bottom-3 right-3";
+
+  const style: CSSProperties = {
+    width: `${size}px`,
+    height: `${size}px`,
+    fontSize: `${Math.max(16, Math.round(size * 0.52))}px`,
+    backgroundColor: String(cell.click_hint_background_color || "#000000"),
+    color: String(cell.click_hint_text_color || "#ffffff"),
+    ...(position === "custom"
+      ? {
+          left: `${customX}%`,
+          top: `${customY}%`,
+          transform: "translate(-50%, -50%)",
+        }
+      : {}),
+    animationName:
+      animation === "none"
+        ? "none"
+        : animation === "bounce"
+          ? "ktt-image-hint-bounce"
+          : animation === "slide"
+            ? "ktt-image-hint-slide"
+            : "ktt-image-hint-pulse",
+    animationDuration: `${interval}s`,
+    animationTimingFunction: "ease-in-out",
+    animationIterationCount: "infinite",
+  };
+
+  const className =
+    `ktt-image-click-hint absolute z-[70] flex items-center justify-center rounded-full ` +
+    `border-2 border-white/90 leading-none shadow-xl ${positionClass} ` +
+    `${href ? "pointer-events-auto cursor-pointer" : "pointer-events-none"}`;
 
   return (
     <>
@@ -17035,23 +17983,31 @@ function MobileImageClickHint({
           .ktt-image-click-hint { animation: none !important; }
         }
       `}</style>
-      <span
-        aria-hidden="true"
-        className={`ktt-image-click-hint pointer-events-none absolute z-20 flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/90 bg-black/70 text-2xl leading-none text-white shadow-xl ${positionClass}`}
-        style={{
-          animationName:
-            animation === "bounce"
-              ? "ktt-image-hint-bounce"
-              : animation === "slide"
-                ? "ktt-image-hint-slide"
-                : "ktt-image-hint-pulse",
-          animationDuration: `${interval}s`,
-          animationTimingFunction: "ease-in-out",
-          animationIterationCount: "infinite",
-        }}
-      >
-        {icon}
-      </span>
+
+      {href ? (
+        <a
+          href={href}
+          className={className}
+          style={style}
+          aria-label="클릭 유도 링크"
+          target={cell.click_hint_link_type === "external" ? "_blank" : undefined}
+          rel={
+            cell.click_hint_link_type === "external"
+              ? "noreferrer noopener"
+              : undefined
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onHintTap?.();
+          }}
+        >
+          {icon}
+        </a>
+      ) : (
+        <span aria-hidden="true" className={className} style={style}>
+          {icon}
+        </span>
+      )}
     </>
   );
 }
@@ -18041,6 +18997,8 @@ function CellPreview({
         <MobileImageClickHint
           cell={cell}
           stopped={imageClickHintStopped}
+          businessId={business.id}
+          onHintTap={stopClickHintAfterTap}
         />
 
         {isSelected && canDragImage ? (
@@ -21819,6 +22777,26 @@ function RightPanel(props: {
   const [cellTypePickerOpen, setCellTypePickerOpen] = useState(false);
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
   const [phoneEditorOpen, setPhoneEditorOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.dispatchEvent(
+      new CustomEvent("website-builder-image-editor-state", {
+        detail: { open: imageEditorOpen },
+      }),
+    );
+
+    return () => {
+      if (imageEditorOpen) {
+        window.dispatchEvent(
+          new CustomEvent("website-builder-image-editor-state", {
+            detail: { open: false },
+          }),
+        );
+      }
+    };
+  }, [imageEditorOpen]);
   const [snsEditorOpen, setSnsEditorOpen] = useState(false);
   const [textEditorOpen, setTextEditorOpen] = useState(false);
   const [mapEditorOpen, setMapEditorOpen] = useState(false);
@@ -21842,7 +22820,7 @@ function RightPanel(props: {
   const [inputTextAlign, setInputTextAlign] = useState<TextAlign>("left");
   const [inputVerticalAlign, setInputVerticalAlign] = useState<VerticalAlign>("top");
   const [textLinkType, setTextLinkType] = useState<
-    "section" | "page" | "external" | "image-popup"
+    "section" | "page" | "external" | "email" | "image-popup"
   >("section");
   const [textLinkValue, setTextLinkValue] = useState("");
   const [textPopupImageUrl, setTextPopupImageUrl] = useState("");
@@ -21852,6 +22830,8 @@ function RightPanel(props: {
   const textPopupImageInputRef = useRef<HTMLInputElement>(null);
   const [textInsertPhone, setTextInsertPhone] = useState("");
   const [textInsertPhoneLabel, setTextInsertPhoneLabel] = useState("Call Us");
+  const [textInsertEmail, setTextInsertEmail] = useState("");
+  const [textInsertEmailLabel, setTextInsertEmailLabel] = useState("Email Us");
   const [textInsertSnsPlatform, setTextInsertSnsPlatform] = useState<SnsPlatform>("instagram");
   const [textInsertSnsUrl, setTextInsertSnsUrl] = useState("");
   const [textInsertSnsLabel, setTextInsertSnsLabel] = useState("Follow Us");
@@ -22142,6 +23122,8 @@ function RightPanel(props: {
     setTextLinkValue("");
     setTextInsertPhone(editorCell.phone_number || "");
     setTextInsertPhoneLabel("Call Us");
+    setTextInsertEmail("");
+    setTextInsertEmailLabel("Email Us");
     setTextInsertSnsPlatform("instagram");
     setTextInsertSnsUrl("");
     setTextInsertSnsLabel("Follow Us");
@@ -24001,10 +24983,17 @@ function RightPanel(props: {
       return;
     }
     const rawLinkValue = textLinkValue.trim();
+    const normalizedEmail = rawLinkValue
+      .replace(/^mailto:/i, "")
+      .trim();
     const href =
       textLinkType === "external"
         ? normalizeExternalUrl(rawLinkValue)
-        : rawLinkValue;
+        : textLinkType === "email"
+          ? normalizedEmail
+            ? `mailto:${normalizedEmail}`
+            : ""
+          : rawLinkValue;
 
     if (!href) {
       setTextEditorMessage(
@@ -24012,7 +25001,9 @@ function RightPanel(props: {
           ? "이동할 레이어를 선택하세요."
           : textLinkType === "page"
             ? "이동할 페이지를 선택하세요."
-            : "연결할 외부 사이트 주소를 입력하세요.",
+            : textLinkType === "email"
+              ? "연결할 이메일 주소를 입력하세요."
+              : "연결할 외부 사이트 주소를 입력하세요.",
       );
       return;
     }
@@ -24071,7 +25062,9 @@ function RightPanel(props: {
           ? "선택한 글씨에 레이어 링크를 적용했습니다."
           : textLinkType === "page"
             ? "선택한 글씨에 페이지 링크를 적용했습니다."
-            : "선택한 글씨에 외부 사이트 링크를 적용했습니다.",
+            : textLinkType === "email"
+              ? "선택한 글씨에 이메일 링크를 적용했습니다."
+              : "선택한 글씨에 외부 사이트 링크를 적용했습니다.",
       );
     } catch {
       setTextEditorMessage("선택한 글씨에 링크를 적용하지 못했습니다.");
@@ -24164,6 +25157,232 @@ function RightPanel(props: {
             <p className="mt-2 text-[11px] leading-5 text-violet-600">
               이름을 바꾸면 왼쪽 목록에도 바로 반영됩니다. 변경 후 서버 저장을 눌러주세요.
             </p>
+
+            {section.section_type !== "hero" &&
+            section.section_type !== "footer" &&
+            section.section_type !== "map" ? (
+              <div className="mt-4 border-t border-violet-200 pt-4">
+                <p className="text-sm font-black text-violet-950">접기 / 펼치기</p>
+                <p className="mt-1 text-xs leading-5 text-violet-700">
+                  공개 사이트에서 ─── Policy ─── ▾ 형태로 보이고 클릭하면 열고 닫습니다.
+                </p>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      props.onUpdateSectionContent(section.id, {
+                        collapsible: false,
+                      })
+                    }
+                    className={`rounded-xl border px-3 py-3 text-left ${
+                      section.content?.collapsible !== true
+                        ? "border-blue-600 bg-white ring-2 ring-blue-100"
+                        : "border-violet-200 bg-white/70"
+                    }`}
+                  >
+                    <span className="block text-sm font-black text-gray-950">일반 펼침</span>
+                    <span className="mt-1 block text-[10px] text-gray-500">항상 내용 표시</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      props.onUpdateSectionContent(section.id, {
+                        collapsible: true,
+                        initially_hidden: section.content?.initially_hidden !== false,
+                        close_button_enabled: false,
+                        scroll_on_open: false,
+                      })
+                    }
+                    className={`rounded-xl border px-3 py-3 text-left ${
+                      section.content?.collapsible === true
+                        ? "border-violet-600 bg-white ring-2 ring-violet-100"
+                        : "border-violet-200 bg-white/70"
+                    }`}
+                  >
+                    <span className="block text-sm font-black text-gray-950">접기식</span>
+                    <span className="mt-1 block text-[10px] text-gray-500">제목 줄을 눌러 열고 닫기</span>
+                  </button>
+                </div>
+
+                {section.content?.collapsible === true ? (
+                  <div className="mt-4 space-y-4 rounded-xl border border-violet-200 bg-white p-3">
+                    <div>
+                      <p className="text-xs font-black text-gray-800">처음 열었을 때</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            props.onUpdateSectionContent(section.id, {
+                              initially_hidden: false,
+                            })
+                          }
+                          className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                            section.content?.initially_hidden === false
+                              ? "border-blue-600 bg-blue-50 text-blue-700"
+                              : "border-gray-200 bg-white text-gray-700"
+                          }`}
+                        >
+                          펼침 ▴
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            props.onUpdateSectionContent(section.id, {
+                              initially_hidden: true,
+                            })
+                          }
+                          className={`rounded-lg border px-3 py-2 text-xs font-black ${
+                            section.content?.initially_hidden !== false
+                              ? "border-violet-600 bg-violet-50 text-violet-700"
+                              : "border-gray-200 bg-white text-gray-700"
+                          }`}
+                        >
+                          숨김 ▾
+                        </button>
+                      </div>
+                    </div>
+
+                    <label className="block">
+                      <span className="text-xs font-black text-gray-800">표시 글자</span>
+                      <input
+                        value={String(section.content?.accordion_label ?? section.title ?? "")}
+                        onChange={(event) =>
+                          props.onUpdateSectionContent(section.id, {
+                            accordion_label: event.target.value,
+                          })
+                        }
+                        placeholder={String(section.title || "Policy")}
+                        className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label>
+                        <span className="text-xs font-black text-gray-800">글자 색상</span>
+                        <input
+                          type="color"
+                          value={String(section.content?.accordion_text_color || "#111827")}
+                          onChange={(event) =>
+                            props.onUpdateSectionContent(section.id, {
+                              accordion_text_color: event.target.value,
+                            })
+                          }
+                          className="mt-2 h-10 w-full rounded border border-gray-300 bg-white p-1"
+                        />
+                      </label>
+
+                      <label>
+                        <span className="text-xs font-black text-gray-800">글자 크기</span>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={10}
+                            max={72}
+                            value={Number(section.content?.accordion_font_size ?? 16)}
+                            onChange={(event) =>
+                              props.onUpdateSectionContent(section.id, {
+                                accordion_font_size: Math.max(
+                                  10,
+                                  Math.min(72, Number(event.target.value) || 16),
+                                ),
+                              })
+                            }
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
+                          />
+                          <span className="text-xs font-bold text-gray-500">px</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <label>
+                        <span className="text-xs font-black text-gray-800">라인 색상</span>
+                        <input
+                          type="color"
+                          value={String(section.content?.accordion_line_color || "#d1d5db")}
+                          onChange={(event) =>
+                            props.onUpdateSectionContent(section.id, {
+                              accordion_line_color: event.target.value,
+                            })
+                          }
+                          className="mt-2 h-10 w-full rounded border border-gray-300 bg-white p-1"
+                        />
+                      </label>
+
+                      <label>
+                        <span className="text-xs font-black text-gray-800">라인 굵기</span>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            max={12}
+                            value={Number(section.content?.accordion_line_thickness ?? 1)}
+                            onChange={(event) =>
+                              props.onUpdateSectionContent(section.id, {
+                                accordion_line_thickness: Math.max(
+                                  1,
+                                  Math.min(12, Number(event.target.value) || 1),
+                                ),
+                              })
+                            }
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold"
+                          />
+                          <span className="text-xs font-bold text-gray-500">px</span>
+                        </div>
+                      </label>
+                    </div>
+
+                    <label className="block">
+                      <span className="text-xs font-black text-gray-800">제목 줄 배경색</span>
+                      <input
+                        type="color"
+                        value={String(section.content?.accordion_background_color || "#ffffff")}
+                        onChange={(event) =>
+                          props.onUpdateSectionContent(section.id, {
+                            accordion_background_color: event.target.value,
+                          })
+                        }
+                        className="mt-2 h-10 w-full rounded border border-gray-300 bg-white p-1"
+                      />
+                    </label>
+
+                    <div
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-3"
+                      style={{
+                        backgroundColor: String(section.content?.accordion_background_color || "#ffffff"),
+                        color: String(section.content?.accordion_text_color || "#111827"),
+                      }}
+                    >
+                      <span
+                        className="flex-1"
+                        style={{
+                          height: `${Math.max(1, Math.min(12, Number(section.content?.accordion_line_thickness ?? 1)))}px`,
+                          backgroundColor: String(section.content?.accordion_line_color || "#d1d5db"),
+                        }}
+                      />
+                      <span
+                        className="shrink-0 font-black"
+                        style={{
+                          fontSize: `${Math.max(10, Math.min(72, Number(section.content?.accordion_font_size ?? 16)))}px`,
+                        }}
+                      >
+                        {String(section.content?.accordion_label || section.title || "Policy")}
+                      </span>
+                      <span
+                        className="flex-1"
+                        style={{
+                          height: `${Math.max(1, Math.min(12, Number(section.content?.accordion_line_thickness ?? 1)))}px`,
+                          backgroundColor: String(section.content?.accordion_line_color || "#d1d5db"),
+                        }}
+                      />
+                      <span className="shrink-0 text-lg font-black">▾</span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="mt-4 border-t border-violet-200 pt-4">
               <p className="text-sm font-black text-violet-950">
@@ -24490,6 +25709,38 @@ function RightPanel(props: {
       `<a href="tel:${escapeTextEditorAttribute(telValue)}" data-text-phone="true" style="display:inline-flex;align-items:center;gap:6px;color:#2563eb;font-weight:700;text-decoration:none;white-space:nowrap;"><span aria-hidden="true">☎</span><span>${escapeCellText(label)}</span></a>&nbsp;`,
     );
     setTextEditorMessage("커서 위치에 전화 링크를 추가했습니다.");
+  }
+
+  function insertEmailIntoTextEditor() {
+    const rawEmail = String(textInsertEmail || "")
+      .replace(/^mailto:/i, "")
+      .trim();
+
+    if (!rawEmail) {
+      setTextEditorMessage("이메일 주소를 입력하세요.");
+      return;
+    }
+
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail);
+    if (!validEmail) {
+      setTextEditorMessage("올바른 이메일 주소를 입력하세요.");
+      return;
+    }
+
+    const label =
+      String(textInsertEmailLabel || rawEmail).trim() || rawEmail;
+
+    insertTextEditorHtmlAtCursor(
+      `<a href="mailto:${escapeTextEditorAttribute(
+        rawEmail,
+      )}" data-text-email="true" style="display:inline-flex;align-items:center;gap:6px;color:#2563eb;font-weight:700;text-decoration:underline;white-space:nowrap;"><span aria-hidden="true">✉</span><span>${escapeCellText(
+        label,
+      )}</span></a>&nbsp;`,
+    );
+
+    setTextEditorMessage(
+      "커서 위치에 이메일 링크를 추가했습니다. 공개 사이트에서 클릭하면 이메일 앱이 열립니다.",
+    );
   }
 
   function insertSnsIntoTextEditor() {
@@ -25226,35 +26477,18 @@ function RightPanel(props: {
                         return;
                       }
 
-                      // 같은 종류를 다시 누르면 기존 데이터를 그대로 유지합니다.
-                      if (nextType === currentType) {
-                        setCellTypePickerOpen(false);
-
-                        if (nextType === "image") {
-                          setImageEditorOpen(true);
-                        } else if (
-                          nextType === "title" ||
-                          nextType === "text"
-                        ) {
-                          openTextEditor(selectedCell);
-                        }
-                        return;
-                      }
-
                       // --------------------------------------------------
-                      // 내용이 이미 있는 칸에서는 다른 종류를 눌러도
-                      // 현재 내용을 자동으로 교체/삭제하지 않습니다.
-                      // 버튼만 위에서 별도 추가할 수 있습니다.
-                      // --------------------------------------------------
-                      if (currentType !== "empty") {
-                        setCellTypePickerOpen(false);
-                        return;
-                      }
-
-                      // --------------------------------------------------
-                      // 아래부터는 "빈 칸"에서만 기존 방식대로 첫 내용을 넣습니다.
+                      // 이미지는 현재 칸이 제목/글 등이어도 즉시 이미지 편집기를 엽니다.
+                      // 기존 제목/글은 가능한 경우 이미지 오버레이 글로 보존합니다.
                       // --------------------------------------------------
                       if (nextType === "image") {
+                        const preservedOverlayText =
+                          selectedCell.overlay_text ||
+                          ((currentType === "title" || currentType === "text") &&
+                          String(selectedCell.text || "").trim()
+                            ? String(selectedCell.text || "").trim()
+                            : undefined);
+
                         props.onUpdateCell(
                           area,
                           selectedCell.id,
@@ -25286,11 +26520,52 @@ function RightPanel(props: {
                                 ),
                               ),
                             ),
+                            ...(preservedOverlayText
+                              ? {
+                                  overlay_text: preservedOverlayText,
+                                  overlay_text_x_percent:
+                                    selectedCell.overlay_text_x_percent ?? 50,
+                                  overlay_text_y_percent:
+                                    selectedCell.overlay_text_y_percent ?? 50,
+                                }
+                              : {}),
                           },
                           selection.layoutId,
                         );
+
                         setCellTypePickerOpen(false);
-                        setImageEditorOpen(true);
+
+                        // selectedCell.type가 React 상태 업데이트로 image가 된 다음
+                        // 모달 조건(selectedCell.type === "image")이 만족되도록 다음 프레임에 엽니다.
+                        window.requestAnimationFrame(() => {
+                          window.requestAnimationFrame(() => {
+                            setImageEditorOpen(true);
+                          });
+                        });
+
+                        return;
+                      }
+
+                      // 같은 종류를 다시 누르면 기존 데이터를 그대로 유지합니다.
+                      if (nextType === currentType) {
+                        setCellTypePickerOpen(false);
+
+                        if (
+                          nextType === "title" ||
+                          nextType === "text"
+                        ) {
+                          openTextEditor(selectedCell);
+                        }
+                        return;
+                      }
+
+                      // --------------------------------------------------
+                      // 내용이 이미 있는 칸에서는 다른 종류를 눌러도
+                      // 현재 내용을 자동으로 교체/삭제하지 않습니다.
+                      // 버튼만 위에서 별도 추가할 수 있습니다.
+                      // --------------------------------------------------
+                      if (currentType !== "empty") {
+                        setCellTypePickerOpen(false);
                         return;
                       }
 
@@ -28428,6 +29703,71 @@ function RightPanel(props: {
                     </button>
                   </div>
 
+                  <div className="rounded-2xl border border-sky-300 bg-sky-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-sky-700">
+                          Email
+                        </p>
+                        <h4 className="mt-1 text-base font-black text-sky-950">
+                          이메일 링크 추가
+                        </h4>
+                      </div>
+                      <span className="text-2xl" aria-hidden="true">✉</span>
+                    </div>
+
+                    <p className="mt-2 text-xs font-semibold leading-5 text-sky-800">
+                      이메일 주소와 표시 문구를 입력하면 현재 커서 위치에 클릭 가능한 이메일 링크를 넣습니다.
+                    </p>
+
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <input
+                        type="email"
+                        value={textInsertEmail}
+                        onChange={(event) =>
+                          setTextInsertEmail(event.target.value)
+                        }
+                        placeholder="orders@example.com"
+                        className="h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm font-bold outline-none focus:border-sky-600"
+                      />
+
+                      <input
+                        value={textInsertEmailLabel}
+                        onChange={(event) =>
+                          setTextInsertEmailLabel(event.target.value)
+                        }
+                        placeholder="표시 문구: Email Us"
+                        className="h-11 rounded-xl border border-sky-300 bg-white px-3 text-sm font-bold outline-none focus:border-sky-600"
+                      />
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-sky-200 bg-white p-3">
+                      <p className="mb-2 text-[11px] font-black text-gray-600">
+                        미리보기
+                      </p>
+                      <span className="inline-flex items-center gap-1.5 font-bold text-blue-600 underline">
+                        <span aria-hidden="true">✉</span>
+                        {String(
+                          textInsertEmailLabel ||
+                            textInsertEmail ||
+                            "Email Us",
+                        )}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        rememberTextSelection();
+                      }}
+                      onClick={insertEmailIntoTextEditor}
+                      className="mt-3 w-full rounded-xl bg-sky-600 px-4 py-3 text-sm font-black text-white hover:bg-sky-700"
+                    >
+                      ＋ 이메일 추가
+                    </button>
+                  </div>
+
                   <div className="rounded-2xl border border-pink-300 bg-pink-50 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -28747,7 +30087,7 @@ function RightPanel(props: {
                           value={textLinkType}
                           onMouseDown={rememberTextSelection}
                           onChange={(event) => {
-                            setTextLinkType(event.target.value as "section" | "page" | "external" | "image-popup");
+                            setTextLinkType(event.target.value as "section" | "page" | "external" | "email" | "image-popup");
                             setTextLinkValue("");
                             setTextEditorMessage("");
                           }}
@@ -28756,6 +30096,7 @@ function RightPanel(props: {
                           <option value="section">레이어 링크</option>
                           <option value="page">페이지 링크</option>
                           <option value="external">다른 사이트 링크</option>
+                          <option value="email">이메일 링크</option>
                           <option value="image-popup">팝업 이미지 열기</option>
                         </select>
                       </label>
@@ -28763,15 +30104,54 @@ function RightPanel(props: {
                       {textLinkType !== "image-popup" ? (
                         <label className="min-w-[220px] flex-1">
                           <span className="mb-1 block text-[11px] font-black text-gray-600">
-                            {textLinkType === "section" ? "이동할 레이어" : textLinkType === "page" ? "이동할 페이지" : "외부 사이트 주소"}
+                            {textLinkType === "section"
+                              ? "이동할 레이어"
+                              : textLinkType === "page"
+                                ? "이동할 페이지"
+                                : textLinkType === "email"
+                                  ? "이메일 주소"
+                                  : "외부 사이트 주소"}
                           </span>
                           {textLinkType === "external" ? (
-                            <input type="url" value={textLinkValue} onMouseDown={rememberTextSelection} onChange={(event) => setTextLinkValue(event.target.value)} placeholder="예: https://squareup.com/gift/..." className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold" />
+                            <input
+                              type="url"
+                              value={textLinkValue}
+                              onMouseDown={rememberTextSelection}
+                              onChange={(event) => setTextLinkValue(event.target.value)}
+                              placeholder="예: https://squareup.com/gift/..."
+                              className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                            />
+                          ) : textLinkType === "email" ? (
+                            <input
+                              type="email"
+                              value={textLinkValue}
+                              onMouseDown={rememberTextSelection}
+                              onChange={(event) => setTextLinkValue(event.target.value)}
+                              placeholder="예: orders@bunsofchapelhill.com"
+                              className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                            />
                           ) : (
-                            <select value={textLinkValue} onMouseDown={rememberTextSelection} onChange={(event) => setTextLinkValue(event.target.value)} className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold">
-                              <option value="">{textLinkType === "section" ? "레이어를 선택하세요" : "페이지를 선택하세요"}</option>
-                              {(textLinkType === "section" ? textSectionLinkOptions : textPageLinkOptions).map((option) => (
-                                <option key={`${textLinkType}-${option.value}`} value={option.value}>{option.label}</option>
+                            <select
+                              value={textLinkValue}
+                              onMouseDown={rememberTextSelection}
+                              onChange={(event) => setTextLinkValue(event.target.value)}
+                              className="h-10 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm font-bold"
+                            >
+                              <option value="">
+                                {textLinkType === "section"
+                                  ? "레이어를 선택하세요"
+                                  : "페이지를 선택하세요"}
+                              </option>
+                              {(textLinkType === "section"
+                                ? textSectionLinkOptions
+                                : textPageLinkOptions
+                              ).map((option) => (
+                                <option
+                                  key={`${textLinkType}-${option.value}`}
+                                  value={option.value}
+                                >
+                                  {option.label}
+                                </option>
                               ))}
                             </select>
                           )}
@@ -28820,6 +30200,13 @@ function RightPanel(props: {
                       <p className="mt-2 text-[11px] font-semibold leading-5 text-blue-800">
                         http:// 또는 https://를 생략해도 자동으로 https://가 붙으며,
                         공개 페이지에서는 새 창으로 열립니다.
+                      </p>
+                    ) : null}
+
+                    {textLinkType === "email" ? (
+                      <p className="mt-2 text-[11px] font-semibold leading-5 text-blue-800">
+                        이메일 주소만 입력하면 자동으로 mailto: 링크가 만들어집니다.
+                        공개 사이트에서 클릭하면 사용자의 기본 이메일 앱이 열립니다.
                       </p>
                     ) : null}
 
@@ -29474,8 +30861,9 @@ function RightPanel(props: {
         <div className="mt-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
           <p className="text-sm font-black text-emerald-950">페이지 전체 배경</p>
           <p className="mt-1 text-xs leading-5 text-emerald-700">
-            데스크톱 화면에서 사이트 왼쪽과 오른쪽에 보이는 바깥 여백 색상입니다.
-            홈페이지와 모든 별도 페이지에 공통으로 적용됩니다.
+            사이트 전체의 기본 배경색입니다. 화면 좌우 여백뿐 아니라 레이어 사이 간격,
+            투명한 레이어/빈 영역, 홈페이지와 모든 별도 페이지의 바탕에 공통 적용됩니다.
+            이미지·동영상·직접 지정한 레이어 배경은 그 위에 그대로 표시됩니다.
           </p>
           <ColorInput
             label="화면 좌우 바깥 컬러"
@@ -30703,12 +32091,61 @@ function ImageCellUploader({
           </p>
         </div>
 
-        <Field label="이미지 표시 방식">
+        <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-emerald-950">
+              레이어 전체 폭 채움
+            </p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-emerald-800">
+              양쪽에 빈 공간이 생길 때 켜세요. 이 이미지가 같은 레이아웃의 빈 칸 폭을 무시하고 좌우 끝까지 채웁니다.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={cell.image_fill_layer === true}
+            onChange={(event) =>
+              onUpdate({
+                image_fill_layer: event.target.checked,
+                ...(event.target.checked
+                  ? {
+                      image_fit: "cover",
+                      image_size_percent: 100,
+                      image_position_x: 0,
+                      image_position_y: 0,
+                      width_percent: 100,
+                    }
+                  : {}),
+              })
+            }
+            className="mt-1 h-5 w-5 shrink-0 accent-emerald-600"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            onUpdate({
+              image_fill_layer: true,
+              image_fit: "cover",
+              image_size_percent: 100,
+              image_position_x: 0,
+              image_position_y: 0,
+              width_percent: 100,
+            })
+          }
+          className="mt-3 w-full rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white hover:bg-emerald-800"
+        >
+          ↔ 지금 레이어에 꽉 채우기
+        </button>
+      </div>
+
+      <Field label="이미지 표시 방식">
         <div className="grid grid-cols-3 gap-2">
           {[
             { value: "width", label: "가로 맞춤" },
             { value: "contain", label: "전체 보기" },
-            { value: "cover", label: "칸 꽉 채움" },
+            { value: "cover", label: "현재 칸 꽉 채움" },
             { value: "scale", label: "직접 크기" },
             { value: "fill", label: "늘여 맞춤" },
           ].map((option) => (
@@ -30853,10 +32290,10 @@ function ImageCellUploader({
           <label className="flex cursor-pointer items-center justify-between gap-3">
             <div>
               <p className="text-sm font-black text-amber-950">
-                휴대폰 클릭 유도 아이콘
+                클릭 유도 아이콘
               </p>
               <p className="mt-1 text-xs font-semibold leading-5 text-amber-800">
-                이미지 위 아이콘이 일정 간격으로 움직이고, 사용자가 한 번 터치하면 멈춥니다.
+                손가락/화살표를 넣고 삭제, 위치, 링크, 크기, 색상, 움직임을 직접 설정합니다.
               </p>
             </div>
             <input
@@ -30871,13 +32308,45 @@ function ImageCellUploader({
 
           {cell.click_hint_enabled === true ? (
             <>
-              <Field label="아이콘 선택">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onUpdate({ click_hint_enabled: false })}
+                  className="rounded-xl border border-red-300 bg-white px-3 py-2.5 text-xs font-black text-red-700"
+                >
+                  🗑 삭제
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdate({
+                      click_hint_icon: "pointer",
+                      click_hint_position: "bottom-right",
+                      click_hint_x_percent: 92,
+                      click_hint_y_percent: 88,
+                      click_hint_size_px: 44,
+                      click_hint_background_color: "#000000",
+                      click_hint_text_color: "#ffffff",
+                      click_hint_animation: "pulse",
+                      click_hint_interval_seconds: 3,
+                      click_hint_stop_after_tap: true,
+                      click_hint_link_type: "none",
+                      click_hint_link_value: "",
+                    })
+                  }
+                  className="rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-xs font-black text-amber-950"
+                >
+                  ↺ 기본값
+                </button>
+              </div>
+
+              <Field label="아이콘">
                 <div className="grid grid-cols-4 gap-2">
                   {([
                     ["pointer", "👆", "손가락"],
                     ["arrow", "↗", "화살표"],
                     ["plus", "⊕", "플러스"],
-                    ["zoom", "⌕", "크게 보기"],
+                    ["zoom", "⌕", "확대"],
                   ] as const).map(([value, icon, label]) => (
                     <button
                       key={value}
@@ -30896,13 +32365,14 @@ function ImageCellUploader({
                 </div>
               </Field>
 
-              <Field label="아이콘 위치">
-                <div className="grid grid-cols-4 gap-2">
+              <Field label="위치">
+                <div className="grid grid-cols-5 gap-2">
                   {([
                     ["top-left", "↖", "왼쪽 위"],
                     ["top-right", "↗", "오른쪽 위"],
                     ["bottom-left", "↙", "왼쪽 아래"],
                     ["bottom-right", "↘", "오른쪽 아래"],
+                    ["custom", "✥", "자유 위치"],
                   ] as const).map(([value, icon, label]) => (
                     <button
                       key={value}
@@ -30921,18 +32391,153 @@ function ImageCellUploader({
                 </div>
               </Field>
 
-              <Field label="움직임 방식">
-                <div className="grid grid-cols-3 gap-2">
+              {cell.click_hint_position === "custom" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="가로 X">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.max(0, Math.min(100, Number(cell.click_hint_x_percent ?? 92)))}
+                      onChange={(event) =>
+                        onUpdate({ click_hint_x_percent: Number(event.target.value) })
+                      }
+                      className="w-full accent-amber-700"
+                    />
+                    <div className="text-right text-xs font-black">
+                      {Math.round(Math.max(0, Math.min(100, Number(cell.click_hint_x_percent ?? 92))))}%
+                    </div>
+                  </Field>
+
+                  <Field label="세로 Y">
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={Math.max(0, Math.min(100, Number(cell.click_hint_y_percent ?? 88)))}
+                      onChange={(event) =>
+                        onUpdate({ click_hint_y_percent: Number(event.target.value) })
+                      }
+                      className="w-full accent-amber-700"
+                    />
+                    <div className="text-right text-xs font-black">
+                      {Math.round(Math.max(0, Math.min(100, Number(cell.click_hint_y_percent ?? 88))))}%
+                    </div>
+                  </Field>
+                </div>
+              ) : null}
+
+              <Field label="크기">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={24}
+                    max={120}
+                    step={2}
+                    value={Math.max(24, Math.min(120, Number(cell.click_hint_size_px || 44)))}
+                    onChange={(event) =>
+                      onUpdate({ click_hint_size_px: Number(event.target.value) })
+                    }
+                    className="min-w-0 flex-1 accent-amber-700"
+                  />
+                  <span className="w-14 text-right text-sm font-black">
+                    {Math.max(24, Math.min(120, Number(cell.click_hint_size_px || 44)))}px
+                  </span>
+                </div>
+              </Field>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="배경색">
+                  <input
+                    type="color"
+                    value={String(cell.click_hint_background_color || "#000000")}
+                    onChange={(event) =>
+                      onUpdate({ click_hint_background_color: event.target.value })
+                    }
+                    className="h-11 w-full rounded-lg border border-amber-300 bg-white p-1"
+                  />
+                </Field>
+                <Field label="아이콘 색상">
+                  <input
+                    type="color"
+                    value={String(cell.click_hint_text_color || "#ffffff")}
+                    onChange={(event) =>
+                      onUpdate({ click_hint_text_color: event.target.value })
+                    }
+                    className="h-11 w-full rounded-lg border border-amber-300 bg-white p-1"
+                  />
+                </Field>
+              </div>
+
+              <Field label="클릭 링크">
+                <div className="grid grid-cols-4 gap-2">
                   {([
-                    ["pulse", "커졌다 작아짐"],
-                    ["bounce", "위아래 움직임"],
-                    ["slide", "좌우 움직임"],
+                    ["none", "없음"],
+                    ["section", "레이어"],
+                    ["page", "페이지"],
+                    ["external", "외부"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() =>
+                        onUpdate({
+                          click_hint_link_type: value,
+                          ...(value === "none" ? { click_hint_link_value: "" } : {}),
+                        })
+                      }
+                      className={`rounded-xl border px-2 py-2.5 text-[11px] font-black ${
+                        (cell.click_hint_link_type || "none") === value
+                          ? "border-amber-700 bg-amber-700 text-white"
+                          : "border-amber-300 bg-white text-amber-950"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              {(cell.click_hint_link_type || "none") !== "none" ? (
+                <Field
+                  label={
+                    cell.click_hint_link_type === "external"
+                      ? "URL"
+                      : cell.click_hint_link_type === "page"
+                        ? "페이지 slug"
+                        : "레이어 이름"
+                  }
+                >
+                  <input
+                    value={cell.click_hint_link_value || ""}
+                    onChange={(event) =>
+                      onUpdate({ click_hint_link_value: event.target.value })
+                    }
+                    placeholder={
+                      cell.click_hint_link_type === "external"
+                        ? "https://..."
+                        : cell.click_hint_link_type === "page"
+                          ? "menu"
+                          : "catering"
+                    }
+                    className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2.5 text-sm font-bold"
+                  />
+                </Field>
+              ) : null}
+
+              <Field label="움직임">
+                <div className="grid grid-cols-4 gap-2">
+                  {([
+                    ["none", "정지"],
+                    ["pulse", "확대"],
+                    ["bounce", "위아래"],
+                    ["slide", "좌우"],
                   ] as const).map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => onUpdate({ click_hint_animation: value })}
-                      className={`rounded-xl border px-2 py-2.5 text-xs font-black ${
+                      className={`rounded-xl border px-2 py-2.5 text-[11px] font-black ${
                         (cell.click_hint_animation || "pulse") === value
                           ? "border-amber-700 bg-amber-700 text-white"
                           : "border-amber-300 bg-white text-amber-950"
@@ -30944,30 +32549,34 @@ function ImageCellUploader({
                 </div>
               </Field>
 
-              <Field label="움직임 반복 간격">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min={2}
-                    max={10}
-                    step={1}
-                    value={Math.max(2, Math.min(10, Number(cell.click_hint_interval_seconds || 3)))}
-                    onChange={(event) =>
-                      onUpdate({ click_hint_interval_seconds: Number(event.target.value) })
-                    }
-                    className="min-w-0 flex-1 accent-amber-700"
-                  />
-                  <span className="w-12 text-right text-sm font-black text-amber-950">
-                    {Math.max(2, Math.min(10, Number(cell.click_hint_interval_seconds || 3)))}초
-                  </span>
-                </div>
-              </Field>
+              {cell.click_hint_animation !== "none" ? (
+                <Field label="움직임 간격">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={1}
+                      max={15}
+                      step={1}
+                      value={Math.max(1, Math.min(15, Number(cell.click_hint_interval_seconds || 3)))}
+                      onChange={(event) =>
+                        onUpdate({ click_hint_interval_seconds: Number(event.target.value) })
+                      }
+                      className="min-w-0 flex-1 accent-amber-700"
+                    />
+                    <span className="w-12 text-right text-sm font-black">
+                      {Math.max(1, Math.min(15, Number(cell.click_hint_interval_seconds || 3)))}초
+                    </span>
+                  </div>
+                </Field>
+              ) : null}
 
               <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3">
                 <div>
-                  <p className="text-sm font-black text-gray-900">한 번 터치하면 멈춤</p>
+                  <p className="text-sm font-black text-gray-900">
+                    한 번 누르면 숨김
+                  </p>
                   <p className="mt-1 text-xs font-semibold text-gray-500">
-                    페이지를 다시 열면 아이콘이 다시 표시됩니다.
+                    다음 페이지 로드에서는 다시 표시됩니다.
                   </p>
                 </div>
                 <input
@@ -30980,7 +32589,31 @@ function ImageCellUploader({
                 />
               </label>
             </>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              onClick={() =>
+                onUpdate({
+                  click_hint_enabled: true,
+                  click_hint_icon: "pointer",
+                  click_hint_position: "bottom-right",
+                  click_hint_x_percent: 92,
+                  click_hint_y_percent: 88,
+                  click_hint_size_px: 44,
+                  click_hint_background_color: "#000000",
+                  click_hint_text_color: "#ffffff",
+                  click_hint_animation: "pulse",
+                  click_hint_interval_seconds: 3,
+                  click_hint_stop_after_tap: true,
+                  click_hint_link_type: "none",
+                  click_hint_link_value: "",
+                })
+              }
+              className="w-full rounded-xl border border-amber-300 bg-white px-4 py-3 text-sm font-black text-amber-950"
+            >
+              ＋ 클릭 유도 아이콘 넣기
+            </button>
+          )}
         </div>
 
         {cell.popup_enabled ? (
@@ -32467,6 +34100,47 @@ function TitleCellEditor({
   ]);
 
   function chooseMode(nextMode: SectionMode) {
+    if (nextMode === "text") {
+      // 기존에 만들어 둔 Text/HTML Editor 모달을 그대로 사용합니다.
+      // 셀 타입을 text로 먼저 바꾼 뒤, 상위 RightPanel의 기존 이벤트 리스너에
+      // 현재 cellId를 보내 모달을 자동으로 엽니다.
+      onUpdate({
+        type: "text",
+        display_mode: "text",
+        text: cell.text || "",
+        rich_text_html:
+          cell.rich_text_html ||
+          (cell.text
+            ? `<p>${String(cell.text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")}</p>`
+            : ""),
+        background_color: cell.background_color || "transparent",
+        color: cell.color || "#111827",
+        font_size: cell.font_size || 16,
+        line_height: cell.line_height || 1.6,
+        font_family: cell.font_family || "sans",
+        font_weight: cell.font_weight || "normal",
+        text_align: cell.text_align || "left",
+        vertical_align: cell.vertical_align || "top",
+      });
+
+      // React 상태가 반영되어 selectedCell.type === "text"가 된 뒤 열어야
+      // 기존 모달의 조건과 이벤트 핸들러가 정확히 동작합니다.
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.dispatchEvent(
+            new CustomEvent("website-builder-open-text-editor", {
+              detail: { cellId: cell.id },
+            }),
+          );
+        });
+      });
+
+      return;
+    }
+
     if (nextMode === "image-scroll") {
       onUpdate({
         display_mode: "image-scroll",
