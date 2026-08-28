@@ -16414,7 +16414,7 @@ function ReadOnlyGrid({
                 ? String(
                     websiteSettings?.outer_background_color || "#e5e7eb",
                   )
-                : gridFrameBackgroundColor
+                : "transparent"
             : undefined,
         // 데스크톱과 모바일 모두 저장된 칸 비율을 그대로 사용합니다.
         // 모바일에서는 resolveGridForDevice()가 mobile_width_percent를
@@ -16522,12 +16522,13 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
+                : (cell.display_mode === "restaurant-menu" ||
+                    cell.display_mode === "catering-menu" ||
+                    cell.display_mode === "catering-request-form")
                   ? "transparent"
-                  : cell.type === "image"
-                    ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
-                    : normalizeVisibleBackgroundColor(cell.background_color) ||
-                      gridFrameBackgroundColor,
+                  : normalizeVisibleBackgroundColor(
+                      cell.background_color,
+                    ) || "transparent",
             padding:
               cell.child_cells?.length ||
               cell.type === "image" ||
@@ -16625,6 +16626,7 @@ function PreviewSection({
       className="relative"
       style={{
         backgroundColor: sectionBackgroundColor,
+        isolation: "isolate",
       }}
     >
       {isCollapsible ? (
