@@ -637,6 +637,13 @@ type CateringSettingsPayload = {
   delivery_enabled?: boolean;
   quote_enabled?: boolean;
   notification_phone?: string | null;
+
+  /** Catering Management에서 설정한 공개 Request Form 표시/숨김 */
+  show_event_time?: boolean;
+  show_occasion?: boolean;
+  show_interested_category?: boolean;
+  show_interested_menu?: boolean;
+  show_budget_per_person?: boolean;
 };
 
 type CateringMenuPayload = {
@@ -4392,10 +4399,40 @@ function CateringRequestFormDisplay({
   editorPreview?: boolean;
   fieldVisibility?: GridCell["catering_request_fields"];
 }) {
+  const [payload, setPayload] = useState<CateringMenuPayload | null>(null);
+
+  /**
+   * 일반 필드는 Website Editor의 cell 설정을 사용하고,
+   * 아래 5개 필드는 Catering Management -> business_catering_settings 값을
+   * 최종 우선값으로 사용합니다.
+   */
   const isFieldVisible = (
     key: keyof NonNullable<GridCell["catering_request_fields"]>,
-  ) => fieldVisibility?.[key] !== false;
-  const [payload, setPayload] = useState<CateringMenuPayload | null>(null);
+  ) => {
+    const settings = payload?.settings;
+
+    if (key === "event_time") {
+      return settings?.show_event_time !== false;
+    }
+
+    if (key === "occasion") {
+      return settings?.show_occasion !== false;
+    }
+
+    if (key === "interested_category") {
+      return settings?.show_interested_category !== false;
+    }
+
+    if (key === "interested_menu") {
+      return settings?.show_interested_menu !== false;
+    }
+
+    if (key === "budget_per_person") {
+      return settings?.show_budget_per_person !== false;
+    }
+
+    return fieldVisibility?.[key] !== false;
+  };
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
