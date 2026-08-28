@@ -4671,14 +4671,14 @@ function CateringRequestFormDisplay({
 
   return (
     <div
-      className="w-full min-w-0"
+      className="w-full"
       style={{
         backgroundColor: outerBackgroundColor || "#ffffff",
         padding: compact ? "12px" : "20px",
       }}
     >
     <form
-      className="mx-auto min-w-0 w-full max-w-[980px] rounded-3xl border border-gray-200 p-4 text-left shadow-sm sm:p-8"
+      className="mx-auto w-full max-w-[980px] rounded-3xl border border-gray-200 p-5 text-left shadow-sm sm:p-8"
       style={{
         backgroundColor: formBackgroundColor || "#ffffff",
       }}
@@ -4843,56 +4843,49 @@ function CateringRequestFormDisplay({
         </div>
       </div>
 
-      <div
-        className="mt-6 grid gap-4"
-        style={{
-          gridTemplateColumns: compact
-            ? "minmax(0, 1fr)"
-            : "repeat(auto-fit, minmax(min(100%, 320px), 1fr))",
-        }}
-      >
-        <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+      <div className={`mt-6 grid gap-4 ${compact ? "grid-cols-1" : "sm:grid-cols-2"}`}>
+        <label className="text-sm font-black text-gray-700">
           Full Name *
-          <input required name="customer_name" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          <input required name="customer_name" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
         </label>
 
         {isFieldVisible("customer_phone") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Phone *
-            <input required type="tel" name="customer_phone" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="tel" name="customer_phone" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("customer_email") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Email *
-            <input required type="email" name="customer_email" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="email" name="customer_email" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("company") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Company / Organization
-            <input name="company" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input name="company" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("event_date") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Event Date *
-            <input required type="date" name="event_date" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="date" name="event_date" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("event_time") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Event Time *
-            <input required type="time" name="event_time" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input required type="time" name="event_time" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("guest_count") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Number of Guests *
             <input
               required
@@ -4900,15 +4893,15 @@ function CateringRequestFormDisplay({
               min={minPeople > 0 ? minPeople : 1}
               defaultValue={minPeople > 0 ? minPeople : undefined}
               name="guest_count"
-              className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
+              className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
             />
           </label>
         ) : null}
 
         {isFieldVisible("occasion") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Occasion
-            <select name="occasion" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
+            <select name="occasion" className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
               <option value="">Select</option>
               <option>Corporate / Business</option>
               <option>Birthday</option>
@@ -4921,7 +4914,7 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("interested_category") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Interested Category
             <select
               name="category_id"
@@ -4930,7 +4923,7 @@ function CateringRequestFormDisplay({
                 setSelectedCategoryId(event.target.value);
                 setSelectedItemId("");
               }}
-              className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+              className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
             >
               <option value="">Select category</option>
               {visibleCategories.map((category) => (
@@ -4943,13 +4936,13 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("interested_menu") ? (
-          <label className="block min-w-0 w-full text-sm font-black text-gray-700">
+          <label className="text-sm font-black text-gray-700">
             Interested Menu
             <select
               name="item_id"
               value={selectedItemId}
               onChange={(event) => setSelectedItemId(event.target.value)}
-              className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+              className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
             >
               <option value="">Select menu</option>
               {visibleItems.map((item) => (
@@ -4962,12 +4955,12 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("catering_service") ? (
-        <fieldset className="min-w-0 w-full" style={{ gridColumn: "1 / -1" }}>
-          <legend className="block min-w-0 w-full text-sm font-black text-gray-700">
+        <fieldset className="sm:col-span-2">
+          <legend className="text-sm font-black text-gray-700">
             Catering Service *
           </legend>
 
-          <div className="mt-2 flex min-w-0 flex-wrap gap-3 rounded-xl border border-gray-200 px-3 py-3">
+          <div className="mt-2 flex flex-wrap gap-4 rounded-xl border border-gray-200 px-4 py-3">
             {pickupAvailable ? (
               <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
                 <input
@@ -5020,22 +5013,16 @@ function CateringRequestFormDisplay({
         ) : null}
 
         {isFieldVisible("budget_per_person") ? (
-          <label
-            className="block min-w-0 w-full text-sm font-black text-gray-700"
-            style={{ gridColumn: "1 / -1" }}
-          >
+          <label className="text-sm font-black text-gray-700 sm:col-span-2">
             Budget Per Person
-            <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 block h-12 min-w-0 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+            <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
 
         {isFieldVisible("notes") ? (
-          <label
-            className="block min-w-0 w-full text-sm font-black text-gray-700"
-            style={{ gridColumn: "1 / -1" }}
-          >
+          <label className="text-sm font-black text-gray-700 sm:col-span-2">
             Description / Special Requests
-            <textarea name="notes" rows={5} className="mt-2 block min-w-0 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
+            <textarea name="notes" rows={5} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
           </label>
         ) : null}
       </div>
@@ -16296,6 +16283,19 @@ function ReadOnlyGrid({
     : deviceGrid.cells;
 
   /*
+   * 이미지 한 장을 "가로폭 맞춤(width)"으로 표시하는 레이어는
+   * 저장된 고정 height_px를 강제로 쓰면 이미지 실제 비율보다 레이어가
+   * 더 높아져 아래에 검은/빈 띠가 생깁니다.
+   * 이 경우 이미지의 자연 비율이 레이어 높이를 결정하게 합니다.
+   */
+  const autoWidthImageGrid =
+    area !== "header" &&
+    renderedCells.length === 1 &&
+    renderedCells[0]?.type === "image" &&
+    Boolean(renderedCells[0]?.image_url) &&
+    normalizeImageFit(renderedCells[0]?.image_fit) === "width";
+
+  /*
    * 휴대폰 폭에서 두 칸 이상을 그대로 옆으로 압축하면 이미지가 잘리고
    * 글자 영역도 지나치게 좁아집니다. 실제 모바일 콘텐츠 폭(약 430px)을
    * 기준으로 각 칸이 최소 240px를 확보하지 못하면 자동으로 다음 줄로
@@ -16357,20 +16357,24 @@ function ReadOnlyGrid({
           : "overflow-hidden"
       }`}
       style={{
-        minHeight: sliderAutoHeight || autoRestaurantMenu
-          ? 0
-          : autoMobileBusinessHours
-            ? "180px"
-            : autoContentHeight
-              ? "420px"
-              : `${
-                previewDevice === "mobile" && area === "header"
-                  ? mobileHeaderHeight
-                  : area === "header"
-                    ? 48
-                    : 20
-              }px`,
+        minHeight:
+          autoWidthImageGrid
+            ? 0
+            : sliderAutoHeight || autoRestaurantMenu
+              ? 0
+              : autoMobileBusinessHours
+                ? "180px"
+                : autoContentHeight
+                  ? "420px"
+                  : `${
+                      previewDevice === "mobile" && area === "header"
+                        ? mobileHeaderHeight
+                        : area === "header"
+                          ? 48
+                          : 20
+                    }px`,
         height:
+          autoWidthImageGrid ||
           sliderAutoHeight ||
           autoMobileBusinessHours ||
           autoRestaurantMenu ||
@@ -16379,6 +16383,7 @@ function ReadOnlyGrid({
             ? "auto"
             : `${displayHeight}px`,
         maxHeight:
+          autoWidthImageGrid ||
           sliderAutoHeight ||
           autoMobileBusinessHours ||
           autoRestaurantMenu ||
@@ -16414,7 +16419,7 @@ function ReadOnlyGrid({
                 ? String(
                     websiteSettings?.outer_background_color || "#e5e7eb",
                   )
-                : "transparent"
+                : gridFrameBackgroundColor
             : undefined,
         // 데스크톱과 모바일 모두 저장된 칸 비율을 그대로 사용합니다.
         // 모바일에서는 resolveGridForDevice()가 mobile_width_percent를
@@ -16473,12 +16478,14 @@ function ReadOnlyGrid({
             maxWidth: "100%",
             boxSizing: "border-box",
             overflow:
-              cellContainsDisplayMode(cell, "auto-slider") ||
-              cellContainsDisplayMode(cell, "image-scroll") ||
-              cell.type === "image" ||
-              cell.display_mode === "background-image"
-                ? "hidden"
-                : undefined,
+              autoWidthImageGrid && cell.type === "image"
+                ? "visible"
+                : cellContainsDisplayMode(cell, "auto-slider") ||
+                    cellContainsDisplayMode(cell, "image-scroll") ||
+                    cell.type === "image" ||
+                    cell.display_mode === "background-image"
+                  ? "hidden"
+                  : undefined,
             lineHeight: cellContainsDisplayMode(cell, "image-scroll")
               ? 0
               : undefined,
@@ -16491,12 +16498,15 @@ function ReadOnlyGrid({
                   cellContainsDisplayMode(cell, "auto-slider")
                 ? "100%"
                 : 0,
-            height: shouldStackMobileCells
-              ? "auto"
-              : isMobileContentGrid &&
-                  cellContainsDisplayMode(cell, "auto-slider")
-                ? "100%"
-                : undefined,
+            height:
+              autoWidthImageGrid && cell.type === "image"
+                ? "auto"
+                : shouldStackMobileCells
+                  ? "auto"
+                  : isMobileContentGrid &&
+                      cellContainsDisplayMode(cell, "auto-slider")
+                    ? "100%"
+                    : undefined,
             // 모바일 분할 레이어의 이미지는 독립된 정사각형 셀로 표시합니다.
             aspectRatio:
               shouldStackMobileCells && cell.type === "image"
@@ -16522,13 +16532,12 @@ function ReadOnlyGrid({
             background:
               area === "header"
                 ? "transparent"
-                : (cell.display_mode === "restaurant-menu" ||
-                    cell.display_mode === "catering-menu" ||
-                    cell.display_mode === "catering-request-form")
+                : (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form")
                   ? "transparent"
-                  : normalizeVisibleBackgroundColor(
-                      cell.background_color,
-                    ) || "transparent",
+                  : cell.type === "image"
+                    ? normalizeVisibleBackgroundColor(cell.background_color) || "transparent"
+                    : normalizeVisibleBackgroundColor(cell.background_color) ||
+                      gridFrameBackgroundColor,
             padding:
               cell.child_cells?.length ||
               cell.type === "image" ||
@@ -16626,7 +16635,6 @@ function PreviewSection({
       className="relative"
       style={{
         backgroundColor: sectionBackgroundColor,
-        isolation: "isolate",
       }}
     >
       {isCollapsible ? (
@@ -19116,9 +19124,11 @@ function CellPreview({
               ? `${imageSize}%`
               : "100%",
           maxHeight:
-            imageFit === "width" || imageFit === "scale"
-              ? "100%"
-              : "100%",
+            imageFit === "width"
+              ? "none"
+              : imageFit === "scale"
+                ? "100%"
+                : "100%",
           flexShrink: 0,
           objectFit:
             imageFit === "cover"
@@ -19140,11 +19150,13 @@ function CellPreview({
       />
     );
 
+    const imageUsesNaturalHeight = imageFit === "width";
+
     const imageContainerStyle: React.CSSProperties = {
       borderRadius: "inherit",
       display: "flex",
       width: "100%",
-      height: "100%",
+      height: imageUsesNaturalHeight ? "auto" : "100%",
       minWidth: 0,
       minHeight: 0,
       boxSizing: "border-box",
@@ -19320,7 +19332,7 @@ function CellPreview({
             onPointerMove={moveImageDrag ?? undefined}
             onPointerUp={stopImageDrag ?? undefined}
             onPointerCancel={stopImageDrag ?? undefined}
-            className={`absolute inset-0 overflow-hidden border-0 bg-transparent ${
+            className={`${imageUsesNaturalHeight ? "relative block h-auto w-full" : "absolute inset-0"} overflow-hidden border-0 bg-transparent ${
               canDragImage
                 ? "touch-none cursor-grab"
                 : "touch-pan-y cursor-pointer"
@@ -19348,7 +19360,7 @@ function CellPreview({
               }
               stopClickHintAfterTap();
             }}
-            className={`absolute inset-0 overflow-hidden ${
+            className={`${imageUsesNaturalHeight ? "relative block h-auto w-full" : "absolute inset-0"} overflow-hidden ${
               canDragImage
                 ? "touch-none cursor-grab"
                 : "touch-pan-y cursor-pointer"
@@ -19375,7 +19387,7 @@ function CellPreview({
             onPointerMove={moveImageDrag ?? undefined}
             onPointerUp={stopImageDrag ?? undefined}
             onPointerCancel={stopImageDrag ?? undefined}
-            className={`absolute inset-0 overflow-hidden border-0 bg-transparent ${
+            className={`${imageUsesNaturalHeight ? "relative block h-auto w-full" : "absolute inset-0"} overflow-hidden border-0 bg-transparent ${
               canDragImage
                 ? "touch-none cursor-grab"
                 : "touch-pan-y cursor-pointer"
