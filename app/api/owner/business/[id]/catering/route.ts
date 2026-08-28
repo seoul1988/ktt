@@ -361,6 +361,11 @@ export async function GET(
           notification_email: null,
           notification_phone: null,
           sender_email: null,
+          show_event_time: true,
+          show_occasion: true,
+          show_interested_category: true,
+          show_interested_menu: true,
+          show_budget_per_person: true,
         })
         .select("*")
         .single();
@@ -596,6 +601,26 @@ export async function PATCH(
           typeof input.sender_email === "string"
             ? input.sender_email.trim() || null
             : current.sender_email ?? null,
+        show_event_time:
+          typeof input.show_event_time === "boolean"
+            ? input.show_event_time
+            : current.show_event_time !== false,
+        show_occasion:
+          typeof input.show_occasion === "boolean"
+            ? input.show_occasion
+            : current.show_occasion !== false,
+        show_interested_category:
+          typeof input.show_interested_category === "boolean"
+            ? input.show_interested_category
+            : current.show_interested_category !== false,
+        show_interested_menu:
+          typeof input.show_interested_menu === "boolean"
+            ? input.show_interested_menu
+            : current.show_interested_menu !== false,
+        show_budget_per_person:
+          typeof input.show_budget_per_person === "boolean"
+            ? input.show_budget_per_person
+            : current.show_budget_per_person !== false,
       };
 
       const { data, error } = await supabase
@@ -614,6 +639,11 @@ export async function PATCH(
           notification_email: data.notification_email ?? null,
           notification_phone: data.notification_phone ?? null,
           sender_email: data.sender_email ?? null,
+          show_event_time: data.show_event_time !== false,
+          show_occasion: data.show_occasion !== false,
+          show_interested_category: data.show_interested_category !== false,
+          show_interested_menu: data.show_interested_menu !== false,
+          show_budget_per_person: data.show_budget_per_person !== false,
         },
       });
     }
