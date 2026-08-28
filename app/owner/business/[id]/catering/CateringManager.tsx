@@ -16,6 +16,13 @@ type CateringSettings = {
   notification_email: string;
   notification_phone: string;
   sender_email?: string;
+
+  /** Catering Request Form에서 각 항목을 웹사이트에 표시할지 여부 */
+  show_event_time?: boolean;
+  show_occasion?: boolean;
+  show_interested_category?: boolean;
+  show_interested_menu?: boolean;
+  show_budget_per_person?: boolean;
 };
 
 type Category = {
@@ -275,6 +282,16 @@ export default function CateringManager({
                 cateringData.settings.notification_phone ?? "",
               sender_email:
                 cateringData.settings.sender_email ?? "",
+              show_event_time:
+                cateringData.settings.show_event_time !== false,
+              show_occasion:
+                cateringData.settings.show_occasion !== false,
+              show_interested_category:
+                cateringData.settings.show_interested_category !== false,
+              show_interested_menu:
+                cateringData.settings.show_interested_menu !== false,
+              show_budget_per_person:
+                cateringData.settings.show_budget_per_person !== false,
             }
           : null,
       );
@@ -404,6 +421,16 @@ export default function CateringManager({
               notification_email: data.settings.notification_email ?? "",
               notification_phone: data.settings.notification_phone ?? "",
               sender_email: data.settings.sender_email ?? "",
+              show_event_time:
+                data.settings.show_event_time !== false,
+              show_occasion:
+                data.settings.show_occasion !== false,
+              show_interested_category:
+                data.settings.show_interested_category !== false,
+              show_interested_menu:
+                data.settings.show_interested_menu !== false,
+              show_budget_per_person:
+                data.settings.show_budget_per_person !== false,
             }
           : null,
       );
@@ -1719,6 +1746,57 @@ export default function CateringManager({
                   {label}
                 </label>
               ))}
+            </div>
+
+            <div className="mt-5 border-t border-[#EEE6DC] pt-5">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-base font-black text-[#172033]">
+                  Website Request Form Fields
+                </h3>
+                <p className="text-sm text-[#667085]">
+                  체크된 항목만 고객이 보는 Catering Request Form에 표시됩니다.
+                </p>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ["show_event_time", "Event Time"],
+                  ["show_occasion", "Occasion"],
+                  ["show_interested_category", "Interested Category"],
+                  ["show_interested_menu", "Interested Menu"],
+                  ["show_budget_per_person", "Budget Per Person"],
+                ].map(([key, label]) => {
+                  const fieldKey = key as keyof CateringSettings;
+                  const checked = settings[fieldKey] !== false;
+
+                  return (
+                    <label
+                      key={key}
+                      className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-black transition ${
+                        checked
+                          ? "border-green-300 bg-green-50 text-green-800"
+                          : "border-gray-200 bg-gray-50 text-gray-500"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          void saveSettings({
+                            [key]: e.target.checked,
+                          } as Partial<CateringSettings>)
+                        }
+                        className="h-4 w-4 accent-green-700"
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 rounded-xl bg-[#FFF8ED] px-3 py-2 text-xs font-bold leading-5 text-[#8A5A24]">
+                체크 해제 = 웹사이트에서 숨김 · 체크 = 웹사이트에 표시
+              </p>
             </div>
 
             <div className="mt-5 border-t border-[#EEE6DC] pt-5">
