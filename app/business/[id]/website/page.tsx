@@ -250,9 +250,14 @@ export async function generateMetadata({
 
   const websitePath = `/business/${businessId}/website`;
   const pageUrl = `${SITE_URL}${websitePath}`;
-  const manifestUrl = `${websitePath}/manifest.webmanifest?v=5`;
-  const icon192 = `${websitePath}/icon/192`;
-  const icon512 = `${websitePath}/icon/512`;
+  const manifestUrl = `${websitePath}/manifest.webmanifest?v=6`;
+
+  // 브라우저 탭용 favicon
+  const icon32 = `${websitePath}/icon/32?v=1`;
+
+  // PWA / 홈 화면 설치용 아이콘
+  const icon192 = `${websitePath}/icon/192?v=1`;
+  const icon512 = `${websitePath}/icon/512?v=1`;
 
   return {
     metadataBase: new URL(SITE_URL),
@@ -260,13 +265,20 @@ export async function generateMetadata({
     description: `${businessName} official website`,
     applicationName: businessName,
     manifest: manifestUrl,
+
     appleWebApp: {
       capable: true,
       title: businessName,
       statusBarStyle: "default",
     },
+
     icons: {
       icon: [
+        {
+          url: icon32,
+          sizes: "32x32",
+          type: "image/png",
+        },
         {
           url: icon192,
           sizes: "192x192",
@@ -277,8 +289,20 @@ export async function generateMetadata({
           sizes: "512x512",
           type: "image/png",
         },
-        { url: fallbackIcon },
+        {
+          url: fallbackIcon,
+        },
       ],
+
+      // Chrome/Edge 탭에서 shortcut icon도 32px favicon을 우선 사용
+      shortcut: [
+        {
+          url: icon32,
+          sizes: "32x32",
+          type: "image/png",
+        },
+      ],
+
       apple: [
         {
           url: icon192,
@@ -287,9 +311,11 @@ export async function generateMetadata({
         },
       ],
     },
+
     alternates: {
       canonical: pageUrl,
     },
+
     other: {
       "mobile-web-app-capable": "yes",
       "apple-mobile-web-app-capable": "yes",
