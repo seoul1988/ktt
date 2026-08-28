@@ -163,6 +163,23 @@ type GridCell = {
   restaurant_menu_pickup_enabled?: boolean;
   restaurant_menu_delivery_enabled?: boolean;
 
+  /** Catering Request Form에서 각 입력 항목을 웹사이트에 표시할지 여부 */
+  catering_request_fields?: {
+    customer_name?: boolean;
+    customer_phone?: boolean;
+    customer_email?: boolean;
+    company?: boolean;
+    event_date?: boolean;
+    event_time?: boolean;
+    guest_count?: boolean;
+    occasion?: boolean;
+    interested_category?: boolean;
+    interested_menu?: boolean;
+    catering_service?: boolean;
+    budget_per_person?: boolean;
+    notes?: boolean;
+  };
+
   gallery_images?: string[];
   /** 갤러리 전용: 이미지 URL과 각 이미지 제목 */
   gallery_items?: GalleryImageItem[];
@@ -4367,12 +4384,17 @@ function CateringRequestFormDisplay({
   businessName,
   compact = false,
   editorPreview = false,
+  fieldVisibility,
 }: {
   businessId: number;
   businessName?: string | null;
   compact?: boolean;
   editorPreview?: boolean;
+  fieldVisibility?: GridCell["catering_request_fields"];
 }) {
+  const isFieldVisible = (
+    key: keyof NonNullable<GridCell["catering_request_fields"]>,
+  ) => fieldVisibility?.[key] !== false;
   const [payload, setPayload] = useState<CateringMenuPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -4756,93 +4778,112 @@ function CateringRequestFormDisplay({
           <input required name="customer_name" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
         </label>
 
-        <label className="text-sm font-black text-gray-700">
-          Phone *
-          <input required type="tel" name="customer_phone" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("customer_phone") ? (
+          <label className="text-sm font-black text-gray-700">
+            Phone *
+            <input required type="tel" name="customer_phone" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Email *
-          <input required type="email" name="customer_email" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("customer_email") ? (
+          <label className="text-sm font-black text-gray-700">
+            Email *
+            <input required type="email" name="customer_email" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Company / Organization
-          <input name="company" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("company") ? (
+          <label className="text-sm font-black text-gray-700">
+            Company / Organization
+            <input name="company" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Event Date *
-          <input required type="date" name="event_date" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("event_date") ? (
+          <label className="text-sm font-black text-gray-700">
+            Event Date *
+            <input required type="date" name="event_date" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Event Time *
-          <input required type="time" name="event_time" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("event_time") ? (
+          <label className="text-sm font-black text-gray-700">
+            Event Time *
+            <input required type="time" name="event_time" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Number of Guests *
-          <input
-            required
-            type="number"
-            min={minPeople > 0 ? minPeople : 1}
-            defaultValue={minPeople > 0 ? minPeople : undefined}
-            name="guest_count"
-            className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
-          />
-        </label>
+        {isFieldVisible("guest_count") ? (
+          <label className="text-sm font-black text-gray-700">
+            Number of Guests *
+            <input
+              required
+              type="number"
+              min={minPeople > 0 ? minPeople : 1}
+              defaultValue={minPeople > 0 ? minPeople : undefined}
+              name="guest_count"
+              className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
+            />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Occasion
-          <select name="occasion" className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
-            <option value="">Select</option>
-            <option>Corporate / Business</option>
-            <option>Birthday</option>
-            <option>Wedding</option>
-            <option>School / University</option>
-            <option>Family Gathering</option>
-            <option>Other</option>
-          </select>
-        </label>
+        {isFieldVisible("occasion") ? (
+          <label className="text-sm font-black text-gray-700">
+            Occasion
+            <select name="occasion" className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950">
+              <option value="">Select</option>
+              <option>Corporate / Business</option>
+              <option>Birthday</option>
+              <option>Wedding</option>
+              <option>School / University</option>
+              <option>Family Gathering</option>
+              <option>Other</option>
+            </select>
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Interested Category
-          <select
-            name="category_id"
-            value={selectedCategoryId}
-            onChange={(event) => {
-              setSelectedCategoryId(event.target.value);
-              setSelectedItemId("");
-            }}
-            className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
-          >
-            <option value="">Select category</option>
-            {visibleCategories.map((category) => (
-              <option key={category.id} value={String(category.id)}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isFieldVisible("interested_category") ? (
+          <label className="text-sm font-black text-gray-700">
+            Interested Category
+            <select
+              name="category_id"
+              value={selectedCategoryId}
+              onChange={(event) => {
+                setSelectedCategoryId(event.target.value);
+                setSelectedItemId("");
+              }}
+              className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+            >
+              <option value="">Select category</option>
+              {visibleCategories.map((category) => (
+                <option key={category.id} value={String(category.id)}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700">
-          Interested Menu
-          <select
-            name="item_id"
-            value={selectedItemId}
-            onChange={(event) => setSelectedItemId(event.target.value)}
-            className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
-          >
-            <option value="">Select menu</option>
-            {visibleItems.map((item) => (
-              <option key={item.id} value={String(item.id)}>
-                {item.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isFieldVisible("interested_menu") ? (
+          <label className="text-sm font-black text-gray-700">
+            Interested Menu
+            <select
+              name="item_id"
+              value={selectedItemId}
+              onChange={(event) => setSelectedItemId(event.target.value)}
+              className="mt-2 h-12 w-full rounded-xl border border-gray-300 bg-white px-3 font-semibold outline-none focus:border-gray-950"
+            >
+              <option value="">Select menu</option>
+              {visibleItems.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
+        {isFieldVisible("catering_service") ? (
         <fieldset className="sm:col-span-2">
           <legend className="text-sm font-black text-gray-700">
             Catering Service *
@@ -4898,16 +4939,21 @@ function CateringRequestFormDisplay({
             </p>
           ) : null}
         </fieldset>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700 sm:col-span-2">
-          Budget Per Person
-          <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("budget_per_person") ? (
+          <label className="text-sm font-black text-gray-700 sm:col-span-2">
+            Budget Per Person
+            <input type="number" min="0" step="0.01" name="budget_per_person" className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
 
-        <label className="text-sm font-black text-gray-700 sm:col-span-2">
-          Description / Special Requests
-          <textarea name="notes" rows={5} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
-        </label>
+        {isFieldVisible("notes") ? (
+          <label className="text-sm font-black text-gray-700 sm:col-span-2">
+            Description / Special Requests
+            <textarea name="notes" rows={5} className="mt-2 w-full rounded-xl border border-gray-300 px-3 py-3 font-semibold outline-none focus:border-gray-950" />
+          </label>
+        ) : null}
       </div>
 
       <button
@@ -18363,6 +18409,7 @@ function CellPreview({
             businessName={business.name}
             compact={previewDevice === "mobile"}
             editorPreview={true}
+            fieldVisibility={cell.catering_request_fields}
           />
         </div>
       );
@@ -24957,6 +25004,21 @@ function RightPanel(props: {
                         text: "Catering Request Form",
                         background_color: "#ffffff",
                         color: "#111827",
+                        catering_request_fields: {
+                          customer_name: true,
+                          customer_phone: true,
+                          customer_email: true,
+                          company: true,
+                          event_date: true,
+                          event_time: true,
+                          guest_count: true,
+                          occasion: true,
+                          interested_category: true,
+                          interested_menu: true,
+                          catering_service: true,
+                          budget_per_person: true,
+                          notes: true,
+                        },
                       },
                       selection.layoutId,
                     );
@@ -32530,6 +32592,21 @@ function TitleCellEditor({
         text: "Catering Request Form",
         background_color: "#ffffff",
         color: "#111827",
+        catering_request_fields: {
+          customer_name: cell.catering_request_fields?.customer_name ?? true,
+          customer_phone: cell.catering_request_fields?.customer_phone ?? true,
+          customer_email: cell.catering_request_fields?.customer_email ?? true,
+          company: cell.catering_request_fields?.company ?? true,
+          event_date: cell.catering_request_fields?.event_date ?? true,
+          event_time: cell.catering_request_fields?.event_time ?? true,
+          guest_count: cell.catering_request_fields?.guest_count ?? true,
+          occasion: cell.catering_request_fields?.occasion ?? true,
+          interested_category: cell.catering_request_fields?.interested_category ?? true,
+          interested_menu: cell.catering_request_fields?.interested_menu ?? true,
+          catering_service: cell.catering_request_fields?.catering_service ?? true,
+          budget_per_person: cell.catering_request_fields?.budget_per_person ?? true,
+          notes: cell.catering_request_fields?.notes ?? true,
+        },
       });
       return;
     }
@@ -33102,6 +33179,8 @@ function TitleCellEditor({
         >
           <option value="text">📝 텍스트</option>
           <option value="restaurant-menu">🍽 DoorDash 스타일 메뉴</option>
+          <option value="catering-menu">🥡 Catering Menu</option>
+          <option value="catering-request-form">📝 Catering Request Form</option>
           <option value="background-image">🖼 전체 배경 이미지</option>
           <option value="auto-slider">🎞 자동 이미지 슬라이드</option>
           <option value="image-scroll">↔ 옆으로 흐르는 이미지</option>
@@ -33206,6 +33285,77 @@ function TitleCellEditor({
                     .filter(Boolean)
                     .join(" · ")
                 }`}
+          </div>
+        </div>
+      ) : null}
+
+      {mode === "catering-request-form" ? (
+        <div className="mt-4 rounded-2xl border-2 border-blue-300 bg-blue-50 p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-base font-black text-blue-950">
+                웹사이트에 표시할 요청 항목
+              </p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-blue-800">
+                체크된 항목만 Catering Request Form에 표시됩니다. 체크를 끄면
+                웹사이트와 미리보기에서 해당 입력칸이 숨겨집니다.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-blue-700 px-2.5 py-1 text-[10px] font-black text-white">
+              FORM FIELDS
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {[
+              ["customer_name", "Customer Name"],
+              ["customer_phone", "Phone"],
+              ["customer_email", "Email"],
+              ["company", "Company"],
+              ["event_date", "Event Date"],
+              ["event_time", "Event Time"],
+              ["guest_count", "Number of Guests"],
+              ["occasion", "Occasion"],
+              ["interested_category", "Interested Category"],
+              ["interested_menu", "Interested Menu"],
+              ["catering_service", "Catering Service"],
+              ["budget_per_person", "Budget Per Person"],
+              ["notes", "Description / Special Requests"],
+            ].map(([key, label]) => {
+              const fieldKey =
+                key as keyof NonNullable<GridCell["catering_request_fields"]>;
+              const checked = cell.catering_request_fields?.[fieldKey] !== false;
+
+              return (
+                <label
+                  key={key}
+                  className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 px-3 py-3 text-xs font-black transition ${
+                    checked
+                      ? "border-blue-600 bg-blue-600 text-white"
+                      : "border-blue-200 bg-white text-gray-700"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) =>
+                      onUpdate({
+                        catering_request_fields: {
+                          ...(cell.catering_request_fields || {}),
+                          [fieldKey]: event.target.checked,
+                        },
+                      })
+                    }
+                    className="h-4 w-4 shrink-0 accent-blue-700"
+                  />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 rounded-xl bg-white px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
+            체크 해제한 항목은 고객이 보는 웹사이트 폼에서 완전히 숨겨집니다.
           </div>
         </div>
       ) : null}

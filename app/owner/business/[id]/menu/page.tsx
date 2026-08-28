@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -22,7 +22,7 @@ type MenuOption = {
 type MenuOptionGroup = {
   name: string;
   required: boolean;
-  minSelect: number;
+  minSelect: number | "";
   maxSelect: number | null;
   displayOrder: number;
   options: MenuOption[];
@@ -60,6 +60,8 @@ type MenuItem = {
   image_url: string | null;
   display_order: number | null;
   is_available: boolean;
+  /** false면 실제 웹사이트 메뉴에는 표시하지 않음 */
+  show_on_website?: boolean;
   option_groups?: MenuOptionGroup[] | null;
   optionGroups?: MenuOptionGroup[] | null;
   menu_option_groups?: MenuOptionGroup[] | null;
@@ -338,6 +340,14 @@ export default function OwnerBusinessMenuPage() {
     DEFAULT_DELIVERY_PROVIDERS,
   );
   const [savingDeliveryProviders, setSavingDeliveryProviders] = useState(false);
+  const [itemSaveStatus, setItemSaveStatus] = useState<Record<number, "saving" | "saved" | "error">>({});
+  const itemAutoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const categoryAutoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const itemsRef = useRef<MenuItem[]>([]);
+  const categoriesRef = useRef<Category[]>([]);
+  const priceInputsRef = useRef<Record<number, string>>({});
+  const pickupPriceInputsRef = useRef<Record<number, string>>({});
+  const deliveryPriceInputsRef = useRef<Record<number, string>>({});
   const [deliveryPartnersOpen, setDeliveryPartnersOpen] = useState(false);
   const [newDeliveryProviderName, setNewDeliveryProviderName] = useState("");
   const [newDeliveryProviderUrl, setNewDeliveryProviderUrl] = useState("");
@@ -351,7 +361,7 @@ export default function OwnerBusinessMenuPage() {
   const [expandedSavedOptionKeys, setExpandedSavedOptionKeys] = useState<Set<string>>(new Set());
   const [templateNameInput, setTemplateNameInput] = useState("");
   const [templateRequiredInput, setTemplateRequiredInput] = useState(false);
-  const [templateMinInput, setTemplateMinInput] = useState(0);
+  const [templateMinInput, setTemplateMinInput] = useState<number | "">("");
   const [templateMaxInput, setTemplateMaxInput] = useState<number | null>(null);
   const [templateOptionsInput, setTemplateOptionsInput] = useState<MenuOption[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -361,6 +371,19 @@ export default function OwnerBusinessMenuPage() {
   const [optionCategoryNames, setOptionCategoryNames] = useState<string[]>(
     DEFAULT_OPTION_CATEGORY_NAMES,
   );
+
+  useEffect(() => { itemsRef.current = items; }, [items]);
+  useEffect(() => { categoriesRef.current = categories; }, [categories]);
+  useEffect(() => { priceInputsRef.current = priceInputs; }, [priceInputs]);
+  useEffect(() => { pickupPriceInputsRef.current = pickupPriceInputs; }, [pickupPriceInputs]);
+  useEffect(() => { deliveryPriceInputsRef.current = deliveryPriceInputs; }, [deliveryPriceInputs]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(itemAutoSaveTimers.current).forEach(clearTimeout);
+      Object.values(categoryAutoSaveTimers.current).forEach(clearTimeout);
+    };
+  }, []);
 
   useEffect(() => {
     void loadMenu();
@@ -555,7 +578,7 @@ export default function OwnerBusinessMenuPage() {
           id: `existing-${item.id}-${group.displayOrder}-${templates.length}`,
           name: normalizedName,
           required: group.required,
-          minSelect: group.minSelect,
+          minSelect: Number(group.minSelect) || 0,
           maxSelect: group.maxSelect,
           options: group.options.map((option, optionIndex) => ({
             ...option,
@@ -1000,7 +1023,7 @@ export default function OwnerBusinessMenuPage() {
         ...next[sourceIndex],
         name: sourceName || next[sourceIndex].name,
         required: templateRequiredInput,
-        minSelect: Math.max(0, templateMinInput),
+        minSelect: Math.max(0, Number(templateMinInput) || 0),
         maxSelect: templateMaxInput == null ? null : Math.max(0, templateMaxInput),
         options: sourceOptions,
       };
@@ -1118,7 +1141,7 @@ export default function OwnerBusinessMenuPage() {
 
     if (
       templateMaxInput != null &&
-      templateMaxInput < templateMinInput
+      templateMaxInput < (Number(templateMinInput) || 0)
     ) {
       setMessage("최대 선택 수는 최소 선택 수보다 작을 수 없습니다.");
       return;
@@ -1132,7 +1155,7 @@ export default function OwnerBusinessMenuPage() {
           .slice(2, 8)}`,
       name,
       required: templateRequiredInput,
-      minSelect: Math.max(0, templateMinInput),
+      minSelect: Math.max(0, Number(templateMinInput) || 0),
       maxSelect:
         templateMaxInput == null
           ? null
@@ -1242,7 +1265,7 @@ export default function OwnerBusinessMenuPage() {
         .slice(2, 8)}`,
       name: baseName,
       required: group.required,
-      minSelect: group.minSelect,
+      minSelect: Number(group.minSelect) || 0,
       maxSelect: group.maxSelect,
       options: group.options.map((option, index) => ({
         ...option,
@@ -1392,6 +1415,150 @@ export default function OwnerBusinessMenuPage() {
     });
   }, [items, searchTerm, selectedCategoryId]);
 
+  function normalizeItemForSave(item: MenuItem) {
+    const price = parseOptionalPrice(
+      priceInputsRef.current[item.id] ?? "",
+      item.name,
+      "메뉴 단가",
+    );
+    const pickupPrice = parseOptionalPrice(
+      pickupPriceInputsRef.current[item.id] ?? "",
+      item.name,
+      "픽업 단가",
+    );
+    const deliveryPrice = parseOptionalPrice(
+      deliveryPriceInputsRef.current[item.id] ?? "",
+      item.name,
+      "배달 단가",
+    );
+
+    if (!item.name.trim()) throw new Error("상품명은 비워둘 수 없습니다.");
+
+    return {
+      id: item.id,
+      category_id: item.category_id,
+      name: item.name.trim(),
+      description: item.description?.trim() || null,
+      price,
+      pickup_price: pickupPrice,
+      delivery_price: deliveryPrice,
+      display_order: Number(item.display_order ?? 999),
+      is_available: item.is_available,
+      show_on_website: item.show_on_website !== false,
+      option_groups: normalizeOptionGroups(item).map((group, groupIndex) => {
+        const name = group.name.trim();
+        if (!name) throw new Error(`${item.name}: 옵션 그룹 이름을 입력하세요.`);
+        const minSelect = Math.max(0, Math.floor(Number(group.minSelect) || 0));
+        const maxSelect = group.maxSelect == null ? null : Math.max(0, Math.floor(Number(group.maxSelect) || 0));
+        if (maxSelect != null && maxSelect < minSelect) {
+          throw new Error(`${item.name} / ${name}: 최대 선택 수는 최소 선택 수보다 작을 수 없습니다.`);
+        }
+        return {
+          name,
+          required: Boolean(group.required),
+          minSelect,
+          maxSelect,
+          displayOrder: groupIndex,
+          options: group.options.map((option, optionIndex) => ({
+            name: option.name.trim() || `Option ${optionIndex + 1}`,
+            priceDelta: Number(Number(option.priceDelta || 0).toFixed(2)),
+            soldOut: Boolean(option.soldOut),
+            displayOrder: optionIndex,
+          })),
+        };
+      }),
+    };
+  }
+
+  async function saveOneItem(itemId: number) {
+    const item = itemsRef.current.find((row) => row.id === itemId);
+    if (!item) return;
+
+    setItemSaveStatus((current) => ({ ...current, [itemId]: "saving" }));
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(`/api/owner/business/${businessId}/menu`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          categories: [],
+          items: [normalizeItemForSave(item)],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "자동 저장 실패");
+      setItemSaveStatus((current) => ({ ...current, [itemId]: "saved" }));
+    } catch (error) {
+      console.error("MENU ITEM AUTOSAVE ERROR", error);
+      setItemSaveStatus((current) => ({ ...current, [itemId]: "error" }));
+      setMessage(error instanceof Error ? `자동 저장 실패: ${error.message}` : "자동 저장 실패");
+    }
+  }
+
+  function scheduleItemAutoSave(itemId: number, delay = 700) {
+    const oldTimer = itemAutoSaveTimers.current[itemId];
+    if (oldTimer) clearTimeout(oldTimer);
+    setItemSaveStatus((current) => ({ ...current, [itemId]: "saving" }));
+    itemAutoSaveTimers.current[itemId] = setTimeout(() => {
+      void saveOneItem(itemId);
+    }, delay);
+  }
+
+  async function saveOneCategory(categoryId: number) {
+    const category = categoriesRef.current.find((row) => row.id === categoryId);
+    if (!category || !category.name.trim()) return;
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(`/api/owner/business/${businessId}/menu`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          categories: [{
+            id: category.id,
+            name: category.name.trim(),
+            display_order: Number(category.display_order ?? 999),
+            is_active: category.is_active,
+          }],
+          items: [],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "카테고리 자동 저장 실패");
+    } catch (error) {
+      console.error("CATEGORY AUTOSAVE ERROR", error);
+    }
+  }
+
+  function scheduleCategoryAutoSave(categoryId: number, delay = 700) {
+    const oldTimer = categoryAutoSaveTimers.current[categoryId];
+    if (oldTimer) clearTimeout(oldTimer);
+    categoryAutoSaveTimers.current[categoryId] = setTimeout(() => {
+      void saveOneCategory(categoryId);
+    }, delay);
+  }
+
+  function updatePriceField(
+    field: "menu" | "pickup" | "delivery",
+    itemId: number,
+    rawValue: string,
+  ) {
+    const cleaned = cleanPrice(rawValue); // 빈 문자열도 그대로 허용
+    if (field === "menu") {
+      setPriceInputs((current) => ({ ...current, [itemId]: cleaned }));
+    } else if (field === "pickup") {
+      setPickupPriceInputs((current) => ({ ...current, [itemId]: cleaned }));
+    } else {
+      setDeliveryPriceInputs((current) => ({ ...current, [itemId]: cleaned }));
+    }
+    scheduleItemAutoSave(itemId);
+  }
+
   function updateCategory(
     categoryId: number,
     patch: Partial<Category>,
@@ -1401,6 +1568,7 @@ export default function OwnerBusinessMenuPage() {
         category.id === categoryId ? { ...category, ...patch } : category,
       ),
     );
+    scheduleCategoryAutoSave(categoryId);
     setMessage("");
   }
 
@@ -1410,6 +1578,7 @@ export default function OwnerBusinessMenuPage() {
         item.id === itemId ? { ...item, ...patch } : item,
       ),
     );
+    scheduleItemAutoSave(itemId);
     setMessage("");
   }
 
@@ -1449,6 +1618,7 @@ export default function OwnerBusinessMenuPage() {
         };
       }),
     );
+    scheduleItemAutoSave(itemId);
     setMessage("");
   }
 
@@ -2377,6 +2547,7 @@ export default function OwnerBusinessMenuPage() {
           delivery_price: deliveryPrice,
           display_order: Number(item.display_order ?? 999),
           is_available: item.is_available,
+          show_on_website: item.show_on_website !== false,
           option_groups: normalizeOptionGroups(item).map(
             (group, groupIndex) => {
               const name = group.name.trim();
@@ -2615,6 +2786,7 @@ export default function OwnerBusinessMenuPage() {
 
                 <input
                   type="number"
+                  onFocus={(event) => event.currentTarget.select()}
                   value={index}
                   onChange={(event) => {
                     const target = Math.max(
@@ -2787,7 +2959,7 @@ export default function OwnerBusinessMenuPage() {
                       onChange={(event) => {
                         const checked = event.target.checked;
                         setTemplateRequiredInput(checked);
-                        if (checked && templateMinInput === 0) {
+                        if (checked && (Number(templateMinInput) || 0) === 0) {
                           setTemplateMinInput(1);
                         }
                       }}
@@ -2811,14 +2983,14 @@ export default function OwnerBusinessMenuPage() {
                     </span>
                     <input
                       type="number"
+                  onFocus={(event) => event.currentTarget.select()}
                       min={0}
                       value={templateMinInput}
                       onChange={(event) =>
                         setTemplateMinInput(
-                          Math.max(
-                            0,
-                            Math.floor(Number(event.target.value) || 0),
-                          ),
+                          event.target.value === ""
+                            ? ""
+                            : Math.max(0, Math.floor(Number(event.target.value) || 0)),
                         )
                       }
                       className="w-full bg-transparent text-sm font-black outline-none"
@@ -2831,6 +3003,7 @@ export default function OwnerBusinessMenuPage() {
                     </span>
                     <input
                       type="number"
+                  onFocus={(event) => event.currentTarget.select()}
                       min={0}
                       value={templateMaxInput == null ? "" : templateMaxInput}
                       placeholder="제한 없음"
@@ -3215,10 +3388,11 @@ export default function OwnerBusinessMenuPage() {
 
                   <input
                     type="number"
-                    value={category.display_order ?? 999}
+                  onFocus={(event) => event.currentTarget.select()}
+                    value={category.display_order ?? ""}
                     onChange={(event) =>
                       updateCategory(category.id, {
-                        display_order: Number(event.target.value),
+                        display_order: event.target.value === "" ? null : Number(event.target.value),
                       })
                     }
                     className="rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none"
@@ -3512,10 +3686,7 @@ export default function OwnerBusinessMenuPage() {
                           <input
                             value={priceInputs[item.id] ?? ""}
                             onChange={(event) =>
-                              setPriceInputs((current) => ({
-                                ...current,
-                                [item.id]: cleanPrice(event.target.value),
-                              }))
+                              updatePriceField("menu", item.id, event.target.value)
                             }
                             inputMode="decimal"
                             placeholder="0.00"
@@ -3531,10 +3702,7 @@ export default function OwnerBusinessMenuPage() {
                           <input
                             value={pickupPriceInputs[item.id] ?? ""}
                             onChange={(event) =>
-                              setPickupPriceInputs((current) => ({
-                                ...current,
-                                [item.id]: cleanPrice(event.target.value),
-                              }))
+                              updatePriceField("pickup", item.id, event.target.value)
                             }
                             inputMode="decimal"
                             placeholder="0.00"
@@ -3550,10 +3718,7 @@ export default function OwnerBusinessMenuPage() {
                           <input
                             value={deliveryPriceInputs[item.id] ?? ""}
                             onChange={(event) =>
-                              setDeliveryPriceInputs((current) => ({
-                                ...current,
-                                [item.id]: cleanPrice(event.target.value),
-                              }))
+                              updatePriceField("delivery", item.id, event.target.value)
                             }
                             inputMode="decimal"
                             placeholder="0.00"
@@ -3564,28 +3729,51 @@ export default function OwnerBusinessMenuPage() {
 
                       <input
                         type="number"
-                        value={item.display_order ?? 999}
+                  onFocus={(event) => event.currentTarget.select()}
+                        value={item.display_order ?? ""}
                         onChange={(event) =>
                           updateItem(item.id, {
-                            display_order: Number(event.target.value),
+                            display_order: event.target.value === "" ? null : Number(event.target.value),
                           })
                         }
                         title="노출 순서"
                         className="rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none"
                       />
 
-                      <label className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold">
-                        <input
-                          type="checkbox"
-                          checked={item.is_available}
-                          onChange={(event) =>
-                            updateItem(item.id, {
-                              is_available: event.target.checked,
-                            })
-                          }
-                        />
-                        판매
-                      </label>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold">
+                          <input
+                            type="checkbox"
+                            checked={item.is_available}
+                            onChange={(event) =>
+                              updateItem(item.id, {
+                                is_available: event.target.checked,
+                              })
+                            }
+                          />
+                          판매
+                        </label>
+
+                        <label
+                          className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-black ${
+                            item.show_on_website !== false
+                              ? "border-blue-200 bg-blue-50 text-blue-800"
+                              : "border-gray-200 bg-gray-100 text-gray-500"
+                          }`}
+                          title="체크를 끄면 이 메뉴는 실제 웹사이트 메뉴에서 숨깁니다."
+                        >
+                          <input
+                            type="checkbox"
+                            checked={item.show_on_website !== false}
+                            onChange={(event) =>
+                              updateItem(item.id, {
+                                show_on_website: event.target.checked,
+                              })
+                            }
+                          />
+                          웹 표시
+                        </label>
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#EEE5DA] pt-3">
@@ -3629,6 +3817,15 @@ export default function OwnerBusinessMenuPage() {
 
                       <div className="text-xs font-bold text-gray-500">
                         옵션 그룹 {normalizeOptionGroups(item).length}개
+                        <span className="ml-2">
+                          {itemSaveStatus[item.id] === "saving"
+                            ? "저장 중..."
+                            : itemSaveStatus[item.id] === "saved"
+                              ? "✓ 자동 저장됨"
+                              : itemSaveStatus[item.id] === "error"
+                                ? "⚠ 저장 실패"
+                                : ""}
+                        </span>
                       </div>
 
                       <div className="flex gap-2">
@@ -3798,7 +3995,7 @@ export default function OwnerBusinessMenuPage() {
                                             minSelect: required
                                               ? Math.max(
                                                   1,
-                                                  group.minSelect,
+                                                  Number(group.minSelect) || 0,
                                                 )
                                               : 0,
                                           },
@@ -3814,6 +4011,7 @@ export default function OwnerBusinessMenuPage() {
                                     </span>
                                     <input
                                       type="number"
+                  onFocus={(event) => event.currentTarget.select()}
                                       min={0}
                                       value={group.minSelect}
                                       onChange={(event) =>
@@ -3821,14 +4019,13 @@ export default function OwnerBusinessMenuPage() {
                                           item.id,
                                           groupIndex,
                                           {
-                                            minSelect: Math.max(
-                                              0,
-                                              Math.floor(
-                                                Number(
-                                                  event.target.value,
-                                                ) || 0,
-                                              ),
-                                            ),
+                                            minSelect:
+                                              event.target.value === ""
+                                                ? ""
+                                                : Math.max(
+                                                    0,
+                                                    Math.floor(Number(event.target.value) || 0),
+                                                  ),
                                           },
                                         )
                                       }
@@ -3842,6 +4039,7 @@ export default function OwnerBusinessMenuPage() {
                                     </span>
                                     <input
                                       type="number"
+                  onFocus={(event) => event.currentTarget.select()}
                                       min={0}
                                       value={
                                         group.maxSelect == null

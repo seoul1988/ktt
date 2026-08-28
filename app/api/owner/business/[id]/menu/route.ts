@@ -303,7 +303,7 @@ export async function GET(
       supabase
         .from("business_menu_items")
         .select(
-          "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available",
+          "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available,show_on_website",
         )
         .eq("business_id", businessId)
         .order("display_order", {
@@ -583,10 +583,11 @@ export async function POST(
             image_path: null,
             display_order: nextOrder,
             is_available: true,
+            show_on_website: true,
             source_platform: "manual",
           })
           .select(
-            "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available",
+            "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available,show_on_website",
           )
           .single();
 
@@ -622,7 +623,7 @@ export async function POST(
         await supabase
           .from("business_menu_items")
           .select(
-            "id,category_id,name,description,price,pickup_price,delivery_price,display_order,is_available",
+            "id,category_id,name,description,price,pickup_price,delivery_price,display_order,is_available,show_on_website",
           )
           .eq("business_id", businessId)
           .eq("id", itemId)
@@ -673,10 +674,11 @@ export async function POST(
             image_path: null,
             display_order: nextOrder,
             is_available: sourceItem.is_available !== false,
+            show_on_website: sourceItem.show_on_website !== false,
             source_platform: "manual",
           })
           .select(
-            "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available",
+            "id,category_id,name,description,price,pickup_price,delivery_price,thumbnail_path,image_path,display_order,is_available,show_on_website",
           )
           .single();
 
@@ -1049,6 +1051,8 @@ export async function PATCH(
           ),
           is_available:
             rawItem?.is_available !== false,
+          show_on_website:
+            rawItem?.show_on_website !== false,
         })
         .eq("business_id", businessId)
         .eq("id", itemId)
