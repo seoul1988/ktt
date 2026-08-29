@@ -16922,7 +16922,9 @@ function ReadOnlyGrid({
     renderedCells.length === 1 &&
     renderedCells[0]?.type === "image" &&
     Boolean(renderedCells[0]?.image_url) &&
-    normalizeImageFit(renderedCells[0]?.image_fit) === "width";
+    (normalizeImageFit(renderedCells[0]?.image_fit) === "width" ||
+      (renderedCells[0]?.image_fill_layer === true &&
+        normalizeImageFit(renderedCells[0]?.image_fit) !== "fill"));
 
   /*
    * 휴대폰 폭에서 두 칸 이상을 그대로 옆으로 압축하면 이미지가 잘리고
@@ -17068,8 +17070,15 @@ function ReadOnlyGrid({
           fillLayerImageCell && cell.id === fillLayerImageCell.id
             ? {
                 ...cell,
+                /*
+                 * 전체 레이어 이미지를 cover로 강제하면 브라우저 100%에서
+                 * 뷰포트 비율이 좁아질 때 이미지 좌우가 잘립니다. fill을
+                 * 명시한 경우만 왜곡 채우기를 유지하고, 나머지는 가로폭에
+                 * 맞춘 자연 높이로 표시해 모든 확대 비율에서 전체 이미지를
+                 * 보존합니다.
+                 */
                 image_fit:
-                  cell.image_fit === "fill" ? ("fill" as const) : ("cover" as const),
+                  cell.image_fit === "fill" ? ("fill" as const) : ("width" as const),
                 image_size_percent: 100,
                 width_percent: 100,
               }
