@@ -13477,37 +13477,6 @@ function BusinessWebsiteBanners({
         aria-label="Close popup"
       >×</button>
 
-      {editorPreview ? (
-        <div className="absolute bottom-3 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[10px] font-black text-gray-900 shadow-lg">
-          <input
-            type="checkbox"
-            checked={dismissChecked}
-            onChange={(event) =>
-              setDismissChecked(event.target.checked)
-            }
-            className="h-3.5 w-3.5 accent-gray-950"
-          />
-          <span>다시 보지 않기</span>
-          {dismissChecked ? (
-            <select
-              value={dismissHours}
-              onChange={(event) =>
-                setDismissHours(Number(event.target.value))
-              }
-              className="rounded border border-black/10 bg-white px-1 py-0.5 text-[10px]"
-            >
-              <option value={1}>1시간</option>
-              <option value={6}>6시간</option>
-              <option value={12}>12시간</option>
-              <option value={24}>24시간</option>
-              <option value={72}>3일</option>
-              <option value={168}>7일</option>
-              <option value={720}>30일</option>
-            </select>
-          ) : null}
-        </div>
-      ) : null}
-
       {banner.image_url && banner.image_position !== "background" ? (
         <div
           className="absolute z-10 overflow-hidden bg-white"
@@ -13616,46 +13585,6 @@ function BusinessWebsiteBanners({
           )
         ) : null}
 
-        {!editorPreview ? (
-          <div
-            className="mt-4 flex flex-wrap items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold"
-            style={{
-              color: banner.subtitle_color || "#667085",
-              backgroundColor: "rgba(255,255,255,0.82)",
-            }}
-          >
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={dismissChecked}
-                onChange={(event) =>
-                  setDismissChecked(event.target.checked)
-                }
-                className="h-4 w-4 cursor-pointer accent-gray-950"
-              />
-              <span>다시 보지 않기</span>
-            </label>
-
-            {dismissChecked ? (
-              <select
-                value={dismissHours}
-                onChange={(event) =>
-                  setDismissHours(Number(event.target.value))
-                }
-                className="rounded-lg border border-black/15 bg-white px-2 py-1 text-[11px] font-black text-gray-900 outline-none"
-                aria-label="팝업 다시 표시하지 않을 시간"
-              >
-                <option value={1}>1시간</option>
-                <option value={6}>6시간</option>
-                <option value={12}>12시간</option>
-                <option value={24}>24시간</option>
-                <option value={72}>3일</option>
-                <option value={168}>7일</option>
-                <option value={720}>30일</option>
-              </select>
-            ) : null}
-          </div>
-        ) : null}
       </div>
       {banner.lead_capture_enabled ? (
         <div
@@ -13726,7 +13655,7 @@ function BusinessWebsiteBanners({
       }}
     >
       <div
-        className="fixed flex items-center justify-center"
+        className="fixed flex flex-col items-center justify-center"
         onClick={(event) => event.stopPropagation()}
         style={{
           left: "50%",
@@ -13746,6 +13675,46 @@ function BusinessWebsiteBanners({
         }}
       >
         {popupCard}
+
+        <div
+          className="mt-3 flex flex-wrap items-center justify-center gap-2 rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-gray-800 shadow-lg"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={dismissChecked}
+              onChange={(event) =>
+                setDismissChecked(event.target.checked)
+              }
+              className="h-4 w-4 cursor-pointer accent-gray-950"
+            />
+            <span>Don't show this again</span>
+          </label>
+
+          {dismissChecked ? (
+            <select
+              value={dismissHours}
+              onChange={(event) =>
+                setDismissHours(Number(event.target.value))
+              }
+              className="rounded-lg border border-black/15 bg-white px-2 py-1 text-xs font-black text-gray-900 outline-none"
+              aria-label="Don't show this popup again for"
+            >
+              <option value={1}>1 hour</option>
+              <option value={6}>6 hours</option>
+              <option value={12}>12 hours</option>
+              <option value={24}>24 hours</option>
+              <option value={72}>3 days</option>
+              <option value={168}>7 days</option>
+              <option value={720}>30 days</option>
+            </select>
+          ) : (
+            <span className="text-[11px] font-semibold text-gray-500">
+              ({dismissHours === 24 ? "24h" : `${dismissHours}h`})
+            </span>
+          )}
+        </div>
       </div>
     </div>,
     document.body,
