@@ -145,6 +145,23 @@ function writeStoredCart(businessId: number, items: StoredCartItem[]) {
   );
 }
 
+const VISITOR_ID_STORAGE_KEY = "ktown_anonymous_visitor_id";
+
+function getMenuClickVisitorId() {
+  try {
+    let visitorId = window.localStorage.getItem(VISITOR_ID_STORAGE_KEY);
+
+    if (!visitorId) {
+      visitorId = window.crypto.randomUUID();
+      window.localStorage.setItem(VISITOR_ID_STORAGE_KEY, visitorId);
+    }
+
+    return visitorId;
+  } catch {
+    return window.crypto.randomUUID();
+  }
+}
+
 export default function RestaurantMenu({
   businessId,
   compact = false,
@@ -182,6 +199,7 @@ export default function RestaurantMenu({
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
     useState<CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const recentMenuClickRef = useRef<{ key: string; time: number } | null>(null);
 
   const hasOrderModes = pickupEnabled || deliveryEnabled || orderEnabled;
   const effectivePickupEnabled =
@@ -219,6 +237,43 @@ export default function RestaurantMenu({
     (sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0),
     0,
   );
+
+  function recordMenuItemClick(
+    item: RestaurantMenuItem,
+    categoryName: string,
+  ) {
+    const now = Date.now();
+    const clickKey = `${businessId}:${item.id}:${activeService}`;
+
+    /* 더블클릭이나 터치 중복 이벤트는 한 번으로 처리합니다. */
+    if (
+      recentMenuClickRef.current?.key === clickKey &&
+      now - recentMenuClickRef.current.time < 1500
+    ) {
+      return;
+    }
+
+    recentMenuClickRef.current = { key: clickKey, time: now };
+
+    const body = JSON.stringify({
+      businessId,
+      menuItemId: item.id,
+      menuItemName: item.name,
+      categoryId: item.category_id,
+      categoryName,
+      service: activeService,
+      visitorId: getMenuClickVisitorId(),
+    });
+
+    void fetch("/api/business-menu-click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    }).catch(() => {
+      /* 통계 기록 실패가 메뉴 상세창 사용을 방해하지 않게 합니다. */
+    });
+  }
 
   useEffect(() => {
     setCartItems(readStoredCart(businessId));
@@ -753,11 +808,12 @@ export default function RestaurantMenu({
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        recordMenuItemClick(item, category.name);
                         setSelectedItem(
                           withServicePrice(item, activeService),
-                        )
-                      }
+                        );
+                      }}
                       className="group flex min-h-[118px] w-full overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md"
                       style={{
                         backgroundColor,

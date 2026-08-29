@@ -23,6 +23,16 @@ type VisitRow = {
   source: string;
 };
 
+type MenuClickRow = {
+  click_date: string;
+  visitor_hash: string;
+  menu_item_id: number;
+  menu_item_name: string;
+  category_name: string | null;
+  service: "menu" | "pickup" | "delivery";
+  click_count: number;
+};
+
 const SOURCE_LABELS: Record<string, string> = {
   direct: "주소 직접 입력",
   google: "Google",
@@ -94,7 +104,7 @@ export default async function BusinessVisitorsPage({
   const sevenDaysAgo = addDays(today, -6);
   const thirtyDaysAgo = addDays(today, -29);
 
-  const [businessResult, visitsResult] = await Promise.all([
+  const [businessResult, visitsResult, menuClicksResult] = await Promise.all([
     supabase.from("businesses").select("name").eq("id", businessId).maybeSingle(),
     supabase
       .from("business_website_visits")
@@ -103,14 +113,24 @@ export default async function BusinessVisitorsPage({
       .gte("visit_date", thirtyDaysAgo)
       .lte("visit_date", today)
       .order("visit_date", { ascending: true }),
+    supabase
+      .from("business_menu_clicks")
+      .select(
+        "click_date,visitor_hash,menu_item_id,menu_item_name,category_name,service,click_count",
+      )
+      .eq("business_id", businessId)
+      .gte("click_date", thirtyDaysAgo)
+      .lte("click_date", today),
   ]);
 
   if (businessResult.error) throw new Error(businessResult.error.message);
   if (!businessResult.data) notFound();
   if (visitsResult.error) throw new Error(visitsResult.error.message);
+  if (menuClicksResult.error) throw new Error(menuClicksResult.error.message);
 
   const businessName = businessResult.data.name?.trim() || `Business #${businessId}`;
   const visits = (visitsResult.data || []) as VisitRow[];
+  const menuClicks = (menuClicksResult.data || []) as MenuClickRow[];
   const todayCount = visits.filter((visit) => visit.visit_date === today).length;
   const yesterdayCount = visits.filter((visit) => visit.visit_date === yesterday).length;
   const sevenDayCount = visits.filter((visit) => visit.visit_date >= sevenDaysAgo).length;
@@ -145,6 +165,59 @@ export default async function BusinessVisitorsPage({
 
   const selectedRangeLabel =
     rangeCards.find((card) => card.key === selectedRange)?.label || "최근 30일";
+
+  const selectedMenuClicks = menuClicks.filter((row) => {
+    if (selectedRange === "today") return row.click_date === today;
+    if (selectedRange === "yesterday") return row.click_date === yesterday;
+    if (selectedRange === "7days") return row.click_date >= sevenDaysAgo;
+    return true;
+  });
+
+  const popularMenuItems = Array.from(
+    selectedMenuClicks.reduce<
+      Map<
+        number,
+        {
+          id: number;
+          name: string;
+          categoryName: string;
+          totalClicks: number;
+          visitors: Set<string>;
+          menuClicks: number;
+          pickupClicks: number;
+          deliveryClicks: number;
+        }
+      >
+    >((map, row) => {
+      const current = map.get(row.menu_item_id) || {
+        id: row.menu_item_id,
+        name: row.menu_item_name,
+        categoryName: row.category_name || "카테고리 없음",
+        totalClicks: 0,
+        visitors: new Set<string>(),
+        menuClicks: 0,
+        pickupClicks: 0,
+        deliveryClicks: 0,
+      };
+
+      const clicks = Math.max(0, Number(row.click_count) || 0);
+      current.name = row.menu_item_name || current.name;
+      current.categoryName = row.category_name || current.categoryName;
+      current.totalClicks += clicks;
+      current.visitors.add(row.visitor_hash);
+
+      if (row.service === "pickup") current.pickupClicks += clicks;
+      else if (row.service === "delivery") current.deliveryClicks += clicks;
+      else current.menuClicks += clicks;
+
+      map.set(row.menu_item_id, current);
+      return map;
+    }, new Map()).values(),
+  ).sort((a, b) =>
+    b.totalClicks - a.totalClicks ||
+    b.visitors.size - a.visitors.size ||
+    a.name.localeCompare(b.name),
+  );
 
   const dailyCounts = Array.from({ length: 30 }, (_, index) => {
     const date = addDays(thirtyDaysAgo, index);
@@ -277,6 +350,79 @@ export default async function BusinessVisitorsPage({
                 </div>
               )}
             </div>
+          </section>
+
+          <section className="mt-5 rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm sm:p-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#B64032]">
+                  Menu Interest
+                </p>
+                <h2 className="mt-1 text-xl font-black text-[#172033]">
+                  {selectedRangeLabel} 인기 메뉴
+                </h2>
+                <p className="mt-1 text-xs font-bold text-[#667085]">
+                  위 기간 카드를 누르면 인기 메뉴 순위도 함께 변경됩니다.
+                </p>
+              </div>
+              <span className="rounded-full bg-[#FFF1EC] px-3 py-1.5 text-xs font-black text-[#B64032]">
+                총 {popularMenuItems.reduce((sum, item) => sum + item.totalClicks, 0)}회 클릭
+              </span>
+            </div>
+
+            {popularMenuItems.length === 0 ? (
+              <div className="mt-6 rounded-2xl bg-[#F8F5F0] p-8 text-center text-sm font-bold text-[#667085]">
+                선택한 기간에 기록된 메뉴 클릭이 없습니다.
+              </div>
+            ) : (
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full min-w-[720px] border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-[#E9DED0] text-xs font-black text-[#667085]">
+                      <th className="px-3 py-3">순위</th>
+                      <th className="px-3 py-3">메뉴</th>
+                      <th className="px-3 py-3 text-right">총 클릭</th>
+                      <th className="px-3 py-3 text-right">순클릭</th>
+                      <th className="px-3 py-3 text-right">보기</th>
+                      <th className="px-3 py-3 text-right">픽업</th>
+                      <th className="px-3 py-3 text-right">배달</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {popularMenuItems.map((item, index) => (
+                      <tr key={item.id} className="border-b border-[#F0EAE2] last:border-0">
+                        <td className="px-3 py-4">
+                          <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
+                            index === 0
+                              ? "bg-amber-100 text-amber-800"
+                              : index === 1
+                                ? "bg-slate-200 text-slate-700"
+                                : index === 2
+                                  ? "bg-orange-100 text-orange-800"
+                                  : "bg-[#F8F5F0] text-[#667085]"
+                          }`}>
+                            {index + 1}
+                          </span>
+                        </td>
+                        <td className="px-3 py-4">
+                          <p className="font-black text-[#172033]">{item.name}</p>
+                          <p className="mt-1 text-xs font-bold text-[#98A2B3]">{item.categoryName}</p>
+                        </td>
+                        <td className="px-3 py-4 text-right text-lg font-black text-[#172033]">
+                          {item.totalClicks}
+                        </td>
+                        <td className="px-3 py-4 text-right font-black text-[#B64032]">
+                          {item.visitors.size}명
+                        </td>
+                        <td className="px-3 py-4 text-right font-bold text-[#667085]">{item.menuClicks}</td>
+                        <td className="px-3 py-4 text-right font-bold text-[#667085]">{item.pickupClicks}</td>
+                        <td className="px-3 py-4 text-right font-bold text-[#667085]">{item.deliveryClicks}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
       </main>
