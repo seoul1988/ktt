@@ -13589,11 +13589,6 @@ function BusinessWebsiteBanners({
     320,
     Math.min(900, Number(banner.popup_height) || 520),
   );
-  const backgroundImage =
-    banner.image_position === "background" &&
-    banner.image_url
-      ? `linear-gradient(rgba(0,0,0,.36), rgba(0,0,0,.36)), url(${banner.image_url})`
-      : undefined;
 
   const popupCard = (
     <section
@@ -13657,11 +13652,40 @@ function BusinessWebsiteBanners({
             ? "1 / 1"
             : undefined,
         backgroundColor: banner.background_color || "#FFFFFF",
-        backgroundImage,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
+        backgroundImage: "none",
       }}
     >
+      {banner.image_url && banner.image_position === "background" ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+          style={{ borderRadius: "inherit" }}
+          aria-hidden="true"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={banner.image_url}
+            alt=""
+            draggable={false}
+            decoding="sync"
+            className="block h-full w-full select-none"
+            style={{
+              objectFit:
+                banner.image_fit === "contain" ||
+                banner.image_fit === "fill"
+                  ? banner.image_fit
+                  : "cover",
+              objectPosition: "center",
+              transform: `scale(${Math.max(
+                25,
+                Math.min(300, Number(banner.image_zoom) || 100),
+              ) / 100})`,
+              transformOrigin: "center",
+              imageRendering: "auto",
+            }}
+          />
+        </div>
+      ) : null}
+
       <button
         type="button"
         onClick={() => closePopup(banner.id)}
