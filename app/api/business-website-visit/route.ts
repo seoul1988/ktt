@@ -63,6 +63,10 @@ export async function POST(request: NextRequest) {
     const visitorId = typeof body.visitorId === "string" ? body.visitorId : "";
     const requestedSource = typeof body.source === "string" ? body.source : "other";
     const source = ALLOWED_SOURCES.has(requestedSource) ? requestedSource : "other";
+    const sourceDetail =
+      typeof body.sourceDetail === "string"
+        ? body.sourceDetail.trim().toLowerCase().slice(0, 200)
+        : null;
     const path = typeof body.path === "string" ? body.path.slice(0, 500) : null;
 
     if (!Number.isInteger(businessId) || businessId <= 0 || visitorId.length < 10) {
@@ -91,6 +95,7 @@ export async function POST(request: NextRequest) {
         visit_date: getEasternDate(),
         visitor_hash: visitorHash,
         source,
+        referrer_domain: sourceDetail || null,
         landing_path: path,
       },
       {

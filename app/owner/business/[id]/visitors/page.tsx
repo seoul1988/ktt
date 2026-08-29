@@ -21,6 +21,7 @@ type RangeKey = "today" | "yesterday" | "7days" | "30days";
 type VisitRow = {
   visit_date: string;
   source: string;
+  referrer_domain: string | null;
 };
 
 type MenuClickRow = {
@@ -108,7 +109,7 @@ export default async function BusinessVisitorsPage({
     supabase.from("businesses").select("name").eq("id", businessId).maybeSingle(),
     supabase
       .from("business_website_visits")
-      .select("visit_date,source")
+      .select("visit_date,source,referrer_domain")
       .eq("business_id", businessId)
       .gte("visit_date", thirtyDaysAgo)
       .lte("visit_date", today)
@@ -235,6 +236,18 @@ export default async function BusinessVisitorsPage({
     }, {}),
   ).sort((a, b) => b[1] - a[1]);
 
+  const otherSourceDetails = Object.entries(
+    selectedVisits
+      .filter((visit) => visit.source === "other")
+      .reduce<Record<string, number>>((counts, visit) => {
+        const detail = String(visit.referrer_domain || "출처 확인 불가")
+          .trim()
+          .toLowerCase();
+        counts[detail] = (counts[detail] || 0) + 1;
+        return counts;
+      }, {}),
+  ).sort((a, b) => b[1] - a[1]);
+
   const maxDailyCount = Math.max(1, ...dailyCounts.map((item) => item.count));
 
   return (
@@ -344,6 +357,19 @@ export default async function BusinessVisitorsPage({
                             style={{ width: `${percentage}%` }}
                           />
                         </div>
+                        {source === "other" && otherSourceDetails.length > 0 ? (
+                          <div className="mt-3 space-y-1.5 rounded-xl bg-[#F8F5F0] px-3 py-2.5">
+                            {otherSourceDetails.map(([detail, detailCount]) => (
+                              <div
+                                key={detail}
+                                className="flex items-center justify-between gap-3 text-xs font-bold text-[#667085]"
+                              >
+                                <span className="min-w-0 truncate">↳ {detail}</span>
+                                <span className="shrink-0">{detailCount}명</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}

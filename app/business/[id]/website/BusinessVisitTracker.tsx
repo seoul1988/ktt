@@ -56,12 +56,30 @@ function detectSource() {
   }
 }
 
+function detectSourceDetail() {
+  const params = new URLSearchParams(window.location.search);
+  const utmSource = (params.get("utm_source") || "").trim().toLowerCase();
+
+  if (utmSource) return utmSource.slice(0, 200);
+  if (!document.referrer) return "";
+
+  try {
+    return new URL(document.referrer).hostname
+      .replace(/^www\./, "")
+      .toLowerCase()
+      .slice(0, 200);
+  } catch {
+    return "";
+  }
+}
+
 export default function BusinessVisitTracker({ businessId }: Props) {
   useEffect(() => {
     const body = JSON.stringify({
       businessId,
       visitorId: getVisitorId(),
       source: detectSource(),
+      sourceDetail: detectSourceDetail(),
       path: `${window.location.pathname}${window.location.search}`,
     });
 
