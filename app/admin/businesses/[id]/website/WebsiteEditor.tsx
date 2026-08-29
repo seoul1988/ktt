@@ -4826,18 +4826,28 @@ function CateringRequestFormDisplay({
 
         <div className="mt-3 flex flex-wrap gap-2">
           {minAmount > 0 ? (
-            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
-              Minimum ${minAmount.toFixed(2)}
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
+              Minimum{" "}
+              <strong className="font-black text-gray-950">
+                ${minAmount.toFixed(2)}
+              </strong>
             </span>
           ) : null}
           {minPeople > 0 ? (
-            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
-              Minimum {minPeople} guests
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
+              Minimum{" "}
+              <strong className="font-black text-gray-950">
+                {minPeople}
+              </strong>{" "}
+              guests
             </span>
           ) : null}
           {advanceHours > 0 ? (
-            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-700">
-              {advanceHours} hr advance notice
+            <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
+              <strong className="font-black text-gray-950">
+                {advanceHours} hr
+              </strong>{" "}
+              advance notice
             </span>
           ) : null}
           {phone ? (
