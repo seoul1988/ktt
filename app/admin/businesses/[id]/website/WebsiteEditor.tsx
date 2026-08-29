@@ -373,6 +373,12 @@ type WebsiteSettings = {
   header_vertical_padding_px?: number;
   header_submenu_height_px?: number;
   header_submenu_font_size_px?: number;
+
+  /** 모바일 OPEN/CLOSED floating 버튼 */
+  mobile_hours_button_enabled?: boolean;
+  /** 예: #business-hours, #hours, /hours, /business/90/website/hours */
+  mobile_hours_target_url?: string;
+
   [key: string]: unknown;
 };
 
@@ -503,8 +509,10 @@ type SectionContent = {
   link_page_width?: "normal" | "wide" | "full";
   link_page_image_mode?: "stack" | "flipbook" | "scroll";
 
-  // 클릭했을 때 펼쳐지는 숨김 레이어 설정
+  // 레이어 표시 방식: 일반 / 접기식 / 팝업식
   collapsible?: boolean;
+  /** true이면 페이지 본문에는 표시하지 않고 버튼/링크로 팝업을 엽니다. */
+  popup_only?: boolean;
   initially_hidden?: boolean;
   close_button_enabled?: boolean;
   scroll_on_open?: boolean;
@@ -6892,7 +6900,6 @@ function MenuImportModal({
                 : `${platformLabel} 메뉴 가져오기`}
           </button>
         </div>
-        ) : null}
       </div>
     </div>,
     document.body,
@@ -9685,6 +9692,61 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   }
 
 
+  function configureMobileBusinessHoursButton() {
+    const settings = normalizeSettings(
+      business?.website_settings,
+      business?.name || "",
+    );
+
+    const currentTarget = String(
+      settings.mobile_hours_target_url || "",
+    ).trim();
+
+    const entered = window.prompt(
+      [
+        "폰 OPEN/CLOSED 버튼을 눌렀을 때 열 주소를 입력하세요.",
+        "",
+        "레이어 예: #business-hours 또는 #hours",
+        "페이지 예: /hours 또는 /business/90/website/hours",
+        "",
+        "팝업식 레이어를 연결하려면 그 레이어의 #주소를 입력하면 됩니다.",
+      ].join("\\n"),
+      currentTarget || "#business-hours",
+    );
+
+    if (entered === null) return;
+
+    const target = entered.trim();
+
+    if (!target) {
+      updateWebsiteSettings({
+        mobile_hours_button_enabled: false,
+        mobile_hours_target_url: "",
+      });
+      setMessage("폰 OPEN/CLOSED 버튼을 해제했습니다.");
+      setError("");
+      return;
+    }
+
+    const normalizedTarget =
+      target.startsWith("#") ||
+      target.startsWith("/") ||
+      /^https?:\/\//i.test(target)
+        ? target
+        : `#${slugifyMenuValue(target)}`;
+
+    updateWebsiteSettings({
+      mobile_hours_button_enabled: true,
+      mobile_hours_target_url: normalizedTarget,
+    });
+
+    setDevice("mobile");
+    setMessage(
+      `폰 OPEN/CLOSED 버튼을 ${normalizedTarget} 주소에 연결했습니다. 서버 저장 후 공개 폰 화면에서 버튼을 누르면 해당 레이어/페이지가 열립니다.`,
+    );
+    setError("");
+  }
+
   function addOrOpenCateringRequestPage() {
     const createRequestCell = (): GridCell => ({
       ...defaultCell("title", "Catering Request Form", 4),
@@ -10465,6 +10527,59 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               📝 캐터링 요청폼 넣기
             </button>
+            <div className="flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm font-black text-emerald-900">
+                <input
+                  type="checkbox"
+                  checked={websiteSettings.mobile_hours_button_enabled === true}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+
+                    if (!enabled) {
+                      updateWebsiteSettings({
+                        mobile_hours_button_enabled: false,
+                      });
+                      setMessage(
+                        "폰 OPEN/CLOSED 버튼을 사용하지 않습니다.",
+                      );
+                      setError("");
+                      return;
+                    }
+
+                    const currentTarget = String(
+                      websiteSettings.mobile_hours_target_url || "",
+                    ).trim();
+
+                    if (currentTarget) {
+                      updateWebsiteSettings({
+                        mobile_hours_button_enabled: true,
+                      });
+                      setDevice("mobile");
+                      setMessage(
+                        `폰 OPEN/CLOSED 버튼을 사용합니다. 연결 주소: ${currentTarget}`,
+                      );
+                      setError("");
+                      return;
+                    }
+
+                    configureMobileBusinessHoursButton();
+                  }}
+                  className="h-4 w-4 accent-emerald-600"
+                />
+                폰 오픈시간 버튼 사용
+              </label>
+
+              {websiteSettings.mobile_hours_button_enabled === true ? (
+                <button
+                  type="button"
+                  onClick={configureMobileBusinessHoursButton}
+                  className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-black text-emerald-800 hover:bg-emerald-100"
+                  title="OPEN/CLOSED 버튼이 열 레이어 또는 페이지 주소를 변경합니다."
+                >
+                  주소 설정
+                </button>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => {
@@ -13760,6 +13875,7 @@ function BusinessWebsiteBanners({
             </span>
           )}
         </div>
+        ) : null}
       </div>
     </div>,
     document.body,
@@ -14397,6 +14513,8 @@ export function PublicWebsiteRenderer({
 }) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [openedLayerIds, setOpenedLayerIds] = useState<number[]>([]);
+  const [popupLayerId, setPopupLayerId] = useState<number | null>(null);
+  const [, setMobileHoursClockTick] = useState(0);
   const publicHeaderRef = useRef<HTMLElement | null>(null);
   const [mobileHeaderSpacerHeight, setMobileHeaderSpacerHeight] =
     useState(0);
@@ -14407,6 +14525,15 @@ export function PublicWebsiteRenderer({
     updateDevice();
     window.addEventListener("resize", updateDevice);
     return () => window.removeEventListener("resize", updateDevice);
+  }, []);
+
+  // 모바일 OPEN / CLOSED 상태를 현재 시간에 맞춰 1분마다 갱신합니다.
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setMobileHoursClockTick((value) => value + 1),
+      60_000,
+    );
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -14428,7 +14555,14 @@ export function PublicWebsiteRenderer({
         );
       });
 
-      if (!matchingSection?.content?.collapsible) return;
+      if (!matchingSection) return;
+
+      if (matchingSection.content?.popup_only === true) {
+        setPopupLayerId(matchingSection.id);
+        return;
+      }
+
+      if (!matchingSection.content?.collapsible) return;
 
       setOpenedLayerIds([matchingSection.id]);
 
@@ -14468,7 +14602,15 @@ export function PublicWebsiteRenderer({
         );
       });
 
-      if (!matchingSection?.content?.collapsible) return;
+      if (!matchingSection) return;
+
+      if (matchingSection.content?.popup_only === true) {
+        event.preventDefault();
+        setPopupLayerId(matchingSection.id);
+        return;
+      }
+
+      if (!matchingSection.content?.collapsible) return;
 
       event.preventDefault();
 
@@ -14701,20 +14843,141 @@ export function PublicWebsiteRenderer({
    * layouts가 있다는 이유만으로 About/Services 등의 다른 레이어를
    * 홈페이지 Hero로 잘못 선택하지 않도록 합니다.
    */
+  /*
+   * popup_only 레이어는 공개 페이지의 본문/Hero 후보에서 완전히 제외합니다.
+   * 이전에는 Home/Main 레이어가 없거나 선택 순서에 따라 popup_only Business Hours가
+   * pageSections[0] fallback으로 Hero가 되어 페이지에 그대로 보일 수 있었습니다.
+   */
+  const visiblePageSectionsForLayout = pageSections.filter(
+    (section) => section.content?.popup_only !== true,
+  );
+
   const heroSection =
     normalizedSlug === "home"
-      ? pageSections.find((section) => section.section_type === "hero") ??
-        pageSections.find(isHomeLikeSection) ??
-        pageSections[0] ??
+      ? visiblePageSectionsForLayout.find(
+          (section) => section.section_type === "hero",
+        ) ??
+        visiblePageSectionsForLayout.find(isHomeLikeSection) ??
+        visiblePageSectionsForLayout[0] ??
         null
-      : pageSections[0] ?? null;
+      : visiblePageSectionsForLayout[0] ?? null;
 
   // Home/Main으로 잘못 복제된 레이어는 공개 화면에 반복 표시하지 않습니다.
   // 실제 본문 레이어(About, Services, Gallery 등)만 hero 아래에 렌더링합니다.
   const remainingSections = pageSections.filter(
     (section) =>
-      section.id !== heroSection?.id && !isHomeLikeSection(section),
+      section.content?.popup_only !== true &&
+      section.id !== heroSection?.id &&
+      !isHomeLikeSection(section),
   );
+
+  /*
+   * 모바일 OPEN/CLOSED floating 버튼.
+   * 영업 상태는 businesses.hours에서 계산하고,
+   * 클릭 대상은 Website Settings에 저장한 레이어/페이지 주소를 사용합니다.
+   */
+  const mobileHoursTargetUrl = String(
+    websiteSettings.mobile_hours_target_url || "",
+  ).trim();
+
+  const mobileHoursButtonEnabled =
+    websiteSettings.mobile_hours_button_enabled === true &&
+    Boolean(mobileHoursTargetUrl);
+
+  const mobileBusinessHours = parseBusinessTableHours(
+    business.hours,
+  );
+
+  const mobileHoursStatus = getBusinessOpenStatus(
+    mobileBusinessHours,
+  );
+
+  const mobileHoursToneClass =
+    mobileHoursStatus.tone === "open"
+      ? "bg-emerald-500 text-white"
+      : mobileHoursStatus.tone === "break"
+        ? "bg-amber-400 text-amber-950"
+        : "bg-gray-950 text-white";
+
+  function openMobileHoursTarget() {
+    const target = mobileHoursTargetUrl.trim();
+    if (!target) return;
+
+    if (target.startsWith("#")) {
+      const layerSlug = slugifyMenuValue(
+        target.replace(/^#/, ""),
+      );
+
+      const matchingSection = sections.find((section) => {
+        const sectionSlug =
+          slugifyMenuValue(
+            String(
+              section.title ||
+                section.section_type ||
+                "",
+            ),
+          ) || section.section_type;
+
+        return (
+          section.content?.page_type !== "link-page" &&
+          sectionSlug === layerSlug
+        );
+      });
+
+      if (matchingSection?.content?.popup_only === true) {
+        setPopupLayerId(matchingSection.id);
+        return;
+      }
+
+      if (matchingSection?.content?.collapsible === true) {
+        setOpenedLayerIds([matchingSection.id]);
+
+        window.setTimeout(() => {
+          const targetElement =
+            document.getElementById(layerSlug) ||
+            document.getElementById(`${layerSlug}-wrapper`);
+
+          targetElement?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }, 80);
+        return;
+      }
+
+      window.location.hash = layerSlug;
+      return;
+    }
+
+    if (/^https?:\/\//i.test(target)) {
+      window.location.assign(target);
+      return;
+    }
+
+    const websiteBase = `/business/${business.id}/website`;
+    const internalTarget = target.startsWith("/")
+      ? target
+      : `/${target}`;
+
+    if (internalTarget.startsWith("/business/")) {
+      window.location.assign(internalTarget);
+      return;
+    }
+
+    window.location.assign(
+      `${websiteBase}${internalTarget}`,
+    );
+  }
+
+  const popupLayerSection =
+    popupLayerId == null
+      ? null
+      : pageSections.find(
+          (section) =>
+            section.id === popupLayerId &&
+            section.content?.popup_only === true,
+        ) ?? null;
+
   const headerGrid = normalizeGrid(
     websiteSettings.header_grid,
     createDefaultHeader(business.name || ""),
@@ -14991,6 +15254,9 @@ export function PublicWebsiteRenderer({
         )}
 
         {remainingSections.map((section, sectionIndex) => {
+          // 팝업식 레이어는 페이지 본문과 제목 줄에 전혀 표시하지 않습니다.
+          if (section.content?.popup_only === true) return null;
+
           const isCollapsible = Boolean(section.content?.collapsible);
           const isOpen =
             !isCollapsible ||
@@ -15115,6 +15381,79 @@ export function PublicWebsiteRenderer({
             </div>
           );
         })}
+
+        {popupLayerSection && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className="fixed inset-0 z-[4900] flex items-center justify-center bg-black/55 p-3 backdrop-blur-[2px]"
+                onClick={() => setPopupLayerId(null)}
+                role="presentation"
+              >
+                <div
+                  className="relative max-h-[90dvh] w-full max-w-[1120px] overflow-y-auto rounded-[24px] bg-white shadow-2xl"
+                  onClick={(event) => event.stopPropagation()}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={String(
+                    popupLayerSection.title ||
+                      popupLayerSection.section_type ||
+                      "Popup layer",
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPopupLayerId(null)}
+                    className="absolute right-4 top-4 z-[20] flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-black text-gray-950 shadow-lg ring-1 ring-black/10"
+                    aria-label="Close popup"
+                  >
+                    ×
+                  </button>
+
+                  <PreviewSection
+                    section={popupLayerSection}
+                    business={business}
+                    previewDevice={device}
+                    accentColor={String(
+                      websiteSettings.accent_color || "#d97706",
+                    )}
+                    outerBackgroundColor={publicPageBackgroundColor}
+                  />
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
+
+        {device === "mobile" &&
+        mobileHoursButtonEnabled ? (
+          <button
+            type="button"
+            onClick={openMobileHoursTarget}
+            className={`fixed bottom-5 right-4 z-[1250] flex min-w-[172px] items-center justify-between gap-3 rounded-full px-4 py-2.5 text-left shadow-2xl ring-1 ring-black/10 ${mobileHoursToneClass}`}
+            aria-label="Open business hours"
+          >
+            <span className="flex min-w-0 flex-col leading-none">
+              <span className="flex items-center gap-2">
+                <span className="text-[13px] font-black tracking-[0.08em]">
+                  {mobileHoursStatus.label}
+                </span>
+                <span className="rounded-full bg-white/20 px-2 py-1 text-[9px] font-black tracking-[0.08em]">
+                  HOURS
+                </span>
+              </span>
+              <span className="mt-1.5 truncate text-[10px] font-bold opacity-90">
+                {mobileHoursStatus.detail}
+              </span>
+            </span>
+
+            <span
+              className="shrink-0 text-lg font-black leading-none"
+              aria-hidden="true"
+            >
+              ›
+            </span>
+          </button>
+        ) : null}
       </div>
       </main>
     </>
@@ -25786,21 +26125,26 @@ function RightPanel(props: {
             section.section_type !== "footer" &&
             section.section_type !== "map" ? (
               <div className="mt-4 border-t border-violet-200 pt-4">
-                <p className="text-sm font-black text-violet-950">접기 / 펼치기</p>
+                <p className="text-sm font-black text-violet-950">레이어 표시 방식</p>
                 <p className="mt-1 text-xs leading-5 text-violet-700">
-                  공개 사이트에서 ─── Policy ─── ▾ 형태로 보이고 클릭하면 열고 닫습니다.
+                  일반 펼침, 제목 줄만 보이는 접기식, 페이지에 완전히 숨기는 팝업식 중 선택합니다.
                 </p>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() =>
                       props.onUpdateSectionContent(section.id, {
                         collapsible: false,
+                        popup_only: false,
+                        initially_hidden: false,
+                        close_button_enabled: false,
+                        scroll_on_open: false,
                       })
                     }
                     className={`rounded-xl border px-3 py-3 text-left ${
-                      section.content?.collapsible !== true
+                      section.content?.collapsible !== true &&
+                      section.content?.popup_only !== true
                         ? "border-blue-600 bg-white ring-2 ring-blue-100"
                         : "border-violet-200 bg-white/70"
                     }`}
@@ -25814,13 +26158,15 @@ function RightPanel(props: {
                     onClick={() =>
                       props.onUpdateSectionContent(section.id, {
                         collapsible: true,
+                        popup_only: false,
                         initially_hidden: section.content?.initially_hidden !== false,
                         close_button_enabled: false,
                         scroll_on_open: false,
                       })
                     }
                     className={`rounded-xl border px-3 py-3 text-left ${
-                      section.content?.collapsible === true
+                      section.content?.collapsible === true &&
+                      section.content?.popup_only !== true
                         ? "border-violet-600 bg-white ring-2 ring-violet-100"
                         : "border-violet-200 bg-white/70"
                     }`}
@@ -25828,9 +26174,33 @@ function RightPanel(props: {
                     <span className="block text-sm font-black text-gray-950">접기식</span>
                     <span className="mt-1 block text-[10px] text-gray-500">제목 줄을 눌러 열고 닫기</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      props.onUpdateSectionContent(section.id, {
+                        collapsible: false,
+                        popup_only: true,
+                        initially_hidden: true,
+                        close_button_enabled: true,
+                        scroll_on_open: false,
+                      })
+                    }
+                    className={`rounded-xl border px-3 py-3 text-left ${
+                      section.content?.popup_only === true
+                        ? "border-emerald-600 bg-white ring-2 ring-emerald-100"
+                        : "border-emerald-200 bg-white/70"
+                    }`}
+                  >
+                    <span className="block text-sm font-black text-gray-950">팝업식</span>
+                    <span className="mt-1 block text-[10px] text-gray-500">
+                      페이지에는 숨기고 버튼/링크로 팝업
+                    </span>
+                  </button>
                 </div>
 
-                {section.content?.collapsible === true ? (
+                {section.content?.collapsible === true &&
+                section.content?.popup_only !== true ? (
                   <div className="mt-4 space-y-4 rounded-xl border border-violet-200 bg-white p-3">
                     <div>
                       <p className="text-xs font-black text-gray-800">처음 열었을 때</p>
