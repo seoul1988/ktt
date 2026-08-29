@@ -15425,35 +15425,45 @@ export function PublicWebsiteRenderer({
           : null}
 
         {device === "mobile" &&
-        mobileHoursButtonEnabled ? (
-          <button
-            type="button"
-            onClick={openMobileHoursTarget}
-            className={`fixed bottom-5 right-4 z-[1250] flex min-w-[172px] items-center justify-between gap-3 rounded-full px-4 py-2.5 text-left shadow-2xl ring-1 ring-black/10 ${mobileHoursToneClass}`}
-            aria-label="Open business hours"
-          >
-            <span className="flex min-w-0 flex-col leading-none">
-              <span className="flex items-center gap-2">
-                <span className="text-[13px] font-black tracking-[0.08em]">
-                  {mobileHoursStatus.label}
+        mobileHoursButtonEnabled &&
+        typeof document !== "undefined"
+          ? createPortal(
+              <button
+                type="button"
+                onClick={openMobileHoursTarget}
+                className={`fixed bottom-5 right-4 z-[6000] flex min-w-[172px] items-center justify-between gap-3 rounded-full px-4 py-2.5 text-left shadow-2xl ring-1 ring-black/10 ${mobileHoursToneClass}`}
+                aria-label="Open business hours"
+                style={{
+                  position: "fixed",
+                  right: "16px",
+                  bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
+                  zIndex: 6000,
+                }}
+              >
+                <span className="flex min-w-0 flex-col leading-none">
+                  <span className="flex items-center gap-2">
+                    <span className="text-[13px] font-black tracking-[0.08em]">
+                      {mobileHoursStatus.label}
+                    </span>
+                    <span className="rounded-full bg-white/20 px-2 py-1 text-[9px] font-black tracking-[0.08em]">
+                      HOURS
+                    </span>
+                  </span>
+                  <span className="mt-1.5 truncate text-[10px] font-bold opacity-90">
+                    {mobileHoursStatus.detail}
+                  </span>
                 </span>
-                <span className="rounded-full bg-white/20 px-2 py-1 text-[9px] font-black tracking-[0.08em]">
-                  HOURS
-                </span>
-              </span>
-              <span className="mt-1.5 truncate text-[10px] font-bold opacity-90">
-                {mobileHoursStatus.detail}
-              </span>
-            </span>
 
-            <span
-              className="shrink-0 text-lg font-black leading-none"
-              aria-hidden="true"
-            >
-              ›
-            </span>
-          </button>
-        ) : null}
+                <span
+                  className="shrink-0 text-lg font-black leading-none"
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+              </button>,
+              document.body,
+            )
+          : null}
       </div>
       </main>
     </>
