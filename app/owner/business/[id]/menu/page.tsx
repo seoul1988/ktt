@@ -4292,8 +4292,8 @@ export default function OwnerBusinessMenuPage() {
         메뉴 목록의 맨 아래에 붙는 일반 페이지 영역으로 둡니다.
         Owner/Admin 어느 경로에서 이 컴포넌트를 사용해도 항상 표시됩니다.
       */}
-      <div className="mt-8 border-t border-[#E8DED1] bg-white px-4 py-5">
-        <div className="mx-auto flex w-full max-w-4xl gap-3">
+      <div className="mx-auto mt-8 w-full max-w-4xl border-t border-[#E8DED1] bg-white px-4 py-5">
+        <div className="flex w-full gap-3">
           <button
             type="button"
             onClick={() => void loadMenu()}
