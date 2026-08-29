@@ -173,6 +173,14 @@ type ResizedImage = {
   thumbnail: Blob;
 };
 
+function addImageVersion(url: string, version: string) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+
+  const separator = value.includes("?") ? "&" : "?";
+  return `${value}${separator}v=${encodeURIComponent(version)}`;
+}
+
 function loadImageElement(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
@@ -1442,6 +1450,8 @@ export default function OwnerBusinessMenuPage() {
       price,
       pickup_price: pickupPrice,
       delivery_price: deliveryPrice,
+      image_url: item.image_url || null,
+      thumbnail_url: item.thumbnail_url || null,
       display_order: Number(item.display_order ?? 999),
       is_available: item.is_available,
       show_on_website: item.show_on_website !== false,
@@ -1787,17 +1797,21 @@ export default function OwnerBusinessMenuPage() {
       const resized = await createMenuImageFiles(file);
       const token = await getAccessToken();
       const formData = new FormData();
+      const imageVersion = `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
 
       formData.append("itemId", String(itemId));
+      formData.append("imageVersion", imageVersion);
       formData.append(
         "detail",
         resized.detail,
-        "detail.webp",
+        `detail-${imageVersion}.webp`,
       );
       formData.append(
         "thumbnail",
         resized.thumbnail,
-        "thumbnail.webp",
+        `thumbnail-${imageVersion}.webp`,
       );
 
       const response = await fetch(
@@ -1828,9 +1842,18 @@ export default function OwnerBusinessMenuPage() {
         );
       }
 
+      const nextImageUrl = addImageVersion(
+        data.image_url,
+        imageVersion,
+      );
+      const nextThumbnailUrl = addImageVersion(
+        data.thumbnail_url,
+        imageVersion,
+      );
+
       updateItem(itemId, {
-        image_url: data.image_url,
-        thumbnail_url: data.thumbnail_url,
+        image_url: nextImageUrl,
+        thumbnail_url: nextThumbnailUrl,
       });
 
       setMessage(
