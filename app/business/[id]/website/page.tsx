@@ -7,6 +7,7 @@ import InstallAppButton from "@/app/components/InstallAppButton";
 import { PublicWebsiteRenderer } from "@/app/admin/businesses/[id]/website/WebsiteEditor";
 
 import BusinessServiceWorker from "./BusinessServiceWorker";
+import BusinessVisitTracker from "./BusinessVisitTracker";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -388,6 +389,8 @@ export default async function BusinessWebsitePage({
 
   return (
     <>
+      <BusinessVisitTracker businessId={businessId} />
+
       <BusinessServiceWorker businessId={String(businessId)} />
 
       <InstallAppButton businessName={businessName} />

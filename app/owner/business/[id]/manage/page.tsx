@@ -529,6 +529,13 @@ export default async function BusinessManagePage({
   />
 
   <ManagementCard
+    href={`/owner/business/${businessId}/visitors`}
+    icon="📊"
+    title="방문자 통계"
+    description="일일 순방문자와 Google, Instagram, KTownTriangle 등 홈페이지 유입경로를 확인합니다."
+  />
+
+  <ManagementCard
     href={`/admin/businesses/${businessId}/website`}
     icon="🖥️"
     title="웹사이트 디자인"
