@@ -10,6 +10,7 @@ function getServerSupabase() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL;
+
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -69,7 +70,58 @@ export async function GET(
     const { data, error } = await supabase
       .from("business_website_banners")
       .select(
-        "id,title,subtitle,button_text,link_url,image_path,background_color,title_color,subtitle_color,button_color,button_text_color,title_font_size,subtitle_font_size,button_font_size,title_font_weight,subtitle_font_weight,text_align,image_position,popup_width,button_enabled,text_x,text_y,text_width,image_x,image_y,image_width,image_height,image_fit,image_zoom,style_preset,popup_radius,image_radius,button_radius,popup_shadow,popup_height,lead_capture_enabled,email_placeholder,terms_text,submit_button_text,success_message,coupon_code_prefix,reward_signup_url,form_background_color,lead_expanded_mode,display_order",
+        [
+          "id",
+          "title",
+          "subtitle",
+          "button_text",
+          "link_url",
+          "image_path",
+          "background_color",
+          "title_color",
+          "subtitle_color",
+          "button_color",
+          "button_text_color",
+          "title_font_size",
+          "subtitle_font_size",
+          "button_font_size",
+          "title_font_weight",
+          "subtitle_font_weight",
+          "text_align",
+          "image_position",
+          "popup_width",
+          "button_enabled",
+          "text_x",
+          "text_y",
+          "text_width",
+          "image_x",
+          "image_y",
+          "image_width",
+          "image_height",
+          "image_fit",
+          "image_zoom",
+          "style_preset",
+          "popup_radius",
+          "image_radius",
+          "button_radius",
+          "popup_shadow",
+          "popup_height",
+          "lead_capture_enabled",
+          "email_placeholder",
+          "terms_text",
+          "submit_button_text",
+          "success_message",
+          "coupon_code_prefix",
+          "reward_signup_url",
+          "form_background_color",
+          "lead_expanded_mode",
+
+          // Don't show this again 설정
+          "dismiss_option_enabled",
+          "dismiss_hours",
+
+          "display_order",
+        ].join(","),
       )
       .eq("business_id", businessId)
       .eq("is_active", true)
@@ -78,21 +130,43 @@ export async function GET(
       .order("display_order", {
         ascending: true,
       })
-      .order("id", { ascending: true });
+      .order("id", {
+        ascending: true,
+      });
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return NextResponse.json({
-      banners: (data || []).map((banner) => ({
-        ...banner,
-        image_url: imageUrl(
-          supabase,
-          banner.image_path,
-        ),
-      })),
-    });
+    return NextResponse.json(
+      {
+        banners: (data || []).map((banner) => ({
+          ...banner,
+
+          dismiss_option_enabled:
+            banner.dismiss_option_enabled !== false,
+
+          dismiss_hours: Math.max(
+            1,
+            Math.min(
+              24 * 30,
+              Number(banner.dismiss_hours) || 24,
+            ),
+          ),
+
+          image_url: imageUrl(
+            supabase,
+            banner.image_path,
+          ),
+        })),
+      },
+      {
+        headers: {
+          "Cache-Control":
+            "no-store, no-cache, must-revalidate, max-age=0",
+        },
+      },
+    );
   } catch (error) {
     return NextResponse.json(
       {
@@ -101,7 +175,12 @@ export async function GET(
             ? error.message
             : "팝업을 불러오지 못했습니다.",
       },
-      { status: 500 },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
     );
   }
 }
