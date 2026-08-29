@@ -13,7 +13,10 @@ export const revalidate = 0;
 
 type PageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ range?: string }>;
 };
+
+type RangeKey = "today" | "yesterday" | "7days" | "30days";
 
 type VisitRow = {
   visit_date: string;
@@ -73,8 +76,12 @@ function shortDate(dateText: string) {
   return `${Number(month)}/${Number(day)}`;
 }
 
-export default async function BusinessVisitorsPage({ params }: PageProps) {
+export default async function BusinessVisitorsPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
+  const query = await searchParams;
   const businessId = Number(id);
 
   if (!Number.isInteger(businessId) || businessId <= 0) notFound();
@@ -109,6 +116,36 @@ export default async function BusinessVisitorsPage({ params }: PageProps) {
   const sevenDayCount = visits.filter((visit) => visit.visit_date >= sevenDaysAgo).length;
   const thirtyDayCount = visits.length;
 
+  const requestedRange = query.range;
+  const selectedRange: RangeKey =
+    requestedRange === "today" ||
+    requestedRange === "yesterday" ||
+    requestedRange === "7days" ||
+    requestedRange === "30days"
+      ? requestedRange
+      : "30days";
+
+  const rangeCards: Array<{
+    key: RangeKey;
+    label: string;
+    count: number;
+  }> = [
+    { key: "today", label: "오늘", count: todayCount },
+    { key: "yesterday", label: "어제", count: yesterdayCount },
+    { key: "7days", label: "최근 7일", count: sevenDayCount },
+    { key: "30days", label: "최근 30일", count: thirtyDayCount },
+  ];
+
+  const selectedVisits = visits.filter((visit) => {
+    if (selectedRange === "today") return visit.visit_date === today;
+    if (selectedRange === "yesterday") return visit.visit_date === yesterday;
+    if (selectedRange === "7days") return visit.visit_date >= sevenDaysAgo;
+    return true;
+  });
+
+  const selectedRangeLabel =
+    rangeCards.find((card) => card.key === selectedRange)?.label || "최근 30일";
+
   const dailyCounts = Array.from({ length: 30 }, (_, index) => {
     const date = addDays(thirtyDaysAgo, index);
     return {
@@ -118,7 +155,7 @@ export default async function BusinessVisitorsPage({ params }: PageProps) {
   });
 
   const sourceCounts = Object.entries(
-    visits.reduce<Record<string, number>>((counts, visit) => {
+    selectedVisits.reduce<Record<string, number>>((counts, visit) => {
       const source = SOURCE_LABELS[visit.source] ? visit.source : "other";
       counts[source] = (counts[source] || 0) + 1;
       return counts;
@@ -152,17 +189,30 @@ export default async function BusinessVisitorsPage({ params }: PageProps) {
           </div>
 
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              ["오늘", todayCount],
-              ["어제", yesterdayCount],
-              ["최근 7일", sevenDayCount],
-              ["최근 30일", thirtyDayCount],
-            ].map(([label, count]) => (
-              <div key={String(label)} className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm">
-                <p className="text-sm font-bold text-[#667085]">{label}</p>
-                <p className="mt-2 text-4xl font-black text-[#172033]">{count}</p>
+            {rangeCards.map((card) => (
+              <Link
+                key={card.key}
+                href={`/owner/business/${businessId}/visitors?range=${card.key}`}
+                scroll={false}
+                className={`rounded-3xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                  selectedRange === card.key
+                    ? "border-2 border-[#B64032] ring-4 ring-[#B64032]/10"
+                    : "border-[#E9DED0] hover:border-[#D9C6B0]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className={`text-sm font-bold ${selectedRange === card.key ? "text-[#B64032]" : "text-[#667085]"}`}>
+                    {card.label}
+                  </p>
+                  {selectedRange === card.key && (
+                    <span className="rounded-full bg-[#B64032] px-2 py-1 text-[10px] font-black text-white">
+                      선택됨
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-4xl font-black text-[#172033]">{card.count}</p>
                 <p className="mt-1 text-xs font-bold text-[#98A2B3]">순방문</p>
-              </div>
+              </Link>
             ))}
           </section>
 
@@ -191,7 +241,14 @@ export default async function BusinessVisitorsPage({ params }: PageProps) {
             </div>
 
             <div className="rounded-3xl border border-[#E9DED0] bg-white p-5 shadow-sm sm:p-6">
-              <h2 className="text-lg font-black text-[#172033]">최근 30일 유입경로</h2>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-black text-[#172033]">
+                  {selectedRangeLabel} 유입경로
+                </h2>
+                <span className="rounded-full bg-[#FFF1EC] px-3 py-1 text-xs font-black text-[#B64032]">
+                  {selectedVisits.length}명
+                </span>
+              </div>
               {sourceCounts.length === 0 ? (
                 <div className="mt-8 rounded-2xl bg-[#F8F5F0] p-6 text-center text-sm font-bold text-[#667085]">
                   아직 기록된 방문자가 없습니다.
@@ -199,7 +256,9 @@ export default async function BusinessVisitorsPage({ params }: PageProps) {
               ) : (
                 <div className="mt-5 space-y-5">
                   {sourceCounts.map(([source, count]) => {
-                    const percentage = thirtyDayCount > 0 ? Math.round((count / thirtyDayCount) * 100) : 0;
+                    const percentage = selectedVisits.length > 0
+                      ? Math.round((count / selectedVisits.length) * 100)
+                      : 0;
                     return (
                       <div key={source}>
                         <div className="mb-2 flex items-center justify-between gap-3 text-sm font-black">
