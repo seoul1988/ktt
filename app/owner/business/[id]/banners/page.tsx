@@ -1934,34 +1934,30 @@ export default function BannerManagementPage() {
                   </div>
                 )}
 
-                {dismissOptionEnabled ? (
-                  <label
-                    className="mt-4 flex items-center justify-center gap-2 text-[11px] font-bold"
-                    style={{ color: subtitleColor }}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <input
-                      type="checkbox"
-                      disabled
-                      className="h-4 w-4"
-                    />
-                    <span>Don't show this again</span>
-                    <span className="opacity-60">
-                      ({dismissHours < 24
-                        ? `${dismissHours}h`
-                        : dismissHours === 24
-                          ? "24h"
-                          : `${Math.round(dismissHours / 24)}d`})
-                    </span>
-                  </label>
-                ) : null}
-
                 <span className="absolute -top-6 left-0 rounded bg-black/60 px-2 py-1 text-[10px] font-black text-white">
                   글자 이동
                 </span>
               </div>
               ) : null}
             </div>
+
+            {dismissOptionEnabled ? (
+              <label className="mt-3 flex items-center justify-center gap-2 text-sm font-bold text-[#475467]">
+                <input
+                  type="checkbox"
+                  disabled
+                  className="h-4 w-4"
+                />
+                <span>Don't show this again</span>
+                <span className="text-xs font-semibold text-[#98A2B3]">
+                  ({dismissHours < 24
+                    ? `${dismissHours}h`
+                    : dismissHours === 24
+                      ? "24h"
+                      : `${Math.round(dismissHours / 24)}d`})
+                </span>
+              </label>
+            ) : null}
           </section>
         </div>
 
