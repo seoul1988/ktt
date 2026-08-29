@@ -5053,19 +5053,13 @@ function CateringRequestFormDisplay({
         ) : null}
       </div>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-gray-950 px-5 py-3 text-sm font-black text-white disabled:cursor-wait disabled:opacity-60"
-      >
-        {submitting
-          ? editorPreview
-            ? "SENDING TEST EMAIL..."
-            : "SENDING..."
-          : editorPreview
-            ? "SEND TEST CATERING REQUEST"
-            : "SUBMIT CATERING REQUEST"}
-      </button>
+     <button
+  type="submit"
+  disabled={submitting}
+  className="mt-6 flex min-h-12 w-full items-center justify-center rounded-xl bg-gray-950 px-5 py-3 text-sm font-black text-white disabled:cursor-wait disabled:opacity-60"
+>
+  {submitting ? "SENDING..." : "SUBMIT CATERING REQUEST"}
+</button>
 
       {submitMessage ? (
         <p
