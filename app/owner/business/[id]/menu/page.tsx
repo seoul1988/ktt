@@ -4287,13 +4287,18 @@ export default function OwnerBusinessMenuPage() {
         </section>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8DED1] bg-white/95 p-3 backdrop-blur">
-        <div className="mx-auto flex max-w-4xl gap-3">
+      {/* 
+        전체 저장 영역은 화면 위에 떠 있는 fixed 레이어가 아니라
+        메뉴 목록의 맨 아래에 붙는 일반 페이지 영역으로 둡니다.
+        Owner/Admin 어느 경로에서 이 컴포넌트를 사용해도 항상 표시됩니다.
+      */}
+      <div className="mt-8 border-t border-[#E8DED1] bg-white px-4 py-5">
+        <div className="mx-auto flex w-full max-w-4xl gap-3">
           <button
             type="button"
             onClick={() => void loadMenu()}
             disabled={saving}
-            className="rounded-xl border border-[#E8DED1] px-4 py-3 text-sm font-black disabled:opacity-50"
+            className="rounded-xl border border-[#E8DED1] bg-white px-4 py-3 text-sm font-black disabled:opacity-50"
           >
             다시 불러오기
           </button>
