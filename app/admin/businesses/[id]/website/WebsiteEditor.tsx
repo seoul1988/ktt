@@ -671,6 +671,7 @@ type CateringSettingsPayload = {
   advance_notice_hours?: number | null;
   pickup_enabled?: boolean;
   delivery_enabled?: boolean;
+  delivery_fee?: number | null;
   quote_enabled?: boolean;
   notification_phone?: string | null;
 
@@ -4485,6 +4486,9 @@ function CateringRequestFormDisplay({
   const [loadError, setLoadError] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [selectedItemId, setSelectedItemId] = useState("");
+  const [selectedServiceType, setSelectedServiceType] = useState<
+    "pickup" | "delivery" | "quote"
+  >("pickup");
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -4671,7 +4675,21 @@ function CateringRequestFormDisplay({
   const selectedDeliveryFee =
     selectedItem != null
       ? Math.max(0, Number(selectedItem.delivery_fee || 0))
-      : 0;
+      : Math.max(0, Number(settings?.delivery_fee || 0));
+
+  useEffect(() => {
+    if (pickupAvailable) {
+      setSelectedServiceType("pickup");
+      return;
+    }
+
+    if (deliveryAvailable) {
+      setSelectedServiceType("delivery");
+      return;
+    }
+
+    setSelectedServiceType("quote");
+  }, [pickupAvailable, deliveryAvailable, selectedItemId]);
 
   const minPeople = Math.max(0, Number(settings?.minimum_order_people || 0));
   const advanceHours = Math.max(0, Number(settings?.advance_notice_hours || 0));
@@ -4798,7 +4816,7 @@ function CateringRequestFormDisplay({
             ).trim(),
             delivery_fee:
               String(formData.get("service_type") || "") === "delivery"
-                ? Math.max(0, Number(item?.delivery_fee || 0))
+                ? selectedDeliveryFee
                 : 0,
 
             budget_per_person: String(
@@ -5054,7 +5072,8 @@ function CateringRequestFormDisplay({
                   type="radio"
                   name="service_type"
                   value="pickup"
-                  defaultChecked={pickupAvailable}
+                  checked={selectedServiceType === "pickup"}
+                  onChange={() => setSelectedServiceType("pickup")}
                 />
                 Pickup
               </label>
@@ -5067,7 +5086,8 @@ function CateringRequestFormDisplay({
                   type="radio"
                   name="service_type"
                   value="delivery"
-                  defaultChecked={!pickupAvailable}
+                  checked={selectedServiceType === "delivery"}
+                  onChange={() => setSelectedServiceType("delivery")}
                 />
                 Delivery
                 {selectedDeliveryFee > 0 ? (
@@ -5081,14 +5101,21 @@ function CateringRequestFormDisplay({
             <label className="flex cursor-pointer items-center gap-2 text-sm font-bold">
               <input
                 required
-                type="radio"
-                name="service_type"
-                value="quote"
-                defaultChecked={!pickupAvailable && !deliveryAvailable}
-              />
-              Request Quote
-            </label>
+                  type="radio"
+                  name="service_type"
+                  value="quote"
+                  checked={selectedServiceType === "quote"}
+                  onChange={() => setSelectedServiceType("quote")}
+                />
+                Request Quote
+              </label>
           </div>
+
+          {selectedServiceType === "delivery" && selectedDeliveryFee > 0 ? (
+            <div className="mt-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700">
+              Delivery Fee: ${selectedDeliveryFee.toFixed(2)}
+            </div>
+          ) : null}
 
           {selectedItem ? (
             <p className="mt-1.5 text-[11px] font-semibold text-gray-500">

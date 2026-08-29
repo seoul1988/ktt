@@ -12,6 +12,7 @@ type CateringSettings = {
   advance_notice_hours: number;
   pickup_enabled: boolean;
   delivery_enabled: boolean;
+  delivery_fee: number;
   quote_enabled: boolean;
   notification_email: string;
   notification_phone: string;
@@ -282,6 +283,10 @@ export default function CateringManager({
                 cateringData.settings.notification_phone ?? "",
               sender_email:
                 cateringData.settings.sender_email ?? "",
+              delivery_fee: Math.max(
+                0,
+                Number(cateringData.settings.delivery_fee || 0),
+              ),
               show_event_time:
                 cateringData.settings.show_event_time !== false,
               show_occasion:
@@ -421,6 +426,10 @@ export default function CateringManager({
               notification_email: data.settings.notification_email ?? "",
               notification_phone: data.settings.notification_phone ?? "",
               sender_email: data.settings.sender_email ?? "",
+              delivery_fee: Math.max(
+                0,
+                Number(data.settings.delivery_fee || 0),
+              ),
               show_event_time:
                 data.settings.show_event_time !== false,
               show_occasion:
@@ -1722,30 +1731,78 @@ export default function CateringManager({
               </label>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-4">
-              {[
-                ["pickup_enabled", "Pickup"],
-                ["delivery_enabled", "Delivery"],
-                ["quote_enabled", "Request Quote"],
-              ].map(([key, label]) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-2 text-sm font-bold"
-                >
+            <div className="mt-4 flex flex-wrap items-end gap-4">
+              <label className="flex items-center gap-2 pb-2 text-sm font-bold">
+                <input
+                  type="checkbox"
+                  checked={settings.pickup_enabled}
+                  onChange={(e) =>
+                    void saveSettings({
+                      pickup_enabled: e.target.checked,
+                    })
+                  }
+                />
+                Pickup
+              </label>
+
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex items-center gap-2 pb-2 text-sm font-bold">
                   <input
                     type="checkbox"
-                    checked={Boolean(
-                      settings[key as keyof CateringSettings],
-                    )}
+                    checked={settings.delivery_enabled}
                     onChange={(e) =>
                       void saveSettings({
-                        [key]: e.target.checked,
-                      } as Partial<CateringSettings>)
+                        delivery_enabled: e.target.checked,
+                      })
                     }
                   />
-                  {label}
+                  Delivery
                 </label>
-              ))}
+
+                {settings.delivery_enabled ? (
+                  <label className="text-sm font-bold text-[#344054]">
+                    Delivery Fee ($)
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={settings.delivery_fee}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          delivery_fee: Math.max(
+                            0,
+                            Number(e.target.value || 0),
+                          ),
+                        })
+                      }
+                      onBlur={() =>
+                        void saveSettings({
+                          delivery_fee: Math.max(
+                            0,
+                            Number(settings.delivery_fee || 0),
+                          ),
+                        })
+                      }
+                      className="mt-2 w-36 rounded-xl border border-[#D9CFC2] px-3 py-2"
+                      aria-label="Delivery fee"
+                    />
+                  </label>
+                ) : null}
+              </div>
+
+              <label className="flex items-center gap-2 pb-2 text-sm font-bold">
+                <input
+                  type="checkbox"
+                  checked={settings.quote_enabled}
+                  onChange={(e) =>
+                    void saveSettings({
+                      quote_enabled: e.target.checked,
+                    })
+                  }
+                />
+                Request Quote
+              </label>
             </div>
 
             <div className="mt-5 border-t border-[#EEE6DC] pt-5">
