@@ -135,6 +135,24 @@ function absoluteUrl(value: unknown, fallback = "/icon-512.png") {
   return `${SITE_URL}${url.startsWith("/") ? url : `/${url}`}`;
 }
 
+/**
+ * 로고 주소를 기반으로 안정적인 버전값을 만듭니다.
+ * 로고가 바뀌면 버전도 바뀌므로 이전 favicon 캐시를 재사용하지 않습니다.
+ */
+function createIconVersion(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash.toString(36);
+}
+
+function addVersionToUrl(url: string, version: string) {
+  return `${url}${url.includes("?") ? "&" : "?"}v=${version}`;
+}
+
 async function loadBusiness(businessId: number): Promise<{
   data: PublicBusiness | null;
   error: { message: string } | null;
@@ -240,24 +258,25 @@ export async function generateMetadata({
 
   const business = businessResult.data;
   const businessName = text(business.name) || "Business";
-  const uploadedLogo = findUploadedLogo(
-    business.website_settings,
-  );
-  const fallbackIcon = absoluteUrl(
+  const uploadedLogo = findUploadedLogo(business.website_settings);
+
+  const rawIconUrl = absoluteUrl(
     uploadedLogo || business.image_url,
     "/icon-512.png",
   );
 
+  const iconVersion = createIconVersion(
+    `${businessId}:${rawIconUrl}`,
+  );
+
+  const faviconUrl = addVersionToUrl(rawIconUrl, iconVersion);
   const websitePath = `/business/${businessId}/website`;
   const pageUrl = `${SITE_URL}${websitePath}`;
-  const manifestUrl = `${websitePath}/manifest.webmanifest?v=6`;
-
-  // 브라우저 탭용 favicon
-  const icon32 = `${websitePath}/icon/32?v=1`;
-
-  // PWA / 홈 화면 설치용 아이콘
-  const icon192 = `${websitePath}/icon/192?v=1`;
-  const icon512 = `${websitePath}/icon/512?v=1`;
+  const manifestUrl =
+    `${websitePath}/manifest.webmanifest?v=${iconVersion}`;
+  const icon32 = `${websitePath}/icon/32?v=${iconVersion}`;
+  const icon192 = `${websitePath}/icon/192?v=${iconVersion}`;
+  const icon512 = `${websitePath}/icon/512?v=${iconVersion}`;
 
   return {
     metadataBase: new URL(SITE_URL),
@@ -273,7 +292,11 @@ export async function generateMetadata({
     },
 
     icons: {
+      /* 브라우저 탭은 저장된 BUNS 로고를 가장 먼저 사용합니다. */
       icon: [
+        {
+          url: faviconUrl,
+        },
         {
           url: icon32,
           sizes: "32x32",
@@ -289,17 +312,11 @@ export async function generateMetadata({
           sizes: "512x512",
           type: "image/png",
         },
-        {
-          url: fallbackIcon,
-        },
       ],
 
-      // Chrome/Edge 탭에서 shortcut icon도 32px favicon을 우선 사용
       shortcut: [
         {
-          url: icon32,
-          sizes: "32x32",
-          type: "image/png",
+          url: faviconUrl,
         },
       ],
 
@@ -371,9 +388,7 @@ export default async function BusinessWebsitePage({
 
   return (
     <>
-      <BusinessServiceWorker
-        businessId={String(businessId)}
-      />
+      <BusinessServiceWorker businessId={String(businessId)} />
 
       <InstallAppButton businessName={businessName} />
 
