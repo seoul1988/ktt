@@ -14520,11 +14520,35 @@ export function PublicWebsiteRenderer({
     useState(0);
 
   useEffect(() => {
-    const updateDevice = () =>
-      setDevice(window.innerWidth < 640 ? "mobile" : "desktop");
+    const updateDevice = () => {
+      /*
+       * 휴대폰 가로모드에서는 innerWidth가 640px을 넘는 경우가 많습니다.
+       * 화면 방향이 바뀌어도 실제 휴대폰이면 mobile로 유지합니다.
+       */
+      const coarsePointer =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+
+      const shortScreenSide = Math.min(
+        Number(window.screen?.width || window.innerWidth),
+        Number(window.screen?.height || window.innerHeight),
+      );
+
+      const isPhone =
+        window.innerWidth < 640 ||
+        (coarsePointer && shortScreenSide < 700);
+
+      setDevice(isPhone ? "mobile" : "desktop");
+    };
+
     updateDevice();
     window.addEventListener("resize", updateDevice);
-    return () => window.removeEventListener("resize", updateDevice);
+    window.addEventListener("orientationchange", updateDevice);
+
+    return () => {
+      window.removeEventListener("resize", updateDevice);
+      window.removeEventListener("orientationchange", updateDevice);
+    };
   }, []);
 
   // 모바일 OPEN / CLOSED 상태를 현재 시간에 맞춰 1분마다 갱신합니다.
@@ -14969,12 +14993,19 @@ export function PublicWebsiteRenderer({
     );
   }
 
+  /*
+   * 팝업식 레이어는 현재 보고 있는 pageSections 안에서만 찾으면 안 됩니다.
+   * Catering/Menu 같은 별도 link-page를 보고 있을 때도 Home에 만든 팝업식
+   * Business Hours 레이어를 열 수 있도록 전체 sections에서 찾습니다.
+   */
   const popupLayerSection =
     popupLayerId == null
       ? null
-      : pageSections.find(
+      : sections.find(
           (section) =>
             section.id === popupLayerId &&
+            section.is_visible !== false &&
+            section.content?.page_type !== "link-page" &&
             section.content?.popup_only === true,
         ) ?? null;
 
