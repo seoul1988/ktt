@@ -13626,15 +13626,24 @@ function BusinessWebsiteBanners({
     <div
       className="fixed inset-0 z-[2147483000] bg-black/60 backdrop-blur-sm"
       data-editor-popup-preview={editorPreview ? "true" : undefined}
+      onClick={(event) => {
+        // 실제 웹에서는 팝업 바깥의 어두운 영역을 누르면 닫습니다.
+        // 관리자 미리보기에서는 실수로 닫히지 않게 유지합니다.
+        if (!editorPreview && event.target === event.currentTarget) {
+          closePopup(banner.id);
+        }
+      }}
       style={{
         width: "100vw",
         height: "100dvh",
         margin: 0,
         padding: 0,
+        cursor: editorPreview ? "default" : "pointer",
       }}
     >
       <div
         className="fixed flex items-center justify-center"
+        onClick={(event) => event.stopPropagation()}
         style={{
           left: "50%",
           top: "50%",
