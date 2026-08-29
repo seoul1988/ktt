@@ -469,13 +469,6 @@ export async function POST(
       );
     }
 
-    if (!title) {
-      return NextResponse.json(
-        { error: "배너 제목을 입력하세요." },
-        { status: 400 },
-      );
-    }
-
     const supabase = getAdminClient();
     const image = formData.get("image");
     const imageRequested =
@@ -625,6 +618,15 @@ export async function POST(
           reward_signup_url: String(formData.get("reward_signup_url") || "").trim().slice(0, 1000) || null,
           form_background_color: validColor(formData.get("form_background_color"), "#FFFFFF"),
           lead_expanded_mode: parseBoolean(formData.get("lead_expanded_mode")),
+          dismiss_option_enabled: parseBoolean(
+            formData.get("dismiss_option_enabled"),
+          ),
+          dismiss_hours: boundedInteger(
+            formData.get("dismiss_hours"),
+            24,
+            1,
+            720,
+          ),
           display_order:
             positiveInteger(
               formData.get("display_order"),
@@ -767,13 +769,6 @@ export async function PATCH(
     if (!ALLOWED_TYPES.has(bannerType)) {
       return NextResponse.json(
         { error: "잘못된 배너 종류입니다." },
-        { status: 400 },
-      );
-    }
-
-    if (!title) {
-      return NextResponse.json(
-        { error: "배너 제목을 입력하세요." },
         { status: 400 },
       );
     }
@@ -942,6 +937,15 @@ export async function PATCH(
           reward_signup_url: String(formData.get("reward_signup_url") || "").trim().slice(0, 1000) || null,
           form_background_color: validColor(formData.get("form_background_color"), "#FFFFFF"),
           lead_expanded_mode: parseBoolean(formData.get("lead_expanded_mode")),
+          dismiss_option_enabled: parseBoolean(
+            formData.get("dismiss_option_enabled"),
+          ),
+          dismiss_hours: boundedInteger(
+            formData.get("dismiss_hours"),
+            24,
+            1,
+            720,
+          ),
           display_order:
             positiveInteger(
               formData.get("display_order"),
