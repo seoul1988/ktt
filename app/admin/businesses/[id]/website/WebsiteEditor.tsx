@@ -13181,6 +13181,11 @@ function BusinessWebsiteBanners({
   const [errorMessage, setErrorMessage] = useState("");
   const [visibleBannerId, setVisibleBannerId] =
     useState<number | null>(null);
+
+  // 사용자가 체크한 경우에만 지정 시간 동안 팝업을 다시 표시하지 않습니다.
+  const [dismissChecked, setDismissChecked] = useState(false);
+  const [dismissHours, setDismissHours] = useState(24);
+
   const [leadEmail, setLeadEmail] = useState("");
   const [leadExpanded, setLeadExpanded] = useState(false);
   const [leadSubmitting, setLeadSubmitting] = useState(false);
@@ -13279,6 +13284,9 @@ function BusinessWebsiteBanners({
   useEffect(() => {
     setLeadEmail("");
     setLeadResult(null);
+    setDismissChecked(false);
+    setDismissHours(24);
+
     const current = banners.find((item) => item.id === visibleBannerId);
     setLeadExpanded(current ? !current.lead_expanded_mode : false);
   }, [visibleBannerId, banners]);
@@ -13316,13 +13324,26 @@ function BusinessWebsiteBanners({
 
   function closePopup(bannerId: number) {
     if (!editorPreview) {
-      const dismissedUntil =
-        Date.now() + 24 * 60 * 60 * 1000;
+      const key =
+        `business-popup-dismissed-${businessId}-${bannerId}`;
 
-      window.localStorage.setItem(
-        `business-popup-dismissed-${businessId}-${bannerId}`,
-        String(dismissedUntil),
-      );
+      if (dismissChecked) {
+        const safeHours = Math.max(
+          1,
+          Math.min(24 * 30, Number(dismissHours) || 24),
+        );
+
+        const dismissedUntil =
+          Date.now() + safeHours * 60 * 60 * 1000;
+
+        window.localStorage.setItem(
+          key,
+          String(dismissedUntil),
+        );
+      } else {
+        // 체크하지 않고 닫으면 다음 방문 때 다시 표시합니다.
+        window.localStorage.removeItem(key);
+      }
     }
 
     const currentIndex = banners.findIndex(
@@ -13456,6 +13477,37 @@ function BusinessWebsiteBanners({
         aria-label="Close popup"
       >×</button>
 
+      {editorPreview ? (
+        <div className="absolute bottom-3 left-1/2 z-[95] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-[10px] font-black text-gray-900 shadow-lg">
+          <input
+            type="checkbox"
+            checked={dismissChecked}
+            onChange={(event) =>
+              setDismissChecked(event.target.checked)
+            }
+            className="h-3.5 w-3.5 accent-gray-950"
+          />
+          <span>다시 보지 않기</span>
+          {dismissChecked ? (
+            <select
+              value={dismissHours}
+              onChange={(event) =>
+                setDismissHours(Number(event.target.value))
+              }
+              className="rounded border border-black/10 bg-white px-1 py-0.5 text-[10px]"
+            >
+              <option value={1}>1시간</option>
+              <option value={6}>6시간</option>
+              <option value={12}>12시간</option>
+              <option value={24}>24시간</option>
+              <option value={72}>3일</option>
+              <option value={168}>7일</option>
+              <option value={720}>30일</option>
+            </select>
+          ) : null}
+        </div>
+      ) : null}
+
       {banner.image_url && banner.image_position !== "background" ? (
         <div
           className="absolute z-10 overflow-hidden bg-white"
@@ -13565,15 +13617,44 @@ function BusinessWebsiteBanners({
         ) : null}
 
         {!editorPreview ? (
-          <p
-            className="mt-4 text-[11px] font-bold"
+          <div
+            className="mt-4 flex flex-wrap items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold"
             style={{
               color: banner.subtitle_color || "#667085",
-              opacity: 0.65,
+              backgroundColor: "rgba(255,255,255,0.82)",
             }}
           >
-            Close this popup to hide it for 24 hours.
-          </p>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={dismissChecked}
+                onChange={(event) =>
+                  setDismissChecked(event.target.checked)
+                }
+                className="h-4 w-4 cursor-pointer accent-gray-950"
+              />
+              <span>다시 보지 않기</span>
+            </label>
+
+            {dismissChecked ? (
+              <select
+                value={dismissHours}
+                onChange={(event) =>
+                  setDismissHours(Number(event.target.value))
+                }
+                className="rounded-lg border border-black/15 bg-white px-2 py-1 text-[11px] font-black text-gray-900 outline-none"
+                aria-label="팝업 다시 표시하지 않을 시간"
+              >
+                <option value={1}>1시간</option>
+                <option value={6}>6시간</option>
+                <option value={12}>12시간</option>
+                <option value={24}>24시간</option>
+                <option value={72}>3일</option>
+                <option value={168}>7일</option>
+                <option value={720}>30일</option>
+              </select>
+            ) : null}
+          </div>
         ) : null}
       </div>
       {banner.lead_capture_enabled ? (
@@ -13627,9 +13708,12 @@ function BusinessWebsiteBanners({
       className="fixed inset-0 z-[2147483000] bg-black/60 backdrop-blur-sm"
       data-editor-popup-preview={editorPreview ? "true" : undefined}
       onClick={(event) => {
-        // 실제 웹에서는 팝업 바깥의 어두운 영역을 누르면 닫습니다.
-        // 관리자 미리보기에서는 실수로 닫히지 않게 유지합니다.
-        if (!editorPreview && event.target === event.currentTarget) {
+        // 팝업 카드 바깥의 어두운 영역을 누르면 팝업을 닫습니다.
+        // 카드 안쪽 클릭은 아래 컨테이너에서 전파를 막습니다.
+        if (
+          !editorPreview &&
+          event.target === event.currentTarget
+        ) {
           closePopup(banner.id);
         }
       }}
