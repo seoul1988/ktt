@@ -3279,6 +3279,14 @@ function sanitizeCellRichTextHtml(value: string) {
     .replace(/javascript\s*:/gi, "");
 }
 
+/**
+ * 편집기에서 저장한 HTML의 색상을 임의로 바꾸지 않습니다.
+ * 블록 지정한 글자에 들어간 <span style="color:..."> 값을 그대로 보존합니다.
+ */
+function normalizeRichTextLinkColors(value: string) {
+  return String(value || "");
+}
+
 function escapeCellText(value: string) {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -14790,6 +14798,14 @@ export function PublicWebsiteRenderer({
             <div className="relative z-10">
               {layouts.map((layout) => {
                 const layoutSpacing = getLayoutSpacingPx(layout, device);
+                const resolvedLayout = resolveGridForDevice(layout, device);
+                const autoWidthImageLayout =
+                  resolvedLayout.cells.length === 1 &&
+                  resolvedLayout.cells[0]?.type === "image" &&
+                  Boolean(resolvedLayout.cells[0]?.image_url) &&
+                  normalizeImageFit(
+                    resolvedLayout.cells[0]?.image_fit,
+                  ) === "width";
 
                 return (
                   <Fragment key={layout.id}>
@@ -14808,11 +14824,18 @@ export function PublicWebsiteRenderer({
                       <div
                         style={{
                           width: "100%",
-                          height: "100%",
+                          height: autoWidthImageLayout ? "auto" : "100%",
+                          minHeight: autoWidthImageLayout ? 0 : undefined,
                           borderRadius: "inherit",
-                          overflow: "hidden",
-                          clipPath: "inherit",
-                          WebkitClipPath: "inherit",
+                          overflow: autoWidthImageLayout
+                            ? "visible"
+                            : "hidden",
+                          clipPath: autoWidthImageLayout
+                            ? "none"
+                            : "inherit",
+                          WebkitClipPath: autoWidthImageLayout
+                            ? "none"
+                            : "inherit",
                         }}
                       >
                         <ReadOnlyGrid
@@ -14823,6 +14846,7 @@ export function PublicWebsiteRenderer({
                             websiteSettings.accent_color || "#d97706",
                           )}
                           previewDevice={device}
+                          websiteSettings={websiteSettings}
                         />
                       </div>
                       <LayoutBorderOverlay layout={layout} />
@@ -16657,6 +16681,17 @@ function PreviewSection({
         <div className="w-full max-w-none px-0">
           {sectionLayouts.map((layout) => {
             const layoutSpacing = getLayoutSpacingPx(layout, previewDevice);
+            const resolvedLayout = resolveGridForDevice(
+              layout,
+              previewDevice,
+            );
+            const autoWidthImageLayout =
+              resolvedLayout.cells.length === 1 &&
+              resolvedLayout.cells[0]?.type === "image" &&
+              Boolean(resolvedLayout.cells[0]?.image_url) &&
+              normalizeImageFit(
+                resolvedLayout.cells[0]?.image_fit,
+              ) === "width";
 
             return (
               <Fragment key={layout.id}>
@@ -16670,11 +16705,18 @@ function PreviewSection({
                   <div
                     style={{
                       width: "100%",
-                      height: "100%",
+                      height: autoWidthImageLayout ? "auto" : "100%",
+                      minHeight: autoWidthImageLayout ? 0 : undefined,
                       borderRadius: "inherit",
-                      overflow: "hidden",
-                      clipPath: "inherit",
-                      WebkitClipPath: "inherit",
+                      overflow: autoWidthImageLayout
+                        ? "visible"
+                        : "hidden",
+                      clipPath: autoWidthImageLayout
+                        ? "none"
+                        : "inherit",
+                      WebkitClipPath: autoWidthImageLayout
+                        ? "none"
+                        : "inherit",
                     }}
                   >
                     <ReadOnlyGrid
@@ -20180,19 +20222,21 @@ function CellPreview({
     const rawTitleHtml = sanitizeCellRichTextHtml(
       cell.rich_text_html || escapeCellText(cell.text || business.name || "제목"),
     );
-    const titleHtml = prepareRichTextHtmlForDevice(
-      area === "header"
-        ? rawTitleHtml
-            .replace(
-              /font-size\s*:\s*[^;"']+;?/gi,
-              "",
-            )
-            .replace(
-              /\ssize\s*=\s*(["']).*?\1/gi,
-              "",
-            )
-        : rawTitleHtml,
-      previewDevice,
+    const titleHtml = normalizeRichTextLinkColors(
+      prepareRichTextHtmlForDevice(
+        area === "header"
+          ? rawTitleHtml
+              .replace(
+                /font-size\s*:\s*[^;"']+;?/gi,
+                "",
+              )
+              .replace(
+                /\ssize\s*=\s*(["']).*?\1/gi,
+                "",
+              )
+          : rawTitleHtml,
+        previewDevice,
+      ),
     );
     return (
       <div
@@ -20213,9 +20257,15 @@ function CellPreview({
           textAlign: cell.text_align || "center",
         }}
       >
+        {/* 
+          자식 글자에 !important color:inherit를 강제하면
+          편집기에서 블록 지정해 저장한 <span style="color:...">가
+          미리보기/공개 화면에서 셀 기본색으로 덮어씌워집니다.
+          자식 inline color를 그대로 살리기 위해 강제 inherit를 사용하지 않습니다.
+        */}
         <RichTextImagePopup
           html={titleHtml}
-          className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible [&_*]:box-border [&_*]:max-w-full [&_*]:!text-[inherit] [&_div]:min-h-[1em] [&_p]:m-0"
+          className="cell-rich-text flex min-h-0 min-w-0 max-w-full flex-col overflow-visible [&_*]:box-border [&_*]:max-w-full [&_div]:min-h-[1em] [&_p]:m-0"
           style={{
             ...commonStyle,
             color: cell.color || "#111827",
@@ -20230,11 +20280,14 @@ function CellPreview({
     );
   }
   if (cell.type === "text") {
-    const textHtml = prepareRichTextHtmlForDevice(
-      sanitizeCellRichTextHtml(
-        cell.rich_text_html || escapeCellText(cell.text || "내용을 입력하세요"),
+    const textHtml = normalizeRichTextLinkColors(
+      prepareRichTextHtmlForDevice(
+        sanitizeCellRichTextHtml(
+          cell.rich_text_html ||
+            escapeCellText(cell.text || "내용을 입력하세요"),
+        ),
+        previewDevice,
       ),
-      previewDevice,
     );
     return (
       <div
@@ -21658,17 +21711,63 @@ function RichWebPasteBox({
       return;
     }
 
+    const editor = editorRef.current;
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+
+    if (
+      !editor ||
+      !selection ||
+      selection.rangeCount === 0 ||
+      selection.isCollapsed
+    ) {
       setInsertError("먼저 글씨를 블록 지정한 후 색상을 선택해주세요.");
       return;
     }
 
-    document.execCommand("styleWithCSS", false, "true");
-    document.execCommand("foreColor", false, color);
-    setInsertError("");
-    syncEditor();
-    rememberEditorSelection();
+    const range = selection.getRangeAt(0);
+
+    if (!editor.contains(range.commonAncestorContainer)) {
+      setInsertError("HTML 편집창 안의 글씨를 선택해주세요.");
+      return;
+    }
+
+    try {
+      /*
+       * execCommand("foreColor")는 브라우저에 따라 <font> 태그나
+       * 임시 CSS를 만들 수 있어, 저장/재렌더링 과정에서 색이 사라질 수 있습니다.
+       *
+       * 그래서 선택한 글씨 자체를 <span style="color:#xxxxxx">로 감싸
+       * 실제 HTML에 색상을 명시적으로 저장합니다.
+       */
+      const span = document.createElement("span");
+      span.style.color = color;
+      span.setAttribute("data-selected-text-color", color);
+
+      const fragment = range.extractContents();
+      span.appendChild(fragment);
+      range.insertNode(span);
+
+      const nextRange = document.createRange();
+      nextRange.selectNodeContents(span);
+
+      selection.removeAllRanges();
+      selection.addRange(nextRange);
+      savedSelectionRangeRef.current = nextRange.cloneRange();
+
+      setInsertError("");
+      syncEditor();
+      rememberEditorSelection();
+    } catch {
+      /*
+       * 복잡한 HTML 경계 선택에서 extractContents가 실패하는 경우에만
+       * 브라우저 기본 명령을 fallback으로 사용합니다.
+       */
+      document.execCommand("styleWithCSS", false, "true");
+      document.execCommand("foreColor", false, color);
+      setInsertError("");
+      syncEditor();
+      rememberEditorSelection();
+    }
   }
 
   function applyLinkToSelection() {
@@ -26197,7 +26296,11 @@ function RightPanel(props: {
     if (!selectedCell) return;
 
     const editor = textEditorRef.current;
-    const html = sanitizeCellRichTextHtml(editor?.innerHTML || textEditorHtml);
+    const html = normalizeRichTextLinkColors(
+      sanitizeCellRichTextHtml(
+        editor?.innerHTML || textEditorHtml,
+      ),
+    );
     const plainText = richTextToPlainText(html);
 
     props.onUpdateCell(
@@ -38428,7 +38531,6 @@ function OverlayPositionPicker({
     </Field>
   );
 }
-
 
 
 

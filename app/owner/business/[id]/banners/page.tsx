@@ -68,6 +68,8 @@ type Banner = {
   reward_signup_url: string | null;
   form_background_color: string;
   lead_expanded_mode: boolean;
+  dismiss_option_enabled?: boolean;
+  dismiss_hours?: number;
   display_order: number;
   is_active: boolean;
   starts_at: string | null;
@@ -320,6 +322,8 @@ export default function BannerManagementPage() {
     useState<Banner | null>(null);
   const [title, setTitle] = useState(TEMPLATES[0].title);
   const [subtitle, setSubtitle] = useState(TEMPLATES[0].subtitle);
+  const [titleEnabled, setTitleEnabled] = useState(true);
+  const [subtitleEnabled, setSubtitleEnabled] = useState(true);
   const [buttonText, setButtonText] =
     useState(TEMPLATES[0].buttonText);
   const [linkUrl, setLinkUrl] = useState("");
@@ -374,6 +378,11 @@ export default function BannerManagementPage() {
   const [rewardSignupUrl, setRewardSignupUrl] = useState("");
   const [formBackgroundColor, setFormBackgroundColor] = useState("#FFFFFF");
   const [leadExpandedMode, setLeadExpandedMode] = useState(true);
+
+  // 팝업 하단 "Don't show this again" 옵션
+  const [dismissOptionEnabled, setDismissOptionEnabled] = useState(true);
+  const [dismissHours, setDismissHours] = useState(24);
+
   const [dragging, setDragging] = useState<"text" | "image" | null>(null);
   const [displayOrder, setDisplayOrder] = useState(1);
   const [isActive, setIsActive] = useState(true);
@@ -487,6 +496,8 @@ export default function BannerManagementPage() {
     setEditingBanner(null);
     setTitle(template.title);
     setSubtitle(template.subtitle);
+    setTitleEnabled(true);
+    setSubtitleEnabled(true);
     setButtonText(template.buttonText);
     setLinkUrl("");
     setImageFile(null);
@@ -532,6 +543,8 @@ export default function BannerManagementPage() {
     setRewardSignupUrl("");
     setFormBackgroundColor("#FFFFFF");
     setLeadExpandedMode(true);
+    setDismissOptionEnabled(true);
+    setDismissHours(24);
     setDisplayOrder(banners.length + 1);
     setIsActive(true);
     setStartsAt("");
@@ -549,8 +562,10 @@ export default function BannerManagementPage() {
 
     setSelectedTemplate(template);
     setEditingBanner(banner);
-    setTitle(banner.title);
+    setTitle(banner.title || "");
     setSubtitle(banner.subtitle || "");
+    setTitleEnabled(Boolean(String(banner.title || "").trim()));
+    setSubtitleEnabled(Boolean(String(banner.subtitle || "").trim()));
     setButtonText(banner.button_text || "");
     setLinkUrl(banner.link_url || "");
     setImageFile(null);
@@ -612,6 +627,13 @@ export default function BannerManagementPage() {
     setRewardSignupUrl(banner.reward_signup_url || "");
     setFormBackgroundColor(banner.form_background_color || "#FFFFFF");
     setLeadExpandedMode(banner.lead_expanded_mode !== false);
+    setDismissOptionEnabled(banner.dismiss_option_enabled !== false);
+    setDismissHours(
+      Math.max(
+        1,
+        Math.min(24 * 30, Number(banner.dismiss_hours) || 24),
+      ),
+    );
     setDisplayOrder(banner.display_order);
     setIsActive(banner.is_active);
     setStartsAt(toLocalDateTime(banner.starts_at));
@@ -624,11 +646,6 @@ export default function BannerManagementPage() {
   }
 
   async function saveBanner() {
-    if (!title.trim()) {
-      alert("배너 제목을 입력하세요.");
-      return;
-    }
-
     if (leadCaptureEnabled && !emailPlaceholder.trim()) {
       alert("이메일 입력 안내 문구를 입력하세요.");
       return;
@@ -658,10 +675,22 @@ export default function BannerManagementPage() {
         "template_style",
         selectedTemplate.style,
       );
-      formData.append("title", title.trim());
-      formData.append("subtitle", subtitle.trim());
-      formData.append("button_text", buttonText.trim());
-      formData.append("link_url", linkUrl.trim());
+      formData.append(
+        "title",
+        titleEnabled ? title.trim() : "",
+      );
+      formData.append(
+        "subtitle",
+        subtitleEnabled ? subtitle.trim() : "",
+      );
+      formData.append(
+        "button_text",
+        buttonEnabled ? buttonText.trim() : "",
+      );
+      formData.append(
+        "link_url",
+        buttonEnabled ? linkUrl.trim() : "",
+      );
       formData.append(
         "background_color",
         backgroundColor,
@@ -718,6 +747,19 @@ export default function BannerManagementPage() {
       formData.append("reward_signup_url", rewardSignupUrl.trim());
       formData.append("form_background_color", formBackgroundColor);
       formData.append("lead_expanded_mode", String(leadExpandedMode));
+      formData.append(
+        "dismiss_option_enabled",
+        String(dismissOptionEnabled),
+      );
+      formData.append(
+        "dismiss_hours",
+        String(
+          Math.max(
+            1,
+            Math.min(24 * 30, Number(dismissHours) || 24),
+          ),
+        ),
+      );
       formData.append(
         "display_order",
         String(displayOrder),
@@ -1057,32 +1099,74 @@ export default function BannerManagementPage() {
             </div>
 
             <div className="popup-design-scroll grid gap-4 p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-3 [scrollbar-gutter:stable]">
-              <label>
-                <span className="mb-1 block text-xs font-black text-[#667085]">
-                  제목
-                </span>
-                <input
-                  value={title}
-                  onChange={(event) =>
-                    setTitle(event.target.value)
-                  }
-                  className="w-full rounded-xl border border-[#D9CFC2] px-4 py-3 text-sm font-bold outline-none focus:border-[#172033]"
-                />
-              </label>
+              <div className="rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-[#172033]">제목 글자</p>
+                    <p className="mt-1 text-[11px] font-medium text-[#667085]">
+                      체크를 끄면 팝업 이미지 위에 제목을 표시하지 않습니다.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={titleEnabled}
+                    onChange={(event) =>
+                      setTitleEnabled(event.target.checked)
+                    }
+                    className="h-5 w-5 accent-green-600"
+                  />
+                </div>
 
-              <label>
-                <span className="mb-1 block text-xs font-black text-[#667085]">
-                  설명
-                </span>
-                <textarea
-                  value={subtitle}
-                  onChange={(event) =>
-                    setSubtitle(event.target.value)
-                  }
-                  rows={3}
-                  className="w-full resize-y rounded-xl border border-[#D9CFC2] px-4 py-3 text-sm font-medium outline-none focus:border-[#172033]"
-                />
-              </label>
+                {titleEnabled ? (
+                  <input
+                    value={title}
+                    onChange={(event) =>
+                      setTitle(event.target.value)
+                    }
+                    placeholder="예: WE ARE OPEN!"
+                    className="mt-3 w-full rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-[#172033]"
+                  />
+                ) : (
+                  <div className="mt-3 rounded-xl bg-gray-100 px-4 py-3 text-xs font-bold text-gray-500">
+                    제목 숨김
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-[#172033]">설명 글자</p>
+                    <p className="mt-1 text-[11px] font-medium text-[#667085]">
+                      체크를 끄면 설명 문구를 표시하지 않습니다.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={subtitleEnabled}
+                    onChange={(event) =>
+                      setSubtitleEnabled(event.target.checked)
+                    }
+                    className="h-5 w-5 accent-green-600"
+                  />
+                </div>
+
+                {subtitleEnabled ? (
+                  <textarea
+                    value={subtitle}
+                    onChange={(event) =>
+                      setSubtitle(event.target.value)
+                    }
+                    placeholder="예: Open on Labor Day"
+                    rows={3}
+                    className="mt-3 w-full resize-y rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-medium outline-none focus:border-[#172033]"
+                  />
+                ) : (
+                  <div className="mt-3 rounded-xl bg-gray-100 px-4 py-3 text-xs font-bold text-gray-500">
+                    설명 숨김
+                  </div>
+                )}
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <label>
@@ -1094,6 +1178,7 @@ export default function BannerManagementPage() {
                     min={16}
                     max={72}
                     value={titleFontSize}
+                    disabled={!titleEnabled}
                     onChange={(event) =>
                       setTitleFontSize(Number(event.target.value))
                     }
@@ -1110,6 +1195,7 @@ export default function BannerManagementPage() {
                     min={10}
                     max={40}
                     value={subtitleFontSize}
+                    disabled={!subtitleEnabled}
                     onChange={(event) =>
                       setSubtitleFontSize(Number(event.target.value))
                     }
@@ -1142,6 +1228,7 @@ export default function BannerManagementPage() {
                   </span>
                   <select
                     value={titleFontWeight}
+                    disabled={!titleEnabled}
                     onChange={(event) =>
                       setTitleFontWeight(Number(event.target.value))
                     }
@@ -1160,6 +1247,7 @@ export default function BannerManagementPage() {
                   </span>
                   <select
                     value={subtitleFontWeight}
+                    disabled={!subtitleEnabled}
                     onChange={(event) =>
                       setSubtitleFontWeight(Number(event.target.value))
                     }
@@ -1287,6 +1375,53 @@ export default function BannerManagementPage() {
                 </label>
               </div>
               )}
+
+              <section className="rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-black text-[#172033]">
+                      Don't show this again
+                    </div>
+                    <p className="mt-1 text-xs font-medium text-[#667085]">
+                      사용자가 체크한 뒤 팝업을 닫으면 지정한 시간 동안 이 팝업을 다시 표시하지 않습니다.
+                    </p>
+                  </div>
+
+                  <input
+                    type="checkbox"
+                    checked={dismissOptionEnabled}
+                    onChange={(event) =>
+                      setDismissOptionEnabled(event.target.checked)
+                    }
+                    className="h-5 w-5 accent-green-600"
+                  />
+                </div>
+
+                {dismissOptionEnabled ? (
+                  <div className="mt-4">
+                    <label>
+                      <span className="mb-1 block text-xs font-black text-[#667085]">
+                        다시 표시하지 않을 시간
+                      </span>
+                      <select
+                        value={dismissHours}
+                        onChange={(event) =>
+                          setDismissHours(Number(event.target.value))
+                        }
+                        className="w-full rounded-xl border border-[#D9CFC2] bg-white px-3 py-3 text-sm font-black"
+                      >
+                        <option value={1}>1 hour</option>
+                        <option value={6}>6 hours</option>
+                        <option value={12}>12 hours</option>
+                        <option value={24}>24 hours</option>
+                        <option value={72}>3 days</option>
+                        <option value={168}>7 days</option>
+                        <option value={720}>30 days</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </section>
 
               <section className="rounded-2xl border border-[#D9CFC2] bg-[#FCFAF7] p-4">
                 <label className="flex items-center justify-between gap-3">
@@ -1743,6 +1878,9 @@ export default function BannerManagementPage() {
                 </div>
               )}
 
+              {(titleEnabled && title.trim()) ||
+              (subtitleEnabled && subtitle.trim()) ||
+              (buttonEnabled && buttonText.trim()) ? (
               <div
                 onPointerDown={(event) => {
                   event.currentTarget.setPointerCapture(event.pointerId);
@@ -1756,18 +1894,20 @@ export default function BannerManagementPage() {
                   textAlign,
                 }}
               >
-                <div
-                  style={{
-                    color: titleColor,
-                    fontSize: `${titleFontSize}px`,
-                    fontWeight: titleFontWeight,
-                    lineHeight: 1.15,
-                  }}
-                >
-                  {title || "Popup Title"}
-                </div>
+                {titleEnabled && title.trim() ? (
+                  <div
+                    style={{
+                      color: titleColor,
+                      fontSize: `${titleFontSize}px`,
+                      fontWeight: titleFontWeight,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {title}
+                  </div>
+                ) : null}
 
-                {subtitle && (
+                {subtitleEnabled && subtitle.trim() && (
                   <p
                     className="mt-2 leading-6"
                     style={{
@@ -1794,17 +1934,33 @@ export default function BannerManagementPage() {
                   </div>
                 )}
 
-                <p
-                  className="mt-4 text-[11px] font-bold"
-                  style={{ color: subtitleColor, opacity: 0.65 }}
-                >
-                  Close this popup to hide it for 24 hours.
-                </p>
+                {dismissOptionEnabled ? (
+                  <label
+                    className="mt-4 flex items-center justify-center gap-2 text-[11px] font-bold"
+                    style={{ color: subtitleColor }}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      disabled
+                      className="h-4 w-4"
+                    />
+                    <span>Don't show this again</span>
+                    <span className="opacity-60">
+                      ({dismissHours < 24
+                        ? `${dismissHours}h`
+                        : dismissHours === 24
+                          ? "24h"
+                          : `${Math.round(dismissHours / 24)}d`})
+                    </span>
+                  </label>
+                ) : null}
 
                 <span className="absolute -top-6 left-0 rounded bg-black/60 px-2 py-1 text-[10px] font-black text-white">
                   글자 이동
                 </span>
               </div>
+              ) : null}
             </div>
           </section>
         </div>
@@ -1859,7 +2015,7 @@ export default function BannerManagementPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-black text-[#172033]">
-                          {banner.title}
+                          {banner.title || "(제목 없는 이미지 팝업)"}
                         </h3>
 
                         <span className="rounded-full bg-[#FFF3DF] px-2 py-1 text-[10px] font-black text-[#B64032]">
