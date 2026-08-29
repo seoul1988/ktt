@@ -13994,11 +13994,13 @@ function CurrentWebsitePreview({
             </div>
           </div>
 
-          <BusinessWebsiteBanners
-            businessId={business.id}
-            previewDevice={device}
-            editorPreview
-          />
+          {!previewLinkPage ? (
+            <BusinessWebsiteBanners
+              businessId={business.id}
+              previewDevice={device}
+              editorPreview
+            />
+          ) : null}
 
           {previewLinkPage ? (
             previewLinkPage.content?.link_page_kind === "restaurant-menu" ? (
@@ -14806,10 +14808,12 @@ export function PublicWebsiteRenderer({
           />
         ) : null}
 
-        <BusinessWebsiteBanners
-          businessId={business.id}
-          previewDevice={device}
-        />
+        {heroSection?.content?.page_type !== "link-page" ? (
+          <BusinessWebsiteBanners
+            businessId={business.id}
+            previewDevice={device}
+          />
+        ) : null}
 
         {heroSection?.content?.page_type === "link-page" &&
         heroSection.content?.link_page_kind === "restaurant-menu" ? (
