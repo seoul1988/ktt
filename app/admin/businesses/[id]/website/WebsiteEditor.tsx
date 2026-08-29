@@ -6892,6 +6892,7 @@ function MenuImportModal({
                 : `${platformLabel} 메뉴 가져오기`}
           </button>
         </div>
+        ) : null}
       </div>
     </div>,
     document.body,
@@ -13161,6 +13162,9 @@ type WebsiteBanner = {
   reward_signup_url: string | null;
   form_background_color: string;
   lead_expanded_mode: boolean;
+  /** Banner Management에서 지정한 "Don't show this again" 기본 설정 */
+  dismiss_option_enabled?: boolean;
+  dismiss_hours?: number;
   display_order: number;
 };
 
@@ -13294,10 +13298,20 @@ function BusinessWebsiteBanners({
   useEffect(() => {
     setLeadEmail("");
     setLeadResult(null);
-    setDismissChecked(false);
-    setDismissHours(24);
 
     const current = banners.find((item) => item.id === visibleBannerId);
+
+    // Banner Management에서 저장한 시간을 공개 팝업의 기본값으로 사용합니다.
+    const adminDismissHours = Math.max(
+      1,
+      Math.min(
+        24 * 30,
+        Number(current?.dismiss_hours) || 24,
+      ),
+    );
+
+    setDismissChecked(false);
+    setDismissHours(adminDismissHours);
     setLeadExpanded(current ? !current.lead_expanded_mode : false);
   }, [visibleBannerId, banners]);
 
@@ -13686,6 +13700,7 @@ function BusinessWebsiteBanners({
       >
         {popupCard}
 
+        {banner.dismiss_option_enabled !== false ? (
         <div
           className="mt-3 flex flex-wrap items-center justify-center gap-2 rounded-full bg-white/95 px-4 py-2 text-xs font-bold text-gray-800 shadow-lg"
           onClick={(event) => event.stopPropagation()}
@@ -13703,12 +13718,13 @@ function BusinessWebsiteBanners({
           </label>
 
           {dismissChecked ? (
+            <>
             <select
               value={dismissHours}
               onChange={(event) =>
                 setDismissHours(Number(event.target.value))
               }
-              className="rounded-lg border border-black/15 bg-white px-2 py-1 text-xs font-black text-gray-900 outline-none"
+              className="rounded-lg border border-blue-200 bg-white px-2 py-1 text-xs font-black text-blue-700 outline-none"
               aria-label="Don't show this popup again for"
             >
               <option value={1}>1 hour</option>
@@ -13719,6 +13735,25 @@ function BusinessWebsiteBanners({
               <option value={168}>7 days</option>
               <option value={720}>30 days</option>
             </select>
+
+            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">
+              {dismissHours === 1
+                ? "1 hour"
+                : dismissHours === 6
+                  ? "6 hours"
+                  : dismissHours === 12
+                    ? "12 hours"
+                    : dismissHours === 24
+                      ? "24 hours"
+                      : dismissHours === 72
+                        ? "3 days"
+                        : dismissHours === 168
+                          ? "7 days"
+                          : dismissHours === 720
+                            ? "30 days"
+                            : `${dismissHours} hours`}
+            </span>
+            </>
           ) : (
             <span className="text-[11px] font-semibold text-gray-500">
               ({dismissHours === 24 ? "24h" : `${dismissHours}h`})
