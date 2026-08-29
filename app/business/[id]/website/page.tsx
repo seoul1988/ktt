@@ -28,7 +28,6 @@ type PublicBusiness = UnknownRecord & {
   image_url?: string | null;
   image_urls?: string[] | null;
   slider_image_urls?: string[] | null;
-  logo_url?: string | null;
   address?: string | null;
   phone?: string | null;
   lat?: number | string | null;
@@ -63,35 +62,10 @@ function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function isDefaultKtownIcon(value: string) {
-  if (!value) return false;
-
-  try {
-    const pathname = new URL(value, SITE_URL).pathname.toLowerCase();
-    return (
-      pathname === "/icon-512.png" ||
-      pathname === "/icon-192.png" ||
-      pathname === "/favicon.ico"
-    );
-  } catch {
-    const clean = value.split("?")[0].toLowerCase();
-    return (
-      clean.endsWith("/icon-512.png") ||
-      clean.endsWith("/icon-192.png") ||
-      clean.endsWith("/favicon.ico")
-    );
-  }
-}
-
-/**
- * 웹사이트 설정 안에서 "실제 비즈니스 로고"를 찾습니다.
- * 오래전에 app_icon_url에 저장된 KTownTriangle 기본 아이콘은
- * 비즈니스 favicon 후보에서 제외합니다.
- */
-function findUploadedBusinessLogo(value: unknown): string {
+function findUploadedLogo(value: unknown): string {
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findUploadedBusinessLogo(item);
+      const found = findUploadedLogo(item);
       if (found) return found;
     }
     return "";
@@ -110,11 +84,12 @@ function findUploadedBusinessLogo(value: unknown): string {
       text(value.url) ||
       text(value.src);
 
-    if (logo && !isDefaultKtownIcon(logo)) return logo;
+    if (logo) return logo;
   }
 
-  // app_icon_url보다 실제 logo 계열을 먼저 사용합니다.
   const explicitLogo =
+    text(value.app_icon_url) ||
+    text(value.appIconUrl) ||
     text(value.logo_url) ||
     text(value.logoUrl) ||
     text(value.business_logo_url) ||
@@ -122,24 +97,11 @@ function findUploadedBusinessLogo(value: unknown): string {
     text(value.header_logo_url) ||
     text(value.headerLogoUrl);
 
-  if (explicitLogo && !isDefaultKtownIcon(explicitLogo)) {
-    return explicitLogo;
-  }
+  if (explicitLogo) return explicitLogo;
 
-  for (const [key, child] of Object.entries(value)) {
-    // app_icon_url은 마지막 후보로 따로 처리합니다.
-    if (key === "app_icon_url" || key === "appIconUrl") continue;
-
-    const found = findUploadedBusinessLogo(child);
+  for (const child of Object.values(value)) {
+    const found = findUploadedLogo(child);
     if (found) return found;
-  }
-
-  const appIcon =
-    text(value.app_icon_url) ||
-    text(value.appIconUrl);
-
-  if (appIcon && !isDefaultKtownIcon(appIcon)) {
-    return appIcon;
   }
 
   return "";
@@ -186,7 +148,6 @@ async function loadBusiness(businessId: number): Promise<{
         "image_url",
         "image_urls",
         "slider_image_urls",
-        "logo_url",
         "address",
         "phone",
         "lat",
@@ -228,6 +189,11 @@ async function loadBusiness(businessId: number): Promise<{
   };
 }
 
+/**
+ * 공개 페이지에서는 서버에 저장된 각 레이어를 그대로 전달합니다.
+ * Home 레이어들을 하나로 합치면 각 레이어의 배경 이미지, 오버레이 글씨,
+ * 높이 및 기타 설정이 유실될 수 있으므로 병합하지 않습니다.
+ */
 function normalizeSectionsForPublic(rows: unknown[]): PublicSection[] {
   return rows
     .filter(isRecord)
@@ -274,25 +240,24 @@ export async function generateMetadata({
 
   const business = businessResult.data;
   const businessName = text(business.name) || "Business";
-
-  const uploadedLogo =
-    text(business.logo_url) ||
-    findUploadedBusinessLogo(business.website_settings) ||
-    text(business.image_url);
+  const uploadedLogo = findUploadedLogo(
+    business.website_settings,
+  );
+  const fallbackIcon = absoluteUrl(
+    uploadedLogo || business.image_url,
+    "/icon-512.png",
+  );
 
   const websitePath = `/business/${businessId}/website`;
   const pageUrl = `${SITE_URL}${websitePath}`;
-  const manifestUrl = `${websitePath}/manifest.webmanifest?v=7`;
+  const manifestUrl = `${websitePath}/manifest.webmanifest?v=6`;
 
-  /*
-   * favicon URL에 버전을 올려 브라우저가 예전 KTownTriangle favicon을
-   * 계속 캐시해서 쓰지 않도록 합니다.
-   */
-  const icon32 = `${websitePath}/icon/32?v=7`;
-  const icon192 = `${websitePath}/icon/192?v=7`;
-  const icon512 = `${websitePath}/icon/512?v=7`;
+  // 브라우저 탭용 favicon
+  const icon32 = `${websitePath}/icon/32?v=1`;
 
-  const fallbackIcon = absoluteUrl(uploadedLogo, "/icon-512.png");
+  // PWA / 홈 화면 설치용 아이콘
+  const icon192 = `${websitePath}/icon/192?v=1`;
+  const icon512 = `${websitePath}/icon/512?v=1`;
 
   return {
     metadataBase: new URL(SITE_URL),
@@ -328,6 +293,8 @@ export async function generateMetadata({
           url: fallbackIcon,
         },
       ],
+
+      // Chrome/Edge 탭에서 shortcut icon도 32px favicon을 우선 사용
       shortcut: [
         {
           url: icon32,
@@ -335,6 +302,7 @@ export async function generateMetadata({
           type: "image/png",
         },
       ],
+
       apple: [
         {
           url: icon192,
