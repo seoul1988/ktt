@@ -1,7 +1,15 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
 import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
@@ -14565,7 +14573,12 @@ export function PublicWebsiteRenderer({
   const [mobileHeaderSpacerHeight, setMobileHeaderSpacerHeight] =
     useState(0);
 
-  useEffect(() => {
+  /*
+   * 공개 사이트의 첫 화면이 그려지기 전에 휴대폰 여부를 판정합니다.
+   * 일반 useEffect를 사용하면 첫 프레임은 desktop 헤더로 보인 뒤 mobile로
+   * 바뀌면서 헤더와 Hero 사이가 잠깐 벌어지는 레이아웃 이동이 발생합니다.
+   */
+  useLayoutEffect(() => {
     const updateDevice = () => {
       /*
        * 휴대폰 가로모드에서는 innerWidth가 640px을 넘는 경우가 많습니다.
@@ -14743,7 +14756,11 @@ export function PublicWebsiteRenderer({
   // Restaurant Menu 배경색은 가운데 메뉴 패널에만 적용됩니다.
   const publicPageBackgroundColor = outerBackgroundColor;
 
-  useEffect(() => {
+  /*
+   * fixed 모바일 헤더의 실제 높이를 브라우저 페인트 전에 spacer에 반영합니다.
+   * 이후 로고나 폰트 높이가 달라지는 경우에는 ResizeObserver가 계속 보정합니다.
+   */
+  useLayoutEffect(() => {
     if (device !== "mobile" || isMenuPage) {
       setMobileHeaderSpacerHeight(0);
       return;
