@@ -4480,6 +4480,7 @@ function CateringRequestFormDisplay({
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [guestCountError, setGuestCountError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -4703,6 +4704,32 @@ function CateringRequestFormDisplay({
 
         if (submitting) return;
 
+        const submittedFormData = new FormData(event.currentTarget);
+        const submittedGuestCount = Number(
+          submittedFormData.get("guest_count") || 0,
+        );
+
+        if (
+          isFieldVisible("guest_count") &&
+          minPeople > 0 &&
+          submittedGuestCount < minPeople
+        ) {
+          const message = `Minimum ${minPeople} guests are required.`;
+          setGuestCountError(message);
+          setSubmitSuccess(false);
+          setSubmitMessage(message);
+
+          const guestInput = event.currentTarget.elements.namedItem(
+            "guest_count",
+          ) as HTMLInputElement | null;
+          guestInput?.setCustomValidity(message);
+          guestInput?.focus();
+          guestInput?.reportValidity();
+          return;
+        }
+
+        setGuestCountError("");
+
         setSubmitting(true);
         setSubmitSuccess(false);
         setSubmitMessage(
@@ -4836,7 +4863,7 @@ function CateringRequestFormDisplay({
           {minAmount > 0 ? (
             <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
               Minimum{" "}
-              <strong className="font-black text-gray-950">
+              <strong className="font-black text-blue-600">
                 ${minAmount.toFixed(2)}
               </strong>
             </span>
@@ -4844,7 +4871,7 @@ function CateringRequestFormDisplay({
           {minPeople > 0 ? (
             <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
               Minimum{" "}
-              <strong className="font-black text-gray-950">
+              <strong className="font-black text-blue-600">
                 {minPeople}
               </strong>{" "}
               guests
@@ -4852,7 +4879,7 @@ function CateringRequestFormDisplay({
           ) : null}
           {advanceHours > 0 ? (
             <span className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600">
-              <strong className="font-black text-gray-950">
+              <strong className="font-black text-blue-600">
                 {advanceHours} hr
               </strong>{" "}
               advance notice
@@ -4916,11 +4943,36 @@ function CateringRequestFormDisplay({
             <input
               required
               type="number"
+              inputMode="numeric"
               min={minPeople > 0 ? minPeople : 1}
               defaultValue={minPeople > 0 ? minPeople : undefined}
               name="guest_count"
-              className="mt-2 h-12 w-full rounded-xl border border-gray-300 px-3 font-semibold outline-none focus:border-gray-950"
+              aria-invalid={guestCountError ? true : undefined}
+              aria-describedby={guestCountError ? "guest-count-error" : undefined}
+              onChange={(event) => {
+                const value = Number(event.currentTarget.value || 0);
+                const isTooLow = minPeople > 0 && value < minPeople;
+                const message = isTooLow
+                  ? `Minimum ${minPeople} guests are required.`
+                  : "";
+
+                event.currentTarget.setCustomValidity(message);
+                setGuestCountError(message);
+              }}
+              className={`mt-2 h-12 w-full rounded-xl border px-3 font-semibold outline-none ${
+                guestCountError
+                  ? "border-red-500 focus:border-red-600"
+                  : "border-gray-300 focus:border-gray-950"
+              }`}
             />
+            {guestCountError ? (
+              <span
+                id="guest-count-error"
+                className="mt-1.5 block text-xs font-bold text-red-600"
+              >
+                {guestCountError}
+              </span>
+            ) : null}
           </label>
         ) : null}
 
