@@ -16912,19 +16912,17 @@ function ReadOnlyGrid({
     : deviceGrid.cells;
 
   /*
-   * 이미지 한 장을 "가로폭 맞춤(width)"으로 표시하는 레이어는
-   * 저장된 고정 height_px를 강제로 쓰면 이미지 실제 비율보다 레이어가
-   * 더 높아져 아래에 검은/빈 띠가 생깁니다.
-   * 이 경우 이미지의 자연 비율이 레이어 높이를 결정하게 합니다.
+   * 공개 화면에서 이미지 한 장만 있는 레이어는 브라우저 확대율과
+   * 화면 비율이 달라져도 좌우가 잘리지 않아야 합니다. 명시적인 fill
+   * 모드만 제외하고 가로폭 맞춤(width)으로 렌더링하고, 이미지의 자연
+   * 비율이 레이어 높이를 결정하게 합니다.
    */
   const autoWidthImageGrid =
     area !== "header" &&
     renderedCells.length === 1 &&
     renderedCells[0]?.type === "image" &&
     Boolean(renderedCells[0]?.image_url) &&
-    (normalizeImageFit(renderedCells[0]?.image_fit) === "width" ||
-      (renderedCells[0]?.image_fill_layer === true &&
-        normalizeImageFit(renderedCells[0]?.image_fit) !== "fill"));
+    normalizeImageFit(renderedCells[0]?.image_fit) !== "fill";
 
   /*
    * 휴대폰 폭에서 두 칸 이상을 그대로 옆으로 압축하면 이미지가 잘리고
@@ -17067,7 +17065,16 @@ function ReadOnlyGrid({
     >
       {renderedCells.map((cell) => {
         const stackedCell =
-          fillLayerImageCell && cell.id === fillLayerImageCell.id
+          autoWidthImageGrid && cell.type === "image"
+            ? {
+                ...cell,
+                image_fit: "width" as const,
+                image_size_percent: 100,
+                width_percent: 100,
+                image_position_x: 0,
+                image_position_y: 0,
+              }
+            : fillLayerImageCell && cell.id === fillLayerImageCell.id
             ? {
                 ...cell,
                 /*
