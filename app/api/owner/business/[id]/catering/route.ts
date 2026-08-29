@@ -357,6 +357,7 @@ export async function GET(
           advance_notice_hours: 24,
           pickup_enabled: true,
           delivery_enabled: false,
+          delivery_fee: 0,
           quote_enabled: true,
           notification_email: null,
           notification_phone: null,
@@ -585,6 +586,14 @@ export async function PATCH(
           typeof input.delivery_enabled === "boolean"
             ? input.delivery_enabled
             : Boolean(current.delivery_enabled),
+        delivery_fee: Math.max(
+          0,
+          Number(
+            input.delivery_fee ??
+              current.delivery_fee ??
+              0,
+          ),
+        ),
         quote_enabled:
           typeof input.quote_enabled === "boolean"
             ? input.quote_enabled
@@ -639,6 +648,10 @@ export async function PATCH(
           notification_email: data.notification_email ?? null,
           notification_phone: data.notification_phone ?? null,
           sender_email: data.sender_email ?? null,
+          delivery_fee: Math.max(
+            0,
+            Number(data.delivery_fee || 0),
+          ),
           show_event_time: data.show_event_time !== false,
           show_occasion: data.show_occasion !== false,
           show_interested_category: data.show_interested_category !== false,
