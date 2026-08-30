@@ -1168,7 +1168,7 @@ export default function CommunitySearchDirectory({
     setSubmittedSearchText(trimmedSearch);
     setSelectedCategory("all");
     setShowCategories(false);
-    setShowLiveMatches(true);
+    setShowLiveMatches(false);
     updateSearchUrl(trimmedSearch);
   }
 
@@ -1212,7 +1212,7 @@ export default function CommunitySearchDirectory({
                   if (!searchText.trim()) {
                     setShowCategories(true);
                     setShowLiveMatches(false);
-                  } else {
+                  } else if (!submittedSearchText) {
                     setShowLiveMatches(true);
                   }
                 }}
@@ -1220,13 +1220,16 @@ export default function CommunitySearchDirectory({
                   if (!searchText.trim()) {
                     setShowCategories(true);
                     setShowLiveMatches(false);
-                  } else {
+                  } else if (!submittedSearchText) {
                     setShowLiveMatches(true);
                   }
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
+                    event.stopPropagation();
+                    setShowLiveMatches(false);
+                    setShowCategories(false);
                     submitSearch();
                     event.currentTarget.blur();
                   }
@@ -1283,7 +1286,7 @@ export default function CommunitySearchDirectory({
               </button>
             </div>
 
-            {showLiveMatches && searchText.trim() && (
+            {showLiveMatches && searchText.trim() && !submittedSearchText && (
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[10000] max-h-[60dvh] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl">
                 {liveMatches.length > 0 ? (
                   <div className="space-y-1">
