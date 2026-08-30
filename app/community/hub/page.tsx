@@ -385,7 +385,12 @@ export default function CommunityHubPage() {
   }, []);
 
   const handleBack = () => {
-    router.push("/community/hub");
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.replace("/community");
   };
 
   return (
@@ -398,7 +403,7 @@ export default function CommunityHubPage() {
        * 스크롤하면 헤더와 카드가 함께 위로 사라지게 합니다.
        */}
      <section className="mx-auto w-full max-w-2xl px-4 pt-4">
-        <header className="border-b border-gray-200 bg-white/95 backdrop-blur">
+        <header className="relative z-50 border-b border-gray-200 bg-white/95 backdrop-blur">
           <div className="flex h-14 w-full items-center justify-between px-1">
             <button
             type="button"
@@ -430,7 +435,7 @@ export default function CommunityHubPage() {
             </p>
             </div>
 
-            <div className="flex h-9 w-9 items-center justify-center">
+            <div className="relative z-[60] flex h-9 w-9 items-center justify-center">
               <ProfileButton />
             </div>
           </div>
