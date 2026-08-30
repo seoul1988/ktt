@@ -223,8 +223,8 @@ function getOpenStatus(hours?: string | null) {
 }
 
 /**
- * 서버(Node.js)와 브라우저에서 동일한 정렬 결과를 만들기 위한 비교 함수입니다.
- * localeCompare()는 실행 환경의 ICU/로케일 차이로 순서가 달라질 수 있습니다.
+ * �쒕쾭(Node.js)�� 釉뚮씪�곗��먯꽌 �숈씪�� �뺣젹 寃곌낵瑜� 留뚮뱾湲� �꾪븳 鍮꾧탳 �⑥닔�낅땲��.
+ * localeCompare()�� �ㅽ뻾 �섍꼍�� ICU/濡쒖��� 李⑥씠濡� �쒖꽌媛� �щ씪吏� �� �덉뒿�덈떎.
  */
 function compareBusinessNames(a: Business, b: Business) {
   const aName = normalize(a.name);
@@ -294,33 +294,33 @@ function categoryNamesMatch(firstValue: string, secondValue: string) {
   }
 
   /*
-   * 기본적으로 정확히 같은 카테고리 이름을 우선합니다.
+   * 湲곕낯�곸쑝濡� �뺥솗�� 媛숈� 移댄뀒怨좊━ �대쫫�� �곗꽑�⑸땲��.
    */
   if (first === second) {
     return true;
   }
 
   /*
-   * Sushi, BBQ, Noodle처럼 실제 비즈니스 데이터에서
-   * "Sushi Restaurant", "Japanese Sushi", "Korean BBQ" 등으로
-   * 저장되는 대표 카테고리는 키워드가 양쪽에 모두 포함되면
-   * 같은 카테고리로 인정합니다.
+   * Sushi, BBQ, Noodle泥섎읆 �ㅼ젣 鍮꾩쫰�덉뒪 �곗씠�곗뿉��
+   * "Sushi Restaurant", "Japanese Sushi", "Korean BBQ" �깆쑝濡�
+   * ���λ릺�� ���� 移댄뀒怨좊━�� �ㅼ썙�쒓� �묒そ�� 紐⑤몢 �ы븿�섎㈃
+   * 媛숈� 移댄뀒怨좊━濡� �몄젙�⑸땲��.
    *
-   * Beauty와 Beauty Supply처럼 서로 다른 카테고리가
-   * 무조건 합쳐지는 문제는 방지합니다.
+   * Beauty�� Beauty Supply泥섎읆 �쒕줈 �ㅻⅨ 移댄뀒怨좊━媛�
+   * 臾댁“嫄� �⑹퀜吏��� 臾몄젣�� 諛⑹��⑸땲��.
    */
   const keywordGroups = [
-    ["sushi", "스시", "초밥"],
-    ["bbq", "barbecue", "바베큐", "바비큐"],
-    ["noodle", "noodles", "국수", "라면", "면요리"],
-    ["restaurant", "restaurants", "food", "dining", "식당", "레스토랑", "한식"],
-    ["cafe", "café", "coffee", "카페", "커피"],
-    ["bakery", "dessert", "베이커리", "디저트"],
-    ["medical", "health", "clinic", "의료", "병원"],
-    ["dental", "dentist", "치과"],
-    ["auto", "car", "automotive", "자동차"],
-    ["real estate", "property", "부동산"],
-    ["education", "school", "academy", "교육", "학원"],
+    ["sushi", "�ㅼ떆", "珥덈갈"],
+    ["bbq", "barbecue", "諛붾쿋��", "諛붾퉬��"],
+    ["noodle", "noodles", "援�닔", "�쇰㈃", "硫댁슂由�"],
+    ["restaurant", "restaurants", "food", "dining", "�앸떦", "�덉뒪�좊옉", "�쒖떇"],
+    ["cafe", "caf챕", "coffee", "移댄럹", "而ㅽ뵾"],
+    ["bakery", "dessert", "踰좎씠而ㅻ━", "�붿���"],
+    ["medical", "health", "clinic", "�섎즺", "蹂묒썝"],
+    ["dental", "dentist", "移섍낵"],
+    ["auto", "car", "automotive", "�먮룞李�"],
+    ["real estate", "property", "遺��숈궛"],
+    ["education", "school", "academy", "援먯쑁", "�숈썝"],
   ];
 
   return keywordGroups.some((group) => {
@@ -342,26 +342,26 @@ function getBusinessSortRank(business: Business) {
   if (
     categoryText.includes("bbq") ||
     categoryText.includes("barbecue") ||
-    categoryText.includes("바베큐") ||
-    categoryText.includes("바비큐") ||
-    categoryText.includes("고기")
+    categoryText.includes("諛붾쿋��") ||
+    categoryText.includes("諛붾퉬��") ||
+    categoryText.includes("怨좉린")
   ) {
     return 2;
   }
 
   if (
     categoryText.includes("sushi") ||
-    categoryText.includes("스시") ||
-    categoryText.includes("초밥")
+    categoryText.includes("�ㅼ떆") ||
+    categoryText.includes("珥덈갈")
   ) {
     return 3;
   }
 
   if (
     categoryText.includes("noodle") ||
-    categoryText.includes("국수") ||
-    categoryText.includes("라면") ||
-    categoryText.includes("면요리")
+    categoryText.includes("援�닔") ||
+    categoryText.includes("�쇰㈃") ||
+    categoryText.includes("硫댁슂由�")
   ) {
     return 4;
   }
@@ -371,23 +371,23 @@ function getBusinessSortRank(business: Business) {
     categoryText.includes("restaurants") ||
     categoryText.includes("food") ||
     categoryText.includes("dining") ||
-    categoryText.includes("식당") ||
-    categoryText.includes("레스토랑") ||
-    categoryText.includes("한식")
+    categoryText.includes("�앸떦") ||
+    categoryText.includes("�덉뒪�좊옉") ||
+    categoryText.includes("�쒖떇")
   ) {
     return 1;
   }
 
   if (
     categoryText.includes("cafe") ||
-    categoryText.includes("café") ||
+    categoryText.includes("caf챕") ||
     categoryText.includes("coffee") ||
     categoryText.includes("dessert") ||
     categoryText.includes("bakery") ||
-    categoryText.includes("카페") ||
-    categoryText.includes("커피") ||
-    categoryText.includes("디저트") ||
-    categoryText.includes("베이커리")
+    categoryText.includes("移댄럹") ||
+    categoryText.includes("而ㅽ뵾") ||
+    categoryText.includes("�붿���") ||
+    categoryText.includes("踰좎씠而ㅻ━")
   ) {
     return 5;
   }
@@ -398,10 +398,10 @@ function getBusinessSortRank(business: Business) {
     categoryText.includes("salon") ||
     categoryText.includes("spa") ||
     categoryText.includes("nail") ||
-    categoryText.includes("뷰티") ||
-    categoryText.includes("미용") ||
-    categoryText.includes("헤어") ||
-    categoryText.includes("네일")
+    categoryText.includes("酉고떚") ||
+    categoryText.includes("誘몄슜") ||
+    categoryText.includes("�ㅼ뼱") ||
+    categoryText.includes("�ㅼ씪")
   ) {
     return 6;
   }
@@ -415,9 +415,9 @@ function getCategorySortRank(categoryName: string) {
   if (
     category.includes("restaurant") ||
     category.includes("food") ||
-    category.includes("식당") ||
-    category.includes("레스토랑") ||
-    category.includes("한식")
+    category.includes("�앸떦") ||
+    category.includes("�덉뒪�좊옉") ||
+    category.includes("�쒖떇")
   ) {
     return 1;
   }
@@ -425,16 +425,16 @@ function getCategorySortRank(categoryName: string) {
   if (
     category.includes("bbq") ||
     category.includes("barbecue") ||
-    category.includes("바베큐") ||
-    category.includes("바비큐")
+    category.includes("諛붾쿋��") ||
+    category.includes("諛붾퉬��")
   ) {
     return 2;
   }
 
   if (
     category.includes("sushi") ||
-    category.includes("스시") ||
-    category.includes("초밥")
+    category.includes("�ㅼ떆") ||
+    category.includes("珥덈갈")
   ) {
     return 3;
   }
@@ -444,16 +444,16 @@ function getCategorySortRank(categoryName: string) {
     category.includes("fried chicken") ||
     category.includes("korean chicken") ||
     category.includes("wing") ||
-    category.includes("치킨") ||
-    category.includes("닭")
+    category.includes("移섑궓") ||
+    category.includes("��")
   ) {
     return 2;
   }
 
   if (
     category.includes("noodle") ||
-    category.includes("국수") ||
-    category.includes("라면")
+    category.includes("援�닔") ||
+    category.includes("�쇰㈃")
   ) {
     return 4;
   }
@@ -463,8 +463,8 @@ function getCategorySortRank(categoryName: string) {
     category.includes("bread") ||
     category.includes("cake") ||
     category.includes("pastry") ||
-    category.includes("베이커리") ||
-    category.includes("빵")
+    category.includes("踰좎씠而ㅻ━") ||
+    category.includes("鍮�")
   ) {
     return 3;
   }
@@ -472,8 +472,8 @@ function getCategorySortRank(categoryName: string) {
   if (
     category.includes("cafe") ||
     category.includes("coffee") ||
-    category.includes("카페") ||
-    category.includes("베이커리")
+    category.includes("移댄럹") ||
+    category.includes("踰좎씠而ㅻ━")
   ) {
     return 5;
   }
@@ -482,8 +482,8 @@ function getCategorySortRank(categoryName: string) {
     category.includes("beauty") ||
     category.includes("hair") ||
     category.includes("salon") ||
-    category.includes("뷰티") ||
-    category.includes("미용")
+    category.includes("酉고떚") ||
+    category.includes("誘몄슜")
   ) {
     return 6;
   }
@@ -492,8 +492,8 @@ function getCategorySortRank(categoryName: string) {
     category.includes("medical") ||
     category.includes("health") ||
     category.includes("clinic") ||
-    category.includes("의료") ||
-    category.includes("병원")
+    category.includes("�섎즺") ||
+    category.includes("蹂묒썝")
   ) {
     return 7;
   }
@@ -501,7 +501,7 @@ function getCategorySortRank(categoryName: string) {
   if (
     category.includes("dental") ||
     category.includes("dentist") ||
-    category.includes("치과")
+    category.includes("移섍낵")
   ) {
     return 8;
   }
@@ -510,7 +510,7 @@ function getCategorySortRank(categoryName: string) {
     category.includes("auto") ||
     category.includes("car") ||
     category.includes("automotive") ||
-    category.includes("자동차")
+    category.includes("�먮룞李�")
   ) {
     return 9;
   }
@@ -518,7 +518,7 @@ function getCategorySortRank(categoryName: string) {
   if (
     category.includes("real estate") ||
     category.includes("property") ||
-    category.includes("부동산")
+    category.includes("遺��숈궛")
   ) {
     return 10;
   }
@@ -527,8 +527,8 @@ function getCategorySortRank(categoryName: string) {
     category.includes("education") ||
     category.includes("school") ||
     category.includes("academy") ||
-    category.includes("교육") ||
-    category.includes("학원")
+    category.includes("援먯쑁") ||
+    category.includes("�숈썝")
   ) {
     return 11;
   }
@@ -555,22 +555,22 @@ const DISPLAY_CATEGORY_GROUPS = [
       "restaurants",
       "food",
       "dining",
-      "식당",
-      "레스토랑",
-      "한식",
+      "�앸떦",
+      "�덉뒪�좊옉",
+      "�쒖떇",
       "sushi",
-      "스시",
-      "초밥",
+      "�ㅼ떆",
+      "珥덈갈",
       "bbq",
       "barbecue",
-      "바베큐",
-      "바비큐",
-      "고기",
+      "諛붾쿋��",
+      "諛붾퉬��",
+      "怨좉린",
       "noodle",
       "noodles",
-      "국수",
-      "라면",
-      "면요리",
+      "援�닔",
+      "�쇰㈃",
+      "硫댁슂由�",
       "hibachi",
       "ramen",
       "pho",
@@ -584,16 +584,16 @@ const DISPLAY_CATEGORY_GROUPS = [
   {
     id: "__bakery_group__",
     name: "Bakery",
-    keywords: ["bakery", "베이커리", "dessert", "디저트", "cake", "케이크"],
+    keywords: ["bakery", "踰좎씠而ㅻ━", "dessert", "�붿���", "cake", "耳��댄겕"],
   },
   {
     id: "__cafe_group__",
     name: "Cafe",
-    keywords: ["cafe", "café", "coffee", "카페", "커피", "tea", "티"],
+    keywords: ["cafe", "caf챕", "coffee", "移댄럹", "而ㅽ뵾", "tea", "��"],
   },
   {
     id: "__beauty_group__",
-    name: "헤어/미용",
+    name: "�ㅼ뼱/誘몄슜",
     keywords: [
       "beauty",
       "hair",
@@ -601,16 +601,16 @@ const DISPLAY_CATEGORY_GROUPS = [
       "spa",
       "nail",
       "barber",
-      "뷰티",
-      "미용",
-      "헤어",
-      "네일",
-      "이발",
+      "酉고떚",
+      "誘몄슜",
+      "�ㅼ뼱",
+      "�ㅼ씪",
+      "�대컻",
     ],
   },
   {
     id: "__health_group__",
-    name: "병원/건강",
+    name: "蹂묒썝/嫄닿컯",
     keywords: [
       "medical",
       "health",
@@ -620,54 +620,54 @@ const DISPLAY_CATEGORY_GROUPS = [
       "dental",
       "dentist",
       "pharmacy",
-      "의료",
-      "병원",
-      "건강",
-      "의사",
-      "치과",
-      "약국",
+      "�섎즺",
+      "蹂묒썝",
+      "嫄닿컯",
+      "�섏궗",
+      "移섍낵",
+      "�쎄뎅",
     ],
   },
   {
     id: "__realestate_group__",
-    name: "부동산",
+    name: "遺��숈궛",
     keywords: [
       "real estate",
       "realtor",
       "property",
       "mortgage",
-      "부동산",
-      "리얼터",
-      "융자",
+      "遺��숈궛",
+      "由ъ뼹��",
+      "�듭옄",
     ],
   },
   {
     id: "__church_group__",
-    name: "교회/성당",
+    name: "援먰쉶/�깅떦",
     keywords: [
       "church",
       "catholic",
       "chapel",
       "ministry",
-      "교회",
-      "성당",
-      "천주교",
-      "예배",
+      "援먰쉶",
+      "�깅떦",
+      "泥쒖＜援�",
+      "�덈같",
     ],
   },
   {
     id: "__market_group__",
-    name: "마켓",
+    name: "留덉폆",
     keywords: [
       "market",
       "grocery",
       "supermarket",
       "mart",
       "food market",
-      "마켓",
-      "마트",
-      "식품",
-      "식료품",
+      "留덉폆",
+      "留덊듃",
+      "�앺뭹",
+      "�앸즺��",
     ],
   },
 ] as const;
@@ -688,14 +688,14 @@ function textMatchesGroup(value: unknown, groupId: string) {
 function businessBelongsToGroup(business: Business, groupId: string) {
   const businessCategories = getBusinessCategoryNames(business).map(normalize);
 
-  // 비즈니스에 저장된 category, category_name, categories 또는 tag 중
-  // 하나라도 정확히 Coming Soon이면 Coming Soon 그룹에 표시합니다.
+  // 鍮꾩쫰�덉뒪�� ���λ맂 category, category_name, categories �먮뒗 tag 以�
+  // �섎굹�쇰룄 �뺥솗�� Coming Soon�대㈃ Coming Soon 洹몃９�� �쒖떆�⑸땲��.
   if (groupId === "__comingsoon_group__") {
     return businessCategories.includes("coming soon");
   }
 
-  // 비즈니스에 저장된 category, category_name, categories 또는 tag 중
-  // 하나라도 정확히 Chicken이면 Chicken 그룹에 표시합니다.
+  // 鍮꾩쫰�덉뒪�� ���λ맂 category, category_name, categories �먮뒗 tag 以�
+  // �섎굹�쇰룄 �뺥솗�� Chicken�대㈃ Chicken 洹몃９�� �쒖떆�⑸땲��.
   if (groupId === "__chicken_group__") {
     return businessCategories.includes("chicken");
   }
@@ -758,7 +758,7 @@ function CategoryIcon({
   // Chicken
   if (
     category.includes("chicken") ||
-    category.includes("치킨")
+    category.includes("移섑궓")
   ) {
     return (
       <svg {...commonProps}>
@@ -773,7 +773,7 @@ function CategoryIcon({
   // Bakery
   if (
     category.includes("bakery") ||
-    category.includes("베이커리")
+    category.includes("踰좎씠而ㅻ━")
   ) {
     return (
       <svg {...commonProps}>
@@ -789,8 +789,8 @@ function CategoryIcon({
   // Cafe
   if (
     category.includes("cafe") ||
-    category.includes("café") ||
-    category.includes("카페")
+    category.includes("caf챕") ||
+    category.includes("移댄럹")
   ) {
     return (
       <svg {...commonProps}>
@@ -804,8 +804,8 @@ function CategoryIcon({
 
   // Hair / Beauty
   if (
-    category.includes("헤어") ||
-    category.includes("미용") ||
+    category.includes("�ㅼ뼱") ||
+    category.includes("誘몄슜") ||
     category.includes("beauty") ||
     category.includes("hair")
   ) {
@@ -822,8 +822,8 @@ function CategoryIcon({
 
   // Hospital / Health
   if (
-    category.includes("병원") ||
-    category.includes("건강") ||
+    category.includes("蹂묒썝") ||
+    category.includes("嫄닿컯") ||
     category.includes("medical") ||
     category.includes("health")
   ) {
@@ -838,7 +838,7 @@ function CategoryIcon({
 
   // Real Estate
   if (
-    category.includes("부동산") ||
+    category.includes("遺��숈궛") ||
     category.includes("real estate")
   ) {
     return (
@@ -852,8 +852,8 @@ function CategoryIcon({
 
   // Church / Catholic Church
   if (
-    category.includes("교회") ||
-    category.includes("성당") ||
+    category.includes("援먰쉶") ||
+    category.includes("�깅떦") ||
     category.includes("church") ||
     category.includes("catholic")
   ) {
@@ -870,8 +870,8 @@ function CategoryIcon({
 
   // Market
   if (
-    category.includes("마켓") ||
-    category.includes("마트") ||
+    category.includes("留덉폆") ||
+    category.includes("留덊듃") ||
     category.includes("market")
   ) {
     return (
@@ -1019,8 +1019,8 @@ export default function CommunitySearchDirectory({
   }, []);
 
   /*
-   * 카테고리 버튼은 요청한 8개 그룹만 고정 순서로 표시합니다.
-   * 실제 categories 테이블의 세부 카테고리는 각 그룹에 합쳐집니다.
+   * 移댄뀒怨좊━ 踰꾪듉�� �붿껌�� 8媛� 洹몃９留� 怨좎젙 �쒖꽌濡� �쒖떆�⑸땲��.
+   * �ㅼ젣 categories �뚯씠釉붿쓽 �몃� 移댄뀒怨좊━�� 媛� 洹몃９�� �⑹퀜吏묐땲��.
    */
   const sortedCategories = useMemo<DisplayCategory[]>(() => {
     return DISPLAY_CATEGORY_GROUPS.map((group) => ({
@@ -1098,7 +1098,10 @@ export default function CommunitySearchDirectory({
         const belongsToVisibleCategory =
           businessBelongsToAnyDisplayGroup(business);
 
-        if (!belongsToVisibleCategory) {
+        // 寃��됱뼱瑜� Enter濡� �쒖텧�� 寃쎌슦�먮뒗 �먮룞�꾩꽦怨� �숈씪�섍쾶
+        // �꾩껜 businesses�먯꽌 �ы븿 寃��됲빀�덈떎. 移댄뀒怨좊━ 紐⑸줉�� 蹂� �뚮쭔
+        // �붾㈃�� �ъ슜�섎뒗 8媛� 洹몃９ �뚯냽 �щ�瑜� �쒗븳�⑸땲��.
+        if (!keyword && !belongsToVisibleCategory) {
           return false;
         }
 
@@ -1253,7 +1256,7 @@ export default function CommunitySearchDirectory({
                   aria-label="Clear search"
                   className="absolute right-12 top-1/2 z-10 -translate-y-1/2 text-xl text-gray-400"
                 >
-                  ×
+                  횞
                 </button>
               )}
 
@@ -1328,12 +1331,12 @@ export default function CommunitySearchDirectory({
 
                             <p className="mt-0.5 truncate text-xs font-medium text-gray-500">
                               {categoryLabel}
-                              {business.city ? ` · ${business.city}` : ""}
+                              {business.city ? ` 쨌 ${business.city}` : ""}
                             </p>
                           </div>
 
                           <span className="shrink-0 text-lg text-gray-300">
-                            ›
+                            ��
                           </span>
                         </Link>
                       );
@@ -1341,7 +1344,7 @@ export default function CommunitySearchDirectory({
                   </div>
                 ) : (
                   <div className="px-4 py-8 text-center">
-                    <div className="text-2xl">🔍</div>
+                    <div className="text-2xl">�뵇</div>
                     <p className="mt-2 text-sm font-black text-[#172033]">
                       No matching businesses
                     </p>
@@ -1456,7 +1459,7 @@ export default function CommunitySearchDirectory({
               {!submittedSearchText && selectedCategory === "all" && (
                 <p className="shrink-0 whitespace-nowrap pb-[2px] text-[10px] font-semibold tracking-wide text-[#8A8176] sm:text-[11px]">
                   Since 07/14/26
-                  <span className="mx-1 text-[#B8AEA2]">•</span>
+                  <span className="mx-1 text-[#B8AEA2]">��</span>
                   <span className="font-black text-[#172033]">
                     {visitStatsError
                       ? "Visits unavailable"
@@ -1483,7 +1486,7 @@ export default function CommunitySearchDirectory({
 
                         await navigator.share({
                           title: `${resultTitle} - KTown Triangle`,
-                          text: `${resultTitle} 검색 결과를 확인해 보세요.`,
+                          text: `${resultTitle} 寃��� 寃곌낵瑜� �뺤씤�� 蹂댁꽭��.`,
                           url: shareUrl,
                         });
                       } catch (error) {
@@ -1502,9 +1505,9 @@ export default function CommunitySearchDirectory({
 
                     try {
                       await navigator.clipboard.writeText(shareUrl);
-                      alert("검색 주소가 복사되었습니다.");
+                      alert("寃��� 二쇱냼媛� 蹂듭궗�섏뿀�듬땲��.");
                     } catch {
-                      window.prompt("아래 주소를 복사하세요.", shareUrl);
+                      window.prompt("�꾨옒 二쇱냼瑜� 蹂듭궗�섏꽭��.", shareUrl);
                     }
                   }}
                className="flex h-6 items-center justify-center gap-1 rounded-full bg-[#1B365D] px-2 text-[9px] font-semibold text-white shadow-sm transition active:scale-95"
@@ -1526,7 +1529,7 @@ export default function CommunitySearchDirectory({
                     <path d="m8.6 13.5 6.8 4" />
                   </svg>
 
-                  공유
+                  怨듭쑀
                 </button>
 
                 <button
@@ -1536,9 +1539,9 @@ export default function CommunitySearchDirectory({
 
                     try {
                       await navigator.clipboard.writeText(shareUrl);
-                      alert("검색 주소가 복사되었습니다.");
+                      alert("寃��� 二쇱냼媛� 蹂듭궗�섏뿀�듬땲��.");
                     } catch {
-                      window.prompt("아래 주소를 복사하세요.", shareUrl);
+                      window.prompt("�꾨옒 二쇱냼瑜� 蹂듭궗�섏꽭��.", shareUrl);
                     }
                   }}
                   className="flex h-6 items-center justify-center gap-1 rounded-full bg-[#1B365D] px-2 text-[9px] font-semibold text-white shadow-sm transition active:scale-95"
@@ -1557,14 +1560,14 @@ export default function CommunitySearchDirectory({
                     <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
                   </svg>
 
-                  주소 복사
+                  二쇱냼 蹂듭궗
                 </button>
               </div>
             )}
 
             {!submittedSearchText && selectedCategory === "all" && (
               <p className="mt-1 text-xs text-gray-500">
-                Coming Soon · Restaurant · Chicken · Bakery · Cafe
+                Coming Soon 쨌 Restaurant 쨌 Chicken 쨌 Bakery 쨌 Cafe
               </p>
             )}
           </div>
@@ -1573,7 +1576,7 @@ export default function CommunitySearchDirectory({
             href="https://www.ktowntriangle.com/community/directory?back=/community/search"
             className="shrink-0 rounded-full bg-[#F7A928] px-4 py-2 text-sm font-black text-[#172033] shadow-md transition hover:brightness-95 active:scale-95"
           >
-            전체보기
+            �꾩껜蹂닿린
           </Link>
         </div>
 
@@ -1626,12 +1629,12 @@ export default function CommunitySearchDirectory({
 
                   <p className="mt-1 line-clamp-1 text-sm font-medium text-gray-500">
                     {categoryLabel}
-                    {business.city ? ` · ${business.city}` : ""}
+                    {business.city ? ` 쨌 ${business.city}` : ""}
                   </p>
 
                   <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
                     <span className="text-yellow-500">
-                      ★
+                      ��
                     </span>
 
                     <span className="font-black">
@@ -1672,7 +1675,7 @@ export default function CommunitySearchDirectory({
                   )}
                 </div>
 
-                <span className="shrink-0 text-xl text-gray-300">›</span>
+                <span className="shrink-0 text-xl text-gray-300">��</span>
               </Link>
             );
           })}
@@ -1680,7 +1683,7 @@ export default function CommunitySearchDirectory({
 
         {filteredBusinesses.length === 0 && (
           <div className="rounded-3xl border border-gray-100 bg-white px-5 py-12 text-center shadow-sm">
-            <div className="text-4xl">🔍</div>
+            <div className="text-4xl">�뵇</div>
 
             <h2 className="mt-3 font-black">No businesses found</h2>
 
