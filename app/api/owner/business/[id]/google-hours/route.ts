@@ -1,7 +1,4 @@
-import {
-  NextRequest,
-  NextResponse,
-} from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { requireBusinessApiAccess } from "@/lib/requireBusinessApiAccess";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
@@ -34,19 +31,10 @@ type DayHours = {
   breakEnd: string;
 };
 
-type GoogleFindPlaceResponse = {
-  status?: string;
-  error_message?: string;
-  candidates?: Array<{
-    place_id?: string;
-    name?: string;
-    formatted_address?: string;
-  }>;
-};
-
 type GooglePeriodTime = {
   day?: number;
-  time?: string;
+  hour?: number;
+  minute?: number;
 };
 
 type GooglePeriod = {
@@ -54,18 +42,23 @@ type GooglePeriod = {
   close?: GooglePeriodTime;
 };
 
-type GooglePlaceDetailsResponse = {
-  status?: string;
-  error_message?: string;
-  result?: {
-    name?: string;
-    formatted_address?: string;
-    opening_hours?: {
-      open_now?: boolean;
-      periods?: GooglePeriod[];
-      weekday_text?: string[];
-    };
+type GoogleDisplayName = {
+  text?: string;
+};
+
+type GooglePlace = {
+  id?: string;
+  displayName?: GoogleDisplayName;
+  formattedAddress?: string;
+  regularOpeningHours?: {
+    openNow?: boolean;
+    periods?: GooglePeriod[];
+    weekdayDescriptions?: string[];
   };
+};
+
+type GoogleTextSearchResponse = {
+  places?: GooglePlace[];
 };
 
 const DAY_KEYS: DayKey[] = [
@@ -78,10 +71,7 @@ const DAY_KEYS: DayKey[] = [
   "Sunday",
 ];
 
-const GOOGLE_DAY_MAP: Record<
-  number,
-  DayKey
-> = {
+const GOOGLE_DAY_MAP: Record<number, DayKey> = {
   0: "Sunday",
   1: "Monday",
   2: "Tuesday",
@@ -91,15 +81,11 @@ const GOOGLE_DAY_MAP: Record<
   6: "Saturday",
 };
 
-function json(
-  data: Record<string, unknown>,
-  status = 200,
-) {
+function json(data: Record<string, unknown>, status = 200) {
   return NextResponse.json(data, {
     status,
     headers: {
-      "Cache-Control":
-        "no-store, no-cache, must-revalidate, max-age=0",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       Pragma: "no-cache",
       Expires: "0",
     },
@@ -118,18 +104,15 @@ function createClosedDay(): DayHours {
 }
 
 function normalizeGoogleTime(
-  value: string | undefined,
+  value: GooglePeriodTime | undefined,
   fallback: string,
 ) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}$/.test(value)
-  ) {
+  if (typeof value?.hour !== "number" || !Number.isInteger(value.hour)) {
     return fallback;
   }
 
-  const hour = Number(value.slice(0, 2));
-  const minute = Number(value.slice(2, 4));
+  const hour = value.hour;
+  const minute = value.minute ?? 0;
 
   if (
     !Number.isInteger(hour) ||
@@ -142,66 +125,43 @@ function normalizeGoogleTime(
     return fallback;
   }
 
-  return `${String(hour).padStart(
-    2,
-    "0",
-  )}:${String(minute).padStart(2, "0")}`;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function minutesFromGoogleTime(
-  value: string | undefined,
-) {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}$/.test(value)
-  ) {
+function minutesFromGoogleTime(value: GooglePeriodTime | undefined) {
+  if (typeof value?.hour !== "number" || !Number.isInteger(value.hour)) {
     return 0;
   }
 
-  return (
-    Number(value.slice(0, 2)) * 60 +
-    Number(value.slice(2, 4))
-  );
+  return value.hour * 60 + (value.minute ?? 0);
 }
 
 function convertGooglePeriods(
   periods: GooglePeriod[],
 ): Record<DayKey, DayHours> {
   const hours = Object.fromEntries(
-    DAY_KEYS.map((day) => [
-      day,
-      createClosedDay(),
-    ]),
+    DAY_KEYS.map((day) => [day, createClosedDay()]),
   ) as Record<DayKey, DayHours>;
 
-  const grouped = new Map<
-    DayKey,
-    GooglePeriod[]
-  >();
+  const grouped = new Map<DayKey, GooglePeriod[]>();
 
   for (const period of periods) {
     const openDay = period.open?.day;
 
-    if (
-      typeof openDay !== "number" ||
-      !GOOGLE_DAY_MAP[openDay]
-    ) {
+    if (typeof openDay !== "number" || !GOOGLE_DAY_MAP[openDay]) {
       continue;
     }
 
-    const dayKey =
-      GOOGLE_DAY_MAP[openDay];
+    const dayKey = GOOGLE_DAY_MAP[openDay];
 
-    const existing =
-      grouped.get(dayKey) ?? [];
+    const existing = grouped.get(dayKey) ?? [];
 
     existing.push(period);
     grouped.set(dayKey, existing);
   }
 
   for (const dayKey of DAY_KEYS) {
-    const dayPeriods =
-      grouped.get(dayKey) ?? [];
+    const dayPeriods = grouped.get(dayKey) ?? [];
 
     if (dayPeriods.length === 0) {
       continue;
@@ -209,30 +169,24 @@ function convertGooglePeriods(
 
     dayPeriods.sort(
       (left, right) =>
-        minutesFromGoogleTime(
-          left.open?.time,
-        ) -
-        minutesFromGoogleTime(
-          right.open?.time,
-        ),
+        minutesFromGoogleTime(left.open) - minutesFromGoogleTime(right.open),
     );
 
-    const firstPeriod =
-      dayPeriods[0];
+    const firstPeriod = dayPeriods[0];
 
-    const lastPeriod =
-      dayPeriods[
-        dayPeriods.length - 1
-      ];
+    const lastPeriod = dayPeriods[dayPeriods.length - 1];
 
     /*
      * Google이 24시간 영업을 close 없이 반환하는 경우
      */
     if (
       dayPeriods.length === 1 &&
-      firstPeriod.open?.time ===
-        "0000" &&
-      !firstPeriod.close?.time
+      firstPeriod.open?.hour === 0 &&
+      (firstPeriod.open?.minute ?? 0) === 0 &&
+      (!firstPeriod.close ||
+        (firstPeriod.close.day === firstPeriod.open.day &&
+          firstPeriod.close.hour === 0 &&
+          (firstPeriod.close.minute ?? 0) === 0))
     ) {
       hours[dayKey] = {
         closed: false,
@@ -251,38 +205,22 @@ function convertGooglePeriods(
      * 첫 구간 종료부터 두 번째 구간 시작까지를
      * Break Time으로 처리합니다.
      */
-    const secondPeriod =
-      dayPeriods[1];
+    const secondPeriod = dayPeriods[1];
 
     const breakEnabled =
       dayPeriods.length >= 2 &&
-      Boolean(
-        firstPeriod.close?.time &&
-          secondPeriod?.open?.time,
-      );
+      Boolean(firstPeriod.close && secondPeriod?.open);
 
     hours[dayKey] = {
       closed: false,
-      open: normalizeGoogleTime(
-        firstPeriod.open?.time,
-        "11:00",
-      ),
-      close: normalizeGoogleTime(
-        lastPeriod.close?.time,
-        "21:00",
-      ),
+      open: normalizeGoogleTime(firstPeriod.open, "11:00"),
+      close: normalizeGoogleTime(lastPeriod.close, "21:00"),
       breakEnabled,
       breakStart: breakEnabled
-        ? normalizeGoogleTime(
-            firstPeriod.close?.time,
-            "14:00",
-          )
+        ? normalizeGoogleTime(firstPeriod.close, "14:00")
         : "14:00",
       breakEnd: breakEnabled
-        ? normalizeGoogleTime(
-            secondPeriod.open?.time,
-            "17:00",
-          )
+        ? normalizeGoogleTime(secondPeriod.open, "17:00")
         : "17:00",
     };
   }
@@ -292,122 +230,94 @@ function convertGooglePeriods(
 
 async function fetchGoogleJson<T>(
   url: string,
+  init: RequestInit = {},
   timeoutMs = 20000,
 ): Promise<T> {
   const response = await fetch(url, {
-    method: "GET",
+    ...init,
     cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+
     throw new Error(
-      `Google API HTTP 오류: ${response.status}`,
+      `Google API HTTP 오류: ${response.status} · ${errorText.slice(0, 300)}`,
     );
   }
 
   return (await response.json()) as T;
 }
 
-export async function GET(
-  _request: NextRequest,
-  context: RouteContext,
-) {
+export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const businessId = Number(id);
 
-  if (
-    !Number.isInteger(businessId) ||
-    businessId <= 0
-  ) {
+  if (!Number.isInteger(businessId) || businessId <= 0) {
     return json(
       {
         ok: false,
-        error:
-          "잘못된 business ID입니다.",
+        error: "잘못된 business ID입니다.",
       },
       400,
     );
   }
 
-  const access =
-    await requireBusinessApiAccess(
-      businessId,
-    );
+  const access = await requireBusinessApiAccess(businessId);
 
   if (!access.ok) {
     return access.response;
   }
 
-  const googleKey =
-    process.env
-      .GOOGLE_PLACES_API_KEY
-      ?.trim();
+  const googleKey = process.env.GOOGLE_PLACES_API_KEY?.trim();
 
   if (!googleKey) {
     return json(
       {
         ok: false,
-        error:
-          "GOOGLE_PLACES_API_KEY 환경변수가 없습니다.",
+        error: "GOOGLE_PLACES_API_KEY 환경변수가 없습니다.",
       },
       500,
     );
   }
 
   try {
-    const {
-      data: business,
-      error: businessError,
-    } = await supabaseAdmin
+    const { data: business, error: businessError } = await supabaseAdmin
       .from("businesses")
-      .select(
-        "id, name, address, city, google_place_id",
-      )
+      .select("id, name, address, city, google_place_id")
       .eq("id", businessId)
       .maybeSingle();
 
     if (businessError) {
-      throw new Error(
-        `비즈니스 조회 실패: ${businessError.message}`,
-      );
+      throw new Error(`비즈니스 조회 실패: ${businessError.message}`);
     }
 
     if (!business) {
       return json(
         {
           ok: false,
-          error:
-            "비즈니스를 찾을 수 없습니다.",
+          error: "비즈니스를 찾을 수 없습니다.",
         },
         404,
       );
     }
 
     let placeId =
-      typeof business.google_place_id ===
-      "string"
+      typeof business.google_place_id === "string"
         ? business.google_place_id.trim()
         : "";
 
-    let googlePlaceName =
-      business.name?.trim() || "";
+    let googlePlaceName = business.name?.trim() || "";
 
     /*
      * 저장된 Google Place ID가 없으면
-     * 이름과 주소로 기존 Find Place API를 호출합니다.
+     * 이름과 주소로 Places API (New)의 Text Search를 호출합니다.
      */
     if (!placeId) {
-      const searchText = [
-        business.name,
-        business.address,
-        business.city,
-        "NC",
-      ]
+      const searchText = [business.name, business.address, business.city, "NC"]
         .filter(Boolean)
-        .map((value) =>
-          String(value).trim(),
-        )
+        .map((value) => String(value).trim())
         .filter(Boolean)
         .join(" ");
 
@@ -415,63 +325,41 @@ export async function GET(
         return json(
           {
             ok: false,
-            error:
-              "Google에서 검색할 비즈니스 이름이나 주소가 없습니다.",
+            error: "Google에서 검색할 비즈니스 이름이나 주소가 없습니다.",
           },
           400,
         );
       }
 
-      const findUrl =
-        "https://maps.googleapis.com/maps/api/place/findplacefromtext/json" +
-        `?input=${encodeURIComponent(
-          searchText,
-        )}` +
-        "&inputtype=textquery" +
-        "&fields=place_id,name,formatted_address" +
-        `&key=${encodeURIComponent(
-          googleKey,
-        )}`;
-
-      const findData =
-        await fetchGoogleJson<GoogleFindPlaceResponse>(
-          findUrl,
-        );
-
-      if (
-        findData.status !== "OK"
-      ) {
-        return json(
-          {
-            ok: false,
-            error:
-              findData.error_message ||
-              `Google 장소 검색 실패: ${
-                findData.status ||
-                "UNKNOWN_ERROR"
-              }`,
+      const findData = await fetchGoogleJson<GoogleTextSearchResponse>(
+        "https://places.googleapis.com/v1/places:searchText",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": googleKey,
+            "X-Goog-FieldMask":
+              "places.id,places.displayName,places.formattedAddress",
           },
-          502,
-        );
-      }
+          body: JSON.stringify({
+            textQuery: searchText,
+            languageCode: "en",
+            regionCode: "US",
+          }),
+        },
+      );
 
-      const candidate =
-        findData.candidates?.[0];
+      const candidate = findData.places?.[0];
 
-      placeId =
-        candidate?.place_id?.trim() ||
-        "";
+      placeId = candidate?.id?.trim() || "";
 
-      googlePlaceName =
-        candidate?.name?.trim() ||
-        googlePlaceName;
+      googlePlaceName = candidate?.displayName?.text?.trim() || googlePlaceName;
 
       if (!placeId) {
         return json(
           {
             ok: false,
-            error:
-              "Google에서 Place ID를 찾지 못했습니다.",
+            error: "Google에서 Place ID를 찾지 못했습니다.",
           },
           404,
         );
@@ -480,100 +368,58 @@ export async function GET(
       /*
        * 다음 요청부터 다시 검색하지 않도록 Place ID 저장
        */
-      const { error: savePlaceIdError } =
-        await supabaseAdmin
-          .from("businesses")
-          .update({
-            google_place_id: placeId,
-          })
-          .eq("id", businessId);
+      const { error: savePlaceIdError } = await supabaseAdmin
+        .from("businesses")
+        .update({
+          google_place_id: placeId,
+        })
+        .eq("id", businessId);
 
       if (savePlaceIdError) {
-        console.error(
-          "Google Place ID 저장 실패:",
-          savePlaceIdError,
-        );
+        console.error("Google Place ID 저장 실패:", savePlaceIdError);
       }
     }
 
     const detailUrl =
-      "https://maps.googleapis.com/maps/api/place/details/json" +
-      `?place_id=${encodeURIComponent(
-        placeId,
-      )}` +
-      "&fields=name,formatted_address,opening_hours" +
-      `&key=${encodeURIComponent(
-        googleKey,
-      )}`;
+      "https://places.googleapis.com/v1/places/" + encodeURIComponent(placeId);
 
-    const detailData =
-      await fetchGoogleJson<GooglePlaceDetailsResponse>(
-        detailUrl,
-      );
+    const detailData = await fetchGoogleJson<GooglePlace>(detailUrl, {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": googleKey,
+        "X-Goog-FieldMask":
+          "id,displayName,formattedAddress,regularOpeningHours",
+      },
+    });
 
-    if (
-      detailData.status !== "OK"
-    ) {
-      return json(
-        {
-          ok: false,
-          error:
-            detailData.error_message ||
-            `Google 장소 상세 조회 실패: ${
-              detailData.status ||
-              "UNKNOWN_ERROR"
-            }`,
-          place_id: placeId,
-        },
-        502,
-      );
-    }
+    const openingHours = detailData.regularOpeningHours;
 
-    const openingHours =
-      detailData.result
-        ?.opening_hours;
-
-    const periods =
-      openingHours?.periods ?? [];
+    const periods = openingHours?.periods ?? [];
 
     if (periods.length === 0) {
       return json(
         {
           ok: false,
-          error:
-            "Google에 등록된 영업시간이 없습니다.",
+          error: "Google에 등록된 영업시간이 없습니다.",
           place_id: placeId,
-          place_name:
-            detailData.result?.name ||
-            googlePlaceName,
+          place_name: detailData.displayName?.text || googlePlaceName,
         },
         404,
       );
     }
 
-    const hours =
-      convertGooglePeriods(periods);
+    const hours = convertGooglePeriods(periods);
 
     return json({
       ok: true,
       place_id: placeId,
-      place_name:
-        detailData.result?.name ||
-        googlePlaceName,
-      formatted_address:
-        detailData.result
-          ?.formatted_address ||
-        null,
+      place_name: detailData.displayName?.text || googlePlaceName,
+      formatted_address: detailData.formattedAddress || null,
       hours,
-      weekday_descriptions:
-        openingHours
-          ?.weekday_text ?? [],
+      weekday_descriptions: openingHours?.weekdayDescriptions ?? [],
     });
   } catch (error) {
-    console.error(
-      "Google 영업시간 조회 실패:",
-      error,
-    );
+    console.error("Google 영업시간 조회 실패:", error);
 
     return json(
       {
