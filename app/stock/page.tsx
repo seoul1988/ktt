@@ -78,6 +78,7 @@ export default function StockMonitorPage() {
   const [openSymbol, setOpenSymbol] = useState("");
   const [status, setStatus] = useState("로그인 확인 중...");
   const [busy, setBusy] = useState(false);
+  const [userId, setUserId] = useState("");
 
   const getAccessToken = useCallback(async () => {
     const {
@@ -125,24 +126,37 @@ export default function StockMonitorPage() {
   }, []);
 
   const openSession = useCallback(async () => {
-    const token = await getAccessToken();
-    if (!token) {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session?.user) {
       setStatus("로그인 후 사용할 수 있습니다.");
       return;
     }
 
-    const response = await fetch("/api/stocks/session", {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
+    const uid = session.user.id;
+    setUserId(uid);
 
-    const data = await response.json();
-    if (!response.ok) {
-      setStatus(data?.error || "Watchlist를 불러오지 못했습니다.");
+    // 1) Watchlist는 Supabase에서 직접 읽습니다.
+    //    분석 서버 환경변수가 없어도 등록/새로고침 저장이 유지됩니다.
+    const { data: watchlistRow, error: watchlistError } = await supabase
+      .from("stock_watchlists")
+      .select("symbols")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (watchlistError) {
+      console.error("stock_watchlists load error:", watchlistError);
+      setStatus(`Watchlist 불러오기 실패: ${watchlistError.message}`);
       return;
     }
 
-    const loaded = Array.isArray(data.symbols) ? data.symbols.slice(0, MAX_SYMBOLS) : [];
+    const loaded = Array.isArray(watchlistRow?.symbols)
+      ? watchlistRow.symbols.slice(0, MAX_SYMBOLS)
+      : [];
+
     setSymbols(loaded);
     setTickerInputs([
       loaded[0] || "",
@@ -152,12 +166,29 @@ export default function StockMonitorPage() {
       loaded[4] || "",
     ]);
 
-    if (data.wsUrl) {
-      connectWebSocket(data.wsUrl);
-    } else {
+    // 2) 실시간 분석 연결은 별도 API로 시도합니다.
+    //    실패해도 Watchlist 저장에는 영향을 주지 않습니다.
+    try {
+      const response = await fetch("/api/stocks/session", {
+        headers: { authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && data?.wsUrl) {
+        connectWebSocket(data.wsUrl);
+      } else {
+        setStatus(
+          loaded.length
+            ? "종목 저장됨 · 분석 서버 연결 대기"
+            : "종목을 등록하세요."
+        );
+      }
+    } catch {
       setStatus(
-        data.serverWarning ||
-        "종목은 저장되어 있습니다. 분석 서버 연결을 기다리는 중입니다."
+        loaded.length
+          ? "종목 저장됨 · 분석 서버 연결 대기"
+          : "종목을 등록하세요."
       );
     }
 
@@ -165,7 +196,7 @@ export default function StockMonitorPage() {
     renewRef.current = setTimeout(() => {
       void openSession();
     }, 4 * 60 * 1000);
-  }, [connectWebSocket, getAccessToken]);
+  }, [connectWebSocket]);
 
   useEffect(() => {
     let mounted = true;
@@ -178,6 +209,7 @@ export default function StockMonitorPage() {
       if (!mounted) return;
 
       if (session?.user) {
+        setUserId(session.user.id);
         void openSession();
       } else {
         setStatus("로그인 정보를 기다리는 중...");
@@ -192,8 +224,10 @@ export default function StockMonitorPage() {
       if (!mounted) return;
 
       if (session?.user) {
+        setUserId(session.user.id);
         void openSession();
       } else {
+        setUserId("");
         setStatus("로그인 후 사용할 수 있습니다.");
         setSymbols([]);
         setSnapshots({});
@@ -214,48 +248,73 @@ export default function StockMonitorPage() {
   }, [openSession]);
 
   async function saveWatchlist(nextSymbols: string[]) {
-    const token = await getAccessToken();
-    if (!token) {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session?.user) {
       setStatus("로그인이 필요합니다.");
       return;
     }
 
+    const uid = session.user.id;
+    setUserId(uid);
     setBusy(true);
     setStatus("종목 저장 중...");
 
     try {
-      const response = await fetch("/api/stocks/session", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ symbols: nextSymbols }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || "저장 실패");
-
-      const savedSymbols = Array.isArray(data.symbols)
-        ? data.symbols.slice(0, MAX_SYMBOLS)
-        : [];
-
-      setSymbols(savedSymbols);
-      setTickerInputs([
-        savedSymbols[0] || "",
-        savedSymbols[1] || "",
-        savedSymbols[2] || "",
-        savedSymbols[3] || "",
-        savedSymbols[4] || "",
-      ]);
-      if (data.wsUrl) {
-        connectWebSocket(data.wsUrl);
-        setStatus("등록 / 수정 완료 · 실시간 분석 연결 중...");
-      } else {
-        setStatus(
-          data.serverWarning ||
-          "종목 등록은 완료되었습니다. 분석 서버 연결을 기다리는 중입니다."
+      // 핵심: 먼저 Supabase에 직접 저장.
+      const { error: saveError } = await supabase
+        .from("stock_watchlists")
+        .upsert(
+          {
+            user_id: uid,
+            symbols: nextSymbols,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
         );
+
+      if (saveError) {
+        throw new Error(`Watchlist 저장 실패: ${saveError.message}`);
+      }
+
+      // 저장 성공 즉시 화면 반영.
+      setSymbols(nextSymbols);
+      setTickerInputs([
+        nextSymbols[0] || "",
+        nextSymbols[1] || "",
+        nextSymbols[2] || "",
+        nextSymbols[3] || "",
+        nextSymbols[4] || "",
+      ]);
+
+      setStatus("종목 저장 완료 · 분석 서버 연결 중...");
+
+      // 분석 서버 동기화는 best-effort.
+      // 이 부분이 실패해도 Supabase 저장은 이미 완료되어 있습니다.
+      try {
+        const response = await fetch("/api/stocks/session", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ symbols: nextSymbols }),
+          cache: "no-store",
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok && data?.wsUrl) {
+          connectWebSocket(data.wsUrl);
+          setStatus("종목 저장 완료 · 실시간 분석 서버 연결 중...");
+        } else {
+          setStatus("종목 저장 완료 · 분석 서버 연결 대기");
+        }
+      } catch {
+        setStatus("종목 저장 완료 · 분석 서버 연결 대기");
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "저장 실패");
@@ -361,7 +420,10 @@ export default function StockMonitorPage() {
               </span>
             )}
 
-            <span className="ml-auto text-xs text-slate-500">{status}</span>
+            <span className="ml-auto text-xs text-slate-500">
+              {status}
+              {userId ? ` · USER ${userId.slice(0, 8)}` : ""}
+            </span>
           </div>
         </section>
 
