@@ -727,6 +727,29 @@ export default function BusinessHoursEditor({
         );
       }
 
+      /*
+       * 웹사이트 빌더가 다른 탭에 열려 있을 때도 저장된 최신 시간을
+       * 즉시 받을 수 있도록 브라우저에 변경 사실을 알립니다.
+       * 서버 응답에 hours가 없으면 방금 저장한 현재 값을 사용합니다.
+       */
+      const savedHours = result.hours ?? hours;
+      const hoursUpdateDetail = {
+        businessId,
+        hours: savedHours,
+        updatedAt: Date.now(),
+      };
+
+      window.localStorage.setItem(
+        `business-hours-updated-${businessId}`,
+        JSON.stringify(hoursUpdateDetail),
+      );
+
+      window.dispatchEvent(
+        new CustomEvent("business-hours-updated", {
+          detail: hoursUpdateDetail,
+        }),
+      );
+
       setMessage(
         "Business Hours가 저장되었습니다.",
       );

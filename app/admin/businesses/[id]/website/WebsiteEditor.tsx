@@ -3665,15 +3665,31 @@ function getBusinessOpenStatus(
 }
 function BusinessHoursDisplay({
   cell,
+  businessHours,
   compact = false,
   mobilePreview = false,
 }: {
   cell: GridCell;
+  businessHours?: unknown;
   compact?: boolean;
   mobilePreview?: boolean;
 }) {
   const [, setClockTick] = useState(0);
-  const hours = Array.isArray(cell.business_hours_data) ? cell.business_hours_data : [];
+  /*
+   * 셀을 만들 때 복사해 둔 business_hours_data는 과거 값일 수 있습니다.
+   * 관리자/오너 페이지에서 수정한 businesses.hours를 항상 우선 사용하고,
+   * 이전 데이터에 hours가 없는 경우에만 셀의 저장값을 fallback으로 씁니다.
+   */
+  const hasLiveBusinessHours =
+    businessHours !== undefined &&
+    businessHours !== null &&
+    (typeof businessHours !== "string" || businessHours.trim() !== "");
+
+  const hours = hasLiveBusinessHours
+    ? parseBusinessTableHours(businessHours)
+    : Array.isArray(cell.business_hours_data)
+      ? cell.business_hours_data
+      : [];
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockTick((value) => value + 1), 60_000);
@@ -7026,6 +7042,61 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
       return Number.isInteger(saved) && saved > 0 ? saved : null;
     });
 
+  /*
+   * 관리자/오너 영업시간 편집기가 저장한 값을 같은 창 또는 다른 탭에서
+   * 즉시 받아 미리보기의 Business Hours 블록을 갱신합니다.
+   * 공개 페이지는 새 요청마다 서버 businesses.hours를 사용합니다.
+   */
+  useEffect(() => {
+    const applyHoursUpdate = (value: unknown) => {
+      if (!value || typeof value !== "object") return;
+
+      const detail = value as {
+        businessId?: string | number;
+        hours?: unknown;
+      };
+
+      if (String(detail.businessId ?? "") !== String(businessId)) return;
+      if (detail.hours === undefined) return;
+
+      setBusiness((current) =>
+        current
+          ? {
+              ...current,
+              hours: detail.hours,
+            }
+          : current,
+      );
+    };
+
+    const handleCustomUpdate = (event: Event) => {
+      applyHoursUpdate(
+        (event as CustomEvent<{ businessId?: string | number; hours?: unknown }>)
+          .detail,
+      );
+    };
+
+    const handleStorageUpdate = (event: StorageEvent) => {
+      if (event.key !== `business-hours-updated-${businessId}` || !event.newValue) {
+        return;
+      }
+
+      try {
+        applyHoursUpdate(JSON.parse(event.newValue));
+      } catch {
+        // 손상된 브라우저 저장값은 무시하고 서버 값을 유지합니다.
+      }
+    };
+
+    window.addEventListener("business-hours-updated", handleCustomUpdate);
+    window.addEventListener("storage", handleStorageUpdate);
+
+    return () => {
+      window.removeEventListener("business-hours-updated", handleCustomUpdate);
+      window.removeEventListener("storage", handleStorageUpdate);
+    };
+  }, [businessId]);
+
   useEffect(() => {
     const handleNestedImageEditorState = (event: Event) => {
       const customEvent = event as CustomEvent<{ open?: boolean }>;
@@ -7662,6 +7733,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
         } else if (localDraft) {
           setBusiness({
             ...localDraft.business,
+            // 로컬 웹사이트 초안이 관리자 페이지의 최신 영업시간을
+            // 덮어쓰지 않도록 서버 businesses.hours를 기준으로 유지합니다.
+            hours: normalizedBusiness.hours,
             website_settings: normalizeSettings(
               localDraft.business.website_settings,
               localDraft.business.name || "",
@@ -20499,6 +20573,7 @@ function CellPreview({
         >
           <BusinessHoursDisplay
             cell={cell}
+            businessHours={business.hours}
             mobilePreview={previewDevice === "mobile"}
           />
         </div>
