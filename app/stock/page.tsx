@@ -93,7 +93,12 @@ export default function StockMonitorPage() {
     return session?.access_token || "";
   }, []);
 
-  const connectWebSocket = useCallback((wsUrl: string) => {
+  const connectWebSocket = useCallback((wsUrl?: string | null) => {
+    if (!wsUrl) {
+      setStatus("종목은 저장되었습니다. 분석 서버 연결을 기다리는 중입니다.");
+      return;
+    }
+
     if (wsRef.current) {
       try { wsRef.current.close(); } catch {}
     }
@@ -146,7 +151,15 @@ export default function StockMonitorPage() {
       loaded[3] || "",
       loaded[4] || "",
     ]);
-    connectWebSocket(data.wsUrl);
+
+    if (data.wsUrl) {
+      connectWebSocket(data.wsUrl);
+    } else {
+      setStatus(
+        data.serverWarning ||
+        "종목은 저장되어 있습니다. 분석 서버 연결을 기다리는 중입니다."
+      );
+    }
 
     if (renewRef.current) clearTimeout(renewRef.current);
     renewRef.current = setTimeout(() => {
@@ -235,8 +248,15 @@ export default function StockMonitorPage() {
         savedSymbols[3] || "",
         savedSymbols[4] || "",
       ]);
-      connectWebSocket(data.wsUrl);
-      setStatus("등록 / 수정 완료 · 실시간 분석 연결 중...");
+      if (data.wsUrl) {
+        connectWebSocket(data.wsUrl);
+        setStatus("등록 / 수정 완료 · 실시간 분석 연결 중...");
+      } else {
+        setStatus(
+          data.serverWarning ||
+          "종목 등록은 완료되었습니다. 분석 서버 연결을 기다리는 중입니다."
+        );
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "저장 실패");
     } finally {
@@ -364,17 +384,23 @@ export default function StockMonitorPage() {
                   <span>
                     <span className="block text-lg font-extrabold text-slate-900">{symbol}</span>
                     <span className={`block text-xs font-extrabold ${signalClass}`}>
-                      {item?.action || "WAITING"} · Score {item?.score ?? "-"} · Risk {fmt(item?.down_risk, 0)}%
+                      {item?.action || "DATA WAIT"} · Score {item?.score ?? "-"} · Risk {fmt(item?.down_risk, 0)}%
                     </span>
                   </span>
                   <span className="text-right text-lg font-extrabold text-slate-900">
-                    {item?.price ? `$${fmt(item.price)}` : "-"}
+                    {item?.price ? `$${fmt(item.price)}` : "데이터 대기"}
                   </span>
                 </button>
 
                 {isOpen && (
                   <div className="border-t border-slate-200 bg-slate-50 p-4">
-                    {item?.error ? (
+                    {!item ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+                        이 종목은 등록되었습니다. 제2 PC 분석 서버에서 데이터가 들어오면
+                        Price, Action, Score, Down Risk, VWAP, EMA, Support/Resistance,
+                        Buy60/Sell60, ML/DL, Options/0DTE가 이곳에 자동으로 표시됩니다.
+                      </div>
+                    ) : item?.error ? (
                       <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{item.error}</div>
                     ) : (
                       <>
