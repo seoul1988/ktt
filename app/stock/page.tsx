@@ -73,7 +73,7 @@ export default function StockMonitorPage() {
   const renewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [symbols, setSymbols] = useState<string[]>([]);
-  const [draft, setDraft] = useState("");
+  const [tickerInputs, setTickerInputs] = useState<string[]>(["", "", "", "", ""]);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [openSymbol, setOpenSymbol] = useState("");
   const [status, setStatus] = useState("로그인 확인 중...");
@@ -139,6 +139,13 @@ export default function StockMonitorPage() {
 
     const loaded = Array.isArray(data.symbols) ? data.symbols.slice(0, MAX_SYMBOLS) : [];
     setSymbols(loaded);
+    setTickerInputs([
+      loaded[0] || "",
+      loaded[1] || "",
+      loaded[2] || "",
+      loaded[3] || "",
+      loaded[4] || "",
+    ]);
     connectWebSocket(data.wsUrl);
 
     if (renewRef.current) clearTimeout(renewRef.current);
@@ -216,9 +223,20 @@ export default function StockMonitorPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || "저장 실패");
 
-      setSymbols(data.symbols || []);
+      const savedSymbols = Array.isArray(data.symbols)
+        ? data.symbols.slice(0, MAX_SYMBOLS)
+        : [];
+
+      setSymbols(savedSymbols);
+      setTickerInputs([
+        savedSymbols[0] || "",
+        savedSymbols[1] || "",
+        savedSymbols[2] || "",
+        savedSymbols[3] || "",
+        savedSymbols[4] || "",
+      ]);
       connectWebSocket(data.wsUrl);
-      setStatus("저장 완료 · 실시간 분석 연결 중...");
+      setStatus("등록 / 수정 완료 · 실시간 분석 연결 중...");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "저장 실패");
     } finally {
@@ -226,24 +244,28 @@ export default function StockMonitorPage() {
     }
   }
 
-  async function addSymbol() {
-    const symbol = cleanSymbol(draft);
-    if (!symbol) return;
-    if (symbols.includes(symbol)) {
-      setDraft("");
-      return;
-    }
-    if (symbols.length >= MAX_SYMBOLS) {
-      setStatus("최대 5종목까지 등록할 수 있습니다.");
-      return;
+  async function saveTickerInputs() {
+    const nextSymbols: string[] = [];
+
+    for (const raw of tickerInputs) {
+      const symbol = cleanSymbol(raw);
+      if (symbol && !nextSymbols.includes(symbol)) {
+        nextSymbols.push(symbol);
+      }
     }
 
-    setDraft("");
-    await saveWatchlist([...symbols, symbol]);
+    await saveWatchlist(nextSymbols.slice(0, MAX_SYMBOLS));
   }
 
   async function removeSymbol(symbol: string) {
     const next = symbols.filter((item) => item !== symbol);
+    setTickerInputs([
+      next[0] || "",
+      next[1] || "",
+      next[2] || "",
+      next[3] || "",
+      next[4] || "",
+    ]);
     setSnapshots((prev) => {
       const copy = { ...prev };
       delete copy[symbol];
@@ -264,44 +286,63 @@ export default function StockMonitorPage() {
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex gap-2">
-            <input
-              value={draft}
-              onChange={(e) => setDraft(cleanSymbol(e.target.value))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addSymbol();
-              }}
-              placeholder="예: TSLA"
-              className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold uppercase outline-none focus:border-blue-500"
-              maxLength={12}
-              disabled={busy || symbols.length >= MAX_SYMBOLS}
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-1 text-sm font-extrabold text-slate-900">
+              1) TICKERS (max 5):
+            </div>
+
+            {tickerInputs.map((value, index) => (
+              <input
+                key={index}
+                value={value}
+                onChange={(e) => {
+                  const next = [...tickerInputs];
+                  next[index] = cleanSymbol(e.target.value);
+                  setTickerInputs(next);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveTickerInputs();
+                }}
+                placeholder={index === 0 ? "NVDA" : ""}
+                maxLength={12}
+                disabled={busy}
+                className="h-9 w-[86px] rounded-md border border-slate-300 bg-white px-2 text-sm font-bold uppercase text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            ))}
+
             <button
-              onClick={() => void addSymbol()}
-              disabled={busy || symbols.length >= MAX_SYMBOLS}
-              className="rounded-xl bg-blue-600 px-5 py-3 font-bold text-white disabled:opacity-40"
+              onClick={() => void saveTickerInputs()}
+              disabled={busy}
+              className="h-9 rounded-md bg-blue-600 px-5 text-sm font-extrabold text-white hover:bg-blue-700 disabled:opacity-40"
             >
-              추가
+              {busy ? "저장 중..." : symbols.length ? "등록 / 수정" : "등록"}
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {symbols.map((symbol) => (
-              <button
-                key={symbol}
-                onClick={() => void removeSymbol(symbol)}
-                className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700"
-                title="삭제"
-              >
-                {symbol} ×
-              </button>
-            ))}
-            {!symbols.length && (
-              <span className="text-sm text-slate-400">등록된 종목이 없습니다.</span>
-            )}
-          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">
+              현재 저장:
+            </span>
 
-          <div className="mt-3 text-xs text-slate-500">{status}</div>
+            {symbols.length ? (
+              symbols.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => void removeSymbol(symbol)}
+                  className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-red-50 hover:text-red-600"
+                  title="이 종목 삭제"
+                >
+                  {symbol} ×
+                </button>
+              ))
+            ) : (
+              <span className="text-xs text-slate-400">
+                등록된 종목이 없습니다.
+              </span>
+            )}
+
+            <span className="ml-auto text-xs text-slate-500">{status}</span>
+          </div>
         </section>
 
         <section className="mt-4 space-y-3">
