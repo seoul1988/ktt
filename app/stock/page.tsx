@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type Snapshot = {
   symbol: string;
@@ -41,11 +41,6 @@ type Snapshot = {
 
 const MAX_SYMBOLS = 5;
 
-function getBrowserSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, anon);
-}
 
 function cleanSymbol(value: string) {
   return value
@@ -74,7 +69,6 @@ function signalStyle(action?: string, risk?: number, fastDrop?: string) {
 }
 
 export default function StockMonitorPage() {
-  const supabase = useMemo(() => getBrowserSupabase(), []);
   const wsRef = useRef<WebSocket | null>(null);
   const renewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -88,9 +82,16 @@ export default function StockMonitorPage() {
   const getAccessToken = useCallback(async () => {
     const {
       data: { session },
+      error,
     } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error("Stock monitor session error:", error);
+      return "";
+    }
+
     return session?.access_token || "";
-  }, [supabase]);
+  }, []);
 
   const connectWebSocket = useCallback((wsUrl: string) => {
     if (wsRef.current) {
@@ -147,8 +148,44 @@ export default function StockMonitorPage() {
   }, [connectWebSocket, getAccessToken]);
 
   useEffect(() => {
-    void openSession();
+    let mounted = true;
+
+    async function initialize() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (session?.user) {
+        void openSession();
+      } else {
+        setStatus("로그인 정보를 기다리는 중...");
+      }
+    }
+
+    void initialize();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+
+      if (session?.user) {
+        void openSession();
+      } else {
+        setStatus("로그인 후 사용할 수 있습니다.");
+        setSymbols([]);
+        setSnapshots({});
+        if (wsRef.current) {
+          try { wsRef.current.close(); } catch {}
+        }
+      }
+    });
+
     return () => {
+      mounted = false;
+      subscription.unsubscribe();
       if (renewRef.current) clearTimeout(renewRef.current);
       if (wsRef.current) {
         try { wsRef.current.close(); } catch {}
