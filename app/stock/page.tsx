@@ -450,7 +450,7 @@ export default function StockMonitorPage() {
                     </span>
                   </span>
                   <span className="text-right text-lg font-extrabold text-slate-900">
-                    {item?.price ? `$${fmt(item.price)}` : "데이터 대기"}
+                    {item?.price ? `$${fmt(item.price)}` : "기본 정보 보기"}
                   </span>
                 </button>
 
