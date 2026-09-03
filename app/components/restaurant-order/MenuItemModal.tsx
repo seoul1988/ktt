@@ -352,7 +352,7 @@ export default function MenuItemModal({
           {item.image_url || item.thumbnail_url ? (
             <button
               type="button"
-              className="relative h-[230px] w-full shrink-0 cursor-zoom-in overflow-hidden rounded-t-3xl bg-white sm:h-[260px]"
+              className="relative flex h-[190px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
               onClick={() => setOriginalImageOpen(true)}
               aria-label={`${item.name} 이미지 View Larger`}
             >
@@ -364,7 +364,7 @@ export default function MenuItemModal({
                 }
                 alt={item.name}
                 draggable={false}
-                className="block h-full w-full select-none object-cover object-center transition-transform duration-200 hover:scale-[1.02]"
+                className="block h-full w-full select-none object-contain transition-transform duration-200 hover:scale-[1.02]"
               />
 
               <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1.5 text-[10px] font-black text-white shadow-lg">

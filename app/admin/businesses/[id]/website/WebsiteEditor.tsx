@@ -5238,6 +5238,7 @@ function LinkPageContent({
             color: menuTextColor,
           }}
         >
+          {/* MENU/PICKUP/DELIVERY는 Menu Management의 businesses DB 컬럼을 RestaurantMenu가 직접 읽습니다. */}
           <RestaurantMenu
             businessId={section.business_id}
             compact={previewDevice === "mobile"}
@@ -5247,15 +5248,6 @@ function LinkPageContent({
             scrollTopButtonColor={scrollTopButtonColor}
             scrollTopIconColor={scrollTopIconColor}
             scrollTopPosition={scrollTopPosition}
-            menuEnabled={
-              section.content?.restaurant_menu_menu_enabled !== false
-            }
-            pickupEnabled={
-              section.content?.restaurant_menu_pickup_enabled === true
-            }
-            deliveryEnabled={
-              section.content?.restaurant_menu_delivery_enabled === true
-            }
           />
         </div>
       </div>
@@ -20516,12 +20508,10 @@ function CellPreview({
     if (cell.display_mode === "restaurant-menu") {
       return (
         <div className="relative h-auto min-h-0 w-full overflow-visible rounded-[10px] bg-white">
+          {/* 주문 모드는 section/cell 저장값이 아니라 businesses DB 설정을 단일 원본으로 사용합니다. */}
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
-            menuEnabled={cell.restaurant_menu_menu_enabled !== false}
-            pickupEnabled={cell.restaurant_menu_pickup_enabled === true}
-            deliveryEnabled={cell.restaurant_menu_delivery_enabled === true}
           />
         </div>
       );

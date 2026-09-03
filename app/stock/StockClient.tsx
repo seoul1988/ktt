@@ -77,6 +77,10 @@ type MarketInfoPayload = {
   events?: MarketEvent[];
   earnings?: EarningsItem[];
   news?: NewsItem[];
+  updatedAt?: string;
+  source?: string;
+  warning?: string;
+  error?: string;
 };
 
 const MAX_SYMBOLS = 5;
@@ -88,11 +92,6 @@ function cleanSymbol(value: string) {
     .toUpperCase()
     .replace(/[^A-Z0-9.\-]/g, "")
     .slice(0, 12);
-}
-
-function fmt(value: unknown, digits = 2) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(digits) : "-";
 }
 
 function signalStyle(action?: string, risk?: number, fastDrop?: string) {
@@ -118,6 +117,7 @@ export default function StockMonitorPage() {
   const [openSymbol, setOpenSymbol] = useState("");
   const [status, setStatus] = useState("로그인 확인 중...");
   const [busy, setBusy] = useState(false);
+  const [isLive, setIsLive] = useState(false);
   const [userId, setUserId] = useState("");
   const [marketInfo, setMarketInfo] = useState<MarketInfoPayload>({
     events: [],
@@ -151,14 +151,33 @@ export default function StockMonitorPage() {
       try { wsRef.current.close(); } catch {}
     }
 
-    const ws = new WebSocket(wsUrl);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (error) {
+      console.error("Invalid WebSocket URL:", error);
+      setIsLive(false);
+      setStatus("분석 서버 주소가 올바르지 않습니다.");
+      return;
+    }
     wsRef.current = ws;
 
-    ws.onopen = () => setStatus("실시간 분석 서버 연결됨");
+    ws.onopen = () => {
+      setIsLive(true);
+      setStatus("실시간 분석 서버 연결됨 · 데이터 수신 중");
+    };
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        const list: Snapshot[] = Array.isArray(payload?.data) ? payload.data : [];
+        const list: Snapshot[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : payload?.symbol
+              ? [payload]
+              : payload?.snapshot?.symbol
+                ? [payload.snapshot]
+                : [];
         setSnapshots((prev) => {
           const next = { ...prev };
           for (const item of list) {
@@ -166,43 +185,101 @@ export default function StockMonitorPage() {
           }
           return next;
         });
-      } catch {}
+      } catch (error) {
+        console.error("Stock WebSocket message error:", error);
+      }
     };
-    ws.onerror = () => setStatus("분석 서버 연결 오류");
-    ws.onclose = () => setStatus("분석 서버 연결이 끊어졌습니다.");
+    ws.onerror = () => {
+      setIsLive(false);
+      setStatus("분석 서버 연결 오류 · 서버 실행 상태를 확인하세요.");
+    };
+    ws.onclose = () => {
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+        setIsLive(false);
+        setStatus("분석 서버 연결이 끊어졌습니다.");
+      }
+    };
   }, []);
 
 
   const loadMarketInfo = useCallback(async (watchSymbols: string[]) => {
-    if (!watchSymbols.length) {
-      setMarketInfo({ events: [], earnings: [], news: [] });
-      setMarketInfoStatus("종목 등록 필요");
-      return;
-    }
-
     try {
       setMarketInfoStatus("업데이트 중");
-      const query = encodeURIComponent(watchSymbols.join(","));
-      const response = await fetch(`/api/stocks/market-info?symbols=${query}`, {
+      const query = watchSymbols.length
+        ? `?symbols=${encodeURIComponent(watchSymbols.join(","))}`
+        : "";
+      const response = await fetch(`/api/stocks/market-info${query}`, {
         cache: "no-store",
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        setMarketInfoStatus("연결 대기");
+        setMarketInfo({ events: [], earnings: [], news: [] });
+        setMarketInfoStatus(data?.error || `이벤트 서버 HTTP ${response.status}`);
         return;
       }
 
-      const data = await response.json().catch(() => ({}));
+      const events: MarketEvent[] = Array.isArray(data?.events)
+        ? data.events.map((event: Record<string, unknown>, index: number) => {
+            const rawImportance = event.importance ?? event.risk;
+            const importanceText = String(rawImportance || "").toLowerCase();
+            const importance: MarketEvent["importance"] =
+              importanceText === "3" || importanceText.includes("high")
+                ? "high"
+                : importanceText === "2" || importanceText.includes("med")
+                  ? "medium"
+                  : "low";
+
+            return {
+              id: String(event.id || `event-${index}`),
+              time: String(event.time || "TBD"),
+              title: String(event.title || event.name || "-"),
+              importance,
+              symbol: event.symbol ? String(event.symbol) : undefined,
+            };
+          })
+        : [];
+
       setMarketInfo({
-        events: Array.isArray(data?.events) ? data.events : [],
+        events,
         earnings: Array.isArray(data?.earnings) ? data.earnings : [],
         news: Array.isArray(data?.news) ? data.news : [],
+        updatedAt: data?.updatedAt,
+        source: data?.source,
+        warning: data?.warning,
       });
-      setMarketInfoStatus(data?.updatedAt ? `업데이트 ${data.updatedAt}` : "업데이트 완료");
-    } catch {
-      setMarketInfoStatus("연결 대기");
+      const updated = data?.updatedAt
+        ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "방금";
+      setMarketInfoStatus(
+        data?.warning ? `일부 연결 경고 · ${updated}` : `업데이트 ${updated}`,
+      );
+    } catch (error) {
+      setMarketInfo({ events: [], earnings: [], news: [] });
+      setMarketInfoStatus(
+        error instanceof Error ? error.message : "이벤트 서버 연결 실패",
+      );
     }
   }, []);
+
+  useEffect(() => {
+    const refresh = () => void loadMarketInfo(symbols);
+    const timer = window.setInterval(refresh, 15 * 60 * 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [loadMarketInfo, symbols]);
 
   const openSession = useCallback(async () => {
     const {
@@ -247,36 +324,7 @@ export default function StockMonitorPage() {
 
     void loadMarketInfo(loaded);
 
-    // 2) 실시간 분석 연결은 별도 API로 시도합니다.
-    //    실패해도 Watchlist 저장에는 영향을 주지 않습니다.
-    try {
-      const response = await fetch("/api/stocks/session", {
-        headers: { authorization: `Bearer ${session.access_token}` },
-        cache: "no-store",
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (response.ok && data?.wsUrl) {
-        connectWebSocket(data.wsUrl);
-      } else {
-        setStatus(
-          loaded.length
-            ? "종목 저장됨 · 분석 서버 연결 대기"
-            : "종목을 등록하세요."
-        );
-      }
-    } catch {
-      setStatus(
-        loaded.length
-          ? "종목 저장됨 · 분석 서버 연결 대기"
-          : "종목을 등록하세요."
-      );
-    }
-
-    if (renewRef.current) clearTimeout(renewRef.current);
-    renewRef.current = setTimeout(() => {
-      void openSession();
-    }, 4 * 60 * 1000);
+    setStatus(loaded.length ? "종목 준비 완료 · START를 누르세요." : "종목을 등록하세요.");
   }, [connectWebSocket, loadMarketInfo]);
 
   useEffect(() => {
@@ -373,32 +421,9 @@ export default function StockMonitorPage() {
 
       void loadMarketInfo(nextSymbols);
 
-      setStatus("종목 저장 완료 · 분석 서버 연결 중...");
-
-      // 분석 서버 동기화는 best-effort.
-      // 이 부분이 실패해도 Supabase 저장은 이미 완료되어 있습니다.
-      try {
-        const response = await fetch("/api/stocks/session", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ symbols: nextSymbols }),
-          cache: "no-store",
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        if (response.ok && data?.wsUrl) {
-          connectWebSocket(data.wsUrl);
-          setStatus("종목 저장 완료 · 실시간 분석 서버 연결 중...");
-        } else {
-          setStatus("종목 저장 완료 · 분석 서버 연결 대기");
-        }
-      } catch {
-        setStatus("종목 저장 완료 · 분석 서버 연결 대기");
-      }
+      // /api/stocks/session은 GET 전용이므로 저장할 때 POST하지 않습니다.
+      // 실시간 연결은 사용자가 START를 누를 때 시작합니다.
+      setStatus("종목 저장 완료 · START를 누르세요.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "저장 실패");
     } finally {
@@ -442,12 +467,49 @@ export default function StockMonitorPage() {
       finalSymbols.length !== symbols.length ||
       finalSymbols.some((symbol, index) => symbol !== symbols[index]);
 
-    if (changed) {
-      await saveWatchlist(finalSymbols);
-    }
+    if (changed) await saveWatchlist(finalSymbols);
 
-    // START는 실시간 전용 페이지로 이동합니다.
-    window.location.assign("/stock/live");
+    // 다른 페이지로 이동하지 않고 이 화면에서 분석 서버 세션을 시작합니다.
+    setBusy(true);
+    setIsLive(false);
+    setStatus("분석 서버 연결 요청 중...");
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setStatus("로그인이 필요합니다.");
+        return;
+      }
+
+      const response = await fetch("/api/stocks/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ symbols: finalSymbols }),
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}: ${data?.error || data?.message || "분석 서버 응답 오류"}`,
+        );
+      }
+
+      if (!data?.wsUrl) {
+        throw new Error(data?.serverWarning || "분석 서버의 wsUrl이 없습니다.");
+      }
+
+      connectWebSocket(data.wsUrl);
+      void loadMarketInfo(finalSymbols);
+    } catch (error) {
+      console.error("START error:", error);
+      setStatus(error instanceof Error ? `START 실패: ${error.message}` : "START 실패");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function removeSymbol(symbol: string) {
@@ -467,14 +529,6 @@ export default function StockMonitorPage() {
     if (openSymbol === symbol) setOpenSymbol("");
     await saveWatchlist(next);
   }
-
-  const rows = Array.from({ length: MAX_SYMBOLS }, (_, i) => {
-    const symbol = symbols[i] || "";
-    return {
-      symbol,
-      item: symbol ? snapshots[symbol] : undefined,
-    };
-  });
 
   return (
     <main className="min-h-screen bg-slate-50 pb-16">
@@ -525,19 +579,26 @@ export default function StockMonitorPage() {
             </button>
 
             <button
+              type="button"
               onClick={() => void startLive()}
               disabled={busy}
-              className="h-8 rounded border border-emerald-500 bg-emerald-600 px-5 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-40"
+              className={`h-8 rounded border px-5 text-xs font-black text-white disabled:opacity-40 ${
+                isLive
+                  ? "border-orange-500 bg-orange-500 ring-2 ring-orange-200"
+                  : "border-emerald-500 bg-emerald-600 hover:bg-emerald-700"
+              }`}
             >
-              START
+              {busy ? "CONNECTING..." : isLive ? "RUNNING" : "START"}
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 if (wsRef.current) {
                   try { wsRef.current.close(); } catch {}
                   wsRef.current = null;
                 }
+                setIsLive(false);
                 setStatus("Stopped");
               }}
               className="h-8 rounded border border-red-300 bg-red-50 px-5 text-xs font-black text-red-700 hover:bg-red-100"
@@ -571,7 +632,6 @@ export default function StockMonitorPage() {
             ) : null}
           </div>
         </section>
-
 
         <section className="mt-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -714,133 +774,7 @@ export default function StockMonitorPage() {
           </div>
         </section>
 
-        <section className="mt-4 rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="mr-1 text-sm font-black text-slate-950">
-              2) POSITION / HISTORY:
-            </div>
-
-            <select
-              value={symbols[0] || ""}
-              onChange={() => {}}
-              className="h-8 min-w-[90px] rounded border border-slate-300 bg-white px-2 text-xs font-semibold"
-            >
-              {symbols.length ? (
-                symbols.map((symbol) => (
-                  <option key={symbol} value={symbol}>{symbol}</option>
-                ))
-              ) : (
-                <option value="">-</option>
-              )}
-            </select>
-
-            {[
-              "MARK BOUGHT",
-              "CLEAR POSITION",
-              "TODAY'S EVENTS",
-            ].map((label) => (
-              <button
-                key={label}
-                type="button"
-                className={label === "TODAY'S EVENTS"
-                  ? "h-8 rounded border-2 border-amber-600 bg-amber-400 px-3 text-[11px] font-black text-slate-950 shadow-sm hover:bg-amber-300"
-                  : "h-8 rounded border border-slate-300 bg-slate-50 px-3 text-[11px] font-bold text-slate-700"}
-                title="웹 버전 UI 자리 — 서버 기능 연결 시 활성화"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <p className="mt-2 text-[11px] leading-5 text-slate-600">
-            Schwab 실시간/최근 시장 데이터와 핵심 단기 분석을 표시합니다. 서버 데이터가 없거나 장 종료 후에는 값이 “-”로 표시되며,
-            등록된 종목 행은 그대로 유지됩니다.
-          </p>
-
-          <div className="mt-3 overflow-x-auto border border-slate-300">
-            <table className="min-w-[1180px] w-full border-collapse bg-white text-[11px]">
-              <thead className="bg-slate-100 text-slate-950">
-                <tr>
-                  {[
-                    "Ticker", "?", "Action", "Price", "Forecast", "Score",
-                    "Down Risk", "P/L", "Entry", "Buy60", "Sell60",
-                    "VWAP", "EMA9", "EMA20", "Resistance", "Support",
-                    "Fast Drop", "1m Trend"
-                  ].map((head) => (
-                    <th
-                      key={head}
-                      className="whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center font-black"
-                    >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {rows.map(({ symbol, item }, index) => {
-                  const actionClass = signalStyle(item?.action, item?.down_risk, item?.fast_drop);
-                  return (
-                    <tr key={symbol || `empty-${index}`} className="h-[48px]">
-                      <Cell strong>{symbol || "-"}</Cell>
-                      <Cell>
-                        {symbol ? (
-                          <button
-                            type="button"
-                            title="이 종목의 분석 항목 설명"
-                            className="mx-auto flex h-7 w-7 items-center justify-center rounded-md border-2 border-blue-700 bg-blue-600 text-sm font-black text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                          >
-                            ?
-                          </button>
-                        ) : "-"}
-                      </Cell>
-                      <Cell>
-                        {symbol ? (
-                          <span className={`font-black ${actionClass}`}>
-                            {item?.action || "DATA WAIT"}
-                          </span>
-                        ) : "-"}
-                      </Cell>
-                      <Cell>{symbol && item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
-                      <Cell>{symbol ? item?.forecast || "-" : "-"}</Cell>
-                      <Cell>{symbol && item ? item.score ?? "-" : "-"}</Cell>
-                      <Cell>{symbol && item ? `${fmt(item.down_risk, 0)}%` : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.pnl) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.entry) : "-"}</Cell>
-                      <Cell>{symbol && item ? item.buy60 ?? "-" : "-"}</Cell>
-                      <Cell>{symbol && item ? item.sell60 ?? "-" : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.vwap) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.ema9) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.ema20) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.resistance) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.local_support ?? item.support) : "-"}</Cell>
-                      <Cell>{symbol ? item?.fast_drop || "-" : "-"}</Cell>
-                      <Cell>{symbol ? item?.trend_1m || "-" : "-"}</Cell>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_320px]">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
-              <div className="mb-1 font-black text-slate-800">LEGEND</div>
-              Action: BUY WATCH / BUY / HOLD / WATCH / SELL WATCH / SELL ·
-              Forecast: 단기 예상 방향 · Score: 종합 신호 점수 · Down Risk: 하락 위험도 ·
-              Buy60 / Sell60: 최근 매수/매도 흐름 · VWAP / EMA: 단기 기준선 ·
-              Resistance / Support: 단기 저항/지지 · Fast Drop: 급락 경고
-            </div>
-
-            <div className="rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
-              <div className="mb-1 font-black text-slate-800">STATUS</div>
-              <div>• 서버: {status}</div>
-              <div>• 등록 종목: {symbols.length} / 5</div>
-              <div>• 데이터: {Object.keys(snapshots).length ? "수신 중" : "대기 중"}</div>
-              <div>• 실시간 값이 없으면 “-” 표시</div>
-            </div>
-          </div>
-        </section>
+       
       </div>
     </main>
   );

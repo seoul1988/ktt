@@ -363,32 +363,6 @@ export default function OwnerBusinessMenuPage() {
   const [menuModeEnabled, setMenuModeEnabled] = useState(true);
   const [pickupModeEnabled, setPickupModeEnabled] = useState(false);
   const [deliveryModeEnabled, setDeliveryModeEnabled] = useState(false);
-
-  // Restaurant sales tax is stored as a decimal in restaurant_order_settings.tax_rate.
-  // Example: 7.25% is saved as 0.0725.
-  const [taxRateInput, setTaxRateInput] = useState("0");
-  const [savingTaxRate, setSavingTaxRate] = useState(false);
-
-  const [paymentProvider, setPaymentProvider] = useState<"stripe" | "square">("stripe");
-  const [savingPaymentProvider, setSavingPaymentProvider] = useState(false);
-  const [orderSettingsMessage, setOrderSettingsMessage] = useState("");
-
-  const [stripeSecretKeyInput, setStripeSecretKeyInput] = useState("");
-  const [stripeWebhookSecretInput, setStripeWebhookSecretInput] = useState("");
-  const [stripeConfigured, setStripeConfigured] = useState(false);
-  const [stripeWebhookConfigured, setStripeWebhookConfigured] = useState(false);
-  const [stripeSecretKeyMasked, setStripeSecretKeyMasked] = useState("");
-  const [stripeWebhookSecretMasked, setStripeWebhookSecretMasked] = useState("");
-
-  const [squareConfigured, setSquareConfigured] = useState(false);
-  const [squareMerchantName, setSquareMerchantName] = useState("");
-  const [squareMerchantId, setSquareMerchantId] = useState("");
-  const [squareLocationName, setSquareLocationName] = useState("");
-  const [squareLocationId, setSquareLocationId] = useState("");
-  const [connectingSquare, setConnectingSquare] = useState(false);
-  const [squareConnectError, setSquareConnectError] = useState("");
-  const [disconnectingSquare, setDisconnectingSquare] = useState(false);
-  const [savingPaymentCredentials, setSavingPaymentCredentials] = useState(false);
   const [expandedOptionItemIds, setExpandedOptionItemIds] = useState<
     Set<number>
   >(new Set());
@@ -430,252 +404,28 @@ export default function OwnerBusinessMenuPage() {
   }, [businessId]);
 
 
-  const [savingOrderModes, setSavingOrderModes] = useState(false);
-
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadOrderModes() {
-      if (!Number.isInteger(businessId) || businessId <= 0) return;
-
-      try {
-        const token = await getAccessToken();
-        const response = await fetch(
-          `/api/owner/business/${businessId}/order-settings`,
-          {
-            method: "GET",
-            headers: { Authorization: `Bearer ${token}` },
-            cache: "no-store",
-          },
-        );
-
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data?.error || "온라인 주문 설정을 불러오지 못했습니다.");
-        }
-        if (cancelled) return;
-
-        const modes = data?.orderModes || {};
-        setMenuModeEnabled(modes.menu !== false);
-        setPickupModeEnabled(modes.pickup === true);
-        setDeliveryModeEnabled(modes.delivery === true);
-
-        const loadedTaxRate = Math.max(0, Number(data?.taxRate || 0));
-        setTaxRateInput(
-          Number((loadedTaxRate * 100).toFixed(4)).toString(),
-        );
-
-        setPaymentProvider(
-          data?.paymentProvider === "square" ? "square" : "stripe",
-        );
-      } catch (error) {
-        if (!cancelled) {
-          setMessage(error instanceof Error ? error.message : "온라인 주문 설정을 불러오지 못했습니다.");
-        }
-      }
+    if (typeof window === "undefined" || !Number.isInteger(businessId) || businessId <= 0) return;
+    try {
+      const raw = window.localStorage.getItem(`ktown-restaurant-order-modes:${businessId}`);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { menu?: boolean; pickup?: boolean; delivery?: boolean };
+      const nextMenu = saved.menu !== false;
+      const nextPickup = saved.pickup === true;
+      const nextDelivery = saved.delivery === true;
+      if (!nextMenu && !nextPickup && !nextDelivery) return;
+      setMenuModeEnabled(nextMenu);
+      setPickupModeEnabled(nextPickup);
+      setDeliveryModeEnabled(nextDelivery);
+    } catch {
+      // 손상된 브라우저 저장값은 무시합니다.
     }
-
-    void loadOrderModes();
-    return () => { cancelled = true; };
   }, [businessId]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPaymentCredentials() {
-      if (!Number.isInteger(businessId) || businessId <= 0) return;
-
-      try {
-        const token = await getAccessToken();
-        const response = await fetch(
-          `/api/owner/business/${businessId}/order-payment-settings`,
-          {
-            method: "GET",
-            headers: { Authorization: `Bearer ${token}` },
-            cache: "no-store",
-          },
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data?.error || "결제 계정 설정을 불러오지 못했습니다.");
-        }
-
-        if (cancelled) return;
-
-        setStripeConfigured(data?.stripeConfigured === true);
-        setStripeWebhookConfigured(data?.stripeWebhookConfigured === true);
-        setStripeSecretKeyMasked(String(data?.stripeSecretKeyMasked || ""));
-        setStripeWebhookSecretMasked(String(data?.stripeWebhookSecretMasked || ""));
-
-        setSquareConfigured(data?.squareConfigured === true);
-        setSquareMerchantName(String(data?.squareMerchantName || ""));
-        setSquareMerchantId(String(data?.squareMerchantId || ""));
-        setSquareLocationName(String(data?.squareLocationName || ""));
-        setSquareLocationId(String(data?.squareLocationId || ""));
-      } catch (error) {
-        if (!cancelled) {
-          setMessage(
-            error instanceof Error
-              ? error.message
-              : "결제 계정 설정을 불러오지 못했습니다.",
-          );
-        }
-      }
-    }
-
-    void loadPaymentCredentials();
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId]);
-
-  async function savePaymentCredentials() {
-    if (savingPaymentCredentials || paymentProvider !== "stripe") return;
-
-    setSavingPaymentCredentials(true);
-    setMessage("Stripe 결제 계정 설정 저장 중...");
-
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/order-payment-settings`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            paymentProvider: "stripe",
-            stripeSecretKey: stripeSecretKeyInput.trim(),
-            stripeWebhookSecret: stripeWebhookSecretInput.trim(),
-          }),
-        },
-      );
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "Stripe 결제 계정 설정 저장에 실패했습니다.");
-      }
-
-      setStripeConfigured(data?.stripeConfigured === true);
-      setStripeWebhookConfigured(data?.stripeWebhookConfigured === true);
-      setStripeSecretKeyMasked(String(data?.stripeSecretKeyMasked || ""));
-      setStripeWebhookSecretMasked(String(data?.stripeWebhookSecretMasked || ""));
-      setStripeSecretKeyInput("");
-      setStripeWebhookSecretInput("");
-      setMessage("✓ Stripe 결제 계정 설정 저장 완료");
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? `Stripe 결제 계정 설정 저장 실패: ${error.message}`
-          : "Stripe 결제 계정 설정 저장에 실패했습니다.",
-      );
-    } finally {
-      setSavingPaymentCredentials(false);
-    }
-  }
-
-  async function connectSquare() {
-    if (connectingSquare) return;
-    setConnectingSquare(true);
-    setSquareConnectError("");
-    setMessage("Square 연결 화면을 여는 중...");
-
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/square/connect`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-          cache: "no-store",
-        },
-      );
-
-      const raw = await response.text();
-      let data: any = {};
-      try {
-        data = raw ? JSON.parse(raw) : {};
-      } catch {
-        throw new Error(`Square 연결 API 응답 오류 (${response.status}). 배포된 square/connect route를 확인하세요.`);
-      }
-
-      if (!response.ok) {
-        throw new Error(data?.error || `Square 연결 API 오류 (${response.status})`);
-      }
-      if (!data?.authorizationUrl) {
-        throw new Error("Square authorization URL을 받지 못했습니다.");
-      }
-
-      const authorizationUrl = String(data.authorizationUrl);
-      if (!authorizationUrl.startsWith("https://")) {
-        throw new Error("Square authorization URL이 올바르지 않습니다.");
-      }
-
-      // Full-page navigation is required for Square OAuth.
-      window.location.href = authorizationUrl;
-    } catch (error) {
-      const text = error instanceof Error ? error.message : "Square 연결을 시작하지 못했습니다.";
-      setSquareConnectError(text);
-      setMessage(`Square 연결 실패: ${text}`);
-      setConnectingSquare(false);
-    }
-  }
-
-  async function disconnectSquare() {
-    if (disconnectingSquare) return;
-    if (!window.confirm("Square 연결을 해제하시겠습니까?")) return;
-
-    setDisconnectingSquare(true);
-    setMessage("Square 연결 해제 중...");
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/square/disconnect`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "Square 연결 해제에 실패했습니다.");
-      }
-      setSquareConfigured(false);
-      setSquareMerchantName("");
-      setSquareMerchantId("");
-      setSquareLocationName("");
-      setSquareLocationId("");
-      setMessage("✓ Square 연결이 해제되었습니다.");
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? `Square 연결 해제 실패: ${error.message}`
-          : "Square 연결 해제에 실패했습니다.",
-      );
-    } finally {
-      setDisconnectingSquare(false);
-    }
-  }
-
-  async function updateRestaurantOrderMode(
+  function updateRestaurantOrderMode(
     key: "menu" | "pickup" | "delivery",
     checked: boolean,
   ) {
-    if (savingOrderModes) return;
-
-    const previous = {
-      menu: menuModeEnabled,
-      pickup: pickupModeEnabled,
-      delivery: deliveryModeEnabled,
-    };
-
     const nextMenu = key === "menu" ? checked : menuModeEnabled;
     const nextPickup = key === "pickup" ? checked : pickupModeEnabled;
     const nextDelivery = key === "delivery" ? checked : deliveryModeEnabled;
@@ -688,160 +438,14 @@ export default function OwnerBusinessMenuPage() {
     setMenuModeEnabled(nextMenu);
     setPickupModeEnabled(nextPickup);
     setDeliveryModeEnabled(nextDelivery);
-    setSavingOrderModes(true);
-    setOrderSettingsMessage("저장 중...");
-    setMessage("온라인 주문 설정 저장 중...");
 
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/order-settings`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            menu: nextMenu,
-            pickup: nextPickup,
-            delivery: nextDelivery,
-          }),
-        },
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        `ktown-restaurant-order-modes:${businessId}`,
+        JSON.stringify({ menu: nextMenu, pickup: nextPickup, delivery: nextDelivery }),
       );
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error || "온라인 주문 설정 저장에 실패했습니다.");
-      }
-
-      const saved = data?.orderModes || { menu: nextMenu, pickup: nextPickup, delivery: nextDelivery };
-      setMenuModeEnabled(saved.menu !== false);
-      setPickupModeEnabled(saved.pickup === true);
-      setDeliveryModeEnabled(saved.delivery === true);
-
-      setOrderSettingsMessage("✓ MENU / PICKUP / DELIVERY 저장 완료");
-      setMessage("✓ 온라인 주문 설정을 DB에 저장했습니다.");
-    } catch (error) {
-      setMenuModeEnabled(previous.menu);
-      setPickupModeEnabled(previous.pickup);
-      setDeliveryModeEnabled(previous.delivery);
-      const msg = error instanceof Error ? `저장 실패: ${error.message}` : "저장 실패";
-      setOrderSettingsMessage(msg);
-      setMessage(msg);
-    } finally {
-      setSavingOrderModes(false);
     }
-  }
-
-  async function saveRestaurantTaxRate() {
-    if (savingTaxRate) return;
-
-    const percent = Number(taxRateInput);
-
-    if (!Number.isFinite(percent) || percent < 0 || percent > 100) {
-      setMessage("Tax는 0%에서 100% 사이로 입력하세요.");
-      return;
-    }
-
-    setSavingTaxRate(true);
-    setOrderSettingsMessage("Tax 저장 중...");
-    setMessage("Tax 저장 중...");
-
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/order-settings`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            taxRate: percent / 100,
-          }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Tax 저장에 실패했습니다.");
-      }
-
-      const savedTaxRate = Math.max(0, Number(data?.taxRate || 0));
-      setTaxRateInput(
-        Number((savedTaxRate * 100).toFixed(4)).toString(),
-      );
-      const ok = `✓ Tax ${Number((savedTaxRate * 100).toFixed(4))}% 저장 완료`;
-      setOrderSettingsMessage(ok);
-      setMessage(ok);
-    } catch (error) {
-      const msg = error instanceof Error
-        ? `Tax 저장 실패: ${error.message}`
-        : "Tax 저장에 실패했습니다.";
-      setOrderSettingsMessage(msg);
-      setMessage(msg);
-    } finally {
-      setSavingTaxRate(false);
-    }
-  }
-
-  async function savePaymentProvider(nextProvider: "stripe" | "square") {
-    if (savingPaymentProvider) return;
-
-    const previous = paymentProvider;
-    setPaymentProvider(nextProvider);
-    setSavingPaymentProvider(true);
-    setOrderSettingsMessage(nextProvider === "square" ? "Square 저장 중..." : "Stripe 저장 중...");
-    setMessage(
-      nextProvider === "square"
-        ? "Square 결제방식 저장 중..."
-        : "Stripe 결제방식 저장 중...",
-    );
-
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/order-settings`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            paymentProvider: nextProvider,
-          }),
-        },
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Payment Provider 저장에 실패했습니다.");
-      }
-
-      const savedProvider =
-        data?.paymentProvider === "square" ? "square" : "stripe";
-      setPaymentProvider(savedProvider);
-
-      const ok = savedProvider === "square"
-        ? "✓ Payment Provider: Square 저장 완료"
-        : "✓ Payment Provider: Stripe 저장 완료";
-      setOrderSettingsMessage(ok);
-      setMessage(ok);
-    } catch (error) {
-      setPaymentProvider(previous);
-      const msg = error instanceof Error
-        ? `Payment Provider 저장 실패: ${error.message}`
-        : "Payment Provider 저장에 실패했습니다.";
-      setOrderSettingsMessage(msg);
-      setMessage(msg);
-    } finally {
-      setSavingPaymentProvider(false);
-    }
+    setMessage("✓ 온라인 주문 설정을 저장했습니다.");
   }
 
   useEffect(() => {
@@ -3347,12 +2951,6 @@ export default function OwnerBusinessMenuPage() {
             </div>
           </div>
 
-          {orderSettingsMessage ? (
-            <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-900">
-              {orderSettingsMessage}
-            </div>
-          ) : null}
-
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             {[
               {
@@ -3390,10 +2988,9 @@ export default function OwnerBusinessMenuPage() {
                     type="checkbox"
                     checked={option.checked}
                     onChange={(event) =>
-                      void updateRestaurantOrderMode(option.key, event.target.checked)
+                      updateRestaurantOrderMode(option.key, event.target.checked)
                     }
-                    disabled={savingOrderModes}
-                    className="mt-0.5 h-5 w-5 shrink-0 accent-orange-600 disabled:cursor-wait disabled:opacity-60"
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-orange-600"
                   />
                   <div className="min-w-0">
                     <p className="text-sm font-black text-[#172033]">
@@ -3407,249 +3004,6 @@ export default function OwnerBusinessMenuPage() {
                 </div>
               </label>
             ))}
-          </div>
-
-          <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-violet-700">
-                Payment Provider
-              </p>
-              <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
-                이 식당에서 Pay Now 결제에 사용할 회사를 선택하세요. 식당별로 다르게 저장됩니다.
-              </p>
-            </div>
-
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void savePaymentProvider("stripe")}
-                disabled={savingPaymentProvider}
-                className={`rounded-2xl border-2 p-4 text-left transition ${
-                  paymentProvider === "stripe"
-                    ? "border-indigo-600 bg-indigo-100 ring-2 ring-indigo-200"
-                    : "border-gray-200 bg-white hover:border-indigo-300"
-                } disabled:cursor-wait disabled:opacity-60`}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                      paymentProvider === "stripe"
-                        ? "border-indigo-600 bg-indigo-600"
-                        : "border-gray-300 bg-white"
-                    }`}
-                  >
-                    {paymentProvider === "stripe" ? (
-                      <span className="h-2 w-2 rounded-full bg-white" />
-                    ) : null}
-                  </span>
-                  <div>
-                    <p className="text-sm font-black text-[#172033]">Stripe</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      Pay Now → Stripe 결제
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void savePaymentProvider("square")}
-                disabled={savingPaymentProvider}
-                className={`rounded-2xl border-2 p-4 text-left transition ${
-                  paymentProvider === "square"
-                    ? "border-emerald-600 bg-emerald-100 ring-2 ring-emerald-200"
-                    : "border-gray-200 bg-white hover:border-emerald-300"
-                } disabled:cursor-wait disabled:opacity-60`}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                      paymentProvider === "square"
-                        ? "border-emerald-600 bg-emerald-600"
-                        : "border-gray-300 bg-white"
-                    }`}
-                  >
-                    {paymentProvider === "square" ? (
-                      <span className="h-2 w-2 rounded-full bg-white" />
-                    ) : null}
-                  </span>
-                  <div>
-                    <p className="text-sm font-black text-[#172033]">Square</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      Pay Now → Square 결제
-                    </p>
-                  </div>
-                </div>
-              </button>
-            </div>
-
-            <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[11px] font-black text-violet-900">
-              현재 선택: {paymentProvider === "square" ? "SQUARE" : "STRIPE"}
-              {savingPaymentProvider ? " · 저장 중..." : ""}
-            </div>
-
-            {orderSettingsMessage ? (
-              <div className={`mt-2 rounded-xl px-3 py-2 text-[11px] font-black ${
-                orderSettingsMessage.includes("실패") || orderSettingsMessage.includes("오류")
-                  ? "bg-red-50 text-red-700"
-                  : "bg-white text-violet-800"
-              }`}>
-                {orderSettingsMessage}
-              </div>
-            ) : null}
-
-            {paymentProvider === "stripe" ? (
-              <div className="mt-4 rounded-2xl border border-indigo-200 bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-black text-[#172033]">Stripe Account</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      Secret 값은 서버 DB에만 저장되고, 다시 전체 값으로 내려오지 않습니다.
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-[11px] font-black ${
-                    stripeConfigured
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}>
-                    {stripeConfigured ? "CONNECTED" : "NOT CONFIGURED"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-3">
-                  <label className="block">
-                    <span className="text-xs font-black text-gray-700">Stripe Secret Key</span>
-                    <input
-                      type="password"
-                      value={stripeSecretKeyInput}
-                      onChange={(event) => setStripeSecretKeyInput(event.target.value)}
-                      placeholder={stripeSecretKeyMasked || "sk_test_... or sk_live_..."}
-                      autoComplete="off"
-                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-500"
-                    />
-                  </label>
-
-                  <label className="block">
-                    <span className="text-xs font-black text-gray-700">Stripe Webhook Secret</span>
-                    <input
-                      type="password"
-                      value={stripeWebhookSecretInput}
-                      onChange={(event) => setStripeWebhookSecretInput(event.target.value)}
-                      placeholder={stripeWebhookSecretMasked || "whsec_..."}
-                      autoComplete="off"
-                      className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-indigo-500"
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => void savePaymentCredentials()}
-                    disabled={savingPaymentCredentials}
-                    className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-black text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {savingPaymentCredentials ? "저장 중..." : "STRIPE 설정 저장"}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-black text-[#172033]">Square Account</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      API Key를 입력할 필요가 없습니다. Square 계정으로 로그인해서 연결만 하세요.
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-[11px] font-black ${
-                    squareConfigured
-                      ? "bg-emerald-100 text-emerald-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}>
-                    {squareConfigured ? "CONNECTED" : "NOT CONNECTED"}
-                  </span>
-                </div>
-
-                {squareConfigured ? (
-                  <div className="mt-4 grid gap-3">
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                      <div className="text-xs font-black text-emerald-800">✓ SQUARE CONNECTED</div>
-                      <div className="mt-2 grid gap-1 text-sm font-semibold text-gray-700">
-                        <div>Business: {squareMerchantName || squareMerchantId || "Connected"}</div>
-                        <div>Location: {squareLocationName || squareLocationId || "Connected"}</div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void disconnectSquare()}
-                      disabled={disconnectingSquare}
-                      className="rounded-xl border-2 border-red-200 bg-white px-4 py-2.5 text-sm font-black text-red-700 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {disconnectingSquare ? "연결 해제 중..." : "DISCONNECT SQUARE"}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-4 grid gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void connectSquare()}
-                      disabled={connectingSquare}
-                      className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {connectingSquare ? "SQUARE로 이동 중..." : "CONNECT SQUARE"}
-                    </button>
-                    <p className="text-center text-[11px] font-semibold text-gray-500">
-                      Square 로그인 → 권한 승인 → KTown으로 자동 복귀
-                    </p>
-                    {squareConnectError ? (
-                      <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
-                        Square 연결 실패: {squareConnectError}
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="min-w-[220px] flex-1">
-                <span className="block text-xs font-black uppercase tracking-wider text-emerald-700">
-                  Sales Tax
-                </span>
-                <span className="mt-1 block text-[11px] font-semibold leading-5 text-gray-600">
-                  Checkout의 Estimated tax에 사용할 세율입니다. 예: 7.25 입력 = 7.25%
-                </span>
-
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="relative w-full max-w-[220px]">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      value={taxRateInput}
-                      onChange={(event) => setTaxRateInput(event.target.value)}
-                      className="w-full rounded-xl border-2 border-emerald-300 bg-white px-3 py-3 pr-9 text-base font-black text-[#172033] outline-none focus:border-emerald-600"
-                      placeholder="0.00"
-                    />
-                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-black text-emerald-700">
-                      %
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void saveRestaurantTaxRate()}
-                    disabled={savingTaxRate}
-                    className="rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {savingTaxRate ? "저장 중..." : "TAX 저장"}
-                  </button>
-                </div>
-              </label>
-            </div>
           </div>
 
           <div className="mt-3 rounded-2xl border border-orange-100 bg-[#FFF8F0] px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
