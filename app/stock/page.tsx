@@ -486,10 +486,6 @@ export default function StockMonitorPage() {
             {[
               "MARK BOUGHT",
               "CLEAR POSITION",
-              "5M BACKFILL / TRAIN",
-              "1M BACKFILL",
-              "DL PREP / CHECK",
-              "TRAIN DEEP LEARNING",
               "TODAY'S EVENTS",
             ].map((label) => (
               <button
@@ -504,20 +500,19 @@ export default function StockMonitorPage() {
           </div>
 
           <p className="mt-2 text-[11px] leading-5 text-slate-600">
-            Schwab 5m trend + 1m volume + estimated 60s trade flow. 서버 데이터가 없거나 장 종료 후에는 값이 “-”로 표시되며,
+            Schwab 실시간/최근 시장 데이터와 핵심 단기 분석을 표시합니다. 서버 데이터가 없거나 장 종료 후에는 값이 “-”로 표시되며,
             등록된 종목 행은 그대로 유지됩니다.
           </p>
 
           <div className="mt-3 overflow-x-auto border border-slate-300">
-            <table className="min-w-[1750px] w-full border-collapse bg-white text-[11px]">
+            <table className="min-w-[1180px] w-full border-collapse bg-white text-[11px]">
               <thead className="bg-slate-100 text-slate-950">
                 <tr>
                   {[
-                    "Ticker", "?", "Action", "Down Risk", "Sell Risk", "P/L",
-                    "Entry", "Forecast", "Score", "ML Up5", "DL 5/10/15",
-                    "Exp 5m", "Samples", "Price", "Vol x", "Buy60", "Sell60",
-                    "5m VWAP", "5m EMA9", "5m EMA20", "Resistance", "Support",
-                    "Bid", "Ask", "Fast Drop", "1m Trend", "Options", "0DTE"
+                    "Ticker", "Action", "Price", "Forecast", "Score",
+                    "Down Risk", "P/L", "Entry", "Buy60", "Sell60",
+                    "VWAP", "EMA9", "EMA20", "Resistance", "Support",
+                    "Fast Drop", "1m Trend"
                   ].map((head) => (
                     <th
                       key={head}
@@ -535,7 +530,6 @@ export default function StockMonitorPage() {
                   return (
                     <tr key={symbol || `empty-${index}`} className="h-[48px]">
                       <Cell strong>{symbol || "-"}</Cell>
-                      <Cell>{symbol ? "?" : "-"}</Cell>
                       <Cell>
                         {symbol ? (
                           <span className={`font-black ${actionClass}`}>
@@ -543,22 +537,12 @@ export default function StockMonitorPage() {
                           </span>
                         ) : "-"}
                       </Cell>
-                      <Cell>{symbol && item ? `${fmt(item.down_risk, 0)}%` : "-"}</Cell>
-                      <Cell>{symbol && item ? `${fmt(item.sell_risk, 0)}%` : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.pnl) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.entry) : "-"}</Cell>
+                      <Cell>{symbol && item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
                       <Cell>{symbol ? item?.forecast || "-" : "-"}</Cell>
                       <Cell>{symbol && item ? item.score ?? "-" : "-"}</Cell>
-                      <Cell>{symbol && item ? `${fmt(item.ml_up5, 0)}%` : "-"}</Cell>
-                      <Cell>
-                        {symbol && item
-                          ? `${fmt(item.dl_up5, 0)} / ${fmt(item.dl_up10, 0)} / ${fmt(item.dl_up15, 0)}`
-                          : "-"}
-                      </Cell>
-                      <Cell>{symbol ? item?.exp_5m || "-" : "-"}</Cell>
-                      <Cell>{symbol && item ? item.samples ?? "-" : "-"}</Cell>
-                      <Cell>{symbol && item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.vol_x, 1) : "-"}</Cell>
+                      <Cell>{symbol && item ? `${fmt(item.down_risk, 0)}%` : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.pnl) : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.entry) : "-"}</Cell>
                       <Cell>{symbol && item ? item.buy60 ?? "-" : "-"}</Cell>
                       <Cell>{symbol && item ? item.sell60 ?? "-" : "-"}</Cell>
                       <Cell>{symbol && item ? fmt(item.vwap) : "-"}</Cell>
@@ -566,12 +550,8 @@ export default function StockMonitorPage() {
                       <Cell>{symbol && item ? fmt(item.ema20) : "-"}</Cell>
                       <Cell>{symbol && item ? fmt(item.resistance) : "-"}</Cell>
                       <Cell>{symbol && item ? fmt(item.local_support ?? item.support) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.bid) : "-"}</Cell>
-                      <Cell>{symbol && item ? fmt(item.ask) : "-"}</Cell>
                       <Cell>{symbol ? item?.fast_drop || "-" : "-"}</Cell>
                       <Cell>{symbol ? item?.trend_1m || "-" : "-"}</Cell>
-                      <Cell>{symbol ? item?.option_bias || "-" : "-"}</Cell>
-                      <Cell>{symbol ? item?.zero_dte_key || item?.zero_dte_label || "-" : "-"}</Cell>
                     </tr>
                   );
                 })}
@@ -583,9 +563,9 @@ export default function StockMonitorPage() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
               <div className="mb-1 font-black text-slate-800">LEGEND</div>
               Action: BUY WATCH / BUY / HOLD / WATCH / SELL WATCH / SELL ·
-              Score: 0–100 · Down Risk: 하락 위험도(%) ·
-              Buy60 / Sell60: 최근 60초 매수/매도 추정 ·
-              VWAP / EMA: 5분 기준선 · Resistance / Support: 단기 저항/지지
+              Forecast: 단기 예상 방향 · Score: 종합 신호 점수 · Down Risk: 하락 위험도 ·
+              Buy60 / Sell60: 최근 매수/매도 흐름 · VWAP / EMA: 단기 기준선 ·
+              Resistance / Support: 단기 저항/지지 · Fast Drop: 급락 경고
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
