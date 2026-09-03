@@ -304,6 +304,50 @@ async function createMenuImageFiles(
   };
 }
 
+
+async function readApiJson(response: Response) {
+  const text = await response.text();
+  const contentType = response.headers.get("content-type") || "";
+
+  if (!text.trim()) {
+    if (response.ok) return {};
+    throw new Error(
+      `${response.url} 응답이 비어 있습니다. HTTP ${response.status}`,
+    );
+  }
+
+  const looksJson =
+    contentType.toLowerCase().includes("application/json") ||
+    text.trim().startsWith("{") ||
+    text.trim().startsWith("[");
+
+  if (!looksJson) {
+    const preview = text
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+
+    throw new Error(
+      `${response.url}가 JSON 대신 HTML/텍스트를 반환했습니다. ` +
+      `HTTP ${response.status}. 응답 시작: ${preview}`,
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const preview = text
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 120);
+
+    throw new Error(
+      `${response.url}의 JSON 형식이 잘못되었습니다. ` +
+      `HTTP ${response.status}. 응답 시작: ${preview}`,
+    );
+  }
+}
+
 export default function OwnerBusinessMenuPage() {
   const params = useParams<{ id: string }>();
   const businessId = Number(params.id);
@@ -422,7 +466,7 @@ export default function OwnerBusinessMenuPage() {
           },
         );
 
-        const data = await response.json();
+        const data = await readApiJson(response);
         if (!response.ok) {
           throw new Error(data?.error || "온라인 주문 설정을 불러오지 못했습니다.");
         }
@@ -469,7 +513,7 @@ export default function OwnerBusinessMenuPage() {
           },
         );
 
-        const data = await response.json();
+        const data = await readApiJson(response);
 
         if (!response.ok) {
           throw new Error(data?.error || "결제 계정 설정을 불러오지 못했습니다.");
@@ -528,7 +572,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = await response.json();
+      const data = await readApiJson(response);
       if (!response.ok) {
         throw new Error(data?.error || "Stripe 결제 계정 설정 저장에 실패했습니다.");
       }
@@ -616,7 +660,7 @@ export default function OwnerBusinessMenuPage() {
           headers: { Authorization: `Bearer ${token}` },
         },
       );
-      const data = await response.json();
+      const data = await readApiJson(response);
       if (!response.ok) {
         throw new Error(data?.error || "Square 연결 해제에 실패했습니다.");
       }
@@ -683,7 +727,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = await response.json();
+      const data = await readApiJson(response);
       if (!response.ok) {
         throw new Error(data?.error || "온라인 주문 설정 저장에 실패했습니다.");
       }
@@ -737,7 +781,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = await response.json();
+      const data = await readApiJson(response);
 
       if (!response.ok) {
         throw new Error(data?.error || "Tax 저장에 실패했습니다.");
@@ -790,7 +834,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = await response.json();
+      const data = await readApiJson(response);
 
       if (!response.ok) {
         throw new Error(data?.error || "Payment Provider 저장에 실패했습니다.");
@@ -1733,7 +1777,7 @@ export default function OwnerBusinessMenuPage() {
         cache: "no-store",
       });
 
-      const data = (await response.json()) as MenuResponse;
+      const data = (await readApiJson(response)) as MenuResponse;
 
       if (!response.ok) {
         throw new Error(data.error || "메뉴를 불러오지 못했습니다.");
@@ -1915,7 +1959,7 @@ export default function OwnerBusinessMenuPage() {
           items: [normalizeItemForSave(item)],
         }),
       });
-      const data = await response.json();
+      const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || "자동 저장 실패");
       setItemSaveStatus((current) => ({ ...current, [itemId]: "saved" }));
     } catch (error) {
@@ -1955,7 +1999,7 @@ export default function OwnerBusinessMenuPage() {
           items: [],
         }),
       });
-      const data = await response.json();
+      const data = await readApiJson(response);
       if (!response.ok) throw new Error(data.error || "카테고리 자동 저장 실패");
     } catch (error) {
       console.error("CATEGORY AUTOSAVE ERROR", error);
@@ -2242,7 +2286,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = (await response.json()) as {
+      const data = (await readApiJson(response)) as {
         image_url?: string;
         thumbnail_url?: string;
         error?: string;
@@ -2310,7 +2354,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = (await response.json()) as {
+      const data = (await readApiJson(response)) as {
         error?: string;
       };
 
@@ -2363,7 +2407,7 @@ export default function OwnerBusinessMenuPage() {
         }),
       });
 
-      const data = (await response.json()) as MenuResponse & {
+      const data = (await readApiJson(response)) as MenuResponse & {
         category?: Category;
       };
 
@@ -2414,7 +2458,7 @@ export default function OwnerBusinessMenuPage() {
         }),
       });
 
-      const data = (await response.json()) as MenuResponse;
+      const data = (await readApiJson(response)) as MenuResponse;
 
       if (!response.ok) {
         throw new Error(data.error || "카테고리를 삭제하지 못했습니다.");
@@ -2469,7 +2513,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = (await response.json()) as MenuResponse & {
+      const data = (await readApiJson(response)) as MenuResponse & {
         item?: MenuItem;
       };
 
@@ -2561,7 +2605,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = (await response.json()) as MenuResponse & {
+      const data = (await readApiJson(response)) as MenuResponse & {
         item?: MenuItem;
       };
 
@@ -2645,7 +2689,7 @@ export default function OwnerBusinessMenuPage() {
         },
       );
 
-      const data = (await response.json()) as MenuResponse;
+      const data = (await readApiJson(response)) as MenuResponse;
 
       if (!response.ok) {
         throw new Error(
@@ -2913,7 +2957,7 @@ export default function OwnerBusinessMenuPage() {
         }),
       });
 
-      const data = (await response.json()) as MenuResponse & {
+      const data = (await readApiJson(response)) as MenuResponse & {
         updatedCategories?: number;
         updatedItems?: number;
       };
