@@ -77,25 +77,6 @@ type MenuResponse = {
   error?: string;
 };
 
-type DeliveryProvider = {
-  id?: number;
-  provider_key: string;
-  name: string;
-  url: string;
-  is_enabled: boolean;
-  display_order: number;
-  is_custom?: boolean;
-};
-
-const DEFAULT_DELIVERY_PROVIDERS: DeliveryProvider[] = [
-  { provider_key: "doordash-online", name: "Online Ordering by DoorDash", url: "", is_enabled: false, display_order: 0 },
-  { provider_key: "doordash", name: "DoorDash", url: "", is_enabled: false, display_order: 1 },
-  { provider_key: "grubhub", name: "Grubhub", url: "", is_enabled: false, display_order: 2 },
-  { provider_key: "seamless", name: "Seamless", url: "", is_enabled: false, display_order: 3 },
-  { provider_key: "ubereats", name: "Uber Eats", url: "", is_enabled: false, display_order: 4 },
-  { provider_key: "postmates", name: "Postmates", url: "", is_enabled: false, display_order: 5 },
-];
-
 function cleanPrice(value: string) {
   const normalized = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
   const dot = normalized.indexOf(".");
@@ -344,10 +325,6 @@ export default function OwnerBusinessMenuPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
-  const [deliveryProviders, setDeliveryProviders] = useState<DeliveryProvider[]>(
-    DEFAULT_DELIVERY_PROVIDERS,
-  );
-  const [savingDeliveryProviders, setSavingDeliveryProviders] = useState(false);
   const [itemSaveStatus, setItemSaveStatus] = useState<Record<number, "saving" | "saved" | "error">>({});
   const itemAutoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const categoryAutoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -356,9 +333,6 @@ export default function OwnerBusinessMenuPage() {
   const priceInputsRef = useRef<Record<number, string>>({});
   const pickupPriceInputsRef = useRef<Record<number, string>>({});
   const deliveryPriceInputsRef = useRef<Record<number, string>>({});
-  const [deliveryPartnersOpen, setDeliveryPartnersOpen] = useState(false);
-  const [newDeliveryProviderName, setNewDeliveryProviderName] = useState("");
-  const [newDeliveryProviderUrl, setNewDeliveryProviderUrl] = useState("");
 
   const [menuModeEnabled, setMenuModeEnabled] = useState(true);
   const [pickupModeEnabled, setPickupModeEnabled] = useState(false);
@@ -425,7 +399,6 @@ export default function OwnerBusinessMenuPage() {
 
   useEffect(() => {
     void loadMenu();
-    void loadDeliveryProviders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
@@ -2364,172 +2337,6 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
-  async function loadDeliveryProviders() {
-    try {
-      if (!Number.isInteger(businessId) || businessId <= 0) return;
-
-      const token = await getAccessToken();
-      const response = await fetch(
-        `/api/owner/business/${businessId}/delivery-providers`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        },
-      );
-
-      const data = (await response.json()) as {
-        providers?: DeliveryProvider[];
-        error?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(data.error || "배달 업체를 불러오지 못했습니다.");
-      }
-
-      const saved = Array.isArray(data.providers) ? data.providers : [];
-      const savedByKey = new Map(saved.map((provider) => [provider.provider_key, provider]));
-
-      const defaults = DEFAULT_DELIVERY_PROVIDERS.map((provider) => ({
-        ...provider,
-        ...(savedByKey.get(provider.provider_key) || {}),
-      }));
-
-      const custom = saved.filter(
-        (provider) =>
-          !DEFAULT_DELIVERY_PROVIDERS.some(
-            (defaultProvider) =>
-              defaultProvider.provider_key === provider.provider_key,
-          ),
-      );
-
-      setDeliveryProviders(
-        [...defaults, ...custom].sort(
-          (a, b) =>
-            Number(a.display_order ?? 999) -
-            Number(b.display_order ?? 999),
-        ),
-      );
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "배달 업체를 불러오지 못했습니다.",
-      );
-    }
-  }
-
-  function updateDeliveryProvider(
-    providerKey: string,
-    patch: Partial<DeliveryProvider>,
-  ) {
-    setDeliveryProviders((current) =>
-      current.map((provider) =>
-        provider.provider_key === providerKey
-          ? { ...provider, ...patch }
-          : provider,
-      ),
-    );
-  }
-
-  function addCustomDeliveryProvider() {
-    const name = newDeliveryProviderName.trim();
-    const url = newDeliveryProviderUrl.trim();
-
-    if (!name || !url) {
-      setMessage("업체 이름과 주문 링크를 모두 입력하세요.");
-      return;
-    }
-
-    setDeliveryProviders((current) => [
-      ...current,
-      {
-        provider_key: `custom-${Date.now()}`,
-        name,
-        url,
-        is_enabled: true,
-        display_order: current.length,
-        is_custom: true,
-      },
-    ]);
-
-    setNewDeliveryProviderName("");
-    setNewDeliveryProviderUrl("");
-    setMessage("✓ 업체를 추가했습니다. '배달 업체 저장'을 눌러주세요.");
-  }
-
-  function deleteCustomDeliveryProvider(providerKey: string) {
-    setDeliveryProviders((current) =>
-      current.filter(
-        (provider) => provider.provider_key !== providerKey,
-      ),
-    );
-  }
-
-  async function saveDeliveryProviders() {
-  console.log("SAVE CLICK");
-
-  setSavingDeliveryProviders(true);
-  setMessage("");
-
-  try {
-    console.log("GET TOKEN START");
-
-    const token = await getAccessToken();
-
-    console.log("TOKEN OK", Boolean(token));
-    console.log("DELIVERY FETCH START");
-
-    const response = await fetch(
-      `/api/owner/business/${businessId}/delivery-providers`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          providers: deliveryProviders.map((provider, index) => ({
-            provider_key: provider.provider_key,
-            name: provider.name.trim(),
-            url: provider.url.trim(),
-            is_enabled: provider.is_enabled,
-            display_order: index,
-            is_custom:
-              provider.is_custom === true ||
-              provider.provider_key.startsWith("custom-"),
-          })),
-        }),
-      },
-    );
-
-    console.log("DELIVERY RESPONSE", response.status);
-
-    const data = await response.json();
-
-    console.log("DELIVERY DATA", data);
-
-    if (!response.ok) {
-      throw new Error(
-        data.error || "배달 업체 저장에 실패했습니다.",
-      );
-    }
-
-    setDeliveryProviders(data.providers || []);
-    setMessage("✓ 배달 업체 설정을 저장했습니다.");
-  } catch (error) {
-    console.error("DELIVERY SAVE CLIENT ERROR", error);
-
-    setMessage(
-      error instanceof Error
-        ? error.message
-        : "배달 업체 저장 실패",
-    );
-  } finally {
-    setSavingDeliveryProviders(false);
-  }
-}
-
   async function addCategory() {
     const name = newCategoryName.trim();
 
@@ -3167,172 +2974,6 @@ export default function OwnerBusinessMenuPage() {
             {message}
           </div>
         )}
-
-        <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-orange-600">
-                Delivery Partners
-              </p>
-              <h2 className="mt-1 text-xl font-black">
-                배달 업체 등록 · 표시 설정
-              </h2>
-              <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">
-                체크한 업체만 손님이 DELIVERY를 눌렀을 때 표시됩니다.
-                손님이 업체를 선택하면 등록한 주문 링크로 이동합니다.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setDeliveryPartnersOpen((open) => !open)}
-                aria-expanded={deliveryPartnersOpen}
-                className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-3 text-xs font-black text-orange-700 hover:bg-orange-100"
-              >
-                {deliveryPartnersOpen ? "▼ 접기" : "▶ 펼치기"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void saveDeliveryProviders()}
-                disabled={savingDeliveryProviders}
-                className="rounded-xl bg-orange-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-              >
-                {savingDeliveryProviders ? "저장 중..." : "배달 업체 저장"}
-              </button>
-            </div>
-          </div>
-
-          {deliveryPartnersOpen && (
-            <>
-          <div className="mt-4 space-y-2">
-            {deliveryProviders.map((provider, index) => (
-              <div
-                key={provider.provider_key}
-                className={`grid gap-2 rounded-2xl border p-3 ${
-                  provider.is_enabled
-                    ? "border-orange-300 bg-orange-50"
-                    : "border-gray-200 bg-gray-50"
-                } sm:grid-cols-[auto_150px_1fr_70px_auto] sm:items-center`}
-              >
-                <label className="flex items-center gap-2 text-xs font-black">
-                  <input
-                    type="checkbox"
-                    checked={provider.is_enabled}
-                    onChange={(event) =>
-                      updateDeliveryProvider(provider.provider_key, {
-                        is_enabled: event.target.checked,
-                      })
-                    }
-                    className="h-4 w-4 accent-orange-600"
-                  />
-                  표시
-                </label>
-
-                <input
-                  value={provider.name}
-                  onChange={(event) =>
-                    updateDeliveryProvider(provider.provider_key, {
-                      name: event.target.value,
-                    })
-                  }
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-black outline-none focus:border-orange-400"
-                />
-
-                <input
-                  value={provider.url}
-                  onChange={(event) =>
-                    updateDeliveryProvider(provider.provider_key, {
-                      url: event.target.value,
-                    })
-                  }
-                  placeholder="https:// 주문 링크"
-                  className="min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-orange-400"
-                />
-
-                <input
-                  type="number"
-                  onFocus={(event) => event.currentTarget.select()}
-                  value={index}
-                  onChange={(event) => {
-                    const target = Math.max(
-                      0,
-                      Math.min(
-                        deliveryProviders.length - 1,
-                        Number(event.target.value) || 0,
-                      ),
-                    );
-
-                    setDeliveryProviders((current) =>
-                      moveArrayItem(current, index, target).map(
-                        (item, order) => ({
-                          ...item,
-                          display_order: order,
-                        }),
-                      ),
-                    );
-                  }}
-                  title="표시 순서"
-                  className="rounded-xl border border-gray-200 bg-white px-2 py-2 text-center text-xs font-black"
-                />
-
-                {provider.is_custom ||
-                provider.provider_key.startsWith("custom-") ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      deleteCustomDeliveryProvider(provider.provider_key)
-                    }
-                    className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600"
-                  >
-                    삭제
-                  </button>
-                ) : (
-                  <span className="rounded-xl bg-white px-3 py-2 text-center text-[10px] font-black text-gray-500">
-                    기본
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 rounded-2xl border border-dashed border-orange-300 bg-orange-50 p-3">
-            <p className="text-xs font-black text-orange-900">
-              + 다른 배달 업체 / 자체 주문 사이트 추가
-            </p>
-
-            <div className="mt-2 grid gap-2 sm:grid-cols-[180px_1fr_auto]">
-              <input
-                value={newDeliveryProviderName}
-                onChange={(event) =>
-                  setNewDeliveryProviderName(event.target.value)
-                }
-                placeholder="예: koreankitchenwf.com"
-                className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm font-bold outline-none"
-              />
-
-              <input
-                value={newDeliveryProviderUrl}
-                onChange={(event) =>
-                  setNewDeliveryProviderUrl(event.target.value)
-                }
-                placeholder="https://..."
-                className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm font-bold outline-none"
-              />
-
-              <button
-                type="button"
-                onClick={addCustomDeliveryProvider}
-                className="rounded-xl bg-[#172033] px-4 py-2 text-xs font-black text-white"
-              >
-                + 업체 추가
-              </button>
-            </div>
-          </div>
-            </>
-          )}
-        </section>
 
         <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
