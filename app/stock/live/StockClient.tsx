@@ -419,6 +419,37 @@ export default function StockMonitorPage() {
     await saveWatchlist(nextSymbols.slice(0, MAX_SYMBOLS));
   }
 
+
+  async function startLive() {
+    const nextSymbols: string[] = [];
+
+    for (const raw of tickerInputs) {
+      const symbol = cleanSymbol(raw);
+      if (symbol && !nextSymbols.includes(symbol)) {
+        nextSymbols.push(symbol);
+      }
+    }
+
+    const finalSymbols = nextSymbols.slice(0, MAX_SYMBOLS);
+
+    if (!finalSymbols.length) {
+      setStatus("먼저 종목을 1개 이상 등록하세요.");
+      return;
+    }
+
+    // 입력창의 내용이 현재 저장된 종목과 다르면 먼저 저장합니다.
+    const changed =
+      finalSymbols.length !== symbols.length ||
+      finalSymbols.some((symbol, index) => symbol !== symbols[index]);
+
+    if (changed) {
+      await saveWatchlist(finalSymbols);
+    }
+
+    // START는 실시간 전용 페이지로 이동합니다.
+    window.location.assign("/stock/live");
+  }
+
   async function removeSymbol(symbol: string) {
     const next = symbols.filter((item) => item !== symbol);
     setTickerInputs([
@@ -494,8 +525,9 @@ export default function StockMonitorPage() {
             </button>
 
             <button
-              onClick={() => void openSession()}
-              className="h-8 rounded border border-emerald-500 bg-emerald-50 px-5 text-xs font-black text-emerald-700 hover:bg-emerald-100"
+              onClick={() => void startLive()}
+              disabled={busy}
+              className="h-8 rounded border border-emerald-500 bg-emerald-600 px-5 text-xs font-black text-white hover:bg-emerald-700 disabled:opacity-40"
             >
               START
             </button>
