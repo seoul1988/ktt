@@ -119,7 +119,7 @@ export async function POST(
       db
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -129,7 +129,7 @@ export async function POST(
           "restaurant_order_private_settings",
         )
         .select(
-          "stripe_secret_key,twilio_account_sid,twilio_auth_token,twilio_phone_number",
+          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -177,20 +177,46 @@ export async function POST(
       );
     }
 
+    const paymentProvider =
+      privateSettings?.payment_provider === "square"
+        ? "square"
+        : "stripe";
+
     const stripeSecretKey =
       privateSettings?.stripe_secret_key || "";
 
-    if (
-      paymentMethod === "online" &&
-      !stripeSecretKey
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Online payment has not been configured yet.",
-        },
-        { status: 400 },
-      );
+    const squareAccessToken =
+      privateSettings?.square_access_token || "";
+
+    const squareLocationId =
+      privateSettings?.square_location_id || "";
+
+    if (paymentMethod === "online") {
+      if (
+        paymentProvider === "square" &&
+        (!squareAccessToken || !squareLocationId)
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Square is selected, but this restaurant has not connected its Square account yet.",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (
+        paymentProvider === "stripe" &&
+        !stripeSecretKey
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Stripe is selected, but Stripe payment has not been configured yet.",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const ids = [
@@ -428,6 +454,240 @@ export async function POST(
           request.url,
         ).origin;
 
+      if (paymentProvider === "square") {
+        const squareResponse = await fetch(
+          "https://connect.squareup.com/v2/online-checkout/payment-links",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${squareAccessToken}`,
+              "Content-Type": "application/json",
+              "Square-Version": "2026-08-19",
+            },
+            body: JSON.stringify({
+              idempotency_key: `ktown-order-${order.id}`,
+              order: {
+                location_id: squareLocationId,
+                reference_id: `KTOWN-${number}`,
+                line_items: [
+                  ...normalized.map((item) => {
+                    const selectionText =
+                      item.selections == null
+                        ? ""
+                        : typeof item.selections === "string"
+                          ? item.selections
+                          : JSON.stringify(item.selections);
+
+                    const note = [
+                      item.instructions
+                        ? `Instructions: ${item.instructions}`
+                        : "",
+                      selectionText
+                        ? `Options: ${selectionText}`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" | ")
+                      .slice(0, 500);
+
+                    return {
+                      name: item.name,
+                      quantity: String(item.quantity),
+                      base_price_money: {
+                        amount: moneyCents(item.unitPrice),
+                        currency: "USD",
+                      },
+                      ...(note ? { note } : {}),
+                    };
+                  }),
+                  ...(tax > 0
+                    ? [
+                        {
+                          name: "Tax",
+                          quantity: "1",
+                          base_price_money: {
+                            amount: moneyCents(tax),
+                            currency: "USD",
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(tip > 0
+                    ? [
+                        {
+                          name: "Tip",
+                          quantity: "1",
+                          base_price_money: {
+                            amount: moneyCents(tip),
+                            currency: "USD",
+                          },
+                        },
+                      ]
+                    : []),
+                ],
+                fulfillments: [
+                  fulfillmentType === "pickup"
+                    ? {
+                        type: "PICKUP",
+                        state: "PROPOSED",
+                        pickup_details: {
+                          schedule_type: "ASAP",
+                          prep_time_duration: `PT${Math.max(
+                            1,
+                            Number(settings?.pickup_prep_minutes || 20),
+                          )}M`,
+                          recipient: {
+                            display_name: customerName,
+                            phone_number: customerPhone,
+                          },
+                          note: `KTown order #${number} · Requested: ${String(
+                            body?.requestedTime || "asap",
+                          ).slice(0, 80)}`,
+                        },
+                      }
+                    : {
+                        type: "DELIVERY",
+                        state: "PROPOSED",
+                        delivery_details: {
+                          schedule_type: "ASAP",
+                          prep_time_duration: `PT${Math.max(
+                            1,
+                            Number(settings?.delivery_prep_minutes || 45),
+                          )}M`,
+                          recipient: {
+                            display_name: customerName,
+                            phone_number: customerPhone,
+                            address: {
+                              address_line_1: String(
+                                address?.address1 || "",
+                              ).slice(0, 500),
+                              ...(address?.address2
+                                ? {
+                                    address_line_2: String(
+                                      address.address2,
+                                    ).slice(0, 500),
+                                  }
+                                : {}),
+                              locality: String(
+                                address?.city || "",
+                              ).slice(0, 255),
+                              administrative_district_level_1: String(
+                                address?.state || "",
+                              )
+                                .trim()
+                                .toUpperCase()
+                                .slice(0, 3),
+                              postal_code: String(
+                                address?.postalCode || "",
+                              ).slice(0, 32),
+                              country: "US",
+                            },
+                          },
+                          ...(address?.note
+                            ? {
+                                dropoff_notes: String(
+                                  address.note,
+                                ).slice(0, 550),
+                              }
+                            : {}),
+                        },
+                      },
+                ],
+              },
+              payment_note: `KTown order #${number}`,
+              checkout_options: {
+                allow_tipping: false,
+                accepted_payment_methods: {
+                  apple_pay: true,
+                  google_pay: true,
+                },
+                redirect_url:
+                  `${origin}/business/${businessId}/website` +
+                  `?order=${encodeURIComponent(number)}` +
+                  `&payment=square`,
+              },
+            }),
+            cache: "no-store",
+          },
+        );
+
+        const squareText = await squareResponse.text();
+
+        let squarePayload: any = {};
+        try {
+          squarePayload = squareText
+            ? JSON.parse(squareText)
+            : {};
+        } catch {
+          throw new Error(
+            `Square returned an invalid response (HTTP ${squareResponse.status}).`,
+          );
+        }
+
+        if (!squareResponse.ok) {
+          const detail =
+            Array.isArray(squarePayload?.errors) &&
+            squarePayload.errors.length
+              ? squarePayload.errors
+                  .map(
+                    (item: any) =>
+                      item?.detail ||
+                      item?.code ||
+                      "Square payment error",
+                  )
+                  .join(" / ")
+              : squarePayload?.error ||
+                `HTTP ${squareResponse.status}`;
+
+          throw new Error(
+            `Square checkout could not be created: ${detail}`,
+          );
+        }
+
+        const checkoutUrl =
+          squarePayload?.payment_link?.url ||
+          squarePayload?.payment_link?.long_url ||
+          "";
+
+        if (!checkoutUrl) {
+          throw new Error(
+            "Square did not return a checkout URL.",
+          );
+        }
+
+        const squareOrderId =
+          String(squarePayload?.payment_link?.order_id || "");
+
+        const squarePaymentLinkId =
+          String(squarePayload?.payment_link?.id || "");
+
+        if (!squareOrderId) {
+          throw new Error(
+            "Square did not return an order ID.",
+          );
+        }
+
+        const { error: squareLinkSaveError } = await db
+          .from("restaurant_orders")
+          .update({
+            square_order_id: squareOrderId,
+            square_payment_link_id: squarePaymentLinkId || null,
+          })
+          .eq("id", order.id);
+
+        if (squareLinkSaveError) {
+          throw squareLinkSaveError;
+        }
+
+        return NextResponse.json({
+          ok: true,
+          paymentProvider: "square",
+          orderId: order.id,
+          orderNumber: number,
+          checkoutUrl,
+        });
+      }
+
       const session =
         await createStripeCheckoutSession(
           {
@@ -464,6 +724,7 @@ export async function POST(
 
       return NextResponse.json({
         ok: true,
+        paymentProvider: "stripe",
         orderId:
           order.id,
         orderNumber:
