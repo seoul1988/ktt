@@ -101,9 +101,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const redirectUri = process.env.SQUARE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.ktowntriangle.com"}/api/square/oauth/callback`;
     const url = new URL("/oauth2/authorize", base);
     url.searchParams.set("client_id", applicationId);
-    url.searchParams.set("scope", "MERCHANT_PROFILE_READ ORDERS_READ ORDERS_WRITE PAYMENTS_READ PAYMENTS_WRITE");
-    url.searchParams.set("session", "false");
+    url.searchParams.set(
+      "scope",
+      "MERCHANT_PROFILE_READ ORDERS_READ ORDERS_WRITE PAYMENTS_READ PAYMENTS_WRITE",
+    );
+
+    // Square Sandbox only supports the default session=true behavior.
+    // Do NOT send session=false in Sandbox. Production should force login.
+    if (!sandbox) {
+      url.searchParams.set("session", "false");
+    }
+
     url.searchParams.set("state", state);
+
+    // The redirect URL is already registered in the Square Developer Console.
+    // Keeping it here makes the callback explicit and must exactly match that value.
     url.searchParams.set("redirect_uri", redirectUri);
 
     return NextResponse.json({ authorizationUrl: url.toString() });
