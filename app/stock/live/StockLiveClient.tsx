@@ -1,4 +1,3 @@
-// KTOWN CLIENT COMPONENT — keep the next line exactly as-is.
 "use client";
 
 import Link from "next/link";
