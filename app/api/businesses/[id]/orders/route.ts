@@ -129,7 +129,7 @@ export async function POST(
           "restaurant_order_private_settings",
         )
         .select(
-          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number",
+          "stripe_secret_key,twilio_account_sid,twilio_auth_token,twilio_phone_number",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -177,46 +177,20 @@ export async function POST(
       );
     }
 
-    const paymentProvider =
-      privateSettings?.payment_provider === "square"
-        ? "square"
-        : "stripe";
-
     const stripeSecretKey =
       privateSettings?.stripe_secret_key || "";
 
-    const squareAccessToken =
-      privateSettings?.square_access_token || "";
-
-    const squareLocationId =
-      privateSettings?.square_location_id || "";
-
-    if (paymentMethod === "online") {
-      if (
-        paymentProvider === "square" &&
-        (!squareAccessToken || !squareLocationId)
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Square is selected, but this restaurant has not connected its Square account yet.",
-          },
-          { status: 400 },
-        );
-      }
-
-      if (
-        paymentProvider === "stripe" &&
-        !stripeSecretKey
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Stripe is selected, but Stripe payment has not been configured yet.",
-          },
-          { status: 400 },
-        );
-      }
+    if (
+      paymentMethod === "online" &&
+      !stripeSecretKey
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Online payment has not been configured yet.",
+        },
+        { status: 400 },
+      );
     }
 
     const ids = [
@@ -454,94 +428,6 @@ export async function POST(
           request.url,
         ).origin;
 
-      if (paymentProvider === "square") {
-        const squareResponse = await fetch(
-          "https://connect.squareup.com/v2/online-checkout/payment-links",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${squareAccessToken}`,
-              "Content-Type": "application/json",
-              "Square-Version": "2026-08-19",
-            },
-            body: JSON.stringify({
-              idempotency_key: `ktown-order-${order.id}`,
-              quick_pay: {
-                name: `${
-                  business?.name || "Restaurant"
-                } Order #${number}`,
-                price_money: {
-                  amount: moneyCents(total),
-                  currency: "USD",
-                },
-                location_id: squareLocationId,
-              },
-              payment_note: `KTown order #${number}`,
-              checkout_options: {
-                allow_tipping: false,
-                redirect_url:
-                  `${origin}/business/${businessId}/website` +
-                  `?order=${encodeURIComponent(number)}` +
-                  `&payment=square`,
-              },
-            }),
-            cache: "no-store",
-          },
-        );
-
-        const squareText = await squareResponse.text();
-
-        let squarePayload: any = {};
-        try {
-          squarePayload = squareText
-            ? JSON.parse(squareText)
-            : {};
-        } catch {
-          throw new Error(
-            `Square returned an invalid response (HTTP ${squareResponse.status}).`,
-          );
-        }
-
-        if (!squareResponse.ok) {
-          const detail =
-            Array.isArray(squarePayload?.errors) &&
-            squarePayload.errors.length
-              ? squarePayload.errors
-                  .map(
-                    (item: any) =>
-                      item?.detail ||
-                      item?.code ||
-                      "Square payment error",
-                  )
-                  .join(" / ")
-              : squarePayload?.error ||
-                `HTTP ${squareResponse.status}`;
-
-          throw new Error(
-            `Square checkout could not be created: ${detail}`,
-          );
-        }
-
-        const checkoutUrl =
-          squarePayload?.payment_link?.url ||
-          squarePayload?.payment_link?.long_url ||
-          "";
-
-        if (!checkoutUrl) {
-          throw new Error(
-            "Square did not return a checkout URL.",
-          );
-        }
-
-        return NextResponse.json({
-          ok: true,
-          paymentProvider: "square",
-          orderId: order.id,
-          orderNumber: number,
-          checkoutUrl,
-        });
-      }
-
       const session =
         await createStripeCheckoutSession(
           {
@@ -578,7 +464,6 @@ export async function POST(
 
       return NextResponse.json({
         ok: true,
-        paymentProvider: "stripe",
         orderId:
           order.id,
         orderNumber:
