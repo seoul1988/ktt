@@ -1,4 +1,4 @@
-"use client";
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -509,7 +509,7 @@ export default function StockMonitorPage() {
               <thead className="bg-slate-100 text-slate-950">
                 <tr>
                   {[
-                    "Ticker", "Action", "Price", "Forecast", "Score",
+                    "Ticker", "?", "Action", "Price", "Forecast", "Score",
                     "Down Risk", "P/L", "Entry", "Buy60", "Sell60",
                     "VWAP", "EMA9", "EMA20", "Resistance", "Support",
                     "Fast Drop", "1m Trend"
@@ -530,6 +530,17 @@ export default function StockMonitorPage() {
                   return (
                     <tr key={symbol || `empty-${index}`} className="h-[48px]">
                       <Cell strong>{symbol || "-"}</Cell>
+                      <Cell>
+                        {symbol ? (
+                          <button
+                            type="button"
+                            title="이 종목의 분석 항목 설명"
+                            className="mx-auto flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-slate-50 font-black text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            ?
+                          </button>
+                        ) : "-"}
+                      </Cell>
                       <Cell>
                         {symbol ? (
                           <span className={`font-black ${actionClass}`}>
