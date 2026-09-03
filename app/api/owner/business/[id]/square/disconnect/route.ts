@@ -40,9 +40,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const accessToken = String(current?.square_access_token || "");
     const applicationId = process.env.SQUARE_APPLICATION_ID || "";
     const applicationSecret = process.env.SQUARE_APPLICATION_SECRET || "";
-    const sandbox = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase() === "sandbox";
+    const environment = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase();
     if (accessToken && applicationId && applicationSecret) {
-      const base = sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+      const base = "https://connect.squareup.com";
       await fetch(`${base}/oauth2/revoke`, {
         method: "POST",
         headers: {

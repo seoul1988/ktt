@@ -15,11 +15,14 @@ function config() {
   const applicationId = process.env.SQUARE_APPLICATION_ID || "";
   const applicationSecret = process.env.SQUARE_APPLICATION_SECRET || "";
   const stateSecret = process.env.SQUARE_OAUTH_STATE_SECRET || applicationSecret;
-  const sandbox = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase() === "sandbox";
+  const environment = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase();
+  const sandbox = environment === "sandbox";
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.ktowntriangle.com";
   const redirectUri = process.env.SQUARE_REDIRECT_URI || `${siteUrl}/api/square/oauth/callback`;
   if (!applicationId || !applicationSecret || !stateSecret) throw new Error("Square OAuth config missing.");
-  return { applicationId, applicationSecret, stateSecret, sandbox, siteUrl, redirectUri };
+  if (environment !== "production") throw new Error("Square production OAuth is required.");
+  if (applicationId.startsWith("sandbox-")) throw new Error("Sandbox Application ID cannot be used in production.");
+  return { applicationId, applicationSecret, stateSecret, sandbox: false, siteUrl, redirectUri };
 }
 
 function verifyState(state: string, secret: string) {
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     if (errorParam || !code) return redirectToMenu(cfg.siteUrl, businessId, "cancelled");
 
-    const base = cfg.sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+    const base = "https://connect.squareup.com";
     const tokenResponse = await fetch(`${base}/oauth2/token`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Square-Version": SQUARE_VERSION },
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     const accessToken = String(tokenData.access_token);
     const merchantId = String(tokenData.merchant_id);
-    const apiBase = cfg.sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+    const apiBase = "https://connect.squareup.com";
     const squareHeaders = { Authorization: `Bearer ${accessToken}`, "Square-Version": SQUARE_VERSION, "Content-Type": "application/json" };
 
     const [merchantResponse, locationsResponse] = await Promise.all([

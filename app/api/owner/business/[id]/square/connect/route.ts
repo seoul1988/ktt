@@ -21,12 +21,13 @@ function getSquareConfig() {
   const applicationId = process.env.SQUARE_APPLICATION_ID || "";
   const applicationSecret = process.env.SQUARE_APPLICATION_SECRET || "";
   const stateSecret = process.env.SQUARE_OAUTH_STATE_SECRET || applicationSecret;
-  const sandbox = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase() === "sandbox";
+  const environment = (process.env.SQUARE_ENVIRONMENT || "production").toLowerCase();
+  const sandbox = environment === "sandbox";
   if (!applicationId) throw new Error("SQUARE_APPLICATION_ID_MISSING");
   if (!applicationSecret) throw new Error("SQUARE_APPLICATION_SECRET_MISSING");
   if (!stateSecret) throw new Error("SQUARE_STATE_SECRET_MISSING");
-  if (sandbox && !applicationId.startsWith("sandbox-")) throw new Error("SQUARE_SANDBOX_ID_MISMATCH");
-  if (!sandbox && applicationId.startsWith("sandbox-")) throw new Error("SQUARE_PRODUCTION_ID_MISMATCH");
+  if (environment !== "production") throw new Error("SQUARE_PRODUCTION_REQUIRED");
+  if (applicationId.startsWith("sandbox-")) throw new Error("SQUARE_PRODUCTION_ID_MISMATCH");
   return { applicationId, stateSecret, sandbox };
 }
 
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     })).toString("base64url");
     const state = `${payload}.${signState(payload, stateSecret)}`;
 
-    const base = sandbox ? "https://connect.squareupsandbox.com" : "https://connect.squareup.com";
+    const base = "https://connect.squareup.com";
     const redirectUri = process.env.SQUARE_REDIRECT_URI || `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.ktowntriangle.com"}/api/square/oauth/callback`;
     const url = new URL("/oauth2/authorize", base);
     url.searchParams.set("client_id", applicationId);
@@ -106,11 +107,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       "MERCHANT_PROFILE_READ ORDERS_READ ORDERS_WRITE PAYMENTS_READ PAYMENTS_WRITE",
     );
 
-    // Square Sandbox only supports the default session=true behavior.
-    // Do NOT send session=false in Sandbox. Production should force login.
-    if (!sandbox) {
-      url.searchParams.set("session", "false");
-    }
+    // Production OAuth should force the seller to explicitly choose/sign in
+    // to the Square account they want to connect.
+    url.searchParams.set("session", "false");
 
     url.searchParams.set("state", state);
 
@@ -130,6 +129,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       `REDIRECT=${diagnostics.squareRedirectUri}, ` +
       `VERCEL_ENV=${diagnostics.vercelEnv}`;
 
+    if (message === "SQUARE_PRODUCTION_REQUIRED") return NextResponse.json({
+      error: `실제 상점주 연결용입니다. Vercel의 SQUARE_ENVIRONMENT 값을 production으로 바꾸세요. [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
     if (message === "SQUARE_APPLICATION_ID_MISSING") return NextResponse.json({
       error: `SQUARE_APPLICATION_ID를 서버가 읽지 못합니다. [${diagText}]`,
       diagnostics,
