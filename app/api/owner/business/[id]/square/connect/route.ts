@@ -30,6 +30,42 @@ function getSquareConfig() {
   return { applicationId, stateSecret, sandbox };
 }
 
+
+function squareEnvDiagnostics() {
+  const appIdRaw = process.env.SQUARE_APPLICATION_ID;
+  const appSecretRaw = process.env.SQUARE_APPLICATION_SECRET;
+  const stateSecretRaw = process.env.SQUARE_OAUTH_STATE_SECRET;
+  const environmentRaw = process.env.SQUARE_ENVIRONMENT;
+  const redirectRaw = process.env.SQUARE_REDIRECT_URI;
+
+  const appId = (appIdRaw || "").trim();
+  const appSecret = (appSecretRaw || "").trim();
+  const stateSecret = (stateSecretRaw || "").trim();
+  const environment = (environmentRaw || "").trim();
+  const redirect = (redirectRaw || "").trim();
+
+  return {
+    squareApplicationId: appId ? "FOUND" : "MISSING",
+    squareApplicationIdLength: appId.length,
+    squareApplicationIdLooksSandbox: appId.startsWith("sandbox-"),
+    squareApplicationSecret: appSecret ? "FOUND" : "MISSING",
+    squareApplicationSecretLength: appSecret.length,
+    squareOauthStateSecret: stateSecret ? "FOUND" : "NOT SET (Application Secret fallback will be used)",
+    squareEnvironment: environment || "NOT SET",
+    squareRedirectUri: redirect ? "FOUND" : "NOT SET",
+    vercelEnv: process.env.VERCEL_ENV || "NOT SET",
+    nodeEnv: process.env.NODE_ENV || "NOT SET",
+  };
+}
+
+export async function GET() {
+  // Diagnostics intentionally return only presence/status, never secret values.
+  return NextResponse.json({
+    ok: true,
+    diagnostics: squareEnvDiagnostics(),
+  });
+}
+
 function signState(payload: string, secret: string) {
   return createHmac("sha256", secret).update(payload).digest("base64url");
 }
@@ -74,11 +110,37 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   } catch (error) {
     console.error("SQUARE CONNECT ERROR", error);
     const message = error instanceof Error ? error.message : "";
-    if (message === "SQUARE_APPLICATION_ID_MISSING") return NextResponse.json({ error: "Vercel에 SQUARE_APPLICATION_ID가 없습니다." }, { status: 500 });
-    if (message === "SQUARE_APPLICATION_SECRET_MISSING") return NextResponse.json({ error: "Vercel에 SQUARE_APPLICATION_SECRET이 없습니다." }, { status: 500 });
-    if (message === "SQUARE_STATE_SECRET_MISSING") return NextResponse.json({ error: "Vercel에 SQUARE_OAUTH_STATE_SECRET 또는 Application Secret이 필요합니다." }, { status: 500 });
-    if (message === "SQUARE_SANDBOX_ID_MISMATCH") return NextResponse.json({ error: "SQUARE_ENVIRONMENT=sandbox인데 Application ID가 Sandbox ID가 아닙니다." }, { status: 500 });
-    if (message === "SQUARE_PRODUCTION_ID_MISMATCH") return NextResponse.json({ error: "Sandbox Application ID를 사용 중입니다. Vercel에 SQUARE_ENVIRONMENT=sandbox를 추가하세요." }, { status: 500 });
-    return NextResponse.json({ error: message || "Square 연결을 시작하지 못했습니다." }, { status: 500 });
+    const diagnostics = squareEnvDiagnostics();
+    const diagText =
+      `APP_ID=${diagnostics.squareApplicationId}, ` +
+      `APP_SECRET=${diagnostics.squareApplicationSecret}, ` +
+      `ENV=${diagnostics.squareEnvironment}, ` +
+      `REDIRECT=${diagnostics.squareRedirectUri}, ` +
+      `VERCEL_ENV=${diagnostics.vercelEnv}`;
+
+    if (message === "SQUARE_APPLICATION_ID_MISSING") return NextResponse.json({
+      error: `SQUARE_APPLICATION_ID를 서버가 읽지 못합니다. [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
+    if (message === "SQUARE_APPLICATION_SECRET_MISSING") return NextResponse.json({
+      error: `SQUARE_APPLICATION_SECRET을 서버가 읽지 못합니다. [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
+    if (message === "SQUARE_STATE_SECRET_MISSING") return NextResponse.json({
+      error: `SQUARE_OAUTH_STATE_SECRET 또는 Application Secret이 필요합니다. [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
+    if (message === "SQUARE_SANDBOX_ID_MISMATCH") return NextResponse.json({
+      error: `SQUARE_ENVIRONMENT=sandbox인데 Application ID가 Sandbox ID가 아닙니다. [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
+    if (message === "SQUARE_PRODUCTION_ID_MISMATCH") return NextResponse.json({
+      error: `Sandbox Application ID를 사용 중입니다. SQUARE_ENVIRONMENT=sandbox가 필요합니다. [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
+    return NextResponse.json({
+      error: `${message || "Square 연결을 시작하지 못했습니다."} [${diagText}]`,
+      diagnostics,
+    }, { status: 500 });
   }
 }
