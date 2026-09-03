@@ -491,7 +491,15 @@ export default function StockMonitorPage() {
               <button
                 key={label}
                 type="button"
-                className="h-8 rounded border border-slate-300 bg-slate-50 px-3 text-[11px] font-bold text-slate-700"
+                className={`h-8 rounded px-3 text-[11px] font-black shadow-sm transition ${
+                  label === "TODAY'S EVENTS"
+                    ? "border border-amber-500 bg-amber-400 text-slate-950 hover:bg-amber-300"
+                    : label === "MARK BOUGHT"
+                    ? "border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+                    : label === "CLEAR POSITION"
+                    ? "border border-red-500 bg-red-50 text-red-700 hover:bg-red-100"
+                    : "border border-slate-300 bg-slate-50 text-slate-700"
+                }`}
                 title="웹 버전 UI 자리 — 서버 기능 연결 시 활성화"
               >
                 {label}
@@ -535,7 +543,7 @@ export default function StockMonitorPage() {
                           <button
                             type="button"
                             title="이 종목의 분석 항목 설명"
-                            className="mx-auto flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-slate-50 font-black text-slate-600 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+                            className="mx-auto flex h-7 w-7 items-center justify-center rounded-md border border-blue-700 bg-blue-600 text-sm font-black text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
                           >
                             ?
                           </button>
