@@ -550,10 +550,329 @@ export default function StockMonitorPage() {
             </div>
             <button
               type="button"
-import StockLiveClient from "./StockLiveClient";
+              onClick={() => void loadMarketInfo(symbols)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              새로고침
+            </button>
+          </div>
 
-export default function StockLivePage() {
-  return <StockLiveClient />;
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Link
+              href="/stock/live"
+              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
+                📈
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-black tracking-wide text-slate-950">LIVE DATA</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  등록 종목의 실시간 분석 화면 열기
+                </div>
+              </div>
+              <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
+            </Link>
+
+            <DashboardCard
+              icon="📅"
+              title="TODAY'S EVENTS"
+              subtitle="시장에 영향을 줄 수 있는 오늘의 일정"
+              accent="amber"
+            >
+              {marketInfo.events?.length ? (
+                <div className="space-y-2">
+                  {marketInfo.events.slice(0, 6).map((event, index) => (
+                    <div key={event.id || `${event.title}-${index}`} className="flex gap-3 border-b border-slate-100 pb-2 last:border-0">
+                      <div className="w-[62px] shrink-0 text-xs font-black text-slate-600">
+                        {event.time || "-"}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-900">{event.title || "-"}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          {event.symbol ? `${event.symbol} · ` : ""}
+                          {event.importance ? `중요도 ${event.importance}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyBlock text={`이벤트 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+
+            <DashboardCard
+              icon="💵"
+              title="EARNINGS SCHEDULE"
+              subtitle="등록 종목의 예정된 실적 발표"
+              accent="emerald"
+            >
+              {marketInfo.earnings?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-xs">
+                    <thead className="text-left text-slate-500">
+                      <tr>
+                        <th className="pb-2">Ticker</th>
+                        <th className="pb-2">Date</th>
+                        <th className="pb-2">Time</th>
+                        <th className="pb-2 text-right">Estimate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {marketInfo.earnings.slice(0, 8).map((item, index) => (
+                        <tr key={`${item.symbol}-${item.date}-${index}`} className="border-t border-slate-100">
+                          <td className="py-2 font-black text-slate-950">{item.symbol || "-"}</td>
+                          <td className="py-2">{item.date || "-"}</td>
+                          <td className="py-2">{item.time || "-"}</td>
+                          <td className="py-2 text-right">{item.estimate ?? "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <EmptyBlock text={`어닝 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+
+            <DashboardCard
+              icon="📰"
+              title="LATEST NEWS"
+              subtitle="등록 종목 중심 최신 뉴스"
+              accent="rose"
+            >
+              {marketInfo.news?.length ? (
+                <div className="space-y-2">
+                  {marketInfo.news.slice(0, 6).map((news, index) => {
+                    const content = (
+                      <>
+                        <div className="text-sm font-bold leading-5 text-slate-900">{news.title || "-"}</div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {[news.symbol, news.source, news.publishedAt].filter(Boolean).join(" · ")}
+                        </div>
+                      </>
+                    );
+
+                    return news.url ? (
+                      <a
+                        key={news.id || `${news.title}-${index}`}
+                        href={news.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <div
+                        key={news.id || `${news.title}-${index}`}
+                        className="rounded-lg border border-slate-200 px-3 py-2"
+                      >
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyBlock text={`뉴스 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-1 text-sm font-black text-slate-950">
+              2) POSITION / HISTORY:
+            </div>
+
+            <select
+              value={symbols[0] || ""}
+              onChange={() => {}}
+              className="h-8 min-w-[90px] rounded border border-slate-300 bg-white px-2 text-xs font-semibold"
+            >
+              {symbols.length ? (
+                symbols.map((symbol) => (
+                  <option key={symbol} value={symbol}>{symbol}</option>
+                ))
+              ) : (
+                <option value="">-</option>
+              )}
+            </select>
+
+            {[
+              "MARK BOUGHT",
+              "CLEAR POSITION",
+              "TODAY'S EVENTS",
+            ].map((label) => (
+              <button
+                key={label}
+                type="button"
+                className={label === "TODAY'S EVENTS"
+                  ? "h-8 rounded border-2 border-amber-600 bg-amber-400 px-3 text-[11px] font-black text-slate-950 shadow-sm hover:bg-amber-300"
+                  : "h-8 rounded border border-slate-300 bg-slate-50 px-3 text-[11px] font-bold text-slate-700"}
+                title="웹 버전 UI 자리 — 서버 기능 연결 시 활성화"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-2 text-[11px] leading-5 text-slate-600">
+            Schwab 실시간/최근 시장 데이터와 핵심 단기 분석을 표시합니다. 서버 데이터가 없거나 장 종료 후에는 값이 “-”로 표시되며,
+            등록된 종목 행은 그대로 유지됩니다.
+          </p>
+
+          <div className="mt-3 overflow-x-auto border border-slate-300">
+            <table className="min-w-[1180px] w-full border-collapse bg-white text-[11px]">
+              <thead className="bg-slate-100 text-slate-950">
+                <tr>
+                  {[
+                    "Ticker", "?", "Action", "Price", "Forecast", "Score",
+                    "Down Risk", "P/L", "Entry", "Buy60", "Sell60",
+                    "VWAP", "EMA9", "EMA20", "Resistance", "Support",
+                    "Fast Drop", "1m Trend"
+                  ].map((head) => (
+                    <th
+                      key={head}
+                      className="whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center font-black"
+                    >
+                      {head}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {rows.map(({ symbol, item }, index) => {
+                  const actionClass = signalStyle(item?.action, item?.down_risk, item?.fast_drop);
+                  return (
+                    <tr key={symbol || `empty-${index}`} className="h-[48px]">
+                      <Cell strong>{symbol || "-"}</Cell>
+                      <Cell>
+                        {symbol ? (
+                          <button
+                            type="button"
+                            title="이 종목의 분석 항목 설명"
+                            className="mx-auto flex h-7 w-7 items-center justify-center rounded-md border-2 border-blue-700 bg-blue-600 text-sm font-black text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          >
+                            ?
+                          </button>
+                        ) : "-"}
+                      </Cell>
+                      <Cell>
+                        {symbol ? (
+                          <span className={`font-black ${actionClass}`}>
+                            {item?.action || "DATA WAIT"}
+                          </span>
+                        ) : "-"}
+                      </Cell>
+                      <Cell>{symbol && item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
+                      <Cell>{symbol ? item?.forecast || "-" : "-"}</Cell>
+                      <Cell>{symbol && item ? item.score ?? "-" : "-"}</Cell>
+                      <Cell>{symbol && item ? `${fmt(item.down_risk, 0)}%` : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.pnl) : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.entry) : "-"}</Cell>
+                      <Cell>{symbol && item ? item.buy60 ?? "-" : "-"}</Cell>
+                      <Cell>{symbol && item ? item.sell60 ?? "-" : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.vwap) : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.ema9) : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.ema20) : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.resistance) : "-"}</Cell>
+                      <Cell>{symbol && item ? fmt(item.local_support ?? item.support) : "-"}</Cell>
+                      <Cell>{symbol ? item?.fast_drop || "-" : "-"}</Cell>
+                      <Cell>{symbol ? item?.trend_1m || "-" : "-"}</Cell>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_320px]">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+              <div className="mb-1 font-black text-slate-800">LEGEND</div>
+              Action: BUY WATCH / BUY / HOLD / WATCH / SELL WATCH / SELL ·
+              Forecast: 단기 예상 방향 · Score: 종합 신호 점수 · Down Risk: 하락 위험도 ·
+              Buy60 / Sell60: 최근 매수/매도 흐름 · VWAP / EMA: 단기 기준선 ·
+              Resistance / Support: 단기 저항/지지 · Fast Drop: 급락 경고
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
+              <div className="mb-1 font-black text-slate-800">STATUS</div>
+              <div>• 서버: {status}</div>
+              <div>• 등록 종목: {symbols.length} / 5</div>
+              <div>• 데이터: {Object.keys(snapshots).length ? "수신 중" : "대기 중"}</div>
+              <div>• 실시간 값이 없으면 “-” 표시</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
 }
 
 
+
+function DashboardCard({
+  icon,
+  title,
+  subtitle,
+  accent,
+  children,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  accent: "blue" | "amber" | "emerald" | "rose";
+  children: React.ReactNode;
+}) {
+  const accentClass = {
+    blue: "bg-blue-50 text-blue-700",
+    amber: "bg-amber-50 text-amber-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    rose: "bg-rose-50 text-rose-700",
+  }[accent];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-start gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${accentClass}`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-sm font-black tracking-wide text-slate-950">{title}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EmptyBlock({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+function Cell({
+  children,
+  strong = false,
+}: {
+  children: React.ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center ${
+        strong ? "font-black text-slate-950" : "font-medium text-slate-700"
+      }`}
+    >
+      {children}
+    </td>
+  );
+}
