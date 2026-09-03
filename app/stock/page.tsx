@@ -1,5 +1,6 @@
-"use client";
 
+
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -557,41 +558,21 @@ export default function StockMonitorPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <DashboardCard
-              icon="📈"
-              title="LIVE DATA"
-              subtitle="등록 종목의 현재 분석 상태"
-              accent="blue"
+            <Link
+              href="/stock/live"
+              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
             >
-              {symbols.length ? (
-                <div className="space-y-2">
-                  {symbols.map((symbol) => {
-                    const item = snapshots[symbol];
-                    return (
-                      <div
-                        key={symbol}
-                        className="grid grid-cols-[70px_1fr_auto] items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
-                      >
-                        <div className="font-black text-slate-950">{symbol}</div>
-                        <div>
-                          <div className={`text-xs font-black ${signalStyle(item?.action, item?.down_risk, item?.fast_drop)}`}>
-                            {item?.action || "DATA WAIT"}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">
-                            Score {item?.score ?? "-"} · Risk {item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}
-                          </div>
-                        </div>
-                        <div className="text-right font-black text-slate-900">
-                          {item?.price != null ? `$${fmt(item.price)}` : "-"}
-                        </div>
-                      </div>
-                    );
-                  })}
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
+                📈
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-black tracking-wide text-slate-950">LIVE DATA</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  등록 종목의 실시간 분석 화면 열기
                 </div>
-              ) : (
-                <EmptyBlock text="먼저 종목을 등록하세요." />
-              )}
-            </DashboardCard>
+              </div>
+              <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
+            </Link>
 
             <DashboardCard
               icon="📅"
