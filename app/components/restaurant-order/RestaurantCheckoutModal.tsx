@@ -691,7 +691,14 @@ export default function RestaurantCheckoutModal({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={onClose}>
+    <div
+      className={
+        isIPhone
+          ? "fixed inset-0 z-[13000] flex items-start justify-center bg-black/60 px-2 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2"
+          : "fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+      }
+      onClick={onClose}
+    >
       <div className={
             isIPhone
               ? "max-h-[76dvh] w-[calc(100%-1rem)] max-w-[350px] overflow-y-auto rounded-2xl bg-white text-gray-950 shadow-2xl"
