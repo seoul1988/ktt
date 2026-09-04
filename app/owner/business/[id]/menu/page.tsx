@@ -1751,8 +1751,7 @@ export default function OwnerBusinessMenuPage() {
       return;
     }
 
-    // 같은 옵션 카테고리 안에서는 옵션 이름 중복 저장 금지
-    // (대소문자/앞뒤 공백 무시)
+    // 같은 옵션 그룹 안에서 이름 중복 금지
     const seenOptionNames = new Set<string>();
     const duplicateOption = templateOptionsInput.find((option) => {
       const optionName = option.name.trim().toLowerCase();
@@ -1781,26 +1780,28 @@ export default function OwnerBusinessMenuPage() {
       return;
     }
 
-    const previousTemplate = editingTemplateId
+    const oldTemplate = editingTemplateId
       ? optionTemplates.find((row) => row.id === editingTemplateId) || null
       : null;
 
-    // 이름을 바꾼 경우에도 기존 메뉴에 붙은 그룹을 찾을 수 있도록
-    // 저장 전 이름을 따로 기억합니다.
-    const previousName = String(previousTemplate?.name || name).trim();
-    const previousKey = previousName.toLowerCase();
-    const nextKey = name.toLowerCase();
+    const oldName = String(oldTemplate?.name || name).trim();
+    const oldKey = oldName.toLowerCase();
+    const newKey = name.toLowerCase();
 
     const template: MenuOptionTemplate = {
       id:
         editingTemplateId ??
-        `template-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        `template-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
       name,
       description: templateDescriptionInput.trim(),
       required: templateRequiredInput,
       minSelect: Math.max(0, Number(templateMinInput) || 0),
       maxSelect:
-        templateMaxInput == null ? null : Math.max(0, templateMaxInput),
+        templateMaxInput == null
+          ? null
+          : Math.max(0, templateMaxInput),
       options: templateOptionsInput.map((option, index) => ({
         name: option.name.trim() || `Option ${index + 1}`,
         priceDelta: Number(Number(option.priceDelta || 0).toFixed(2)),
@@ -1810,204 +1811,112 @@ export default function OwnerBusinessMenuPage() {
     };
 
     const wasEdit = Boolean(editingTemplateId);
-    setMessage("공용 옵션을 DB에 저장 중...");
 
-    try {
-      /*
-       * 1) 공용 Option Library를 실제 DB에 저장
-       *
-       * 화면의 optionTemplates/localStorage만 바꾸면 새 옵션이 브라우저에는 보이지만
-       * menu_option_groups / menu_option_choices에는 남지 않습니다.
-       * 여기서 group을 찾거나 만든 뒤 choices를 현재 편집 내용으로 완전히 교체합니다.
-       */
-      let dbGroupId: number | null = null;
+    /*
+     * 중요:
+     * menu_option_groups / menu_option_choices를 브라우저에서 직접 UPDATE/DELETE/INSERT 하지 않습니다.
+     * 이 테이블은 현재 화면에서는 SELECT만 되고, RLS 때문에 직접 쓰기가 막힐 수 있습니다.
+     *
+     * 실제 메뉴 옵션 DB 저장은 이미 사용 중인
+     * /api/owner/business/[id]/menu
+     * 경로(saveOneItem)를 사용합니다.
+     */
+    const nextTemplates = editingTemplateId
+      ? optionTemplates.map((row) =>
+          row.id === editingTemplateId ? template : row,
+        )
+      : [...optionTemplates, template];
 
-      if (editingTemplateId?.startsWith("db-")) {
-        const parsedId = Number(editingTemplateId.slice(3));
-        if (Number.isFinite(parsedId) && parsedId > 0) {
-          dbGroupId = parsedId;
+    persistOptionTemplates(nextTemplates);
+
+    const changedItemIds: number[] = [];
+
+    const nextItems = itemsRef.current.map((item) => {
+      const groups = normalizeOptionGroups(item);
+      let changed = false;
+
+      const nextGroups = groups.map((group, groupIndex) => {
+        const groupKey = group.name.trim().toLowerCase();
+
+        // 수정 전 이름 또는 수정 후 이름이 같은 그룹은
+        // 현재 공용 옵션의 전체 항목으로 완전히 교체합니다.
+        if (groupKey !== oldKey && groupKey !== newKey) {
+          return group;
         }
-      }
 
-      if (dbGroupId == null) {
-        // merged template은 id가 local/system id일 수 있으므로 이름으로 DB group을 다시 찾습니다.
-        const lookupNames = Array.from(
-          new Set([previousName, name].map((value) => value.trim()).filter(Boolean)),
-        );
-
-        if (lookupNames.length > 0) {
-          const { data: existingGroups, error: lookupError } = await supabase
-            .from("menu_option_groups")
-            .select("id, name")
-            .eq("business_id", businessId)
-            .in("name", lookupNames)
-            .order("id", { ascending: true })
-            .limit(1);
-
-          if (lookupError) throw lookupError;
-
-          const found = Array.isArray(existingGroups) ? existingGroups[0] : null;
-          if (found?.id != null) {
-            dbGroupId = Number(found.id);
-          }
-        }
-      }
-
-      if (dbGroupId != null) {
-        const { error: updateGroupError } = await supabase
-          .from("menu_option_groups")
-          .update({
-            name: template.name,
-            required: template.required,
-            min_select: template.minSelect,
-            max_select: template.maxSelect,
-            active: true,
-          })
-          .eq("id", dbGroupId)
-          .eq("business_id", businessId);
-
-        if (updateGroupError) throw updateGroupError;
-      } else {
-        const { data: insertedGroup, error: insertGroupError } = await supabase
-          .from("menu_option_groups")
-          .insert({
-            business_id: businessId,
-            name: template.name,
-            required: template.required,
-            min_select: template.minSelect,
-            max_select: template.maxSelect,
-            sort_order: optionTemplates.length,
-            active: true,
-          })
-          .select("id")
-          .single();
-
-        if (insertGroupError) throw insertGroupError;
-        dbGroupId = Number(insertedGroup?.id);
-
-        if (!Number.isFinite(dbGroupId) || dbGroupId <= 0) {
-          throw new Error("저장된 옵션 그룹 ID를 확인할 수 없습니다.");
-        }
-      }
-
-      // DB가 4개였던 핵심 원인:
-      // choices를 localStorage에만 저장하지 말고 현재 6개 목록으로 DB를 정확히 교체합니다.
-      const { error: deleteChoicesError } = await supabase
-        .from("menu_option_choices")
-        .delete()
-        .eq("option_group_id", dbGroupId);
-
-      if (deleteChoicesError) throw deleteChoicesError;
-
-      const choiceRows = template.options.map((option, index) => ({
-        option_group_id: dbGroupId,
-        name: option.name,
-        price_delta: Number(Number(option.priceDelta || 0).toFixed(2)),
-        sort_order: index,
-        active: true,
-        sold_out: Boolean(option.soldOut),
-      }));
-
-      if (choiceRows.length > 0) {
-        const { error: insertChoicesError } = await supabase
-          .from("menu_option_choices")
-          .insert(choiceRows);
-
-        if (insertChoicesError) throw insertChoicesError;
-      }
-
-      /*
-       * 2) 화면/로컬 Option Library도 같은 내용으로 갱신
-       * DB id를 알게 되었으므로 다음 편집부터는 db-{id}로 직접 연결합니다.
-       */
-      const savedTemplate: MenuOptionTemplate = {
-        ...template,
-        id: `db-${dbGroupId}`,
-      };
-
-      const nextTemplates = editingTemplateId
-        ? optionTemplates.map((row) =>
-            row.id === editingTemplateId ? savedTemplate : row,
-          )
-        : [...optionTemplates, savedTemplate];
-
-      persistOptionTemplates(nextTemplates);
-
-      /*
-       * 3) 이 공용 옵션을 이미 사용하는 모든 메뉴 아이템의 option_groups도
-       * 현재 6개 목록으로 교체하고 /menu API를 통해 즉시 DB 저장합니다.
-       */
-      const changedItemIds: number[] = [];
-
-      const nextItems = itemsRef.current.map((item) => {
-        const groups = normalizeOptionGroups(item);
-        let changed = false;
-
-        const nextGroups = groups.map((group, groupIndex) => {
-          const groupKey = group.name.trim().toLowerCase();
-
-          // 기존 이름 또는 새 이름으로 붙어 있는 동일 공용 그룹 모두 갱신
-          if (groupKey !== previousKey && groupKey !== nextKey) {
-            return group;
-          }
-
-          changed = true;
-
-          return {
-            name: savedTemplate.name,
-            description: savedTemplate.description || "",
-            required: savedTemplate.required,
-            minSelect: savedTemplate.minSelect,
-            maxSelect: savedTemplate.maxSelect,
-            displayOrder: groupIndex,
-            options: savedTemplate.options.map((option, optionIndex) => ({
-              ...option,
-              displayOrder: optionIndex,
-            })),
-          };
-        });
-
-        if (!changed) return item;
-
-        changedItemIds.push(item.id);
+        changed = true;
 
         return {
-          ...item,
-          option_groups: nextGroups,
-          optionGroups: nextGroups,
-          menu_option_groups: nextGroups,
+          name: template.name,
+          description: template.description || "",
+          required: template.required,
+          minSelect: template.minSelect,
+          maxSelect: template.maxSelect,
+          displayOrder: groupIndex,
+          options: template.options.map((option, optionIndex) => ({
+            ...option,
+            displayOrder: optionIndex,
+          })),
         };
       });
 
-      // saveOneItem()이 stale state를 읽지 않도록 ref를 먼저 갱신
-      itemsRef.current = nextItems;
-      setItems(nextItems);
+      if (!changed) return item;
 
-      // debounce를 거치지 않고 저장 버튼 클릭 시 실제 DB 저장 완료까지 기다립니다.
-      for (const itemId of changedItemIds) {
-        const oldTimer = itemAutoSaveTimers.current[itemId];
-        if (oldTimer) {
-          clearTimeout(oldTimer);
-          delete itemAutoSaveTimers.current[itemId];
+      changedItemIds.push(item.id);
+
+      return {
+        ...item,
+        option_groups: nextGroups,
+        optionGroups: nextGroups,
+        menu_option_groups: nextGroups,
+      };
+    });
+
+    // saveOneItem()이 반드시 최신 6개 옵션을 읽도록 ref를 먼저 갱신
+    itemsRef.current = nextItems;
+    setItems(nextItems);
+
+    try {
+      if (changedItemIds.length > 0) {
+        setMessage(
+          `공용 옵션 저장 중... (${template.options.length}개 / 메뉴 ${changedItemIds.length}개)`,
+        );
+
+        // 기존 debounce timer가 남아 있으면 제거
+        changedItemIds.forEach((itemId) => {
+          const timer = itemAutoSaveTimers.current[itemId];
+          if (timer) {
+            clearTimeout(timer);
+            delete itemAutoSaveTimers.current[itemId];
+          }
+        });
+
+        // 메뉴 API를 통해 실제 DB에 저장.
+        // saveOneItem 내부에서 normalizeItemForSave()가 option_groups를 payload에 포함합니다.
+        for (const itemId of changedItemIds) {
+          await saveOneItem(itemId);
         }
-        await saveOneItem(itemId);
       }
 
       resetOptionTemplateForm();
       setOptionTemplateOpen(false);
 
       setMessage(
-        `✓ "${savedTemplate.name}" 저장 완료: Option Library ${savedTemplate.options.length}개` +
-          (changedItemIds.length > 0
-            ? ` / 적용 메뉴 ${changedItemIds.length}개 DB 동기화 완료`
-            : " / 적용된 메뉴 없음"),
+        changedItemIds.length > 0
+          ? `✓ "${template.name}" ${template.options.length}개 저장 완료 / 적용 메뉴 ${changedItemIds.length}개 DB 동기화 완료`
+          : wasEdit
+            ? `✓ "${template.name}" 공용 옵션을 수정했습니다. 현재 이 옵션을 사용하는 메뉴는 없습니다.`
+            : `✓ "${template.name}" 공용 옵션을 등록했습니다.`,
       );
     } catch (error) {
-      console.error("OPTION TEMPLATE DB SAVE ERROR", error);
+      console.error("OPTION TEMPLATE MENU SYNC ERROR", error);
+      const detail =
+        error && typeof error === "object"
+          ? JSON.stringify(error)
+          : String(error || "");
+
       setMessage(
-        error instanceof Error
-          ? `공용 옵션 DB 저장 실패: ${error.message}`
-          : "공용 옵션 DB 저장 실패",
+        `공용 옵션 메뉴 DB 동기화 실패${detail ? `: ${detail}` : ""}`,
       );
     }
   }
