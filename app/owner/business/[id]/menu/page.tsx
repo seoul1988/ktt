@@ -48,6 +48,20 @@ function getDefaultOptionCategoryName(index: number) {
   return DEFAULT_OPTION_CATEGORY_NAMES[index] ?? `Option ${index + 1}`;
 }
 
+const DEFAULT_COMBO_IT_TEMPLATE: MenuOptionTemplate = {
+  id: "system-combo-it",
+  name: "Combo It!",
+  required: false,
+  minSelect: 0,
+  maxSelect: 1,
+  options: [
+    { name: "Small Fries Combo", priceDelta: 4.5, soldOut: false, displayOrder: 0 },
+    { name: "Medium Fries Combo", priceDelta: 5.0, soldOut: false, displayOrder: 1 },
+    { name: "Small Fries Combo + Shake", priceDelta: 8.0, soldOut: false, displayOrder: 2 },
+    { name: "Medium Fries Combo + Shake", priceDelta: 8.5, soldOut: false, displayOrder: 3 },
+  ],
+};
+
 type MenuItem = {
   id: number;
   category_id: number | null;
@@ -364,6 +378,7 @@ export default function OwnerBusinessMenuPage() {
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [newMenuCategoryId, setNewMenuCategoryId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -412,6 +427,7 @@ export default function OwnerBusinessMenuPage() {
   >(new Set());
 
   const [optionTemplates, setOptionTemplates] = useState<MenuOptionTemplate[]>([]);
+  const [optionLibraryOpen, setOptionLibraryOpen] = useState(false);
   const [optionTemplateOpen, setOptionTemplateOpen] = useState(false);
   const [expandedOptionTemplateIds, setExpandedOptionTemplateIds] = useState<Set<string>>(new Set());
   const [expandedSavedOptionKeys, setExpandedSavedOptionKeys] = useState<Set<string>>(new Set());
@@ -939,6 +955,80 @@ export default function OwnerBusinessMenuPage() {
     } catch {
       // ignore malformed local storage data
     }
+  }, [businessId]);
+
+  // DB 공용 옵션 라이브러리 로드.
+  // menu_option_groups / menu_option_choices에 저장된 옵션을 관리자 화면에 합칩니다.
+  useEffect(() => {
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    let cancelled = false;
+
+    async function loadDbOptionLibrary() {
+      const { data: groups, error: groupError } = await supabase
+        .from("menu_option_groups")
+        .select("id, name, required, min_select, max_select, sort_order, active")
+        .eq("business_id", businessId)
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+
+      if (groupError) {
+        console.error("OPTION LIBRARY GROUP LOAD ERROR", groupError);
+        setMessage(`옵션 목록 DB 불러오기 실패: ${groupError.message}`);
+        return;
+      }
+
+      const groupRows = Array.isArray(groups) ? groups : [];
+      const groupIds = groupRows.map((group) => Number(group.id)).filter(Number.isFinite);
+
+      let choices: any[] = [];
+      if (groupIds.length > 0) {
+        const { data: choiceRows, error: choiceError } = await supabase
+          .from("menu_option_choices")
+          .select("id, option_group_id, name, price_delta, sort_order, active, sold_out")
+          .in("option_group_id", groupIds)
+          .eq("active", true)
+          .order("sort_order", { ascending: true });
+
+        if (choiceError) {
+          console.error("OPTION LIBRARY CHOICE LOAD ERROR", choiceError);
+          setMessage(`옵션 항목 DB 불러오기 실패: ${choiceError.message}`);
+          return;
+        }
+
+        choices = Array.isArray(choiceRows) ? choiceRows : [];
+      }
+
+      if (cancelled) return;
+
+      const dbTemplates: MenuOptionTemplate[] = groupRows.map((group, groupIndex) => ({
+        id: `db-${group.id}`,
+        name: String(group.name || `Option ${groupIndex + 1}`),
+        required: Boolean(group.required),
+        minSelect: Math.max(0, Number(group.min_select) || 0),
+        maxSelect:
+          group.max_select == null
+            ? null
+            : Math.max(0, Number(group.max_select) || 0),
+        options: choices
+          .filter((choice) => Number(choice.option_group_id) === Number(group.id))
+          .map((choice, optionIndex) => ({
+            name: String(choice.name || `Option ${optionIndex + 1}`),
+            priceDelta: Number(choice.price_delta || 0),
+            soldOut: Boolean(choice.sold_out),
+            displayOrder: Number(choice.sort_order ?? optionIndex),
+          })),
+      }));
+
+      setOptionTemplates((current) =>
+        mergeTemplateCollections(current, dbTemplates),
+      );
+    }
+
+    void loadDbOptionLibrary();
+    return () => {
+      cancelled = true;
+    };
   }, [businessId]);
 
   // 공용 옵션이 불러와지면 첫 그룹의 실제 옵션 항목을
@@ -1721,6 +1811,66 @@ export default function OwnerBusinessMenuPage() {
     );
   }
 
+  function toggleOptionTemplateForItem(
+    itemId: number,
+    template: MenuOptionTemplate,
+  ) {
+    const templateKey = template.name.trim().toLowerCase();
+
+    updateOptionGroups(itemId, (groups) => {
+      const existingIndex = groups.findIndex(
+        (group) => group.name.trim().toLowerCase() === templateKey,
+      );
+
+      if (existingIndex >= 0) {
+        return groups.filter((_, index) => index !== existingIndex);
+      }
+
+      return [
+        ...groups,
+        {
+          name: template.name,
+          required: template.required,
+          minSelect: template.minSelect,
+          maxSelect: template.maxSelect,
+          displayOrder: groups.length,
+          options: template.options.map((option, index) => ({
+            ...option,
+            displayOrder: index,
+          })),
+        },
+      ];
+    });
+
+    setMessage(`✓ ${template.name} 옵션을 변경했습니다. 자동 저장됩니다.`);
+  }
+
+  function setQuickOptionRequired(
+    itemId: number,
+    templateName: string,
+    required: boolean,
+  ) {
+    const templateKey = templateName.trim().toLowerCase();
+
+    updateOptionGroups(itemId, (groups) =>
+      groups.map((group) => {
+        if (group.name.trim().toLowerCase() !== templateKey) return group;
+
+        return {
+          ...group,
+          required,
+          minSelect: required
+            ? Math.max(1, Number(group.minSelect) || 0)
+            : 0,
+        };
+      }),
+    );
+
+    setMessage(
+      `✓ ${templateName} 필수 선택을 ${required ? "ON" : "OFF"}으로 변경했습니다. 자동 저장됩니다.`,
+    );
+  }
+
   function saveGroupAsTemplate(
     item: MenuItem,
     group: MenuOptionGroup,
@@ -1946,9 +2096,13 @@ export default function OwnerBusinessMenuPage() {
     if (!item) return;
 
     setItemSaveStatus((current) => ({ ...current, [itemId]: "saving" }));
+
     try {
       const token = await getAccessToken();
-      const response = await fetch(`/api/owner/business/${businessId}/menu`, {
+      const itemPayload = normalizeItemForSave(item);
+
+      // 먼저 변경된 메뉴 1개만 빠르게 자동 저장합니다.
+      let response = await fetch(`/api/owner/business/${businessId}/menu`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -1956,16 +2110,65 @@ export default function OwnerBusinessMenuPage() {
         },
         body: JSON.stringify({
           categories: [],
-          items: [normalizeItemForSave(item)],
+          items: [itemPayload],
         }),
       });
-      const data = await readApiJson(response);
-      if (!response.ok) throw new Error(data.error || "자동 저장 실패");
+
+      let data = await readApiJson(response);
+
+      // 일부 menu API 구현은 빈 categories + 단일 item PATCH를 허용하지 않을 수 있습니다.
+      // 그 경우 현재 화면의 전체 카테고리/메뉴 형식으로 한 번 자동 재시도합니다.
+      if (!response.ok) {
+        console.warn("MENU ITEM AUTOSAVE SINGLE PATCH FAILED", {
+          status: response.status,
+          data,
+          itemId,
+        });
+
+        const normalizedCategories = categoriesRef.current.map((category) => ({
+          id: category.id,
+          name: category.name.trim(),
+          display_order: Number(category.display_order ?? 999),
+          is_active: category.is_active,
+        }));
+
+        const normalizedItems = itemsRef.current.map((row) =>
+          normalizeItemForSave(row),
+        );
+
+        response = await fetch(`/api/owner/business/${businessId}/menu`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            categories: normalizedCategories,
+            items: normalizedItems,
+          }),
+        });
+
+        data = await readApiJson(response);
+      }
+
+      if (!response.ok) {
+        const serverMessage =
+          data?.error ||
+          data?.message ||
+          `HTTP ${response.status} 메뉴 저장 실패`;
+        throw new Error(serverMessage);
+      }
+
       setItemSaveStatus((current) => ({ ...current, [itemId]: "saved" }));
+      setMessage("✓ 옵션 변경 자동 저장 완료");
     } catch (error) {
       console.error("MENU ITEM AUTOSAVE ERROR", error);
       setItemSaveStatus((current) => ({ ...current, [itemId]: "error" }));
-      setMessage(error instanceof Error ? `자동 저장 실패: ${error.message}` : "자동 저장 실패");
+      setMessage(
+        error instanceof Error
+          ? `자동 저장 실패: ${error.message}`
+          : "자동 저장 실패",
+      );
     }
   }
 
@@ -2044,11 +2247,13 @@ export default function OwnerBusinessMenuPage() {
   }
 
   function updateItem(itemId: number, patch: Partial<MenuItem>) {
-    setItems((current) =>
-      current.map((item) =>
+    setItems((current) => {
+      const next = current.map((item) =>
         item.id === itemId ? { ...item, ...patch } : item,
-      ),
-    );
+      );
+      itemsRef.current = next;
+      return next;
+    });
     scheduleItemAutoSave(itemId);
     setMessage("");
   }
@@ -2067,8 +2272,8 @@ export default function OwnerBusinessMenuPage() {
     itemId: number,
     updater: (groups: MenuOptionGroup[]) => MenuOptionGroup[],
   ) {
-    setItems((current) =>
-      current.map((item) => {
+    setItems((current) => {
+      const next = current.map((item) => {
         if (item.id !== itemId) return item;
 
         const groups = normalizeOptionGroups(item);
@@ -2087,8 +2292,12 @@ export default function OwnerBusinessMenuPage() {
           optionGroups: nextGroups,
           menu_option_groups: nextGroups,
         };
-      }),
-    );
+      });
+
+      // 체크 직후 시작되는 자동 저장이 이전 itemsRef를 읽지 않도록 즉시 동기화합니다.
+      itemsRef.current = next;
+      return next;
+    });
     scheduleItemAutoSave(itemId);
     setMessage("");
   }
@@ -3351,74 +3560,102 @@ export default function OwnerBusinessMenuPage() {
         </section>
 
         <section className="mb-5 rounded-3xl border-2 border-blue-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setOptionLibraryOpen((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl px-1 py-1 text-left"
+            aria-expanded={optionLibraryOpen}
+          >
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-blue-600">
-                Shared Options
+                Option Library
               </p>
-              <h2 className="mt-1 text-xl font-black">
-                공용 옵션 관리
-              </h2>
-              <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">
-                이미 메뉴에 등록되어 있는 옵션도 자동으로 불러오며, Sauce, Add-ons, Size 같은 공용 옵션을 등록·수정·삭제하고 다른 메뉴에서 재사용할 수 있습니다.
+              <h2 className="mt-1 text-xl font-black">옵션 목록</h2>
+              <p className="mt-1 text-xs font-bold text-gray-500">
+                {optionTemplates.length}개 옵션 그룹
               </p>
             </div>
+            <span className="flex h-10 min-w-[92px] items-center justify-center rounded-xl bg-blue-600 px-3 text-xs font-black text-white">
+              {optionLibraryOpen ? "접기 ▲" : "펼치기 ▼"}
+            </span>
+          </button>
+
+          {optionLibraryOpen ? (
+          <div className="mt-4 border-t border-blue-100 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="w-full text-xs font-semibold leading-5 text-gray-600">현재 메뉴에 등록된 옵션을 자동으로 모아 종류별로 보여줍니다. 필요한 그룹은 바로 수정하거나 삭제할 수 있습니다.</p>
 
             <div className="w-full rounded-2xl border border-blue-100 bg-blue-50 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-black text-blue-900">
-                  옵션 카테고리 {optionCategoryNames.length}개
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={addOptionCategory}
-                    className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-black text-blue-700"
-                  >
-                    + 옵션 카테고리 추가
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveOptionCategoryNames}
-                    className="rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-black text-white"
-                  >
-                    카테고리 이름 저장
-                  </button>
+              {optionTemplates.length === 0 ? (
+                <div className="rounded-xl bg-white p-4 text-center text-xs font-bold text-gray-500">
+                  아직 등록된 옵션이 없습니다. 메뉴에 저장된 옵션이 있으면 자동으로 이곳에 나타납니다.
                 </div>
-              </div>
-
-              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                {optionCategoryNames.map((categoryName, categoryIndex) => (
-                  <label
-                    key={`option-category-name-${categoryIndex}`}
-                    className="rounded-xl bg-white p-2"
-                  >
-                    <span className="block text-[10px] font-black text-gray-500">
-                      옵션 카테고리 {categoryIndex + 1}
-                    </span>
-                    <input
-                      value={categoryName}
-                      onChange={(event) =>
-                        updateOptionCategoryName(categoryIndex, event.target.value)
-                      }
-                      placeholder={getDefaultOptionCategoryName(categoryIndex)}
-                      className="mt-1 w-full rounded-lg border border-blue-100 px-2 py-2 text-xs font-black outline-none"
-                    />
-                  </label>
-                ))}
-              </div>
-
-              <p className="mt-2 text-[11px] font-semibold leading-5 text-blue-900/70">
-                아래 옵션 항목마다 소속 카테고리를 선택해서 이동할 수 있습니다.
-              </p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {optionTemplates.map((template) => (
+                    <div
+                      key={`quick-library-${template.id}`}
+                      className="rounded-xl border border-blue-100 bg-white p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 flex-1 text-sm font-black text-[#172033]">
+                          {template.name}
+                        </p>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                            {template.options.length}개
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              editOptionTemplate(template);
+                              setOptionLibraryOpen(true);
+                            }}
+                            className="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700 hover:bg-blue-100"
+                            title={`${template.name} 수정`}
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteOptionTemplate(template.id)}
+                            className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-600 hover:bg-red-100"
+                            title={`${template.name} 삭제`}
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {template.options.slice(0, 8).map((option, optionIndex) => (
+                          <span
+                            key={`quick-library-${template.id}-${optionIndex}`}
+                            className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-gray-700"
+                          >
+                            {option.name}
+                            {Number(option.priceDelta || 0) > 0
+                              ? ` +$${Number(option.priceDelta).toFixed(2)}`
+                              : ""}
+                          </span>
+                        ))}
+                        {template.options.length > 8 ? (
+                          <span className="px-1 py-1 text-[10px] font-black text-gray-400">
+                            +{template.options.length - 8}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <button
               type="button"
               onClick={() => setOptionTemplateOpen((current) => !current)}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white"
+              className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-black text-blue-700"
             >
-              {optionTemplateOpen ? "접기" : "공용 옵션 열기"}
+              {optionTemplateOpen ? "고급 옵션 관리 닫기 ▲" : "고급 옵션 관리 ▼"}
             </button>
           </div>
 
@@ -3820,93 +4057,122 @@ export default function OwnerBusinessMenuPage() {
               )}
             </div>
           ) : null}
+          </div>
+          ) : null}
         </section>
 
         <section className="rounded-3xl bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={newCategoryName}
-              onChange={(event) => setNewCategoryName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void addCategory();
-                }
-              }}
-              placeholder="새 카테고리 이름"
-              className="min-w-0 flex-1 rounded-xl border border-[#E8DED1] px-4 py-3 text-sm font-bold outline-none focus:border-[#172033]"
-            />
+          <button
+            type="button"
+            onClick={() => setCategoryManagerOpen((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl px-1 py-1 text-left"
+            aria-expanded={categoryManagerOpen}
+          >
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-gray-400">
+                Categories
+              </p>
+              <h2 className="mt-1 text-lg font-black text-[#172033]">
+                카테고리 관리
+              </h2>
+              <p className="mt-1 text-xs font-bold text-gray-500">
+                {categories.length}개 등록됨
+              </p>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => void addCategory()}
-              disabled={saving}
-              className="rounded-xl bg-[#172033] px-5 py-3 text-sm font-black text-white disabled:opacity-50"
-            >
-              + 카테고리 추가
-            </button>
-          </div>
+            <span className="flex h-10 min-w-[92px] items-center justify-center rounded-xl bg-[#172033] px-3 text-xs font-black text-white">
+              {categoryManagerOpen ? "접기 ▲" : "펼치기 ▼"}
+            </span>
+          </button>
 
-          <div className="mt-4 space-y-2">
-            {categories.length === 0 ? (
-              <div className="rounded-2xl bg-yellow-50 p-4 text-sm font-bold text-yellow-800">
-                카테고리가 없습니다. 도어대시 업데이트 과정에서
-                business_menu_categories 테이블에도 카테고리가 저장됐는지 확인하세요.
-              </div>
-            ) : (
-              categories.map((category) => (
-                <div
-                  key={category.id}
-                  className="grid gap-2 rounded-2xl border border-[#EEE5DA] p-3 sm:grid-cols-[1fr_90px_auto_auto]"
+          {categoryManagerOpen ? (
+            <div className="mt-4 border-t border-[#EEE5DA] pt-4">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void addCategory();
+                    }
+                  }}
+                  placeholder="새 카테고리 이름"
+                  className="min-w-0 flex-1 rounded-xl border border-[#E8DED1] px-4 py-3 text-sm font-bold outline-none focus:border-[#172033]"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => void addCategory()}
+                  disabled={saving}
+                  className="rounded-xl bg-[#172033] px-5 py-3 text-sm font-black text-white disabled:opacity-50"
                 >
-                  <input
-                    value={category.name}
-                    onChange={(event) =>
-                      updateCategory(category.id, {
-                        name: event.target.value,
-                      })
-                    }
-                    className="min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-sm font-black outline-none focus:border-[#172033]"
-                  />
+                  + 카테고리 추가
+                </button>
+              </div>
 
-                  <input
-                    type="number"
-                  onFocus={(event) => event.currentTarget.select()}
-                    value={category.display_order ?? ""}
-                    onChange={(event) =>
-                      updateCategory(category.id, {
-                        display_order: event.target.value === "" ? null : Number(event.target.value),
-                      })
-                    }
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none"
-                    title="노출 순서"
-                  />
+              <div className="mt-4 space-y-2">
+                {categories.length === 0 ? (
+                  <div className="rounded-2xl bg-yellow-50 p-4 text-sm font-bold text-yellow-800">
+                    카테고리가 없습니다. 도어대시 업데이트 과정에서
+                    business_menu_categories 테이블에도 카테고리가 저장됐는지 확인하세요.
+                  </div>
+                ) : (
+                  categories.map((category) => (
+                    <div
+                      key={category.id}
+                      className="grid gap-2 rounded-2xl border border-[#EEE5DA] p-3 sm:grid-cols-[1fr_90px_auto_auto]"
+                    >
+                      <input
+                        value={category.name}
+                        onChange={(event) =>
+                          updateCategory(category.id, {
+                            name: event.target.value,
+                          })
+                        }
+                        className="min-w-0 rounded-xl border border-gray-200 px-3 py-2 text-sm font-black outline-none focus:border-[#172033]"
+                      />
 
-                  <label className="flex items-center gap-2 whitespace-nowrap rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold">
-                    <input
-                      type="checkbox"
-                      checked={category.is_active}
-                      onChange={(event) =>
-                        updateCategory(category.id, {
-                          is_active: event.target.checked,
-                        })
-                      }
-                    />
-                    노출
-                  </label>
+                      <input
+                        type="number"
+                        onFocus={(event) => event.currentTarget.select()}
+                        value={category.display_order ?? ""}
+                        onChange={(event) =>
+                          updateCategory(category.id, {
+                            display_order: event.target.value === "" ? null : Number(event.target.value),
+                          })
+                        }
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-center text-sm font-black outline-none"
+                        title="노출 순서"
+                      />
 
-                  <button
-                    type="button"
-                    onClick={() => void deleteCategory(category)}
-                    disabled={saving}
-                    className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 disabled:opacity-50"
-                  >
-                    삭제
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
+                      <label className="flex items-center gap-2 whitespace-nowrap rounded-xl bg-gray-50 px-3 py-2 text-xs font-bold">
+                        <input
+                          type="checkbox"
+                          checked={category.is_active}
+                          onChange={(event) =>
+                            updateCategory(category.id, {
+                              is_active: event.target.checked,
+                            })
+                          }
+                        />
+                        노출
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => void deleteCategory(category)}
+                        disabled={saving}
+                        className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 disabled:opacity-50"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="mt-5">
@@ -4259,6 +4525,90 @@ export default function OwnerBusinessMenuPage() {
                       </div>
                     </div>
 
+                    <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black text-blue-900">옵션 선택</p>
+                          <p className="mt-0.5 text-[10px] font-semibold text-blue-900/60">
+                            필요한 종류만 체크하세요. 체크하면 자동 저장됩니다.
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-black text-blue-700">
+                          {normalizeOptionGroups(item).length}개 적용 중
+                        </span>
+                      </div>
+
+                      {optionTemplates.length === 0 ? (
+                        <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-bold text-gray-500">
+                          등록된 옵션이 없습니다. 위의 옵션 목록에서 먼저 옵션을 등록하세요.
+                        </p>
+                      ) : (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {optionTemplates.map((template) => {
+                            const appliedGroup = normalizeOptionGroups(item).find(
+                              (group) =>
+                                group.name.trim().toLowerCase() ===
+                                template.name.trim().toLowerCase(),
+                            );
+                            const applied = Boolean(appliedGroup);
+
+                            return (
+                              <div
+                                key={`quick-item-option-${item.id}-${template.id}`}
+                                className={`flex items-center gap-2 rounded-2xl border px-2 py-1.5 ${
+                                  applied
+                                    ? "border-blue-300 bg-white"
+                                    : "border-blue-100 bg-white/70"
+                                }`}
+                              >
+                                <label
+                                  className={`flex cursor-pointer items-center gap-2 rounded-full px-2 py-1 text-xs font-black ${
+                                    applied
+                                      ? "bg-blue-600 text-white"
+                                      : "text-blue-800"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={applied}
+                                    onChange={() =>
+                                      toggleOptionTemplateForItem(item.id, template)
+                                    }
+                                    className="h-4 w-4"
+                                  />
+                                  {template.name}
+                                  <span className={applied ? "text-white/80" : "text-blue-500"}>
+                                    {template.options.length}
+                                  </span>
+                                </label>
+
+                                {applied ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setQuickOptionRequired(
+                                        item.id,
+                                        template.name,
+                                        !Boolean(appliedGroup?.required),
+                                      )
+                                    }
+                                    className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${
+                                      appliedGroup?.required
+                                        ? "border-orange-300 bg-orange-50 text-orange-700"
+                                        : "border-gray-200 bg-gray-50 text-gray-500"
+                                    }`}
+                                    title="이 옵션 그룹을 고객이 반드시 선택해야 하는지 설정합니다."
+                                  >
+                                    {appliedGroup?.required ? "필수 ON" : "필수 OFF"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#EEE5DA] pt-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -4314,14 +4664,6 @@ export default function OwnerBusinessMenuPage() {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => addOptionGroup(item.id)}
-                          className="rounded-xl border border-[#D7C9B9] bg-white px-3 py-2 text-xs font-black"
-                        >
-                          + 옵션 그룹
-                        </button>
-
-                        <button
-                          type="button"
                           onClick={() => toggleOptionManager(item.id)}
                           className={`rounded-xl px-3 py-2 text-xs font-black ${
                             expandedOptionItemIds.has(item.id)
@@ -4330,8 +4672,8 @@ export default function OwnerBusinessMenuPage() {
                           }`}
                         >
                           {expandedOptionItemIds.has(item.id)
-                            ? "옵션 관리 닫기 ▲"
-                            : "⚙ 옵션 관리 ▼"}
+                            ? "세부 옵션 닫기 ▲"
+                            : "세부 옵션 편집 ▼"}
                         </button>
                       </div>
                     </div>

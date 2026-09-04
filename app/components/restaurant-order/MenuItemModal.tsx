@@ -157,6 +157,7 @@ export default function MenuItemModal({
   const [menuQuantity, setMenuQuantity] = useState(1);
   const [instructions, setInstructions] = useState("");
   const [originalImageOpen, setOriginalImageOpen] = useState(false);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
 
   /*
    * Fast Refresh, 이전 코드, 오래된 state 등으로
@@ -323,6 +324,23 @@ export default function MenuItemModal({
   const totalPrice =
     unitPrice * Math.max(1, menuQuantity);
 
+  function toggleGroup(gKey: string) {
+    setExpandedGroupKeys((current) => {
+      const next = new Set(current);
+      if (next.has(gKey)) next.delete(gKey);
+      else next.add(gKey);
+      return next;
+    });
+  }
+
+  const requiredGroups = groups
+    .map((group, groupIndex) => ({
+      group,
+      groupIndex,
+      rules: getGroupRules(group),
+    }))
+    .filter(({ rules }) => rules.minimum > 0);
+
   function handleAddToOrder() {
     if (!orderEnabled || !optionsValid) return;
 
@@ -402,34 +420,126 @@ export default function MenuItemModal({
             ) : null}
 
             {groups.length ? (
-              <div className="mt-6 space-y-5">
-                {groups.map((group, groupIndex) => {
-                  const gKey = groupKey(
-                    group,
-                    groupIndex,
-                  );
+              <div className="mt-6">
+                {requiredGroups.length ? (
+                  <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-red-950">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-red-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+                        REQUIRED
+                      </span>
+                      <p className="text-xs font-black">
+                        Complete these selections before adding to order
+                      </p>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {requiredGroups.map(({ group, groupIndex, rules }) => {
+                        const requiredKey = groupKey(group, groupIndex);
+                        return (
+                          <button
+                            key={`required-${requiredKey}`}
+                            type="button"
+                            onClick={() => {
+                              setExpandedGroupKeys((current) => {
+                                const next = new Set(current);
+                                next.add(requiredKey);
+                                return next;
+                              });
+                            }}
+                            className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-[11px] font-black text-red-800 shadow-sm"
+                          >
+                            {group.name}
+                            {rules.minimum > 1 ? ` · ${rules.minimum} min` : ""}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
 
-                  return (
-                    <MenuOptionGroup
-                      key={gKey}
-                      group={group}
-                      groupIndex={groupIndex}
-                      quantities={
-                        safeSelections[gKey] || {}
-                      }
-                      onSetQuantity={(
-                        optionIndex,
-                        quantity,
-                      ) =>
-                        setOptionQuantity(
-                          groupIndex,
-                          optionIndex,
-                          quantity,
-                        )
-                      }
-                    />
-                  );
-                })}
+                <div className="space-y-2.5">
+                  {groups.map((group, groupIndex) => {
+                    const gKey = groupKey(group, groupIndex);
+                    const isOpen = expandedGroupKeys.has(gKey);
+                    const { minimum, maximum } = getGroupRules(group);
+                    const isRequired = minimum > 0;
+                    const quantities = safeSelections[gKey] || {};
+                    const selectedCount = Object.values(quantities).reduce(
+                      (sum, quantity) => sum + toSafeInteger(quantity),
+                      0,
+                    );
+
+                    const ruleLabel = isRequired
+                      ? minimum > 1
+                        ? `REQUIRED · MIN ${minimum}`
+                        : "REQUIRED"
+                      : maximum != null
+                        ? `OPTIONAL · UP TO ${maximum}`
+                        : "OPTIONAL";
+
+                    return (
+                      <div
+                        key={gKey}
+                        className={`overflow-hidden rounded-2xl border transition ${
+                          isOpen
+                            ? "border-gray-300 bg-white shadow-sm"
+                            : "border-gray-200 bg-white/70"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(gKey)}
+                          className="flex w-full items-center justify-between gap-3 p-3 text-left"
+                          aria-expanded={isOpen}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="truncate text-sm font-black">
+                                {group.name}
+                              </span>
+                              {selectedCount > 0 ? (
+                                <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700">
+                                  {selectedCount} SELECTED
+                                </span>
+                              ) : null}
+                            </div>
+                            <p
+                              className={`mt-1 text-[10px] font-black uppercase tracking-wide ${
+                                isRequired ? "text-red-600" : "text-gray-500"
+                              }`}
+                            >
+                              {ruleLabel}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`shrink-0 rounded-xl px-3 py-2 text-[11px] font-black shadow-sm transition ${
+                              isOpen
+                                ? "bg-gray-200 text-gray-900"
+                                : isRequired
+                                  ? "bg-red-600 text-white"
+                                  : "bg-gray-950 text-white"
+                            }`}
+                          >
+                            {isOpen ? "CLOSE ▲" : isRequired ? "SELECT ▼" : "VIEW OPTIONS ▼"}
+                          </span>
+                        </button>
+
+                        {isOpen ? (
+                          <div className="border-t border-gray-200 p-3">
+                            <MenuOptionGroup
+                              group={group}
+                              groupIndex={groupIndex}
+                              quantities={quantities}
+                              onSetQuantity={(optionIndex, quantity) =>
+                                setOptionQuantity(groupIndex, optionIndex, quantity)
+                              }
+                            />
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
 
