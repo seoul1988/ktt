@@ -455,8 +455,17 @@ export async function POST(
         ).origin;
 
       if (paymentProvider === "square") {
-        const squareResponse = await fetch(
-          "https://connect.squareup.com/v2/online-checkout/payment-links",
+        const squareApplicationId =
+          process.env.SQUARE_APPLICATION_ID || "";
+
+        if (!squareApplicationId) {
+          throw new Error(
+            "SQUARE_APPLICATION_ID is not configured.",
+          );
+        }
+
+        const squareOrderResponse = await fetch(
+          "https://connect.squareup.com/v2/orders",
           {
             method: "POST",
             headers: {
@@ -469,6 +478,9 @@ export async function POST(
               order: {
                 location_id: squareLocationId,
                 reference_id: `KTOWN-${number}`,
+                source: {
+                  name: "KTown Triangle",
+                },
                 line_items: [
                   ...normalized.map((item) => {
                     const selectionText =
@@ -594,72 +606,45 @@ export async function POST(
                       },
                 ],
               },
-              payment_note: `KTown order #${number}`,
-              checkout_options: {
-                allow_tipping: false,
-                accepted_payment_methods: {
-                  apple_pay: true,
-                  google_pay: true,
-                },
-                redirect_url:
-                  `${origin}/business/${businessId}/website` +
-                  `?order=${encodeURIComponent(number)}` +
-                  `&payment=square`,
-              },
             }),
             cache: "no-store",
           },
         );
 
-        const squareText = await squareResponse.text();
+        const squareOrderText = await squareOrderResponse.text();
 
-        let squarePayload: any = {};
+        let squareOrderPayload: any = {};
         try {
-          squarePayload = squareText
-            ? JSON.parse(squareText)
+          squareOrderPayload = squareOrderText
+            ? JSON.parse(squareOrderText)
             : {};
         } catch {
           throw new Error(
-            `Square returned an invalid response (HTTP ${squareResponse.status}).`,
+            `Square returned an invalid order response (HTTP ${squareOrderResponse.status}).`,
           );
         }
 
-        if (!squareResponse.ok) {
+        if (!squareOrderResponse.ok) {
           const detail =
-            Array.isArray(squarePayload?.errors) &&
-            squarePayload.errors.length
-              ? squarePayload.errors
+            Array.isArray(squareOrderPayload?.errors) &&
+            squareOrderPayload.errors.length
+              ? squareOrderPayload.errors
                   .map(
                     (item: any) =>
                       item?.detail ||
                       item?.code ||
-                      "Square payment error",
+                      "Square order error",
                   )
                   .join(" / ")
-              : squarePayload?.error ||
-                `HTTP ${squareResponse.status}`;
+              : `HTTP ${squareOrderResponse.status}`;
 
           throw new Error(
-            `Square checkout could not be created: ${detail}`,
-          );
-        }
-
-        const checkoutUrl =
-          squarePayload?.payment_link?.url ||
-          squarePayload?.payment_link?.long_url ||
-          "";
-
-        if (!checkoutUrl) {
-          throw new Error(
-            "Square did not return a checkout URL.",
+            `Square order could not be created: ${detail}`,
           );
         }
 
         const squareOrderId =
-          String(squarePayload?.payment_link?.order_id || "");
-
-        const squarePaymentLinkId =
-          String(squarePayload?.payment_link?.id || "");
+          String(squareOrderPayload?.order?.id || "");
 
         if (!squareOrderId) {
           throw new Error(
@@ -667,24 +652,60 @@ export async function POST(
           );
         }
 
-        const { error: squareLinkSaveError } = await db
+        const { error: squareOrderSaveError } = await db
           .from("restaurant_orders")
           .update({
             square_order_id: squareOrderId,
-            square_payment_link_id: squarePaymentLinkId || null,
+            square_payment_link_id: null,
           })
           .eq("id", order.id);
 
-        if (squareLinkSaveError) {
-          throw squareLinkSaveError;
+        if (squareOrderSaveError) {
+          throw squareOrderSaveError;
+        }
+
+        // Apple Pay on the Web needs the current host registered for this seller.
+        // Failure here does not block Card or Google Pay.
+        try {
+          const host = new URL(request.url).hostname;
+          if (
+            host &&
+            host !== "localhost" &&
+            host !== "127.0.0.1"
+          ) {
+            await fetch(
+              "https://connect.squareup.com/v2/apple-pay/domains",
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${squareAccessToken}`,
+                  "Content-Type": "application/json",
+                  "Square-Version": "2026-08-19",
+                },
+                body: JSON.stringify({
+                  domain_name: host,
+                }),
+                cache: "no-store",
+              },
+            );
+          }
+        } catch {
+          // Do not fail the order if Apple Pay domain registration is unavailable.
         }
 
         return NextResponse.json({
           ok: true,
           paymentProvider: "square",
+          paymentRequired: true,
           orderId: order.id,
           orderNumber: number,
-          checkoutUrl,
+          squarePayment: {
+            applicationId: squareApplicationId,
+            locationId: squareLocationId,
+            amount: total.toFixed(2),
+            amountCents: moneyCents(total),
+            currencyCode: "USD",
+          },
         });
       }
 

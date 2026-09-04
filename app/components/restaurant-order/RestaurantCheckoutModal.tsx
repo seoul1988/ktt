@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type CheckoutCartItem = {
@@ -41,6 +41,51 @@ type Props = {
 
 const CUSTOMER_KEY = "restaurant-order-customer";
 
+type SquarePreparedPayment = {
+  orderId: number;
+  orderNumber: string;
+  applicationId: string;
+  locationId: string;
+  amount: string;
+  amountCents: number;
+  currencyCode: string;
+};
+
+let squareSdkPromise: Promise<void> | null = null;
+
+function loadSquareSdk() {
+  if (typeof window === "undefined") return Promise.resolve();
+  if ((window as any).Square) return Promise.resolve();
+  if (squareSdkPromise) return squareSdkPromise;
+
+  squareSdkPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-ktown-square-web-payments="1"]',
+    );
+
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Square payment library could not be loaded.")),
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://web.squarecdn.com/v1/square.js";
+    script.async = true;
+    script.dataset.ktownSquareWebPayments = "1";
+    script.onload = () => resolve();
+    script.onerror = () =>
+      reject(new Error("Square payment library could not be loaded."));
+    document.head.appendChild(script);
+  });
+
+  return squareSdkPromise;
+}
+
 function money(value: number) {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
@@ -72,6 +117,18 @@ export default function RestaurantCheckoutModal({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [squarePrepared, setSquarePrepared] =
+    useState<SquarePreparedPayment | null>(null);
+  const [squareMethodsLoading, setSquareMethodsLoading] = useState(false);
+  const [squareCardReady, setSquareCardReady] = useState(false);
+  const [squareGoogleReady, setSquareGoogleReady] = useState(false);
+  const [squareAppleReady, setSquareAppleReady] = useState(false);
+  const [squarePaying, setSquarePaying] = useState(false);
+
+  const squarePaymentsRef = useRef<any>(null);
+  const squareCardRef = useRef<any>(null);
+  const squareGoogleRef = useRef<any>(null);
+  const squareAppleRef = useRef<any>(null);
 
   const subtotal = useMemo(
     () => cartItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0), 0),
@@ -113,6 +170,244 @@ export default function RestaurantCheckoutModal({
     })();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  useEffect(() => {
+    if (!squarePrepared) return;
+
+    let cancelled = false;
+
+    setSquareMethodsLoading(true);
+    setSquareCardReady(false);
+    setSquareGoogleReady(false);
+    setSquareAppleReady(false);
+    setError("");
+
+    (async () => {
+      try {
+        await loadSquareSdk();
+        if (cancelled) return;
+
+        const Square = (window as any).Square;
+        if (!Square) {
+          throw new Error("Square payment library is unavailable.");
+        }
+
+        const payments = Square.payments(
+          squarePrepared.applicationId,
+          squarePrepared.locationId,
+        );
+        squarePaymentsRef.current = payments;
+
+        const paymentRequest = payments.paymentRequest({
+          countryCode: "US",
+          currencyCode: squarePrepared.currencyCode || "USD",
+          total: {
+            amount: squarePrepared.amount,
+            label: "KTown Order",
+          },
+        });
+
+        try {
+          const card = await payments.card();
+          if (!cancelled) {
+            squareCardRef.current = card;
+            await card.attach("#ktown-square-card");
+            if (!cancelled) setSquareCardReady(true);
+          }
+        } catch (cardError) {
+          console.error("Square card init:", cardError);
+        }
+
+        try {
+          const googlePay = await payments.googlePay(paymentRequest);
+          if (!cancelled) {
+            squareGoogleRef.current = googlePay;
+            await googlePay.attach("#ktown-square-google-pay", {
+              buttonColor: "default",
+              buttonType: "long",
+            });
+            if (!cancelled) setSquareGoogleReady(true);
+          }
+        } catch {
+          // Google Pay is only shown on supported devices/browsers.
+        }
+
+        try {
+          const applePay = await payments.applePay(paymentRequest);
+          if (!cancelled) {
+            squareAppleRef.current = applePay;
+            setSquareAppleReady(true);
+          }
+        } catch {
+          // Apple Pay is only shown on supported Apple devices/browsers.
+        }
+
+        if (
+          !cancelled &&
+          !squareCardRef.current &&
+          !squareGoogleRef.current &&
+          !squareAppleRef.current
+        ) {
+          throw new Error(
+            "No supported Square payment method is available on this device.",
+          );
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Payment form could not be loaded.",
+          );
+        }
+      } finally {
+        if (!cancelled) setSquareMethodsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+
+      for (const ref of [
+        squareCardRef,
+        squareGoogleRef,
+        squareAppleRef,
+      ]) {
+        try {
+          ref.current?.destroy?.();
+        } catch {}
+        ref.current = null;
+      }
+
+      squarePaymentsRef.current = null;
+    };
+  }, [squarePrepared]);
+
+  function billingContact() {
+    return {
+      givenName: name.trim(),
+      phone: phone.trim(),
+      countryCode: "US",
+      ...(fulfillmentType === "delivery"
+        ? {
+            addressLines: [
+              address1.trim(),
+              address2.trim(),
+            ].filter(Boolean),
+            city: city.trim(),
+            state: stateCode.trim(),
+            postalCode: postalCode.trim(),
+          }
+        : {}),
+    };
+  }
+
+  async function finishSquarePayment(
+    method: "card" | "google" | "apple",
+  ) {
+    if (!squarePrepared || squarePaying) return;
+
+    setSquarePaying(true);
+    setError("");
+
+    try {
+      const amount = squarePrepared.amount;
+      const currencyCode =
+        squarePrepared.currencyCode || "USD";
+
+      let tokenResult: any;
+      let verificationToken = "";
+
+      if (method === "card") {
+        if (!squareCardRef.current) {
+          throw new Error("Card payment is not ready.");
+        }
+
+        tokenResult = await squareCardRef.current.tokenize({
+          amount,
+          currencyCode,
+          intent: "CHARGE",
+          billingContact: billingContact(),
+          customerInitiated: true,
+          sellerKeyedIn: false,
+        });
+      } else if (method === "google") {
+        if (!squareGoogleRef.current) {
+          throw new Error("Google Pay is not available.");
+        }
+        tokenResult = await squareGoogleRef.current.tokenize();
+      } else {
+        if (!squareAppleRef.current) {
+          throw new Error("Apple Pay is not available.");
+        }
+        tokenResult = await squareAppleRef.current.tokenize();
+      }
+
+      if (tokenResult?.status !== "OK" || !tokenResult?.token) {
+        const detail = Array.isArray(tokenResult?.errors)
+          ? tokenResult.errors
+              .map((item: any) => item?.message || item?.detail || item?.code)
+              .filter(Boolean)
+              .join(" / ")
+          : "";
+        throw new Error(detail || "Payment information could not be verified.");
+      }
+
+      if (
+        method !== "card" &&
+        squarePaymentsRef.current?.verifyBuyer
+      ) {
+        const verification = await squarePaymentsRef.current.verifyBuyer(
+          tokenResult.token,
+          {
+            amount,
+            currencyCode,
+            intent: "CHARGE",
+            billingContact: billingContact(),
+          },
+        );
+        verificationToken = String(verification?.token || "");
+      }
+
+      const attemptId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const response = await fetch(
+        `/api/businesses/${businessId}/orders/${squarePrepared.orderId}/square-pay`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceId: tokenResult.token,
+            verificationToken,
+            attemptId,
+          }),
+        },
+      );
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || "Payment could not be completed.",
+        );
+      }
+
+      onOrderPlaced();
+      alert(`Order #${squarePrepared.orderNumber} paid and received.`);
+      onClose();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Payment could not be completed.",
+      );
+    } finally {
+      setSquarePaying(false);
+    }
+  }
 
   async function submitOrder() {
     setError("");
@@ -166,6 +461,23 @@ export default function RestaurantCheckoutModal({
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "주문을 완료하지 못했습니다.");
 
+      if (
+        payload?.paymentProvider === "square" &&
+        payload?.paymentRequired &&
+        payload?.squarePayment
+      ) {
+        setSquarePrepared({
+          orderId: Number(payload.orderId),
+          orderNumber: String(payload.orderNumber || ""),
+          applicationId: String(payload.squarePayment.applicationId || ""),
+          locationId: String(payload.squarePayment.locationId || ""),
+          amount: String(payload.squarePayment.amount || "0.00"),
+          amountCents: Number(payload.squarePayment.amountCents || 0),
+          currencyCode: String(payload.squarePayment.currencyCode || "USD"),
+        });
+        return;
+      }
+
       if (payload.checkoutUrl) {
         window.location.href = payload.checkoutUrl;
         return;
@@ -196,6 +508,91 @@ export default function RestaurantCheckoutModal({
           {loading ? <div className="py-10 text-center text-sm font-bold text-gray-500">Loading…</div> : null}
 
           {!loading && settings ? <>
+            {squarePrepared ? (
+              <>
+                <section className="rounded-2xl border p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[.16em] text-gray-400">
+                        SECURE PAYMENT
+                      </p>
+                      <h3 className="mt-1 text-lg font-black">
+                        Order #{squarePrepared.orderNumber}
+                      </h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Your name and phone were already received by KTown. No duplicate contact form.
+                      </p>
+                    </div>
+                    <b className="text-xl">{money(Number(squarePrepared.amount))}</b>
+                  </div>
+                </section>
+
+                {error ? (
+                  <div className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">
+                    {error}
+                  </div>
+                ) : null}
+
+                <section className="rounded-2xl border p-4">
+                  <h3 className="font-black">Payment</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Apple Pay · Google Pay · Credit / Debit Card
+                  </p>
+
+                  {squareMethodsLoading ? (
+                    <div className="py-6 text-center text-sm font-bold text-gray-500">
+                      Loading secure payment…
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => finishSquarePayment("apple")}
+                      disabled={!squareAppleReady || squarePaying}
+                      className={`w-full rounded-xl bg-black px-4 py-3 text-lg font-semibold text-white ${
+                        squareAppleReady ? "" : "hidden"
+                      }`}
+                    >
+                      Pay
+                    </button>
+
+                    <div
+                      id="ktown-square-google-pay"
+                      onClick={() => {
+                        if (squareGoogleReady && !squarePaying) {
+                          finishSquarePayment("google");
+                        }
+                      }}
+                      className={squareGoogleReady ? "" : "min-h-[1px]"}
+                    />
+
+                    <div
+                      className={`rounded-xl border p-3 ${
+                        squareCardReady ? "" : "hidden"
+                      }`}
+                    >
+                      <div id="ktown-square-card" />
+                      <button
+                        type="button"
+                        onClick={() => finishSquarePayment("card")}
+                        disabled={!squareCardReady || squarePaying}
+                        className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                      >
+                        {squarePaying
+                          ? "PROCESSING…"
+                          : `PAY ${money(Number(squarePrepared.amount))}`}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-[10px] text-gray-500">
+                    Payment is securely processed by Square. KTown does not store card numbers.
+                  </p>
+                </section>
+              </>
+            ) : (
+              <>
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Customer Information</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -357,6 +754,8 @@ export default function RestaurantCheckoutModal({
             </section>
 
             <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
+              </>
+            )}
           </> : null}
         </div>
       </div>
