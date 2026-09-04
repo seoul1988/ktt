@@ -701,7 +701,7 @@ export default function RestaurantCheckoutModal({
     >
       <div className={
             isIPhone
-              ? "max-h-[76dvh] w-[calc(100%-1rem)] max-w-[350px] overflow-y-auto rounded-2xl bg-white text-gray-950 shadow-2xl"
+              ? "max-h-[95dvh] w-[calc(100%-1rem)] max-w-[350px] overflow-y-auto rounded-2xl bg-white text-gray-950 shadow-2xl"
               : "max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl"
           } onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
