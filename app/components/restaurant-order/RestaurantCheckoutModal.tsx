@@ -141,6 +141,7 @@ export default function RestaurantCheckoutModal({
   const [squareCardReady, setSquareCardReady] = useState(false);
   const [squareGoogleReady, setSquareGoogleReady] = useState(false);
   const [squareAppleReady, setSquareAppleReady] = useState(false);
+  const [squareAppleError, setSquareAppleError] = useState("");
   const [squarePaying, setSquarePaying] = useState(false);
 
   const squarePaymentsRef = useRef<any>(null);
@@ -300,6 +301,7 @@ export default function RestaurantCheckoutModal({
     setSquareCardReady(false);
     setSquareGoogleReady(false);
     setSquareAppleReady(false);
+    setSquareAppleError("");
     setError("");
 
     (async () => {
@@ -354,12 +356,53 @@ export default function RestaurantCheckoutModal({
 
         try {
           const applePay = await payments.applePay(paymentRequest);
+
           if (!cancelled) {
             squareAppleRef.current = applePay;
             setSquareAppleReady(true);
+            setSquareAppleError("");
           }
-        } catch {
-          // Apple Pay is only shown on supported Apple devices/browsers.
+        } catch (applePayError) {
+          console.error("Square Apple Pay init:", applePayError);
+
+          // Retry once because Safari / Apple Pay capability can finish
+          // initializing slightly after the Square SDK is ready.
+          try {
+            await new Promise((resolve) =>
+              window.setTimeout(resolve, 500),
+            );
+
+            if (cancelled) return;
+
+            const applePay =
+              await payments.applePay(paymentRequest);
+
+            if (!cancelled) {
+              squareAppleRef.current = applePay;
+              setSquareAppleReady(true);
+              setSquareAppleError("");
+            }
+          } catch (retryError) {
+            console.error(
+              "Square Apple Pay init retry:",
+              retryError,
+            );
+
+            if (!cancelled) {
+              const rawMessage =
+                retryError instanceof Error
+                  ? retryError.message
+                  : applePayError instanceof Error
+                    ? applePayError.message
+                    : "Apple Pay is unavailable on this device or browser.";
+
+              setSquareAppleReady(false);
+              setSquareAppleError(
+                rawMessage ||
+                  "Apple Pay is unavailable on this device or browser.",
+              );
+            }
+          }
         }
 
         if (
@@ -715,6 +758,14 @@ export default function RestaurantCheckoutModal({
                         -apple-pay-button-style: black;
                       }
                     `}</style>
+
+                    {!squareMethodsLoading &&
+                    !squareAppleReady &&
+                    squareAppleError ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800">
+                        Apple Pay unavailable: {squareAppleError}
+                      </div>
+                    ) : null}
 
                     <div
                       id="ktown-square-google-pay"
