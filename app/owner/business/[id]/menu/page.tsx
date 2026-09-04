@@ -444,6 +444,8 @@ export default function OwnerBusinessMenuPage() {
   const [templateMaxInput, setTemplateMaxInput] = useState<number | null>(null);
   const [templateOptionsInput, setTemplateOptionsInput] = useState<MenuOption[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [savingOptionTemplate, setSavingOptionTemplate] = useState(false);
+  const [optionTemplateSaveMessage, setOptionTemplateSaveMessage] = useState("");
   const [selectedTemplateByItem, setSelectedTemplateByItem] = useState<
     Record<number, string>
   >({});
@@ -1571,6 +1573,9 @@ export default function OwnerBusinessMenuPage() {
 
   function resetOptionTemplateForm() {
     setEditingTemplateId(null);
+    if (!savingOptionTemplate) {
+      setOptionTemplateSaveMessage("");
+    }
     setTemplateNameInput("");
     setTemplateDescriptionInput("");
     setTemplateRequiredInput(false);
@@ -1739,15 +1744,24 @@ export default function OwnerBusinessMenuPage() {
   }
 
   async function saveOptionTemplate() {
+    if (savingOptionTemplate) return;
+
+    setSavingOptionTemplate(true);
+    setOptionTemplateSaveMessage("저장 중...");
+
     const name = templateNameInput.trim();
 
     if (!name) {
       setMessage("옵션 그룹 이름을 입력하세요.");
+      setOptionTemplateSaveMessage("옵션 그룹 이름을 입력하세요.");
+      setSavingOptionTemplate(false);
       return;
     }
 
     if (templateOptionsInput.length === 0) {
       setMessage("옵션 항목을 하나 이상 추가하세요.");
+      setOptionTemplateSaveMessage("옵션 항목을 하나 이상 추가하세요.");
+      setSavingOptionTemplate(false);
       return;
     }
 
@@ -1769,6 +1783,10 @@ export default function OwnerBusinessMenuPage() {
       setMessage(
         `⚠️ "${duplicateName}" 옵션 이름이 이미 있습니다. 같은 이름은 저장할 수 없습니다.`,
       );
+      setOptionTemplateSaveMessage(
+        `⚠️ "${duplicateName}" 옵션 이름이 이미 있습니다.`,
+      );
+      setSavingOptionTemplate(false);
       return;
     }
 
@@ -1777,6 +1795,8 @@ export default function OwnerBusinessMenuPage() {
       templateMaxInput < (Number(templateMinInput) || 0)
     ) {
       setMessage("최대 선택 수는 최소 선택 수보다 작을 수 없습니다.");
+      setOptionTemplateSaveMessage("최대 선택 수를 확인하세요.");
+      setSavingOptionTemplate(false);
       return;
     }
 
@@ -1878,9 +1898,10 @@ export default function OwnerBusinessMenuPage() {
 
     try {
       if (changedItemIds.length > 0) {
-        setMessage(
-          `공용 옵션 저장 중... (${template.options.length}개 / 메뉴 ${changedItemIds.length}개)`,
-        );
+        const progressText =
+          `공용 옵션 저장 중... (${template.options.length}개 / 적용 메뉴 ${changedItemIds.length}개 · 한 번에 저장)`;
+        setMessage(progressText);
+        setOptionTemplateSaveMessage(progressText);
 
         // 기존 debounce timer가 남아 있으면 제거
         changedItemIds.forEach((itemId) => {
@@ -1891,33 +1912,128 @@ export default function OwnerBusinessMenuPage() {
           }
         });
 
-        // 메뉴 API를 통해 실제 DB에 저장.
-        // saveOneItem 내부에서 normalizeItemForSave()가 option_groups를 payload에 포함합니다.
-        for (const itemId of changedItemIds) {
-          await saveOneItem(itemId);
+        /*
+         * 이전에는 변경된 메뉴를 1개씩 순서대로 저장해서
+         * Combo It!이 16개 메뉴에 붙어 있으면 PATCH가 최대 16번 발생했습니다.
+         *
+         * 이제 수정된 메뉴들만 한 번에 묶어서 1회 PATCH합니다.
+         * 서버가 부분 batch PATCH를 허용하지 않는 경우에만 전체 메뉴 저장을 딱 1번 재시도합니다.
+         */
+        const token = await getAccessToken();
+
+        changedItemIds.forEach((itemId) => {
+          setItemSaveStatus((current) => ({
+            ...current,
+            [itemId]: "saving",
+          }));
+        });
+
+        const changedIdSet = new Set(changedItemIds);
+        const changedPayloadItems = nextItems
+          .filter((item) => changedIdSet.has(item.id))
+          .map((item) => normalizeItemForSave(item));
+
+        let response = await fetch(`/api/owner/business/${businessId}/menu`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            categories: [],
+            items: changedPayloadItems,
+          }),
+        });
+
+        let data = await readApiJson(response);
+
+        if (!response.ok) {
+          console.warn(
+            "OPTION TEMPLATE BATCH PATCH FAILED:",
+            response.status,
+            JSON.stringify(data),
+          );
+
+          const normalizedCategories = categoriesRef.current.map((category) => ({
+            id: category.id,
+            name: category.name.trim(),
+            display_order: Number(category.display_order ?? 999),
+            is_active: category.is_active,
+          }));
+
+          const normalizedItems = nextItems.map((item) =>
+            normalizeItemForSave(item),
+          );
+
+          response = await fetch(`/api/owner/business/${businessId}/menu`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              categories: normalizedCategories,
+              items: normalizedItems,
+            }),
+          });
+
+          data = await readApiJson(response);
         }
+
+        if (!response.ok) {
+          const serverMessage =
+            data?.error ||
+            data?.message ||
+            `HTTP ${response.status} 메뉴 저장 실패`;
+
+          changedItemIds.forEach((itemId) => {
+            setItemSaveStatus((current) => ({
+              ...current,
+              [itemId]: "error",
+            }));
+          });
+
+          throw new Error(serverMessage);
+        }
+
+        changedItemIds.forEach((itemId) => {
+          setItemSaveStatus((current) => ({
+            ...current,
+            [itemId]: "saved",
+          }));
+        });
       }
 
-      resetOptionTemplateForm();
-      setOptionTemplateOpen(false);
-
-      setMessage(
+      const successText =
         changedItemIds.length > 0
           ? `✓ "${template.name}" ${template.options.length}개 저장 완료 / 적용 메뉴 ${changedItemIds.length}개 DB 동기화 완료`
           : wasEdit
             ? `✓ "${template.name}" 공용 옵션을 수정했습니다. 현재 이 옵션을 사용하는 메뉴는 없습니다.`
-            : `✓ "${template.name}" 공용 옵션을 등록했습니다.`,
-      );
+            : `✓ "${template.name}" 공용 옵션을 등록했습니다.`;
+
+      setMessage(successText);
+      setOptionTemplateSaveMessage(successText);
+      setSavingOptionTemplate(false);
+
+      // 성공 문구를 모달 안에서 잠깐 보여준 뒤 닫습니다.
+      window.setTimeout(() => {
+        resetOptionTemplateForm();
+        setOptionTemplateOpen(false);
+        setOptionTemplateSaveMessage("");
+      }, 350);
     } catch (error) {
-      console.error("OPTION TEMPLATE MENU SYNC ERROR", error);
+      console.warn("OPTION TEMPLATE MENU SYNC ERROR:", error instanceof Error ? error.message : String(error));
       const detail =
         error && typeof error === "object"
           ? JSON.stringify(error)
           : String(error || "");
 
-      setMessage(
-        `공용 옵션 메뉴 DB 동기화 실패${detail ? `: ${detail}` : ""}`,
-      );
+      const failureText =
+        `공용 옵션 메뉴 DB 동기화 실패${detail ? `: ${detail}` : ""}`;
+
+      setMessage(failureText);
+      setOptionTemplateSaveMessage(failureText);
+      setSavingOptionTemplate(false);
     }
   }
 
@@ -2231,8 +2347,23 @@ export default function OwnerBusinessMenuPage() {
       "배달 단가",
     );
 
-    if (!item.name.trim()) throw new Error("상품명은 비워둘 수 없습니다.");
+    if (!item.name.trim()) {
+      throw new Error("상품명은 비워둘 수 없습니다.");
+    }
 
+    /*
+     * 중요:
+     * 이 payload는 아래 saveAll()이 실제로 보내는 형식과 정확히 맞춥니다.
+     *
+     * 이전 normalizeItemForSave에는
+     * - image_url
+     * - thumbnail_url
+     * - option_groups[].description
+     * 이 추가되어 있었는데, saveAll()에는 이 필드들이 없습니다.
+     *
+     * /menu PATCH 서버가 strict validation을 쓰면 단일 자동저장만 실패할 수 있으므로
+     * 검증된 전체저장 payload와 동일한 shape으로 통일합니다.
+     */
     return {
       id: item.id,
       category_id: item.category_id,
@@ -2241,40 +2372,75 @@ export default function OwnerBusinessMenuPage() {
       price,
       pickup_price: pickupPrice,
       delivery_price: deliveryPrice,
-      image_url: item.image_url || null,
-      thumbnail_url: item.thumbnail_url || null,
       display_order: Number(item.display_order ?? 999),
       is_available: item.is_available,
       show_on_website: item.show_on_website !== false,
       option_groups: normalizeOptionGroups(item).map((group, groupIndex) => {
-        const name = group.name.trim();
-        if (!name) throw new Error(`${item.name}: 옵션 그룹 이름을 입력하세요.`);
-        const minSelect = Math.max(0, Math.floor(Number(group.minSelect) || 0));
-        const maxSelect = group.maxSelect == null ? null : Math.max(0, Math.floor(Number(group.maxSelect) || 0));
-        if (maxSelect != null && maxSelect < minSelect) {
-          throw new Error(`${item.name} / ${name}: 최대 선택 수는 최소 선택 수보다 작을 수 없습니다.`);
+        const groupName = group.name.trim();
+
+        if (!groupName) {
+          throw new Error(`${item.name}: 옵션 그룹 이름을 입력하세요.`);
         }
+
+        const minSelect = Math.max(
+          0,
+          Math.floor(Number(group.minSelect) || 0),
+        );
+
+        const maxSelect =
+          group.maxSelect == null
+            ? null
+            : Math.max(
+                0,
+                Math.floor(Number(group.maxSelect) || 0),
+              );
+
+        if (maxSelect != null && maxSelect < minSelect) {
+          throw new Error(
+            `${item.name} / ${groupName}: 최대 선택 수는 최소 선택 수보다 작을 수 없습니다.`,
+          );
+        }
+
+        const options = group.options.map((option, optionIndex) => {
+          const optionName = option.name.trim();
+
+          if (!optionName) {
+            throw new Error(
+              `${item.name} / ${groupName}: 옵션 이름을 입력하세요.`,
+            );
+          }
+
+          const priceDelta = Number(option.priceDelta || 0);
+
+          if (!Number.isFinite(priceDelta)) {
+            throw new Error(
+              `${item.name} / ${groupName} / ${optionName}: 추가 금액이 올바르지 않습니다.`,
+            );
+          }
+
+          return {
+            name: optionName,
+            priceDelta: Number(priceDelta.toFixed(2)),
+            soldOut: Boolean(option.soldOut),
+            displayOrder: optionIndex,
+          };
+        });
+
         return {
-          name,
-          description: String(group.description || "").trim(),
+          name: groupName,
           required: Boolean(group.required),
           minSelect,
           maxSelect,
           displayOrder: groupIndex,
-          options: group.options.map((option, optionIndex) => ({
-            name: option.name.trim() || `Option ${optionIndex + 1}`,
-            priceDelta: Number(Number(option.priceDelta || 0).toFixed(2)),
-            soldOut: Boolean(option.soldOut),
-            displayOrder: optionIndex,
-          })),
+          options,
         };
       }),
     };
   }
 
-  async function saveOneItem(itemId: number) {
+  async function saveOneItem(itemId: number): Promise<boolean> {
     const item = itemsRef.current.find((row) => row.id === itemId);
-    if (!item) return;
+    if (!item) return false;
 
     setItemSaveStatus((current) => ({ ...current, [itemId]: "saving" }));
 
@@ -2282,7 +2448,6 @@ export default function OwnerBusinessMenuPage() {
       const token = await getAccessToken();
       const itemPayload = normalizeItemForSave(item);
 
-      // 먼저 변경된 메뉴 1개만 빠르게 자동 저장합니다.
       let response = await fetch(`/api/owner/business/${businessId}/menu`, {
         method: "PATCH",
         headers: {
@@ -2297,15 +2462,15 @@ export default function OwnerBusinessMenuPage() {
 
       let data = await readApiJson(response);
 
-      // 일부 menu API 구현은 빈 categories + 단일 item PATCH를 허용하지 않을 수 있습니다.
-      // 그 경우 현재 화면의 전체 카테고리/메뉴 형식으로 한 번 자동 재시도합니다.
       if (!response.ok) {
-        console.warn("MENU ITEM AUTOSAVE SINGLE PATCH FAILED", {
-          status: response.status,
-          data,
-          itemId,
-        });
+        console.warn(
+          "MENU ITEM PATCH FAILED:",
+          response.status,
+          JSON.stringify(data),
+        );
 
+        // 단일 PATCH를 서버가 허용하지 않는 경우 전체 메뉴 payload로 재시도.
+        // 여기서도 normalizeItemForSave()를 사용하므로 saveAll()과 같은 shape입니다.
         const normalizedCategories = categoriesRef.current.map((category) => ({
           id: category.id,
           name: category.name.trim(),
@@ -2337,19 +2502,38 @@ export default function OwnerBusinessMenuPage() {
           data?.error ||
           data?.message ||
           `HTTP ${response.status} 메뉴 저장 실패`;
-        throw new Error(serverMessage);
+
+        console.warn(
+          "MENU ITEM AUTOSAVE FINAL FAILURE:",
+          response.status,
+          JSON.stringify(data),
+        );
+
+        setItemSaveStatus((current) => ({
+          ...current,
+          [itemId]: "error",
+        }));
+        setMessage(`자동 저장 실패: ${serverMessage}`);
+        return false;
       }
 
-      setItemSaveStatus((current) => ({ ...current, [itemId]: "saved" }));
-      setMessage("✓ 옵션 변경 자동 저장 완료");
+      setItemSaveStatus((current) => ({
+        ...current,
+        [itemId]: "saved",
+      }));
+      return true;
     } catch (error) {
-      console.error("MENU ITEM AUTOSAVE ERROR", error);
-      setItemSaveStatus((current) => ({ ...current, [itemId]: "error" }));
-      setMessage(
-        error instanceof Error
-          ? `자동 저장 실패: ${error.message}`
-          : "자동 저장 실패",
-      );
+      const serverMessage =
+        error instanceof Error ? error.message : String(error || "메뉴 저장 실패");
+
+      console.warn("MENU ITEM AUTOSAVE EXCEPTION:", serverMessage);
+
+      setItemSaveStatus((current) => ({
+        ...current,
+        [itemId]: "error",
+      }));
+      setMessage(`자동 저장 실패: ${serverMessage}`);
+      return false;
     }
   }
 
@@ -3841,9 +4025,9 @@ export default function OwnerBusinessMenuPage() {
                               : ""}
                           </span>
                         ))}
-                        {template.options.length > 8 ? (
-                          <span className="px-1 py-1 text-[10px] font-black text-gray-400">
-                            +{template.options.length - 8}
+                        {template.options.length > 4 ? (
+                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                            +{template.options.length - 4}
                           </span>
                         ) : null}
                       </div>
@@ -4108,14 +4292,37 @@ export default function OwnerBusinessMenuPage() {
 
                   <button
                     type="button"
-                    onClick={saveOptionTemplate}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white"
+                    onClick={() => void saveOptionTemplate()}
+                    disabled={savingOptionTemplate}
+                    aria-busy={savingOptionTemplate}
+                    className={`rounded-xl px-4 py-2 text-xs font-black text-white transition active:scale-95 ${
+                      savingOptionTemplate
+                        ? "cursor-wait bg-blue-400"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                   >
-                    {editingTemplateId
-                      ? "공용 옵션 수정 저장"
-                      : "공용 옵션 등록"}
+                    {savingOptionTemplate
+                      ? "저장 중..."
+                      : editingTemplateId
+                        ? "공용 옵션 수정 저장"
+                        : "공용 옵션 등록"}
                   </button>
                 </div>
+
+                {optionTemplateSaveMessage && (
+                  <div
+                    className={`mt-2 rounded-xl px-3 py-2 text-xs font-black ${
+                      optionTemplateSaveMessage.startsWith("✓")
+                        ? "bg-green-50 text-green-700"
+                        : optionTemplateSaveMessage.includes("실패") ||
+                            optionTemplateSaveMessage.startsWith("⚠️")
+                          ? "bg-red-50 text-red-700"
+                          : "bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    {optionTemplateSaveMessage}
+                  </div>
+                )}
               </div>
 
               {optionTemplates.length === 0 ? (
