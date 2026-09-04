@@ -189,6 +189,9 @@ export default function RestaurantMenu({
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
 
+  // TEMP TEST: 실제 80mm 영수증처럼 보이는 출력 미리보기
+  const [receiptPreviewOpen, setReceiptPreviewOpen] = useState(false);
+
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
     useState<CSSProperties>({});
@@ -617,6 +620,187 @@ export default function RestaurantMenu({
     });
 
     return labels;
+  }
+
+  function escapeReceiptHtml(value: unknown) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function buildTestReceiptHtml() {
+    const serviceLabel =
+      activeService === "delivery" ? "DELIVERY" : "PICKUP";
+
+    const itemRows = cartItems
+      .map((item) => {
+        const optionLines = getSelectedOptionLabels(item)
+          .map(
+            (label) =>
+              `<div class="option">+ ${escapeReceiptHtml(label)}</div>`,
+          )
+          .join("");
+
+        const noteLine = item.instructions
+          ? `<div class="note">NOTE: ${escapeReceiptHtml(item.instructions)}</div>`
+          : "";
+
+        return `
+          <div class="item">
+            <div class="item-row">
+              <span>${Math.max(1, Number(item.quantity) || 1)} x ${escapeReceiptHtml(item.name)}</span>
+              <span>$${Math.max(0, Number(item.totalPrice) || 0).toFixed(2)}</span>
+            </div>
+            ${optionLines}
+            ${noteLine}
+          </div>
+        `;
+      })
+      .join("");
+
+    const now = new Date();
+
+    return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Test Receipt</title>
+<style>
+  @page { size: 80mm auto; margin: 4mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #000;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .receipt {
+    width: 72mm;
+    margin: 0 auto;
+  }
+  .center { text-align: center; }
+  .title { font-size: 18px; font-weight: 900; }
+  .strong { font-weight: 900; }
+  .dash {
+    border-top: 1px dashed #000;
+    margin: 8px 0;
+  }
+  .meta-row,
+  .item-row,
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .item { margin: 8px 0; }
+  .item-row {
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .option {
+    margin-left: 18px;
+    font-size: 11px;
+  }
+  .note {
+    margin-left: 18px;
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .total-row {
+    font-size: 16px;
+    font-weight: 900;
+  }
+  .test {
+    margin-top: 14px;
+    border: 2px solid #000;
+    padding: 5px;
+    text-align: center;
+    font-weight: 900;
+  }
+  .no-print {
+    margin: 14px auto;
+    width: 72mm;
+    display: flex;
+    gap: 8px;
+  }
+  .no-print button {
+    flex: 1;
+    padding: 10px 8px;
+    border: 1px solid #000;
+    background: #fff;
+    font: 700 12px Arial, sans-serif;
+    cursor: pointer;
+  }
+  @media print {
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="receipt">
+    <div class="center title">KTOWN ORDER</div>
+    <div class="center strong">BUSINESS #${businessId}</div>
+    <div class="center">${serviceLabel}</div>
+
+    <div class="dash"></div>
+
+    <div class="meta-row">
+      <span>DATE</span>
+      <span>${escapeReceiptHtml(now.toLocaleDateString())}</span>
+    </div>
+    <div class="meta-row">
+      <span>TIME</span>
+      <span>${escapeReceiptHtml(now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</span>
+    </div>
+
+    <div class="dash"></div>
+
+    ${itemRows || '<div class="center">NO ITEMS</div>'}
+
+    <div class="dash"></div>
+
+    <div class="total-row">
+      <span>SUBTOTAL</span>
+      <span>$${cartSubtotal.toFixed(2)}</span>
+    </div>
+
+    <div class="dash"></div>
+
+    <div class="center">THANK YOU</div>
+    <div class="test">TEST RECEIPT - NOT AN ORDER</div>
+  </div>
+
+  <div class="no-print">
+    <button onclick="window.print()">PRINT</button>
+    <button onclick="window.close()">CLOSE</button>
+  </div>
+</body>
+</html>`;
+  }
+
+  function printTestReceipt() {
+    const printWindow = window.open(
+      "",
+      "ktown-test-receipt",
+      "width=420,height=760,scrollbars=yes",
+    );
+
+    if (!printWindow) {
+      window.alert("팝업이 차단되었습니다. 브라우저에서 팝업을 허용해 주세요.");
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(buildTestReceiptHtml());
+    printWindow.document.close();
+    printWindow.focus();
   }
 
   function handleAddToOrder(draft: MenuOrderDraft) {
@@ -1071,7 +1255,10 @@ export default function RestaurantMenu({
                         {cartItems.length ? (
                           <button
                             type="button"
-                            onClick={() => { setCartOpen(false); setCheckoutOpen(true); }}
+                            onClick={() => {
+                              setCartOpen(false);
+                              setReceiptPreviewOpen(true);
+                            }}
                             className="col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
                           >
                             CHECKOUT
@@ -1083,6 +1270,159 @@ export default function RestaurantMenu({
                 </div>
               ) : null}
             </>,
+            document.body,
+          )
+        : null}
+
+      {receiptPreviewOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4"
+              onClick={() => setReceiptPreviewOpen(false)}
+            >
+              <div
+                className="flex max-h-[92vh] w-full max-w-[390px] flex-col overflow-hidden rounded-t-3xl bg-gray-100 shadow-2xl sm:rounded-3xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-600">
+                      TEST ONLY
+                    </p>
+                    <h3 className="text-base font-black text-gray-950">
+                      80mm Receipt Preview
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptPreviewOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-950"
+                    aria-label="Close receipt preview"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                  <div
+                    className="mx-auto bg-white px-4 py-5 text-black shadow"
+                    style={{
+                      width: "302px",
+                      fontFamily: '"Courier New", monospace',
+                      fontSize: "12px",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    <div className="text-center text-[18px] font-black">
+                      KTOWN ORDER
+                    </div>
+                    <div className="text-center font-black">
+                      BUSINESS #{businessId}
+                    </div>
+                    <div className="text-center font-black">
+                      {activeService === "delivery" ? "DELIVERY" : "PICKUP"}
+                    </div>
+
+                    <div className="my-2 border-t border-dashed border-black" />
+
+                    <div className="flex justify-between gap-2">
+                      <span>DATE</span>
+                      <span>{new Date().toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span>TIME</span>
+                      <span>
+                        {new Date().toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="my-2 border-t border-dashed border-black" />
+
+                    {cartItems.map((item) => {
+                      const selectedOptions = getSelectedOptionLabels(item);
+
+                      return (
+                        <div key={item.cartItemId} className="my-2">
+                          <div className="flex items-start justify-between gap-2 text-[13px] font-black">
+                            <span className="min-w-0">
+                              {Math.max(1, Number(item.quantity) || 1)} x{" "}
+                              {item.name}
+                            </span>
+                            <span className="shrink-0">
+                              $
+                              {Math.max(
+                                0,
+                                Number(item.totalPrice) || 0,
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+
+                          {selectedOptions.map((label, optionIndex) => (
+                            <div
+                              key={`${item.cartItemId}-option-${optionIndex}`}
+                              className="ml-[18px] text-[11px]"
+                            >
+                              + {label}
+                            </div>
+                          ))}
+
+                          {item.instructions ? (
+                            <div className="ml-[18px] mt-0.5 text-[11px] font-black">
+                              NOTE: {item.instructions}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+
+                    <div className="my-2 border-t border-dashed border-black" />
+
+                    <div className="flex items-center justify-between text-[16px] font-black">
+                      <span>SUBTOTAL</span>
+                      <span>${cartSubtotal.toFixed(2)}</span>
+                    </div>
+
+                    <div className="my-2 border-t border-dashed border-black" />
+
+                    <div className="text-center">THANK YOU</div>
+                    <div className="mt-3 border-2 border-black p-1.5 text-center font-black">
+                      TEST RECEIPT - NOT AN ORDER
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 border-t border-gray-200 bg-white px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setReceiptPreviewOpen(false)}
+                    className="rounded-xl border border-gray-300 px-4 py-3 text-xs font-black text-gray-950"
+                  >
+                    CLOSE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={printTestReceipt}
+                    className="rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                  >
+                    PRINT TEST
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptPreviewOpen(false);
+                      setCheckoutOpen(true);
+                    }}
+                    className="col-span-2 rounded-xl border-2 border-gray-950 bg-white px-4 py-3 text-xs font-black text-gray-950"
+                  >
+                    CONTINUE TO REAL CHECKOUT
+                  </button>
+                </div>
+              </div>
+            </div>,
             document.body,
           )
         : null}
