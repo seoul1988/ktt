@@ -417,8 +417,8 @@ export default function MenuItemModal({
         <div
           className={
             isIPhone
-              ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
-              : "flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
+              ? "mt-1 flex h-[72dvh] max-h-[72dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
+              : "flex max-h-[82dvh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:max-h-[86vh] sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
           }
           style={{
             backgroundColor,
