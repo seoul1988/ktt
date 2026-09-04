@@ -1,4 +1,4 @@
-"use client";
+
 
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -948,7 +948,7 @@ export default function RestaurantMenu({
                   <div
                     className={
                       isIPhone
-                        ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl bg-white text-gray-950 shadow-2xl"
+                        ? "mt-1 flex h-[85dvh] max-h-[85dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl bg-white text-gray-950 shadow-2xl"
                         : "flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-lg sm:rounded-3xl"
                     }
                     onClick={(event) => event.stopPropagation()}
