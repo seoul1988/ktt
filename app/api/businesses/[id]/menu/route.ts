@@ -175,7 +175,7 @@ export async function GET(
       supabase
         .from("business_menu_option_groups")
         .select(
-          "id,menu_item_id,name,is_required,min_select,max_select,display_order",
+          "id,menu_item_id,name,description,is_required,min_select,max_select,display_order",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -235,6 +235,7 @@ export async function GET(
       list.push({
         id: group.id,
         name: group.name,
+        description: String(group.description || "").trim(),
         required: group.is_required === true,
         is_required: group.is_required === true,
         minSelect,
