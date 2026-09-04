@@ -16,6 +16,16 @@ const nextConfig: NextConfig = {
     // worker 하나가 한 번에 처리하는 페이지 수
     staticGenerationMinPagesPerWorker: 1,
   },
+
+  async rewrites() {
+    return [
+      {
+        source: "/.well-known/apple-developer-merchantid-domain-association",
+        destination: "/api/apple-pay-domain-association",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
+
