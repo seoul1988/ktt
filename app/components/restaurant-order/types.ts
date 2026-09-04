@@ -7,6 +7,8 @@ export type MenuOptionItem = {
 
 export type MenuOptionGroup = {
   name: string;
+  /** 주문 화면에 표시할 옵션 그룹 설명 */
+  description?: string;
   required: boolean;
   minSelect: number;
   maxSelect: number | null;
@@ -56,6 +58,12 @@ export function getOptionGroups(item: RestaurantMenuItem | null): MenuOptionGrou
 
       return {
         name: String(group.name || group.group_name || `Options ${groupIndex + 1}`),
+        description: String(
+          group.description ??
+          group.group_description ??
+          group.description_text ??
+          "",
+        ).trim(),
         required: Boolean(group.required ?? group.is_required ?? minValue > 0),
         minSelect: Number.isFinite(minValue) ? Math.max(0, Math.floor(minValue)) : 0,
         maxSelect:
