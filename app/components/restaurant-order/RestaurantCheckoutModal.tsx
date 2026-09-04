@@ -523,7 +523,7 @@ export default function RestaurantCheckoutModal({
                         Your name and phone were already received by KTown. No duplicate contact form.
                       </p>
                     </div>
-                    <b className="text-xl">{money(Number(squarePrepared.amount))}</b>
+                    <b className="shrink-0 whitespace-nowrap text-xl">{money(Number(squarePrepared.amount))}</b>
                   </div>
                 </section>
 
@@ -547,15 +547,22 @@ export default function RestaurantCheckoutModal({
 
                   <div className="mt-4 space-y-3">
                     <button
+                      id="ktown-apple-pay-button"
                       type="button"
+                      aria-label="Pay with Apple Pay"
                       onClick={() => finishSquarePayment("apple")}
                       disabled={!squareAppleReady || squarePaying}
-                      className={`w-full rounded-xl bg-black px-4 py-3 text-lg font-semibold text-white ${
-                        squareAppleReady ? "" : "hidden"
+                      className={`h-12 w-full overflow-hidden rounded-xl ${
+                        squareAppleReady ? "block" : "hidden"
                       }`}
-                    >
-                      Pay
-                    </button>
+                    />
+                    <style jsx>{`
+                      #ktown-apple-pay-button {
+                        -webkit-appearance: -apple-pay-button;
+                        -apple-pay-button-type: pay;
+                        -apple-pay-button-style: black;
+                      }
+                    `}</style>
 
                     <div
                       id="ktown-square-google-pay"
@@ -746,10 +753,10 @@ export default function RestaurantCheckoutModal({
             </section>
 
             <section className="rounded-2xl bg-gray-50 p-4 text-sm">
-              <div className="flex justify-between"><span>Subtotal</span><b>{money(subtotal)}</b></div>
-              <div className="mt-2 flex justify-between"><span>Estimated tax</span><b>{money(tax)}</b></div>
-              <div className="mt-2 flex justify-between"><span>Tip</span><b>{money(tip)}</b></div>
-              <div className="mt-3 flex justify-between border-t pt-3 text-lg"><b>Estimated total</b><b>{money(estimatedTotal)}</b></div>
+              <div className="flex items-center justify-between gap-3"><span className="min-w-0">Subtotal</span><b className="shrink-0 whitespace-nowrap">{money(subtotal)}</b></div>
+              <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
+              <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
+              <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-lg"><b className="min-w-0 whitespace-nowrap">Estimated total</b><b className="shrink-0 whitespace-nowrap">{money(estimatedTotal)}</b></div>
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 

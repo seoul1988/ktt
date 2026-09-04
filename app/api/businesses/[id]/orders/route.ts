@@ -667,13 +667,27 @@ export async function POST(
         // Apple Pay on the Web needs the current host registered for this seller.
         // Failure here does not block Card or Google Pay.
         try {
-          const host = new URL(request.url).hostname;
-          if (
-            host &&
-            host !== "localhost" &&
-            host !== "127.0.0.1"
-          ) {
-            await fetch(
+          const requestHost = new URL(request.url).hostname;
+          const applePayDomains = Array.from(
+            new Set(
+              [
+                requestHost,
+                requestHost.startsWith("www.")
+                  ? requestHost.slice(4)
+                  : requestHost
+                    ? `www.${requestHost}`
+                    : "",
+              ].filter(
+                (host) =>
+                  host &&
+                  host !== "localhost" &&
+                  host !== "127.0.0.1",
+              ),
+            ),
+          );
+
+          for (const domainName of applePayDomains) {
+            const domainResponse = await fetch(
               "https://connect.squareup.com/v2/apple-pay/domains",
               {
                 method: "POST",
@@ -683,14 +697,27 @@ export async function POST(
                   "Square-Version": "2026-08-19",
                 },
                 body: JSON.stringify({
-                  domain_name: host,
+                  domain_name: domainName,
                 }),
                 cache: "no-store",
               },
             );
+
+            if (!domainResponse.ok) {
+              const domainText = await domainResponse.text();
+              console.warn(
+                "Square Apple Pay domain registration failed:",
+                domainName,
+                domainResponse.status,
+                domainText,
+              );
+            }
           }
-        } catch {
-          // Do not fail the order if Apple Pay domain registration is unavailable.
+        } catch (appleDomainError) {
+          console.warn(
+            "Square Apple Pay domain registration error:",
+            appleDomainError,
+          );
         }
 
         return NextResponse.json({
