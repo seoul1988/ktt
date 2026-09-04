@@ -158,6 +158,10 @@ export default function MenuItemModal({
   const [instructions, setInstructions] = useState("");
   const [originalImageOpen, setOriginalImageOpen] = useState(false);
 
+  // Combo It! 그룹만 기본 접힘으로 표시합니다.
+  // REQUIRED 그룹과 나머지 OPTION 그룹은 기존처럼 항상 펼쳐진 상태를 유지합니다.
+  const [comboItOpen, setComboItOpen] = useState(false);
+
   /*
    * Fast Refresh, 이전 코드, 오래된 state 등으로
    * 4 maximum 그룹 안에 8/9 같은 값이 남아 있어도 즉시 정리한다.
@@ -338,6 +342,43 @@ export default function MenuItemModal({
 
   const addButtonDisabled = !orderEnabled || !optionsValid;
 
+  /*
+   * 화면 표시 순서만 정리합니다.
+   * 실제 groups 배열의 index는 그대로 보존해야 selections / validation / 가격 계산이
+   * 기존과 동일하게 동작하므로 originalIndex를 함께 들고 정렬합니다.
+   *
+   * 표시 순서:
+   * 1) REQUIRED 그룹
+   * 2) Combo It!
+   * 3) 나머지 OPTION 그룹
+   */
+  const displayGroups = useMemo(
+    () =>
+      groups
+        .map((group, originalIndex) => ({
+          group,
+          originalIndex,
+          isRequired: getGroupRules(group).minimum > 0,
+          isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
+        }))
+        .sort((a, b) => {
+          const rank = (row: {
+            isRequired: boolean;
+            isComboIt: boolean;
+          }) => {
+            if (row.isRequired) return 0;
+            if (row.isComboIt) return 1;
+            return 2;
+          };
+
+          const rankDifference = rank(a) - rank(b);
+          return rankDifference !== 0
+            ? rankDifference
+            : a.originalIndex - b.originalIndex;
+        }),
+    [groups],
+  );
+
   return createPortal(
     <>
       <div
@@ -403,33 +444,104 @@ export default function MenuItemModal({
 
             {groups.length ? (
               <div className="mt-6 space-y-5">
-                {groups.map((group, groupIndex) => {
-                  const gKey = groupKey(
+                {displayGroups.map(
+                  ({
                     group,
-                    groupIndex,
-                  );
+                    originalIndex,
+                    isComboIt,
+                  }) => {
+                    const gKey = groupKey(
+                      group,
+                      originalIndex,
+                    );
+                    const { maximum } = getGroupRules(group);
 
-                  return (
-                    <MenuOptionGroup
-                      key={gKey}
-                      group={group}
-                      groupIndex={groupIndex}
-                      quantities={
-                        safeSelections[gKey] || {}
-                      }
-                      onSetQuantity={(
-                        optionIndex,
-                        quantity,
-                      ) =>
-                        setOptionQuantity(
-                          groupIndex,
+                    // Combo It!만 기본 접힘 + 버튼 클릭 시 펼침
+                    if (isComboIt) {
+                      return (
+                        <div
+                          key={gKey}
+                          className="rounded-2xl border border-amber-300 bg-amber-50/70 p-2.5"
+                        >
+                          {!comboItOpen ? (
+                            <button
+                              type="button"
+                              onClick={() => setComboItOpen(true)}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl border-2 border-amber-400 bg-amber-300 px-4 py-3 text-left text-gray-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.99]"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-black">
+                                  {group.name}
+                                </span>
+                                <span className="mt-0.5 block text-[10px] font-black uppercase tracking-wide opacity-70">
+                                  {maximum != null
+                                    ? `OPTIONAL · UP TO ${maximum}`
+                                    : "OPTIONAL"}
+                                </span>
+                              </span>
+
+                              <span className="shrink-0 rounded-full bg-gray-950 px-3 py-1.5 text-[10px] font-black text-white">
+                                VIEW OPTIONS ▼
+                              </span>
+                            </button>
+                          ) : (
+                            <>
+                              <div className="mb-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => setComboItOpen(false)}
+                                  className="rounded-full border border-black/15 bg-white px-3 py-1.5 text-[10px] font-black text-gray-800 shadow-sm"
+                                >
+                                  CLOSE COMBO ▲
+                                </button>
+                              </div>
+
+                              <MenuOptionGroup
+                                group={group}
+                                groupIndex={originalIndex}
+                                quantities={
+                                  safeSelections[gKey] || {}
+                                }
+                                onSetQuantity={(
+                                  optionIndex,
+                                  quantity,
+                                ) =>
+                                  setOptionQuantity(
+                                    originalIndex,
+                                    optionIndex,
+                                    quantity,
+                                  )
+                                }
+                              />
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // REQUIRED와 기타 OPTION 그룹은 기존 방식 그대로 항상 펼쳐서 표시
+                    return (
+                      <MenuOptionGroup
+                        key={gKey}
+                        group={group}
+                        groupIndex={originalIndex}
+                        quantities={
+                          safeSelections[gKey] || {}
+                        }
+                        onSetQuantity={(
                           optionIndex,
                           quantity,
-                        )
-                      }
-                    />
-                  );
-                })}
+                        ) =>
+                          setOptionQuantity(
+                            originalIndex,
+                            optionIndex,
+                            quantity,
+                          )
+                        }
+                      />
+                    );
+                  },
+                )}
               </div>
             ) : null}
 
