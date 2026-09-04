@@ -559,7 +559,6 @@ export default function RestaurantCheckoutModal({
       }
 
       onOrderPlaced();
-      alert(`Order #${squarePrepared.orderNumber} paid and received.`);
       onClose();
     } catch (e) {
       setError(
@@ -674,7 +673,6 @@ export default function RestaurantCheckoutModal({
       }
 
       onOrderPlaced();
-      alert(`Order #${payload.orderNumber} received.`);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "주문을 완료하지 못했습니다.");
