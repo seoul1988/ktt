@@ -409,7 +409,7 @@ export default function MenuItemModal({
       <div
         className={
           isIPhone
-            ? "fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            ? "fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
             : "fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 pt-10 pb-4 px-2 sm:pt-12 sm:pb-6 sm:px-4"
         }
         onClick={onClose}
@@ -417,7 +417,7 @@ export default function MenuItemModal({
         <div
           className={
             isIPhone
-              ? "mt-1 relative flex h-[78dvh] max-h-[78dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
+              ? "mt-2 relative flex h-[80dvh] max-h-[80dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
               : "relative flex max-h-[76dvh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:max-h-[86vh] sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
           }
           style={{
