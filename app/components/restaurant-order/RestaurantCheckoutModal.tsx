@@ -29,6 +29,12 @@ type PublicSettings = {
   deliveryPrepMinutes: number;
   taxRate: number;
   tipPresets: number[];
+  orderingOpen?: boolean;
+  orderingHoursEnforced?: boolean;
+  orderingClosedReason?: string;
+  orderingClosesAt?: string | null;
+  orderingCutoffAt?: string | null;
+  orderCutoffMinutes?: number;
 };
 
 type Props = {
@@ -411,6 +417,16 @@ export default function RestaurantCheckoutModal({
 
   async function submitOrder() {
     setError("");
+
+    if (
+      settings?.orderingHoursEnforced &&
+      settings?.orderingOpen === false
+    ) {
+      return setError(
+        settings.orderingClosedReason ||
+          "Online ordering is currently closed.",
+      );
+    }
     if (!name.trim()) return setError("Please enter your name.");
     if (!phone.trim()) return setError("Please enter your phone number.");
     if (fulfillmentType === "delivery") {
@@ -504,6 +520,11 @@ export default function RestaurantCheckoutModal({
         </div>
 
         <div className="space-y-5 p-5">
+          {settings?.orderingHoursEnforced === true && settings?.orderingOpen === false ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+              {settings.orderingClosedReason || "Online ordering is currently closed."}
+            </div>
+          ) : null}
           {error ? <div className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div> : null}
           {loading ? <div className="py-10 text-center text-sm font-bold text-gray-500">Loading…</div> : null}
 
@@ -760,7 +781,7 @@ export default function RestaurantCheckoutModal({
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
+            <button type="button" disabled={submitting || !cartItems.length || (settings?.orderingHoursEnforced === true && settings?.orderingOpen === false)} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
               </>
             )}
           </> : null}
