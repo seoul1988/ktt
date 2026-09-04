@@ -115,6 +115,7 @@ export default function RestaurantCheckoutModal({
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
   const [city, setCity] = useState("");
@@ -175,6 +176,7 @@ export default function RestaurantCheckoutModal({
         const saved = JSON.parse(raw);
         setName(String(saved?.name || ""));
         setPhone(String(saved?.phone || ""));
+        setEmail(String(saved?.email || ""));
       }
     } catch {}
 
@@ -457,6 +459,7 @@ export default function RestaurantCheckoutModal({
     return {
       givenName: name.trim(),
       phone: phone.trim(),
+      ...(email.trim() ? { email: email.trim() } : {}),
       countryCode: "US",
       ...(fulfillmentType === "delivery"
         ? {
@@ -553,6 +556,8 @@ export default function RestaurantCheckoutModal({
             sourceId: tokenResult.token,
             verificationToken,
             attemptId,
+            buyerEmailAddress: email.trim(),
+            buyerPhoneNumber: phone.trim(),
           }),
         },
       );
@@ -592,6 +597,12 @@ export default function RestaurantCheckoutModal({
     }
     if (!name.trim()) return setError("Please enter your name.");
     if (!phone.trim()) return setError("Please enter your phone number.");
+    if (
+      email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ) {
+      return setError("Please enter a valid email address.");
+    }
     if (fulfillmentType === "delivery") {
       if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
         return setError("Please enter the complete delivery address.");
@@ -617,13 +628,13 @@ export default function RestaurantCheckoutModal({
 
     setSubmitting(true);
     try {
-      window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim() }));
+      window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim() }));
       const response = await fetch(`/api/businesses/${businessId}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fulfillmentType,
-          customer: { name: name.trim(), phone: phone.trim() },
+          customer: { name: name.trim(), phone: phone.trim(), email: email.trim() },
           deliveryAddress: fulfillmentType === "delivery" ? {
             address1: address1.trim(), address2: address2.trim(), city: city.trim(),
             state: stateCode.trim(), postalCode: postalCode.trim(), note: deliveryNote.trim(),
@@ -757,21 +768,48 @@ export default function RestaurantCheckoutModal({
                   ) : null}
 
                   <div className="mt-4 space-y-3">
-                    <button
-                      id="ktown-apple-pay-button"
-                      type="button"
-                      aria-label="Pay with Apple Pay"
-                      onClick={() => finishSquarePayment("apple")}
-                      disabled={!squareAppleReady || squarePaying}
-                      className={`h-12 w-full overflow-hidden rounded-xl ${
-                        squareAppleReady ? "block" : "hidden"
-                      }`}
-                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        id="ktown-apple-pay-button"
+                        type="button"
+                        aria-label="Pay with Apple Pay"
+                        onClick={() => finishSquarePayment("apple")}
+                        disabled={!squareAppleReady || squarePaying}
+                        className={`h-12 min-w-0 w-full overflow-hidden rounded-xl ${
+                          squareAppleReady ? "block" : "hidden"
+                        }`}
+                      />
+
+                      <div
+                        id="ktown-square-google-pay"
+                        onClick={() => {
+                          if (squareGoogleReady && !squarePaying) {
+                            finishSquarePayment("google");
+                          }
+                        }}
+                        className={
+                          squareGoogleReady
+                            ? "h-12 min-w-0 w-full overflow-hidden rounded-xl"
+                            : "hidden"
+                        }
+                      />
+                    </div>
+
                     <style jsx>{`
                       #ktown-apple-pay-button {
                         -webkit-appearance: -apple-pay-button;
                         -apple-pay-button-type: pay;
                         -apple-pay-button-style: black;
+                      }
+
+                      #ktown-square-google-pay {
+                        height: 48px;
+                      }
+
+                      #ktown-square-google-pay > * {
+                        width: 100% !important;
+                        height: 48px !important;
+                        max-width: none !important;
                       }
                     `}</style>
 
@@ -782,16 +820,6 @@ export default function RestaurantCheckoutModal({
                         Apple Pay unavailable: {squareAppleError}
                       </div>
                     ) : null}
-
-                    <div
-                      id="ktown-square-google-pay"
-                      onClick={() => {
-                        if (squareGoogleReady && !squarePaying) {
-                          finishSquarePayment("google");
-                        }
-                      }}
-                      className={squareGoogleReady ? "" : "min-h-[1px]"}
-                    />
 
                     <div
                       className={`rounded-xl border p-3 ${
@@ -824,6 +852,14 @@ export default function RestaurantCheckoutModal({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone *" inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email for receipt (optional)"
+                  inputMode="email"
+                  autoComplete="email"
+                  className="rounded-xl border px-3 py-3 text-sm sm:col-span-2"
+                />
               </div>
             </section>
 

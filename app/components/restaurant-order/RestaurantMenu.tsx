@@ -79,6 +79,10 @@ type Props = {
   menuEnabled?: boolean;
   pickupEnabled?: boolean;
   deliveryEnabled?: boolean;
+
+  // WebsiteRenderer가 모바일 하단 ORDER/CART 버튼을 제공할 때
+  // RestaurantMenu 자체 floating cart 버튼은 숨깁니다.
+  externalCartButton?: boolean;
 };
 
 type StoredCartItem = {
@@ -168,6 +172,7 @@ export default function RestaurantMenu({
   menuEnabled = true,
   pickupEnabled = false,
   deliveryEnabled = false,
+  externalCartButton = false,
 }: Props) {
   const [data, setData] = useState<RestaurantMenuPayload>({
     categories: [],
@@ -349,11 +354,38 @@ export default function RestaurantMenu({
       setCartItems(readStoredCart(businessId));
     }
 
+    function openCartFromExternalButton(event: Event) {
+      if (!(event instanceof CustomEvent)) return;
+
+      const detailBusinessId = Number(event.detail?.businessId);
+      if (
+        Number.isFinite(detailBusinessId) &&
+        detailBusinessId !== businessId
+      ) {
+        return;
+      }
+
+      if (event.detail && typeof event.detail === "object") {
+        event.detail.handled = true;
+      }
+
+      setCartItems(readStoredCart(businessId));
+      setCartOpen(true);
+    }
+
     window.addEventListener("restaurant-order-cart-updated", syncCart as EventListener);
+    window.addEventListener(
+      "restaurant-order-open-cart",
+      openCartFromExternalButton as EventListener,
+    );
     window.addEventListener("storage", syncStorage);
 
     return () => {
       window.removeEventListener("restaurant-order-cart-updated", syncCart as EventListener);
+      window.removeEventListener(
+        "restaurant-order-open-cart",
+        openCartFromExternalButton as EventListener,
+      );
       window.removeEventListener("storage", syncStorage);
     };
   }, [businessId]);
@@ -923,18 +955,20 @@ export default function RestaurantMenu({
       {orderingAvailable && typeof document !== "undefined"
         ? createPortal(
             <>
-              <button
-                type="button"
-                onClick={() => setCartOpen(true)}
-                aria-label={`Shopping cart, ${cartCount} item${cartCount === 1 ? "" : "s"}`}
-                className="fixed bottom-5 right-5 z-[12000] flex h-14 items-center gap-2 rounded-full border border-black/10 bg-gray-950 px-4 text-white shadow-2xl transition hover:scale-[1.02] sm:bottom-7 sm:right-7"
-              >
-                <span aria-hidden="true" className="text-xl leading-none">🛒</span>
-                <span className="text-xs font-black uppercase tracking-wide">Cart</span>
-                <span className="flex min-w-6 h-6 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-black text-gray-950">
-                  {cartCount}
-                </span>
-              </button>
+              {!externalCartButton ? (
+                <button
+                  type="button"
+                  onClick={() => setCartOpen(true)}
+                  aria-label={`Shopping cart, ${cartCount} item${cartCount === 1 ? "" : "s"}`}
+                  className="fixed bottom-5 right-5 z-[12000] flex h-14 items-center gap-2 rounded-full border border-black/10 bg-gray-950 px-4 text-white shadow-2xl transition hover:scale-[1.02] sm:bottom-7 sm:right-7"
+                >
+                  <span aria-hidden="true" className="text-xl leading-none">🛒</span>
+                  <span className="text-xs font-black uppercase tracking-wide">Cart</span>
+                  <span className="flex min-w-6 h-6 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-black text-gray-950">
+                    {cartCount}
+                  </span>
+                </button>
+              ) : null}
 
               {cartOpen ? (
                 <div

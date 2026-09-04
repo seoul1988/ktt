@@ -4,7 +4,6 @@ import {
   getOrderAdmin,
   moneyCents,
 } from "@/lib/restaurant-order/server";
-import { dispatchUberDirectOrder } from "@/lib/delivery/uber-direct";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +61,31 @@ export async function POST(
     )
       .replace(/[^a-zA-Z0-9_-]/g, "")
       .slice(0, 80);
+
+    const buyerEmailAddress = String(
+      body?.buyerEmailAddress || "",
+    )
+      .trim()
+      .toLowerCase()
+      .slice(0, 254);
+
+    const buyerPhoneNumber = String(
+      body?.buyerPhoneNumber || "",
+    )
+      .trim()
+      .slice(0, 40);
+
+    if (
+      buyerEmailAddress &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        buyerEmailAddress,
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Please enter a valid email address." },
+        { status: 400 },
+      );
+    }
 
     if (!sourceId) {
       return NextResponse.json(
@@ -174,6 +198,22 @@ export async function POST(
           location_id:
             privateSettings.square_location_id,
           autocomplete: true,
+          ...(buyerEmailAddress
+            ? {
+                buyer_email_address:
+                  buyerEmailAddress,
+              }
+            : {}),
+          ...(buyerPhoneNumber
+            ? {
+                buyer_phone_number:
+                  buyerPhoneNumber,
+              }
+            : {}),
+          customer_details: {
+            customer_initiated: true,
+            seller_keyed_in: false,
+          },
           ...(verificationToken
             ? {
                 verification_token:
@@ -248,37 +288,11 @@ export async function POST(
       throw updateError;
     }
 
-    let delivery: any = null;
-
-    try {
-      delivery = await dispatchUberDirectOrder({
-        db,
-        businessId,
-        orderId: ktownOrderId,
-      });
-    } catch (deliveryError) {
-      console.error(
-        "Uber Direct automatic dispatch failed:",
-        deliveryError,
-      );
-
-      // Payment remains successful. The delivery failure is saved on the order
-      // and can be retried without charging the customer again.
-      delivery = {
-        ok: false,
-        error:
-          deliveryError instanceof Error
-            ? deliveryError.message
-            : "Courier dispatch failed.",
-      };
-    }
-
     return NextResponse.json({
       ok: true,
       paymentStatus: "paid",
       paymentId,
       orderNumber: order.order_number,
-      delivery,
     });
   } catch (error) {
     console.error("Square direct payment error:", error);

@@ -5253,6 +5253,7 @@ function LinkPageContent({
             scrollTopButtonColor={scrollTopButtonColor}
             scrollTopIconColor={scrollTopIconColor}
             scrollTopPosition={scrollTopPosition}
+            externalCartButton={previewDevice === "mobile"}
           />
         </div>
       </div>
@@ -14810,6 +14811,7 @@ export function PublicWebsiteRenderer({
   const publicHeaderRef = useRef<HTMLElement | null>(null);
   const [mobileHeaderSpacerHeight, setMobileHeaderSpacerHeight] =
     useState(0);
+  const [mobileCartCount, setMobileCartCount] = useState(0);
 
   /*
    * 공개 사이트의 첫 화면이 그려지기 전에 휴대폰 여부를 판정합니다.
@@ -14856,6 +14858,77 @@ export function PublicWebsiteRenderer({
     );
     return () => window.clearInterval(timer);
   }, []);
+
+  // RestaurantMenu 장바구니 상태를 모바일 하단 버튼과 동기화합니다.
+  useEffect(() => {
+    const storageKey = `restaurant-order-cart:${business.id}`;
+
+    const readCartCount = () => {
+      try {
+        const raw = window.localStorage.getItem(storageKey);
+        if (!raw) {
+          setMobileCartCount(0);
+          return;
+        }
+
+        const items = JSON.parse(raw);
+        if (!Array.isArray(items)) {
+          setMobileCartCount(0);
+          return;
+        }
+
+        setMobileCartCount(
+          items.reduce(
+            (sum: number, item: any) =>
+              sum + Math.max(1, Number(item?.quantity) || 1),
+            0,
+          ),
+        );
+      } catch {
+        setMobileCartCount(0);
+      }
+    };
+
+    const handleCartUpdated = (event: Event) => {
+      if (event instanceof CustomEvent) {
+        const eventBusinessId = Number(event.detail?.businessId);
+        if (
+          Number.isFinite(eventBusinessId) &&
+          eventBusinessId !== business.id
+        ) {
+          return;
+        }
+
+        const detailCount = Number(event.detail?.count);
+        if (Number.isFinite(detailCount)) {
+          setMobileCartCount(Math.max(0, detailCount));
+          return;
+        }
+      }
+
+      readCartCount();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== storageKey) return;
+      readCartCount();
+    };
+
+    readCartCount();
+    window.addEventListener(
+      "restaurant-order-cart-updated",
+      handleCartUpdated as EventListener,
+    );
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(
+        "restaurant-order-cart-updated",
+        handleCartUpdated as EventListener,
+      );
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [business.id]);
 
   useEffect(() => {
     function openLayerFromCurrentHash() {
@@ -15214,8 +15287,14 @@ export function PublicWebsiteRenderer({
   ).trim();
 
   const mobileActionButtonLabel =
-    String(websiteSettings.mobile_action_button_label || "ORDER").trim() ||
-    "ORDER";
+    String(
+      websiteSettings.mobile_action_button_label || "ORDER",
+    ).trim() || "ORDER";
+
+  const mobileActionDisplayLabel =
+    mobileCartCount > 0
+      ? `CART · ${mobileCartCount}`
+      : mobileActionButtonLabel;
 
   const mobileActionButtonEnabled =
     websiteSettings.mobile_action_button_enabled === true &&
@@ -15309,6 +15388,21 @@ export function PublicWebsiteRenderer({
   function openMobileActionTarget() {
     const target = mobileActionTargetUrl.trim();
     if (!target) return;
+
+    if (mobileCartCount > 0) {
+      const detail = {
+        businessId: business.id,
+        handled: false,
+      };
+
+      window.dispatchEvent(
+        new CustomEvent("restaurant-order-open-cart", {
+          detail,
+        }),
+      );
+
+      if (detail.handled) return;
+    }
 
     if (/^https?:\/\//i.test(target)) {
       window.location.assign(target);
@@ -15794,67 +15888,95 @@ export function PublicWebsiteRenderer({
           : null}
 
         {device === "mobile" &&
-        mobileHoursButtonEnabled &&
+        (mobileHoursButtonEnabled || mobileActionButtonEnabled) &&
         typeof document !== "undefined"
           ? createPortal(
-              <button
-                type="button"
-                onClick={openMobileHoursTarget}
-                className={`fixed bottom-5 left-4 z-[6000] flex min-w-[154px] max-w-[calc(50vw-24px)] items-center justify-between gap-2 rounded-full px-4 py-2.5 text-left shadow-2xl ring-1 ring-black/10 ${mobileHoursToneClass}`}
-                aria-label="Open business hours"
+              <nav
+                aria-label="Mobile quick actions"
+                className="fixed inset-x-0 bottom-0 z-[6000] border-t border-gray-200 bg-white/95 px-2 pt-1.5 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] backdrop-blur"
                 style={{
                   position: "fixed",
-                  left: "16px",
-                  bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
                   zIndex: 6000,
+                  paddingBottom:
+                    "max(6px, env(safe-area-inset-bottom, 0px))",
                 }}
               >
-                <span className="flex min-w-0 flex-col leading-none">
-                  <span className="flex items-center gap-2">
-                    <span className="text-[13px] font-black tracking-[0.08em]">
-                      {mobileHoursStatus.label}
-                    </span>
-                    <span className="rounded-full bg-white/20 px-2 py-1 text-[9px] font-black tracking-[0.08em]">
-                      HOURS
-                    </span>
-                  </span>
-                  <span className="mt-1.5 truncate text-[10px] font-bold opacity-90">
-                    {mobileHoursStatus.detail}
-                  </span>
-                </span>
-
-                <span
-                  className="shrink-0 text-lg font-black leading-none"
-                  aria-hidden="true"
+                <div
+                  className={`mx-auto grid max-w-md ${
+                    mobileHoursButtonEnabled && mobileActionButtonEnabled
+                      ? "grid-cols-2"
+                      : "grid-cols-1"
+                  }`}
                 >
-                  ›
-                </span>
-              </button>,
+                  {mobileHoursButtonEnabled ? (
+                    <button
+                      type="button"
+                      onClick={openMobileHoursTarget}
+                      aria-label="Open business hours"
+                      className="flex min-h-[52px] items-center justify-center gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-black ${mobileHoursToneClass}`}
+                      >
+                        ◷
+                      </span>
+
+                      <span className="min-w-0 text-left leading-tight">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.06em]">
+                          {mobileHoursStatus.label}
+                        </span>
+                        <span className="block truncate text-[9px] font-bold text-gray-500">
+                          HOURS · {mobileHoursStatus.detail}
+                        </span>
+                      </span>
+                    </button>
+                  ) : null}
+
+                  {mobileActionButtonEnabled ? (
+                    <button
+                      type="button"
+                      onClick={openMobileActionTarget}
+                      aria-label={mobileActionDisplayLabel}
+                      className="flex min-h-[52px] items-center justify-center gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="relative flex h-7 w-7 shrink-0 items-center justify-center text-[19px] leading-none"
+                      >
+                        {mobileCartCount > 0 ? "🛒" : "↗"}
+                        {mobileCartCount > 0 ? (
+                          <span className="absolute -right-2 -top-1.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-black leading-none text-white">
+                            {mobileCartCount}
+                          </span>
+                        ) : null}
+                      </span>
+
+                      <span className="min-w-0 text-left leading-tight">
+                        <span className="block truncate text-[10px] font-black uppercase tracking-[0.06em]">
+                          {mobileCartCount > 0
+                            ? "CART"
+                            : mobileActionButtonLabel}
+                        </span>
+                        <span className="block truncate text-[9px] font-bold text-gray-500">
+                          {mobileCartCount > 0
+                            ? `${mobileCartCount} item${
+                                mobileCartCount === 1 ? "" : "s"
+                              }`
+                            : "ONLINE"}
+                        </span>
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
+              </nav>,
               document.body,
             )
           : null}
 
-        {device === "mobile" &&
-        mobileActionButtonEnabled &&
-        typeof document !== "undefined"
-          ? createPortal(
-              <button
-                type="button"
-                onClick={openMobileActionTarget}
-                className="fixed bottom-5 right-4 z-[6000] flex min-h-[50px] max-w-[calc(50vw-24px)] items-center justify-center rounded-full bg-gray-950 px-5 py-3 text-center text-[13px] font-black uppercase tracking-[0.08em] text-white shadow-2xl ring-1 ring-black/10"
-                aria-label={mobileActionButtonLabel}
-                style={{
-                  position: "fixed",
-                  right: "16px",
-                  bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
-                  zIndex: 6000,
-                }}
-              >
-                <span className="truncate">{mobileActionButtonLabel}</span>
-              </button>,
-              document.body,
-            )
-          : null}
       </div>
       </main>
     </>
@@ -20692,6 +20814,7 @@ function CellPreview({
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
+            externalCartButton={previewDevice === "mobile"}
           />
         </div>
       );
