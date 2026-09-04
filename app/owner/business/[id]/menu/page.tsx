@@ -21,6 +21,8 @@ type MenuOption = {
 
 type MenuOptionGroup = {
   name: string;
+  /** 주문 화면에 표시할 짧은 설명. 예: Includes: Fries · Dipping Sauce · Drink */
+  description?: string;
   required: boolean;
   minSelect: number | "";
   maxSelect: number | null;
@@ -31,6 +33,8 @@ type MenuOptionGroup = {
 type MenuOptionTemplate = {
   id: string;
   name: string;
+  /** 공용 옵션 설명. 메뉴에 적용할 때 option group으로 같이 복사됩니다. */
+  description?: string;
   required: boolean;
   minSelect: number;
   maxSelect: number | null;
@@ -51,6 +55,7 @@ function getDefaultOptionCategoryName(index: number) {
 const DEFAULT_COMBO_IT_TEMPLATE: MenuOptionTemplate = {
   id: "system-combo-it",
   name: "Combo It!",
+  description: "Includes: Fries · Dipping Sauce · Drink",
   required: false,
   minSelect: 0,
   maxSelect: 1,
@@ -115,6 +120,7 @@ function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
 
   return raw.map((group, groupIndex) => ({
     name: String(group?.name || `Option Group ${groupIndex + 1}`),
+    description: String((group as any)?.description || "").trim(),
     required: Boolean(group?.required),
     minSelect: Math.max(0, Math.floor(Number(group?.minSelect) || 0)),
     maxSelect:
@@ -432,6 +438,7 @@ export default function OwnerBusinessMenuPage() {
   const [expandedOptionTemplateIds, setExpandedOptionTemplateIds] = useState<Set<string>>(new Set());
   const [expandedSavedOptionKeys, setExpandedSavedOptionKeys] = useState<Set<string>>(new Set());
   const [templateNameInput, setTemplateNameInput] = useState("");
+  const [templateDescriptionInput, setTemplateDescriptionInput] = useState("");
   const [templateRequiredInput, setTemplateRequiredInput] = useState(false);
   const [templateMinInput, setTemplateMinInput] = useState<number | "">("");
   const [templateMaxInput, setTemplateMaxInput] = useState<number | null>(null);
@@ -925,6 +932,7 @@ export default function OwnerBusinessMenuPage() {
           String(template?.id || "") ||
           `template-${Date.now()}-${templateIndex}`,
         name: String(template?.name || `Option ${templateIndex + 1}`),
+        description: String((template as any)?.description || "").trim(),
         required: Boolean(template?.required),
         minSelect: Math.max(
           0,
@@ -1004,6 +1012,7 @@ export default function OwnerBusinessMenuPage() {
       const dbTemplates: MenuOptionTemplate[] = groupRows.map((group, groupIndex) => ({
         id: `db-${group.id}`,
         name: String(group.name || `Option ${groupIndex + 1}`),
+        description: "",
         required: Boolean(group.required),
         minSelect: Math.max(0, Number(group.min_select) || 0),
         maxSelect:
@@ -1040,6 +1049,7 @@ export default function OwnerBusinessMenuPage() {
     const first = optionTemplates[0];
     setEditingTemplateId(first.id);
     setTemplateNameInput(first.name);
+    setTemplateDescriptionInput(first.description || "");
     setTemplateRequiredInput(first.required);
     setTemplateMinInput(first.minSelect);
     setTemplateMaxInput(first.maxSelect);
@@ -1106,6 +1116,9 @@ export default function OwnerBusinessMenuPage() {
 
       next[existingIndex] = {
         ...existing,
+        description:
+          String(existing.description || "").trim() ||
+          String(template.description || "").trim(),
         // 저장된 공용 옵션이 비어 있거나 기본값이면 실제 메뉴 설정을 사용합니다.
         required:
           existing.options.length === 0 ? template.required : existing.required,
@@ -1136,6 +1149,7 @@ export default function OwnerBusinessMenuPage() {
         const template: MenuOptionTemplate = {
           id: `existing-${item.id}-${group.displayOrder}-${templates.length}`,
           name: normalizedName,
+          description: group.description || "",
           required: group.required,
           minSelect: Number(group.minSelect) || 0,
           maxSelect: group.maxSelect,
@@ -1185,6 +1199,57 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
+  function updateOptionTemplateDescription(
+    templateId: string,
+    templateName: string,
+    description: string,
+  ) {
+    const nextDescription = description.slice(0, 240);
+
+    // Option Library 자체에 저장
+    const nextTemplates = optionTemplates.map((template) =>
+      template.id === templateId
+        ? { ...template, description: nextDescription }
+        : template,
+    );
+    persistOptionTemplates(nextTemplates);
+
+    // 이미 이 옵션 그룹을 사용하고 있는 메뉴에도 즉시 반영.
+    // 700ms debounce 자동저장을 그대로 사용하므로 타이핑 중 과도한 요청은 방지됩니다.
+    const templateKey = templateName.trim().toLowerCase();
+    const changedItemIds: number[] = [];
+
+    setItems((current) => {
+      const next = current.map((item) => {
+        const currentGroups = normalizeOptionGroups(item);
+        let changed = false;
+
+        const nextGroups = currentGroups.map((group) => {
+          if (group.name.trim().toLowerCase() !== templateKey) return group;
+          if ((group.description || "") === nextDescription) return group;
+          changed = true;
+          return { ...group, description: nextDescription };
+        });
+
+        if (!changed) return item;
+        changedItemIds.push(item.id);
+
+        return {
+          ...item,
+          option_groups: nextGroups,
+          optionGroups: nextGroups,
+          menu_option_groups: nextGroups,
+        };
+      });
+
+      itemsRef.current = next;
+      return next;
+    });
+
+    changedItemIds.forEach((itemId) => scheduleItemAutoSave(itemId));
+    setMessage("✓ 옵션 설명이 변경되었습니다. 적용된 메뉴에도 자동 저장됩니다.");
+  }
+
   function persistOptionCategoryNames(next: string[]) {
     const categoryCount = Math.max(DEFAULT_OPTION_CATEGORY_NAMES.length, next.length);
     const normalized = Array.from({ length: categoryCount }, (_, index) => {
@@ -1232,6 +1297,7 @@ export default function OwnerBusinessMenuPage() {
         next.push({
           id: `category-${index}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           name,
+          description: "",
           required: false,
           minSelect: 0,
           maxSelect: null,
@@ -1262,6 +1328,7 @@ export default function OwnerBusinessMenuPage() {
             .toString(36)
             .slice(2, 7)}`,
           name: newName,
+          description: "",
           required: false,
           minSelect: 0,
           maxSelect: null,
@@ -1362,6 +1429,7 @@ export default function OwnerBusinessMenuPage() {
             .toString(36)
             .slice(2, 7)}`,
           name: targetName,
+          description: "",
           required: false,
           minSelect: 0,
           maxSelect: null,
@@ -1484,6 +1552,7 @@ export default function OwnerBusinessMenuPage() {
       } else {
         next.push({
           name: targetName,
+          description: targetTemplate?.description || "",
           required: targetTemplate?.required ?? false,
           minSelect: targetTemplate?.minSelect ?? 0,
           maxSelect: targetTemplate?.maxSelect ?? null,
@@ -1503,6 +1572,7 @@ export default function OwnerBusinessMenuPage() {
   function resetOptionTemplateForm() {
     setEditingTemplateId(null);
     setTemplateNameInput("");
+    setTemplateDescriptionInput("");
     setTemplateRequiredInput(false);
     setTemplateMinInput(0);
     setTemplateMaxInput(null);
@@ -1713,6 +1783,7 @@ export default function OwnerBusinessMenuPage() {
           .toString(36)
           .slice(2, 8)}`,
       name,
+      description: templateDescriptionInput.trim(),
       required: templateRequiredInput,
       minSelect: Math.max(0, Number(templateMinInput) || 0),
       maxSelect:
@@ -1738,6 +1809,7 @@ export default function OwnerBusinessMenuPage() {
     );
 
     resetOptionTemplateForm();
+    setOptionTemplateOpen(false);
     setMessage(
       wasEdit
         ? "✓ 공용 옵션 그룹을 수정했습니다."
@@ -1748,6 +1820,7 @@ export default function OwnerBusinessMenuPage() {
   function editOptionTemplate(template: MenuOptionTemplate) {
     setEditingTemplateId(template.id);
     setTemplateNameInput(template.name);
+    setTemplateDescriptionInput(template.description || "");
     setTemplateRequiredInput(template.required);
     setTemplateMinInput(template.minSelect);
     setTemplateMaxInput(template.maxSelect);
@@ -1789,6 +1862,7 @@ export default function OwnerBusinessMenuPage() {
       ...groups,
       {
         name: template.name,
+        description: template.description || "",
         required: template.required,
         minSelect: template.minSelect,
         maxSelect: template.maxSelect,
@@ -1830,6 +1904,7 @@ export default function OwnerBusinessMenuPage() {
         ...groups,
         {
           name: template.name,
+          description: template.description || "",
           required: template.required,
           minSelect: template.minSelect,
           maxSelect: template.maxSelect,
@@ -1883,6 +1958,7 @@ export default function OwnerBusinessMenuPage() {
         .toString(36)
         .slice(2, 8)}`,
       name: baseName,
+      description: group.description || "",
       required: group.required,
       minSelect: Number(group.minSelect) || 0,
       maxSelect: group.maxSelect,
@@ -2076,6 +2152,7 @@ export default function OwnerBusinessMenuPage() {
         }
         return {
           name,
+          description: String(group.description || "").trim(),
           required: Boolean(group.required),
           minSelect,
           maxSelect,
@@ -2307,6 +2384,7 @@ export default function OwnerBusinessMenuPage() {
       ...groups,
       {
         name: "NEW OPTION GROUP",
+        description: "",
         required: false,
         minSelect: 0,
         maxSelect: null,
@@ -3626,6 +3704,27 @@ export default function OwnerBusinessMenuPage() {
                           </button>
                         </div>
                       </div>
+
+                      <label className="mt-2 block">
+                        <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-gray-500">
+                          주문 화면 설명
+                        </span>
+                        <textarea
+                          value={template.description || ""}
+                          onChange={(event) =>
+                            updateOptionTemplateDescription(
+                              template.id,
+                              template.name,
+                              event.target.value,
+                            )
+                          }
+                          rows={2}
+                          maxLength={240}
+                          placeholder="예: Includes: Fries · Dipping Sauce · Drink"
+                          className="w-full resize-none rounded-lg border border-blue-100 bg-blue-50/40 px-2.5 py-2 text-[11px] font-semibold leading-4 text-gray-700 outline-none focus:border-blue-400 focus:bg-white"
+                        />
+                      </label>
+
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {template.options.slice(0, 8).map((option, optionIndex) => (
                           <span
@@ -3652,16 +3751,46 @@ export default function OwnerBusinessMenuPage() {
 
             <button
               type="button"
-              onClick={() => setOptionTemplateOpen((current) => !current)}
+              onClick={() => setOptionTemplateOpen(true)}
               className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-black text-blue-700"
             >
-              {optionTemplateOpen ? "고급 옵션 관리 닫기 ▲" : "고급 옵션 관리 ▼"}
+              옵션 추가 / 관리
             </button>
           </div>
 
           {optionTemplateOpen ? (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+            <div
+              className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setOptionTemplateOpen(false);
+                }
+              }}
+            >
+              <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-3 sm:px-5">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-blue-600">
+                      Option Library
+                    </p>
+                    <h3 className="text-lg font-black text-[#172033]">
+                      {editingTemplateId ? "옵션 수정" : "옵션 추가 / 관리"}
+                    </h3>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setOptionTemplateOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200"
+                    aria-label="옵션 관리 닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                   <input
                     value={templateNameInput}
@@ -3695,6 +3824,22 @@ export default function OwnerBusinessMenuPage() {
                     새로 입력
                   </button>
                 </div>
+
+                <label className="mt-2 block rounded-xl border border-blue-100 bg-white px-3 py-2">
+                  <span className="block text-[10px] font-black uppercase tracking-wide text-gray-500">
+                    주문 화면 설명
+                  </span>
+                  <textarea
+                    value={templateDescriptionInput}
+                    onChange={(event) =>
+                      setTemplateDescriptionInput(event.target.value.slice(0, 240))
+                    }
+                    rows={2}
+                    maxLength={240}
+                    placeholder="예: Includes: Fries · Dipping Sauce · Drink"
+                    className="mt-1 w-full resize-none bg-transparent text-sm font-bold leading-5 text-gray-700 outline-none"
+                  />
+                </label>
 
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   <label className="rounded-xl border border-blue-100 bg-white px-3 py-2">
@@ -4055,6 +4200,9 @@ export default function OwnerBusinessMenuPage() {
                   ))}
                 </div>
               )}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
           </div>
@@ -4743,6 +4891,19 @@ export default function OwnerBusinessMenuPage() {
                                     }
                                     placeholder="옵션 그룹 이름"
                                     className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm font-black outline-none focus:border-[#172033]"
+                                  />
+
+                                  <input
+                                    value={group.description || ""}
+                                    onChange={(event) =>
+                                      updateOptionGroup(
+                                        item.id,
+                                        groupIndex,
+                                        { description: event.target.value.slice(0, 240) },
+                                      )
+                                    }
+                                    placeholder="주문 화면 설명 (예: Includes: Fries · Dipping Sauce · Drink)"
+                                    className="min-w-0 flex-[1.4] rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold outline-none focus:border-[#172033]"
                                   />
 
                                   <div className="flex shrink-0 gap-1">
