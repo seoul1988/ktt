@@ -18,6 +18,7 @@ function shouldIgnorePath(pathname: string) {
   return (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/api/") ||
+    pathname.startsWith("/.well-known/") ||
     pathname.startsWith("/admin/") ||
     pathname.startsWith("/business/") ||
     pathname.startsWith("/businesses/") ||
