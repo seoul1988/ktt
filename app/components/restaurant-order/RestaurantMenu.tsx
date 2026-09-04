@@ -7,6 +7,7 @@ import MenuItemModal from "./MenuItemModal";
 import RestaurantCheckoutModal from "./RestaurantCheckoutModal";
 import type { MenuOrderDraft } from "./MenuItemModal";
 import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
+import { getOptionGroups, groupKey, optionKey } from "./types";
 
 type PricedRestaurantMenuItem = RestaurantMenuItem & {
   pickup_price?: number | null;
@@ -587,6 +588,37 @@ export default function RestaurantMenu({
     persistCart([]);
   }
 
+  function getSelectedOptionLabels(item: StoredCartItem) {
+    const menuItem = data.items.find((menu) => menu.id === item.menuItemId);
+    if (!menuItem) return [];
+
+    const groups = getOptionGroups(menuItem);
+    const labels: string[] = [];
+
+    groups.forEach((group, groupIndex) => {
+      const selectedGroup = item.selections?.[groupKey(group, groupIndex)] || {};
+
+      group.options.forEach((option, optionIndex) => {
+        const selectedQuantity = Math.max(
+          0,
+          Math.floor(Number(selectedGroup[optionKey(option, optionIndex)]) || 0),
+        );
+        if (selectedQuantity <= 0) return;
+
+        const priceDelta = Number(option.priceDelta || 0);
+        const quantityText = selectedQuantity > 1 ? ` ×${selectedQuantity}` : "";
+        const priceText =
+          priceDelta !== 0
+            ? ` (${priceDelta > 0 ? "+" : "-"}$${Math.abs(priceDelta).toFixed(2)})`
+            : "";
+
+        labels.push(`${option.name}${quantityText}${priceText}`);
+      });
+    });
+
+    return labels;
+  }
+
   function handleAddToOrder(draft: MenuOrderDraft) {
     if (!orderingAvailable) return;
 
@@ -948,8 +980,13 @@ export default function RestaurantMenu({
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="min-w-0">
                                     <p className="truncate text-sm font-black">{item.name}</p>
+                                    {getSelectedOptionLabels(item).length ? (
+                                      <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-4 text-gray-500">
+                                        {getSelectedOptionLabels(item).join(" · ")}
+                                      </p>
+                                    ) : null}
                                     {item.instructions ? (
-                                      <p className="mt-1 line-clamp-2 text-[11px] font-medium text-gray-500">
+                                      <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-4 text-gray-400">
                                         {item.instructions}
                                       </p>
                                     ) : null}
