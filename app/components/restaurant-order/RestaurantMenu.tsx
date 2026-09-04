@@ -7,6 +7,7 @@ import MenuItemModal from "./MenuItemModal";
 import RestaurantCheckoutModal from "./RestaurantCheckoutModal";
 import type { MenuOrderDraft } from "./MenuItemModal";
 import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
+import { getOptionGroups, groupKey, optionKey } from "./types";
 
 type PricedRestaurantMenuItem = RestaurantMenuItem & {
   pickup_price?: number | null;
@@ -96,6 +97,37 @@ type StoredCartItem = {
   addedAt: string;
 };
 
+
+function getSelectedOptionLabels(
+  cartItem: StoredCartItem,
+  menuItem: RestaurantMenuItem | undefined,
+) {
+  if (!menuItem) return [];
+
+  const labels: string[] = [];
+  const groups = getOptionGroups(menuItem);
+
+  groups.forEach((group, groupIndex) => {
+    const selectedGroup = cartItem.selections?.[groupKey(group, groupIndex)] || {};
+
+    group.options.forEach((option, optionIndex) => {
+      const quantity = Math.max(0, Math.floor(Number(selectedGroup[optionKey(option, optionIndex)]) || 0));
+      if (!quantity) return;
+
+      const delta = Number(option.priceDelta || 0);
+      const quantityText = quantity > 1 ? ` ×${quantity}` : "";
+      const priceText =
+        delta === 0
+          ? ""
+          : ` (${delta > 0 ? "+" : "-"}$${Math.abs(delta).toFixed(2)})`;
+
+      labels.push(`${option.name}${quantityText}${priceText}`);
+    });
+  });
+
+  return labels;
+}
+
 function getCartStorageKey(businessId: number) {
   return `restaurant-order-cart:${businessId}`;
 }
@@ -178,12 +210,6 @@ export default function RestaurantMenu({
   const [selectedItem, setSelectedItem] =
     useState<RestaurantMenuItem | null>(null);
 
-  // WebsiteEditor에 저장되어 있는 예전 section/cell 값보다
-  // businesses 테이블의 현재 주문 설정을 우선합니다.
-  const [resolvedMenuEnabled, setResolvedMenuEnabled] = useState(menuEnabled);
-  const [resolvedPickupEnabled, setResolvedPickupEnabled] = useState(pickupEnabled);
-  const [resolvedDeliveryEnabled, setResolvedDeliveryEnabled] = useState(deliveryEnabled);
-
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -196,35 +222,32 @@ export default function RestaurantMenu({
 
   // MENU만 켜져 있으면 보기 전용입니다.
   // PICKUP 또는 DELIVERY가 켜지면 해당 모드에서 자체 장바구니/체크아웃을 사용합니다.
-  const hasOrderModes =
-    resolvedPickupEnabled || resolvedDeliveryEnabled || orderEnabled;
+  const hasOrderModes = pickupEnabled || deliveryEnabled || orderEnabled;
   const effectivePickupEnabled =
-    resolvedPickupEnabled ||
-    (orderEnabled && !resolvedPickupEnabled && !resolvedDeliveryEnabled);
-  const effectiveDeliveryEnabled = resolvedDeliveryEnabled;
-  const orderingAvailable =
-    effectivePickupEnabled || effectiveDeliveryEnabled;
+    pickupEnabled || (orderEnabled && !pickupEnabled && !deliveryEnabled);
+  const effectiveDeliveryEnabled = deliveryEnabled;
 
   const getInitialService = (): "menu" | "pickup" | "delivery" => {
     if (typeof window !== "undefined") {
       const requested = new URLSearchParams(window.location.search).get("service");
-      if (requested === "menu" && resolvedMenuEnabled) return "menu";
+      if (requested === "menu" && menuEnabled) return "menu";
       if (requested === "pickup" && effectivePickupEnabled) return "pickup";
       if (requested === "delivery" && effectiveDeliveryEnabled) return "delivery";
     }
 
-    if (resolvedMenuEnabled && !hasOrderModes) return "menu";
+    if (menuEnabled && !hasOrderModes) return "menu";
+    if (!menuEnabled && effectivePickupEnabled) return "pickup";
+    if (!menuEnabled && effectiveDeliveryEnabled) return "delivery";
+    if (menuEnabled) return "menu";
     if (effectivePickupEnabled) return "pickup";
-    if (effectiveDeliveryEnabled) return "delivery";
-    return "menu";
+    return "delivery";
   };
 
   const [activeService, setActiveService] =
     useState<"menu" | "pickup" | "delivery">(getInitialService);
 
   const activeOrderEnabled =
-    (activeService === "pickup" && effectivePickupEnabled) ||
-    (activeService === "delivery" && effectiveDeliveryEnabled);
+    activeService === "pickup" || activeService === "delivery";
 
   const cartCount = cartItems.reduce(
     (sum, item) => sum + Math.max(1, Number(item.quantity) || 1),
@@ -274,57 +297,6 @@ export default function RestaurantMenu({
   }
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadOrderSettings() {
-      try {
-        const response = await fetch(
-          `/api/businesses/${encodeURIComponent(businessId)}/order-settings`,
-          {
-            cache: "no-store",
-            headers: {
-              "Cache-Control": "no-cache",
-            },
-          },
-        );
-
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            payload?.error || "주문 설정을 불러오지 못했습니다.",
-          );
-        }
-
-        if (cancelled) return;
-
-        const modes = payload?.orderModes || {};
-
-        setResolvedMenuEnabled(modes.menu !== false);
-        setResolvedPickupEnabled(modes.pickup === true);
-        setResolvedDeliveryEnabled(modes.delivery === true);
-      } catch (settingsError) {
-        if (cancelled) return;
-
-        console.error(
-          "Restaurant order settings load failed:",
-          settingsError,
-        );
-
-        setResolvedMenuEnabled(menuEnabled);
-        setResolvedPickupEnabled(pickupEnabled);
-        setResolvedDeliveryEnabled(deliveryEnabled);
-      }
-    }
-
-    void loadOrderSettings();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId, menuEnabled, pickupEnabled, deliveryEnabled]);
-
-  useEffect(() => {
     setCartItems(readStoredCart(businessId));
 
     function syncCart(event?: Event) {
@@ -357,29 +329,24 @@ export default function RestaurantMenu({
   }, [activeService]);
 
   useEffect(() => {
-    // DB 주문 설정이 비동기로 들어온 뒤 서비스 상태를 반드시 재조정합니다.
-    // 주문 방식이 하나라도 켜져 있으면 주문 화면(PICKUP 우선)으로 진입합니다.
+    // 페이지 설정이 바뀌어 현재 선택 방식이 더 이상 허용되지 않으면
+    // 가능한 첫 방식으로 자동 전환합니다.
+    if (activeService === "menu" && menuEnabled) return;
     if (activeService === "pickup" && effectivePickupEnabled) return;
     if (activeService === "delivery" && effectiveDeliveryEnabled) return;
 
-    if (orderingAvailable) {
-      if (effectivePickupEnabled) {
-        setActiveService("pickup");
-      } else if (effectiveDeliveryEnabled) {
-        setActiveService("delivery");
-      }
-      return;
-    }
-
-    if (resolvedMenuEnabled) {
+    if (menuEnabled) {
       setActiveService("menu");
+    } else if (effectivePickupEnabled) {
+      setActiveService("pickup");
+    } else if (effectiveDeliveryEnabled) {
+      setActiveService("delivery");
     }
   }, [
     activeService,
-    resolvedMenuEnabled,
+    menuEnabled,
     effectivePickupEnabled,
     effectiveDeliveryEnabled,
-    orderingAvailable,
   ]);
 
   useEffect(() => {
@@ -588,14 +555,8 @@ export default function RestaurantMenu({
   }
 
   function handleAddToOrder(draft: MenuOrderDraft) {
-    if (!orderingAvailable) return;
-
-    const fulfillmentType: "pickup" | "delivery" =
-      activeService === "delivery" && effectiveDeliveryEnabled
-        ? "delivery"
-        : effectivePickupEnabled
-          ? "pickup"
-          : "delivery";
+    // MENU 보기에서는 절대로 장바구니에 저장하지 않음
+    if (!activeOrderEnabled) return;
 
     const currentCart = readStoredCart(businessId);
 
@@ -632,7 +593,10 @@ export default function RestaurantMenu({
         draft.item.thumbnail_url ||
         draft.item.image_url ||
         "",
-      fulfillmentType,
+      fulfillmentType:
+        activeService === "delivery"
+          ? "delivery"
+          : "pickup",
       addedAt: new Date().toISOString(),
     };
 
@@ -677,7 +641,7 @@ export default function RestaurantMenu({
             style={{ backgroundColor }}
           >
             <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-50">
-              {orderingAvailable ? "ORDER ONLINE" : "MENU"}
+              {activeOrderEnabled ? "ORDER ONLINE" : "MENU"}
             </p>
             <h2 className="mt-0.5 text-lg font-black tracking-tight">
               {activeService === "pickup"
@@ -688,9 +652,9 @@ export default function RestaurantMenu({
             </h2>
           </div>
 
-          {(resolvedMenuEnabled || effectivePickupEnabled || effectiveDeliveryEnabled) ? (
+          {(menuEnabled || effectivePickupEnabled || effectiveDeliveryEnabled) ? (
             <div className="flex flex-wrap gap-2">
-              {resolvedMenuEnabled ? (
+              {menuEnabled ? (
                 <button
                   type="button"
                   onClick={() => setActiveService("menu")}
@@ -708,10 +672,10 @@ export default function RestaurantMenu({
                 <button
                   type="button"
                   onClick={() => setActiveService("pickup")}
-                  className={`rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-md transition-all ${
+                  className={`rounded-full border px-3 py-2 text-[11px] font-black ${
                     activeService === "pickup"
-                      ? "border-amber-300 bg-amber-400 text-black ring-2 ring-amber-200"
-                      : "border-amber-400 bg-amber-100 text-amber-950 hover:bg-amber-200"
+                      ? "bg-gray-950 text-white"
+                      : "bg-white text-gray-900"
                   }`}
                 >
                   PICKUP ONLY
@@ -722,10 +686,10 @@ export default function RestaurantMenu({
                 <button
                   type="button"
                   onClick={() => setActiveService("delivery")}
-                  className={`rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-md transition-all ${
+                  className={`rounded-full border px-3 py-2 text-[11px] font-black ${
                     activeService === "delivery"
-                      ? "border-blue-400 bg-blue-600 text-white ring-2 ring-blue-300"
-                      : "border-blue-500 bg-blue-100 text-blue-950 hover:bg-blue-200"
+                      ? "bg-gray-950 text-white"
+                      : "bg-white text-gray-900"
                   }`}
                 >
                   DELIVERY ONLY
@@ -854,7 +818,7 @@ export default function RestaurantMenu({
                             className="h-full w-full rounded-xl object-cover"
                           />
 
-                          {orderingAvailable ? (
+                          {activeOrderEnabled ? (
                             <span
                               aria-hidden="true"
                               className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-[24px] font-medium leading-none text-gray-950 shadow-md sm:h-10 sm:w-10"
@@ -863,7 +827,7 @@ export default function RestaurantMenu({
                             </span>
                           ) : null}
                         </div>
-                      ) : orderingAvailable ? (
+                      ) : activeOrderEnabled ? (
                         <div className="flex shrink-0 items-end p-3">
                           <span
                             aria-hidden="true"
@@ -882,7 +846,7 @@ export default function RestaurantMenu({
         })}
       </div>
 
-      {orderingAvailable && typeof document !== "undefined"
+      {activeOrderEnabled && typeof document !== "undefined"
         ? createPortal(
             <>
               <button
@@ -944,23 +908,29 @@ export default function RestaurantMenu({
                                 </div>
                               )}
 
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-black">{item.name}</p>
-                                    {item.instructions ? (
-                                      <p className="mt-1 line-clamp-2 text-[11px] font-medium text-gray-500">
-                                        {item.instructions}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                  <span className="shrink-0 text-sm font-black">
-                                    ${Math.max(0, Number(item.totalPrice) || 0).toFixed(2)}
-                                  </span>
-                                </div>
+                              <div className="min-w-0 flex flex-1">
+                                <div className="min-w-0 flex-1 pr-3">
+                                  <p className="truncate text-sm font-black">{item.name}</p>
 
-                                <div className="mt-3 flex items-center justify-between gap-3">
-                                  <div className="inline-flex items-center rounded-full border border-gray-200">
+                                  {getSelectedOptionLabels(
+                                    item,
+                                    data.items.find((menuItem) => menuItem.id === item.menuItemId),
+                                  ).length ? (
+                                    <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-4 text-gray-500">
+                                      {getSelectedOptionLabels(
+                                        item,
+                                        data.items.find((menuItem) => menuItem.id === item.menuItemId),
+                                      ).join(" · ")}
+                                    </p>
+                                  ) : null}
+
+                                  {item.instructions ? (
+                                    <p className="mt-0.5 line-clamp-1 text-[9px] font-medium leading-4 text-gray-400">
+                                      Note: {item.instructions}
+                                    </p>
+                                  ) : null}
+
+                                  <div className="mt-2 inline-flex items-center rounded-full border border-gray-200">
                                     <button
                                       type="button"
                                       onClick={() => changeCartQuantity(item.cartItemId, -1)}
@@ -981,11 +951,17 @@ export default function RestaurantMenu({
                                       +
                                     </button>
                                   </div>
+                                </div>
+
+                                <div className="flex w-[86px] shrink-0 flex-col items-end justify-between border-l border-gray-200 pl-3">
+                                  <span className="whitespace-nowrap text-sm font-black">
+                                    ${Math.max(0, Number(item.totalPrice) || 0).toFixed(2)}
+                                  </span>
 
                                   <button
                                     type="button"
                                     onClick={() => removeCartItem(item.cartItemId)}
-                                    className="text-[11px] font-black uppercase tracking-wide text-red-600"
+                                    className="text-[10px] font-black uppercase tracking-wide text-red-600"
                                   >
                                     Remove
                                   </button>
@@ -1050,14 +1026,10 @@ export default function RestaurantMenu({
           )
         : null}
 
-      {checkoutOpen && orderingAvailable ? (
+      {checkoutOpen && activeOrderEnabled ? (
         <RestaurantCheckoutModal
           businessId={businessId}
-          fulfillmentType={
-            activeService === "delivery" && effectiveDeliveryEnabled
-              ? "delivery"
-              : "pickup"
-          }
+          fulfillmentType={activeService === "delivery" ? "delivery" : "pickup"}
           cartItems={cartItems}
           onClose={() => setCheckoutOpen(false)}
           onOrderPlaced={() => { clearCart(); setCheckoutOpen(false); }}
@@ -1096,7 +1068,7 @@ export default function RestaurantMenu({
           item={selectedItem}
           backgroundColor={backgroundColor}
           textColor={textColor}
-          orderEnabled={orderingAvailable}
+          orderEnabled={activeOrderEnabled}
           onAddToOrder={handleAddToOrder}
           onClose={() =>
             setSelectedItem(null)
