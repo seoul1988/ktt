@@ -503,7 +503,7 @@ export default function MenuItemModal({
                                   {group.name}
                                 </span>
                                 {comboDescription ? (
-                                  <span className="mt-1 block whitespace-normal text-[11px] font-black leading-4 text-gray-800">
+                                  <span className="mt-1 block whitespace-normal text-[11px] font-black leading-4 text-red-600">
                                     {comboDescription}
                                   </span>
                                 ) : null}
@@ -526,28 +526,30 @@ export default function MenuItemModal({
                               </div>
 
                               {comboDescription ? (
-                                <p className="mb-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-gray-800">
+                                <p className="mb-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-red-600">
                                   {comboDescription}
                                 </p>
                               ) : null}
 
-                              <MenuOptionGroup
-                                group={group}
-                                groupIndex={originalIndex}
-                                quantities={
-                                  safeSelections[gKey] || {}
-                                }
-                                onSetQuantity={(
-                                  optionIndex,
-                                  quantity,
-                                ) =>
-                                  setOptionQuantity(
-                                    originalIndex,
+                              <div className="[&_span.shrink-0]:!font-black [&_span.shrink-0]:!text-[#7BAFD4] [&_span.shrink-0]:!opacity-100">
+                                <MenuOptionGroup
+                                  group={group}
+                                  groupIndex={originalIndex}
+                                  quantities={
+                                    safeSelections[gKey] || {}
+                                  }
+                                  onSetQuantity={(
                                     optionIndex,
                                     quantity,
-                                  )
-                                }
-                              />
+                                  ) =>
+                                    setOptionQuantity(
+                                      originalIndex,
+                                      optionIndex,
+                                      quantity,
+                                    )
+                                  }
+                                />
+                              </div>
                             </>
                           )}
                         </div>
@@ -563,23 +565,25 @@ export default function MenuItemModal({
                           </p>
                         ) : null}
 
-                        <MenuOptionGroup
-                          group={group}
-                          groupIndex={originalIndex}
-                          quantities={
-                            safeSelections[gKey] || {}
-                          }
-                          onSetQuantity={(
-                            optionIndex,
-                            quantity,
-                          ) =>
-                            setOptionQuantity(
-                              originalIndex,
+                        <div className="[&_span.shrink-0]:!font-black [&_span.shrink-0]:!text-[#7BAFD4] [&_span.shrink-0]:!opacity-100">
+                          <MenuOptionGroup
+                            group={group}
+                            groupIndex={originalIndex}
+                            quantities={
+                              safeSelections[gKey] || {}
+                            }
+                            onSetQuantity={(
                               optionIndex,
                               quantity,
-                            )
-                          }
-                        />
+                            ) =>
+                              setOptionQuantity(
+                                originalIndex,
+                                optionIndex,
+                                quantity,
+                              )
+                            }
+                          />
+                        </div>
                       </div>
                     );
                   },
