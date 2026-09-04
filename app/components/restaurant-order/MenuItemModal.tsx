@@ -401,18 +401,18 @@ export default function MenuItemModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 pt-10 pb-4 px-2 sm:pt-12 sm:pb-6 sm:px-4"
+        className="fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 px-2 py-[max(0.75rem,env(safe-area-inset-top))] sm:px-4 sm:py-6"
         onClick={onClose}
       >
         <div
-          className="flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
-          style={{ backgroundColor, color: textColor, transform: "translateY(18px)" }}
+          className="flex max-h-[78dvh] w-[calc(100%-1rem)] max-w-[370px] flex-col overflow-hidden rounded-3xl shadow-2xl sm:max-h-[86vh] sm:w-[400px] sm:max-w-[400px]"
+          style={{ backgroundColor, color: textColor }}
           onClick={(event) => event.stopPropagation()}
         >
           {item.image_url || item.thumbnail_url ? (
             <button
               type="button"
-              className="relative flex h-[190px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
+              className="relative flex h-[145px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
               onClick={() => setOriginalImageOpen(true)}
               aria-label={`${item.name} 이미지 View Larger`}
             >
@@ -433,7 +433,7 @@ export default function MenuItemModal({
             </button>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3.5 sm:p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
             <div className="flex items-start justify-between gap-4">
               <h2 className="text-lg font-black leading-tight sm:text-xl">
                 {item.name}
@@ -612,7 +612,7 @@ export default function MenuItemModal({
 
           {orderEnabled ? (
           <div
-            className="z-20 flex min-h-14 shrink-0 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
+            className="z-20 flex min-h-12 shrink-0 items-stretch border-t border-black/10 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(0,0,0,0.10)] sm:min-h-14"
             style={{ backgroundColor }}
           >
             <div className="flex shrink-0 items-center border-r border-black/10">
@@ -623,12 +623,12 @@ export default function MenuItemModal({
                     Math.max(1, value - 1),
                   )
                 }
-                className="flex h-14 w-11 items-center justify-center text-lg font-black"
+                className="flex h-12 w-10 items-center justify-center text-lg font-black sm:h-14 sm:w-11"
               >
                 −
               </button>
 
-              <div className="flex h-14 min-w-9 items-center justify-center text-sm font-black">
+              <div className="flex h-12 min-w-8 items-center justify-center text-sm font-black sm:h-14 sm:min-w-9">
                 {menuQuantity}
               </div>
 
@@ -639,7 +639,7 @@ export default function MenuItemModal({
                     Math.min(99, value + 1),
                   )
                 }
-                className="flex h-14 w-11 items-center justify-center text-lg font-black"
+                className="flex h-12 w-10 items-center justify-center text-lg font-black sm:h-14 sm:w-11"
               >
                 +
               </button>
@@ -649,7 +649,7 @@ export default function MenuItemModal({
               type="button"
               disabled={addButtonDisabled}
               onClick={handleAddToOrder}
-              className={`flex min-w-0 flex-1 items-center justify-between gap-3 px-4 text-left font-black transition ${
+              className={`flex min-w-0 flex-1 items-center justify-between gap-2 px-3 text-left text-sm font-black transition sm:gap-3 sm:px-4 sm:text-base ${
                 addButtonDisabled
                   ? "cursor-not-allowed bg-gray-400 text-white"
                   : "cursor-pointer bg-green-600 text-white hover:bg-green-700 active:bg-green-800"
