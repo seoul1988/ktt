@@ -145,6 +145,113 @@ type RequestItem = {
   selections?: unknown;
 };
 
+
+function cleanSelectionLabel(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+
+  // Stored selection keys are commonly "index:Label".
+  const colonIndex = raw.indexOf(":");
+  const label = colonIndex >= 0 ? raw.slice(colonIndex + 1) : raw;
+
+  return label
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function selectedSquareModifiers(selections: unknown) {
+  if (!selections) {
+    return [] as Array<{
+      name: string;
+      base_price_money: {
+        amount: number;
+        currency: "USD";
+      };
+    }>;
+  }
+
+  let value: any = selections;
+
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      const cleaned = cleanSelectionLabel(value);
+
+      return cleaned
+        ? [
+            {
+              name: cleaned,
+              base_price_money: {
+                amount: 0,
+                currency: "USD" as const,
+              },
+            },
+          ]
+        : [];
+    }
+  }
+
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return [];
+  }
+
+  const modifiers: Array<{
+    name: string;
+    base_price_money: {
+      amount: number;
+      currency: "USD";
+    };
+  }> = [];
+
+  for (const selectedGroup of Object.values(
+    value as Record<string, unknown>,
+  )) {
+    if (
+      !selectedGroup ||
+      typeof selectedGroup !== "object" ||
+      Array.isArray(selectedGroup)
+    ) {
+      continue;
+    }
+
+    for (const [optionKey, quantityValue] of Object.entries(
+      selectedGroup as Record<string, unknown>,
+    )) {
+      const quantity = Math.max(
+        0,
+        Math.floor(Number(quantityValue) || 0),
+      );
+
+      if (quantity <= 0) continue;
+
+      const optionName =
+        cleanSelectionLabel(optionKey);
+
+      if (!optionName) continue;
+
+      modifiers.push({
+        name:
+          quantity > 1
+            ? `${optionName} x${quantity}`
+            : optionName,
+        base_price_money: {
+          amount: 0,
+          currency: "USD",
+        },
+      });
+    }
+  }
+
+  return modifiers;
+}
+
+
 function orderNumber() {
   return `${Date.now()
     .toString()
@@ -656,33 +763,33 @@ export async function POST(
                 },
                 line_items: [
                   ...normalized.map((item) => {
-                    const selectionText =
-                      item.selections == null
-                        ? ""
-                        : typeof item.selections === "string"
-                          ? item.selections
-                          : JSON.stringify(item.selections);
+                    const modifiers =
+                      selectedSquareModifiers(
+                        item.selections,
+                      );
 
-                    const note = [
-                      item.instructions
-                        ? `Instructions: ${item.instructions}`
-                        : "",
-                      selectionText
-                        ? `Options: ${selectionText}`
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" | ")
-                      .slice(0, 500);
+                    const note = item.instructions
+                      ? `NOTE: ${item.instructions}`.slice(
+                          0,
+                          500,
+                        )
+                      : "";
 
                     return {
                       name: item.name,
                       quantity: String(item.quantity),
                       base_price_money: {
-                        amount: moneyCents(item.unitPrice),
+                        amount: moneyCents(
+                          item.unitPrice,
+                        ),
                         currency: "USD",
                       },
-                      ...(note ? { note } : {}),
+                      ...(modifiers.length
+                        ? { modifiers }
+                        : {}),
+                      ...(note
+                        ? { note }
+                        : {}),
                     };
                   }),
                   ...(tax > 0
