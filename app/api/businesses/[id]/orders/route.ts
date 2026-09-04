@@ -6,6 +6,10 @@ import {
 } from "@/lib/restaurant-order/server";
 import { createStripeCheckoutSession } from "@/lib/restaurant-order/stripe";
 import { sendTwilioSms } from "@/lib/restaurant-order/twilio";
+import {
+  createUberDirectQuote,
+  isUberDirectEnabled,
+} from "@/lib/delivery/uber-direct";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -236,7 +240,7 @@ export async function POST(
     ] = await Promise.all([
       db
         .from("businesses")
-        .select("id,name,hours")
+        .select("*")
         .eq("id", businessId)
         .single(),
 
@@ -253,7 +257,7 @@ export async function POST(
           "restaurant_order_private_settings",
         )
         .select(
-          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number",
+          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number,delivery_provider,uber_direct_enabled,uber_direct_customer_id,delivery_fee_markup_cents,pickup_phone_override",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -495,16 +499,35 @@ export async function POST(
       subtotal *
       (tipPercent / 100);
 
-    const total =
-      subtotal + tax + tip;
-
-    const number =
-      orderNumber();
-
     const address =
       fulfillmentType === "delivery"
         ? body.deliveryAddress
         : null;
+
+    let deliveryFee = 0;
+    let deliveryQuoteId: string | null = null;
+    let deliveryQuoteExpiresAt: string | null = null;
+
+    if (
+      fulfillmentType === "delivery" &&
+      isUberDirectEnabled(privateSettings)
+    ) {
+      const directQuote = await createUberDirectQuote({
+        business,
+        privateSettings,
+        dropoffAddress: address,
+      });
+
+      deliveryFee = directQuote.customerFeeCents / 100;
+      deliveryQuoteId = directQuote.id;
+      deliveryQuoteExpiresAt = directQuote.expires || null;
+    }
+
+    const total =
+      subtotal + tax + tip + deliveryFee;
+
+    const number =
+      orderNumber();
 
     const {
       data: order,
@@ -540,6 +563,18 @@ export async function POST(
         subtotal,
         tax,
         tip,
+        delivery_fee: deliveryFee,
+        delivery_provider:
+          fulfillmentType === "delivery" &&
+          isUberDirectEnabled(privateSettings)
+            ? "uber_direct"
+            : privateSettings?.delivery_provider || "manual",
+        delivery_quote_id: deliveryQuoteId,
+        delivery_quote_expires_at: deliveryQuoteExpiresAt,
+        delivery_status:
+          fulfillmentType === "delivery"
+            ? "awaiting_payment"
+            : null,
         total,
       })
       .select("id")
@@ -669,6 +704,18 @@ export async function POST(
                           quantity: "1",
                           base_price_money: {
                             amount: moneyCents(tip),
+                            currency: "USD",
+                          },
+                        },
+                      ]
+                    : []),
+                  ...(deliveryFee > 0
+                    ? [
+                        {
+                          name: "Delivery Fee",
+                          quantity: "1",
+                          base_price_money: {
+                            amount: moneyCents(deliveryFee),
                             currency: "USD",
                           },
                         },

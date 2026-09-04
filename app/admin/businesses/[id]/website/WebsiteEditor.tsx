@@ -382,10 +382,15 @@ type WebsiteSettings = {
   header_submenu_height_px?: number;
   header_submenu_font_size_px?: number;
 
-  /** 모바일 OPEN/CLOSED floating 버튼 */
+  /** 모바일 하단 왼쪽 OPEN/CLOSED floating 버튼 */
   mobile_hours_button_enabled?: boolean;
   /** 예: #business-hours, #hours, /hours, /business/90/website/hours */
   mobile_hours_target_url?: string;
+
+  /** 모바일 하단 오른쪽 액션 버튼 (ORDER / BOOK / APPOINTMENT 등) */
+  mobile_action_button_enabled?: boolean;
+  mobile_action_button_label?: string;
+  mobile_action_target_url?: string;
 
   [key: string]: unknown;
 };
@@ -7015,6 +7020,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   // 현재 브라우저 메모리의 sections 상태에서 해당 페이지를 바로 엽니다.
   const [previewInitialPageSlug, setPreviewInitialPageSlug] = useState("");
   const [menuImportOpen, setMenuImportOpen] = useState(false);
+  const [mobileBottomButtonsOpen, setMobileBottomButtonsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
@@ -9839,61 +9845,6 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   }
 
 
-  function configureMobileBusinessHoursButton() {
-    const settings = normalizeSettings(
-      business?.website_settings,
-      business?.name || "",
-    );
-
-    const currentTarget = String(
-      settings.mobile_hours_target_url || "",
-    ).trim();
-
-    const entered = window.prompt(
-      [
-        "폰 OPEN/CLOSED 버튼을 눌렀을 때 열 주소를 입력하세요.",
-        "",
-        "레이어 예: #business-hours 또는 #hours",
-        "페이지 예: /hours 또는 /business/90/website/hours",
-        "",
-        "팝업식 레이어를 연결하려면 그 레이어의 #주소를 입력하면 됩니다.",
-      ].join("\\n"),
-      currentTarget || "#business-hours",
-    );
-
-    if (entered === null) return;
-
-    const target = entered.trim();
-
-    if (!target) {
-      updateWebsiteSettings({
-        mobile_hours_button_enabled: false,
-        mobile_hours_target_url: "",
-      });
-      setMessage("폰 OPEN/CLOSED 버튼을 해제했습니다.");
-      setError("");
-      return;
-    }
-
-    const normalizedTarget =
-      target.startsWith("#") ||
-      target.startsWith("/") ||
-      /^https?:\/\//i.test(target)
-        ? target
-        : `#${slugifyMenuValue(target)}`;
-
-    updateWebsiteSettings({
-      mobile_hours_button_enabled: true,
-      mobile_hours_target_url: normalizedTarget,
-    });
-
-    setDevice("mobile");
-    setMessage(
-      `폰 OPEN/CLOSED 버튼을 ${normalizedTarget} 주소에 연결했습니다. 서버 저장 후 공개 폰 화면에서 버튼을 누르면 해당 레이어/페이지가 열립니다.`,
-    );
-    setError("");
-  }
-
   function addOrOpenCateringRequestPage() {
     const createRequestCell = (): GridCell => ({
       ...defaultCell("title", "Catering Request Form", 4),
@@ -10674,59 +10625,14 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               📝 캐터링 요청폼 넣기
             </button>
-            <div className="flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2">
-              <label className="flex cursor-pointer items-center gap-2 text-sm font-black text-emerald-900">
-                <input
-                  type="checkbox"
-                  checked={websiteSettings.mobile_hours_button_enabled === true}
-                  onChange={(event) => {
-                    const enabled = event.target.checked;
-
-                    if (!enabled) {
-                      updateWebsiteSettings({
-                        mobile_hours_button_enabled: false,
-                      });
-                      setMessage(
-                        "폰 OPEN/CLOSED 버튼을 사용하지 않습니다.",
-                      );
-                      setError("");
-                      return;
-                    }
-
-                    const currentTarget = String(
-                      websiteSettings.mobile_hours_target_url || "",
-                    ).trim();
-
-                    if (currentTarget) {
-                      updateWebsiteSettings({
-                        mobile_hours_button_enabled: true,
-                      });
-                      setDevice("mobile");
-                      setMessage(
-                        `폰 OPEN/CLOSED 버튼을 사용합니다. 연결 주소: ${currentTarget}`,
-                      );
-                      setError("");
-                      return;
-                    }
-
-                    configureMobileBusinessHoursButton();
-                  }}
-                  className="h-4 w-4 accent-emerald-600"
-                />
-                폰 오픈시간 버튼 사용
-              </label>
-
-              {websiteSettings.mobile_hours_button_enabled === true ? (
-                <button
-                  type="button"
-                  onClick={configureMobileBusinessHoursButton}
-                  className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs font-black text-emerald-800 hover:bg-emerald-100"
-                  title="OPEN/CLOSED 버튼이 열 레이어 또는 페이지 주소를 변경합니다."
-                >
-                  주소 설정
-                </button>
-              ) : null}
-            </div>
+            <button
+              type="button"
+              onClick={() => setMobileBottomButtonsOpen(true)}
+              className="rounded-full border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-800 hover:bg-indigo-100"
+              title="모바일 화면 하단의 영업시간 버튼과 ORDER/BOOK 같은 액션 버튼을 한 곳에서 설정합니다."
+            >
+              📱 모바일 하단 버튼 설정
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -10846,6 +10752,221 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
           onClose={() => setMenuImportOpen(false)}
         />
       ) : null}
+
+      {mobileBottomButtonsOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[160000] flex items-center justify-center bg-black/60 p-4"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) {
+                  setMobileBottomButtonsOpen(false);
+                }
+              }}
+            >
+              <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-600">
+                      Mobile Bottom Buttons
+                    </p>
+                    <h2 className="mt-1 text-xl font-black text-gray-950">
+                      모바일 하단 버튼 설정
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-gray-500">
+                      왼쪽은 영업시간, 오른쪽은 필요한 업체만 ORDER · BOOK · APPOINTMENT 같은 버튼을 표시합니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileBottomButtonsOpen(false)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200"
+                    aria-label="Close mobile bottom button settings"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="space-y-5 px-5 py-5">
+                  <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-emerald-950">
+                          왼쪽 · 영업시간
+                        </p>
+                        <p className="mt-0.5 text-xs font-semibold text-emerald-800/70">
+                          OPEN / CLOSED 상태를 표시하고 영업시간 레이어나 페이지를 엽니다.
+                        </p>
+                      </div>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm font-black text-emerald-900">
+                        <input
+                          type="checkbox"
+                          checked={websiteSettings.mobile_hours_button_enabled === true}
+                          onChange={(event) => {
+                            updateWebsiteSettings({
+                              mobile_hours_button_enabled: event.target.checked,
+                            });
+                            if (event.target.checked) setDevice("mobile");
+                          }}
+                          className="h-5 w-5 accent-emerald-600"
+                        />
+                        사용
+                      </label>
+                    </div>
+
+                    <label className="mt-4 block text-xs font-black text-gray-700">
+                      연결 주소
+                    </label>
+                    <div className="mt-1.5 flex gap-2">
+                      <input
+                        type="text"
+                        value={String(websiteSettings.mobile_hours_target_url || "")}
+                        onChange={(event) =>
+                          updateWebsiteSettings({
+                            mobile_hours_target_url: event.target.value,
+                          })
+                        }
+                        placeholder="#business-hours"
+                        className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-950 outline-none focus:border-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateWebsiteSettings({ mobile_hours_target_url: "" })
+                        }
+                        className="shrink-0 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-black text-gray-700 hover:bg-gray-100"
+                        title="연결 주소 지우기"
+                      >
+                        CLEAR
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] font-semibold text-gray-500">
+                      예: #business-hours · #hours · /hours
+                    </p>
+                  </section>
+
+                  <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-indigo-950">
+                          오른쪽 · 액션 버튼
+                        </p>
+                        <p className="mt-0.5 text-xs font-semibold text-indigo-800/70">
+                          온라인 주문이나 예약이 필요한 업체만 켜세요.
+                        </p>
+                      </div>
+                      <label className="flex cursor-pointer items-center gap-2 text-sm font-black text-indigo-900">
+                        <input
+                          type="checkbox"
+                          checked={websiteSettings.mobile_action_button_enabled === true}
+                          onChange={(event) => {
+                            updateWebsiteSettings({
+                              mobile_action_button_enabled: event.target.checked,
+                            });
+                            if (event.target.checked) setDevice("mobile");
+                          }}
+                          className="h-5 w-5 accent-indigo-600"
+                        />
+                        사용
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-[160px_1fr]">
+                      <div>
+                        <label className="block text-xs font-black text-gray-700">
+                          버튼 이름
+                        </label>
+                        <input
+                          type="text"
+                          value={String(websiteSettings.mobile_action_button_label || "ORDER")}
+                          onChange={(event) =>
+                            updateWebsiteSettings({
+                              mobile_action_button_label: event.target.value,
+                            })
+                          }
+                          placeholder="ORDER"
+                          maxLength={24}
+                          className="mt-1.5 w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-black uppercase text-gray-950 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-black text-gray-700">
+                          연결 주소
+                        </label>
+                        <div className="mt-1.5 flex gap-2">
+                          <input
+                            type="text"
+                            value={String(websiteSettings.mobile_action_target_url || "")}
+                            onChange={(event) =>
+                              updateWebsiteSettings({
+                                mobile_action_target_url: event.target.value,
+                              })
+                            }
+                            placeholder="https://order.example.com 또는 /order"
+                            className="min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-950 outline-none focus:border-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateWebsiteSettings({ mobile_action_target_url: "" })
+                            }
+                            className="shrink-0 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-xs font-black text-gray-700 hover:bg-gray-100"
+                            title="연결 주소 지우기"
+                          >
+                            CLEAR
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {["ORDER", "BOOK", "APPOINTMENT", "CALL"].map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() =>
+                            updateWebsiteSettings({
+                              mobile_action_button_label: label,
+                            })
+                          }
+                          className="rounded-full border border-indigo-200 bg-white px-3 py-1 text-[11px] font-black text-indigo-800 hover:bg-indigo-100"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <div className="rounded-2xl bg-gray-950 px-4 py-3 text-xs font-semibold text-gray-200">
+                    모바일 표시: 영업시간은 왼쪽 아래 · 액션 버튼은 오른쪽 아래. 각각 “사용”이 켜져 있고 연결 주소가 있을 때만 표시됩니다.
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-5 py-4">
+                  <button
+                    type="button"
+                    onClick={() => setDevice("mobile")}
+                    className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-black text-gray-800 hover:bg-gray-100"
+                  >
+                    📱 모바일 미리보기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileBottomButtonsOpen(false);
+                      setMessage("모바일 하단 버튼 설정을 변경했습니다. 공개하려면 서버 저장을 눌러주세요.");
+                      setError("");
+                    }}
+                    className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-black text-white hover:bg-indigo-700"
+                  >
+                    완료
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {fullLayoutEditorOpen && typeof document !== "undefined"
         ? createPortal(
@@ -15088,6 +15209,18 @@ export function PublicWebsiteRenderer({
     websiteSettings.mobile_hours_button_enabled === true &&
     Boolean(mobileHoursTargetUrl);
 
+  const mobileActionTargetUrl = String(
+    websiteSettings.mobile_action_target_url || "",
+  ).trim();
+
+  const mobileActionButtonLabel =
+    String(websiteSettings.mobile_action_button_label || "ORDER").trim() ||
+    "ORDER";
+
+  const mobileActionButtonEnabled =
+    websiteSettings.mobile_action_button_enabled === true &&
+    Boolean(mobileActionTargetUrl);
+
   const mobileBusinessHours = parseBusinessTableHours(
     business.hours,
   );
@@ -15171,6 +15304,31 @@ export function PublicWebsiteRenderer({
     window.location.assign(
       `${websiteBase}${internalTarget}`,
     );
+  }
+
+  function openMobileActionTarget() {
+    const target = mobileActionTargetUrl.trim();
+    if (!target) return;
+
+    if (/^https?:\/\//i.test(target)) {
+      window.location.assign(target);
+      return;
+    }
+
+    if (target.startsWith("#")) {
+      window.location.hash = slugifyMenuValue(target.replace(/^#/, ""));
+      return;
+    }
+
+    const websiteBase = `/business/${business.id}/website`;
+    const internalTarget = target.startsWith("/") ? target : `/${target}`;
+
+    if (internalTarget.startsWith("/business/")) {
+      window.location.assign(internalTarget);
+      return;
+    }
+
+    window.location.assign(`${websiteBase}${internalTarget}`);
   }
 
   /*
@@ -15642,11 +15800,11 @@ export function PublicWebsiteRenderer({
               <button
                 type="button"
                 onClick={openMobileHoursTarget}
-                className={`fixed bottom-5 right-4 z-[6000] flex min-w-[172px] items-center justify-between gap-3 rounded-full px-4 py-2.5 text-left shadow-2xl ring-1 ring-black/10 ${mobileHoursToneClass}`}
+                className={`fixed bottom-5 left-4 z-[6000] flex min-w-[154px] max-w-[calc(50vw-24px)] items-center justify-between gap-2 rounded-full px-4 py-2.5 text-left shadow-2xl ring-1 ring-black/10 ${mobileHoursToneClass}`}
                 aria-label="Open business hours"
                 style={{
                   position: "fixed",
-                  right: "16px",
+                  left: "16px",
                   bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
                   zIndex: 6000,
                 }}
@@ -15671,6 +15829,28 @@ export function PublicWebsiteRenderer({
                 >
                   ›
                 </span>
+              </button>,
+              document.body,
+            )
+          : null}
+
+        {device === "mobile" &&
+        mobileActionButtonEnabled &&
+        typeof document !== "undefined"
+          ? createPortal(
+              <button
+                type="button"
+                onClick={openMobileActionTarget}
+                className="fixed bottom-5 right-4 z-[6000] flex min-h-[50px] max-w-[calc(50vw-24px)] items-center justify-center rounded-full bg-gray-950 px-5 py-3 text-center text-[13px] font-black uppercase tracking-[0.08em] text-white shadow-2xl ring-1 ring-black/10"
+                aria-label={mobileActionButtonLabel}
+                style={{
+                  position: "fixed",
+                  right: "16px",
+                  bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
+                  zIndex: 6000,
+                }}
+              >
+                <span className="truncate">{mobileActionButtonLabel}</span>
               </button>,
               document.body,
             )

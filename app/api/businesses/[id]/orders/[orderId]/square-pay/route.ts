@@ -4,6 +4,7 @@ import {
   getOrderAdmin,
   moneyCents,
 } from "@/lib/restaurant-order/server";
+import { dispatchUberDirectOrder } from "@/lib/delivery/uber-direct";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -247,11 +248,37 @@ export async function POST(
       throw updateError;
     }
 
+    let delivery: any = null;
+
+    try {
+      delivery = await dispatchUberDirectOrder({
+        db,
+        businessId,
+        orderId: ktownOrderId,
+      });
+    } catch (deliveryError) {
+      console.error(
+        "Uber Direct automatic dispatch failed:",
+        deliveryError,
+      );
+
+      // Payment remains successful. The delivery failure is saved on the order
+      // and can be retried without charging the customer again.
+      delivery = {
+        ok: false,
+        error:
+          deliveryError instanceof Error
+            ? deliveryError.message
+            : "Courier dispatch failed.",
+      };
+    }
+
     return NextResponse.json({
       ok: true,
       paymentStatus: "paid",
       paymentId,
       orderNumber: order.order_number,
+      delivery,
     });
   } catch (error) {
     console.error("Square direct payment error:", error);

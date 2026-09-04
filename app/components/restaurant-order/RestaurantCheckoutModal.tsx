@@ -35,6 +35,8 @@ type PublicSettings = {
   orderingClosesAt?: string | null;
   orderingCutoffAt?: string | null;
   orderCutoffMinutes?: number;
+  deliveryProvider?: "manual" | "uber_direct" | "doordash_drive" | "auto";
+  deliveryDispatchEnabled?: boolean;
 };
 
 type Props = {
@@ -112,6 +114,16 @@ export default function RestaurantCheckoutModal({
   const [stateCode, setStateCode] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
+  const [deliveryQuote, setDeliveryQuote] = useState<{
+    quoteId: string;
+    feeCents: number;
+    expiresAt?: string | null;
+    durationMinutes?: number | null;
+    pickupMinutes?: number | null;
+    dropoffEta?: string | null;
+  } | null>(null);
+  const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
+  const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
   const [pickupTime, setPickupTime] = useState("asap");
   const [customTime, setCustomTime] = useState("");
   const [customDate, setCustomDate] = useState("");
@@ -142,7 +154,11 @@ export default function RestaurantCheckoutModal({
   );
   const tax = subtotal * Math.max(0, Number(settings?.taxRate || 0));
   const tip = subtotal * (tipPercent / 100);
-  const estimatedTotal = subtotal + tax + tip;
+  const deliveryFee =
+    fulfillmentType === "delivery"
+      ? Math.max(0, Number(deliveryQuote?.feeCents || 0)) / 100
+      : 0;
+  const estimatedTotal = subtotal + tax + tip + deliveryFee;
 
   useEffect(() => {
     try {
@@ -176,6 +192,104 @@ export default function RestaurantCheckoutModal({
     })();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  useEffect(() => {
+    if (
+      fulfillmentType !== "delivery" ||
+      !settings?.deliveryDispatchEnabled
+    ) {
+      setDeliveryQuote(null);
+      setDeliveryQuoteError("");
+      return;
+    }
+
+    const complete =
+      address1.trim() &&
+      city.trim() &&
+      stateCode.trim() &&
+      postalCode.trim();
+
+    if (!complete) {
+      setDeliveryQuote(null);
+      setDeliveryQuoteError("");
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setDeliveryQuoteLoading(true);
+      setDeliveryQuoteError("");
+
+      try {
+        const response = await fetch(
+          `/api/businesses/${businessId}/delivery/quote`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deliveryAddress: {
+                address1: address1.trim(),
+                address2: address2.trim(),
+                city: city.trim(),
+                state: stateCode.trim(),
+                postalCode: postalCode.trim(),
+              },
+            }),
+          },
+        );
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error || "Delivery quote could not be created.",
+          );
+        }
+
+        if (!cancelled) {
+          setDeliveryQuote({
+            quoteId: String(payload.quoteId || ""),
+            feeCents: Number(payload.feeCents || 0),
+            expiresAt: payload.expiresAt || null,
+            durationMinutes:
+              payload.durationMinutes == null
+                ? null
+                : Number(payload.durationMinutes),
+            pickupMinutes:
+              payload.pickupMinutes == null
+                ? null
+                : Number(payload.pickupMinutes),
+            dropoffEta: payload.dropoffEta || null,
+          });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setDeliveryQuote(null);
+          setDeliveryQuoteError(
+            e instanceof Error
+              ? e.message
+              : "Delivery quote could not be created.",
+          );
+        }
+      } finally {
+        if (!cancelled) setDeliveryQuoteLoading(false);
+      }
+    }, 700);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    fulfillmentType,
+    settings?.deliveryDispatchEnabled,
+    businessId,
+    address1,
+    address2,
+    city,
+    stateCode,
+    postalCode,
+  ]);
 
   useEffect(() => {
     if (!squarePrepared) return;
@@ -433,6 +547,15 @@ export default function RestaurantCheckoutModal({
       if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
         return setError("Please enter the complete delivery address.");
       }
+      if (settings?.deliveryDispatchEnabled && deliveryQuoteLoading) {
+        return setError("Please wait for the delivery fee.");
+      }
+      if (settings?.deliveryDispatchEnabled && !deliveryQuote) {
+        return setError(
+          deliveryQuoteError ||
+            "A delivery quote is required before placing the order.",
+        );
+      }
     }
     if (pickupTime === "custom" && !customDate) return setError("Please select a date.");
     if (pickupTime === "custom") {
@@ -466,6 +589,14 @@ export default function RestaurantCheckoutModal({
             : pickupTime,
           paymentMethod,
           tipPercent,
+          deliveryQuote:
+            fulfillmentType === "delivery" && deliveryQuote
+              ? {
+                  quoteId: deliveryQuote.quoteId,
+                  feeCents: deliveryQuote.feeCents,
+                  expiresAt: deliveryQuote.expiresAt || null,
+                }
+              : null,
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
@@ -641,6 +772,43 @@ export default function RestaurantCheckoutModal({
               </div>
             </section> : null}
 
+            {fulfillmentType === "delivery" &&
+            settings?.deliveryDispatchEnabled ? (
+              <section className="rounded-2xl border p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-black">Delivery</h3>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Uber Direct courier will be requested automatically after payment.
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    {deliveryQuoteLoading ? (
+                      <b className="text-sm">Checking…</b>
+                    ) : deliveryQuote ? (
+                      <>
+                        <b className="whitespace-nowrap text-lg">
+                          {money(deliveryFee)}
+                        </b>
+                        {deliveryQuote.durationMinutes ? (
+                          <p className="text-[10px] text-gray-500">
+                            about {deliveryQuote.durationMinutes} min
+                          </p>
+                        ) : null}
+                      </>
+                    ) : (
+                      <b className="text-sm text-gray-400">Enter address</b>
+                    )}
+                  </div>
+                </div>
+                {deliveryQuoteError ? (
+                  <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">
+                    {deliveryQuoteError}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">{fulfillmentType === "delivery" ? "Delivery Time" : "Pickup Time"}</h3>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -777,11 +945,31 @@ export default function RestaurantCheckoutModal({
               <div className="flex items-center justify-between gap-3"><span className="min-w-0">Subtotal</span><b className="shrink-0 whitespace-nowrap">{money(subtotal)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
+              {fulfillmentType === "delivery" ? (
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="min-w-0">Delivery fee</span>
+                  <b className="shrink-0 whitespace-nowrap">
+                    {deliveryQuoteLoading
+                      ? "Checking…"
+                      : deliveryQuote
+                        ? money(deliveryFee)
+                        : "—"}
+                  </b>
+                </div>
+              ) : null}
               <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-lg"><b className="min-w-0 whitespace-nowrap">Estimated total</b><b className="shrink-0 whitespace-nowrap">{money(estimatedTotal)}</b></div>
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={submitting || !cartItems.length || (settings?.orderingHoursEnforced === true && settings?.orderingOpen === false)} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
+            <button type="button" disabled={
+              submitting ||
+              !cartItems.length ||
+              (settings?.orderingHoursEnforced === true &&
+                settings?.orderingOpen === false) ||
+              (fulfillmentType === "delivery" &&
+                settings?.deliveryDispatchEnabled === true &&
+                (deliveryQuoteLoading || !deliveryQuote))
+            } onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
               </>
             )}
           </> : null}
