@@ -1,193 +1,181 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import MenuItemModal from "./MenuItemModal";
-import RestaurantCheckoutModal from "./RestaurantCheckoutModal";
-import type { MenuOrderDraft } from "./MenuItemModal";
-import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
+import { useEffect, useMemo, useState } from "react";
+import MenuOptionGroup from "./MenuOptionGroup";
+import type { OptionSelectionState, RestaurantMenuItem } from "./types";
 import { getOptionGroups, groupKey, optionKey } from "./types";
 
-type PricedRestaurantMenuItem = RestaurantMenuItem & {
-  pickup_price?: number | null;
-  delivery_price?: number | null;
-};
-
-function getPriceForService(
-  item: RestaurantMenuItem,
-  service: "menu" | "pickup" | "delivery",
-) {
-  const priced = item as PricedRestaurantMenuItem;
-
-  const base =
-    item.price == null
-      ? null
-      : Number(item.price);
-
-  const pickup =
-    priced.pickup_price == null
-      ? base
-      : Number(priced.pickup_price);
-
-  const delivery =
-    priced.delivery_price == null
-      ? pickup
-      : Number(priced.delivery_price);
-
-  if (service === "delivery") {
-    return Number.isFinite(delivery as number)
-      ? delivery
-      : null;
-  }
-
-  if (service === "pickup") {
-    return Number.isFinite(pickup as number)
-      ? pickup
-      : null;
-  }
-
-  return Number.isFinite(base as number)
-    ? base
-    : null;
-}
-
-function withServicePrice(
-  item: RestaurantMenuItem,
-  service: "menu" | "pickup" | "delivery",
-): RestaurantMenuItem {
-  return {
-    ...item,
-    price: getPriceForService(item, service),
-  };
-}
-
-type Props = {
-  businessId: number;
-  compact?: boolean;
-  backgroundColor?: string;
-  textColor?: string;
-  scrollTopEnabled?: boolean;
-  scrollTopButtonColor?: string;
-  scrollTopIconColor?: string;
-  scrollTopPosition?: "right" | "left";
-
-  // 이전 코드 호환용. 아래 pickup/delivery가 없을 때만 사용합니다.
-  orderEnabled?: boolean;
-
-  // 페이지에서 허용할 표시/주문 방식
-  menuEnabled?: boolean;
-  pickupEnabled?: boolean;
-  deliveryEnabled?: boolean;
-};
-
-type StoredCartItem = {
-  cartItemId: string;
-  businessId: number;
-  menuItemId: number;
-  name: string;
-  basePrice: number;
+export type MenuOrderDraft = {
+  item: RestaurantMenuItem;
   quantity: number;
   instructions: string;
-  selections: MenuOrderDraft["selections"];
+  selections: OptionSelectionState;
   unitPrice: number;
   totalPrice: number;
-  imageUrl: string;
-  fulfillmentType?: "pickup" | "delivery";
-  addedAt: string;
 };
 
-function getCartStorageKey(businessId: number) {
-  return `restaurant-order-cart:${businessId}`;
+type Props = {
+  item: RestaurantMenuItem;
+  backgroundColor: string;
+  textColor: string;
+  orderEnabled?: boolean;
+  onAddToOrder?: (draft: MenuOrderDraft) => void;
+  onClose: () => void;
+};
+
+function toSafeInteger(value: unknown) {
+  return Math.max(0, Math.floor(Number(value) || 0));
 }
 
-function readStoredCart(businessId: number): StoredCartItem[] {
-  if (typeof window === "undefined") return [];
+function getGroupRules(group: ReturnType<typeof getOptionGroups>[number]) {
+  const name = String(group.name || "");
 
-  try {
-    const raw = window.localStorage.getItem(getCartStorageKey(businessId));
-    if (!raw) return [];
+  const requiredMatch = name.match(/(\d+)\s*required/i);
+  const maximumMatch = name.match(/(\d+)\s*maximum/i);
 
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const explicitMin = toSafeInteger(group.minSelect);
+  const parsedMin = requiredMatch ? toSafeInteger(requiredMatch[1]) : 0;
+
+  const minimum =
+    explicitMin > 0
+      ? explicitMin
+      : parsedMin > 0
+        ? parsedMin
+        : group.required
+          ? 1
+          : 0;
+
+  const explicitMaximum =
+    group.maxSelect == null
+      ? null
+      : toSafeInteger(group.maxSelect);
+
+  const parsedMaximum =
+    maximumMatch
+      ? toSafeInteger(maximumMatch[1])
+      : null;
+
+  const maximum =
+    explicitMaximum != null && explicitMaximum > 0
+      ? explicitMaximum
+      : parsedMaximum != null && parsedMaximum > 0
+        ? parsedMaximum
+        : null;
+
+  return { minimum, maximum };
 }
 
-function writeStoredCart(businessId: number, items: StoredCartItem[]) {
-  if (typeof window === "undefined") return;
-
-  window.localStorage.setItem(
-    getCartStorageKey(businessId),
-    JSON.stringify(items),
-  );
-
-  // 같은 페이지의 장바구니 버튼/카운트가 즉시 갱신할 수 있게 이벤트 발생
-  window.dispatchEvent(
-    new CustomEvent("restaurant-order-cart-updated", {
-      detail: {
-        businessId,
-        items,
-        count: items.reduce(
-          (sum, cartItem) => sum + Math.max(1, Number(cartItem.quantity) || 1),
-          0,
-        ),
-      },
-    }),
-  );
+function getGroupMaximum(group: ReturnType<typeof getOptionGroups>[number]) {
+  return getGroupRules(group).maximum;
 }
 
-const VISITOR_ID_STORAGE_KEY = "ktown_anonymous_visitor_id";
+function getRawGroupDescription(
+  item: RestaurantMenuItem,
+  groupIndex: number,
+) {
+  const rawItem = item as RestaurantMenuItem & {
+    option_groups?: Array<{ description?: string | null }>;
+    optionGroups?: Array<{ description?: string | null }>;
+    menu_option_groups?: Array<{ description?: string | null }>;
+  };
 
-function getMenuClickVisitorId() {
-  try {
-    let visitorId = window.localStorage.getItem(VISITOR_ID_STORAGE_KEY);
+  const rawGroups =
+    rawItem.option_groups ??
+    rawItem.optionGroups ??
+    rawItem.menu_option_groups ??
+    [];
 
-    if (!visitorId) {
-      visitorId = window.crypto.randomUUID();
-      window.localStorage.setItem(VISITOR_ID_STORAGE_KEY, visitorId);
+  return String(rawGroups[groupIndex]?.description || "").trim();
+}
+
+function normalizeSelections(
+  groups: ReturnType<typeof getOptionGroups>,
+  source: OptionSelectionState,
+): OptionSelectionState {
+  const result: OptionSelectionState = {};
+
+  groups.forEach((group, groupIndex) => {
+    const gKey = groupKey(group, groupIndex);
+    const rawGroup = source[gKey] || {};
+    const maximum = getGroupMaximum(group);
+
+    let remaining =
+      maximum == null ? Number.POSITIVE_INFINITY : maximum;
+
+    const nextGroup: Record<string, number> = {};
+
+    group.options.forEach((option, optionIndex) => {
+      if (option.soldOut || remaining <= 0) return;
+
+      const oKey = optionKey(option, optionIndex);
+      const requested = toSafeInteger(rawGroup[oKey]);
+
+      const allowed =
+        maximum == null
+          ? requested
+          : Math.min(requested, Math.max(0, remaining));
+
+      if (allowed > 0) {
+        nextGroup[oKey] = allowed;
+
+        if (maximum != null) {
+          remaining = Math.max(0, remaining - allowed);
+        }
+      }
+    });
+
+    if (Object.keys(nextGroup).length > 0) {
+      result[gKey] = nextGroup;
     }
+  });
 
-    return visitorId;
-  } catch {
-    return window.crypto.randomUUID();
-  }
+  return result;
 }
 
-export default function RestaurantMenu({
-  businessId,
-  compact = false,
-  backgroundColor = "#ffffff",
-  textColor = "#111827",
-  scrollTopEnabled = true,
-  scrollTopButtonColor = "#111827",
-  scrollTopIconColor = "#ffffff",
-  scrollTopPosition = "right",
+function selectionStatesEqual(
+  a: OptionSelectionState,
+  b: OptionSelectionState,
+) {
+  const aGroups = Object.keys(a);
+  const bGroups = Object.keys(b);
+
+  if (aGroups.length !== bGroups.length) return false;
+
+  for (const gKey of aGroups) {
+    const aGroup = a[gKey] || {};
+    const bGroup = b[gKey] || {};
+
+    const aKeys = Object.keys(aGroup);
+    const bKeys = Object.keys(bGroup);
+
+    if (aKeys.length !== bKeys.length) return false;
+
+    for (const oKey of aKeys) {
+      if (toSafeInteger(aGroup[oKey]) !== toSafeInteger(bGroup[oKey])) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+export default function MenuItemModal({
+  item,
+  backgroundColor,
+  textColor,
   orderEnabled = false,
-  menuEnabled = true,
-  pickupEnabled = false,
-  deliveryEnabled = false,
+  onAddToOrder,
+  onClose,
 }: Props) {
-  const [data, setData] = useState<RestaurantMenuPayload>({
-    categories: [],
-    items: [],
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
-  const [selectedItem, setSelectedItem] =
-    useState<RestaurantMenuItem | null>(null);
+  const groups = useMemo(() => getOptionGroups(item), [item]);
 
-  // WebsiteEditor에 저장되어 있는 예전 section/cell 값보다
-  // businesses 테이블의 현재 주문 설정을 우선합니다.
-  const [resolvedMenuEnabled, setResolvedMenuEnabled] = useState(menuEnabled);
-  const [resolvedPickupEnabled, setResolvedPickupEnabled] = useState(pickupEnabled);
-  const [resolvedDeliveryEnabled, setResolvedDeliveryEnabled] = useState(deliveryEnabled);
-
-  const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
-  const [cartOpen, setCartOpen] = useState(false);
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  // 이 state 자체가 항상 그룹 maximum 안에 있도록 유지한다.
+  const [selections, setSelections] = useState<OptionSelectionState>({});
+  const [menuQuantity, setMenuQuantity] = useState(1);
+  const [instructions, setInstructions] = useState("");
+  const [originalImageOpen, setOriginalImageOpen] = useState(false);
   const [isIPhone, setIsIPhone] = useState(false);
 
   useEffect(() => {
@@ -195,1001 +183,594 @@ export default function RestaurantMenu({
     setIsIPhone(/iPhone/i.test(ua));
   }, []);
 
-  const [showScrollTop, setShowScrollTop] = useState(false);
-  const [scrollTopButtonStyle, setScrollTopButtonStyle] =
-    useState<CSSProperties>({});
-  const rootRef = useRef<HTMLDivElement>(null);
-  const recentMenuClickRef = useRef<{ key: string; time: number } | null>(null);
+  // Combo It! 그룹만 기본 접힘으로 표시합니다.
+  // REQUIRED 그룹과 나머지 OPTION 그룹은 기존처럼 항상 펼쳐진 상태를 유지합니다.
+  const [comboItOpen, setComboItOpen] = useState(false);
 
-  // MENU만 켜져 있으면 보기 전용입니다.
-  // PICKUP 또는 DELIVERY가 켜지면 해당 모드에서 자체 장바구니/체크아웃을 사용합니다.
-  const hasOrderModes =
-    resolvedPickupEnabled || resolvedDeliveryEnabled || orderEnabled;
-  const effectivePickupEnabled =
-    resolvedPickupEnabled ||
-    (orderEnabled && !resolvedPickupEnabled && !resolvedDeliveryEnabled);
-  const effectiveDeliveryEnabled = resolvedDeliveryEnabled;
-  const orderingAvailable =
-    effectivePickupEnabled || effectiveDeliveryEnabled;
+  /*
+   * Fast Refresh, 이전 코드, 오래된 state 등으로
+   * 4 maximum 그룹 안에 8/9 같은 값이 남아 있어도 즉시 정리한다.
+   *
+   * 예:
+   * max 4
+   * { cucumber: 9 } -> { cucumber: 4 }
+   * { cucumber: 3, ranch: 3 } -> { cucumber: 3, ranch: 1 }
+   */
+  useEffect(() => {
+    setSelections((current) => {
+      const normalized = normalizeSelections(groups, current);
 
-  const getInitialService = (): "menu" | "pickup" | "delivery" => {
-    if (typeof window !== "undefined") {
-      const requested = new URLSearchParams(window.location.search).get("service");
-      if (requested === "menu" && resolvedMenuEnabled) return "menu";
-      if (requested === "pickup" && effectivePickupEnabled) return "pickup";
-      if (requested === "delivery" && effectiveDeliveryEnabled) return "delivery";
-    }
+      return selectionStatesEqual(current, normalized)
+        ? current
+        : normalized;
+    });
+  }, [groups]);
 
-    if (resolvedMenuEnabled && !hasOrderModes) return "menu";
-    if (effectivePickupEnabled) return "pickup";
-    if (effectiveDeliveryEnabled) return "delivery";
-    return "menu";
-  };
-
-  const [activeService, setActiveService] =
-    useState<"menu" | "pickup" | "delivery">(getInitialService);
-
-  const activeOrderEnabled =
-    (activeService === "pickup" && effectivePickupEnabled) ||
-    (activeService === "delivery" && effectiveDeliveryEnabled);
-
-  const cartCount = cartItems.reduce(
-    (sum, item) => sum + Math.max(1, Number(item.quantity) || 1),
-    0,
-  );
-
-  const cartSubtotal = cartItems.reduce(
-    (sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0),
-    0,
-  );
-
-  function recordMenuItemClick(
-    item: RestaurantMenuItem,
-    categoryName: string,
+  function setOptionQuantity(
+    groupIndex: number,
+    optionIndex: number,
+    requestedQuantity: number,
   ) {
-    const now = Date.now();
-    const clickKey = `${businessId}:${item.id}:${activeService}`;
+    const group = groups[groupIndex];
+    const option = group?.options?.[optionIndex];
 
-    /* 더블클릭이나 터치 중복 이벤트는 한 번으로 처리합니다. */
-    if (
-      recentMenuClickRef.current?.key === clickKey &&
-      now - recentMenuClickRef.current.time < 1500
-    ) {
-      return;
-    }
+    if (!group || !option || option.soldOut) return;
 
-    recentMenuClickRef.current = { key: clickKey, time: now };
+    const gKey = groupKey(group, groupIndex);
+    const oKey = optionKey(option, optionIndex);
+    const maximum = getGroupMaximum(group);
+    const requested = toSafeInteger(requestedQuantity);
 
-    const body = JSON.stringify({
-      businessId,
-      menuItemId: item.id,
-      menuItemName: item.name,
-      categoryId: item.category_id,
-      categoryName,
-      service: activeService,
-      visitorId: getMenuClickVisitorId(),
-    });
+    setSelections((current) => {
+      /*
+       * 먼저 현재 state 전체를 정상화한다.
+       * 이미 8/9 같은 잘못된 값이 있다면 이 시점에서 제거된다.
+       */
+      const normalizedCurrent = normalizeSelections(groups, current);
+      const currentGroup = normalizedCurrent[gKey] || {};
 
-    void fetch("/api/business-menu-click", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      keepalive: true,
-    }).catch(() => {
-      /* 통계 기록 실패가 메뉴 상세창 사용을 방해하지 않게 합니다. */
-    });
-  }
+      /*
+       * 변경하려는 옵션을 제외한 "다른 옵션들의 총 수량".
+       */
+      const otherTotal = group.options.reduce(
+        (sum, otherOption, otherIndex) => {
+          if (otherIndex === optionIndex) return sum;
 
-  useEffect(() => {
-    let cancelled = false;
+          const otherKey = optionKey(otherOption, otherIndex);
 
-    async function loadOrderSettings() {
-      try {
-        const response = await fetch(
-          `/api/businesses/${encodeURIComponent(businessId)}/order-settings`,
-          {
-            cache: "no-store",
-            headers: {
-              "Cache-Control": "no-cache",
-            },
-          },
-        );
+          return sum + toSafeInteger(currentGroup[otherKey]);
+        },
+        0,
+      );
 
-        const payload = await response.json();
+      /*
+       * 그룹 max가 4라면:
+       *
+       * 다른 옵션 합계 0 -> 현재 옵션 최대 4
+       * 다른 옵션 합계 1 -> 현재 옵션 최대 3
+       * 다른 옵션 합계 3 -> 현재 옵션 최대 1
+       * 다른 옵션 합계 4 -> 현재 옵션 최대 0
+       */
+      const availableForThisOption =
+        maximum == null
+          ? Number.POSITIVE_INFINITY
+          : Math.max(0, maximum - otherTotal);
 
-        if (!response.ok) {
-          throw new Error(
-            payload?.error || "주문 설정을 불러오지 못했습니다.",
-          );
-        }
+      const allowedQuantity =
+        maximum == null
+          ? requested
+          : Math.min(requested, availableForThisOption);
 
-        if (cancelled) return;
+      const nextGroup: Record<string, number> = {
+        ...currentGroup,
+      };
 
-        const modes = payload?.orderModes || {};
-
-        setResolvedMenuEnabled(modes.menu !== false);
-        setResolvedPickupEnabled(modes.pickup === true);
-        setResolvedDeliveryEnabled(modes.delivery === true);
-      } catch (settingsError) {
-        if (cancelled) return;
-
-        console.error(
-          "Restaurant order settings load failed:",
-          settingsError,
-        );
-
-        setResolvedMenuEnabled(menuEnabled);
-        setResolvedPickupEnabled(pickupEnabled);
-        setResolvedDeliveryEnabled(deliveryEnabled);
+      if (allowedQuantity > 0) {
+        nextGroup[oKey] = allowedQuantity;
+      } else {
+        delete nextGroup[oKey];
       }
-    }
 
-    void loadOrderSettings();
+      const next: OptionSelectionState = {
+        ...normalizedCurrent,
+      };
 
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId, menuEnabled, pickupEnabled, deliveryEnabled]);
-
-  useEffect(() => {
-    setCartItems(readStoredCart(businessId));
-
-    function syncCart(event?: Event) {
-      if (event instanceof CustomEvent) {
-        const detailBusinessId = Number(event.detail?.businessId);
-        if (Number.isFinite(detailBusinessId) && detailBusinessId !== businessId) {
-          return;
-        }
+      if (Object.keys(nextGroup).length > 0) {
+        next[gKey] = nextGroup;
+      } else {
+        delete next[gKey];
       }
-      setCartItems(readStoredCart(businessId));
-    }
 
-    function syncStorage(event: StorageEvent) {
-      if (event.key && event.key !== getCartStorageKey(businessId)) return;
-      setCartItems(readStoredCart(businessId));
-    }
-
-    window.addEventListener("restaurant-order-cart-updated", syncCart as EventListener);
-    window.addEventListener("storage", syncStorage);
-
-    return () => {
-      window.removeEventListener("restaurant-order-cart-updated", syncCart as EventListener);
-      window.removeEventListener("storage", syncStorage);
-    };
-  }, [businessId]);
-
-  useEffect(() => {
-    // 서비스 변경 후 기존 가격으로 열린 모달이 남지 않게 닫습니다.
-    setSelectedItem(null);
-  }, [activeService]);
-
-  useEffect(() => {
-    // DB 주문 설정이 비동기로 들어온 뒤 서비스 상태를 반드시 재조정합니다.
-    // 주문 방식이 하나라도 켜져 있으면 주문 화면(PICKUP 우선)으로 진입합니다.
-    if (activeService === "pickup" && effectivePickupEnabled) return;
-    if (activeService === "delivery" && effectiveDeliveryEnabled) return;
-
-    if (orderingAvailable) {
-      if (effectivePickupEnabled) {
-        setActiveService("pickup");
-      } else if (effectiveDeliveryEnabled) {
-        setActiveService("delivery");
-      }
-      return;
-    }
-
-    if (resolvedMenuEnabled) {
-      setActiveService("menu");
-    }
-  }, [
-    activeService,
-    resolvedMenuEnabled,
-    effectivePickupEnabled,
-    effectiveDeliveryEnabled,
-    orderingAvailable,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setError("");
-
-      try {
-        const response = await fetch(
-          `/api/businesses/${encodeURIComponent(businessId)}/menu`,
-          {
-            cache: "no-store",
-          },
-        );
-
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            payload?.error || "메뉴를 불러오지 못했습니다.",
-          );
-        }
-
-        if (!cancelled) {
-          setData({
-            categories: Array.isArray(payload?.categories)
-              ? payload.categories
-              : [],
-            items: Array.isArray(payload?.items)
-              ? payload.items
-              : [],
-          });
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "메뉴를 불러오지 못했습니다.",
-          );
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId]);
-
-  function getMenuScrollContainer() {
-    if (typeof window === "undefined") return null;
-
-    let element = rootRef.current?.parentElement ?? null;
-
-    while (element) {
-      const style = window.getComputedStyle(element);
-      const overflowY = style.overflowY;
-
-      const canScroll =
-        (overflowY === "auto" ||
-          overflowY === "scroll" ||
-          overflowY === "overlay") &&
-        element.scrollHeight > element.clientHeight + 2;
-
-      if (canScroll) return element;
-      element = element.parentElement;
-    }
-
-    return null;
-  }
-
-  function scrollMenuToTop() {
-    const container = getMenuScrollContainer();
-
-    if (container) {
-      container.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "smooth",
-      });
-      return;
-    }
-
-    const scrollingElement = document.scrollingElement;
-
-    if (scrollingElement) {
-      scrollingElement.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "smooth",
-      });
-      return;
-    }
-
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "smooth",
+      /*
+       * 마지막으로 한 번 더 전체 그룹을 normalize.
+       * 어떠한 호출 경로에서도 maximum 초과 state가 저장되지 않는다.
+       */
+      return normalizeSelections(groups, next);
     });
   }
 
-  useEffect(() => {
-    // 모든 Restaurant Menu / Online Order 페이지에 공통 적용:
-    // 현재 스크롤 위치가 1500px을 넘으면 맨 위로 버튼을 표시합니다.
-    const container = getMenuScrollContainer();
-
-    function update() {
-      const root = rootRef.current;
-      if (!root) return;
-
-      const currentScroll = container
-        ? container.scrollTop
-        : window.scrollY ||
-          document.documentElement.scrollTop ||
-          0;
-
-      setShowScrollTop(currentScroll >= 1500);
-
-      setScrollTopButtonStyle({
-        bottom: compact ? 82 : 28,
-        [scrollTopPosition]: compact ? 14 : 28,
-      });
-    }
-
-    update();
-
-    const scrollTarget: EventTarget = container || window;
-    scrollTarget.addEventListener("scroll", update, {
-      passive: true,
-    });
-    window.addEventListener("resize", update);
-
-    const observer =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(update)
-        : null;
-
-    if (rootRef.current && observer) {
-      observer.observe(rootRef.current);
-    }
-
-    return () => {
-      scrollTarget.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-      observer?.disconnect();
-    };
-  }, [compact, scrollTopPosition, data.items.length]);
-
-  const visibleCategories = data.categories.filter((category) =>
-    data.items.some(
-      (item) => item.category_id === category.id,
-    ),
+  /*
+   * 렌더링, 가격 계산, validation 모두 같은 normalized state 사용.
+   * 화면 숫자와 실제 주문 state가 서로 달라지는 것을 막는다.
+   */
+  const safeSelections = useMemo(
+    () => normalizeSelections(groups, selections),
+    [groups, selections],
   );
 
-  function scrollToCategory(categoryId: number) {
-    setActiveCategoryId(categoryId);
+  const optionExtra = groups.reduce(
+    (groupTotal, group, groupIndex) => {
+      const values =
+        safeSelections[groupKey(group, groupIndex)] || {};
 
-    document
-      .getElementById(
-        `restaurant-menu-${businessId}-${categoryId}`,
-      )
-      ?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-  }
+      return (
+        groupTotal +
+        group.options.reduce(
+          (optionTotal, option, optionIndex) => {
+            const quantity = toSafeInteger(
+              values[optionKey(option, optionIndex)],
+            );
 
-  function persistCart(items: StoredCartItem[]) {
-    setCartItems(items);
-    writeStoredCart(businessId, items);
-  }
-
-  function changeCartQuantity(cartItemId: string, delta: number) {
-    const next = cartItems
-      .map((item) => {
-        if (item.cartItemId !== cartItemId) return item;
-
-        const nextQuantity = Math.max(0, (Number(item.quantity) || 1) + delta);
-        if (nextQuantity === 0) return null;
-
-        return {
-          ...item,
-          quantity: nextQuantity,
-          totalPrice: Math.max(0, Number(item.unitPrice) || 0) * nextQuantity,
-        };
-      })
-      .filter((item): item is StoredCartItem => Boolean(item));
-
-    persistCart(next);
-  }
-
-  function removeCartItem(cartItemId: string) {
-    persistCart(cartItems.filter((item) => item.cartItemId !== cartItemId));
-  }
-
-  function clearCart() {
-    persistCart([]);
-  }
-
-  function getSelectedOptionLabels(item: StoredCartItem) {
-    const menuItem = data.items.find((menu) => menu.id === item.menuItemId);
-    if (!menuItem) return [];
-
-    const groups = getOptionGroups(menuItem);
-    const labels: string[] = [];
-
-    groups.forEach((group, groupIndex) => {
-      const selectedGroup = item.selections?.[groupKey(group, groupIndex)] || {};
-
-      group.options.forEach((option, optionIndex) => {
-        const selectedQuantity = Math.max(
+            return (
+              optionTotal +
+              quantity * Number(option.priceDelta || 0)
+            );
+          },
           0,
-          Math.floor(Number(selectedGroup[optionKey(option, optionIndex)]) || 0),
-        );
-        if (selectedQuantity <= 0) return;
+        )
+      );
+    },
+    0,
+  );
 
-        const priceDelta = Number(option.priceDelta || 0);
-        const quantityText = selectedQuantity > 1 ? ` ×${selectedQuantity}` : "";
-        const priceText =
-          priceDelta !== 0
-            ? ` (${priceDelta > 0 ? "+" : "-"}$${Math.abs(priceDelta).toFixed(2)})`
-            : "";
+  const optionsValid = groups.every((group, groupIndex) => {
+    const values =
+      safeSelections[groupKey(group, groupIndex)] || {};
 
-        labels.push(`${option.name}${quantityText}${priceText}`);
-      });
+    const count = group.options.reduce(
+      (sum, option, optionIndex) =>
+        sum +
+        toSafeInteger(
+          values[optionKey(option, optionIndex)],
+        ),
+      0,
+    );
+
+    const { minimum, maximum } = getGroupRules(group);
+
+    return (
+      count >= minimum &&
+      (maximum == null || count <= maximum)
+    );
+  });
+
+  const unitPrice = Math.max(
+    0,
+    Number(item.price || 0) + optionExtra,
+  );
+
+  const totalPrice =
+    unitPrice * Math.max(1, menuQuantity);
+
+  function handleAddToOrder() {
+    if (!orderEnabled || !optionsValid) return;
+
+    onAddToOrder?.({
+      item,
+      quantity: Math.max(1, menuQuantity),
+      instructions: instructions.trim(),
+      selections: safeSelections,
+      unitPrice,
+      totalPrice,
     });
-
-    return labels;
   }
 
-  function handleAddToOrder(draft: MenuOrderDraft) {
-    if (!orderingAvailable) return;
+  const addButtonDisabled = !orderEnabled || !optionsValid;
 
-    const fulfillmentType: "pickup" | "delivery" =
-      activeService === "delivery" && effectiveDeliveryEnabled
-        ? "delivery"
-        : effectivePickupEnabled
-          ? "pickup"
-          : "delivery";
+  /*
+   * 화면 표시 순서만 정리합니다.
+   * 실제 groups 배열의 index는 그대로 보존해야 selections / validation / 가격 계산이
+   * 기존과 동일하게 동작하므로 originalIndex를 함께 들고 정렬합니다.
+   *
+   * 표시 순서:
+   * 1) REQUIRED 그룹
+   * 2) Combo It!
+   * 3) 나머지 OPTION 그룹
+   */
+  const displayGroups = useMemo(
+    () =>
+      groups
+        .map((group, originalIndex) => ({
+          group,
+          originalIndex,
+          isRequired: getGroupRules(group).minimum > 0,
+          isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
+        }))
+        .sort((a, b) => {
+          const rank = (row: {
+            isRequired: boolean;
+            isComboIt: boolean;
+          }) => {
+            if (row.isRequired) return 0;
+            if (row.isComboIt) return 1;
+            return 2;
+          };
 
-    const currentCart = readStoredCart(businessId);
+          const rankDifference = rank(a) - rank(b);
+          return rankDifference !== 0
+            ? rankDifference
+            : a.originalIndex - b.originalIndex;
+        }),
+    [groups],
+  );
 
-    const newCartItem: StoredCartItem = {
-      cartItemId:
-        typeof crypto !== "undefined" &&
-        typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `cart-${Date.now()}-${Math.random()
-              .toString(36)
-              .slice(2, 9)}`,
-      businessId,
-      menuItemId: draft.item.id,
-      name: draft.item.name,
-      basePrice: Math.max(
-        0,
-        Number(draft.item.price || 0),
-      ),
-      quantity: Math.max(
-        1,
-        Number(draft.quantity) || 1,
-      ),
-      instructions: draft.instructions,
-      selections: draft.selections,
-      unitPrice: Math.max(
-        0,
-        Number(draft.unitPrice) || 0,
-      ),
-      totalPrice: Math.max(
-        0,
-        Number(draft.totalPrice) || 0,
-      ),
-      imageUrl:
-        draft.item.thumbnail_url ||
-        draft.item.image_url ||
-        "",
-      fulfillmentType,
-      addedAt: new Date().toISOString(),
-    };
-
-    const nextCart = [...currentCart, newCartItem];
-    persistCart(nextCart);
-
-    setSelectedItem(null);
-  }
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[260px] items-center justify-center text-sm font-black">
-        메뉴 불러오는 중...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex min-h-[260px] items-center justify-center px-5 text-center text-sm font-black text-red-600">
-        {error}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={rootRef}
-      className="relative w-full"
-      style={{
-        backgroundColor: "transparent",
-        color: textColor,
-      }}
-    >
+  return createPortal(
+    <>
       <div
-        className="border-b border-black/10 px-3 py-3 sm:px-5"
-        style={{ backgroundColor: "transparent" }}
+        className={
+          isIPhone
+            ? "fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            : "fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 pt-10 pb-4 px-2 sm:pt-12 sm:pb-6 sm:px-4"
+        }
+        onClick={onClose}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          className={
+            isIPhone
+              ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
+              : "flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
+          }
+          style={{
+            backgroundColor,
+            color: textColor,
+            transform: isIPhone ? undefined : "translateY(18px)",
+          }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {item.image_url || item.thumbnail_url ? (
+            <button
+              type="button"
+              className={
+                isIPhone
+                  ? "relative flex h-[105px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-2xl bg-white p-1.5"
+                  : "relative flex h-[190px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
+              }
+              onClick={() => setOriginalImageOpen(true)}
+              aria-label={`${item.name} 이미지 View Larger`}
+            >
+              <img
+                src={
+                  item.image_url ||
+                  item.thumbnail_url ||
+                  ""
+                }
+                alt={item.name}
+                draggable={false}
+                className="block h-full w-full select-none object-contain transition-transform duration-200 hover:scale-[1.02]"
+              />
+
+              <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1.5 text-[10px] font-black text-white shadow-lg">
+                View Larger
+              </span>
+            </button>
+          ) : null}
+
           <div
-            className="rounded-lg px-2 py-1"
-            style={{ backgroundColor }}
+            className={
+              isIPhone
+                ? "min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5"
+                : "min-h-0 flex-1 overflow-y-auto overscroll-contain p-3.5 sm:p-4"
+            }
           >
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-50">
-              {orderingAvailable ? "ORDER ONLINE" : "MENU"}
-            </p>
-            <h2 className="mt-0.5 text-lg font-black tracking-tight">
-              {activeService === "pickup"
-                ? "Pickup Order"
-                : activeService === "delivery"
-                  ? "Delivery Order"
-                  : "Menu"}
-            </h2>
+            <div className="flex items-start justify-between gap-4">
+              <h2 className="text-lg font-black leading-tight sm:text-xl">
+                {item.name}
+              </h2>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-black"
+                aria-label="Close menu details"
+              >
+                ×
+              </button>
+            </div>
+
+            {item.price != null ? (
+              <p className="mt-1 text-[15px] font-black">
+                ${Number(item.price).toFixed(2)}
+              </p>
+            ) : null}
+
+            {item.description ? (
+              <p className={
+                  isIPhone
+                    ? "mt-2 whitespace-pre-wrap text-xs font-medium leading-5 opacity-70"
+                    : "mt-4 whitespace-pre-wrap text-sm font-medium leading-6 opacity-70"
+                }>
+                {item.description}
+              </p>
+            ) : null}
+
+            {groups.length ? (
+              <div className={isIPhone ? "mt-4 space-y-3" : "mt-6 space-y-5"}>
+                {displayGroups.map(
+                  ({
+                    group,
+                    originalIndex,
+                    isComboIt,
+                  }) => {
+                    const gKey = groupKey(
+                      group,
+                      originalIndex,
+                    );
+                    const { maximum } = getGroupRules(group);
+                    const groupDescription = getRawGroupDescription(
+                      item,
+                      originalIndex,
+                    );
+
+                    const comboDescription =
+                      groupDescription ||
+                      (isComboIt
+                        ? "Includes: Fries · Dipping Sauce · Drink"
+                        : "");
+
+                    // Combo It!만 기본 접힘 + 버튼 클릭 시 펼침
+                    if (isComboIt) {
+                      return (
+                        <div
+                          key={gKey}
+                          className="rounded-2xl border border-amber-300 bg-amber-50/70 p-2.5"
+                        >
+                          {!comboItOpen ? (
+                            <button
+                              type="button"
+                              onClick={() => setComboItOpen(true)}
+                              className="flex w-full items-center justify-between gap-3 rounded-xl border-2 border-amber-400 bg-amber-300 px-4 py-3 text-left text-gray-950 shadow-sm transition hover:bg-amber-400 active:scale-[0.99]"
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-black">
+                                  {group.name}
+                                </span>
+                                {comboDescription ? (
+                                  <span className="mt-1 block whitespace-normal text-[11px] font-black leading-4 text-red-600">
+                                    {comboDescription}
+                                  </span>
+                                ) : null}
+                              </span>
+
+                              <span className="shrink-0 rounded-full bg-gray-950 px-3 py-1.5 text-[10px] font-black text-white">
+                                VIEW OPTIONS ▼
+                              </span>
+                            </button>
+                          ) : (
+                            <>
+                              <div className="mb-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => setComboItOpen(false)}
+                                  className="rounded-full border border-black/15 bg-white px-3 py-1.5 text-[10px] font-black text-gray-800 shadow-sm"
+                                >
+                                  CLOSE COMBO ▲
+                                </button>
+                              </div>
+
+                              {comboDescription ? (
+                                <p className="mb-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-red-600">
+                                  {comboDescription}
+                                </p>
+                              ) : null}
+
+                              <div className="[&_span.shrink-0]:!font-black [&_span.shrink-0]:!text-[#7BAFD4] [&_span.shrink-0]:!opacity-100">
+                                <MenuOptionGroup
+                                  group={group}
+                                  groupIndex={originalIndex}
+                                  quantities={
+                                    safeSelections[gKey] || {}
+                                  }
+                                  onSetQuantity={(
+                                    optionIndex,
+                                    quantity,
+                                  ) =>
+                                    setOptionQuantity(
+                                      originalIndex,
+                                      optionIndex,
+                                      quantity,
+                                    )
+                                  }
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // REQUIRED와 기타 OPTION 그룹은 기존 방식 그대로 항상 펼쳐서 표시
+                    return (
+                      <div key={gKey}>
+                        {groupDescription ? (
+                          <p className="mb-2 rounded-xl bg-black/[0.035] px-3 py-2 text-xs font-bold leading-5 opacity-75">
+                            {groupDescription}
+                          </p>
+                        ) : null}
+
+                        <div className="[&_span.shrink-0]:!font-black [&_span.shrink-0]:!text-[#7BAFD4] [&_span.shrink-0]:!opacity-100">
+                          <MenuOptionGroup
+                            group={group}
+                            groupIndex={originalIndex}
+                            quantities={
+                              safeSelections[gKey] || {}
+                            }
+                            onSetQuantity={(
+                              optionIndex,
+                              quantity,
+                            ) =>
+                              setOptionQuantity(
+                                originalIndex,
+                                optionIndex,
+                                quantity,
+                              )
+                            }
+                          />
+                        </div>
+                      </div>
+                    );
+                  },
+                )}
+              </div>
+            ) : null}
+
+            {orderEnabled ? (
+              <div className={
+                  isIPhone
+                    ? "mt-3 border-t border-black/10 pt-3"
+                    : "mt-5 border-t border-black/10 pt-4"
+                }>
+                <label className="text-xs font-black uppercase tracking-wide opacity-60">
+                  Special Instructions
+                </label>
+
+                <textarea
+                  value={instructions}
+                  onChange={(event) => setInstructions(event.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="Add special instructions"
+                  className="mt-2 w-full resize-none rounded-xl border border-black/15 bg-transparent px-3 py-2 text-sm outline-none"
+                />
+              </div>
+            ) : null}
+
           </div>
 
-          {(resolvedMenuEnabled || effectivePickupEnabled || effectiveDeliveryEnabled) ? (
-            <div className="flex flex-wrap gap-2">
-              {resolvedMenuEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService("menu")}
-                  className={`rounded-full border px-3 py-2 text-[11px] font-black ${
-                    activeService === "menu"
-                      ? "bg-gray-950 text-white"
-                      : "bg-white text-gray-900"
-                  }`}
-                >
-                  MENU
-                </button>
-              ) : null}
+          {orderEnabled ? (
+          <div
+            className={
+              isIPhone
+                ? "z-30 flex min-h-11 shrink-0 items-stretch border-t border-black/10 bg-white pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.14)]"
+                : "z-20 flex min-h-14 shrink-0 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
+            }
+            style={{ backgroundColor }}
+          >
+            <div className="flex shrink-0 items-center border-r border-black/10">
+              <button
+                type="button"
+                onClick={() =>
+                  setMenuQuantity((value) =>
+                    Math.max(1, value - 1),
+                  )
+                }
+                className={
+                  isIPhone
+                    ? "flex h-11 w-9 items-center justify-center text-base font-black"
+                    : "flex h-14 w-11 items-center justify-center text-lg font-black"
+                }
+              >
+                −
+              </button>
 
-              {effectivePickupEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService("pickup")}
-                  className={`rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-md transition-all ${
-                    activeService === "pickup"
-                      ? "border-amber-300 bg-amber-400 text-black ring-2 ring-amber-200"
-                      : "border-amber-400 bg-amber-100 text-amber-950 hover:bg-amber-200"
-                  }`}
-                >
-                  PICKUP ONLY
-                </button>
-              ) : null}
+              <div className={
+                isIPhone
+                  ? "flex h-11 min-w-8 items-center justify-center text-sm font-black"
+                  : "flex h-14 min-w-9 items-center justify-center text-sm font-black"
+              }>
+                {menuQuantity}
+              </div>
 
-              {effectiveDeliveryEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService("delivery")}
-                  className={`rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-md transition-all ${
-                    activeService === "delivery"
-                      ? "border-blue-400 bg-blue-600 text-white ring-2 ring-blue-300"
-                      : "border-blue-500 bg-blue-100 text-blue-950 hover:bg-blue-200"
-                  }`}
-                >
-                  DELIVERY ONLY
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={() =>
+                  setMenuQuantity((value) =>
+                    Math.min(99, value + 1),
+                  )
+                }
+                className={
+                  isIPhone
+                    ? "flex h-11 w-9 items-center justify-center text-base font-black"
+                    : "flex h-14 w-11 items-center justify-center text-lg font-black"
+                }
+              >
+                +
+              </button>
             </div>
+
+            <button
+              type="button"
+              disabled={addButtonDisabled}
+              onClick={handleAddToOrder}
+              className={`flex min-w-0 flex-1 items-center justify-between text-left font-black transition ${
+                isIPhone ? "gap-2 px-3 text-sm" : "gap-3 px-4"
+              } ${
+                addButtonDisabled
+                  ? "cursor-not-allowed bg-gray-400 text-white"
+                  : "cursor-pointer bg-green-600 text-white hover:bg-green-700 active:bg-green-800"
+              }`}
+              title={
+                !orderEnabled
+                  ? "Ordering is available only on the Order page."
+                  : optionsValid
+                    ? "Add the selected item and options to your order"
+                    : "Please complete the required option selections"
+              }
+            >
+              <span className="shrink-0">
+                Add to order
+              </span>
+
+              <span className="min-w-0 text-right">
+                <span className="block text-base">
+                  ${totalPrice.toFixed(2)}
+                </span>
+
+                {optionExtra !== 0 ? (
+                  <span className="block text-[10px] font-bold opacity-90">
+                    Item ${Number(item.price || 0).toFixed(2)} + Options ${optionExtra.toFixed(2)} × {menuQuantity}
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          </div>
           ) : null}
         </div>
       </div>
 
-      {visibleCategories.length ? (
+      {originalImageOpen ? (
         <div
-          className="sticky top-0 z-20 border-b border-black/10 px-3 py-3"
-          style={{
-            backgroundColor: "transparent",
-          }}
+          className="fixed inset-0 z-[13000] flex items-center justify-center bg-black/95 p-3 sm:p-6"
+          onClick={() =>
+            setOriginalImageOpen(false)
+          }
         >
-          <div className="flex gap-2 overflow-x-auto">
-            {visibleCategories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() =>
-                  scrollToCategory(category.id)
-                }
-                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black ${
-                  activeCategoryId === category.id
-                    ? "bg-gray-950 text-white"
-                    : "bg-white text-gray-900"
-                }`}
-              >
-                {category.name}
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setOriginalImageOpen(false)
+            }
+            className="fixed right-4 top-[max(1rem,env(safe-area-inset-top))] z-[13010] flex h-11 w-11 items-center justify-center rounded-full bg-white text-2xl font-black text-black shadow-2xl"
+            aria-label="Close enlarged image"
+          >
+            ×
+          </button>
+
+          <img
+            src={
+              item.image_url ||
+              item.thumbnail_url ||
+              ""
+            }
+            alt={`${item.name} enlarged image`}
+            draggable={false}
+            className="max-h-[92vh] max-w-[94vw] select-none object-contain"
+            onClick={(event) =>
+              event.stopPropagation()
+            }
+          />
         </div>
       ) : null}
-
-      <div
-        className={
-          compact
-            ? "px-3 py-4"
-            : "px-4 py-5 sm:px-7 sm:py-7"
-        }
-        style={{ backgroundColor: "transparent" }}
-      >
-        {visibleCategories.map((category) => {
-          const items = data.items.filter(
-            (item) =>
-              item.category_id === category.id,
-          );
-
-          return (
-            <section
-              key={category.id}
-              id={`restaurant-menu-${businessId}-${category.id}`}
-              className="scroll-mt-[90px] border-b border-gray-200 pb-7 pt-2 last:border-b-0"
-            >
-              <h2
-                className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
-                style={{ backgroundColor }}
-              >
-                {category.name}
-              </h2>
-
-              <div
-                className={`grid grid-cols-1 gap-3 ${
-                  compact ? "" : "lg:grid-cols-2"
-                }`}
-              >
-                {items.map((item) => {
-                  const hasImage = Boolean(
-                    item.thumbnail_url ||
-                      item.image_url,
-                  );
-
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        recordMenuItemClick(item, category.name);
-                        setSelectedItem(
-                          withServicePrice(item, activeService),
-                        );
-                      }}
-                      className="group flex min-h-[118px] w-full overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md"
-                      style={{
-                        backgroundColor,
-                        borderColor: `${textColor}22`,
-                        color: textColor,
-                      }}
-                    >
-                      <div className="min-w-0 flex-1 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="line-clamp-2 text-[15px] font-black leading-snug sm:text-base">
-                            {item.name}
-                          </h3>
-
-                          {getPriceForService(item, activeService) != null ? (
-                            <span className="shrink-0 text-sm font-black">
-                              $
-                              {Number(
-                                getPriceForService(item, activeService),
-                              ).toFixed(2)}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {item.description ? (
-                          <p className="mt-2 line-clamp-3 text-xs font-medium leading-5 opacity-65 sm:text-sm">
-                            {item.description}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      {hasImage ? (
-                        <div className="relative m-2 h-[94px] w-[94px] shrink-0 sm:h-[116px] sm:w-[116px]">
-                          <img
-                            src={
-                              item.thumbnail_url ||
-                              item.image_url ||
-                              ""
-                            }
-                            alt={item.name}
-                            className="h-full w-full rounded-xl object-cover"
-                          />
-
-                          {orderingAvailable ? (
-                            <span
-                              aria-hidden="true"
-                              className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-[24px] font-medium leading-none text-gray-950 shadow-md sm:h-10 sm:w-10"
-                            >
-                              +
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : orderingAvailable ? (
-                        <div className="flex shrink-0 items-end p-3">
-                          <span
-                            aria-hidden="true"
-                            className="flex h-9 w-9 items-center justify-center rounded-full border border-black/10 bg-white text-[24px] font-medium leading-none text-gray-950 shadow-md sm:h-10 sm:w-10"
-                          >
-                            +
-                          </span>
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-
-      {orderingAvailable && typeof document !== "undefined"
-        ? createPortal(
-            <>
-              <button
-                type="button"
-                onClick={() => setCartOpen(true)}
-                aria-label={`Shopping cart, ${cartCount} item${cartCount === 1 ? "" : "s"}`}
-                className="fixed bottom-5 right-5 z-[12000] flex h-14 items-center gap-2 rounded-full border border-black/10 bg-gray-950 px-4 text-white shadow-2xl transition hover:scale-[1.02] sm:bottom-7 sm:right-7"
-              >
-                <span aria-hidden="true" className="text-xl leading-none">🛒</span>
-                <span className="text-xs font-black uppercase tracking-wide">Cart</span>
-                <span className="flex min-w-6 h-6 items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-black text-gray-950">
-                  {cartCount}
-                </span>
-              </button>
-
-              {cartOpen ? (
-                <div
-                  className={
-                    isIPhone
-                      ? "fixed inset-0 z-[12600] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-                      : "fixed inset-0 z-[12600] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
-                  }
-                  onClick={() => setCartOpen(false)}
-                >
-                  <div
-                    className={
-                      isIPhone
-                        ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl bg-white text-gray-950 shadow-2xl"
-                        : "flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-lg sm:rounded-3xl"
-                    }
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <div
-                      className={
-                        isIPhone
-                          ? "flex items-center justify-between border-b border-gray-200 px-4 py-3"
-                          : "flex items-center justify-between border-b border-gray-200 px-5 py-4"
-                      }
-                    >
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
-                          {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
-                        </p>
-                        <h3 className="mt-1 text-xl font-black">Shopping Cart</h3>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCartOpen(false)}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-lg font-black"
-                        aria-label="Close cart"
-                      >
-                        ×
-                      </button>
-                    </div>
-
-                    <div
-                      className={
-                        isIPhone
-                          ? "min-h-0 flex-1 overflow-y-auto px-3 py-2.5"
-                          : "min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5"
-                      }
-                    >
-                      {cartItems.length ? (
-                        <div className="space-y-3">
-                          {cartItems.map((item) => (
-                            <div
-                              key={item.cartItemId}
-                              className="flex gap-3 rounded-2xl border border-gray-200 p-3"
-                            >
-                              {item.imageUrl ? (
-                                <img
-                                  src={item.imageUrl}
-                                  alt={item.name}
-                                  className="h-20 w-20 shrink-0 rounded-xl object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-2xl">
-                                  🍽️
-                                </div>
-                              )}
-
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-black">{item.name}</p>
-                                    {getSelectedOptionLabels(item).length ? (
-                                      <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-4 text-gray-500">
-                                        {getSelectedOptionLabels(item).join(" · ")}
-                                      </p>
-                                    ) : null}
-                                    {item.instructions ? (
-                                      <p className="mt-0.5 line-clamp-2 text-[10px] font-medium leading-4 text-gray-400">
-                                        {item.instructions}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                  <span className="shrink-0 text-sm font-black">
-                                    ${Math.max(0, Number(item.totalPrice) || 0).toFixed(2)}
-                                  </span>
-                                </div>
-
-                                <div className="mt-3 flex items-center justify-between gap-3">
-                                  <div className="inline-flex items-center rounded-full border border-gray-200">
-                                    <button
-                                      type="button"
-                                      onClick={() => changeCartQuantity(item.cartItemId, -1)}
-                                      className="flex h-8 w-8 items-center justify-center text-lg font-black"
-                                      aria-label={`Decrease ${item.name} quantity`}
-                                    >
-                                      −
-                                    </button>
-                                    <span className="min-w-8 text-center text-xs font-black">
-                                      {Math.max(1, Number(item.quantity) || 1)}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => changeCartQuantity(item.cartItemId, 1)}
-                                      className="flex h-8 w-8 items-center justify-center text-lg font-black"
-                                      aria-label={`Increase ${item.name} quantity`}
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => removeCartItem(item.cartItemId)}
-                                    className="text-[11px] font-black uppercase tracking-wide text-red-600"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex min-h-[220px] flex-col items-center justify-center text-center">
-                          <div className="text-4xl">🛒</div>
-                          <p className="mt-3 text-base font-black">Your cart is empty</p>
-                          <p className="mt-1 text-xs font-medium text-gray-500">
-                            Tap the + button on a menu item to add it.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div
-                      className={
-                        isIPhone
-                          ? "shrink-0 border-t border-gray-200 px-4 pb-[max(8px,env(safe-area-inset-bottom))] pt-3"
-                          : "border-t border-gray-200 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4"
-                      }
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold text-gray-600">Subtotal</span>
-                        <span className="text-xl font-black">${cartSubtotal.toFixed(2)}</span>
-                      </div>
-                      <p className="mt-1 text-[10px] font-medium text-gray-400">
-                        Taxes, fees, and delivery charges are calculated at checkout.
-                      </p>
-
-                      <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
-                        {cartItems.length ? (
-                          <button
-                            type="button"
-                            onClick={clearCart}
-                            className={
-                              isIPhone
-                                ? "rounded-xl border border-gray-300 px-3 py-2.5 text-xs font-black"
-                                : "rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
-                            }
-                          >
-                            CLEAR
-                          </button>
-                        ) : <span />}
-                        <button
-                          type="button"
-                          onClick={() => setCartOpen(false)}
-                          className={
-                              isIPhone
-                                ? "rounded-xl border border-gray-300 px-3 py-2.5 text-xs font-black"
-                                : "rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
-                            }
-                        >
-                          CONTINUE ORDERING
-                        </button>
-                        {cartItems.length ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCartOpen(false);
-                              setCheckoutOpen(true);
-                            }}
-                            className={
-                              isIPhone
-                                ? "col-span-2 rounded-xl bg-gray-950 px-4 py-2.5 text-xs font-black text-white"
-                                : "col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
-                            }
-                          >
-                            CHECKOUT
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </>,
-            document.body,
-          )
-        : null}
-
-      {checkoutOpen && orderingAvailable ? (
-        <RestaurantCheckoutModal
-          businessId={businessId}
-          fulfillmentType={
-            activeService === "delivery" && effectiveDeliveryEnabled
-              ? "delivery"
-              : "pickup"
-          }
-          cartItems={cartItems}
-          onClose={() => setCheckoutOpen(false)}
-          onOrderPlaced={() => {
-            clearCart();
-            setCheckoutOpen(false);
-          }}
-        />
-      ) : null}
-
-      {showScrollTop &&
-      typeof document !== "undefined"
-        ? createPortal(
-            <button
-              type="button"
-              onClick={scrollMenuToTop}
-              className={`fixed z-[11900] flex items-center justify-center rounded-full border text-xl font-black shadow-2xl ${
-                compact
-                  ? "h-12 w-12"
-                  : "h-14 w-14"
-              }`}
-              style={{
-                ...scrollTopButtonStyle,
-                backgroundColor:
-                  scrollTopButtonColor,
-                borderColor: `${scrollTopIconColor}55`,
-                color: scrollTopIconColor,
-              }}
-            >
-              ↑
-            </button>,
-            document.body,
-          )
-        : null}
-
-      {selectedItem &&
-      typeof document !== "undefined" ? (
-        <MenuItemModal
-          key={selectedItem.id}
-          item={selectedItem}
-          backgroundColor={backgroundColor}
-          textColor={textColor}
-          orderEnabled={orderingAvailable}
-          onAddToOrder={handleAddToOrder}
-          onClose={() =>
-            setSelectedItem(null)
-          }
-        />
-      ) : null}
-    </div>
+    </>,
+    document.body,
   );
 }

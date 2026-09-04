@@ -188,6 +188,12 @@ export default function RestaurantMenu({
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [isIPhone, setIsIPhone] = useState(false);
+
+  useEffect(() => {
+    const ua = window.navigator.userAgent || "";
+    setIsIPhone(/iPhone/i.test(ua));
+  }, []);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
@@ -932,14 +938,28 @@ export default function RestaurantMenu({
 
               {cartOpen ? (
                 <div
-                  className="fixed inset-0 z-[12600] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+                  className={
+                    isIPhone
+                      ? "fixed inset-0 z-[12600] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+                      : "fixed inset-0 z-[12600] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+                  }
                   onClick={() => setCartOpen(false)}
                 >
                   <div
-                    className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-lg sm:rounded-3xl"
+                    className={
+                      isIPhone
+                        ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl bg-white text-gray-950 shadow-2xl"
+                        : "flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-lg sm:rounded-3xl"
+                    }
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+                    <div
+                      className={
+                        isIPhone
+                          ? "flex items-center justify-between border-b border-gray-200 px-4 py-3"
+                          : "flex items-center justify-between border-b border-gray-200 px-5 py-4"
+                      }
+                    >
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
                           {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
@@ -956,7 +976,13 @@ export default function RestaurantMenu({
                       </button>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+                    <div
+                      className={
+                        isIPhone
+                          ? "min-h-0 flex-1 overflow-y-auto px-3 py-2.5"
+                          : "min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5"
+                      }
+                    >
                       {cartItems.length ? (
                         <div className="space-y-3">
                           {cartItems.map((item) => (
@@ -1042,7 +1068,13 @@ export default function RestaurantMenu({
                       )}
                     </div>
 
-                    <div className="border-t border-gray-200 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4">
+                    <div
+                      className={
+                        isIPhone
+                          ? "shrink-0 border-t border-gray-200 px-4 pb-[max(8px,env(safe-area-inset-bottom))] pt-3"
+                          : "border-t border-gray-200 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4"
+                      }
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-gray-600">Subtotal</span>
                         <span className="text-xl font-black">${cartSubtotal.toFixed(2)}</span>
@@ -1056,7 +1088,11 @@ export default function RestaurantMenu({
                           <button
                             type="button"
                             onClick={clearCart}
-                            className="rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
+                            className={
+                              isIPhone
+                                ? "rounded-xl border border-gray-300 px-3 py-2.5 text-xs font-black"
+                                : "rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
+                            }
                           >
                             CLEAR
                           </button>
@@ -1064,7 +1100,11 @@ export default function RestaurantMenu({
                         <button
                           type="button"
                           onClick={() => setCartOpen(false)}
-                          className="rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
+                          className={
+                              isIPhone
+                                ? "rounded-xl border border-gray-300 px-3 py-2.5 text-xs font-black"
+                                : "rounded-xl border border-gray-300 px-4 py-3 text-xs font-black"
+                            }
                         >
                           CONTINUE ORDERING
                         </button>
@@ -1075,7 +1115,11 @@ export default function RestaurantMenu({
                               setCartOpen(false);
                               setCheckoutOpen(true);
                             }}
-                            className="col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                            className={
+                              isIPhone
+                                ? "col-span-2 rounded-xl bg-gray-950 px-4 py-2.5 text-xs font-black text-white"
+                                : "col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                            }
                           >
                             CHECKOUT
                           </button>
