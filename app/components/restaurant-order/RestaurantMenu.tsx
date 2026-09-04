@@ -1,4 +1,4 @@
-
+"use client";
 
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -941,7 +941,7 @@ export default function RestaurantMenu({
                   className={
                     isIPhone
                       ? "fixed inset-0 z-[12600] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
-                      : "fixed inset-0 z-[12600] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+                      : "fixed inset-0 z-[12600] flex items-center justify-center bg-black/60 px-2 py-4 sm:p-4"
                   }
                   onClick={() => setCartOpen(false)}
                 >

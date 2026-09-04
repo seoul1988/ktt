@@ -105,6 +105,13 @@ export default function RestaurantCheckoutModal({
   onClose,
   onOrderPlaced,
 }: Props) {
+  const [isIPhone, setIsIPhone] = useState(false);
+
+  useEffect(() => {
+    const ua = window.navigator.userAgent || "";
+    setIsIPhone(/iPhone/i.test(ua));
+  }, []);
+
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -685,7 +692,11 @@ export default function RestaurantCheckoutModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+      <div className={
+            isIPhone
+              ? "max-h-[76dvh] w-[calc(100%-1rem)] max-w-[350px] overflow-y-auto rounded-2xl bg-white text-gray-950 shadow-2xl"
+              : "max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl"
+          } onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black">×</button>
