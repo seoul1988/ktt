@@ -479,6 +479,12 @@ export default function MenuItemModal({
                       originalIndex,
                     );
 
+                    const comboDescription =
+                      groupDescription ||
+                      (isComboIt
+                        ? "Includes: Fries · Dipping Sauce · Drink"
+                        : "");
+
                     // Combo It!만 기본 접힘 + 버튼 클릭 시 펼침
                     if (isComboIt) {
                       return (
@@ -496,16 +502,11 @@ export default function MenuItemModal({
                                 <span className="block truncate text-sm font-black">
                                   {group.name}
                                 </span>
-                                {groupDescription ? (
-                                  <span className="mt-1 block whitespace-normal text-[11px] font-bold leading-4 text-gray-700">
-                                    {groupDescription}
+                                {comboDescription ? (
+                                  <span className="mt-1 block whitespace-normal text-[11px] font-black leading-4 text-gray-800">
+                                    {comboDescription}
                                   </span>
                                 ) : null}
-                                <span className="mt-1 block text-[10px] font-black uppercase tracking-wide opacity-70">
-                                  {maximum != null
-                                    ? `OPTIONAL · UP TO ${maximum}`
-                                    : "OPTIONAL"}
-                                </span>
                               </span>
 
                               <span className="shrink-0 rounded-full bg-gray-950 px-3 py-1.5 text-[10px] font-black text-white">
@@ -524,9 +525,9 @@ export default function MenuItemModal({
                                 </button>
                               </div>
 
-                              {groupDescription ? (
-                                <p className="mb-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-bold leading-5 text-gray-700">
-                                  {groupDescription}
+                              {comboDescription ? (
+                                <p className="mb-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-gray-800">
+                                  {comboDescription}
                                 </p>
                               ) : null}
 
