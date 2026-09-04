@@ -3726,7 +3726,7 @@ export default function OwnerBusinessMenuPage() {
                       </label>
 
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {template.options.slice(0, 8).map((option, optionIndex) => (
+                        {template.options.slice(0, 4).map((option, optionIndex) => (
                           <span
                             key={`quick-library-${template.id}-${optionIndex}`}
                             className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-gray-700"

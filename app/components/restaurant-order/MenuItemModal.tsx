@@ -70,25 +70,6 @@ function getGroupMaximum(group: ReturnType<typeof getOptionGroups>[number]) {
   return getGroupRules(group).maximum;
 }
 
-function getRawGroupDescription(
-  item: RestaurantMenuItem,
-  groupIndex: number,
-) {
-  const rawItem = item as RestaurantMenuItem & {
-    option_groups?: Array<{ description?: string | null }>;
-    optionGroups?: Array<{ description?: string | null }>;
-    menu_option_groups?: Array<{ description?: string | null }>;
-  };
-
-  const rawGroups =
-    rawItem.option_groups ??
-    rawItem.optionGroups ??
-    rawItem.menu_option_groups ??
-    [];
-
-  return String(rawGroups[groupIndex]?.description || "").trim();
-}
-
 function normalizeSelections(
   groups: ReturnType<typeof getOptionGroups>,
   source: OptionSelectionState,
@@ -474,10 +455,9 @@ export default function MenuItemModal({
                       originalIndex,
                     );
                     const { maximum } = getGroupRules(group);
-                    const groupDescription = getRawGroupDescription(
-                      item,
-                      originalIndex,
-                    );
+                    const groupDescription = String(
+                      group.description || "",
+                    ).trim();
 
                     // Combo It!만 기본 접힘 + 버튼 클릭 시 펼침
                     if (isComboIt) {
