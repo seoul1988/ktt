@@ -1,4 +1,4 @@
-"use client";
+
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -176,6 +176,12 @@ export default function MenuItemModal({
   const [menuQuantity, setMenuQuantity] = useState(1);
   const [instructions, setInstructions] = useState("");
   const [originalImageOpen, setOriginalImageOpen] = useState(false);
+  const [isIPhone, setIsIPhone] = useState(false);
+
+  useEffect(() => {
+    const ua = window.navigator.userAgent || "";
+    setIsIPhone(/iPhone/i.test(ua));
+  }, []);
 
   // Combo It! 그룹만 기본 접힘으로 표시합니다.
   // REQUIRED 그룹과 나머지 OPTION 그룹은 기존처럼 항상 펼쳐진 상태를 유지합니다.
@@ -401,18 +407,34 @@ export default function MenuItemModal({
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:px-4 sm:py-6"
+        className={
+          isIPhone
+            ? "fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            : "fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 pt-10 pb-4 px-2 sm:pt-12 sm:pb-6 sm:px-4"
+        }
         onClick={onClose}
       >
         <div
-          className="mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl sm:mt-0 sm:h-auto sm:max-h-[86vh] sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
-          style={{ backgroundColor, color: textColor }}
+          className={
+            isIPhone
+              ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
+              : "flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
+          }
+          style={{
+            backgroundColor,
+            color: textColor,
+            transform: isIPhone ? undefined : "translateY(18px)",
+          }}
           onClick={(event) => event.stopPropagation()}
         >
           {item.image_url || item.thumbnail_url ? (
             <button
               type="button"
-              className="relative flex h-[105px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-2xl bg-white p-1.5 sm:h-[210px] sm:rounded-t-3xl sm:p-2"
+              className={
+                isIPhone
+                  ? "relative flex h-[105px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-2xl bg-white p-1.5"
+                  : "relative flex h-[190px] w-full shrink-0 cursor-zoom-in items-center justify-center overflow-hidden rounded-t-3xl bg-white p-2 sm:h-[210px]"
+              }
               onClick={() => setOriginalImageOpen(true)}
               aria-label={`${item.name} 이미지 View Larger`}
             >
@@ -433,7 +455,13 @@ export default function MenuItemModal({
             </button>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-4">
+          <div
+            className={
+              isIPhone
+                ? "min-h-0 flex-1 overflow-y-auto overscroll-contain p-2.5"
+                : "min-h-0 flex-1 overflow-y-auto overscroll-contain p-3.5 sm:p-4"
+            }
+          >
             <div className="flex items-start justify-between gap-4">
               <h2 className="text-lg font-black leading-tight sm:text-xl">
                 {item.name}
@@ -456,13 +484,17 @@ export default function MenuItemModal({
             ) : null}
 
             {item.description ? (
-              <p className="mt-2 whitespace-pre-wrap text-xs font-medium leading-5 opacity-70 sm:mt-4 sm:text-sm sm:leading-6">
+              <p className={
+                  isIPhone
+                    ? "mt-2 whitespace-pre-wrap text-xs font-medium leading-5 opacity-70"
+                    : "mt-4 whitespace-pre-wrap text-sm font-medium leading-6 opacity-70"
+                }>
                 {item.description}
               </p>
             ) : null}
 
             {groups.length ? (
-              <div className="mt-4 space-y-3 sm:mt-6 sm:space-y-5">
+              <div className={isIPhone ? "mt-4 space-y-3" : "mt-6 space-y-5"}>
                 {displayGroups.map(
                   ({
                     group,
@@ -592,7 +624,11 @@ export default function MenuItemModal({
             ) : null}
 
             {orderEnabled ? (
-              <div className="mt-3 border-t border-black/10 pt-3 sm:mt-5 sm:pt-4">
+              <div className={
+                  isIPhone
+                    ? "mt-3 border-t border-black/10 pt-3"
+                    : "mt-5 border-t border-black/10 pt-4"
+                }>
                 <label className="text-xs font-black uppercase tracking-wide opacity-60">
                   Special Instructions
                 </label>
@@ -612,7 +648,11 @@ export default function MenuItemModal({
 
           {orderEnabled ? (
           <div
-            className="z-30 flex min-h-11 shrink-0 items-stretch border-t border-black/10 bg-white pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.14)] sm:min-h-14 sm:pb-0"
+            className={
+              isIPhone
+                ? "z-30 flex min-h-11 shrink-0 items-stretch border-t border-black/10 bg-white pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.14)]"
+                : "z-20 flex min-h-14 shrink-0 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
+            }
             style={{ backgroundColor }}
           >
             <div className="flex shrink-0 items-center border-r border-black/10">
@@ -623,12 +663,20 @@ export default function MenuItemModal({
                     Math.max(1, value - 1),
                   )
                 }
-                className="flex h-11 w-9 items-center justify-center text-base font-black sm:h-14 sm:w-11 sm:text-lg"
+                className={
+                  isIPhone
+                    ? "flex h-11 w-9 items-center justify-center text-base font-black"
+                    : "flex h-14 w-11 items-center justify-center text-lg font-black"
+                }
               >
                 −
               </button>
 
-              <div className="flex h-11 min-w-8 items-center justify-center text-sm font-black sm:h-14 sm:min-w-9">
+              <div className={
+                isIPhone
+                  ? "flex h-11 min-w-8 items-center justify-center text-sm font-black"
+                  : "flex h-14 min-w-9 items-center justify-center text-sm font-black"
+              }>
                 {menuQuantity}
               </div>
 
@@ -639,7 +687,11 @@ export default function MenuItemModal({
                     Math.min(99, value + 1),
                   )
                 }
-                className="flex h-11 w-9 items-center justify-center text-base font-black sm:h-14 sm:w-11 sm:text-lg"
+                className={
+                  isIPhone
+                    ? "flex h-11 w-9 items-center justify-center text-base font-black"
+                    : "flex h-14 w-11 items-center justify-center text-lg font-black"
+                }
               >
                 +
               </button>
@@ -649,7 +701,9 @@ export default function MenuItemModal({
               type="button"
               disabled={addButtonDisabled}
               onClick={handleAddToOrder}
-              className={`flex min-w-0 flex-1 items-center justify-between gap-2 px-3 text-left text-sm font-black transition sm:gap-3 sm:px-4 sm:text-base ${
+              className={`flex min-w-0 flex-1 items-center justify-between text-left font-black transition ${
+                isIPhone ? "gap-2 px-3 text-sm" : "gap-3 px-4"
+              } ${
                 addButtonDisabled
                   ? "cursor-not-allowed bg-gray-400 text-white"
                   : "cursor-pointer bg-green-600 text-white hover:bg-green-700 active:bg-green-800"
