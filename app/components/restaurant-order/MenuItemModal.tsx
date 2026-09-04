@@ -70,6 +70,25 @@ function getGroupMaximum(group: ReturnType<typeof getOptionGroups>[number]) {
   return getGroupRules(group).maximum;
 }
 
+function getRawGroupDescription(
+  item: RestaurantMenuItem,
+  groupIndex: number,
+) {
+  const rawItem = item as RestaurantMenuItem & {
+    option_groups?: Array<{ description?: string | null }>;
+    optionGroups?: Array<{ description?: string | null }>;
+    menu_option_groups?: Array<{ description?: string | null }>;
+  };
+
+  const rawGroups =
+    rawItem.option_groups ??
+    rawItem.optionGroups ??
+    rawItem.menu_option_groups ??
+    [];
+
+  return String(rawGroups[groupIndex]?.description || "").trim();
+}
+
 function normalizeSelections(
   groups: ReturnType<typeof getOptionGroups>,
   source: OptionSelectionState,
@@ -455,9 +474,10 @@ export default function MenuItemModal({
                       originalIndex,
                     );
                     const { maximum } = getGroupRules(group);
-                    const groupDescription = String(
-                      (group as any)?.description || "",
-                    ).trim();
+                    const groupDescription = getRawGroupDescription(
+                      item,
+                      originalIndex,
+                    );
 
                     // Combo It!만 기본 접힘 + 버튼 클릭 시 펼침
                     if (isComboIt) {
@@ -477,10 +497,15 @@ export default function MenuItemModal({
                                   {group.name}
                                 </span>
                                 {groupDescription ? (
-                                  <span className="mt-1 block whitespace-normal text-[11px] font-bold leading-4 opacity-80">
+                                  <span className="mt-1 block whitespace-normal text-[11px] font-bold leading-4 text-gray-700">
                                     {groupDescription}
                                   </span>
                                 ) : null}
+                                <span className="mt-1 block text-[10px] font-black uppercase tracking-wide opacity-70">
+                                  {maximum != null
+                                    ? `OPTIONAL · UP TO ${maximum}`
+                                    : "OPTIONAL"}
+                                </span>
                               </span>
 
                               <span className="shrink-0 rounded-full bg-gray-950 px-3 py-1.5 text-[10px] font-black text-white">
@@ -498,6 +523,12 @@ export default function MenuItemModal({
                                   CLOSE COMBO ▲
                                 </button>
                               </div>
+
+                              {groupDescription ? (
+                                <p className="mb-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-bold leading-5 text-gray-700">
+                                  {groupDescription}
+                                </p>
+                              ) : null}
 
                               <MenuOptionGroup
                                 group={group}
@@ -524,24 +555,31 @@ export default function MenuItemModal({
 
                     // REQUIRED와 기타 OPTION 그룹은 기존 방식 그대로 항상 펼쳐서 표시
                     return (
-                      <MenuOptionGroup
-                        key={gKey}
-                        group={group}
-                        groupIndex={originalIndex}
-                        quantities={
-                          safeSelections[gKey] || {}
-                        }
-                        onSetQuantity={(
-                          optionIndex,
-                          quantity,
-                        ) =>
-                          setOptionQuantity(
-                            originalIndex,
+                      <div key={gKey}>
+                        {groupDescription ? (
+                          <p className="mb-2 rounded-xl bg-black/[0.035] px-3 py-2 text-xs font-bold leading-5 opacity-75">
+                            {groupDescription}
+                          </p>
+                        ) : null}
+
+                        <MenuOptionGroup
+                          group={group}
+                          groupIndex={originalIndex}
+                          quantities={
+                            safeSelections[gKey] || {}
+                          }
+                          onSetQuantity={(
                             optionIndex,
                             quantity,
-                          )
-                        }
-                      />
+                          ) =>
+                            setOptionQuantity(
+                              originalIndex,
+                              optionIndex,
+                              quantity,
+                            )
+                          }
+                        />
+                      </div>
                     );
                   },
                 )}
