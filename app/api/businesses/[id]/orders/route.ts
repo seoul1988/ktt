@@ -694,9 +694,11 @@ export async function POST(
       throw orderError;
     }
 
-    if (!order) {
+    const orderId = order?.id;
+
+    if (!orderId) {
       throw new Error(
-        "Order was created, but no order record was returned.",
+        "Order was created, but no order ID was returned.",
       );
     }
 
@@ -710,7 +712,7 @@ export async function POST(
         normalized.map(
           (item) => ({
             order_id:
-              order.id,
+              orderId,
             business_id:
               businessId,
             menu_item_id:
@@ -763,7 +765,7 @@ export async function POST(
               "Square-Version": "2026-08-19",
             },
             body: JSON.stringify({
-              idempotency_key: `ktown-order-${order.id}`,
+              idempotency_key: `ktown-order-${orderId}`,
               order: {
                 location_id: squareLocationId,
                 reference_id: `KTOWN-${number}`,
@@ -965,7 +967,7 @@ export async function POST(
             square_order_id: squareOrderId,
             square_payment_link_id: null,
           })
-          .eq("id", order.id);
+          .eq("id", orderId);
 
         if (squareOrderSaveError) {
           throw squareOrderSaveError;
@@ -1031,7 +1033,7 @@ export async function POST(
           ok: true,
           paymentProvider: "square",
           paymentRequired: true,
-          orderId: order.id,
+          orderId: orderId,
           orderNumber: number,
           squarePayment: {
             applicationId: squareApplicationId,
@@ -1049,7 +1051,7 @@ export async function POST(
             secretKey:
               stripeSecretKey,
             orderId:
-              order.id,
+              orderId,
             orderNumber:
               number,
             businessId,
@@ -1074,14 +1076,14 @@ export async function POST(
         })
         .eq(
           "id",
-          order.id,
+          orderId,
         );
 
       return NextResponse.json({
         ok: true,
         paymentProvider: "stripe",
         orderId:
-          order.id,
+          orderId,
         orderNumber:
           number,
         checkoutUrl:
@@ -1132,7 +1134,7 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       orderId:
-        order.id,
+        orderId,
       orderNumber:
         number,
     });
