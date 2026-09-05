@@ -197,12 +197,10 @@ export default function MenuOptionGroup({
         </h3>
 
         <span
-          className={`shrink-0 rounded-lg border-2 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${
-            minimum > 0
-              ? "border-[#245d7a] bg-[#dceff7] text-[#163f55]"
-              : valid
-                ? "border-black/20 bg-white text-black"
-                : "border-amber-300 bg-amber-50 text-amber-800"
+          className={`shrink-0 rounded border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+            valid
+              ? "border-black/20 bg-white text-black"
+              : "border-amber-300 bg-amber-50 text-amber-800"
           }`}
         >
           {requirementText}
