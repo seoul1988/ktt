@@ -5253,7 +5253,7 @@ function LinkPageContent({
             scrollTopButtonColor={scrollTopButtonColor}
             scrollTopIconColor={scrollTopIconColor}
             scrollTopPosition={scrollTopPosition}
-            externalCartButton={true}
+            externalCartButton={previewDevice === "mobile"}
           />
         </div>
       </div>
@@ -15939,8 +15939,8 @@ export function PublicWebsiteRenderer({
                       aria-label={mobileActionDisplayLabel}
                       className={`ml-auto flex min-h-[56px] shrink-0 items-center justify-end gap-2 rounded-xl px-4 py-2 transition active:scale-[0.98] ${
                           mobileCartCount > 0
-                            ? "text-gray-950 active:bg-gray-100"
-                            : "bg-amber-400 text-gray-950 shadow-md ring-1 ring-amber-500/40"
+                            ? "bg-gray-950 text-white shadow-md active:bg-gray-800"
+                            : "bg-gray-900 text-white shadow-md ring-1 ring-white/10 active:bg-gray-800"
                         }`}
                     >
                       <span
@@ -15969,8 +15969,8 @@ export function PublicWebsiteRenderer({
                         </span>
                         <span className={`block truncate font-bold ${
                             mobileCartCount > 0
-                              ? "text-[9px] text-gray-500"
-                              : "text-[9px] text-gray-800"
+                              ? "text-[9px] text-gray-300"
+                              : "text-[9px] text-gray-300"
                           }`}>
                           {mobileCartCount > 0
                             ? `${mobileCartCount} item${
@@ -20824,7 +20824,7 @@ function CellPreview({
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
-            externalCartButton={true}
+            externalCartButton={previewDevice === "mobile"}
           />
         </div>
       );

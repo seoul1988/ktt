@@ -815,7 +815,7 @@ export default function RestaurantMenu({
           }}
         >
           <div className="flex gap-2 overflow-x-auto">
-            {resolvedMenuEnabled ? (
+            {resolvedMenuEnabled && !orderingAvailable ? (
               <button
                 type="button"
                 onClick={() => setActiveService("menu")}
@@ -837,12 +837,14 @@ export default function RestaurantMenu({
               <button
                 type="button"
                 onClick={() => setActiveService("pickup")}
-                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
+                className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
                   activeService === "pickup"
-                    ? "border-amber-300 bg-amber-400 text-black"
+                    ? isBunsMenu
+                      ? "border-white/30 bg-white/12 text-white"
+                      : "border-gray-300 bg-gray-900 text-white"
                     : isBunsMenu
-                      ? "border-amber-400/60 bg-amber-400/10 text-amber-300"
-                      : "border-amber-400 bg-amber-100 text-amber-950"
+                      ? "border-white/20 bg-white/5 text-gray-200"
+                      : "border-gray-300 bg-gray-100 text-gray-800"
                 }`}
               >
                 PICKUP
