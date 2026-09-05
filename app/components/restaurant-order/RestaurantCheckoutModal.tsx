@@ -153,6 +153,12 @@ export default function RestaurantCheckoutModal({
   const squareGoogleRef = useRef<any>(null);
   const squareAppleRef = useRef<any>(null);
 
+  const address1Ref = useRef<HTMLInputElement>(null);
+  const address2Ref = useRef<HTMLInputElement>(null);
+  const cityRef = useRef<HTMLInputElement>(null);
+  const stateCodeRef = useRef<HTMLInputElement>(null);
+  const postalCodeRef = useRef<HTMLInputElement>(null);
+
   const subtotal = useMemo(
     () => cartItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0), 0),
     [cartItems],
@@ -445,10 +451,26 @@ export default function RestaurantCheckoutModal({
 
   async function getUberDirectQuote() {
     if (fulfillmentType !== "delivery") return;
-    if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
+
+    // Browser autofill can visually populate an input without immediately
+    // updating React state. Read the actual input values as a fallback.
+    const nextAddress1 = (address1Ref.current?.value ?? address1).trim();
+    const nextAddress2 = (address2Ref.current?.value ?? address2).trim();
+    const nextCity = (cityRef.current?.value ?? city).trim();
+    const nextStateCode = (stateCodeRef.current?.value ?? stateCode).trim();
+    const nextPostalCode = (postalCodeRef.current?.value ?? postalCode).trim();
+
+    if (!nextAddress1 || !nextCity || !nextStateCode || !nextPostalCode) {
       setDeliveryQuoteError("Please enter the complete delivery address.");
       return;
     }
+
+    // Keep React state synchronized with any browser-autofilled values.
+    setAddress1(nextAddress1);
+    setAddress2(nextAddress2);
+    setCity(nextCity);
+    setStateCode(nextStateCode);
+    setPostalCode(nextPostalCode);
 
     setDeliveryQuoteLoading(true);
     setDeliveryQuoteError("");
@@ -462,11 +484,11 @@ export default function RestaurantCheckoutModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             dropoffAddress: {
-              address1: address1.trim(),
-              address2: address2.trim(),
-              city: city.trim(),
-              state: stateCode.trim(),
-              postalCode: postalCode.trim(),
+              address1: nextAddress1,
+              address2: nextAddress2,
+              city: nextCity,
+              state: nextStateCode,
+              postalCode: nextPostalCode,
             },
             dropoffPhone: phone.trim(),
           }),
@@ -475,7 +497,9 @@ export default function RestaurantCheckoutModal({
 
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload?.error || "Delivery quote could not be calculated.");
+        throw new Error(
+          payload?.error || "Delivery quote could not be calculated.",
+        );
       }
 
       setDeliveryQuoteId(String(payload?.quoteId || ""));
@@ -494,7 +518,9 @@ export default function RestaurantCheckoutModal({
       setDeliveryQuoteId("");
       setDeliveryFeeCents(0);
       setDeliveryQuoteError(
-        e instanceof Error ? e.message : "Delivery quote could not be calculated.",
+        e instanceof Error
+          ? e.message
+          : "Delivery quote could not be calculated.",
       );
     } finally {
       setDeliveryQuoteLoading(false);
@@ -808,31 +834,31 @@ export default function RestaurantCheckoutModal({
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">
               <h3 className="font-black">Delivery Address</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <input value={address1} onChange={(e) => {
+                <input ref={address1Ref} name="address-line1" autoComplete="address-line1" value={address1} onChange={(e) => {
                   setAddress1(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteError("");
                 }} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={address2} onChange={(e) => {
+                <input ref={address2Ref} name="address-line2" autoComplete="address-line2" value={address2} onChange={(e) => {
                   setAddress2(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteError("");
                 }} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={city} onChange={(e) => {
+                <input ref={cityRef} name="address-level2" autoComplete="address-level2" value={city} onChange={(e) => {
                   setCity(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteError("");
                 }} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={stateCode} onChange={(e) => {
+                <input ref={stateCodeRef} name="address-level1" autoComplete="address-level1" value={stateCode} onChange={(e) => {
                   setStateCode(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteError("");
                 }} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={postalCode} onChange={(e) => {
+                <input ref={postalCodeRef} name="postal-code" autoComplete="postal-code" value={postalCode} onChange={(e) => {
                   setPostalCode(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
