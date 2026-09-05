@@ -73,13 +73,6 @@ export default function MenuOptionGroup({
 }: Props) {
   const { minimum, maximum } = getRules(group);
 
-  /*
-   * 정확히 1개만 선택해야 하는 그룹:
-   * checkbox/수량 +/- 대신 radio UI 사용.
-   *
-   * 예:
-   * SINGLE SAUCE 1 REQUIRED
-   */
   const singleChoice = minimum === 1 && maximum === 1;
 
   const safeQuantities: Record<string, number> = {};
@@ -142,11 +135,6 @@ export default function MenuOptionGroup({
 
     const requested = toInt(requestedQuantity);
 
-    /*
-     * Radio group:
-     * 새 옵션을 고르면 부모 state에서 현재 그룹의 다른 옵션을 0으로 만들도록
-     * 순서대로 callback을 호출한 뒤 선택한 옵션을 1로 설정합니다.
-     */
     if (singleChoice) {
       group.options.forEach((otherOption, otherIndex) => {
         if (otherIndex === optionIndex || otherOption.soldOut) return;
@@ -198,9 +186,11 @@ export default function MenuOptionGroup({
 
         <span
           className={`shrink-0 rounded border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
-            valid
-              ? "border-black/20 bg-white text-black"
-              : "border-amber-300 bg-amber-50 text-amber-800"
+            minimum > 0
+              ? "border-red-700 bg-red-600 text-white shadow-sm"
+              : valid
+                ? "border-black/20 bg-white text-black"
+                : "border-amber-300 bg-amber-50 text-amber-800"
           }`}
         >
           {requirementText}
@@ -213,11 +203,6 @@ export default function MenuOptionGroup({
           const quantity = toInt(safeQuantities[key]);
           const checked = quantity > 0;
 
-          /*
-           * SINGLE CHOICE
-           * 두 번째 이미지처럼 radio 버튼 + 옵션명 + 가격만 표시.
-           * 수량 +/-는 표시하지 않습니다.
-           */
           if (singleChoice) {
             return (
               <label
@@ -297,8 +282,6 @@ export default function MenuOptionGroup({
           );
         })}
       </div>
-
-
     </section>
   );
 }
