@@ -563,6 +563,82 @@ export default function RootLayout({
             "auto",
         }}
       >
+        <Script
+          id="pwa-refresh-on-resume"
+          strategy="afterInteractive"
+        >
+          {`
+            (() => {
+              if (!("serviceWorker" in navigator)) {
+                return;
+              }
+
+              let wasHidden = false;
+              let refreshing = false;
+
+              const updateServiceWorker = async () => {
+                try {
+                  const registration =
+                    await navigator.serviceWorker.getRegistration();
+
+                  if (registration) {
+                    await registration.update();
+                  }
+                } catch (error) {
+                  console.error(
+                    "PWA update check failed:",
+                    error
+                  );
+                }
+              };
+
+              const refreshInstalledApp = async () => {
+                if (refreshing) {
+                  return;
+                }
+
+                refreshing = true;
+
+                await updateServiceWorker();
+
+                window.location.reload();
+              };
+
+              document.addEventListener(
+                "visibilitychange",
+                () => {
+                  if (
+                    document.visibilityState ===
+                    "hidden"
+                  ) {
+                    wasHidden = true;
+                    return;
+                  }
+
+                  if (
+                    document.visibilityState ===
+                      "visible" &&
+                    wasHidden
+                  ) {
+                    wasHidden = false;
+                    refreshInstalledApp();
+                  }
+                }
+              );
+
+              window.addEventListener(
+                "pageshow",
+                (event) => {
+                  if (event.persisted) {
+                    refreshInstalledApp();
+                  }
+                }
+              );
+
+              updateServiceWorker();
+            })();
+          `}
+        </Script>
         <AuthProvider>
           <ServiceWorkerRegister />
 
