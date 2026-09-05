@@ -122,6 +122,7 @@ export default function RestaurantCheckoutModal({
     useState<SquarePreparedPayment | null>(null);
   const [squareMethodsLoading, setSquareMethodsLoading] = useState(false);
   const [squareCardReady, setSquareCardReady] = useState(false);
+  const [cardPaymentOpen, setCardPaymentOpen] = useState(false);
   const [squareGoogleReady, setSquareGoogleReady] = useState(false);
   const [squareAppleReady, setSquareAppleReady] = useState(false);
   const [squarePaying, setSquarePaying] = useState(false);
@@ -187,6 +188,7 @@ export default function RestaurantCheckoutModal({
 
     setSquareMethodsLoading(true);
     setSquareCardReady(false);
+    setCardPaymentOpen(false);
     setSquareGoogleReady(false);
     setSquareAppleReady(false);
     setError("");
@@ -232,8 +234,11 @@ export default function RestaurantCheckoutModal({
           if (!cancelled) {
             squareGoogleRef.current = googlePay;
             await googlePay.attach("#ktown-square-google-pay", {
-              buttonColor: "default",
+              buttonColor: "black",
               buttonType: "long",
+              buttonSizeMode: "fill",
+              buttonRadius: 4,
+              buttonBorderType: "no_border",
             });
             if (!cancelled) setSquareGoogleReady(true);
           }
@@ -508,8 +513,14 @@ export default function RestaurantCheckoutModal({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black">×</button>
@@ -583,31 +594,112 @@ export default function RestaurantCheckoutModal({
                     ) : null}
 
                     <div
-                      id="ktown-square-google-pay"
-                      onClick={() => {
-                        if (squareGoogleReady && !squarePaying) {
-                          finishSquarePayment("google");
-                        }
-                      }}
-                      className={squareGoogleReady ? "" : "min-h-[1px]"}
-                    />
-
-                    <div
-                      className={`rounded-xl border p-3 ${
-                        squareCardReady ? "" : "hidden"
-                      }`}
+                      className={
+                        squareGoogleReady
+                          ? "relative h-12 w-full overflow-hidden rounded-md bg-black"
+                          : "min-h-[1px]"
+                      }
                     >
-                      <div id="ktown-square-card" />
+                      <div
+                        id="ktown-square-google-pay"
+                        onClick={() => {
+                          if (squareGoogleReady && !squarePaying) {
+                            finishSquarePayment("google");
+                          }
+                        }}
+                        className={
+                          squareGoogleReady
+                            ? "h-12 w-full"
+                            : "min-h-[1px]"
+                        }
+                      />
+
+                      {squareGoogleReady ? (
+                        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-md bg-black text-white">
+                          <span className="text-[17px] font-medium">
+                            Buy with
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className="text-[23px] font-black leading-none"
+                              style={{
+                                background:
+                                  "conic-gradient(from -45deg,#4285F4 0 25%,#34A853 25% 50%,#FBBC05 50% 75%,#EA4335 75% 100%)",
+                                WebkitBackgroundClip: "text",
+                                backgroundClip: "text",
+                                color: "transparent",
+                              }}
+                              aria-hidden="true"
+                            >
+                              G
+                            </span>
+                            <span className="text-[22px] font-medium leading-none">
+                              Pay
+                            </span>
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="overflow-hidden rounded-xl border bg-white">
                       <button
                         type="button"
-                        onClick={() => finishSquarePayment("card")}
+                        onClick={() =>
+                          squareCardReady &&
+                          setCardPaymentOpen((current) => !current)
+                        }
                         disabled={!squareCardReady || squarePaying}
-                        className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                        aria-expanded={cardPaymentOpen}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {squarePaying
-                          ? "PROCESSING…"
-                          : `PAY ${money(Number(squarePrepared.amount))}`}
+                        <span className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md bg-gray-100 text-lg">
+                            💳
+                          </span>
+
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black text-gray-950">
+                              Credit / Debit Card
+                            </span>
+                            <span className="mt-0.5 block text-[11px] text-gray-500">
+                              {squareCardReady
+                                ? "Tap to enter card details"
+                                : "Loading secure card form…"}
+                            </span>
+                          </span>
+                        </span>
+
+                        <span
+                          className={`shrink-0 text-sm font-black text-gray-500 transition-transform ${
+                            cardPaymentOpen ? "rotate-180" : ""
+                          }`}
+                        >
+                          ▼
+                        </span>
                       </button>
+
+                      <div
+                        className={`overflow-hidden transition-all duration-200 ${
+                          cardPaymentOpen
+                            ? "max-h-[430px] border-t opacity-100"
+                            : "max-h-0 opacity-0"
+                        }`}
+                      >
+                        <div className="p-3">
+                          <div id="ktown-square-card" />
+
+                          <button
+                            type="button"
+                            onClick={() => finishSquarePayment("card")}
+                            disabled={!squareCardReady || squarePaying}
+                            className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                          >
+                            {squarePaying
+                              ? "PROCESSING…"
+                              : `PAY ${money(Number(squarePrepared.amount))}`}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
