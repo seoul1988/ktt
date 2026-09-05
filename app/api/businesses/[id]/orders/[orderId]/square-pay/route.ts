@@ -4,6 +4,7 @@ import {
   getOrderAdmin,
   moneyCents,
 } from "@/lib/restaurant-order/server";
+import { dispatchUberDirectOrder } from "@/lib/delivery/uber-direct";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,6 +108,7 @@ export async function POST(
       );
     }
 
+
     if (!sourceId) {
       return NextResponse.json(
         { error: "Payment token is required." },
@@ -177,12 +179,36 @@ export async function POST(
       order.payment_status === "paid" &&
       order.square_payment_id
     ) {
+      let delivery: any = null;
+
+      try {
+        delivery = await dispatchUberDirectOrder({
+          db,
+          businessId,
+          orderId: ktownOrderId,
+        });
+      } catch (deliveryError) {
+        console.error(
+          "Uber Direct automatic dispatch retry failed:",
+          deliveryError,
+        );
+        delivery = {
+          ok: false,
+          error:
+            deliveryError instanceof Error
+              ? deliveryError.message
+              : "Courier dispatch failed.",
+        };
+      }
+
       return NextResponse.json({
         ok: true,
         alreadyPaid: true,
         paymentStatus: "paid",
         paymentId: order.square_payment_id,
+        paymentMethodType,
         orderNumber: order.order_number,
+        delivery,
       });
     }
 
@@ -301,7 +327,7 @@ export async function POST(
         payment_status: "paid",
         square_payment_id: paymentId,
 
-        // Square 결제가 실제 COMPLETED 된 뒤에만 최종 결제수단을 저장합니다.
+        // Save the actual Square method only after COMPLETED.
         payment_method_type: paymentMethodType,
       })
       .eq("id", ktownOrderId)
@@ -311,12 +337,38 @@ export async function POST(
       throw updateError;
     }
 
+    let delivery: any = null;
+
+    try {
+      delivery = await dispatchUberDirectOrder({
+        db,
+        businessId,
+        orderId: ktownOrderId,
+      });
+    } catch (deliveryError) {
+      console.error(
+        "Uber Direct automatic dispatch failed:",
+        deliveryError,
+      );
+
+      // Payment remains successful. The delivery failure is saved on the order
+      // and can be retried without charging the customer again.
+      delivery = {
+        ok: false,
+        error:
+          deliveryError instanceof Error
+            ? deliveryError.message
+            : "Courier dispatch failed.",
+      };
+    }
+
     return NextResponse.json({
       ok: true,
       paymentStatus: "paid",
       paymentId,
       paymentMethodType,
       orderNumber: order.order_number,
+      delivery,
     });
   } catch (error) {
     console.error("Square direct payment error:", error);

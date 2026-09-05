@@ -29,6 +29,8 @@ type PublicSettings = {
   deliveryPrepMinutes: number;
   taxRate: number;
   tipPresets: number[];
+  deliveryProvider?: string | null;
+  deliveryDispatchEnabled?: boolean;
 };
 
 type Props = {
@@ -127,6 +129,12 @@ export default function RestaurantCheckoutModal({
   const [squareAppleReady, setSquareAppleReady] = useState(false);
   const [squarePaying, setSquarePaying] = useState(false);
 
+  // Uber Direct delivery quote
+  const [deliveryQuoteId, setDeliveryQuoteId] = useState("");
+  const [deliveryFeeCents, setDeliveryFeeCents] = useState(0);
+  const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
+  const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
+
   const isSafariBrowser = useMemo(() => {
     if (typeof navigator === "undefined") return false;
 
@@ -151,7 +159,8 @@ export default function RestaurantCheckoutModal({
   );
   const tax = subtotal * Math.max(0, Number(settings?.taxRate || 0));
   const tip = subtotal * (tipPercent / 100);
-  const estimatedTotal = subtotal + tax + tip;
+  const deliveryFee = fulfillmentType === "delivery" ? deliveryFeeCents / 100 : 0;
+  const estimatedTotal = subtotal + tax + tip + deliveryFee;
 
   useEffect(() => {
     try {
@@ -434,6 +443,64 @@ export default function RestaurantCheckoutModal({
     }
   }
 
+  async function getUberDirectQuote() {
+    if (fulfillmentType !== "delivery") return;
+    if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
+      setDeliveryQuoteError("Please enter the complete delivery address.");
+      return;
+    }
+
+    setDeliveryQuoteLoading(true);
+    setDeliveryQuoteError("");
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/businesses/${businessId}/delivery/quote`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            dropoffAddress: {
+              address1: address1.trim(),
+              address2: address2.trim(),
+              city: city.trim(),
+              state: stateCode.trim(),
+              postalCode: postalCode.trim(),
+            },
+            dropoffPhone: phone.trim(),
+          }),
+        },
+      );
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Delivery quote could not be calculated.");
+      }
+
+      setDeliveryQuoteId(String(payload?.quoteId || ""));
+      setDeliveryFeeCents(
+        Math.max(
+          0,
+          Number(
+            payload?.customerFeeCents ??
+              payload?.deliveryFeeCents ??
+              payload?.feeCents ??
+              0,
+          ) || 0,
+        ),
+      );
+    } catch (e) {
+      setDeliveryQuoteId("");
+      setDeliveryFeeCents(0);
+      setDeliveryQuoteError(
+        e instanceof Error ? e.message : "Delivery quote could not be calculated.",
+      );
+    } finally {
+      setDeliveryQuoteLoading(false);
+    }
+  }
+
   async function submitOrder() {
     setError("");
     if (!name.trim()) return setError("Please enter your name.");
@@ -441,6 +508,13 @@ export default function RestaurantCheckoutModal({
     if (fulfillmentType === "delivery") {
       if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
         return setError("Please enter the complete delivery address.");
+      }
+      if (
+        settings?.deliveryProvider === "uber_direct" &&
+        settings?.deliveryDispatchEnabled &&
+        !deliveryQuoteId
+      ) {
+        return setError("Please calculate the delivery fee before paying.");
       }
     }
     if (pickupTime === "custom" && !customDate) return setError("Please select a date.");
@@ -475,6 +549,10 @@ export default function RestaurantCheckoutModal({
             : pickupTime,
           paymentMethod,
           tipPercent,
+          deliveryQuoteId:
+            fulfillmentType === "delivery" && deliveryQuoteId
+              ? deliveryQuoteId
+              : null,
           orderNote: orderNote.trim().slice(0, 500),
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
@@ -730,13 +808,44 @@ export default function RestaurantCheckoutModal({
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">
               <h3 className="font-black">Delivery Address</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <input value={address1} onChange={(e) => setAddress1(e.target.value)} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={address2} onChange={(e) => setAddress2(e.target.value)} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={address1} onChange={(e) => setAddress1(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
+                <input value={address2} onChange={(e) => setAddress2(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
+                <input value={city} onChange={(e) => setCity(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={stateCode} onChange={(e) => setStateCode(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={postalCode} onChange={(e) => setPostalCode(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
+
+              {settings?.deliveryProvider === "uber_direct" &&
+              settings?.deliveryDispatchEnabled ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={getUberDirectQuote}
+                    disabled={deliveryQuoteLoading}
+                    className="w-full rounded-xl border-2 border-gray-950 px-4 py-3 text-sm font-black disabled:opacity-50"
+                  >
+                    {deliveryQuoteLoading
+                      ? "CALCULATING DELIVERY FEE…"
+                      : deliveryQuoteId
+                        ? "RECALCULATE DELIVERY FEE"
+                        : "CALCULATE DELIVERY FEE"}
+                  </button>
+
+                  {deliveryQuoteError ? (
+                    <p className="mt-2 text-xs font-bold text-red-600">
+                      {deliveryQuoteError}
+                    </p>
+                  ) : null}
+
+                  {deliveryQuoteId ? (
+                    <div className="mt-2 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-3 text-sm">
+                      <span className="font-bold">Delivery fee</span>
+                      <b>{money(deliveryFee)}</b>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </section> : null}
 
             <section className="rounded-2xl border p-4">
@@ -839,6 +948,14 @@ export default function RestaurantCheckoutModal({
               <div className="flex items-center justify-between gap-3"><span className="min-w-0">Subtotal</span><b className="shrink-0 whitespace-nowrap">{money(subtotal)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
+              {fulfillmentType === "delivery" ? (
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="min-w-0">Delivery fee</span>
+                  <b className="shrink-0 whitespace-nowrap">
+                    {deliveryQuoteLoading ? "Calculating…" : money(deliveryFee)}
+                  </b>
+                </div>
+              ) : null}
               <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-lg"><b className="min-w-0 whitespace-nowrap">Estimated total</b><b className="shrink-0 whitespace-nowrap">{money(estimatedTotal)}</b></div>
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
