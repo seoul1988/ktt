@@ -62,6 +62,26 @@ export async function POST(
       .replace(/[^a-zA-Z0-9_-]/g, "")
       .slice(0, 80);
 
+    const rawPaymentMethodType = String(
+      body?.paymentMethodType || "",
+    )
+      .trim()
+      .toLowerCase();
+
+    const paymentMethodType =
+      rawPaymentMethodType === "apple_pay" ||
+      rawPaymentMethodType === "google_pay" ||
+      rawPaymentMethodType === "card"
+        ? rawPaymentMethodType
+        : "";
+
+    if (!paymentMethodType) {
+      return NextResponse.json(
+        { error: "Valid payment method type is required." },
+        { status: 400 },
+      );
+    }
+
     const buyerEmailAddress = String(
       body?.buyerEmailAddress || "",
     )
@@ -280,6 +300,9 @@ export async function POST(
       .update({
         payment_status: "paid",
         square_payment_id: paymentId,
+
+        // Square 결제가 실제 COMPLETED 된 뒤에만 최종 결제수단을 저장합니다.
+        payment_method_type: paymentMethodType,
       })
       .eq("id", ktownOrderId)
       .eq("business_id", businessId);
@@ -292,6 +315,7 @@ export async function POST(
       ok: true,
       paymentStatus: "paid",
       paymentId,
+      paymentMethodType,
       orderNumber: order.order_number,
     });
   } catch (error) {

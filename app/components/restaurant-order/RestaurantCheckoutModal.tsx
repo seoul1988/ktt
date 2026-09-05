@@ -399,6 +399,15 @@ export default function RestaurantCheckoutModal({
             sourceId: tokenResult.token,
             verificationToken,
             attemptId,
+
+            // 실제로 고객이 사용한 결제수단을 서버에 전달합니다.
+            // DB 저장은 Square가 COMPLETED를 반환한 뒤 서버에서만 수행합니다.
+            paymentMethodType:
+              method === "apple"
+                ? "apple_pay"
+                : method === "google"
+                  ? "google_pay"
+                  : "card",
           }),
         },
       );
