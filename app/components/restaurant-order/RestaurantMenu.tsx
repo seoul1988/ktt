@@ -217,6 +217,19 @@ export default function RestaurantMenu({
   const orderingAvailable =
     effectivePickupEnabled || effectiveDeliveryEnabled;
 
+  // Buns(#90)는 어두운 브랜드 배경에 카테고리별 포인트 컬러를 사용합니다.
+  const isBunsMenu = businessId === 90;
+  const bunsCategoryAccents = [
+    "#facc15", // gold
+    "#ef4444", // red
+    "#f97316", // orange
+    "#22c55e", // green
+    "#38bdf8", // blue
+    "#a78bfa", // purple
+    "#ec4899", // pink
+    "#14b8a6", // teal
+  ];
+
   const getInitialService = (): "menu" | "pickup" | "delivery" => {
     if (typeof window !== "undefined") {
       const requested = new URLSearchParams(window.location.search).get("service");
@@ -737,99 +750,130 @@ export default function RestaurantMenu({
         color: textColor,
       }}
     >
-      <div
-        className="border-b border-black/10 px-3 py-3 sm:px-5"
-        style={{ backgroundColor: "transparent" }}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div
-            className="rounded-lg px-2 py-1"
-            style={{ backgroundColor }}
-          >
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] opacity-50">
-              {orderingAvailable ? "ORDER ONLINE" : "MENU"}
-            </p>
-            <h2 className="mt-0.5 text-lg font-black tracking-tight">
-              {activeService === "pickup"
-                ? "Pickup Order"
-                : activeService === "delivery"
-                  ? "Delivery Order"
-                  : "Menu"}
-            </h2>
-          </div>
-
-          {(resolvedMenuEnabled || effectivePickupEnabled || effectiveDeliveryEnabled) ? (
-            <div className="flex flex-wrap gap-2">
-              {resolvedMenuEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService("menu")}
-                  className={`rounded-full border px-3 py-2 text-[11px] font-black ${
-                    activeService === "menu"
-                      ? "bg-gray-950 text-white"
-                      : "bg-white text-gray-900"
-                  }`}
-                >
-                  MENU
-                </button>
-              ) : null}
-
-              {effectivePickupEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService("pickup")}
-                  className={`rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-md transition-all ${
-                    activeService === "pickup"
-                      ? "border-amber-300 bg-amber-400 text-black ring-2 ring-amber-200"
-                      : "border-amber-400 bg-amber-100 text-amber-950 hover:bg-amber-200"
-                  }`}
-                >
-                  PICKUP ONLY
-                </button>
-              ) : null}
-
-              {effectiveDeliveryEnabled ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService("delivery")}
-                  className={`rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-md transition-all ${
-                    activeService === "delivery"
-                      ? "border-blue-400 bg-blue-600 text-white ring-2 ring-blue-300"
-                      : "border-blue-500 bg-blue-100 text-blue-950 hover:bg-blue-200"
-                  }`}
-                >
-                  DELIVERY ONLY
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-      {visibleCategories.length ? (
+      {orderingAvailable ? (
         <div
-          className="sticky top-0 z-20 border-b border-black/10 px-3 py-3"
+          className={`border-b px-3 py-2 sm:px-5 ${
+            isBunsMenu
+              ? "border-white/10 bg-[#0b0b0b]"
+              : "border-black/10"
+          }`}
           style={{
-            backgroundColor: "transparent",
+            backgroundColor: isBunsMenu ? "#0b0b0b" : "transparent",
           }}
         >
           <div className="flex gap-2 overflow-x-auto">
-            {visibleCategories.map((category) => (
+            {resolvedMenuEnabled ? (
               <button
-                key={category.id}
                 type="button"
-                onClick={() =>
-                  scrollToCategory(category.id)
-                }
-                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black ${
-                  activeCategoryId === category.id
-                    ? "bg-gray-950 text-white"
-                    : "bg-white text-gray-900"
+                onClick={() => setActiveService("menu")}
+                className={`shrink-0 rounded-full border px-3 py-2 text-[11px] font-black ${
+                  activeService === "menu"
+                    ? isBunsMenu
+                      ? "border-white bg-white text-black"
+                      : "bg-gray-950 text-white"
+                    : isBunsMenu
+                      ? "border-white/20 bg-white/5 text-white"
+                      : "bg-white text-gray-900"
                 }`}
               >
-                {category.name}
+                MENU
               </button>
-            ))}
+            ) : null}
+
+            {effectivePickupEnabled ? (
+              <button
+                type="button"
+                onClick={() => setActiveService("pickup")}
+                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
+                  activeService === "pickup"
+                    ? "border-amber-300 bg-amber-400 text-black"
+                    : isBunsMenu
+                      ? "border-amber-400/60 bg-amber-400/10 text-amber-300"
+                      : "border-amber-400 bg-amber-100 text-amber-950"
+                }`}
+              >
+                PICKUP
+              </button>
+            ) : null}
+
+            {effectiveDeliveryEnabled ? (
+              <button
+                type="button"
+                onClick={() => setActiveService("delivery")}
+                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
+                  activeService === "delivery"
+                    ? "border-blue-400 bg-blue-600 text-white"
+                    : isBunsMenu
+                      ? "border-blue-400/60 bg-blue-400/10 text-blue-300"
+                      : "border-blue-500 bg-blue-100 text-blue-950"
+                }`}
+              >
+                DELIVERY
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {visibleCategories.length ? (
+        <div
+          className={`sticky top-0 z-[70] border-b px-3 py-2.5 shadow-sm backdrop-blur-md ${
+            isBunsMenu
+              ? "border-white/10 bg-[#0b0b0b]/95"
+              : "border-black/10"
+          }`}
+          style={{
+            backgroundColor: isBunsMenu
+              ? "rgba(11,11,11,0.96)"
+              : backgroundColor,
+          }}
+        >
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {visibleCategories.map((category, categoryIndex) => {
+              const accent =
+                bunsCategoryAccents[
+                  categoryIndex % bunsCategoryAccents.length
+                ];
+              const isActive =
+                activeCategoryId === category.id ||
+                (activeCategoryId == null && categoryIndex === 0);
+
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => scrollToCategory(category.id)}
+                  className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.02em] transition ${
+                    isBunsMenu
+                      ? "shadow-[0_2px_8px_rgba(0,0,0,0.24)]"
+                      : ""
+                  }`}
+                  style={
+                    isBunsMenu
+                      ? {
+                          borderColor: isActive
+                            ? accent
+                            : `${accent}66`,
+                          backgroundColor: isActive
+                            ? accent
+                            : "rgba(255,255,255,0.05)",
+                          color: isActive ? "#111827" : accent,
+                        }
+                      : {
+                          backgroundColor: isActive
+                            ? "#111827"
+                            : "#ffffff",
+                          color: isActive ? "#ffffff" : "#111827",
+                          borderColor: isActive
+                            ? "#111827"
+                            : "rgba(17,24,39,0.16)",
+                        }
+                  }
+                >
+                  {category.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -852,14 +896,42 @@ export default function RestaurantMenu({
             <section
               key={category.id}
               id={`restaurant-menu-${businessId}-${category.id}`}
-              className="scroll-mt-[90px] border-b border-gray-200 pb-7 pt-2 last:border-b-0"
+              className={`scroll-mt-[76px] pb-6 pt-3 last:border-b-0 ${
+                isBunsMenu
+                  ? "border-b border-white/10"
+                  : "border-b border-gray-200"
+              }`}
             >
-              <h2
-                className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
-                style={{ backgroundColor }}
-              >
-                {category.name}
-              </h2>
+              {(() => {
+                const categoryIndex = visibleCategories.findIndex(
+                  (entry) => entry.id === category.id,
+                );
+                const accent =
+                  bunsCategoryAccents[
+                    Math.max(0, categoryIndex) %
+                      bunsCategoryAccents.length
+                  ];
+
+                return isBunsMenu ? (
+                  <div className="mb-4 flex items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="block h-10 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: accent }}
+                    />
+                    <h2 className="text-[22px] font-black tracking-tight text-white sm:text-2xl">
+                      {category.name}
+                    </h2>
+                  </div>
+                ) : (
+                  <h2
+                    className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
+                    style={{ backgroundColor }}
+                  >
+                    {category.name}
+                  </h2>
+                );
+              })()}
 
               <div
                 className={`grid grid-cols-1 gap-3 ${
@@ -882,11 +954,19 @@ export default function RestaurantMenu({
                           withServicePrice(item, activeService),
                         );
                       }}
-                      className="group flex min-h-[118px] w-full overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md"
+                      className={`group flex min-h-[112px] w-full overflow-hidden rounded-xl border text-left transition ${
+                        isBunsMenu
+                          ? "shadow-[0_4px_18px_rgba(0,0,0,0.20)] hover:bg-white/[0.07]"
+                          : "shadow-sm hover:shadow-md"
+                      }`}
                       style={{
-                        backgroundColor,
-                        borderColor: `${textColor}22`,
-                        color: textColor,
+                        backgroundColor: isBunsMenu
+                          ? "rgba(255,255,255,0.055)"
+                          : backgroundColor,
+                        borderColor: isBunsMenu
+                          ? "rgba(255,255,255,0.12)"
+                          : `${textColor}22`,
+                        color: isBunsMenu ? "#ffffff" : textColor,
                       }}
                     >
                       <div className="min-w-0 flex-1 p-4">
@@ -896,7 +976,26 @@ export default function RestaurantMenu({
                           </h3>
 
                           {getPriceForService(item, activeService) != null ? (
-                            <span className="shrink-0 text-sm font-black">
+                            <span
+                              className="shrink-0 text-sm font-black"
+                              style={
+                                isBunsMenu
+                                  ? {
+                                      color:
+                                        bunsCategoryAccents[
+                                          Math.max(
+                                            0,
+                                            visibleCategories.findIndex(
+                                              (entry) =>
+                                                entry.id === category.id,
+                                            ),
+                                          ) %
+                                            bunsCategoryAccents.length
+                                        ],
+                                    }
+                                  : undefined
+                              }
+                            >
                               $
                               {Number(
                                 getPriceForService(item, activeService),
