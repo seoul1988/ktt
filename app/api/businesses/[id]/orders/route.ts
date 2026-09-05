@@ -694,6 +694,12 @@ export async function POST(
       throw orderError;
     }
 
+    if (!order) {
+      throw new Error(
+        "Order was created, but no order record was returned.",
+      );
+    }
+
     const {
       error: itemsError,
     } = await db
