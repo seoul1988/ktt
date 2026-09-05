@@ -203,7 +203,12 @@ export default function RestaurantMenu({
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
     useState<CSSProperties>({});
+  const [categoryBarFixed, setCategoryBarFixed] = useState(false);
+  const [categoryBarHeight, setCategoryBarHeight] = useState(0);
+
   const rootRef = useRef<HTMLDivElement>(null);
+  const categoryBarSentinelRef = useRef<HTMLDivElement>(null);
+  const categoryBarMeasureRef = useRef<HTMLDivElement>(null);
   const recentMenuClickRef = useRef<{ key: string; time: number } | null>(null);
 
   // MENU만 켜져 있으면 보기 전용입니다.
@@ -594,6 +599,54 @@ export default function RestaurantMenu({
     ),
   );
 
+  useEffect(() => {
+    if (!isBunsMenu || !visibleCategories.length) {
+      setCategoryBarFixed(false);
+      return;
+    }
+
+    const updateCategoryBarPosition = () => {
+      const sentinel = categoryBarSentinelRef.current;
+      const root = rootRef.current;
+      const measure = categoryBarMeasureRef.current;
+
+      if (!sentinel || !root) return;
+
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      if (!isMobile) {
+        setCategoryBarFixed(false);
+        return;
+      }
+
+      const measuredHeight = Math.max(
+        48,
+        Math.round(measure?.getBoundingClientRect().height || 0),
+      );
+      setCategoryBarHeight(measuredHeight);
+
+      const sentinelTop = sentinel.getBoundingClientRect().top;
+      const rootBottom = root.getBoundingClientRect().bottom;
+
+      // 카테고리 바의 원래 위치를 지나면 화면 위에 고정하고,
+      // 메뉴 영역의 끝에 도달하면 다시 해제합니다.
+      setCategoryBarFixed(
+        sentinelTop <= 0 && rootBottom > measuredHeight + 8,
+      );
+    };
+
+    updateCategoryBarPosition();
+
+    window.addEventListener("scroll", updateCategoryBarPosition, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateCategoryBarPosition);
+
+    return () => {
+      window.removeEventListener("scroll", updateCategoryBarPosition);
+      window.removeEventListener("resize", updateCategoryBarPosition);
+    };
+  }, [isBunsMenu, visibleCategories.length]);
+
   function scrollToCategory(categoryId: number) {
     setActiveCategoryId(categoryId);
 
@@ -816,66 +869,88 @@ export default function RestaurantMenu({
       ) : null}
 
       {visibleCategories.length ? (
-        <div
-          className={`sticky top-0 z-[70] border-b px-3 py-2.5 shadow-sm backdrop-blur-md ${
-            isBunsMenu
-              ? "border-white/10 bg-[#0b0b0b]/95"
-              : "border-black/10"
-          }`}
-          style={{
-            backgroundColor: isBunsMenu
-              ? "rgba(11,11,11,0.96)"
-              : backgroundColor,
-          }}
-        >
-          <div className="flex gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {visibleCategories.map((category, categoryIndex) => {
-              const accent =
-                bunsCategoryAccents[
-                  categoryIndex % bunsCategoryAccents.length
-                ];
-              const isActive =
-                activeCategoryId === category.id ||
-                (activeCategoryId == null && categoryIndex === 0);
+        <>
+          <div ref={categoryBarSentinelRef} className="h-px w-full" />
 
-              return (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => scrollToCategory(category.id)}
-                  className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.02em] transition ${
-                    isBunsMenu
-                      ? "shadow-[0_2px_8px_rgba(0,0,0,0.24)]"
-                      : ""
-                  }`}
-                  style={
-                    isBunsMenu
-                      ? {
-                          borderColor: isActive
-                            ? accent
-                            : `${accent}66`,
-                          backgroundColor: isActive
-                            ? accent
-                            : "rgba(255,255,255,0.05)",
-                          color: isActive ? "#111827" : accent,
-                        }
-                      : {
-                          backgroundColor: isActive
-                            ? "#111827"
-                            : "#ffffff",
-                          color: isActive ? "#ffffff" : "#111827",
-                          borderColor: isActive
-                            ? "#111827"
-                            : "rgba(17,24,39,0.16)",
-                        }
+          {categoryBarFixed && isBunsMenu ? (
+            <div
+              aria-hidden="true"
+              style={{ height: categoryBarHeight }}
+            />
+          ) : null}
+
+          <div
+            ref={categoryBarMeasureRef}
+            className={`${
+              categoryBarFixed && isBunsMenu
+                ? "fixed inset-x-0 top-0 z-[12500]"
+                : "sticky top-0 z-[70]"
+            } border-b px-3 py-2.5 shadow-sm backdrop-blur-md ${
+              isBunsMenu
+                ? "border-white/10 bg-[#0b0b0b]/95"
+                : "border-black/10"
+            }`}
+            style={{
+              backgroundColor: isBunsMenu
+                ? "rgba(11,11,11,0.96)"
+                : backgroundColor,
+              ...(categoryBarFixed && isBunsMenu
+                ? {
+                    paddingTop:
+                      "max(10px, env(safe-area-inset-top, 0px))",
                   }
-                >
-                  {category.name}
-                </button>
-              );
-            })}
+                : {}),
+            }}
+          >
+            <div className="mx-auto flex max-w-[760px] gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {visibleCategories.map((category, categoryIndex) => {
+                const accent =
+                  bunsCategoryAccents[
+                    categoryIndex % bunsCategoryAccents.length
+                  ];
+                const isActive =
+                  activeCategoryId === category.id ||
+                  (activeCategoryId == null && categoryIndex === 0);
+
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => scrollToCategory(category.id)}
+                    className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.02em] transition ${
+                      isBunsMenu
+                        ? "shadow-[0_2px_8px_rgba(0,0,0,0.24)]"
+                        : ""
+                    }`}
+                    style={
+                      isBunsMenu
+                        ? {
+                            borderColor: isActive
+                              ? accent
+                              : `${accent}66`,
+                            backgroundColor: isActive
+                              ? accent
+                              : "rgba(255,255,255,0.05)",
+                            color: isActive ? "#111827" : accent,
+                          }
+                        : {
+                            backgroundColor: isActive
+                              ? "#111827"
+                              : "#ffffff",
+                            color: isActive ? "#ffffff" : "#111827",
+                            borderColor: isActive
+                              ? "#111827"
+                              : "rgba(17,24,39,0.16)",
+                          }
+                    }
+                  >
+                    {category.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        </>
       ) : null}
 
       <div
