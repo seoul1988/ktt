@@ -492,7 +492,7 @@ export default function RestaurantCheckoutModal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            dropoffAddress: {
+            deliveryAddress: {
               address1: nextAddress1,
               address2: nextAddress2,
               city: nextCity,
@@ -540,10 +540,39 @@ export default function RestaurantCheckoutModal({
     setError("");
     if (!name.trim()) return setError("Please enter your name.");
     if (!phone.trim()) return setError("Please enter your phone number.");
+    const submitAddress1 =
+      (address1Ref.current?.value || address1 || "").trim();
+    const submitAddress2 =
+      (address2Ref.current?.value || address2 || "").trim();
+    const submitCity =
+      (cityRef.current?.value || city || "").trim();
+    const submitStateCode =
+      (stateCodeRef.current?.value || stateCode || "").trim();
+    const submitPostalCode =
+      (postalCodeRef.current?.value || postalCode || "").trim();
+
     if (fulfillmentType === "delivery") {
-      if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
-        return setError("Please enter the complete delivery address.");
+      const missingSubmitFields = [
+        !submitAddress1 ? "Street address" : "",
+        !submitCity ? "City" : "",
+        !submitStateCode ? "State" : "",
+        !submitPostalCode ? "ZIP" : "",
+      ].filter(Boolean);
+
+      if (missingSubmitFields.length) {
+        return setError(
+          `Missing delivery address field(s): ${missingSubmitFields.join(", ")}.`,
+        );
       }
+
+      // Keep React state synchronized with the values actually visible
+      // in the browser, including browser-autofilled address fields.
+      setAddress1(submitAddress1);
+      setAddress2(submitAddress2);
+      setCity(submitCity);
+      setStateCode(submitStateCode);
+      setPostalCode(submitPostalCode);
+
       if (
         settings?.deliveryProvider === "uber_direct" &&
         settings?.deliveryDispatchEnabled &&
@@ -571,8 +600,12 @@ export default function RestaurantCheckoutModal({
           fulfillmentType,
           customer: { name: name.trim(), phone: phone.trim() },
           deliveryAddress: fulfillmentType === "delivery" ? {
-            address1: address1.trim(), address2: address2.trim(), city: city.trim(),
-            state: stateCode.trim(), postalCode: postalCode.trim(), note: deliveryNote.trim(),
+            address1: submitAddress1,
+            address2: submitAddress2,
+            city: submitCity,
+            state: submitStateCode,
+            postalCode: submitPostalCode,
+            note: deliveryNote.trim(),
           } : null,
           requestedTime: pickupTime === "custom"
             ? (() => {
