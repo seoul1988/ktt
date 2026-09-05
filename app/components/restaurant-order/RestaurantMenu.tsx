@@ -194,36 +194,10 @@ export default function RestaurantMenu({
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [isIPhone, setIsIPhone] = useState(false);
-  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
     const ua = window.navigator.userAgent || "";
     setIsIPhone(/iPhone/i.test(ua));
-
-    const updateMobileViewport = () => {
-      const coarsePointer =
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(pointer: coarse)").matches;
-
-      const shortScreenSide = Math.min(
-        Number(window.screen?.width || window.innerWidth),
-        Number(window.screen?.height || window.innerHeight),
-      );
-
-      setIsMobileViewport(
-        window.innerWidth < 768 ||
-          (coarsePointer && shortScreenSide < 800),
-      );
-    };
-
-    updateMobileViewport();
-    window.addEventListener("resize", updateMobileViewport);
-    window.addEventListener("orientationchange", updateMobileViewport);
-
-    return () => {
-      window.removeEventListener("resize", updateMobileViewport);
-      window.removeEventListener("orientationchange", updateMobileViewport);
-    };
   }, []);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -423,6 +397,24 @@ export default function RestaurantMenu({
       openCartFromExternalButton as EventListener,
     );
     window.addEventListener("storage", syncStorage);
+
+    // Home의 하단 Cart 버튼에서 메뉴 화면으로 이동해 온 경우,
+    // RestaurantMenu가 mount되는 즉시 저장된 카트를 열어 줍니다.
+    try {
+      const pendingKey =
+        `restaurant-order-open-cart-pending:${businessId}`;
+
+      if (window.sessionStorage.getItem(pendingKey) === "1") {
+        window.sessionStorage.removeItem(pendingKey);
+
+        const storedCart = readStoredCart(businessId);
+        setCartItems(storedCart);
+
+        if (storedCart.length > 0) {
+          setCartOpen(true);
+        }
+      }
+    } catch {}
 
     return () => {
       window.removeEventListener("restaurant-order-cart-updated", syncCart as EventListener);
@@ -841,7 +833,7 @@ export default function RestaurantMenu({
           }}
         >
           <div className="flex gap-2 overflow-x-auto">
-            {resolvedMenuEnabled && !orderingAvailable ? (
+            {resolvedMenuEnabled ? (
               <button
                 type="button"
                 onClick={() => setActiveService("menu")}
@@ -863,14 +855,12 @@ export default function RestaurantMenu({
               <button
                 type="button"
                 onClick={() => setActiveService("pickup")}
-                className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
+                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
                   activeService === "pickup"
-                    ? isBunsMenu
-                      ? "border-white/30 bg-white/12 text-white"
-                      : "border-gray-300 bg-gray-900 text-white"
+                    ? "border-amber-300 bg-amber-400 text-black"
                     : isBunsMenu
-                      ? "border-white/20 bg-white/5 text-gray-200"
-                      : "border-gray-300 bg-gray-100 text-gray-800"
+                      ? "border-amber-400/60 bg-amber-400/10 text-amber-300"
+                      : "border-amber-400 bg-amber-100 text-amber-950"
                 }`}
               >
                 PICKUP
@@ -1154,10 +1144,10 @@ export default function RestaurantMenu({
         })}
       </div>
 
-      {typeof document !== "undefined"
+      {orderingAvailable && typeof document !== "undefined"
         ? createPortal(
             <>
-              {orderingAvailable && !externalCartButton && !isMobileViewport ? (
+              {!externalCartButton ? (
                 <button
                   type="button"
                   onClick={() => setCartOpen(true)}
