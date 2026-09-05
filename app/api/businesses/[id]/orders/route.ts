@@ -280,10 +280,16 @@ export async function POST(
         ? "delivery"
         : "pickup";
 
-    const paymentMethod =
-      body?.paymentMethod === "pay_at_pickup"
-        ? "pay_at_pickup"
-        : "online";
+    // Pay at Store is temporarily disabled.
+    // Reject old clients or direct API requests that still send pay_at_pickup.
+    if (body?.paymentMethod === "pay_at_pickup") {
+      return NextResponse.json(
+        { error: "Pay at Store is temporarily unavailable. Please pay online." },
+        { status: 400 },
+      );
+    }
+
+    const paymentMethod = "online";
 
     const customerName = String(
       body?.customer?.name || "",
