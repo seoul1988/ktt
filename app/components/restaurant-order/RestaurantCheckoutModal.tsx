@@ -112,7 +112,7 @@ export default function RestaurantCheckoutModal({
   const [customHour, setCustomHour] = useState("12");
   const [customMinute, setCustomMinute] = useState("00");
   const [customPeriod, setCustomPeriod] = useState<"AM" | "PM">("PM");
-  const [paymentMethod, setPaymentMethod] = useState<"online" | "pay_at_pickup">("online");
+  const paymentMethod = "online" as const;
   const [tipPercent, setTipPercent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -169,11 +169,6 @@ export default function RestaurantCheckoutModal({
         if (!response.ok) throw new Error(payload?.error || "주문 설정을 불러오지 못했습니다.");
         if (!cancelled) {
           setSettings(payload);
-          if (fulfillmentType === "pickup" && payload.payAtPickupEnabled) {
-            setPaymentMethod("pay_at_pickup");
-          } else if (payload.onlinePaymentEnabled) {
-            setPaymentMethod("online");
-          }
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "주문 설정을 불러오지 못했습니다.");
@@ -689,92 +684,32 @@ export default function RestaurantCheckoutModal({
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Payment</h3>
 
-              {fulfillmentType === "pickup" ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label
-                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition ${
-                      paymentMethod === "pay_at_pickup"
-                        ? "border-blue-600 bg-blue-50"
-                        : "border-gray-200 bg-white hover:border-blue-300"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      checked={paymentMethod === "pay_at_pickup"}
-                      onChange={() => setPaymentMethod("pay_at_pickup")}
-                      className="mt-1 h-4 w-4 accent-blue-600"
-                    />
-                    <span>
-                      <b className="block text-sm">Pay at Store</b>
-                      <span className="mt-1 block text-xs text-gray-500">
-                        Pay when you pick up your order.
-                      </span>
-                    </span>
-                  </label>
+              <div
+                className={`mt-3 flex items-start gap-3 rounded-2xl border-2 p-4 ${
+                  settings.onlinePaymentEnabled
+                    ? "border-emerald-600 bg-emerald-50"
+                    : "border-gray-200 bg-gray-50 opacity-50"
+                }`}
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-emerald-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
+                </span>
 
-                  <label
-                    className={`flex items-start gap-3 rounded-2xl border-2 p-4 transition ${
-                      settings.onlinePaymentEnabled
-                        ? "cursor-pointer"
-                        : "cursor-not-allowed opacity-50"
-                    } ${
-                      paymentMethod === "online" && settings.onlinePaymentEnabled
-                        ? "border-emerald-600 bg-emerald-50"
-                        : "border-gray-200 bg-white"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      checked={paymentMethod === "online"}
-                      disabled={!settings.onlinePaymentEnabled}
-                      onChange={() => setPaymentMethod("online")}
-                      className="mt-1 h-4 w-4 accent-emerald-600"
-                    />
-                    <span>
-                      <b className="block text-sm">Pay Now</b>
-                      <span className="mt-1 block text-xs text-gray-500">
-                        {isSafariBrowser
-                          ? "Apple Pay · Google Pay · Card"
-                          : "Google Pay · Card"}
-                      </span>
-                      {!settings.onlinePaymentEnabled ? (
-                        <span className="mt-1 block text-[10px] font-bold text-red-500">
-                          Online payment is not configured yet.
-                        </span>
-                      ) : null}
+                <span>
+                  <b className="block text-sm">Pay Now</b>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    {isSafariBrowser
+                      ? "Apple Pay · Google Pay · Card"
+                      : "Google Pay · Card"}
+                  </span>
+
+                  {!settings.onlinePaymentEnabled ? (
+                    <span className="mt-1 block text-[10px] font-bold text-red-500">
+                      Online payment is not configured yet.
                     </span>
-                  </label>
-                </div>
-              ) : (
-                <div className="mt-3">
-                  <label
-                    className={`flex items-start gap-3 rounded-2xl border-2 p-4 ${
-                      settings.onlinePaymentEnabled
-                        ? "cursor-pointer border-emerald-600 bg-emerald-50"
-                        : "cursor-not-allowed border-gray-200 bg-gray-50 opacity-50"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      checked={paymentMethod === "online"}
-                      disabled={!settings.onlinePaymentEnabled}
-                      onChange={() => setPaymentMethod("online")}
-                      className="mt-1 h-4 w-4 accent-emerald-600"
-                    />
-                    <span>
-                      <b className="block text-sm">Pay Now</b>
-                      <span className="mt-1 block text-xs text-gray-500">
-                        {isSafariBrowser
-                          ? "Apple Pay · Google Pay · Card"
-                          : "Google Pay · Card"}
-                      </span>
-                    </span>
-                  </label>
-                </div>
-              )}
+                  ) : null}
+                </span>
+              </div>
             </section>
 
             <section className="rounded-2xl bg-gray-50 p-4 text-sm">
@@ -785,7 +720,7 @@ export default function RestaurantCheckoutModal({
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
+            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : "PAY NOW"}</button>
               </>
             )}
           </> : null}
