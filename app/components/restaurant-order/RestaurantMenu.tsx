@@ -1126,10 +1126,10 @@ export default function RestaurantMenu({
         })}
       </div>
 
-      {orderingAvailable && typeof document !== "undefined"
+      {typeof document !== "undefined"
         ? createPortal(
             <>
-              {!externalCartButton ? (
+              {orderingAvailable && !externalCartButton ? (
                 <button
                   type="button"
                   onClick={() => setCartOpen(true)}

@@ -5253,7 +5253,7 @@ function LinkPageContent({
             scrollTopButtonColor={scrollTopButtonColor}
             scrollTopIconColor={scrollTopIconColor}
             scrollTopPosition={scrollTopPosition}
-            externalCartButton={previewDevice === "mobile"}
+            externalCartButton={true}
           />
         </div>
       </div>
@@ -15387,7 +15387,6 @@ export function PublicWebsiteRenderer({
 
   function openMobileActionTarget() {
     const target = mobileActionTargetUrl.trim();
-    if (!target) return;
 
     if (mobileCartCount > 0) {
       const detail = {
@@ -15401,8 +15400,11 @@ export function PublicWebsiteRenderer({
         }),
       );
 
-      if (detail.handled) return;
+      // CART가 보이는 상태에서는 URL 이동보다 장바구니 모달 열기를 우선합니다.
+      return;
     }
+
+    if (!target) return;
 
     if (/^https?:\/\//i.test(target)) {
       window.location.assign(target);
@@ -15904,13 +15906,13 @@ export function PublicWebsiteRenderer({
                     "max(6px, env(safe-area-inset-bottom, 0px))",
                 }}
               >
-                <div className="mx-auto flex w-full items-center justify-between gap-2 px-1">
+                <div className="flex w-full items-center justify-between">
                   {mobileHoursButtonEnabled ? (
                     <button
                       type="button"
                       onClick={openMobileHoursTarget}
                       aria-label="Open business hours"
-                      className="flex min-h-[52px] min-w-0 flex-1 items-center justify-start gap-2 px-2 py-1.5 text-left text-gray-950 active:bg-gray-100"
+                      className="flex min-h-[52px] min-w-0 items-center justify-start gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
                     >
                       <span
                         aria-hidden="true"
@@ -15935,7 +15937,7 @@ export function PublicWebsiteRenderer({
                       type="button"
                       onClick={openMobileActionTarget}
                       aria-label={mobileActionDisplayLabel}
-                      className="ml-auto flex min-h-[52px] shrink-0 items-center justify-end gap-2 px-2 py-1.5 text-right text-gray-950 active:bg-gray-100"
+                      className="ml-auto flex min-h-[52px] shrink-0 items-center justify-end gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
                     >
                       <span
                         aria-hidden="true"
@@ -15949,7 +15951,7 @@ export function PublicWebsiteRenderer({
                         ) : null}
                       </span>
 
-                      <span className="min-w-0 text-right leading-tight">
+                      <span className="min-w-0 text-left leading-tight">
                         <span className="block truncate text-[10px] font-black uppercase tracking-[0.06em]">
                           {mobileCartCount > 0
                             ? "CART"
@@ -20808,7 +20810,7 @@ function CellPreview({
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
-            externalCartButton={previewDevice === "mobile"}
+            externalCartButton={true}
           />
         </div>
       );
