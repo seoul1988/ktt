@@ -808,11 +808,11 @@ export default function RestaurantCheckoutModal({
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">
               <h3 className="font-black">Delivery Address</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <input value={address1} onChange={(e) => setAddress1(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={address2} onChange={(e) => setAddress2(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={city} onChange={(e) => setCity(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={stateCode} onChange={(e) => setStateCode(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={postalCode} onChange={(e) => setPostalCode(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError("")} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={address1} onChange={(e) => { setAddress1(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError(""); }} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
+                <input value={address2} onChange={(e) => { setAddress2(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError(""); }} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
+                <input value={city} onChange={(e) => { setCity(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError(""); }} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={stateCode} onChange={(e) => { setStateCode(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError(""); }} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={postalCode} onChange={(e) => { setPostalCode(e.target.value); setDeliveryQuoteId(""); setDeliveryFeeCents(0); setDeliveryQuoteError(""); }} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
 
