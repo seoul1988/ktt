@@ -15400,8 +15400,19 @@ export function PublicWebsiteRenderer({
         }),
       );
 
-      // CART가 보이는 상태에서는 URL 이동보다 장바구니 모달 열기를 우선합니다.
-      return;
+      // 현재 화면에 RestaurantMenu가 있으면 즉시 카트 모달이 열립니다.
+      if (detail.handled) return;
+
+      // HOME처럼 RestaurantMenu가 없는 화면이면,
+      // 주문 페이지로 이동한 직후 카트 모달을 자동으로 열도록 표시합니다.
+      try {
+        window.sessionStorage.setItem(
+          `restaurant-order-open-cart-pending:${business.id}`,
+          "1",
+        );
+      } catch {
+        // sessionStorage 사용 불가 시에도 기존 target 이동은 계속합니다.
+      }
     }
 
     if (!target) return;

@@ -424,6 +424,26 @@ export default function RestaurantMenu({
     );
     window.addEventListener("storage", syncStorage);
 
+    // HOME의 하단 CART 버튼에서 주문 페이지로 이동해 온 경우
+    // RestaurantMenu가 mount되자마자 저장된 카트를 열어 줍니다.
+    try {
+      const pendingCartKey =
+        `restaurant-order-open-cart-pending:${businessId}`;
+
+      if (window.sessionStorage.getItem(pendingCartKey) === "1") {
+        window.sessionStorage.removeItem(pendingCartKey);
+
+        const storedCart = readStoredCart(businessId);
+        setCartItems(storedCart);
+
+        if (storedCart.length > 0) {
+          setCartOpen(true);
+        }
+      }
+    } catch {
+      // sessionStorage를 사용할 수 없는 환경에서는 기존 동작만 유지합니다.
+    }
+
     return () => {
       window.removeEventListener("restaurant-order-cart-updated", syncCart as EventListener);
       window.removeEventListener(
