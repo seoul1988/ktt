@@ -29,14 +29,6 @@ type PublicSettings = {
   deliveryPrepMinutes: number;
   taxRate: number;
   tipPresets: number[];
-  orderingOpen?: boolean;
-  orderingHoursEnforced?: boolean;
-  orderingClosedReason?: string;
-  orderingClosesAt?: string | null;
-  orderingCutoffAt?: string | null;
-  orderCutoffMinutes?: number;
-  deliveryProvider?: "manual" | "uber_direct" | "doordash_drive" | "auto";
-  deliveryDispatchEnabled?: boolean;
 };
 
 type Props = {
@@ -105,33 +97,15 @@ export default function RestaurantCheckoutModal({
   onClose,
   onOrderPlaced,
 }: Props) {
-  const [isIPhone, setIsIPhone] = useState(false);
-
-  useEffect(() => {
-    const ua = window.navigator.userAgent || "";
-    setIsIPhone(/iPhone/i.test(ua));
-  }, []);
-
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
   const [city, setCity] = useState("");
   const [stateCode, setStateCode] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
-  const [deliveryQuote, setDeliveryQuote] = useState<{
-    quoteId: string;
-    feeCents: number;
-    expiresAt?: string | null;
-    durationMinutes?: number | null;
-    pickupMinutes?: number | null;
-    dropoffEta?: string | null;
-  } | null>(null);
-  const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
-  const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
   const [pickupTime, setPickupTime] = useState("asap");
   const [customTime, setCustomTime] = useState("");
   const [customDate, setCustomDate] = useState("");
@@ -149,8 +123,20 @@ export default function RestaurantCheckoutModal({
   const [squareCardReady, setSquareCardReady] = useState(false);
   const [squareGoogleReady, setSquareGoogleReady] = useState(false);
   const [squareAppleReady, setSquareAppleReady] = useState(false);
-  const [squareAppleError, setSquareAppleError] = useState("");
   const [squarePaying, setSquarePaying] = useState(false);
+
+  const isSafariBrowser = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+
+    const ua = navigator.userAgent;
+    const vendor = navigator.vendor || "";
+
+    return (
+      /Safari/i.test(ua) &&
+      /Apple Computer/i.test(vendor) &&
+      !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Chromium|Edg|OPR|Android/i.test(ua)
+    );
+  }, []);
 
   const squarePaymentsRef = useRef<any>(null);
   const squareCardRef = useRef<any>(null);
@@ -163,11 +149,7 @@ export default function RestaurantCheckoutModal({
   );
   const tax = subtotal * Math.max(0, Number(settings?.taxRate || 0));
   const tip = subtotal * (tipPercent / 100);
-  const deliveryFee =
-    fulfillmentType === "delivery"
-      ? Math.max(0, Number(deliveryQuote?.feeCents || 0)) / 100
-      : 0;
-  const estimatedTotal = subtotal + tax + tip + deliveryFee;
+  const estimatedTotal = subtotal + tax + tip;
 
   useEffect(() => {
     try {
@@ -176,7 +158,6 @@ export default function RestaurantCheckoutModal({
         const saved = JSON.parse(raw);
         setName(String(saved?.name || ""));
         setPhone(String(saved?.phone || ""));
-        setEmail(String(saved?.email || ""));
       }
     } catch {}
 
@@ -188,9 +169,11 @@ export default function RestaurantCheckoutModal({
         if (!response.ok) throw new Error(payload?.error || "주문 설정을 불러오지 못했습니다.");
         if (!cancelled) {
           setSettings(payload);
-          // Pay at Store is temporarily disabled.
-          // All orders must use online payment.
-          setPaymentMethod("online");
+          if (fulfillmentType === "pickup" && payload.payAtPickupEnabled) {
+            setPaymentMethod("pay_at_pickup");
+          } else if (payload.onlinePaymentEnabled) {
+            setPaymentMethod("online");
+          }
         }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "주문 설정을 불러오지 못했습니다.");
@@ -202,104 +185,6 @@ export default function RestaurantCheckoutModal({
   }, [businessId]);
 
   useEffect(() => {
-    if (
-      fulfillmentType !== "delivery" ||
-      !settings?.deliveryDispatchEnabled
-    ) {
-      setDeliveryQuote(null);
-      setDeliveryQuoteError("");
-      return;
-    }
-
-    const complete =
-      address1.trim() &&
-      city.trim() &&
-      stateCode.trim() &&
-      postalCode.trim();
-
-    if (!complete) {
-      setDeliveryQuote(null);
-      setDeliveryQuoteError("");
-      return;
-    }
-
-    let cancelled = false;
-    const timer = window.setTimeout(async () => {
-      setDeliveryQuoteLoading(true);
-      setDeliveryQuoteError("");
-
-      try {
-        const response = await fetch(
-          `/api/businesses/${businessId}/delivery/quote`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              deliveryAddress: {
-                address1: address1.trim(),
-                address2: address2.trim(),
-                city: city.trim(),
-                state: stateCode.trim(),
-                postalCode: postalCode.trim(),
-              },
-            }),
-          },
-        );
-
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            payload?.error || "Delivery quote could not be created.",
-          );
-        }
-
-        if (!cancelled) {
-          setDeliveryQuote({
-            quoteId: String(payload.quoteId || ""),
-            feeCents: Number(payload.feeCents || 0),
-            expiresAt: payload.expiresAt || null,
-            durationMinutes:
-              payload.durationMinutes == null
-                ? null
-                : Number(payload.durationMinutes),
-            pickupMinutes:
-              payload.pickupMinutes == null
-                ? null
-                : Number(payload.pickupMinutes),
-            dropoffEta: payload.dropoffEta || null,
-          });
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setDeliveryQuote(null);
-          setDeliveryQuoteError(
-            e instanceof Error
-              ? e.message
-              : "Delivery quote could not be created.",
-          );
-        }
-      } finally {
-        if (!cancelled) setDeliveryQuoteLoading(false);
-      }
-    }, 700);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [
-    fulfillmentType,
-    settings?.deliveryDispatchEnabled,
-    businessId,
-    address1,
-    address2,
-    city,
-    stateCode,
-    postalCode,
-  ]);
-
-  useEffect(() => {
     if (!squarePrepared) return;
 
     let cancelled = false;
@@ -308,7 +193,6 @@ export default function RestaurantCheckoutModal({
     setSquareCardReady(false);
     setSquareGoogleReady(false);
     setSquareAppleReady(false);
-    setSquareAppleError("");
     setError("");
 
     (async () => {
@@ -361,54 +245,15 @@ export default function RestaurantCheckoutModal({
           // Google Pay is only shown on supported devices/browsers.
         }
 
-        try {
-          const applePay = await payments.applePay(paymentRequest);
-
-          if (!cancelled) {
-            squareAppleRef.current = applePay;
-            setSquareAppleReady(true);
-            setSquareAppleError("");
-          }
-        } catch (applePayError) {
-          console.error("Square Apple Pay init:", applePayError);
-
-          // Retry once because Safari / Apple Pay capability can finish
-          // initializing slightly after the Square SDK is ready.
+        if (isSafariBrowser) {
           try {
-            await new Promise((resolve) =>
-              window.setTimeout(resolve, 500),
-            );
-
-            if (cancelled) return;
-
-            const applePay =
-              await payments.applePay(paymentRequest);
-
+            const applePay = await payments.applePay(paymentRequest);
             if (!cancelled) {
               squareAppleRef.current = applePay;
               setSquareAppleReady(true);
-              setSquareAppleError("");
             }
-          } catch (retryError) {
-            console.error(
-              "Square Apple Pay init retry:",
-              retryError,
-            );
-
-            if (!cancelled) {
-              const rawMessage =
-                retryError instanceof Error
-                  ? retryError.message
-                  : applePayError instanceof Error
-                    ? applePayError.message
-                    : "Apple Pay is unavailable on this device or browser.";
-
-              setSquareAppleReady(false);
-              setSquareAppleError(
-                rawMessage ||
-                  "Apple Pay is unavailable on this device or browser.",
-              );
-            }
+          } catch {
+            // Apple Pay stays hidden when Safari/device support is unavailable.
           }
         }
 
@@ -451,13 +296,12 @@ export default function RestaurantCheckoutModal({
 
       squarePaymentsRef.current = null;
     };
-  }, [squarePrepared]);
+  }, [squarePrepared, isSafariBrowser]);
 
   function billingContact() {
     return {
       givenName: name.trim(),
       phone: phone.trim(),
-      ...(email.trim() ? { email: email.trim() } : {}),
       countryCode: "US",
       ...(fulfillmentType === "delivery"
         ? {
@@ -554,8 +398,6 @@ export default function RestaurantCheckoutModal({
             sourceId: tokenResult.token,
             verificationToken,
             attemptId,
-            buyerEmailAddress: email.trim(),
-            buyerPhoneNumber: phone.trim(),
           }),
         },
       );
@@ -569,6 +411,7 @@ export default function RestaurantCheckoutModal({
       }
 
       onOrderPlaced();
+      alert(`Order #${squarePrepared.orderNumber} paid and received.`);
       onClose();
     } catch (e) {
       setError(
@@ -583,36 +426,11 @@ export default function RestaurantCheckoutModal({
 
   async function submitOrder() {
     setError("");
-
-    if (
-      settings?.orderingHoursEnforced &&
-      settings?.orderingOpen === false
-    ) {
-      return setError(
-        settings.orderingClosedReason ||
-          "Online ordering is currently closed.",
-      );
-    }
     if (!name.trim()) return setError("Please enter your name.");
     if (!phone.trim()) return setError("Please enter your phone number.");
-    if (
-      email.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
-    ) {
-      return setError("Please enter a valid email address.");
-    }
     if (fulfillmentType === "delivery") {
       if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
         return setError("Please enter the complete delivery address.");
-      }
-      if (settings?.deliveryDispatchEnabled && deliveryQuoteLoading) {
-        return setError("Please wait for the delivery fee.");
-      }
-      if (settings?.deliveryDispatchEnabled && !deliveryQuote) {
-        return setError(
-          deliveryQuoteError ||
-            "A delivery quote is required before placing the order.",
-        );
       }
     }
     if (pickupTime === "custom" && !customDate) return setError("Please select a date.");
@@ -626,13 +444,13 @@ export default function RestaurantCheckoutModal({
 
     setSubmitting(true);
     try {
-      window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim() }));
+      window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim() }));
       const response = await fetch(`/api/businesses/${businessId}/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fulfillmentType,
-          customer: { name: name.trim(), phone: phone.trim(), email: email.trim() },
+          customer: { name: name.trim(), phone: phone.trim() },
           deliveryAddress: fulfillmentType === "delivery" ? {
             address1: address1.trim(), address2: address2.trim(), city: city.trim(),
             state: stateCode.trim(), postalCode: postalCode.trim(), note: deliveryNote.trim(),
@@ -647,14 +465,6 @@ export default function RestaurantCheckoutModal({
             : pickupTime,
           paymentMethod,
           tipPercent,
-          deliveryQuote:
-            fulfillmentType === "delivery" && deliveryQuote
-              ? {
-                  quoteId: deliveryQuote.quoteId,
-                  feeCents: deliveryQuote.feeCents,
-                  expiresAt: deliveryQuote.expiresAt || null,
-                }
-              : null,
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
@@ -689,6 +499,7 @@ export default function RestaurantCheckoutModal({
       }
 
       onOrderPlaced();
+      alert(`Order #${payload.orderNumber} received.`);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "주문을 완료하지 못했습니다.");
@@ -700,30 +511,14 @@ export default function RestaurantCheckoutModal({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div
-      className={
-        isIPhone
-          ? "fixed inset-0 z-[13000] flex items-start justify-center bg-black/60 px-2 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2"
-          : "fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
-      }
-      onClick={onClose}
-    >
-      <div className={
-            isIPhone
-              ? "max-h-[95dvh] w-[calc(100%-1rem)] max-w-[350px] overflow-y-auto rounded-2xl bg-white text-gray-950 shadow-2xl"
-              : "max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl"
-          } onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={onClose}>
+      <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black">×</button>
         </div>
 
         <div className="space-y-5 p-5">
-          {settings?.orderingHoursEnforced === true && settings?.orderingOpen === false ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-              {settings.orderingClosedReason || "Online ordering is currently closed."}
-            </div>
-          ) : null}
           {error ? <div className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">{error}</div> : null}
           {loading ? <div className="py-10 text-center text-sm font-bold text-gray-500">Loading…</div> : null}
 
@@ -756,7 +551,9 @@ export default function RestaurantCheckoutModal({
                 <section className="rounded-2xl border p-4">
                   <h3 className="font-black">Payment</h3>
                   <p className="mt-1 text-xs text-gray-500">
-                    Apple Pay · Google Pay · Credit / Debit Card
+                    {isSafariBrowser
+                      ? "Apple Pay · Google Pay · Credit / Debit Card"
+                      : "Google Pay · Credit / Debit Card"}
                   </p>
 
                   {squareMethodsLoading ? (
@@ -766,58 +563,37 @@ export default function RestaurantCheckoutModal({
                   ) : null}
 
                   <div className="mt-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        id="ktown-apple-pay-button"
-                        type="button"
-                        aria-label="Pay with Apple Pay"
-                        onClick={() => finishSquarePayment("apple")}
-                        disabled={!squareAppleReady || squarePaying}
-                        className={`h-12 min-w-0 w-full overflow-hidden rounded-xl ${
-                          squareAppleReady ? "block" : "hidden"
-                        }`}
-                      />
-
-                      <div
-                        id="ktown-square-google-pay"
-                        onClick={() => {
-                          if (squareGoogleReady && !squarePaying) {
-                            finishSquarePayment("google");
+                    {isSafariBrowser ? (
+                      <>
+                        <button
+                          id="ktown-apple-pay-button"
+                          type="button"
+                          aria-label="Pay with Apple Pay"
+                          onClick={() => finishSquarePayment("apple")}
+                          disabled={!squareAppleReady || squarePaying}
+                          className={`h-12 w-full overflow-hidden rounded-xl ${
+                            squareAppleReady ? "block" : "hidden"
+                          }`}
+                        />
+                        <style jsx>{`
+                          #ktown-apple-pay-button {
+                            -webkit-appearance: -apple-pay-button;
+                            -apple-pay-button-type: pay;
+                            -apple-pay-button-style: black;
                           }
-                        }}
-                        className={
-                          squareGoogleReady
-                            ? "h-12 min-w-0 w-full overflow-hidden rounded-xl"
-                            : "hidden"
-                        }
-                      />
-                    </div>
-
-                    <style jsx>{`
-                      #ktown-apple-pay-button {
-                        -webkit-appearance: -apple-pay-button;
-                        -apple-pay-button-type: pay;
-                        -apple-pay-button-style: black;
-                      }
-
-                      #ktown-square-google-pay {
-                        height: 48px;
-                      }
-
-                      #ktown-square-google-pay > * {
-                        width: 100% !important;
-                        height: 48px !important;
-                        max-width: none !important;
-                      }
-                    `}</style>
-
-                    {!squareMethodsLoading &&
-                    !squareAppleReady &&
-                    squareAppleError ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800">
-                        Apple Pay unavailable: {squareAppleError}
-                      </div>
+                        `}</style>
+                      </>
                     ) : null}
+
+                    <div
+                      id="ktown-square-google-pay"
+                      onClick={() => {
+                        if (squareGoogleReady && !squarePaying) {
+                          finishSquarePayment("google");
+                        }
+                      }}
+                      className={squareGoogleReady ? "" : "min-h-[1px]"}
+                    />
 
                     <div
                       className={`rounded-xl border p-3 ${
@@ -850,14 +626,6 @@ export default function RestaurantCheckoutModal({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone *" inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email for receipt (optional)"
-                  inputMode="email"
-                  autoComplete="email"
-                  className="rounded-xl border px-3 py-3 text-sm sm:col-span-2"
-                />
               </div>
             </section>
 
@@ -872,43 +640,6 @@ export default function RestaurantCheckoutModal({
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
             </section> : null}
-
-            {fulfillmentType === "delivery" &&
-            settings?.deliveryDispatchEnabled ? (
-              <section className="rounded-2xl border p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-black">Delivery</h3>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Uber Direct courier will be requested automatically after payment.
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    {deliveryQuoteLoading ? (
-                      <b className="text-sm">Checking…</b>
-                    ) : deliveryQuote ? (
-                      <>
-                        <b className="whitespace-nowrap text-lg">
-                          {money(deliveryFee)}
-                        </b>
-                        {deliveryQuote.durationMinutes ? (
-                          <p className="text-[10px] text-gray-500">
-                            about {deliveryQuote.durationMinutes} min
-                          </p>
-                        ) : null}
-                      </>
-                    ) : (
-                      <b className="text-sm text-gray-400">Enter address</b>
-                    )}
-                  </div>
-                </div>
-                {deliveryQuoteError ? (
-                  <div className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">
-                    {deliveryQuoteError}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
 
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">{fulfillmentType === "delivery" ? "Delivery Time" : "Pickup Time"}</h3>
@@ -957,67 +688,104 @@ export default function RestaurantCheckoutModal({
 
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Payment</h3>
-              <div className="mt-3">
-                <label
-                  className={`flex items-start gap-3 rounded-2xl border-2 p-4 ${
-                    settings.onlinePaymentEnabled
-                      ? "cursor-pointer border-emerald-600 bg-emerald-50"
-                      : "cursor-not-allowed border-gray-200 bg-gray-50 opacity-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    checked={paymentMethod === "online"}
-                    disabled={!settings.onlinePaymentEnabled}
-                    onChange={() => setPaymentMethod("online")}
-                    className="mt-1 h-4 w-4 accent-emerald-600"
-                  />
-                  <span>
-                    <b className="block text-sm">Pay Now</b>
-                    <span className="mt-1 block text-xs text-gray-500">
-                      Apple Pay · Google Pay · Card
-                    </span>
-                    {!settings.onlinePaymentEnabled ? (
-                      <span className="mt-1 block text-[10px] font-bold text-red-500">
-                        Online payment is not configured yet.
+
+              {fulfillmentType === "pickup" ? (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label
+                    className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition ${
+                      paymentMethod === "pay_at_pickup"
+                        ? "border-blue-600 bg-blue-50"
+                        : "border-gray-200 bg-white hover:border-blue-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "pay_at_pickup"}
+                      onChange={() => setPaymentMethod("pay_at_pickup")}
+                      className="mt-1 h-4 w-4 accent-blue-600"
+                    />
+                    <span>
+                      <b className="block text-sm">Pay at Store</b>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Pay when you pick up your order.
                       </span>
-                    ) : null}
-                  </span>
-                </label>
-              </div>
+                    </span>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-3 rounded-2xl border-2 p-4 transition ${
+                      settings.onlinePaymentEnabled
+                        ? "cursor-pointer"
+                        : "cursor-not-allowed opacity-50"
+                    } ${
+                      paymentMethod === "online" && settings.onlinePaymentEnabled
+                        ? "border-emerald-600 bg-emerald-50"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "online"}
+                      disabled={!settings.onlinePaymentEnabled}
+                      onChange={() => setPaymentMethod("online")}
+                      className="mt-1 h-4 w-4 accent-emerald-600"
+                    />
+                    <span>
+                      <b className="block text-sm">Pay Now</b>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        {isSafariBrowser
+                          ? "Apple Pay · Google Pay · Card"
+                          : "Google Pay · Card"}
+                      </span>
+                      {!settings.onlinePaymentEnabled ? (
+                        <span className="mt-1 block text-[10px] font-bold text-red-500">
+                          Online payment is not configured yet.
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <label
+                    className={`flex items-start gap-3 rounded-2xl border-2 p-4 ${
+                      settings.onlinePaymentEnabled
+                        ? "cursor-pointer border-emerald-600 bg-emerald-50"
+                        : "cursor-not-allowed border-gray-200 bg-gray-50 opacity-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      checked={paymentMethod === "online"}
+                      disabled={!settings.onlinePaymentEnabled}
+                      onChange={() => setPaymentMethod("online")}
+                      className="mt-1 h-4 w-4 accent-emerald-600"
+                    />
+                    <span>
+                      <b className="block text-sm">Pay Now</b>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        {isSafariBrowser
+                          ? "Apple Pay · Google Pay · Card"
+                          : "Google Pay · Card"}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
             </section>
 
             <section className="rounded-2xl bg-gray-50 p-4 text-sm">
               <div className="flex items-center justify-between gap-3"><span className="min-w-0">Subtotal</span><b className="shrink-0 whitespace-nowrap">{money(subtotal)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
-              {fulfillmentType === "delivery" ? (
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="min-w-0">Delivery fee</span>
-                  <b className="shrink-0 whitespace-nowrap">
-                    {deliveryQuoteLoading
-                      ? "Checking…"
-                      : deliveryQuote
-                        ? money(deliveryFee)
-                        : "—"}
-                  </b>
-                </div>
-              ) : null}
               <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-lg"><b className="min-w-0 whitespace-nowrap">Estimated total</b><b className="shrink-0 whitespace-nowrap">{money(estimatedTotal)}</b></div>
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={
-              submitting ||
-              !cartItems.length ||
-              (settings?.orderingHoursEnforced === true &&
-                settings?.orderingOpen === false) ||
-              !settings?.onlinePaymentEnabled ||
-              (fulfillmentType === "delivery" &&
-                settings?.deliveryDispatchEnabled === true &&
-                (deliveryQuoteLoading || !deliveryQuote))
-            } onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : "PAY NOW"}</button>
+            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : paymentMethod === "online" ? "PAY NOW" : "PLACE ORDER · PAY AT STORE"}</button>
               </>
             )}
           </> : null}

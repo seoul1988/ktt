@@ -409,7 +409,7 @@ export default function MenuItemModal({
       <div
         className={
           isIPhone
-            ? "fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            ? "fixed inset-0 z-[12000] flex items-start justify-center overflow-hidden bg-black/60 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
             : "fixed inset-0 z-[12000] flex items-center justify-center bg-black/60 pt-10 pb-4 px-2 sm:pt-12 sm:pb-6 sm:px-4"
         }
         onClick={onClose}
@@ -417,8 +417,8 @@ export default function MenuItemModal({
         <div
           className={
             isIPhone
-              ? "mt-2 relative flex h-[80dvh] max-h-[80dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
-              : "relative flex max-h-[76dvh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:max-h-[86vh] sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
+              ? "mt-1 flex h-[68dvh] max-h-[68dvh] w-[calc(100%-1rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl shadow-2xl"
+              : "flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
           }
           style={{
             backgroundColor,
@@ -427,15 +427,6 @@ export default function MenuItemModal({
           }}
           onClick={(event) => event.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-2.5 top-2.5 z-50 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-lg font-black text-black shadow-lg ring-1 ring-black/10"
-            aria-label="Close menu details"
-          >
-            ×
-          </button>
-
           {item.image_url || item.thumbnail_url ? (
             <button
               type="button"
@@ -476,6 +467,14 @@ export default function MenuItemModal({
                 {item.name}
               </h2>
 
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-black"
+                aria-label="Close menu details"
+              >
+                ×
+              </button>
             </div>
 
             {item.price != null ? (
