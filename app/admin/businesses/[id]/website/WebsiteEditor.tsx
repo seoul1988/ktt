@@ -15387,7 +15387,6 @@ export function PublicWebsiteRenderer({
 
   function openMobileActionTarget() {
     const target = mobileActionTargetUrl.trim();
-    if (!target) return;
 
     if (mobileCartCount > 0) {
       const detail = {
@@ -15401,18 +15400,11 @@ export function PublicWebsiteRenderer({
         }),
       );
 
-      // 현재 화면에 RestaurantMenu가 이미 떠 있으면 즉시 카트를 엽니다.
-      if (detail.handled) return;
-
-      // Home처럼 RestaurantMenu가 아직 mount되지 않은 화면에서는
-      // 메뉴/주문 화면으로 이동한 직후 카트를 자동으로 열도록 표시를 남깁니다.
-      try {
-        window.sessionStorage.setItem(
-          `restaurant-order-open-cart-pending:${business.id}`,
-          "1",
-        );
-      } catch {}
+      // CART가 보이는 상태에서는 URL 이동보다 장바구니 모달 열기를 우선합니다.
+      return;
     }
+
+    if (!target) return;
 
     if (/^https?:\/\//i.test(target)) {
       window.location.assign(target);
@@ -15914,19 +15906,13 @@ export function PublicWebsiteRenderer({
                     "max(6px, env(safe-area-inset-bottom, 0px))",
                 }}
               >
-                <div
-                  className={`mx-auto grid max-w-md ${
-                    mobileHoursButtonEnabled && mobileActionButtonEnabled
-                      ? "grid-cols-2"
-                      : "grid-cols-1"
-                  }`}
-                >
+                <div className="flex w-full items-center justify-between">
                   {mobileHoursButtonEnabled ? (
                     <button
                       type="button"
                       onClick={openMobileHoursTarget}
                       aria-label="Open business hours"
-                      className="flex min-h-[52px] items-center justify-center gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                      className="flex min-h-[52px] min-w-0 items-center justify-start gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
                     >
                       <span
                         aria-hidden="true"
@@ -15951,11 +15937,19 @@ export function PublicWebsiteRenderer({
                       type="button"
                       onClick={openMobileActionTarget}
                       aria-label={mobileActionDisplayLabel}
-                      className="flex min-h-[52px] items-center justify-center gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                      className={`ml-auto flex min-h-[56px] shrink-0 items-center justify-end gap-2 rounded-xl px-4 py-2 transition active:scale-[0.98] ${
+                          mobileCartCount > 0
+                            ? "bg-gray-950 text-white shadow-md active:bg-gray-800"
+                            : "bg-gray-900 text-white shadow-md ring-1 ring-white/10 active:bg-gray-800"
+                        }`}
                     >
                       <span
                         aria-hidden="true"
-                        className="relative flex h-7 w-7 shrink-0 items-center justify-center text-[19px] leading-none"
+                        className={`relative flex shrink-0 items-center justify-center leading-none ${
+                          mobileCartCount > 0
+                            ? "h-7 w-7 text-[19px]"
+                            : "h-8 w-8 text-[22px]"
+                        }`}
                       >
                         {mobileCartCount > 0 ? "🛒" : "↗"}
                         {mobileCartCount > 0 ? (
@@ -15966,17 +15960,23 @@ export function PublicWebsiteRenderer({
                       </span>
 
                       <span className="min-w-0 text-left leading-tight">
-                        <span className="block truncate text-[10px] font-black uppercase tracking-[0.06em]">
+                        <span className={`block truncate font-black uppercase tracking-[0.04em] ${
+                            mobileCartCount > 0 ? "text-[10px]" : "text-[13px]"
+                          }`}>
                           {mobileCartCount > 0
                             ? "CART"
-                            : mobileActionButtonLabel}
+                            : "ORDER ONLINE"}
                         </span>
-                        <span className="block truncate text-[9px] font-bold text-gray-500">
+                        <span className={`block truncate font-bold ${
+                            mobileCartCount > 0
+                              ? "text-[9px] text-gray-300"
+                              : "text-[9px] text-gray-300"
+                          }`}>
                           {mobileCartCount > 0
                             ? `${mobileCartCount} item${
                                 mobileCartCount === 1 ? "" : "s"
                               }`
-                            : "ONLINE"}
+                            : "TAP TO ORDER"}
                         </span>
                       </span>
                     </button>
