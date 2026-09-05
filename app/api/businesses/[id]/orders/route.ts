@@ -527,6 +527,130 @@ export async function POST(
       ]),
     );
 
+    /*
+     * Server-side option pricing.
+     *
+     * Never trust the option-inclusive price calculated in the browser.
+     * Re-read the restaurant's current option groups/items and calculate
+     * every selected price_delta here so KTown, Square and the charged
+     * amount all use the same server-authoritative total.
+     */
+    const {
+      data: optionGroupRows,
+      error: optionGroupError,
+    } = await db
+      .from("business_menu_option_groups")
+      .select(
+        "id,menu_item_id,name,is_required,min_select,max_select,display_order",
+      )
+      .eq("business_id", businessId)
+      .in("menu_item_id", ids)
+      .order("display_order", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (optionGroupError) {
+      throw optionGroupError;
+    }
+
+    const optionGroupIds = (optionGroupRows || [])
+      .map((group: any) => Number(group.id))
+      .filter((id: number) => Number.isInteger(id) && id > 0);
+
+    let optionItemRows: any[] = [];
+
+    if (optionGroupIds.length > 0) {
+      const {
+        data,
+        error,
+      } = await db
+        .from("business_menu_option_items")
+        .select(
+          "id,option_group_id,name,price_delta,is_available,display_order",
+        )
+        .eq("business_id", businessId)
+        .in("option_group_id", optionGroupIds)
+        .order("display_order", { ascending: true })
+        .order("id", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      optionItemRows = data || [];
+    }
+
+    const groupsByMenuItem = new Map<number, any[]>();
+
+    for (const group of optionGroupRows || []) {
+      const menuItemId = Number((group as any).menu_item_id);
+      const list = groupsByMenuItem.get(menuItemId) || [];
+      list.push(group);
+      groupsByMenuItem.set(menuItemId, list);
+    }
+
+    const optionsByGroup = new Map<number, any[]>();
+
+    for (const option of optionItemRows) {
+      const groupId = Number(option.option_group_id);
+      const list = optionsByGroup.get(groupId) || [];
+      list.push(option);
+      optionsByGroup.set(groupId, list);
+    }
+
+    function parseSelections(value: unknown): Record<string, Record<string, number>> {
+      if (!value) return {};
+
+      let parsed: unknown = value;
+
+      if (typeof parsed === "string") {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          return {};
+        }
+      }
+
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        return {};
+      }
+
+      return parsed as Record<string, Record<string, number>>;
+    }
+
+    function selectedBucket(
+      selections: Record<string, Record<string, number>>,
+      index: number,
+      name: string,
+    ) {
+      const exact = selections[`${index}:${name}`];
+
+      if (
+        exact &&
+        typeof exact === "object" &&
+        !Array.isArray(exact)
+      ) {
+        return exact;
+      }
+
+      const fallbackKey = Object.keys(selections).find(
+        (key) => cleanSelectionLabel(key) === name,
+      );
+
+      const fallback = fallbackKey
+        ? selections[fallbackKey]
+        : undefined;
+
+      return fallback &&
+        typeof fallback === "object" &&
+        !Array.isArray(fallback)
+        ? fallback
+        : {};
+    }
+
     const normalized = items.map(
       (item) => {
         const row: any = menuMap.get(
@@ -546,7 +670,7 @@ export async function POST(
           99,
           Math.max(
             1,
-            Number(item.quantity) || 1,
+            Math.floor(Number(item.quantity) || 1),
           ),
         );
 
@@ -568,15 +692,147 @@ export async function POST(
                 row.delivery_price,
               );
 
-        const unitPrice =
+        const baseUnitPrice =
           fulfillmentType === "delivery"
             ? delivery
             : pickup;
+
+        const selections = parseSelections(
+          item.selections,
+        );
+
+        const groups =
+          groupsByMenuItem.get(Number(row.id)) || [];
+
+        let optionExtra = 0;
+
+        const squareModifiers: Array<{
+          name: string;
+          base_price_money: {
+            amount: number;
+            currency: "USD";
+          };
+        }> = [];
+
+        groups.forEach((group: any, groupIndex: number) => {
+          const groupName = String(group.name || "");
+          const selectedGroup = selectedBucket(
+            selections,
+            groupIndex,
+            groupName,
+          );
+
+          const options =
+            optionsByGroup.get(Number(group.id)) || [];
+
+          let groupSelectionCount = 0;
+
+          options.forEach((option: any, optionIndex: number) => {
+            const optionName = String(option.name || "");
+            const exactKey = `${optionIndex}:${optionName}`;
+
+            let selectedQuantity = Math.max(
+              0,
+              Math.floor(
+                Number(selectedGroup[exactKey]) || 0,
+              ),
+            );
+
+            if (selectedQuantity <= 0) {
+              const fallbackKey = Object.keys(
+                selectedGroup,
+              ).find(
+                (key) =>
+                  cleanSelectionLabel(key) === optionName,
+              );
+
+              selectedQuantity = fallbackKey
+                ? Math.max(
+                    0,
+                    Math.floor(
+                      Number(selectedGroup[fallbackKey]) || 0,
+                    ),
+                  )
+                : 0;
+            }
+
+            if (selectedQuantity <= 0) {
+              return;
+            }
+
+            if (option.is_available === false) {
+              throw new Error(
+                `The option "${optionName}" is no longer available.`,
+              );
+            }
+
+            groupSelectionCount += selectedQuantity;
+
+            const priceDelta = Number(
+              option.price_delta || 0,
+            );
+
+            const optionAmount =
+              priceDelta * selectedQuantity;
+
+            optionExtra += optionAmount;
+
+            squareModifiers.push({
+              name:
+                selectedQuantity > 1
+                  ? `${optionName} x${selectedQuantity}`
+                  : optionName,
+              base_price_money: {
+                amount: moneyCents(optionAmount),
+                currency: "USD",
+              },
+            });
+          });
+
+          const minimum = Math.max(
+            group.is_required === true ? 1 : 0,
+            Math.max(
+              0,
+              Math.floor(Number(group.min_select) || 0),
+            ),
+          );
+
+          const maximum =
+            group.max_select == null
+              ? null
+              : Math.max(
+                  0,
+                  Math.floor(Number(group.max_select) || 0),
+                );
+
+          if (groupSelectionCount < minimum) {
+            throw new Error(
+              `Please complete the required option "${groupName}".`,
+            );
+          }
+
+          if (
+            maximum != null &&
+            maximum > 0 &&
+            groupSelectionCount > maximum
+          ) {
+            throw new Error(
+              `Too many selections were made for "${groupName}".`,
+            );
+          }
+        });
+
+        const unitPrice = Math.max(
+          0,
+          baseUnitPrice + optionExtra,
+        );
 
         return {
           menuItemId: Number(row.id),
           name: String(row.name),
           quantity,
+          baseUnitPrice,
+          optionExtra,
           unitPrice,
           lineTotal:
             unitPrice * quantity,
@@ -585,6 +841,7 @@ export async function POST(
           ).slice(0, 500),
           selections:
             item.selections ?? null,
+          squareModifiers,
         };
       },
     );
@@ -783,9 +1040,7 @@ export async function POST(
                 line_items: [
                   ...normalized.map((item) => {
                     const modifiers =
-                      selectedSquareModifiers(
-                        item.selections,
-                      );
+                      item.squareModifiers;
 
                     const note = item.instructions
                       ? `NOTE: ${item.instructions}`.slice(
@@ -799,7 +1054,7 @@ export async function POST(
                       quantity: String(item.quantity),
                       base_price_money: {
                         amount: moneyCents(
-                          item.unitPrice,
+                          item.baseUnitPrice,
                         ),
                         currency: "USD",
                       },
