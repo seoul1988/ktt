@@ -15904,19 +15904,13 @@ export function PublicWebsiteRenderer({
                     "max(6px, env(safe-area-inset-bottom, 0px))",
                 }}
               >
-                <div
-                  className={`mx-auto grid max-w-md ${
-                    mobileHoursButtonEnabled && mobileActionButtonEnabled
-                      ? "grid-cols-2"
-                      : "grid-cols-1"
-                  }`}
-                >
+                <div className="mx-auto flex w-full items-center justify-between gap-2 px-1">
                   {mobileHoursButtonEnabled ? (
                     <button
                       type="button"
                       onClick={openMobileHoursTarget}
                       aria-label="Open business hours"
-                      className="flex min-h-[52px] items-center justify-center gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                      className="flex min-h-[52px] min-w-0 flex-1 items-center justify-start gap-2 px-2 py-1.5 text-left text-gray-950 active:bg-gray-100"
                     >
                       <span
                         aria-hidden="true"
@@ -15941,7 +15935,7 @@ export function PublicWebsiteRenderer({
                       type="button"
                       onClick={openMobileActionTarget}
                       aria-label={mobileActionDisplayLabel}
-                      className="flex min-h-[52px] items-center justify-center gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                      className="ml-auto flex min-h-[52px] shrink-0 items-center justify-end gap-2 px-2 py-1.5 text-right text-gray-950 active:bg-gray-100"
                     >
                       <span
                         aria-hidden="true"
@@ -15955,7 +15949,7 @@ export function PublicWebsiteRenderer({
                         ) : null}
                       </span>
 
-                      <span className="min-w-0 text-left leading-tight">
+                      <span className="min-w-0 text-right leading-tight">
                         <span className="block truncate text-[10px] font-black uppercase tracking-[0.06em]">
                           {mobileCartCount > 0
                             ? "CART"
