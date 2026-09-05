@@ -767,11 +767,30 @@ export default async function CommunityPage() {
         )}
 
 
-        <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
+        {/* Featured Sponsor */}
+        <div className="relative mb-8">
+          <Link
+            href="https://www.ktowntriangle.com/community/directory"
+            className="absolute right-3 top-3 z-20 rounded-full bg-[#C4483A] px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-[#A8382D] active:scale-[0.98]"
+          >
+            모두보기
+          </Link>
+
+          <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
+        </div>
 
         {/* Latest Ads */}
         {latestAds.length > 0 && (
-          <CommunityAdsSlider ads={latestAds as any[]} />
+          <div className="relative mb-8">
+            <Link
+              href="/community/ads"
+              className="absolute right-3 top-3 z-20 rounded-full bg-[#C4483A] px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-[#A8382D] active:scale-[0.98]"
+            >
+              모두보기
+            </Link>
+
+            <CommunityAdsSlider ads={latestAds as any[]} />
+          </div>
         )}
 
         {/* New in Raleigh */}
