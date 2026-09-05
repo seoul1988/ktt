@@ -1,4 +1,4 @@
-"use client";
+
 
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -194,10 +194,36 @@ export default function RestaurantMenu({
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [isIPhone, setIsIPhone] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
     const ua = window.navigator.userAgent || "";
     setIsIPhone(/iPhone/i.test(ua));
+
+    const updateMobileViewport = () => {
+      const coarsePointer =
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(pointer: coarse)").matches;
+
+      const shortScreenSide = Math.min(
+        Number(window.screen?.width || window.innerWidth),
+        Number(window.screen?.height || window.innerHeight),
+      );
+
+      setIsMobileViewport(
+        window.innerWidth < 768 ||
+          (coarsePointer && shortScreenSide < 800),
+      );
+    };
+
+    updateMobileViewport();
+    window.addEventListener("resize", updateMobileViewport);
+    window.addEventListener("orientationchange", updateMobileViewport);
+
+    return () => {
+      window.removeEventListener("resize", updateMobileViewport);
+      window.removeEventListener("orientationchange", updateMobileViewport);
+    };
   }, []);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -1131,7 +1157,7 @@ export default function RestaurantMenu({
       {typeof document !== "undefined"
         ? createPortal(
             <>
-              {orderingAvailable && !externalCartButton ? (
+              {orderingAvailable && !externalCartButton && !isMobileViewport ? (
                 <button
                   type="button"
                   onClick={() => setCartOpen(true)}
@@ -1396,10 +1422,3 @@ export default function RestaurantMenu({
           orderEnabled={orderingAvailable}
           onAddToOrder={handleAddToOrder}
           onClose={() =>
-            setSelectedItem(null)
-          }
-        />
-      ) : null}
-    </div>
-  );
-}
