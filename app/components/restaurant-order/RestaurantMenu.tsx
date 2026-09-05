@@ -1,4 +1,4 @@
-"use client";
+
 
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -192,6 +192,7 @@ export default function RestaurantMenu({
 
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [hasMobileBottomNav, setHasMobileBottomNav] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [isIPhone, setIsIPhone] = useState(false);
 
@@ -425,6 +426,33 @@ export default function RestaurantMenu({
       window.removeEventListener("storage", syncStorage);
     };
   }, [businessId]);
+
+  // WebsiteEditor의 모바일 하단 메뉴가 실제로 있으면
+  // RestaurantMenu의 예전 floating Cart 버튼은 숨깁니다.
+  // Cart는 반드시 하단 메뉴 안에만 표시됩니다.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const syncMobileBottomNav = () => {
+      setHasMobileBottomNav(
+        Boolean(
+          document.querySelector(
+            'nav[aria-label="Mobile quick actions"]',
+          ),
+        ),
+      );
+    };
+
+    syncMobileBottomNav();
+
+    const observer = new MutationObserver(syncMobileBottomNav);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     // 서비스 변경 후 기존 가격으로 열린 모달이 남지 않게 닫습니다.
@@ -1147,7 +1175,7 @@ export default function RestaurantMenu({
       {orderingAvailable && typeof document !== "undefined"
         ? createPortal(
             <>
-              {!externalCartButton ? (
+              {!externalCartButton && !hasMobileBottomNav ? (
                 <button
                   type="button"
                   onClick={() => setCartOpen(true)}
