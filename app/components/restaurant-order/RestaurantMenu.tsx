@@ -1,4 +1,4 @@
-
+"use client";
 
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -1422,3 +1422,10 @@ export default function RestaurantMenu({
           orderEnabled={orderingAvailable}
           onAddToOrder={handleAddToOrder}
           onClose={() =>
+            setSelectedItem(null)
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
