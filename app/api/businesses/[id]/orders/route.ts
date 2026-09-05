@@ -433,22 +433,6 @@ export async function POST(
       );
     }
 
-    if (
-      paymentMethod === "pay_at_pickup" &&
-      (
-        fulfillmentType !== "pickup" ||
-        settings?.pay_at_pickup_enabled === false
-      )
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Pay at Store is not available for this order.",
-        },
-        { status: 400 },
-      );
-    }
-
     const paymentProvider =
       privateSettings?.payment_provider === "square"
         ? "square"
@@ -683,11 +667,7 @@ export async function POST(
         ).slice(0, 80),
         payment_method:
           paymentMethod,
-        payment_status:
-          paymentMethod ===
-          "pay_at_pickup"
-            ? "pay_at_pickup"
-            : "pending",
+        payment_status: "pending",
         order_status:
           "new",
         subtotal,
@@ -750,188 +730,8 @@ export async function POST(
     }
 
 
-    // PAY AT STORE + SQUARE:
-    // Even though no online payment is collected, the restaurant still needs
-    // the order in Square so the POS/KDS/printer can receive the ticket.
-    if (
-      paymentMethod === "pay_at_pickup" &&
-      paymentProvider === "square"
-    ) {
-      if (!squareAccessToken || !squareLocationId) {
-        throw new Error(
-          "Square is selected, but this restaurant has not connected its Square account yet.",
-        );
-      }
 
-      const squareOrderResponse = await fetch(
-        "https://connect.squareup.com/v2/orders",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${squareAccessToken}`,
-            "Content-Type": "application/json",
-            "Square-Version": "2026-08-19",
-          },
-          body: JSON.stringify({
-            idempotency_key: `ktown-order-${order.id}`,
-            order: {
-              location_id: squareLocationId,
-              reference_id: `KTOWN-${number}`,
-              source: {
-                name: "KTown Triangle",
-              },
-              line_items: [
-                ...normalized.map((item) => {
-                  const modifiers =
-                    selectedSquareModifiers(
-                      item.selections,
-                    );
-
-                  const note = item.instructions
-                    ? `NOTE: ${item.instructions}`.slice(
-                        0,
-                        500,
-                      )
-                    : "";
-
-                  return {
-                    name: item.name,
-                    quantity: String(item.quantity),
-                    base_price_money: {
-                      amount: moneyCents(
-                        item.unitPrice,
-                      ),
-                      currency: "USD",
-                    },
-                    ...(modifiers.length
-                      ? { modifiers }
-                      : {}),
-                    ...(note
-                      ? { note }
-                      : {}),
-                  };
-                }),
-                ...(tax > 0
-                  ? [
-                      {
-                        name: "Tax",
-                        quantity: "1",
-                        base_price_money: {
-                          amount: moneyCents(tax),
-                          currency: "USD",
-                        },
-                      },
-                    ]
-                  : []),
-                ...(tip > 0
-                  ? [
-                      {
-                        name: "Tip",
-                        quantity: "1",
-                        base_price_money: {
-                          amount: moneyCents(tip),
-                          currency: "USD",
-                        },
-                      },
-                    ]
-                  : []),
-              ],
-              fulfillments: [
-                {
-                  type: "PICKUP",
-                  state: "PROPOSED",
-                  pickup_details: {
-                    schedule_type: "ASAP",
-                    prep_time_duration: `PT${Math.max(
-                      1,
-                      Number(
-                        settings?.pickup_prep_minutes || 20,
-                      ),
-                    )}M`,
-                    recipient: {
-                      display_name: customerName,
-                      phone_number: customerPhone,
-                      ...(customerEmail
-                        ? { email_address: customerEmail }
-                        : {}),
-                    },
-                    note: `KTown order #${number} · PAY AT STORE · Requested: ${String(
-                      body?.requestedTime || "asap",
-                    ).slice(0, 80)}`,
-                  },
-                },
-              ],
-            },
-          }),
-          cache: "no-store",
-        },
-      );
-
-      const squareOrderText =
-        await squareOrderResponse.text();
-
-      let squareOrderPayload: any = {};
-
-      try {
-        squareOrderPayload =
-          squareOrderText
-            ? JSON.parse(squareOrderText)
-            : {};
-      } catch {
-        throw new Error(
-          `Square returned an invalid order response (HTTP ${squareOrderResponse.status}).`,
-        );
-      }
-
-      if (!squareOrderResponse.ok) {
-        const detail =
-          Array.isArray(
-            squareOrderPayload?.errors,
-          ) &&
-          squareOrderPayload.errors.length
-            ? squareOrderPayload.errors
-                .map(
-                  (item: any) =>
-                    item?.detail ||
-                    item?.code ||
-                    "Square order error",
-                )
-                .join(" / ")
-            : `HTTP ${squareOrderResponse.status}`;
-
-        throw new Error(
-          `Square order could not be created: ${detail}`,
-        );
-      }
-
-      const squareOrderId = String(
-        squareOrderPayload?.order?.id || "",
-      );
-
-      if (!squareOrderId) {
-        throw new Error(
-          "Square did not return an order ID.",
-        );
-      }
-
-      const {
-        error: squareOrderSaveError,
-      } = await db
-        .from("restaurant_orders")
-        .update({
-          square_order_id: squareOrderId,
-          square_payment_link_id: null,
-        })
-        .eq("id", order.id);
-
-      if (squareOrderSaveError) {
-        throw squareOrderSaveError;
-      }
-    }
-
-    if (
-      paymentMethod === "online"
-    ) {
+    {
       const origin =
         new URL(
           request.url,
