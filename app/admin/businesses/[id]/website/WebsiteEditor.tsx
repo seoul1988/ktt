@@ -15937,11 +15937,19 @@ export function PublicWebsiteRenderer({
                       type="button"
                       onClick={openMobileActionTarget}
                       aria-label={mobileActionDisplayLabel}
-                      className="ml-auto flex min-h-[52px] shrink-0 items-center justify-end gap-2 px-3 py-1.5 text-gray-950 active:bg-gray-100"
+                      className={`ml-auto flex min-h-[56px] shrink-0 items-center justify-end gap-2 rounded-xl px-4 py-2 transition active:scale-[0.98] ${
+                          mobileCartCount > 0
+                            ? "text-gray-950 active:bg-gray-100"
+                            : "bg-amber-400 text-gray-950 shadow-md ring-1 ring-amber-500/40"
+                        }`}
                     >
                       <span
                         aria-hidden="true"
-                        className="relative flex h-7 w-7 shrink-0 items-center justify-center text-[19px] leading-none"
+                        className={`relative flex shrink-0 items-center justify-center leading-none ${
+                          mobileCartCount > 0
+                            ? "h-7 w-7 text-[19px]"
+                            : "h-8 w-8 text-[22px]"
+                        }`}
                       >
                         {mobileCartCount > 0 ? "🛒" : "↗"}
                         {mobileCartCount > 0 ? (
@@ -15952,17 +15960,23 @@ export function PublicWebsiteRenderer({
                       </span>
 
                       <span className="min-w-0 text-left leading-tight">
-                        <span className="block truncate text-[10px] font-black uppercase tracking-[0.06em]">
+                        <span className={`block truncate font-black uppercase tracking-[0.04em] ${
+                            mobileCartCount > 0 ? "text-[10px]" : "text-[13px]"
+                          }`}>
                           {mobileCartCount > 0
                             ? "CART"
-                            : mobileActionButtonLabel}
+                            : "ORDER ONLINE"}
                         </span>
-                        <span className="block truncate text-[9px] font-bold text-gray-500">
+                        <span className={`block truncate font-bold ${
+                            mobileCartCount > 0
+                              ? "text-[9px] text-gray-500"
+                              : "text-[9px] text-gray-800"
+                          }`}>
                           {mobileCartCount > 0
                             ? `${mobileCartCount} item${
                                 mobileCartCount === 1 ? "" : "s"
                               }`
-                            : "ONLINE"}
+                            : "TAP TO ORDER"}
                         </span>
                       </span>
                     </button>
