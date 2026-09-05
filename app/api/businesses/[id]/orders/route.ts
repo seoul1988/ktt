@@ -861,6 +861,12 @@ export async function POST(
     const tax =
       subtotal * taxRate;
 
+    const squareTaxPercentage =
+      (taxRate * 100)
+        .toFixed(4)
+        .replace(/0+$/, "")
+        .replace(/\.$/, "");
+
     const tipPercent =
       Math.max(
         0,
@@ -1061,23 +1067,20 @@ export async function POST(
                       ...(modifiers.length
                         ? { modifiers }
                         : {}),
+                      ...(tax > 0 && squareTaxPercentage
+                        ? {
+                            applied_taxes: [
+                              {
+                                tax_uid: "ktown-sales-tax",
+                              },
+                            ],
+                          }
+                        : {}),
                       ...(note
                         ? { note }
                         : {}),
                     };
                   }),
-                  ...(tax > 0
-                    ? [
-                        {
-                          name: "Tax",
-                          quantity: "1",
-                          base_price_money: {
-                            amount: moneyCents(tax),
-                            currency: "USD",
-                          },
-                        },
-                      ]
-                    : []),
                   ...(tip > 0
                     ? [
                         {
@@ -1103,6 +1106,19 @@ export async function POST(
                       ]
                     : []),
                 ],
+                ...(tax > 0 && squareTaxPercentage
+                  ? {
+                      taxes: [
+                        {
+                          uid: "ktown-sales-tax",
+                          name: "Tax",
+                          type: "ADDITIVE",
+                          percentage: squareTaxPercentage,
+                          scope: "LINE_ITEM",
+                        },
+                      ],
+                    }
+                  : {}),
                 fulfillments: [
                   fulfillmentType === "pickup"
                     ? {
