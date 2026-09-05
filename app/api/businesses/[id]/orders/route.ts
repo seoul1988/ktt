@@ -275,6 +275,12 @@ export async function POST(
 
     const body = await request.json();
 
+    const orderNote = String(
+      body?.orderNote || "",
+    )
+      .trim()
+      .slice(0, 500);
+
     const fulfillmentType =
       body?.fulfillmentType === "delivery"
         ? "delivery"
@@ -665,6 +671,8 @@ export async function POST(
           body?.requestedTime ||
             "asap",
         ).slice(0, 80),
+        order_note:
+          orderNote || null,
         payment_method:
           paymentMethod,
         payment_status: "pending",
@@ -858,9 +866,17 @@ export async function POST(
                               ? { email_address: customerEmail }
                               : {}),
                           },
-                          note: `KTown order #${number} · Requested: ${String(
-                            body?.requestedTime || "asap",
-                          ).slice(0, 80)}`,
+                          note: [
+                            `KTown order #${number} · Requested: ${String(
+                              body?.requestedTime || "asap",
+                            ).slice(0, 80)}`,
+                            orderNote
+                              ? `Order notes: ${orderNote}`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                            .slice(0, 500),
                         },
                       }
                     : {
@@ -904,13 +920,23 @@ export async function POST(
                               country: "US",
                             },
                           },
-                          ...(address?.note
-                            ? {
-                                dropoff_notes: String(
-                                  address.note,
-                                ).slice(0, 550),
-                              }
-                            : {}),
+                          ...(
+                            address?.note || orderNote
+                              ? {
+                                  dropoff_notes: [
+                                    address?.note
+                                      ? String(address.note).trim()
+                                      : "",
+                                    orderNote
+                                      ? `Order notes: ${orderNote}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" | ")
+                                    .slice(0, 550),
+                                }
+                              : {}
+                          ),
                         },
                       },
                 ],

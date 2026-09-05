@@ -106,6 +106,7 @@ export default function RestaurantCheckoutModal({
   const [stateCode, setStateCode] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
+  const [orderNote, setOrderNote] = useState("");
   const [pickupTime, setPickupTime] = useState("asap");
   const [customTime, setCustomTime] = useState("");
   const [customDate, setCustomDate] = useState("");
@@ -460,6 +461,7 @@ export default function RestaurantCheckoutModal({
             : pickupTime,
           paymentMethod,
           tipPercent,
+          orderNote: orderNote.trim().slice(0, 500),
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
@@ -679,6 +681,26 @@ export default function RestaurantCheckoutModal({
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Tip</h3>
               <div className="mt-3 flex flex-wrap gap-2">{[0, ...(settings.tipPresets || [])].map((p) => <button key={p} type="button" onClick={() => setTipPercent(Number(p))} className={`rounded-full border px-3 py-2 text-xs font-black ${tipPercent === Number(p) ? "bg-gray-950 text-white" : "bg-white"}`}>{p === 0 ? "No tip" : `${p}%`}</button>)}</div>
+            </section>
+
+            <section className="rounded-2xl border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-black">Order Notes / Additional Requests</h3>
+                <span className="text-[10px] font-bold text-gray-400">
+                  {orderNote.length}/500
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Add any instructions that apply to the entire order.
+              </p>
+              <textarea
+                value={orderNote}
+                onChange={(e) => setOrderNote(e.target.value.slice(0, 500))}
+                rows={3}
+                maxLength={500}
+                placeholder="Example: Please include extra napkins, utensils, or other order requests."
+                className="mt-3 w-full resize-none rounded-xl border px-3 py-3 text-sm outline-none focus:border-gray-900"
+              />
             </section>
 
             <section className="rounded-2xl border p-4">
