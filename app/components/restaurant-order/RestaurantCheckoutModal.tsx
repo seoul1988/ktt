@@ -454,14 +454,23 @@ export default function RestaurantCheckoutModal({
 
     // Browser autofill can visually populate an input without immediately
     // updating React state. Read the actual input values as a fallback.
-    const nextAddress1 = (address1Ref.current?.value ?? address1).trim();
-    const nextAddress2 = (address2Ref.current?.value ?? address2).trim();
-    const nextCity = (cityRef.current?.value ?? city).trim();
-    const nextStateCode = (stateCodeRef.current?.value ?? stateCode).trim();
-    const nextPostalCode = (postalCodeRef.current?.value ?? postalCode).trim();
+    const nextAddress1 = (address1Ref.current?.value || address1 || "").trim();
+    const nextAddress2 = (address2Ref.current?.value || address2 || "").trim();
+    const nextCity = (cityRef.current?.value || city || "").trim();
+    const nextStateCode = (stateCodeRef.current?.value || stateCode || "").trim();
+    const nextPostalCode = (postalCodeRef.current?.value || postalCode || "").trim();
 
-    if (!nextAddress1 || !nextCity || !nextStateCode || !nextPostalCode) {
-      setDeliveryQuoteError("Please enter the complete delivery address.");
+    const missingFields = [
+      !nextAddress1 ? "Street address" : "",
+      !nextCity ? "City" : "",
+      !nextStateCode ? "State" : "",
+      !nextPostalCode ? "ZIP" : "",
+    ].filter(Boolean);
+
+    if (missingFields.length) {
+      setDeliveryQuoteError(
+        `Missing delivery address field(s): ${missingFields.join(", ")}.`,
+      );
       return;
     }
 
