@@ -1,4 +1,3 @@
-```tsx
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
 
@@ -100,7 +99,6 @@ export default async function CommunitySponsorsPage() {
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center px-3 text-center">
                           <div className="text-3xl">⭐</div>
-
                           <p className="mt-2 text-xs font-black text-[#6B6257]">
                             No Photo
                           </p>
@@ -142,7 +140,6 @@ export default async function CommunitySponsorsPage() {
               })}
             </div>
           ) : (
-            /* Empty State */
             <div className="rounded-3xl border border-[#EEE4D7] bg-white p-8 text-center shadow-sm">
               <div className="text-4xl">⭐</div>
 
@@ -169,4 +166,3 @@ export default async function CommunitySponsorsPage() {
     </>
   );
 }
-```
