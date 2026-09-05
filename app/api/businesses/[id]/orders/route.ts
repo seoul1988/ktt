@@ -1083,20 +1083,26 @@ export async function POST(
       });
     }
 
+    const twilioAccountSid =
+      privateSettings?.twilio_account_sid || "";
+
+    const twilioAuthToken =
+      privateSettings?.twilio_auth_token || "";
+
+    const twilioPhoneNumber =
+      privateSettings?.twilio_phone_number || "";
+
     if (
       settings?.sms_enabled &&
-      privateSettings?.twilio_account_sid &&
-      privateSettings?.twilio_auth_token &&
-      privateSettings?.twilio_phone_number
+      twilioAccountSid &&
+      twilioAuthToken &&
+      twilioPhoneNumber
     ) {
       sendTwilioSms(
         {
-          accountSid:
-            privateSettings.twilio_account_sid,
-          authToken:
-            privateSettings.twilio_auth_token,
-          fromNumber:
-            privateSettings.twilio_phone_number,
+          accountSid: twilioAccountSid,
+          authToken: twilioAuthToken,
+          fromNumber: twilioPhoneNumber,
         },
         customerPhone,
         `${
