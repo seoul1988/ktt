@@ -514,7 +514,7 @@ export default function RestaurantCheckoutModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
+      className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
