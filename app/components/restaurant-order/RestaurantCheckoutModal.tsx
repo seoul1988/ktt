@@ -1035,7 +1035,7 @@ export default function RestaurantCheckoutModal({
                             type="button"
                             onClick={() => setDeliveryPolicyOpen(true)}
                             aria-label="View delivery fee policy"
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-400 bg-white text-[11px] font-black text-gray-700"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-600 bg-blue-600 text-[11px] font-black text-white"
                           >
                             ?
                           </button>
@@ -1172,7 +1172,7 @@ export default function RestaurantCheckoutModal({
                           type="button"
                           onClick={() => setDeliveryPolicyOpen(true)}
                           aria-label="View delivery fee policy"
-                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-400 bg-white text-[11px] font-black text-gray-700"
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-blue-600 bg-blue-600 text-[11px] font-black text-white"
                         >
                           ?
                         </button>
