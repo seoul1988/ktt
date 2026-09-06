@@ -41,16 +41,9 @@ function normalizeDeliveryFeeShareRules(
     const raw = value[index] as any;
     const isLast = index === value.length - 1;
 
-    const maxSubtotal = isLast
-      ? null
-      : Number(raw?.maxSubtotal);
-
     const customerPercent = Number(raw?.customerPercent);
 
     if (
-      (!isLast &&
-        (!Number.isFinite(maxSubtotal) ||
-          maxSubtotal < 0)) ||
       !Number.isFinite(customerPercent) ||
       customerPercent < 0 ||
       customerPercent > 100
@@ -58,11 +51,27 @@ function normalizeDeliveryFeeShareRules(
       return DEFAULT_DELIVERY_FEE_SHARE_RULES;
     }
 
+    if (isLast) {
+      normalized.push({
+        maxSubtotal: null,
+        customerPercent: Number(
+          customerPercent.toFixed(2),
+        ),
+      });
+      continue;
+    }
+
+    const maxSubtotal = Number(raw?.maxSubtotal);
+
+    if (
+      !Number.isFinite(maxSubtotal) ||
+      maxSubtotal < 0
+    ) {
+      return DEFAULT_DELIVERY_FEE_SHARE_RULES;
+    }
+
     normalized.push({
-      maxSubtotal:
-        isLast
-          ? null
-          : Number(maxSubtotal.toFixed(2)),
+      maxSubtotal: Number(maxSubtotal.toFixed(2)),
       customerPercent: Number(
         customerPercent.toFixed(2),
       ),
