@@ -1151,9 +1151,18 @@ export async function POST(
                         },
                       }
                     : {
-                        type: "DELIVERY",
+                        /*
+                         * IMPORTANT:
+                         * KTown still treats this as a DELIVERY order and Uber Direct
+                         * handles the actual courier delivery.
+                         *
+                         * Square receives it as PICKUP so the restaurant POS can
+                         * reliably receive/auto-print it as an online order ticket.
+                         * The delivery destination is written into the pickup note.
+                         */
+                        type: "PICKUP",
                         state: "PROPOSED",
-                        delivery_details: {
+                        pickup_details: {
                           schedule_type: "ASAP",
                           prep_time_duration: `PT${Math.max(
                             1,
@@ -1165,49 +1174,31 @@ export async function POST(
                             ...(customerEmail
                               ? { email_address: customerEmail }
                               : {}),
-                            address: {
-                              address_line_1: String(
-                                address?.address1 || "",
-                              ).slice(0, 500),
-                              ...(address?.address2
-                                ? {
-                                    address_line_2: String(
-                                      address.address2,
-                                    ).slice(0, 500),
-                                  }
-                                : {}),
-                              locality: String(
-                                address?.city || "",
-                              ).slice(0, 255),
-                              administrative_district_level_1: String(
-                                address?.state || "",
-                              )
-                                .trim()
-                                .toUpperCase()
-                                .slice(0, 3),
-                              postal_code: String(
-                                address?.postalCode || "",
-                              ).slice(0, 32),
-                              country: "US",
-                            },
                           },
-                          ...(
-                            address?.note || orderNote
-                              ? {
-                                  dropoff_notes: [
-                                    address?.note
-                                      ? String(address.note).trim()
-                                      : "",
-                                    orderNote
-                                      ? `Order notes: ${orderNote}`
-                                      : "",
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" | ")
-                                    .slice(0, 550),
-                                }
-                              : {}
-                          ),
+                          note: [
+                            "DELIVERY · UBER DIRECT",
+                            `KTown order #${number} · Requested: ${String(
+                              body?.requestedTime || "asap",
+                            ).slice(0, 80)}`,
+                            `Deliver to: ${[
+                              address?.address1,
+                              address?.address2,
+                              address?.city,
+                              address?.state,
+                              address?.postalCode,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}`,
+                            address?.note
+                              ? `Dropoff: ${String(address.note).trim()}`
+                              : "",
+                            orderNote
+                              ? `Order notes: ${orderNote}`
+                              : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")
+                            .slice(0, 500),
                         },
                       },
                 ],
