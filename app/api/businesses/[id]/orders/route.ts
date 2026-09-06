@@ -145,6 +145,50 @@ type RequestItem = {
   selections?: unknown;
 };
 
+type DeliveryFeeShareRule = {
+  maxSubtotal: number | null;
+  customerPercent: number;
+};
+
+const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
+  { maxSubtotal: 19.99, customerPercent: 100 },
+  { maxSubtotal: 29.99, customerPercent: 70 },
+  { maxSubtotal: 39.99, customerPercent: 50 },
+  { maxSubtotal: 49.99, customerPercent: 30 },
+  { maxSubtotal: null, customerPercent: 0 },
+];
+
+function deliveryCustomerPercent(
+  subtotal: number,
+  value: unknown,
+) {
+  const rules = Array.isArray(value) && value.length
+    ? value
+    : DEFAULT_DELIVERY_FEE_SHARE_RULES;
+
+  for (const raw of rules as any[]) {
+    const percent = Math.max(
+      0,
+      Math.min(100, Number(raw?.customerPercent) || 0),
+    );
+
+    if (raw?.maxSubtotal == null) {
+      return percent;
+    }
+
+    const maxSubtotal = Number(raw.maxSubtotal);
+
+    if (
+      Number.isFinite(maxSubtotal) &&
+      subtotal <= maxSubtotal
+    ) {
+      return percent;
+    }
+  }
+
+  return 100;
+}
+
 
 function cleanSelectionLabel(value: unknown) {
   const raw = String(value ?? "").trim();
@@ -383,7 +427,7 @@ export async function POST(
       db
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_share_rules",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -901,7 +945,23 @@ export async function POST(
         dropoffAddress: address,
       });
 
-      deliveryFee = directQuote.customerFeeCents / 100;
+      const courierFeeCents = Math.max(
+        0,
+        Number(directQuote.customerFeeCents || 0),
+      );
+
+      const customerPercent = deliveryCustomerPercent(
+        subtotal,
+        settings?.delivery_fee_share_rules,
+      );
+
+      // The courier still charges the full quote. Only the configured
+      // percentage is charged to the customer; the restaurant absorbs the rest.
+      deliveryFee =
+        Math.round(
+          courierFeeCents * (customerPercent / 100),
+        ) / 100;
+
       deliveryQuoteId = directQuote.id;
       deliveryQuoteExpiresAt = directQuote.expires || null;
     }
@@ -1151,18 +1211,9 @@ export async function POST(
                         },
                       }
                     : {
-                        /*
-                         * IMPORTANT:
-                         * KTown still treats this as a DELIVERY order and Uber Direct
-                         * handles the actual courier delivery.
-                         *
-                         * Square receives it as PICKUP so the restaurant POS can
-                         * reliably receive/auto-print it as an online order ticket.
-                         * The delivery destination is written into the pickup note.
-                         */
-                        type: "PICKUP",
+                        type: "DELIVERY",
                         state: "PROPOSED",
-                        pickup_details: {
+                        delivery_details: {
                           schedule_type: "ASAP",
                           prep_time_duration: `PT${Math.max(
                             1,
@@ -1174,31 +1225,49 @@ export async function POST(
                             ...(customerEmail
                               ? { email_address: customerEmail }
                               : {}),
+                            address: {
+                              address_line_1: String(
+                                address?.address1 || "",
+                              ).slice(0, 500),
+                              ...(address?.address2
+                                ? {
+                                    address_line_2: String(
+                                      address.address2,
+                                    ).slice(0, 500),
+                                  }
+                                : {}),
+                              locality: String(
+                                address?.city || "",
+                              ).slice(0, 255),
+                              administrative_district_level_1: String(
+                                address?.state || "",
+                              )
+                                .trim()
+                                .toUpperCase()
+                                .slice(0, 3),
+                              postal_code: String(
+                                address?.postalCode || "",
+                              ).slice(0, 32),
+                              country: "US",
+                            },
                           },
-                          note: [
-                            "DELIVERY · UBER DIRECT",
-                            `KTown order #${number} · Requested: ${String(
-                              body?.requestedTime || "asap",
-                            ).slice(0, 80)}`,
-                            `Deliver to: ${[
-                              address?.address1,
-                              address?.address2,
-                              address?.city,
-                              address?.state,
-                              address?.postalCode,
-                            ]
-                              .filter(Boolean)
-                              .join(", ")}`,
-                            address?.note
-                              ? `Dropoff: ${String(address.note).trim()}`
-                              : "",
-                            orderNote
-                              ? `Order notes: ${orderNote}`
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
-                            .slice(0, 500),
+                          ...(
+                            address?.note || orderNote
+                              ? {
+                                  dropoff_notes: [
+                                    address?.note
+                                      ? String(address.note).trim()
+                                      : "",
+                                    orderNote
+                                      ? `Order notes: ${orderNote}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" | ")
+                                    .slice(0, 550),
+                                }
+                              : {}
+                          ),
                         },
                       },
                 ],

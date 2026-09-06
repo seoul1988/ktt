@@ -96,6 +96,19 @@ type MenuResponse = {
   error?: string;
 };
 
+type DeliveryFeeShareRule = {
+  maxSubtotal: number | null;
+  customerPercent: number;
+};
+
+const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
+  { maxSubtotal: 19.99, customerPercent: 100 },
+  { maxSubtotal: 29.99, customerPercent: 70 },
+  { maxSubtotal: 39.99, customerPercent: 50 },
+  { maxSubtotal: 49.99, customerPercent: 30 },
+  { maxSubtotal: null, customerPercent: 0 },
+];
+
 function cleanPrice(value: string) {
   const normalized = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
   const dot = normalized.indexOf(".");
@@ -403,6 +416,11 @@ export default function OwnerBusinessMenuPage() {
   const [pickupModeEnabled, setPickupModeEnabled] = useState(false);
   const [deliveryModeEnabled, setDeliveryModeEnabled] = useState(false);
 
+  const [deliveryFeeShareRules, setDeliveryFeeShareRules] =
+    useState<DeliveryFeeShareRule[]>(DEFAULT_DELIVERY_FEE_SHARE_RULES);
+  const [savingDeliveryFeeShareRules, setSavingDeliveryFeeShareRules] =
+    useState(false);
+
   // Restaurant sales tax is stored as a decimal in restaurant_order_settings.tax_rate.
   // Example: 7.25% is saved as 0.0725.
   const [taxRateInput, setTaxRateInput] = useState("0");
@@ -501,6 +519,26 @@ export default function OwnerBusinessMenuPage() {
         setMenuModeEnabled(modes.menu !== false);
         setPickupModeEnabled(modes.pickup === true);
         setDeliveryModeEnabled(modes.delivery === true);
+
+        if (
+          Array.isArray(data?.deliveryFeeShareRules) &&
+          data.deliveryFeeShareRules.length > 0
+        ) {
+          setDeliveryFeeShareRules(
+            data.deliveryFeeShareRules.map((rule: any) => ({
+              maxSubtotal:
+                rule?.maxSubtotal == null
+                  ? null
+                  : Math.max(0, Number(rule.maxSubtotal) || 0),
+              customerPercent: Math.max(
+                0,
+                Math.min(100, Number(rule?.customerPercent) || 0),
+              ),
+            })),
+          );
+        } else {
+          setDeliveryFeeShareRules(DEFAULT_DELIVERY_FEE_SHARE_RULES);
+        }
 
         const loadedTaxRate = Math.max(0, Number(data?.taxRate || 0));
         setTaxRateInput(
@@ -773,6 +811,109 @@ export default function OwnerBusinessMenuPage() {
       setMessage(msg);
     } finally {
       setSavingOrderModes(false);
+    }
+  }
+
+  function updateDeliveryFeeShareRule(
+    index: number,
+    patch: Partial<DeliveryFeeShareRule>,
+  ) {
+    setDeliveryFeeShareRules((current) =>
+      current.map((rule, ruleIndex) =>
+        ruleIndex === index ? { ...rule, ...patch } : rule,
+      ),
+    );
+  }
+
+  async function saveDeliveryFeeShareRules() {
+    if (savingDeliveryFeeShareRules) return;
+
+    const normalized = deliveryFeeShareRules.map((rule, index) => ({
+      maxSubtotal:
+        index === deliveryFeeShareRules.length - 1
+          ? null
+          : rule.maxSubtotal == null
+            ? 0
+            : Number(rule.maxSubtotal),
+      customerPercent: Number(rule.customerPercent),
+    }));
+
+    for (let index = 0; index < normalized.length; index += 1) {
+      const rule = normalized[index];
+
+      if (
+        !Number.isFinite(rule.customerPercent) ||
+        rule.customerPercent < 0 ||
+        rule.customerPercent > 100
+      ) {
+        setMessage("고객 부담률은 0%에서 100% 사이로 입력하세요.");
+        return;
+      }
+
+      if (index < normalized.length - 1) {
+        if (
+          rule.maxSubtotal == null ||
+          !Number.isFinite(rule.maxSubtotal) ||
+          rule.maxSubtotal < 0
+        ) {
+          setMessage("주문금액 기준은 0 이상이어야 합니다.");
+          return;
+        }
+
+        if (
+          index > 0 &&
+          normalized[index - 1].maxSubtotal != null &&
+          rule.maxSubtotal <= Number(normalized[index - 1].maxSubtotal)
+        ) {
+          setMessage("주문금액 기준은 위 구간보다 큰 금액으로 입력하세요.");
+          return;
+        }
+      }
+    }
+
+    setSavingDeliveryFeeShareRules(true);
+    setOrderSettingsMessage("배달료 분담 설정 저장 중...");
+    setMessage("배달료 분담 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/order-settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            deliveryFeeShareRules: normalized,
+          }),
+        },
+      );
+
+      const data = await readApiJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "배달료 분담 설정 저장에 실패했습니다.",
+        );
+      }
+
+      if (Array.isArray(data?.deliveryFeeShareRules)) {
+        setDeliveryFeeShareRules(data.deliveryFeeShareRules);
+      }
+
+      setOrderSettingsMessage("✓ 주문금액별 배달료 분담 설정 저장 완료");
+      setMessage("✓ 주문금액별 배달료 분담 설정을 DB에 저장했습니다.");
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? `배달료 분담 설정 저장 실패: ${error.message}`
+          : "배달료 분담 설정 저장에 실패했습니다.";
+      setOrderSettingsMessage(msg);
+      setMessage(msg);
+    } finally {
+      setSavingDeliveryFeeShareRules(false);
     }
   }
 
@@ -3668,6 +3809,128 @@ export default function OwnerBusinessMenuPage() {
               </label>
             ))}
           </div>
+
+          {deliveryModeEnabled ? (
+            <div className="mt-4 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-blue-700">
+                  Delivery Fee Sharing
+                </p>
+                <h3 className="mt-1 text-base font-black text-[#172033]">
+                  주문금액별 배달료 분담
+                </h3>
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                  Uber / DoorDash에서 나온 실제 배달료를 주문금액 기준으로 고객과 식당이 나눠 부담합니다.
+                </p>
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-xl border border-blue-200 bg-white">
+                <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr] bg-blue-100 px-3 py-2 text-[10px] font-black uppercase text-blue-900">
+                  <div>주문금액</div>
+                  <div className="text-center">고객 부담</div>
+                  <div className="text-center">식당 부담</div>
+                </div>
+
+                {deliveryFeeShareRules.map((rule, index) => {
+                  const previousMax =
+                    index === 0
+                      ? null
+                      : deliveryFeeShareRules[index - 1]?.maxSubtotal;
+                  const isLast = index === deliveryFeeShareRules.length - 1;
+                  const restaurantPercent = Math.max(
+                    0,
+                    100 - Number(rule.customerPercent || 0),
+                  );
+
+                  return (
+                    <div
+                      key={index}
+                      className="grid grid-cols-[1.2fr_0.9fr_0.9fr] items-center gap-2 border-t border-blue-100 px-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        {isLast ? (
+                          <div className="rounded-lg bg-gray-50 px-2 py-2 text-xs font-black text-gray-700">
+                            ${(Number(previousMax || 0) + 0.01).toFixed(2)} 이상
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span className="shrink-0 text-xs font-bold text-gray-500">
+                              {index === 0
+                                ? "$0 ~"
+                                : `$${(Number(previousMax || 0) + 0.01).toFixed(2)} ~`}
+                            </span>
+                            <div className="flex min-w-0 items-center overflow-hidden rounded-lg border border-gray-300 bg-white">
+                              <span className="pl-2 text-xs font-black">$</span>
+                              <input
+                                value={
+                                  rule.maxSubtotal == null
+                                    ? ""
+                                    : String(rule.maxSubtotal)
+                                }
+                                onChange={(event) => {
+                                  const value = event.target.value.replace(
+                                    /[^0-9.]/g,
+                                    "",
+                                  );
+                                  updateDeliveryFeeShareRule(index, {
+                                    maxSubtotal:
+                                      value === "" ? 0 : Number(value),
+                                  });
+                                }}
+                                inputMode="decimal"
+                                className="min-w-0 w-full px-1 py-2 text-right text-xs font-black outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          value={String(rule.customerPercent)}
+                          onChange={(event) => {
+                            const value = event.target.value.replace(
+                              /[^0-9.]/g,
+                              "",
+                            );
+                            updateDeliveryFeeShareRule(index, {
+                              customerPercent: Math.max(
+                                0,
+                                Math.min(100, Number(value) || 0),
+                              ),
+                            });
+                          }}
+                          inputMode="decimal"
+                          className="w-14 rounded-lg border border-blue-300 bg-white px-2 py-2 text-right text-xs font-black outline-none"
+                        />
+                        <span className="text-xs font-black text-blue-800">%</span>
+                      </div>
+
+                      <div className="text-center text-xs font-black text-gray-700">
+                        {restaurantPercent}%
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[11px] font-bold leading-5 text-gray-600">
+                예: Uber 배달료가 $8이고 주문금액이 $35이면 50:50 설정 기준으로
+                고객 $4.00 · 식당 $4.00 부담
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void saveDeliveryFeeShareRules()}
+                disabled={savingDeliveryFeeShareRules}
+                className="mt-3 w-full rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+              >
+                {savingDeliveryFeeShareRules
+                  ? "저장 중..."
+                  : "배달료 분담 설정 저장"}
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
             <div>

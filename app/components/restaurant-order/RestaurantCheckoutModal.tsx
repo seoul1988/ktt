@@ -33,6 +33,22 @@ type PublicSettings = {
   deliveryDispatchEnabled?: boolean;
 };
 
+type DeliveryFeeShareRule = {
+  maxSubtotal: number | null;
+  customerPercent: number;
+};
+
+type DeliveryQuoteBreakdown = {
+  provider: string;
+  providerFeeCents: number;
+  customerFeeCents: number;
+  restaurantFeeCents: number;
+  customerSharePercent: number;
+  restaurantSharePercent: number;
+  orderSubtotal: number;
+  feeShareRules: DeliveryFeeShareRule[];
+};
+
 type Props = {
   businessId: number;
   fulfillmentType: "pickup" | "delivery";
@@ -92,6 +108,21 @@ function money(value: number) {
   return `$${Math.max(0, value).toFixed(2)}`;
 }
 
+function deliveryPolicyRangeLabel(
+  rules: DeliveryFeeShareRule[],
+  index: number,
+) {
+  const rule = rules[index];
+  const previousMax = index > 0 ? rules[index - 1]?.maxSubtotal : null;
+  const minimum = previousMax == null ? 0 : Number(previousMax) + 0.01;
+
+  if (rule?.maxSubtotal == null) {
+    return `${money(minimum)}+`;
+  }
+
+  return `${money(minimum)} – ${money(Number(rule.maxSubtotal))}`;
+}
+
 export default function RestaurantCheckoutModal({
   businessId,
   fulfillmentType,
@@ -132,6 +163,9 @@ export default function RestaurantCheckoutModal({
   // Uber Direct delivery quote
   const [deliveryQuoteId, setDeliveryQuoteId] = useState("");
   const [deliveryFeeCents, setDeliveryFeeCents] = useState(0);
+  const [deliveryQuoteBreakdown, setDeliveryQuoteBreakdown] =
+    useState<DeliveryQuoteBreakdown | null>(null);
+  const [deliveryPolicyOpen, setDeliveryPolicyOpen] = useState(false);
   const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
   const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
 
@@ -500,6 +534,7 @@ export default function RestaurantCheckoutModal({
               postalCode: nextPostalCode,
             },
             dropoffPhone: phone.trim(),
+            orderSubtotal: Number(subtotal.toFixed(2)),
           }),
         },
       );
@@ -523,9 +558,64 @@ export default function RestaurantCheckoutModal({
           ) || 0,
         ),
       );
+
+      const providerFeeCents = Math.max(
+        0,
+        Number(
+          payload?.providerFeeCents ??
+            payload?.uberFeeCents ??
+            payload?.fullDeliveryFeeCents ??
+            payload?.feeCents ??
+            0,
+        ) || 0,
+      );
+      const customerFeeCents = Math.max(
+        0,
+        Number(
+          payload?.customerFeeCents ??
+            payload?.deliveryFeeCents ??
+            payload?.feeCents ??
+            0,
+        ) || 0,
+      );
+      const restaurantFeeCents = Math.max(
+        0,
+        Number(
+          payload?.restaurantFeeCents ??
+            providerFeeCents - customerFeeCents,
+        ) || 0,
+      );
+      const customerSharePercent = Math.max(
+        0,
+        Math.min(100, Number(payload?.customerSharePercent ?? 100) || 0),
+      );
+      const feeShareRules: DeliveryFeeShareRule[] = Array.isArray(
+        payload?.feeShareRules,
+      )
+        ? payload.feeShareRules.map((rule: any) => ({
+            maxSubtotal:
+              rule?.maxSubtotal == null ? null : Number(rule.maxSubtotal),
+            customerPercent: Math.max(
+              0,
+              Math.min(100, Number(rule?.customerPercent) || 0),
+            ),
+          }))
+        : [];
+
+      setDeliveryQuoteBreakdown({
+        provider: String(payload?.provider || "uber_direct"),
+        providerFeeCents,
+        customerFeeCents,
+        restaurantFeeCents,
+        customerSharePercent,
+        restaurantSharePercent: Math.max(0, 100 - customerSharePercent),
+        orderSubtotal: Number(payload?.orderSubtotal ?? subtotal),
+        feeShareRules,
+      });
     } catch (e) {
       setDeliveryQuoteId("");
       setDeliveryFeeCents(0);
+      setDeliveryQuoteBreakdown(null);
       setDeliveryQuoteError(
         e instanceof Error
           ? e.message
@@ -880,30 +970,35 @@ export default function RestaurantCheckoutModal({
                   setAddress1(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
                   setDeliveryQuoteError("");
                 }} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
                 <input ref={address2Ref} name="address-line2" autoComplete="address-line2" value={address2} onChange={(e) => {
                   setAddress2(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
                   setDeliveryQuoteError("");
                 }} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
                 <input ref={cityRef} name="address-level2" autoComplete="address-level2" value={city} onChange={(e) => {
                   setCity(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
                   setDeliveryQuoteError("");
                 }} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input ref={stateCodeRef} name="address-level1" autoComplete="address-level1" value={stateCode} onChange={(e) => {
                   setStateCode(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
                   setDeliveryQuoteError("");
                 }} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input ref={postalCodeRef} name="postal-code" autoComplete="postal-code" value={postalCode} onChange={(e) => {
                   setPostalCode(e.target.value);
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
                   setDeliveryQuoteError("");
                 }} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
@@ -932,9 +1027,35 @@ export default function RestaurantCheckoutModal({
                   ) : null}
 
                   {deliveryQuoteId ? (
-                    <div className="mt-2 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-3 text-sm">
-                      <span className="font-bold">Delivery fee</span>
-                      <b>{money(deliveryFee)}</b>
+                    <div className="mt-2 rounded-xl bg-gray-50 px-3 py-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-1.5 font-bold">
+                          Delivery fee
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryPolicyOpen(true)}
+                            aria-label="View delivery fee policy"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-400 bg-white text-[11px] font-black text-gray-700"
+                          >
+                            ?
+                          </button>
+                        </span>
+                        <b>{money(deliveryFee)}</b>
+                      </div>
+
+                      {deliveryQuoteBreakdown ? (
+                        <div className="mt-2 border-t border-gray-200 pt-2 text-[11px] leading-5 text-gray-600">
+                          <p>
+                            Your order subtotal is {money(deliveryQuoteBreakdown.orderSubtotal)}.
+                          </p>
+                          <p>
+                            Based on this restaurant&apos;s delivery policy, you pay {deliveryQuoteBreakdown.customerSharePercent}% of the {money(deliveryQuoteBreakdown.providerFeeCents / 100)} courier fee.
+                            {deliveryQuoteBreakdown.restaurantFeeCents > 0
+                              ? ` The restaurant covers ${money(deliveryQuoteBreakdown.restaurantFeeCents / 100)}.`
+                              : ""}
+                          </p>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1042,12 +1163,31 @@ export default function RestaurantCheckoutModal({
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
               {fulfillmentType === "delivery" ? (
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="min-w-0">Delivery fee</span>
-                  <b className="shrink-0 whitespace-nowrap">
-                    {deliveryQuoteLoading ? "Calculating…" : money(deliveryFee)}
-                  </b>
-                </div>
+                <>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      Delivery fee
+                      {deliveryQuoteId ? (
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryPolicyOpen(true)}
+                          aria-label="View delivery fee policy"
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-400 bg-white text-[11px] font-black text-gray-700"
+                        >
+                          ?
+                        </button>
+                      ) : null}
+                    </span>
+                    <b className="shrink-0 whitespace-nowrap">
+                      {deliveryQuoteLoading ? "Calculating…" : money(deliveryFee)}
+                    </b>
+                  </div>
+                  {deliveryQuoteId && deliveryQuoteBreakdown ? (
+                    <p className="mt-1 text-[10px] leading-4 text-gray-500">
+                      Order {money(deliveryQuoteBreakdown.orderSubtotal)} · Customer pays {deliveryQuoteBreakdown.customerSharePercent}% of courier fee
+                    </p>
+                  ) : null}
+                </>
               ) : null}
               <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-lg"><b className="min-w-0 whitespace-nowrap">Estimated total</b><b className="shrink-0 whitespace-nowrap">{money(estimatedTotal)}</b></div>
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
@@ -1059,6 +1199,72 @@ export default function RestaurantCheckoutModal({
           </> : null}
         </div>
       </div>
+
+      {deliveryPolicyOpen && deliveryQuoteBreakdown ? (
+        <div
+          className="fixed inset-0 z-[14000] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+          onClick={() => setDeliveryPolicyOpen(false)}
+        >
+          <div
+            className="max-h-[82vh] w-full overflow-y-auto rounded-3xl bg-white p-5 text-gray-950 shadow-2xl sm:max-w-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[.16em] text-gray-400">
+                  Delivery Fee Policy
+                </p>
+                <h3 className="mt-1 text-xl font-black">How delivery fees are shared</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeliveryPolicyOpen(false)}
+                className="h-9 w-9 shrink-0 rounded-full bg-gray-100 text-lg font-black"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              The delivery partner provides the courier quote. Your share of that fee is based on the food order subtotal before tax and tip. The restaurant covers the remaining share.
+            </p>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border">
+              <div className="grid grid-cols-[1.25fr_.75fr_.75fr] bg-gray-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
+                <span>Order subtotal</span>
+                <span className="text-right">You pay</span>
+                <span className="text-right">Restaurant</span>
+              </div>
+              {(deliveryQuoteBreakdown.feeShareRules || []).map((rule, index) => (
+                <div
+                  key={`${rule.maxSubtotal ?? "plus"}-${index}`}
+                  className="grid grid-cols-[1.25fr_.75fr_.75fr] border-t px-3 py-3 text-xs"
+                >
+                  <span className="font-bold">
+                    {deliveryPolicyRangeLabel(deliveryQuoteBreakdown.feeShareRules, index)}
+                  </span>
+                  <span className="text-right font-black">{rule.customerPercent}%</span>
+                  <span className="text-right font-black">{Math.max(0, 100 - rule.customerPercent)}%</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm leading-6">
+              <p className="font-black">Your current order</p>
+              <p className="mt-1 text-gray-600">
+                Subtotal {money(deliveryQuoteBreakdown.orderSubtotal)} · Courier quote {money(deliveryQuoteBreakdown.providerFeeCents / 100)}
+              </p>
+              <p className="text-gray-600">
+                You pay {deliveryQuoteBreakdown.customerSharePercent}% = {money(deliveryQuoteBreakdown.customerFeeCents / 100)}. Restaurant pays {money(deliveryQuoteBreakdown.restaurantFeeCents / 100)}.
+              </p>
+            </div>
+
+            <p className="mt-3 text-[10px] leading-4 text-gray-500">
+              If the cart, delivery address, or courier quote changes, the delivery fee may be recalculated before payment.
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>,
     document.body,
   );
