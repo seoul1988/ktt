@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type BannerType = "popup";
@@ -312,6 +312,7 @@ async function resizeBannerImage(file: File) {
 
 export default function BannerManagementPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const businessId = Number(params.id);
 
   const [businessName, setBusinessName] = useState("Business");
@@ -968,27 +969,35 @@ export default function BannerManagementPage() {
   return (
     <main className="min-h-screen bg-[#F8F5F0] px-4 pb-24 pt-8 sm:px-6">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-6">
-          <Link
-            href={`/owner/business/${businessId}/manage`}
-            className="text-sm font-black text-[#B64032]"
+        <header className="mb-6 grid grid-cols-[48px_1fr_48px] items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Back"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E8DED1] bg-white text-2xl font-black text-[#172033] shadow-sm"
           >
-            ← 비즈니스 사이트 관리
-          </Link>
+            ←
+          </button>
 
-          <p className="mt-4 text-sm font-black uppercase tracking-[0.16em] text-[#B64032]">
-            Business #{businessId}
-          </p>
+          <div className="min-w-0 text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#B64032]">
+              BANNER MANAGEMENT
+            </p>
+            <h1 className="mt-1 truncate text-xl font-black text-[#172033]">
+              팝업 배너 관리
+            </h1>
+          </div>
 
-          <h1 className="mt-2 text-3xl font-black text-[#172033]">
-            팝업 배너 관리
-          </h1>
-
-          <p className="mt-2 text-sm font-medium text-[#667085]">
-            {businessName}에 사용할 배너 종류를 고르고
-            내용과 이미지를 등록합니다.
-          </p>
+          <div className="flex h-11 w-12 items-center justify-end">
+            <ProfileButton />
+          </div>
         </header>
+
+        <div className="mb-7 text-center">
+          <p className="text-sm font-medium text-[#667085]">
+            {businessName}에 사용할 배너 종류를 고르고 내용과 이미지를 등록합니다.
+          </p>
+        </div>
 
         {message && (
           <div
@@ -2090,6 +2099,7 @@ export default function BannerManagementPage() {
           </div>
         </section>
       </div>
+      <CommunityBottomNav />
     </main>
   );
 }

@@ -254,22 +254,31 @@ export default async function BusinessVisitorsPage({
     <>
       <main className="min-h-screen bg-[#F8F5F0] px-4 pb-28 pt-6 sm:px-6 sm:pt-8">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <header className="mb-6 grid grid-cols-[48px_1fr_48px] items-center gap-2">
             <Link
               href={`/owner/business/${businessId}/manage`}
-              className="text-sm font-black text-[#B64032]"
+              aria-label="Back"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E8DED1] bg-white text-2xl font-black text-[#172033] shadow-sm"
             >
-              ← 관리 메뉴
+              ←
             </Link>
-            <ProfileButton />
-          </div>
 
-          <div className="mb-7">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-[#B64032]">
-              Website Analytics
-            </p>
-            <h1 className="mt-2 text-3xl font-black text-[#172033]">방문자 통계</h1>
-            <p className="mt-2 text-sm font-medium text-[#667085]">
+            <div className="min-w-0 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#B64032]">
+                WEBSITE ANALYTICS
+              </p>
+              <h1 className="mt-1 truncate text-xl font-black text-[#172033]">
+                방문자 통계
+              </h1>
+            </div>
+
+            <div className="flex h-11 w-12 items-center justify-end">
+              <ProfileButton />
+            </div>
+          </header>
+
+          <div className="mb-7 text-center">
+            <p className="text-sm font-medium text-[#667085]">
               {businessName} · 미국 동부시간 기준 · 같은 브라우저는 하루 한 번만 집계
             </p>
           </div>
