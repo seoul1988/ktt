@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
 import { supabase } from "@/lib/supabase";
 
 type Category = {
@@ -388,6 +390,7 @@ async function readApiJson(response: Response) {
 
 export default function OwnerBusinessMenuPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const businessId = Number(params.id);
 
   const [businessName, setBusinessName] = useState("Business");
@@ -3730,21 +3733,29 @@ export default function OwnerBusinessMenuPage() {
   return (
     <main className="min-h-screen bg-[#F8F3EC] px-4 pb-32 pt-6 text-[#172033] sm:px-6">
       <div className="mx-auto w-full max-w-4xl">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wider text-[#B64032]">
-              Menu Management
+        <header className="mb-5 grid grid-cols-[48px_1fr_48px] items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            aria-label="Back"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-[#E8DED1] bg-white text-2xl font-black shadow-sm"
+          >
+            ←
+          </button>
+
+          <div className="min-w-0 text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#B64032]">
+              MENU MANAGEMENT
             </p>
-            <h1 className="mt-1 text-2xl font-black">{businessName}</h1>
+            <h1 className="mt-1 truncate text-xl font-black text-[#172033]">
+              {businessName}
+            </h1>
           </div>
 
-          <Link
-            href={`/owner/business/${businessId}/manage`}
-            className="rounded-xl border border-[#E8DED1] bg-white px-3 py-2 text-xs font-black shadow-sm"
-          >
-            Back
-          </Link>
-        </div>
+          <div className="flex h-11 w-12 items-center justify-end">
+            <ProfileButton />
+          </div>
+        </header>
 
         {message && (
           <div
@@ -5941,6 +5952,8 @@ export default function OwnerBusinessMenuPage() {
           </button>
         </div>
       </div>
+
+      <CommunityBottomNav />
     </main>
   );
 }

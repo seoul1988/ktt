@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
 import { supabase } from "@/lib/supabase";
 
 function raleighDateTime(value: unknown) {
@@ -53,6 +55,7 @@ function paymentLabel(order: any) {
 
 export default function OwnerOrdersPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const businessId = Number(params.id);
 
   const [orders, setOrders] = useState<any[]>([]);
@@ -195,16 +198,32 @@ export default function OwnerOrdersPage() {
   ]);
 
   return (
-    <main className="mx-auto max-w-5xl p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-black text-gray-400">
+    <main className="mx-auto max-w-5xl p-5 pb-28">
+      <header className="grid grid-cols-[44px_1fr_44px] items-center gap-2">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Back"
+          className="flex h-11 w-11 items-center justify-center rounded-full border bg-white text-2xl font-black shadow-sm"
+        >
+          ←
+        </button>
+
+        <div className="min-w-0 text-center">
+          <p className="text-[10px] font-black tracking-wider text-gray-400">
             ONLINE ORDERS
           </p>
-          <h1 className="text-2xl font-black">Orders</h1>
+          <h1 className="truncate text-xl font-black">Orders</h1>
         </div>
 
+        <div className="flex h-11 w-11 items-center justify-center">
+          <ProfileButton />
+        </div>
+      </header>
+
+      <div className="mt-3 flex justify-end">
         <button
+          type="button"
           onClick={() => void load()}
           className="rounded-xl border px-4 py-2 text-xs font-black"
         >
@@ -403,6 +422,7 @@ export default function OwnerOrdersPage() {
           </div>
         ) : null}
       </div>
+      <CommunityBottomNav />
     </main>
   );
 }
