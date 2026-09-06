@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import CommunityBottomNav from "@/app/components/CommunityBottomNav";
+import ProfileButton from "@/app/components/ProfileButton";
 import { supabase } from "@/lib/supabase";
 
 type BannerType = "popup";
