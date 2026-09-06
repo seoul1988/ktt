@@ -137,7 +137,12 @@ export default function OwnerOrdersPage() {
 
   const visibleOrders = useMemo(() => {
     return orders.filter((o) => {
-      // 요청대로 payment pending 주문은 조회 목록에서 제외
+      // Square에서 실제 결제 ID가 생성된 주문만 표시합니다.
+      if (!String(o.square_payment_id || "").trim()) {
+        return false;
+      }
+
+      // payment pending 주문은 조회 목록에서 제외합니다.
       if (
         String(o.payment_status || "")
           .trim()
@@ -267,7 +272,7 @@ export default function OwnerOrdersPage() {
 
         <div className="sm:col-span-2 lg:col-span-4 flex items-center justify-between gap-3">
           <p className="text-xs font-black text-gray-500">
-            {visibleOrders.length} ORDERS · RALEIGH TIME · PENDING EXCLUDED
+            {visibleOrders.length} ORDERS · RALEIGH TIME · PAID SQUARE ORDERS ONLY
           </p>
 
           <button
@@ -401,4 +406,3 @@ export default function OwnerOrdersPage() {
     </main>
   );
 }
-
