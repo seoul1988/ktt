@@ -507,6 +507,15 @@ export default async function BusinessManagePage({
     />
   )}
 
+  {isRestaurant && (
+    <ManagementCard
+      href={`/owner/business/${businessId}/orders`}
+      icon="🧾"
+      title="온라인 주문 조회"
+      description="날짜별 주문, 고객 이름, 주문 시간, 픽업·딜리버리, 결제수단과 결제금액을 확인합니다."
+    />
+  )}
+
   <ManagementCard
     href={`/owner/business/${businessId}/hours`}
     icon="🕒"
