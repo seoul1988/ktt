@@ -10,6 +10,17 @@ type DeliveryFeeShareRule = {
   customerPercent: number;
 };
 
+type DeliveryFeePolicyMode =
+  | "customer_100"
+  | "order_amount"
+  | "restaurant_100";
+
+function normalizeDeliveryFeePolicyMode(value: unknown): DeliveryFeePolicyMode {
+  return value === "customer_100" || value === "restaurant_100"
+    ? value
+    : "order_amount";
+}
+
 const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: 19.99, customerPercent: 100 },
   { maxSubtotal: 29.99, customerPercent: 70 },
@@ -132,7 +143,7 @@ export async function POST(
 
       db
         .from("restaurant_order_settings")
-        .select("delivery_fee_share_rules")
+        .select("delivery_fee_policy_mode,delivery_fee_share_rules")
         .eq("business_id", businessId)
         .maybeSingle(),
     ]);
@@ -150,7 +161,16 @@ export async function POST(
     const feeShareRules = normalizeDeliveryFeeShareRules(
       orderSettings?.delivery_fee_share_rules,
     );
-    const sharePercent = customerSharePercent(orderSubtotal, feeShareRules);
+    const policyMode = normalizeDeliveryFeePolicyMode(
+      orderSettings?.delivery_fee_policy_mode,
+    );
+
+    const sharePercent =
+      policyMode === "customer_100"
+        ? 100
+        : policyMode === "restaurant_100"
+          ? 0
+          : customerSharePercent(orderSubtotal, feeShareRules);
 
     // quote.customerFeeCents is the full delivery quote amount used by KTown
     // before the restaurant subsidy is applied.
@@ -179,6 +199,7 @@ export async function POST(
       providerFeeCents,
       fullDeliveryFeeCents: providerFeeCents,
 
+      deliveryFeePolicyMode: policyMode,
       customerSharePercent: sharePercent,
       restaurantSharePercent: Math.max(0, 100 - sharePercent),
       orderSubtotal: Number(orderSubtotal.toFixed(2)),

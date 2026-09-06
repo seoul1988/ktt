@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+
 import {
   getOrderAdmin,
   cleanPhone,
@@ -149,6 +149,17 @@ type DeliveryFeeShareRule = {
   maxSubtotal: number | null;
   customerPercent: number;
 };
+
+type DeliveryFeePolicyMode =
+  | "customer_100"
+  | "order_amount"
+  | "restaurant_100";
+
+function normalizeDeliveryFeePolicyMode(value: unknown): DeliveryFeePolicyMode {
+  return value === "customer_100" || value === "restaurant_100"
+    ? value
+    : "order_amount";
+}
 
 const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: 19.99, customerPercent: 100 },
@@ -427,7 +438,7 @@ export async function POST(
       db
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_share_rules",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_policy_mode,delivery_fee_share_rules",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -950,10 +961,19 @@ export async function POST(
         Number(directQuote.customerFeeCents || 0),
       );
 
-      const customerPercent = deliveryCustomerPercent(
-        subtotal,
-        settings?.delivery_fee_share_rules,
+      const deliveryFeePolicyMode = normalizeDeliveryFeePolicyMode(
+        settings?.delivery_fee_policy_mode,
       );
+
+      const customerPercent =
+        deliveryFeePolicyMode === "customer_100"
+          ? 100
+          : deliveryFeePolicyMode === "restaurant_100"
+            ? 0
+            : deliveryCustomerPercent(
+                subtotal,
+                settings?.delivery_fee_share_rules,
+              );
 
       // The courier still charges the full quote. Only the configured
       // percentage is charged to the customer; the restaurant absorbs the rest.
