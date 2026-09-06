@@ -101,6 +101,11 @@ type DeliveryFeeShareRule = {
   customerPercent: number;
 };
 
+type DeliveryFeePolicyMode =
+  | "customer_100"
+  | "order_amount"
+  | "restaurant_100";
+
 const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: 19.99, customerPercent: 100 },
   { maxSubtotal: 29.99, customerPercent: 70 },
@@ -416,6 +421,8 @@ export default function OwnerBusinessMenuPage() {
   const [pickupModeEnabled, setPickupModeEnabled] = useState(false);
   const [deliveryModeEnabled, setDeliveryModeEnabled] = useState(false);
 
+  const [deliveryFeePolicyMode, setDeliveryFeePolicyMode] =
+    useState<DeliveryFeePolicyMode>("order_amount");
   const [deliveryFeeShareRules, setDeliveryFeeShareRules] =
     useState<DeliveryFeeShareRule[]>(DEFAULT_DELIVERY_FEE_SHARE_RULES);
   const [savingDeliveryFeeShareRules, setSavingDeliveryFeeShareRules] =
@@ -519,6 +526,13 @@ export default function OwnerBusinessMenuPage() {
         setMenuModeEnabled(modes.menu !== false);
         setPickupModeEnabled(modes.pickup === true);
         setDeliveryModeEnabled(modes.delivery === true);
+
+        setDeliveryFeePolicyMode(
+          data?.deliveryFeePolicyMode === "customer_100" ||
+          data?.deliveryFeePolicyMode === "restaurant_100"
+            ? data.deliveryFeePolicyMode
+            : "order_amount",
+        );
 
         if (
           Array.isArray(data?.deliveryFeeShareRules) &&
@@ -886,6 +900,7 @@ export default function OwnerBusinessMenuPage() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
+            deliveryFeePolicyMode,
             deliveryFeeShareRules: normalized,
           }),
         },
@@ -897,6 +912,14 @@ export default function OwnerBusinessMenuPage() {
         throw new Error(
           data?.error || "배달료 분담 설정 저장에 실패했습니다.",
         );
+      }
+
+      if (
+        data?.deliveryFeePolicyMode === "customer_100" ||
+        data?.deliveryFeePolicyMode === "order_amount" ||
+        data?.deliveryFeePolicyMode === "restaurant_100"
+      ) {
+        setDeliveryFeePolicyMode(data.deliveryFeePolicyMode);
       }
 
       if (Array.isArray(data?.deliveryFeeShareRules)) {
@@ -3817,107 +3840,152 @@ export default function OwnerBusinessMenuPage() {
                   Delivery Fee Sharing
                 </p>
                 <h3 className="mt-1 text-base font-black text-[#172033]">
-                  주문금액별 배달료 분담
+                  배달료 부담 방식
                 </h3>
                 <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
-                  Uber / DoorDash에서 나온 실제 배달료를 주문금액 기준으로 고객과 식당이 나눠 부담합니다.
+                  아래 3가지 중 하나만 선택하세요. 주문금액별 분할을 선택하면 세부 설정이 열립니다.
                 </p>
               </div>
 
-              <div className="mt-4 overflow-hidden rounded-xl border border-blue-200 bg-white">
-                <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr] bg-blue-100 px-3 py-2 text-[10px] font-black uppercase text-blue-900">
-                  <div>주문금액</div>
-                  <div className="text-center">고객 부담</div>
-                  <div className="text-center">식당 부담</div>
-                </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {[
+                  {
+                    value: "customer_100" as DeliveryFeePolicyMode,
+                    title: "손님이 100% 부담",
+                    description: "Uber 배달료 전액을 고객이 결제합니다.",
+                  },
+                  {
+                    value: "order_amount" as DeliveryFeePolicyMode,
+                    title: "주문금액별 분할",
+                    description: "주문금액에 따라 고객과 식당이 나눠 부담합니다.",
+                  },
+                  {
+                    value: "restaurant_100" as DeliveryFeePolicyMode,
+                    title: "식당이 100% 부담",
+                    description: "고객에게 배달료를 청구하지 않습니다.",
+                  },
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${
+                      deliveryFeePolicyMode === option.value
+                        ? "border-blue-600 bg-white"
+                        : "border-blue-100 bg-blue-50/50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deliveryFeePolicyMode"
+                      checked={deliveryFeePolicyMode === option.value}
+                      onChange={() => setDeliveryFeePolicyMode(option.value)}
+                      disabled={savingDeliveryFeeShareRules}
+                      className="mt-0.5 h-5 w-5 shrink-0 accent-blue-700"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-black text-[#172033]">
+                        {option.title}
+                      </span>
+                      <span className="mt-1 block text-[11px] font-semibold leading-5 text-gray-600">
+                        {option.description}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
 
-                {deliveryFeeShareRules.map((rule, index) => {
-                  const previousMax =
-                    index === 0
-                      ? null
-                      : deliveryFeeShareRules[index - 1]?.maxSubtotal;
-                  const isLast = index === deliveryFeeShareRules.length - 1;
-                  const restaurantPercent = Math.max(
-                    0,
-                    100 - Number(rule.customerPercent || 0),
-                  );
-
-                  return (
-                    <div
-                      key={index}
-                      className="grid grid-cols-[1.2fr_0.9fr_0.9fr] items-center gap-2 border-t border-blue-100 px-3 py-3"
-                    >
-                      <div className="min-w-0">
-                        {isLast ? (
-                          <div className="rounded-lg bg-gray-50 px-2 py-2 text-xs font-black text-gray-700">
-                            ${(Number(previousMax || 0) + 0.01).toFixed(2)} 이상
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <span className="shrink-0 text-xs font-bold text-gray-500">
-                              {index === 0
-                                ? "$0 ~"
-                                : `$${(Number(previousMax || 0) + 0.01).toFixed(2)} ~`}
-                            </span>
-                            <div className="flex min-w-0 items-center overflow-hidden rounded-lg border border-gray-300 bg-white">
-                              <span className="pl-2 text-xs font-black">$</span>
-                              <input
-                                value={
-                                  rule.maxSubtotal == null
-                                    ? ""
-                                    : String(rule.maxSubtotal)
-                                }
-                                onChange={(event) => {
-                                  const value = event.target.value.replace(
-                                    /[^0-9.]/g,
-                                    "",
-                                  );
-                                  updateDeliveryFeeShareRule(index, {
-                                    maxSubtotal:
-                                      value === "" ? 0 : Number(value),
-                                  });
-                                }}
-                                inputMode="decimal"
-                                className="min-w-0 w-full px-1 py-2 text-right text-xs font-black outline-none"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-center gap-1">
-                        <input
-                          value={String(rule.customerPercent)}
-                          onChange={(event) => {
-                            const value = event.target.value.replace(
-                              /[^0-9.]/g,
-                              "",
-                            );
-                            updateDeliveryFeeShareRule(index, {
-                              customerPercent: Math.max(
-                                0,
-                                Math.min(100, Number(value) || 0),
-                              ),
-                            });
-                          }}
-                          inputMode="decimal"
-                          className="w-14 rounded-lg border border-blue-300 bg-white px-2 py-2 text-right text-xs font-black outline-none"
-                        />
-                        <span className="text-xs font-black text-blue-800">%</span>
-                      </div>
-
-                      <div className="text-center text-xs font-black text-gray-700">
-                        {restaurantPercent}%
-                      </div>
+              {deliveryFeePolicyMode === "order_amount" ? (
+                <>
+                  <div className="mt-4 overflow-hidden rounded-xl border border-blue-200 bg-white">
+                    <div className="grid grid-cols-[1.2fr_0.9fr_0.9fr] bg-blue-100 px-3 py-2 text-[10px] font-black uppercase text-blue-900">
+                      <div>주문금액</div>
+                      <div className="text-center">고객 부담</div>
+                      <div className="text-center">식당 부담</div>
                     </div>
-                  );
-                })}
-              </div>
 
-              <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[11px] font-bold leading-5 text-gray-600">
-                예: Uber 배달료가 $8이고 주문금액이 $35이면 50:50 설정 기준으로
-                고객 $4.00 · 식당 $4.00 부담
-              </div>
+                    {deliveryFeeShareRules.map((rule, index) => {
+                      const previousMax =
+                        index === 0
+                          ? null
+                          : deliveryFeeShareRules[index - 1]?.maxSubtotal;
+                      const isLast = index === deliveryFeeShareRules.length - 1;
+                      const restaurantPercent = Math.max(
+                        0,
+                        100 - Number(rule.customerPercent || 0),
+                      );
+
+                      return (
+                        <div
+                          key={index}
+                          className="grid grid-cols-[1.2fr_0.9fr_0.9fr] items-center gap-2 border-t border-blue-100 px-3 py-3"
+                        >
+                          <div className="min-w-0">
+                            {isLast ? (
+                              <div className="rounded-lg bg-gray-50 px-2 py-2 text-xs font-black text-gray-700">
+                                ${(Number(previousMax || 0) + 0.01).toFixed(2)} 이상
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1">
+                                <span className="shrink-0 text-xs font-bold text-gray-500">
+                                  {index === 0
+                                    ? "$0 ~"
+                                    : `$${(Number(previousMax || 0) + 0.01).toFixed(2)} ~`}
+                                </span>
+                                <div className="flex min-w-0 items-center overflow-hidden rounded-lg border border-gray-300 bg-white">
+                                  <span className="pl-2 text-xs font-black">$</span>
+                                  <input
+                                    value={rule.maxSubtotal == null ? "" : String(rule.maxSubtotal)}
+                                    onChange={(event) => {
+                                      const value = event.target.value.replace(/[^0-9.]/g, "");
+                                      updateDeliveryFeeShareRule(index, {
+                                        maxSubtotal: value === "" ? 0 : Number(value),
+                                      });
+                                    }}
+                                    inputMode="decimal"
+                                    className="min-w-0 w-full px-1 py-2 text-right text-xs font-black outline-none"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-center gap-1">
+                            <input
+                              value={String(rule.customerPercent)}
+                              onChange={(event) => {
+                                const value = event.target.value.replace(/[^0-9.]/g, "");
+                                updateDeliveryFeeShareRule(index, {
+                                  customerPercent: Math.max(
+                                    0,
+                                    Math.min(100, Number(value) || 0),
+                                  ),
+                                });
+                              }}
+                              inputMode="decimal"
+                              className="w-14 rounded-lg border border-blue-300 bg-white px-2 py-2 text-right text-xs font-black outline-none"
+                            />
+                            <span className="text-xs font-black text-blue-800">%</span>
+                          </div>
+
+                          <div className="text-center text-xs font-black text-gray-700">
+                            {restaurantPercent}%
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[11px] font-bold leading-5 text-gray-600">
+                    예: Uber 배달료가 $8이고 주문금액이 $35이면 50:50 설정 기준으로
+                    고객 $4.00 · 식당 $4.00 부담
+                  </div>
+                </>
+              ) : (
+                <div className="mt-4 rounded-xl bg-white px-3 py-3 text-[11px] font-bold leading-5 text-gray-700">
+                  {deliveryFeePolicyMode === "customer_100"
+                    ? "현재 설정: 손님이 Uber 배달료의 100%를 부담합니다."
+                    : "현재 설정: 식당이 Uber 배달료의 100%를 부담하며 고객 배달료는 $0입니다."}
+                </div>
+              )}
 
               <button
                 type="button"
@@ -3927,7 +3995,7 @@ export default function OwnerBusinessMenuPage() {
               >
                 {savingDeliveryFeeShareRules
                   ? "저장 중..."
-                  : "배달료 분담 설정 저장"}
+                  : "배달료 부담 설정 저장"}
               </button>
             </div>
           ) : null}
