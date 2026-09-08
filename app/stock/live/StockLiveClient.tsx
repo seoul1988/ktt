@@ -7,7 +7,10 @@ import { supabase } from "@/lib/supabase";
 type Snapshot = {
   symbol: string;
   price?: number;
+  bid?: number;
+  ask?: number;
   action?: string;
+  reason?: string;
   forecast?: string;
   score?: number;
   down_risk?: number;
@@ -23,6 +26,15 @@ type Snapshot = {
   local_support?: number;
   fast_drop?: string;
   trend_1m?: string;
+  trend_score?: number;
+  ml_up5?: number;
+  dl_up5?: number;
+  dl_up10?: number;
+  dl_up15?: number;
+  sector?: string;
+  option_bias?: string;
+  option_score?: number;
+  vol_x?: number;
 };
 
 const MAX_SYMBOLS = 5;
@@ -67,7 +79,8 @@ export default function StockLiveClient() {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [status, setStatus] = useState("페이지 로드됨 · 로그인 확인 중...");
-  const [openSymbol, setOpenSymbol] = useState("");
+  const [popupSymbol, setPopupSymbol] = useState("");
+  const [mobileOpenSymbol, setMobileOpenSymbol] = useState("");
 
   const connect = useCallback((url?: string | null) => {
     if (!url) {
@@ -126,7 +139,6 @@ export default function StockLiveClient() {
 
     const list = Array.isArray(data?.symbols) ? data.symbols.slice(0, MAX_SYMBOLS) : [];
     setSymbols(list);
-    setOpenSymbol((current) => current && list.includes(current) ? current : list[0] || "");
     if (!list.length) {
       setStatus("등록된 종목이 없습니다. Market Dashboard에서 종목을 등록하세요.");
       return;
@@ -195,6 +207,8 @@ export default function StockLiveClient() {
     return { symbol, item: symbol ? snapshots[symbol] : undefined };
   });
 
+  const popupItem = popupSymbol ? snapshots[popupSymbol] : undefined;
+
   return (
     <main className="min-h-screen bg-slate-50 pb-16">
       <div className="mx-auto max-w-[1600px] px-3 py-4">
@@ -227,12 +241,12 @@ export default function StockLiveClient() {
           <div className="space-y-2 md:hidden">
             {symbols.map((symbol) => {
               const item = snapshots[symbol];
-              const isOpen = openSymbol === symbol;
+              const isOpen = mobileOpenSymbol === symbol;
               return (
                 <div key={symbol} className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
                   <button
                     type="button"
-                    onClick={() => setOpenSymbol(isOpen ? "" : symbol)}
+                    onClick={() => setMobileOpenSymbol(isOpen ? "" : symbol)}
                     className="w-full p-3 text-left"
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -278,7 +292,7 @@ export default function StockLiveClient() {
               </tr></thead>
               <tbody>
               {rows.map(({ symbol, item }, index) => {
-                const isOpen = Boolean(symbol) && openSymbol === symbol;
+                const isPopupOpen = Boolean(symbol) && popupSymbol === symbol;
 
                 return (
                   <Fragment key={symbol || `empty-${index}`}>
@@ -288,13 +302,11 @@ export default function StockLiveClient() {
                         {symbol ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              setOpenSymbol(isOpen ? "" : symbol)
-                            }
-                            aria-label={`${symbol} 상세보기`}
-                            aria-expanded={isOpen}
+                            onClick={() => setPopupSymbol(symbol)}
+                            aria-label={`${symbol} 현재 판단 설명`}
+                            aria-expanded={isPopupOpen}
                             className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md font-black text-white transition ${
-                              isOpen
+                              isPopupOpen
                                 ? "bg-slate-900"
                                 : "bg-blue-600 hover:bg-blue-700"
                             }`}
@@ -324,70 +336,6 @@ export default function StockLiveClient() {
                       <Cell className={textTone(item?.fast_drop)}>{item?.fast_drop || "-"}</Cell>
                       <Cell className={textTone(item?.trend_1m)}>{item?.trend_1m || "-"}</Cell>
                     </tr>
-
-                    {isOpen ? (
-                      <tr>
-                        <td
-                          colSpan={16}
-                          className="border-b border-slate-300 bg-slate-50 px-4 py-4"
-                        >
-                          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
-                            <DesktopDetail label="Ticker" value={symbol} />
-                            <DesktopDetail
-                              label="Price"
-                              value={item?.price != null ? `$${fmt(item.price)}` : "-"}
-                            />
-                            <DesktopDetail
-                              label="Action"
-                              value={item?.action || "DATA WAIT"}
-                              tone={textTone(item?.action)}
-                            />
-                            <DesktopDetail
-                              label="Forecast"
-                              value={item?.forecast || "-"}
-                              tone={textTone(item?.forecast)}
-                            />
-                            <DesktopDetail
-                              label="Score"
-                              value={item?.score ?? "-"}
-                              tone={scoreTone(item?.score)}
-                            />
-                            <DesktopDetail
-                              label="Down Risk"
-                              value={
-                                item?.down_risk != null
-                                  ? `${fmt(item.down_risk, 0)}%`
-                                  : "-"
-                              }
-                              tone={riskTone(item?.down_risk)}
-                            />
-                            <DesktopDetail label="Buy60" value={item?.buy60 ?? "-"} />
-                            <DesktopDetail label="Sell60" value={item?.sell60 ?? "-"} />
-                            <DesktopDetail label="VWAP" value={item ? fmt(item.vwap) : "-"} />
-                            <DesktopDetail label="EMA9" value={item ? fmt(item.ema9) : "-"} />
-                            <DesktopDetail label="EMA20" value={item ? fmt(item.ema20) : "-"} />
-                            <DesktopDetail
-                              label="Resistance"
-                              value={item ? fmt(item.resistance) : "-"}
-                            />
-                            <DesktopDetail
-                              label="Support"
-                              value={item ? fmt(item.local_support ?? item.support) : "-"}
-                            />
-                            <DesktopDetail
-                              label="Fast Drop"
-                              value={item?.fast_drop || "-"}
-                              tone={textTone(item?.fast_drop)}
-                            />
-                            <DesktopDetail
-                              label="1m Trend"
-                              value={item?.trend_1m || "-"}
-                              tone={textTone(item?.trend_1m)}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
                   </Fragment>
                 );
               })}
@@ -396,9 +344,192 @@ export default function StockLiveClient() {
           </div>
         </section>
       </div>
+
+        {popupSymbol ? (
+          <StockWhyModal
+            symbol={popupSymbol}
+            item={popupItem}
+            onClose={() => setPopupSymbol("")}
+          />
+        ) : null}
     </main>
   );
 }
+
+
+function signalSentence(item?: Snapshot) {
+  const action = String(item?.action || "WAIT").toUpperCase();
+
+  if (action.includes("SELL")) {
+    return "🔴 현재는 매수보다 포지션 위험 관리가 우선인 신호입니다.";
+  }
+  if (action.includes("BUY")) {
+    return "🟢 매수 조건이 상당 부분 충족된 상태입니다.";
+  }
+  if (action.includes("WARNING") || action.includes("DANGER")) {
+    return "🟠 하락 위험 경고가 감지되었습니다. 신규 진입보다 확인이 우선입니다.";
+  }
+  return "🟡 WAIT: 일부 조건이 아직 동시에 맞지 않습니다.";
+}
+
+function formatK(v?: number) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "-";
+  return Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(Math.round(n));
+}
+
+function StockWhyModal({
+  symbol,
+  item,
+  onClose,
+}: {
+  symbol: string;
+  item?: Snapshot;
+  onClose: () => void;
+}) {
+  const support = item?.local_support ?? item?.support;
+  const buy = Number(item?.buy60);
+  const sell = Number(item?.sell60);
+  const totalFlow = buy + sell;
+  const buyPct =
+    Number.isFinite(totalFlow) && totalFlow > 0
+      ? Math.round((buy / totalFlow) * 100)
+      : null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-3"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="max-h-[90vh] w-full max-w-[720px] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-4 py-3">
+          <div className="font-black text-slate-950">
+            {symbol} — Why? / Current Situation
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-lg font-black text-slate-600 hover:bg-slate-50"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-3">
+          <h2 className="text-lg font-black text-slate-950">
+            {symbol} 현재 판단 설명
+          </h2>
+          <span className="text-xs font-semibold text-slate-500">
+            실시간 계산값 기준
+          </span>
+        </div>
+
+        <div className="max-h-[72vh] overflow-y-auto px-5 py-4 text-[15px] leading-7 text-slate-900">
+          <div className="mb-4 text-base font-bold">{symbol} 현재 상황</div>
+
+          <div>
+            현재 호가:{" "}
+            <b>
+              {item?.bid != null ? `$${fmt(item.bid)}` : "-"}
+              {" / "}
+              {item?.ask != null ? `$${fmt(item.ask)}` : "-"}
+            </b>
+            {"  |  "}현재가:{" "}
+            <b>{item?.price != null ? `$${fmt(item.price)}` : "-"}</b>
+          </div>
+
+          <div className="mb-4">
+            현재 판단: <b>{item?.action || "WAIT"}</b>
+            {"  |  "}Forecast <b>{item?.forecast || "-"}</b>
+            {"  |  "}Score <b>{item?.score ?? "-"}</b>
+          </div>
+
+          <div className="space-y-1">
+            <div>
+              🔵 단기 추세: 현재 1분 추세 <b>{item?.trend_1m || "-"}</b>
+              {item?.vwap != null && item?.price != null
+                ? ` · Price ${item.price >= item.vwap ? "above" : "below"} VWAP $${fmt(item.vwap)}`
+                : ""}
+            </div>
+
+            <div>
+              🟠 EMA: EMA9 <b>{item?.ema9 != null ? `$${fmt(item.ema9)}` : "-"}</b>
+              {"  |  "}EMA20 <b>{item?.ema20 != null ? `$${fmt(item.ema20)}` : "-"}</b>
+            </div>
+
+            <div>
+              🟢 지지 / 저항: 지지{" "}
+              <b>{support != null ? `$${fmt(support)}` : "-"}</b>
+              {"  |  "}저항{" "}
+              <b>{item?.resistance != null ? `$${fmt(item.resistance)}` : "-"}</b>
+            </div>
+
+            <div>
+              🔴 Fast Drop: <b>{item?.fast_drop || "NONE"}</b>
+            </div>
+
+            <div>
+              🟢 60초 수급: Buy <b>{formatK(item?.buy60)}</b> / Sell{" "}
+              <b>{formatK(item?.sell60)}</b>
+              {buyPct != null ? ` — 매수 비중 ${buyPct}%` : ""}
+            </div>
+
+            <div>
+              ⚪ 거래량: 상대 거래량{" "}
+              <b>{item?.vol_x != null ? `${Number(item.vol_x).toFixed(2)}x` : "-"}</b>
+            </div>
+
+            <div>
+              🔴 조기 하락 경고: Down Risk{" "}
+              <b>{item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}</b>
+            </div>
+
+            <div>
+              🟣 모델: ML Up5{" "}
+              <b>{item?.ml_up5 != null ? `${fmt(item.ml_up5, 0)}%` : "-"}</b>
+              {item?.dl_up5 != null ? ` · DL Up5 ${fmt(item.dl_up5, 0)}%` : ""}
+            </div>
+
+            <div>
+              Sector: <b>{item?.sector || "-"}</b>
+            </div>
+
+            <div>
+              Options:{" "}
+              <b>
+                {item?.option_bias || "N/A"}
+                {item?.option_score != null ? ` ${item.option_score >= 0 ? "+" : ""}${item.option_score}` : ""}
+              </b>
+            </div>
+          </div>
+
+          <div className="my-5 border-t border-slate-200" />
+
+          <div className="font-bold">{signalSentence(item)}</div>
+
+          <div className="mt-4">
+            프로그램 판단 근거:{" "}
+            <b>{item?.reason || "현재 서버가 전달한 판단 근거가 없습니다."}</b>
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-4 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-black text-white hover:bg-slate-800"
+          >
+            CLOSE
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function Cell({ children, strong = false, className = "" }: { children: React.ReactNode; strong?: boolean; className?: string }) {
   return <td className={`whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center ${strong ? "font-black text-slate-950" : "font-medium text-slate-700"} ${className}`}>{children}</td>;
