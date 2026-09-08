@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import CommunityBottomNav from "../components/CommunityBottomNav";
+import ProfileButton from "../components/ProfileButton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -151,6 +154,7 @@ function earningsTimeLabel(value?: string) {
 }
 
 export default function StockMonitorPage() {
+  const router = useRouter();
   const wsRef = useRef<WebSocket | null>(null);
   const renewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -635,20 +639,28 @@ export default function StockMonitorPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-16">
-      <div className="mx-auto max-w-[1600px] px-3 py-4">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-black text-slate-950">My Stock Monitor</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              최대 5종목 · 실시간 분석 신호는 투자 조언이나 주문이 아닙니다.
-            </p>
-          </div>
-          <div className="text-xs font-black text-slate-700">
-            KTown WEB · SCHWAB DATA · 1M / 5M ANALYSIS
+    <main className="min-h-screen bg-slate-50 pb-20">
+      <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="relative mx-auto flex h-14 max-w-[1600px] items-center justify-between px-3">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="z-10 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-black text-slate-800 shadow-sm active:scale-95"
+            aria-label="뒤로가기"
+          >
+            ←
+          </button>
+
+          <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-lg font-black text-slate-950 sm:text-xl">
+            My Stock Monitor
+          </h1>
+
+          <div className="z-10 flex h-10 w-10 items-center justify-center">
+            <ProfileButton />
           </div>
         </div>
-
+      </header>
+      <div className="mx-auto max-w-[1600px] px-3 py-4">
         <section className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-1 text-sm font-black text-slate-950">
@@ -976,6 +988,7 @@ export default function StockMonitorPage() {
         </div>
       ) : null}
 
+      <CommunityBottomNav activeNav="community" />
     </main>
   );
 }
