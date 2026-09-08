@@ -146,7 +146,9 @@ export default function StockLiveClient() {
     }
 
     try {
-      // Vercel은 여기서 딱 한 번, 보안용 WebSocket URL/token 발급에만 사용합니다.\n      // 이후 1초 실시간 데이터는 브라우저가 PC #2(stock.7pocker.us)에서 직접 받습니다.\n      const response = await fetch("/api/stocks/session", {
+      // Vercel은 여기서 딱 한 번, 보안용 WebSocket URL/token 발급에만 사용합니다.
+      // 이후 1초 실시간 데이터는 브라우저가 PC #2(stock.7pocker.us)에서 직접 받습니다.
+      const response = await fetch("/api/stocks/session", {
         headers: { authorization: `Bearer ${session.access_token}` },
         cache: "no-store",
       });
