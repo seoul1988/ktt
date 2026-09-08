@@ -10,6 +10,7 @@ type EarningsItem = {
   date: string;
   time: string;
   estimate: string | number | null;
+  marketCap: number;
 };
 
 function cleanSymbols(value: string | null) {
@@ -48,6 +49,39 @@ function nextFiveWeekdays() {
   }
 
   return result;
+}
+
+
+function parseMarketCap(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  const raw = String(value || "")
+    .trim()
+    .replace(/[$,\s]/g, "")
+    .toUpperCase();
+
+  if (!raw) return 0;
+
+  const match = raw.match(/^(-?\d+(?:\.\d+)?)([KMBT])?$/);
+  if (!match) {
+    const numeric = Number(raw);
+    return Number.isFinite(numeric) ? numeric : 0;
+  }
+
+  const base = Number(match[1]);
+  const unit = match[2] || "";
+  const mult =
+    unit === "T"
+      ? 1e12
+      : unit === "B"
+        ? 1e9
+        : unit === "M"
+          ? 1e6
+          : unit === "K"
+            ? 1e3
+            : 1;
+
+  return base * mult;
 }
 
 function normalizeTime(value: unknown) {
@@ -103,7 +137,6 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
   // Nasdaq's calendar is generally ordered with the more notable companies
   // near the top. Keep the dashboard compact like an earnings-calendar board.
   return rows
-    .slice(0, 18)
     .map((row: Record<string, unknown>) => {
       const symbol = String(
         row.symbol || row.ticker || row.Symbol || "",
@@ -134,6 +167,14 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
         row.timeOfDay ||
         "";
 
+      const marketCap = parseMarketCap(
+        row.marketCap ??
+          row.marketcap ??
+          row.market_cap ??
+          row.marketCapitalization ??
+          0,
+      );
+
       return {
         symbol,
         company,
@@ -143,9 +184,12 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
           estimate == null || String(estimate).trim() === ""
             ? null
             : String(estimate),
+        marketCap,
       };
     })
-    .filter((item: EarningsItem) => Boolean(item.symbol));
+    .filter((item: EarningsItem) => Boolean(item.symbol))
+    .sort((a: EarningsItem, b: EarningsItem) => b.marketCap - a.marketCap)
+    .slice(0, 6);
 }
 
 async function fetchMarketEvents() {

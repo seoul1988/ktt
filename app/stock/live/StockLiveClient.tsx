@@ -1,11 +1,13 @@
+
 "use client";
 
 import Link from "next/link";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Snapshot = {
   symbol: string;
+  ts?: number;
   price?: number;
   bid?: number;
   ask?: number;
@@ -14,17 +16,17 @@ type Snapshot = {
   forecast?: string;
   score?: number;
   down_risk?: number;
-  pnl?: number;
-  entry?: number;
+  fast_drop?: string;
+  fast_drop_1m?: number;
+  fast_drop_2m?: number;
   buy60?: number;
   sell60?: number;
   vwap?: number;
   ema9?: number;
   ema20?: number;
-  resistance?: number;
-  support?: number;
   local_support?: number;
-  fast_drop?: string;
+  support?: number;
+  resistance?: number;
   trend_1m?: string;
   trend_score?: number;
   ml_up5?: number;
@@ -34,540 +36,938 @@ type Snapshot = {
   sector?: string;
   option_bias?: string;
   option_score?: number;
+  zero_dte_key?: string;
+  zero_dte_label?: string;
+  sell_risk?: number;
+  pnl?: number;
+  entry?: number;
+  exp_5m?: string;
+  samples?: number;
   vol_x?: number;
+  error?: string;
+};
+
+
+type MarketEvent = {
+  id?: string;
+  time?: string;
+  title?: string;
+  importance?: "high" | "medium" | "low";
+  symbol?: string;
+};
+
+type EarningsItem = {
+  symbol?: string;
+  company?: string;
+  date?: string;
+  time?: string;
+  estimate?: string | number;
+  marketCap?: number;
+};
+
+type NewsItem = {
+  id?: string;
+  symbol?: string;
+  title?: string;
+  source?: string;
+  publishedAt?: string;
+  url?: string;
+};
+
+type MarketInfoPayload = {
+  events?: MarketEvent[];
+  earnings?: EarningsItem[];
+  news?: NewsItem[];
+  updatedAt?: string;
+  source?: string;
+  warning?: string;
+  error?: string;
 };
 
 const MAX_SYMBOLS = 5;
 
-function fmt(v: unknown, d = 2) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n.toFixed(d) : "-";
+
+function cleanSymbol(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9.\-]/g, "")
+    .slice(0, 12);
 }
 
-function textTone(value?: string) {
-  const v = (value || "").toUpperCase();
-  if (v.includes("SELL") || v.includes("DOWN") || v.includes("CRITICAL")) {
-    return "bg-red-100 text-red-800 font-black";
+function signalStyle(action?: string, risk?: number, fastDrop?: string) {
+  const a = (action || "").toUpperCase();
+  const f = (fastDrop || "").toUpperCase();
+  if (a.includes("SELL") || f.includes("CRITICAL") || Number(risk) >= 65) {
+    return "text-red-600";
   }
-  if (v.includes("BUY") || v.includes("UP") || v === "NONE") {
-    return "bg-emerald-100 text-emerald-800 font-black";
+  if (a.includes("BUY")) return "text-emerald-600";
+  if (a.includes("WARNING") || a.includes("WATCH") || Number(risk) >= 45) {
+    return "text-amber-600";
   }
-  if (v.includes("WAIT") || v.includes("WATCH") || v.includes("MIXED") || v.includes("WARNING")) {
-    return "bg-amber-100 text-amber-800 font-black";
+  return "text-slate-500";
+}
+
+
+function earningsDateKey(value?: string) {
+  if (!value) return "TBD";
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 10);
+}
+
+function earningsDayLabel(value: string) {
+  if (value === "TBD") return { dow: "TBD", day: "—", date: "Date TBD" };
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return { dow: "", day: value, date: value };
   }
-  return "";
+  return {
+    dow: parsed.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+    day: String(parsed.getDate()),
+    date: parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+  };
 }
 
-function riskTone(value?: number) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "";
-  if (n >= 65) return "bg-red-100 text-red-800 font-black";
-  if (n >= 45) return "bg-amber-100 text-amber-800 font-black";
-  return "bg-emerald-100 text-emerald-800 font-black";
+function earningsTimeLabel(value?: string) {
+  const v = String(value || "").toLowerCase();
+  if (!v) return "";
+  if (
+    v.includes("before") ||
+    v.includes("bmo") ||
+    v.includes("pre") ||
+    v.includes("morning")
+  ) return "Before Open";
+  if (
+    v.includes("after") ||
+    v.includes("amc") ||
+    v.includes("post") ||
+    v.includes("close")
+  ) return "After Close";
+  return value || "";
 }
 
-function scoreTone(value?: number) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "";
-  if (n >= 60) return "bg-emerald-100 text-emerald-800 font-black";
-  if (n >= 40) return "bg-amber-100 text-amber-800 font-black";
-  return "bg-red-100 text-red-800 font-black";
-}
-
-export default function StockLiveClient() {
+export default function StockMonitorPage() {
   const wsRef = useRef<WebSocket | null>(null);
-  const [symbols, setSymbols] = useState<string[]>([]);
-  const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
-  const [status, setStatus] = useState("페이지 로드됨 · 로그인 확인 중...");
-  const [popupSymbol, setPopupSymbol] = useState("");
-  const [mobileOpenSymbol, setMobileOpenSymbol] = useState("");
+  const renewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const connect = useCallback((url?: string | null) => {
-    if (!url) {
-      setStatus("등록 종목 표시됨 · 분석 서버 연결 대기");
+  const [symbols, setSymbols] = useState<string[]>([]);
+  const [tickerInputs, setTickerInputs] = useState<string[]>(["", "", "", "", ""]);
+  const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
+  const [openSymbol, setOpenSymbol] = useState("");
+  const [status, setStatus] = useState("로그인 확인 중...");
+  const [busy, setBusy] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [marketInfo, setMarketInfo] = useState<MarketInfoPayload>({
+    events: [],
+    earnings: [],
+    news: [],
+  });
+  const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
+
+
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error("Stock monitor session error:", error);
+      return "";
+    }
+
+    return session?.access_token || "";
+  }, []);
+
+  const connectWebSocket = useCallback((wsUrl?: string | null) => {
+    if (!wsUrl) {
+      setStatus("종목은 저장되었습니다. 분석 서버 연결을 기다리는 중입니다.");
       return;
     }
+
     if (wsRef.current) {
       try { wsRef.current.close(); } catch {}
     }
-    const ws = new WebSocket(url);
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (error) {
+      console.error("Invalid WebSocket URL:", error);
+      setIsLive(false);
+      setStatus("분석 서버 주소가 올바르지 않습니다.");
+      return;
+    }
     wsRef.current = ws;
-    ws.onopen = () => setStatus("실시간 분석 서버 연결됨");
+
+    ws.onopen = () => {
+      setIsLive(true);
+      setStatus("실시간 분석 서버 연결됨 · 데이터 수신 중");
+    };
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        const list: Snapshot[] = Array.isArray(payload?.data) ? payload.data : [];
+        const list: Snapshot[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : payload?.symbol
+              ? [payload]
+              : payload?.snapshot?.symbol
+                ? [payload.snapshot]
+                : [];
         setSnapshots((prev) => {
           const next = { ...prev };
-          for (const item of list) if (item?.symbol) next[item.symbol] = item;
+          for (const item of list) {
+            if (item?.symbol) next[item.symbol] = item;
+          }
           return next;
         });
-      } catch {}
+      } catch (error) {
+        console.error("Stock WebSocket message error:", error);
+      }
     };
-    ws.onerror = () => setStatus("분석 서버 연결 오류");
+    ws.onerror = () => {
+      setIsLive(false);
+      setStatus("분석 서버 연결 오류 · 서버 실행 상태를 확인하세요.");
+    };
     ws.onclose = () => {
       if (wsRef.current === ws) {
         wsRef.current = null;
-        setStatus("분석 서버 연결 끊김");
+        setIsLive(false);
+        setStatus("분석 서버 연결이 끊어졌습니다.");
       }
     };
   }, []);
 
-  const load = useCallback(async () => {
-    setStatus("로그인 및 등록 종목 확인 중...");
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      setStatus(`로그인 확인 오류: ${sessionError.message}`);
-      return;
-    }
-    if (!session?.user) {
-      setSymbols([]);
-      setStatus("로그인이 필요합니다.");
-      return;
-    }
 
-    const { data, error } = await supabase
-      .from("stock_watchlists")
-      .select("symbols")
-      .eq("user_id", session.user.id)
-      .maybeSingle();
-
-    if (error) {
-      setStatus(`등록 종목 불러오기 실패: ${error.message}`);
-      return;
-    }
-
-    const list = Array.isArray(data?.symbols) ? data.symbols.slice(0, MAX_SYMBOLS) : [];
-    setSymbols(list);
-    if (!list.length) {
-      setStatus("등록된 종목이 없습니다. Market Dashboard에서 종목을 등록하세요.");
-      return;
-    }
-
+  const loadMarketInfo = useCallback(async (watchSymbols: string[]) => {
     try {
-      const response = await fetch("/api/stocks/session", {
-        headers: { authorization: `Bearer ${session.access_token}` },
+      setMarketInfoStatus("업데이트 중");
+      const query = watchSymbols.length
+        ? `?symbols=${encodeURIComponent(watchSymbols.join(","))}`
+        : "";
+      const response = await fetch(`/api/stocks/market-info${query}`, {
         cache: "no-store",
       });
-      const payload = await response.json().catch(() => ({}));
+
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        setStatus(`연결 실패: ${payload?.error || `HTTP ${response.status}`}`);
-      } else if (payload?.wsUrl) {
-        connect(payload.wsUrl);
-      } else {
-        setStatus(payload?.serverWarning || "등록 종목 표시됨 · 분석 서버 연결 대기");
-      }
-    } catch {
-      setStatus("분석 서버 연결 요청 실패");
-    }
-  }, [connect]);
-
-  const stopLive = useCallback(async () => {
-    setStatus("실시간 분석 중지 중...");
-    const { data: { session } } = await supabase.auth.getSession();
-
-    try {
-      if (session?.access_token) {
-        const response = await fetch("/api/stocks/session", {
-          method: "DELETE",
-          headers: { authorization: `Bearer ${session.access_token}` },
-          cache: "no-store",
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || `HTTP ${response.status}`);
-        }
+        setMarketInfo({ events: [], earnings: [], news: [] });
+        setMarketInfoStatus(data?.error || `이벤트 서버 HTTP ${response.status}`);
+        return;
       }
 
-      if (wsRef.current) {
-        const ws = wsRef.current;
-        wsRef.current = null;
-        try { ws.close(1000, "User stopped live analysis"); } catch {}
-      }
-      setStatus("실시간 분석 중지됨");
+      const events: MarketEvent[] = Array.isArray(data?.events)
+        ? data.events.map((event: Record<string, unknown>, index: number) => {
+            const rawImportance = event.importance ?? event.risk;
+            const importanceText = String(rawImportance || "").toLowerCase();
+            const importance: MarketEvent["importance"] =
+              importanceText === "3" || importanceText.includes("high")
+                ? "high"
+                : importanceText === "2" || importanceText.includes("med")
+                  ? "medium"
+                  : "low";
+
+            return {
+              id: String(event.id || `event-${index}`),
+              time: String(event.time || "TBD"),
+              title: String(event.title || event.name || "-"),
+              importance,
+              symbol: event.symbol ? String(event.symbol) : undefined,
+            };
+          })
+        : [];
+
+      setMarketInfo({
+        events,
+        earnings: Array.isArray(data?.earnings) ? data.earnings : [],
+        news: Array.isArray(data?.news) ? data.news : [],
+        updatedAt: data?.updatedAt,
+        source: data?.source,
+        warning: data?.warning,
+      });
+      const updated = data?.updatedAt
+        ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "방금";
+      setMarketInfoStatus(
+        data?.warning ? `일부 연결 경고 · ${updated}` : `업데이트 ${updated}`,
+      );
     } catch (error) {
-      setStatus(error instanceof Error ? `STOP 실패: ${error.message}` : "STOP 실패");
+      setMarketInfo({ events: [], earnings: [], news: [] });
+      setMarketInfoStatus(
+        error instanceof Error ? error.message : "이벤트 서버 연결 실패",
+      );
     }
   }, []);
 
   useEffect(() => {
-    void load();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => void load());
+    const refresh = () => void loadMarketInfo(symbols);
+    const timer = window.setInterval(refresh, 15 * 60 * 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [loadMarketInfo, symbols]);
+
+  const openSession = useCallback(async () => {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session?.user) {
+      setStatus("로그인 후 사용할 수 있습니다.");
+      return;
+    }
+
+    const uid = session.user.id;
+    setUserId(uid);
+
+    // 1) Watchlist는 Supabase에서 직접 읽습니다.
+    //    분석 서버 환경변수가 없어도 등록/새로고침 저장이 유지됩니다.
+    const { data: watchlistRow, error: watchlistError } = await supabase
+      .from("stock_watchlists")
+      .select("symbols")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (watchlistError) {
+      console.error("stock_watchlists load error:", watchlistError);
+      setStatus(`Watchlist 불러오기 실패: ${watchlistError.message}`);
+      return;
+    }
+
+    const loaded = Array.isArray(watchlistRow?.symbols)
+      ? watchlistRow.symbols.slice(0, MAX_SYMBOLS)
+      : [];
+
+    setSymbols(loaded);
+    setTickerInputs([
+      loaded[0] || "",
+      loaded[1] || "",
+      loaded[2] || "",
+      loaded[3] || "",
+      loaded[4] || "",
+    ]);
+
+    void loadMarketInfo(loaded);
+
+    setStatus(loaded.length ? "종목 준비 완료 · START를 누르세요." : "종목을 등록하세요.");
+  }, [connectWebSocket, loadMarketInfo]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function initialize() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (session?.user) {
+        setUserId(session.user.id);
+        void openSession();
+      } else {
+        setStatus("로그인 정보를 기다리는 중...");
+      }
+    }
+
+    void initialize();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+
+      if (session?.user) {
+        setUserId(session.user.id);
+        void openSession();
+      } else {
+        setUserId("");
+        setStatus("로그인 후 사용할 수 있습니다.");
+        setSymbols([]);
+        setSnapshots({});
+        if (wsRef.current) {
+          try { wsRef.current.close(); } catch {}
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
       subscription.unsubscribe();
+      if (renewRef.current) clearTimeout(renewRef.current);
       if (wsRef.current) {
         try { wsRef.current.close(); } catch {}
-        wsRef.current = null;
       }
     };
-  }, [load]);
+  }, [openSession]);
 
-  const rows = Array.from({ length: MAX_SYMBOLS }, (_, i) => {
-    const symbol = symbols[i] || "";
-    return { symbol, item: symbol ? snapshots[symbol] : undefined };
-  });
+  async function saveWatchlist(nextSymbols: string[]) {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  const popupItem = popupSymbol ? snapshots[popupSymbol] : undefined;
+    if (sessionError || !session?.user) {
+      setStatus("로그인이 필요합니다.");
+      return;
+    }
+
+    const uid = session.user.id;
+    setUserId(uid);
+    setBusy(true);
+    setStatus("종목 저장 중...");
+
+    try {
+      // 핵심: 먼저 Supabase에 직접 저장.
+      const { error: saveError } = await supabase
+        .from("stock_watchlists")
+        .upsert(
+          {
+            user_id: uid,
+            symbols: nextSymbols,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
+        );
+
+      if (saveError) {
+        throw new Error(`Watchlist 저장 실패: ${saveError.message}`);
+      }
+
+      // 저장 성공 즉시 화면 반영.
+      setSymbols(nextSymbols);
+      setTickerInputs([
+        nextSymbols[0] || "",
+        nextSymbols[1] || "",
+        nextSymbols[2] || "",
+        nextSymbols[3] || "",
+        nextSymbols[4] || "",
+      ]);
+
+      void loadMarketInfo(nextSymbols);
+
+      // /api/stocks/session은 GET 전용이므로 저장할 때 POST하지 않습니다.
+      // 실시간 연결은 사용자가 START를 누를 때 시작합니다.
+      setStatus("종목 저장 완료 · START를 누르세요.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "저장 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTickerInputs() {
+    const nextSymbols: string[] = [];
+
+    for (const raw of tickerInputs) {
+      const symbol = cleanSymbol(raw);
+      if (symbol && !nextSymbols.includes(symbol)) {
+        nextSymbols.push(symbol);
+      }
+    }
+
+    await saveWatchlist(nextSymbols.slice(0, MAX_SYMBOLS));
+  }
+
+
+  async function startLive() {
+    const nextSymbols: string[] = [];
+
+    for (const raw of tickerInputs) {
+      const symbol = cleanSymbol(raw);
+      if (symbol && !nextSymbols.includes(symbol)) {
+        nextSymbols.push(symbol);
+      }
+    }
+
+    const finalSymbols = nextSymbols.slice(0, MAX_SYMBOLS);
+
+    if (!finalSymbols.length) {
+      setStatus("먼저 종목을 1개 이상 등록하세요.");
+      return;
+    }
+
+    // 입력창의 내용이 현재 저장된 종목과 다르면 먼저 저장합니다.
+    const changed =
+      finalSymbols.length !== symbols.length ||
+      finalSymbols.some((symbol, index) => symbol !== symbols[index]);
+
+    if (changed) await saveWatchlist(finalSymbols);
+
+    // 다른 페이지로 이동하지 않고 이 화면에서 분석 서버 세션을 시작합니다.
+    setBusy(true);
+    setIsLive(false);
+    setStatus("분석 서버 연결 요청 중...");
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setStatus("로그인이 필요합니다.");
+        return;
+      }
+
+      const response = await fetch("/api/stocks/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ symbols: finalSymbols }),
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}: ${data?.error || data?.message || "분석 서버 응답 오류"}`,
+        );
+      }
+
+      if (!data?.wsUrl) {
+        throw new Error(data?.serverWarning || "분석 서버의 wsUrl이 없습니다.");
+      }
+
+      connectWebSocket(data.wsUrl);
+      void loadMarketInfo(finalSymbols);
+    } catch (error) {
+      console.error("START error:", error);
+      setStatus(error instanceof Error ? `START 실패: ${error.message}` : "START 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSymbol(symbol: string) {
+    const next = symbols.filter((item) => item !== symbol);
+    setTickerInputs([
+      next[0] || "",
+      next[1] || "",
+      next[2] || "",
+      next[3] || "",
+      next[4] || "",
+    ]);
+    setSnapshots((prev) => {
+      const copy = { ...prev };
+      delete copy[symbol];
+      return copy;
+    });
+    if (openSymbol === symbol) setOpenSymbol("");
+    await saveWatchlist(next);
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 pb-16">
       <div className="mx-auto max-w-[1600px] px-3 py-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <Link href="/stock" className="text-xs font-black text-blue-600 hover:underline">← Market Dashboard</Link>
-            <h1 className="mt-2 text-2xl font-black text-slate-950">LIVE STOCK DATA</h1>
-            <p className="mt-1 text-sm font-semibold text-slate-600">{status}</p>
+            <h1 className="text-2xl font-black text-slate-950">My Stock Monitor</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              최대 5종목 · 실시간 분석 신호는 투자 조언이나 주문이 아닙니다.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={() => void load()} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-black text-white hover:bg-blue-700">재연결</button>
-            <button
-              type="button"
-              onClick={() => void stopLive()}
-              className="rounded-lg border border-red-600 bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700"
-            >
-              STOP
-            </button>
+          <div className="text-xs font-black text-slate-700">
+            KTown WEB · SCHWAB DATA · 1M / 5M ANALYSIS
           </div>
         </div>
 
         <section className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-black text-slate-700">등록 종목:</span>
-            {symbols.length ? symbols.map((symbol) => (
-              <span key={symbol} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">{symbol}</span>
-            )) : <span className="text-xs font-semibold text-slate-400">없음</span>}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-1 text-sm font-black text-slate-950">
+              1) TICKERS (max 5):
+            </div>
+
+            {tickerInputs.map((value, index) => (
+              <input
+                key={index}
+                value={value}
+                onChange={(e) => {
+                  const next = [...tickerInputs];
+                  next[index] = cleanSymbol(e.target.value);
+                  setTickerInputs(next);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveTickerInputs();
+                }}
+                placeholder={index === 0 ? "NVDA" : ""}
+                maxLength={12}
+                disabled={busy}
+                className="h-8 w-[84px] rounded border border-slate-300 bg-white px-2 text-sm font-bold uppercase text-slate-900 outline-none focus:border-blue-500"
+              />
+            ))}
+
+            <button
+              onClick={() => void saveTickerInputs()}
+              disabled={busy}
+              className="h-8 rounded bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-40"
+            >
+              {busy ? "저장 중..." : symbols.length ? "등록 / 수정" : "등록"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void startLive()}
+              disabled={busy}
+              className={`h-8 rounded border px-5 text-xs font-black text-white disabled:opacity-40 ${
+                isLive
+                  ? "border-orange-500 bg-orange-500 ring-2 ring-orange-200"
+                  : "border-emerald-500 bg-emerald-600 hover:bg-emerald-700"
+              }`}
+            >
+              {busy ? "CONNECTING..." : isLive ? "RUNNING" : "START"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (wsRef.current) {
+                  try { wsRef.current.close(); } catch {}
+                  wsRef.current = null;
+                }
+                setIsLive(false);
+                setStatus("Stopped");
+              }}
+              className="h-8 rounded border border-red-300 bg-red-50 px-5 text-xs font-black text-red-700 hover:bg-red-100"
+            >
+              STOP
+            </button>
+
+            <span className="ml-2 text-xs font-semibold text-slate-600">{status}</span>
           </div>
 
-          <div className="space-y-2 md:hidden">
-            {symbols.map((symbol) => {
-              const item = snapshots[symbol];
-              const isOpen = mobileOpenSymbol === symbol;
-              return (
-                <div key={symbol} className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setMobileOpenSymbol(isOpen ? "" : symbol)}
-                    className="w-full p-3 text-left"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-lg font-black text-slate-950">{symbol}</div>
-                      <div className="text-xl font-black text-blue-700">
-                        {item?.price != null ? `$${fmt(item.price)}` : "-"}
-                      </div>
-                      <span className="text-sm font-black text-slate-400">{isOpen ? "▲" : "▼"}</span>
-                    </div>
-                    <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px]">
-                      <MobileValue label="ACTION" value={item?.action || "DATA WAIT"} tone={textTone(item?.action)} />
-                      <MobileValue label="SCORE" value={item?.score ?? "-"} tone={scoreTone(item?.score)} />
-                      <MobileValue label="RISK" value={item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"} tone={riskTone(item?.down_risk)} />
-                    </div>
-                  </button>
-
-                  {isOpen ? (
-                    <div className="border-t border-slate-200 bg-slate-50 p-3">
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <MobileDetail label="Forecast" value={item?.forecast || "-"} tone={textTone(item?.forecast)} />
-                        <MobileDetail label="1m Trend" value={item?.trend_1m || "-"} tone={textTone(item?.trend_1m)} />
-                        <MobileDetail label="Buy60" value={item?.buy60 ?? "-"} />
-                        <MobileDetail label="Sell60" value={item?.sell60 ?? "-"} />
-                        <MobileDetail label="VWAP" value={item ? fmt(item.vwap) : "-"} />
-                        <MobileDetail label="EMA9 / EMA20" value={item ? `${fmt(item.ema9)} / ${fmt(item.ema20)}` : "-"} />
-                        <MobileDetail label="Resistance" value={item ? fmt(item.resistance) : "-"} />
-                        <MobileDetail label="Support" value={item ? fmt(item.local_support ?? item.support) : "-"} />
-                        <MobileDetail label="Fast Drop" value={item?.fast_drop || "-"} tone={textTone(item?.fast_drop)} />
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="hidden overflow-x-auto border border-slate-300 md:block">
-            <table className="w-full min-w-[1180px] border-collapse text-[11px]">
-              <thead className="bg-slate-100"><tr>
-                {["Ticker", "?", "Action", "Price", "Forecast", "Score", "Down Risk", "Buy60", "Sell60", "VWAP", "EMA9", "EMA20", "Resistance", "Support", "Fast Drop", "1m Trend"].map((head) => (
-                  <th key={head} className="whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 font-black text-slate-950">{head}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-              {rows.map(({ symbol, item }, index) => {
-                const isPopupOpen = Boolean(symbol) && popupSymbol === symbol;
-
-                return (
-                  <Fragment key={symbol || `empty-${index}`}>
-                    <tr className="h-12">
-                      <Cell strong>{symbol || "-"}</Cell>
-                      <Cell>
-                        {symbol ? (
-                          <button
-                            type="button"
-                            onClick={() => setPopupSymbol(symbol)}
-                            aria-label={`${symbol} 현재 판단 설명`}
-                            aria-expanded={isPopupOpen}
-                            className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md font-black text-white transition ${
-                              isPopupOpen
-                                ? "bg-slate-900"
-                                : "bg-blue-600 hover:bg-blue-700"
-                            }`}
-                          >
-                            ?
-                          </button>
-                        ) : (
-                          "-"
-                        )}
-                      </Cell>
-                      <Cell className={symbol ? textTone(item?.action) : ""}>
-                        {symbol ? <b>{item?.action || "DATA WAIT"}</b> : "-"}
-                      </Cell>
-                      <Cell>{item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
-                      <Cell className={textTone(item?.forecast)}>{item?.forecast || "-"}</Cell>
-                      <Cell className={scoreTone(item?.score)}>{item?.score ?? "-"}</Cell>
-                      <Cell className={riskTone(item?.down_risk)}>
-                        {item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}
-                      </Cell>
-                      <Cell>{item?.buy60 ?? "-"}</Cell>
-                      <Cell>{item?.sell60 ?? "-"}</Cell>
-                      <Cell>{item ? fmt(item.vwap) : "-"}</Cell>
-                      <Cell>{item ? fmt(item.ema9) : "-"}</Cell>
-                      <Cell>{item ? fmt(item.ema20) : "-"}</Cell>
-                      <Cell>{item ? fmt(item.resistance) : "-"}</Cell>
-                      <Cell>{item ? fmt(item.local_support ?? item.support) : "-"}</Cell>
-                      <Cell className={textTone(item?.fast_drop)}>{item?.fast_drop || "-"}</Cell>
-                      <Cell className={textTone(item?.trend_1m)}>{item?.trend_1m || "-"}</Cell>
-                    </tr>
-                  </Fragment>
-                );
-              })}
-            </tbody>
-            </table>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-bold text-slate-500">현재 저장:</span>
+            {symbols.length ? (
+              symbols.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => void removeSymbol(symbol)}
+                  className="rounded-full bg-slate-100 px-2.5 py-1 font-bold text-slate-700 hover:bg-red-50 hover:text-red-600"
+                  title="이 종목 삭제"
+                >
+                  {symbol} ×
+                </button>
+              ))
+            ) : (
+              <span className="text-slate-400">등록된 종목이 없습니다.</span>
+            )}
+            {userId ? (
+              <span className="ml-auto text-[11px] text-slate-400">
+                USER {userId.slice(0, 8)}
+              </span>
+            ) : null}
           </div>
         </section>
-      </div>
 
-        {popupSymbol ? (
-          <StockWhyModal
-            symbol={popupSymbol}
-            item={popupItem}
-            onClose={() => setPopupSymbol("")}
-          />
-        ) : null}
+        <section className="mt-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-black text-slate-950">Market Dashboard</h2>
+              <p className="text-xs text-slate-500">
+                등록 종목의 실시간 데이터, 오늘의 주요 이벤트, 어닝 일정, 최신 뉴스를 한 화면에서 확인합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadMarketInfo(symbols)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              새로고침
+            </button>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Link
+              href="/stock/live"
+              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
+                📈
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-black tracking-wide text-slate-950">LIVE DATA</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  등록 종목의 실시간 분석 화면 열기
+                </div>
+              </div>
+              <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
+            </Link>
+
+            <DashboardCard
+              icon="📅"
+              title="TODAY'S EVENTS"
+              subtitle="시장에 영향을 줄 수 있는 오늘의 일정"
+              accent="amber"
+            >
+              {marketInfo.events?.length ? (
+                <div className="space-y-2">
+                  {marketInfo.events.slice(0, 6).map((event, index) => (
+                    <div key={event.id || `${event.title}-${index}`} className="flex gap-3 border-b border-slate-100 pb-2 last:border-0">
+                      <div className="w-[62px] shrink-0 text-xs font-black text-slate-600">
+                        {event.time || "-"}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-900">{event.title || "-"}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-500">
+                          {event.symbol ? `${event.symbol} · ` : ""}
+                          {event.importance ? `중요도 ${event.importance}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyBlock text={`이벤트 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+
+            <DashboardCard
+              icon="💵"
+              title="EARNINGS SCHEDULE"
+              subtitle="날짜별 예정 실적 발표 회사"
+              accent="emerald"
+            >
+              {marketInfo.earnings?.length ? (
+                <EarningsCalendar items={marketInfo.earnings} />
+              ) : (
+                <EmptyBlock text={`어닝 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+
+            <DashboardCard
+              icon="📰"
+              title="LATEST NEWS"
+              subtitle="등록 종목 중심 최신 뉴스"
+              accent="rose"
+            >
+              {marketInfo.news?.length ? (
+                <div className="space-y-2">
+                  {marketInfo.news.slice(0, 6).map((news, index) => {
+                    const content = (
+                      <>
+                        <div className="text-sm font-bold leading-5 text-slate-900">{news.title || "-"}</div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {[news.symbol, news.source, news.publishedAt].filter(Boolean).join(" · ")}
+                        </div>
+                      </>
+                    );
+
+                    return news.url ? (
+                      <a
+                        key={news.id || `${news.title}-${index}`}
+                        href={news.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <div
+                        key={news.id || `${news.title}-${index}`}
+                        className="rounded-lg border border-slate-200 px-3 py-2"
+                      >
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyBlock text={`뉴스 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+          </div>
+        </section>
+
+       
+      </div>
     </main>
   );
 }
 
 
-function signalSentence(item?: Snapshot) {
-  const action = String(item?.action || "WAIT").toUpperCase();
 
-  if (action.includes("SELL")) {
-    return "🔴 현재는 매수보다 포지션 위험 관리가 우선인 신호입니다.";
-  }
-  if (action.includes("BUY")) {
-    return "🟢 매수 조건이 상당 부분 충족된 상태입니다.";
-  }
-  if (action.includes("WARNING") || action.includes("DANGER")) {
-    return "🟠 하락 위험 경고가 감지되었습니다. 신규 진입보다 확인이 우선입니다.";
-  }
-  return "🟡 WAIT: 일부 조건이 아직 동시에 맞지 않습니다.";
-}
 
-function formatK(v?: number) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "-";
-  return Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(Math.round(n));
-}
+function EarningsCalendar({ items }: { items: EarningsItem[] }) {
+  const grouped = items.reduce<Record<string, EarningsItem[]>>((acc, item) => {
+    const key = earningsDateKey(item.date);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
 
-function StockWhyModal({
-  symbol,
-  item,
-  onClose,
-}: {
-  symbol: string;
-  item?: Snapshot;
-  onClose: () => void;
-}) {
-  const support = item?.local_support ?? item?.support;
-  const buy = Number(item?.buy60);
-  const sell = Number(item?.sell60);
-  const totalFlow = buy + sell;
-  const buyPct =
-    Number.isFinite(totalFlow) && totalFlow > 0
-      ? Math.round((buy / totalFlow) * 100)
-      : null;
+  const dates = Object.keys(grouped)
+    .sort((a, b) => {
+      if (a === "TBD") return 1;
+      if (b === "TBD") return -1;
+      return a.localeCompare(b);
+    })
+    .slice(0, 5);
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-3"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <div className="overflow-x-auto pb-1">
+      <div
+        className="grid min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
+        }}
+      >
+        {dates.map((date, dateIndex) => {
+          const label = earningsDayLabel(date);
+
+          // 날짜별 시가총액 큰 순서 → 최대 6개만 표시
+          const dayItems = [...(grouped[date] || [])]
+            .sort(
+              (a, b) =>
+                Number(b.marketCap || 0) - Number(a.marketCap || 0),
+            )
+            .slice(0, 6);
+
+          return (
+            <div
+              key={date}
+              className={dateIndex ? "border-l border-slate-200" : ""}
+            >
+              <div className="border-b border-slate-200 bg-slate-100 px-2 py-2 text-center">
+                <div className="text-[9px] font-black tracking-wider text-slate-500">
+                  {label.dow}
+                </div>
+                <div className="text-lg font-black leading-5 text-slate-900">
+                  {label.day}
+                </div>
+                <div className="mt-0.5 text-[9px] font-bold text-slate-400">
+                  {label.date}
+                </div>
+              </div>
+
+              <div className="min-h-[310px] bg-slate-50 p-2">
+                <div className="space-y-2">
+                  {dayItems.map((item, index) => {
+                    const symbol = String(item.symbol || "?").toUpperCase();
+                    const timing = earningsTimeLabel(item.time);
+
+                    return (
+                      <div
+                        key={`${symbol}-${date}-${index}`}
+                        className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm"
+                        title={item.company || symbol}
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-white">
+                          <img
+                            src={`https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`}
+                            alt={`${symbol} logo`}
+                            loading="lazy"
+                            className="h-7 w-7 object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[11px] font-black text-slate-950">
+                            {symbol}
+                          </div>
+
+                          <div className="truncate text-[8px] font-semibold text-slate-500">
+                            {timing || "Time TBD"}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!dayItems.length ? (
+                  <div className="flex min-h-[250px] items-center justify-center text-[10px] font-bold text-slate-400">
+                    No earnings
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 text-[10px] font-semibold text-slate-400">
+        날짜별 시가총액 상위 6개 · 실적 발표 시점만 표시
+      </div>
+    </div>
+  );
+}
+
+
+function DashboardCard({
+  icon,
+  title,
+  subtitle,
+  accent,
+  children,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  accent: "blue" | "amber" | "emerald" | "rose";
+  children: React.ReactNode;
+}) {
+  const accentClass = {
+    blue: "bg-blue-50 text-blue-700",
+    amber: "bg-amber-50 text-amber-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    rose: "bg-rose-50 text-rose-700",
+  }[accent];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-start gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${accentClass}`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-sm font-black tracking-wide text-slate-950">{title}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EmptyBlock({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
+      {text}
+    </div>
+  );
+}
+
+function Cell({
+  children,
+  strong = false,
+}: {
+  children: React.ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center ${
+        strong ? "font-black text-slate-950" : "font-medium text-slate-700"
+      }`}
     >
-      <div className="max-h-[90vh] w-full max-w-[720px] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-4 py-3">
-          <div className="font-black text-slate-950">
-            {symbol} — Why? / Current Situation
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-lg font-black text-slate-600 hover:bg-slate-50"
-            aria-label="닫기"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-3">
-          <h2 className="text-lg font-black text-slate-950">
-            {symbol} 현재 판단 설명
-          </h2>
-          <span className="text-xs font-semibold text-slate-500">
-            실시간 계산값 기준
-          </span>
-        </div>
-
-        <div className="max-h-[72vh] overflow-y-auto px-5 py-4 text-[15px] leading-7 text-slate-900">
-          <div className="mb-4 text-base font-bold">{symbol} 현재 상황</div>
-
-          <div>
-            현재 호가:{" "}
-            <b>
-              {item?.bid != null ? `$${fmt(item.bid)}` : "-"}
-              {" / "}
-              {item?.ask != null ? `$${fmt(item.ask)}` : "-"}
-            </b>
-            {"  |  "}현재가:{" "}
-            <b>{item?.price != null ? `$${fmt(item.price)}` : "-"}</b>
-          </div>
-
-          <div className="mb-4">
-            현재 판단: <b>{item?.action || "WAIT"}</b>
-            {"  |  "}Forecast <b>{item?.forecast || "-"}</b>
-            {"  |  "}Score <b>{item?.score ?? "-"}</b>
-          </div>
-
-          <div className="space-y-1">
-            <div>
-              🔵 단기 추세: 현재 1분 추세 <b>{item?.trend_1m || "-"}</b>
-              {item?.vwap != null && item?.price != null
-                ? ` · Price ${item.price >= item.vwap ? "above" : "below"} VWAP $${fmt(item.vwap)}`
-                : ""}
-            </div>
-
-            <div>
-              🟠 EMA: EMA9 <b>{item?.ema9 != null ? `$${fmt(item.ema9)}` : "-"}</b>
-              {"  |  "}EMA20 <b>{item?.ema20 != null ? `$${fmt(item.ema20)}` : "-"}</b>
-            </div>
-
-            <div>
-              🟢 지지 / 저항: 지지{" "}
-              <b>{support != null ? `$${fmt(support)}` : "-"}</b>
-              {"  |  "}저항{" "}
-              <b>{item?.resistance != null ? `$${fmt(item.resistance)}` : "-"}</b>
-            </div>
-
-            <div>
-              🔴 Fast Drop: <b>{item?.fast_drop || "NONE"}</b>
-            </div>
-
-            <div>
-              🟢 60초 수급: Buy <b>{formatK(item?.buy60)}</b> / Sell{" "}
-              <b>{formatK(item?.sell60)}</b>
-              {buyPct != null ? ` — 매수 비중 ${buyPct}%` : ""}
-            </div>
-
-            <div>
-              ⚪ 거래량: 상대 거래량{" "}
-              <b>{item?.vol_x != null ? `${Number(item.vol_x).toFixed(2)}x` : "-"}</b>
-            </div>
-
-            <div>
-              🔴 조기 하락 경고: Down Risk{" "}
-              <b>{item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}</b>
-            </div>
-
-            <div>
-              🟣 모델: ML Up5{" "}
-              <b>{item?.ml_up5 != null ? `${fmt(item.ml_up5, 0)}%` : "-"}</b>
-              {item?.dl_up5 != null ? ` · DL Up5 ${fmt(item.dl_up5, 0)}%` : ""}
-            </div>
-
-            <div>
-              Sector: <b>{item?.sector || "-"}</b>
-            </div>
-
-            <div>
-              Options:{" "}
-              <b>
-                {item?.option_bias || "N/A"}
-                {item?.option_score != null ? ` ${item.option_score >= 0 ? "+" : ""}${item.option_score}` : ""}
-              </b>
-            </div>
-          </div>
-
-          <div className="my-5 border-t border-slate-200" />
-
-          <div className="font-bold">{signalSentence(item)}</div>
-
-          <div className="mt-4">
-            프로그램 판단 근거:{" "}
-            <b>{item?.reason || "현재 서버가 전달한 판단 근거가 없습니다."}</b>
-          </div>
-        </div>
-
-        <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-4 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-black text-white hover:bg-slate-800"
-          >
-            CLOSE
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function Cell({ children, strong = false, className = "" }: { children: React.ReactNode; strong?: boolean; className?: string }) {
-  return <td className={`whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center ${strong ? "font-black text-slate-950" : "font-medium text-slate-700"} ${className}`}>{children}</td>;
-}
-
-function DesktopDetail({
-  label,
-  value,
-  tone = "",
-}: {
-  label: string;
-  value: React.ReactNode;
-  tone?: string;
-}) {
-  return (
-    <div className={`rounded-lg border border-slate-200 p-3 ${tone || "bg-white"}`}>
-      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
-        {label}
-      </div>
-      <div className="mt-1 break-words text-sm font-black">{value}</div>
-    </div>
-  );
-}
-
-function MobileValue({ label, value, tone = "" }: { label: string; value: React.ReactNode; tone?: string }) {
-  return (
-    <div className={`rounded-lg border border-slate-200 px-2 py-2 ${tone || "bg-slate-50 text-slate-700"}`}>
-      <div className="text-[9px] font-bold opacity-70">{label}</div>
-      <div className="mt-0.5 truncate font-black">{value}</div>
-    </div>
-  );
-}
-
-function MobileDetail({ label, value, tone = "" }: { label: string; value: React.ReactNode; tone?: string }) {
-  return (
-    <div className={`rounded-lg border border-slate-200 p-2.5 ${tone || "bg-white"}`}>
-      <div className="text-[10px] font-bold text-slate-500">{label}</div>
-      <div className="mt-1 font-black">{value}</div>
-    </div>
+      {children}
+    </td>
   );
 }
