@@ -167,6 +167,7 @@ export default function StockMonitorPage() {
   });
   const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
   const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
+  const [stockNews, setStockNews] = useState<NewsItem[]>([]);
 
 
   const getAccessToken = useCallback(async () => {
@@ -206,6 +207,31 @@ export default function StockMonitorPage() {
         imageUrl: row.image_url || undefined,
         description: row.description || undefined,
         shared: true,
+      })),
+    );
+  }, []);
+
+  const loadStockNews = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("stock_news")
+      .select("id,symbol,title,url,source,published_at,created_at")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("stock_news load error:", error);
+      return;
+    }
+
+    setStockNews(
+      (data || []).map((row) => ({
+        id: `cron-${row.id}`,
+        symbol: row.symbol || undefined,
+        title: row.title || "주식 속보",
+        url: row.url || undefined,
+        source: row.source || undefined,
+        publishedAt: row.published_at || row.created_at || undefined,
       })),
     );
   }, []);
@@ -340,6 +366,7 @@ export default function StockMonitorPage() {
     const refresh = () => {
       void loadMarketInfo(symbols);
       void loadSharedNews();
+      void loadStockNews();
     };
     const timer = window.setInterval(refresh, 15 * 60 * 1000);
     const onVisibilityChange = () => {
@@ -351,7 +378,7 @@ export default function StockMonitorPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [loadMarketInfo, loadSharedNews, symbols]);
+  }, [loadMarketInfo, loadSharedNews, loadStockNews, symbols]);
 
   const openSession = useCallback(async () => {
     const {
@@ -396,9 +423,10 @@ export default function StockMonitorPage() {
 
     void loadMarketInfo(loaded);
     void loadSharedNews();
+    void loadStockNews();
 
     setStatus(loaded.length ? "종목 준비 완료 · START를 누르세요." : "종목을 등록하세요.");
-  }, [connectWebSocket, loadMarketInfo, loadSharedNews]);
+  }, [connectWebSocket, loadMarketInfo, loadSharedNews, loadStockNews]);
 
   useEffect(() => {
     let mounted = true;
@@ -784,31 +812,27 @@ export default function StockMonitorPage() {
             <DashboardCard
               icon="📰"
               title="LATEST NEWS"
-              subtitle="등록 종목 + 휴대폰에서 공유한 최신 뉴스"
+              subtitle="자동 수집 주식 속보 · 10분마다 업데이트"
               accent="rose"
             >
-              {sharedNews.length || marketInfo.news?.length ? (
+              {stockNews.length ? (
                 <div className="space-y-2">
-                  {[...sharedNews, ...(marketInfo.news || [])].slice(0, 8).map((news, index) => {
+                  {stockNews.slice(0, 10).map((news, index) => {
                     const content = (
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          {news.shared ? (
-                            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">SHARED</span>
-                          ) : null}
-                          <div className="min-w-0 flex-1 truncate text-sm font-bold leading-5 text-slate-900">
-                            {news.title || "-"}
-                          </div>
+                        <div className="truncate text-sm font-bold leading-5 text-slate-900">
+                          {news.title || "-"}
                         </div>
-                        {news.description ? (
-                          <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600">
-                            {news.description}
-                          </div>
-                        ) : null}
                         <div className="mt-1 text-[10px] text-slate-500">
-                          {[news.symbol, news.source, news.publishedAt ? new Date(news.publishedAt).toLocaleString() : ""]
-                            .filter(Boolean)
-                            .join(" · ")}
+                          {news.publishedAt
+                            ? new Date(news.publishedAt).toLocaleString("ko-KR", {
+                                year: "numeric",
+                                month: "numeric",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })
+                            : ""}
                         </div>
                       </div>
                     );
@@ -834,7 +858,7 @@ export default function StockMonitorPage() {
                   })}
                 </div>
               ) : (
-                <EmptyBlock text={`뉴스 데이터 ${marketInfoStatus}`} />
+                <EmptyBlock text="자동 수집된 주식 속보가 아직 없습니다." />
               )}
             </DashboardCard>
           </div>
