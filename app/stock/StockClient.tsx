@@ -185,16 +185,10 @@ export default function StockMonitorPage() {
   }, []);
 
   const loadSharedNews = useCallback(async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) {
-      setSharedNews([]);
-      return;
-    }
-
+    // 공유 뉴스는 로그인 여부와 관계없이 전체 최신 항목을 불러옵니다.
     const { data, error } = await supabase
       .from("shared_news")
       .select("id,title,url,source,description,image_url,published_at,created_at")
-      .eq("user_id", session.user.id)
       .order("created_at", { ascending: false })
       .limit(20);
 

@@ -1,4 +1,4 @@
-"use client";
+
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -84,15 +84,14 @@ function ShareNewsContent() {
     setStatus("KTown에 저장하는 중...");
 
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.user) {
-        setStatus("KTown에 로그인한 뒤 다시 공유해 주세요.");
-        setSaving(false);
-        return;
-      }
+      // 로그인 여부와 관계없이 등록할 수 있습니다.
+      // 로그인되어 있으면 user_id를 함께 저장하고, 아니면 null로 저장합니다.
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       const { error } = await supabase.from("shared_news").insert({
-        user_id: session.user.id,
+        user_id: session?.user?.id ?? null,
         title: preview.title,
         url: preview.url || null,
         source: preview.source || "Shared",
