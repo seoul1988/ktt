@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -792,35 +791,24 @@ export default function StockMonitorPage() {
                 <div className="space-y-2">
                   {[...sharedNews, ...(marketInfo.news || [])].slice(0, 8).map((news, index) => {
                     const content = (
-                      <div className="flex gap-3">
-                        {news.imageUrl ? (
-                          <img
-                            src={news.imageUrl}
-                            alt=""
-                            loading="lazy"
-                            className="h-16 w-20 shrink-0 rounded-lg border border-slate-100 object-cover"
-                            onError={(e) => { e.currentTarget.style.display = "none"; }}
-                          />
-                        ) : null}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            {news.shared ? (
-                              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">SHARED</span>
-                            ) : null}
-                            <div className="min-w-0 flex-1 truncate text-sm font-bold leading-5 text-slate-900">
-                              {news.title || "-"}
-                            </div>
-                          </div>
-                          {news.description ? (
-                            <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600">
-                              {news.description}
-                            </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          {news.shared ? (
+                            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">SHARED</span>
                           ) : null}
-                          <div className="mt-1 text-[10px] text-slate-500">
-                            {[news.symbol, news.source, news.publishedAt ? new Date(news.publishedAt).toLocaleString() : ""]
-                              .filter(Boolean)
-                              .join(" · ")}
+                          <div className="min-w-0 flex-1 truncate text-sm font-bold leading-5 text-slate-900">
+                            {news.title || "-"}
                           </div>
+                        </div>
+                        {news.description ? (
+                          <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600">
+                            {news.description}
+                          </div>
+                        ) : null}
+                        <div className="mt-1 text-[10px] text-slate-500">
+                          {[news.symbol, news.source, news.publishedAt ? new Date(news.publishedAt).toLocaleString() : ""]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </div>
                       </div>
                     );
