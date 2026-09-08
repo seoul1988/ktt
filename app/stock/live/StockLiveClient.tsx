@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -690,12 +689,9 @@ export default function StockMonitorPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => {
-                window.location.assign("/stock/live");
-              }}
-              className="group flex min-h-[112px] w-full cursor-pointer items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
+            <a
+              href="/stock/live"
+              className="group relative z-10 flex min-h-[112px] w-full cursor-pointer items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
               aria-label="LIVE DATA 열기"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
@@ -708,7 +704,7 @@ export default function StockMonitorPage() {
                 </div>
               </div>
               <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
-            </button>
+            </a>
 
             <DashboardCard
               icon="📅"
@@ -822,9 +818,9 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
     .slice(0, 5);
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div className="-mx-1 overflow-x-scroll overscroll-x-contain px-1 pb-3 touch-pan-x md:overflow-x-auto">
       <div
-        className="grid min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        className="grid w-max min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
         style={{
           gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
         }}
