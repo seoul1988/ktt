@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -105,6 +104,44 @@ function signalStyle(action?: string, risk?: number, fastDrop?: string) {
     return "text-amber-600";
   }
   return "text-slate-500";
+}
+
+
+function earningsDateKey(value?: string) {
+  if (!value) return "TBD";
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 10);
+}
+
+function earningsDayLabel(value: string) {
+  if (value === "TBD") return { dow: "TBD", day: "—", date: "Date TBD" };
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return { dow: "", day: value, date: value };
+  }
+  return {
+    dow: parsed.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+    day: String(parsed.getDate()),
+    date: parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+  };
+}
+
+function earningsTimeLabel(value?: string) {
+  const v = String(value || "").toLowerCase();
+  if (!v) return "";
+  if (
+    v.includes("before") ||
+    v.includes("bmo") ||
+    v.includes("pre") ||
+    v.includes("morning")
+  ) return "Before Open";
+  if (
+    v.includes("after") ||
+    v.includes("amc") ||
+    v.includes("post") ||
+    v.includes("close")
+  ) return "After Close";
+  return value || "";
 }
 
 export default function StockMonitorPage() {
@@ -698,32 +735,11 @@ export default function StockMonitorPage() {
             <DashboardCard
               icon="💵"
               title="EARNINGS SCHEDULE"
-              subtitle="등록 종목의 예정된 실적 발표"
+              subtitle="날짜별 예정 실적 발표 회사"
               accent="emerald"
             >
               {marketInfo.earnings?.length ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[520px] text-xs">
-                    <thead className="text-left text-slate-500">
-                      <tr>
-                        <th className="pb-2">Ticker</th>
-                        <th className="pb-2">Date</th>
-                        <th className="pb-2">Time</th>
-                        <th className="pb-2 text-right">Estimate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {marketInfo.earnings.slice(0, 8).map((item, index) => (
-                        <tr key={`${item.symbol}-${item.date}-${index}`} className="border-t border-slate-100">
-                          <td className="py-2 font-black text-slate-950">{item.symbol || "-"}</td>
-                          <td className="py-2">{item.date || "-"}</td>
-                          <td className="py-2">{item.time || "-"}</td>
-                          <td className="py-2 text-right">{item.estimate ?? "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <EarningsCalendar items={marketInfo.earnings} />
               ) : (
                 <EmptyBlock text={`어닝 데이터 ${marketInfoStatus}`} />
               )}
@@ -780,6 +796,103 @@ export default function StockMonitorPage() {
   );
 }
 
+
+
+
+function EarningsCalendar({ items }: { items: EarningsItem[] }) {
+  const grouped = items.reduce<Record<string, EarningsItem[]>>((acc, item) => {
+    const key = earningsDateKey(item.date);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  const dates = Object.keys(grouped)
+    .sort((a, b) => {
+      if (a === "TBD") return 1;
+      if (b === "TBD") return -1;
+      return a.localeCompare(b);
+    })
+    .slice(0, 5);
+
+  return (
+    <div className="overflow-x-auto pb-1">
+      <div
+        className="grid min-w-[720px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        style={{ gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(138px, 1fr))` }}
+      >
+        {dates.map((date, dateIndex) => {
+          const label = earningsDayLabel(date);
+          const dayItems = grouped[date] || [];
+
+          return (
+            <div
+              key={date}
+              className={dateIndex ? "border-l border-slate-200" : ""}
+            >
+              <div className="border-b border-slate-200 bg-slate-100 px-2 py-2 text-center">
+                <div className="text-[9px] font-black tracking-wider text-slate-500">
+                  {label.dow}
+                </div>
+                <div className="text-lg font-black leading-5 text-slate-900">
+                  {label.day}
+                </div>
+                <div className="mt-0.5 text-[9px] font-bold text-slate-400">
+                  {label.date}
+                </div>
+              </div>
+
+              <div className="min-h-[190px] bg-slate-50 p-2">
+                <div className="grid grid-cols-2 gap-1.5">
+                  {dayItems.map((item, index) => {
+                    const symbol = String(item.symbol || "?").toUpperCase();
+                    const timing = earningsTimeLabel(item.time);
+
+                    return (
+                      <div
+                        key={`${symbol}-${date}-${index}`}
+                        title={[
+                          item.company || symbol,
+                          timing,
+                          item.estimate != null ? `Estimate ${item.estimate}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        className="flex min-h-[54px] flex-col items-center justify-center rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-center shadow-sm"
+                      >
+                        <div className="flex h-7 min-w-7 items-center justify-center rounded-md bg-slate-900 px-1.5 text-[9px] font-black text-white">
+                          {symbol.slice(0, 5)}
+                        </div>
+                        <div className="mt-1 max-w-full truncate text-[9px] font-black text-slate-800">
+                          {symbol}
+                        </div>
+                        {timing ? (
+                          <div className="mt-0.5 max-w-full truncate text-[7px] font-bold text-slate-400">
+                            {timing}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!dayItems.length ? (
+                  <div className="flex min-h-[150px] items-center justify-center text-[10px] font-bold text-slate-400">
+                    No earnings
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 text-[10px] font-semibold text-slate-400">
+        회사 칸에 마우스를 올리면 회사명 · 발표시간 · 예상치를 확인할 수 있습니다.
+      </div>
+    </div>
+  );
+}
 
 
 function DashboardCard({
