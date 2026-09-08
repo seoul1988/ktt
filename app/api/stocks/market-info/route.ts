@@ -11,6 +11,7 @@ type EarningsItem = {
   time: string;
   estimate: string | number | null;
   marketCap: number;
+  logoUrl: string;
 };
 
 function cleanSymbols(value: string | null) {
@@ -134,8 +135,9 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
       ? payload.rows
       : [];
 
-  // Nasdaq's calendar is generally ordered with the more notable companies
-  // near the top. Keep the dashboard compact like an earnings-calendar board.
+  // 해당 날짜의 어닝 회사를 모두 읽은 뒤 시가총액을 계산합니다.
+  // 이후 시가총액 내림차순으로 정렬하고 최대 10개만 반환합니다.
+  // 예: 8개면 8개 전부, 13개면 시총 상위 10개.
   return rows
     .map((row: Record<string, unknown>) => {
       const symbol = String(
@@ -185,11 +187,14 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
             ? null
             : String(estimate),
         marketCap,
+        logoUrl: symbol
+          ? `https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`
+          : "",
       };
     })
     .filter((item: EarningsItem) => Boolean(item.symbol))
     .sort((a: EarningsItem, b: EarningsItem) => b.marketCap - a.marketCap)
-    .slice(0, 6);
+    .slice(0, 10);
 }
 
 async function fetchMarketEvents() {

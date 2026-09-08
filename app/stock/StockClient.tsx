@@ -67,6 +67,7 @@ type EarningsItem = {
   time?: string;
   estimate?: string | number;
   marketCap?: number;
+  logoUrl?: string;
 };
 
 type NewsItem = {
@@ -1032,7 +1033,7 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
         {dates.map((date, dateIndex) => {
           const label = earningsDayLabel(date);
 
-          // 날짜별 시가총액 큰 순서 → 최대 10개만 표시
+          // 날짜별 전체 어닝 회사 중 시가총액 큰 순서 → 최대 10개만 표시
           const dayItems = [...(grouped[date] || [])]
             .sort(
               (a, b) =>
@@ -1057,7 +1058,7 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                 </div>
               </div>
 
-              <div className="min-h-[510px] bg-slate-50 p-2">
+              <div className="bg-slate-50 p-2">
                 <div className="space-y-2">
                   {dayItems.map((item, index) => {
                     const symbol = String(item.symbol || "?").toUpperCase();
@@ -1071,7 +1072,10 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-white">
                           <img
-                            src={`https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`}
+                            src={
+                              item.logoUrl ||
+                              `https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`
+                            }
                             alt={`${symbol} logo`}
                             loading="lazy"
                             className="h-7 w-7 object-contain"
