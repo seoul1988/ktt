@@ -14,37 +14,69 @@ import requests
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-SYMBOLS = [
-    s.strip().upper()
-    for s in os.environ.get(
-        "STOCK_NEWS_SYMBOLS",
-        "NVDA,TSLA,QQQ,SOXL,PLTR",
-    ).split(",")
-    if s.strip()
-]
-MAX_ARTICLE_AGE_HOURS = int(os.environ.get("MAX_ARTICLE_AGE_HOURS", "36"))
-PER_SYMBOL_LIMIT = int(os.environ.get("PER_SYMBOL_LIMIT", "15"))
-RETENTION_DAYS = int(os.environ.get("RETENTION_DAYS", "14"))
 
-QUERY_MAP = {
-    "NVDA": 'NVIDIA NVDA stock',
-    "TSLA": 'Tesla TSLA stock',
-    "QQQ": 'Invesco QQQ Nasdaq 100',
-    "SOXL": 'SOXL semiconductor ETF',
-    "PLTR": 'Palantir PLTR stock',
-}
+MIN_IMPORTANCE = int(os.environ.get("MIN_IMPORTANCE", "3"))
+MAX_ARTICLE_AGE_HOURS = int(os.environ.get("MAX_ARTICLE_AGE_HOURS", "24"))
+PER_FEED_LIMIT = int(os.environ.get("PER_FEED_LIMIT", "40"))
+RETENTION_HOURS = int(os.environ.get("RETENTION_HOURS", "24"))
 
 USER_AGENT = (
-    "Mozilla/5.0 (compatible; KTownTriangleStockNews/1.0; "
+    "Mozilla/5.0 (compatible; KTownTriangleMarketNews/2.0; "
     "+https://www.ktowntriangle.com)"
 )
+
+# 특정 티커가 아니라 미국 증시 전체의 "중요 뉴스"를 넓게 수집합니다.
+NEWS_QUERIES = [
+    "stock market breaking news",
+    "Wall Street market breaking news",
+    "Federal Reserve stocks market",
+    "S&P 500 Nasdaq Dow market news",
+    "earnings warning guidance stocks",
+    "merger acquisition stocks breaking",
+    "SEC investigation stocks breaking",
+]
+
+# 강한 시장 영향 키워드: 하나만 있어도 중요도 상승
+CRITICAL_KEYWORDS = {
+    "federal reserve", "fed rate", "interest rate", "rate cut", "rate hike",
+    "fomc", "powell", "cpi", "inflation", "jobs report", "payrolls",
+    "recession", "tariff", "sanction", "bank failure", "liquidity crisis",
+    "market crash", "market selloff", "circuit breaker",
+    "sec investigation", "fraud", "bankruptcy", "chapter 11",
+    "merger", "acquisition", "takeover", "buyout",
+    "earnings warning", "profit warning", "guidance cut",
+    "guidance raised", "earnings beat", "earnings miss",
+}
+
+# 보통 중요 키워드
+IMPORTANT_KEYWORDS = {
+    "earnings", "guidance", "revenue", "profit", "forecast",
+    "ipo", "offering", "layoff", "recall", "antitrust",
+    "lawsuit", "investigation", "downgrade", "upgrade",
+    "dividend", "split", "buyback", "ceo resigns", "ceo steps down",
+    "default", "debt", "credit rating", "oil prices",
+    "treasury yields", "bond yields", "geopolitical",
+    "war", "attack", "shutdown",
+}
+
+# 시장 전체/대형지수 관련이면 가점
+MARKET_KEYWORDS = {
+    "s&p 500", "nasdaq", "dow jones", "wall street",
+    "stock market", "stocks", "equities", "futures",
+}
+
+# 기사 품질을 높이기 위한 주요 금융 매체 가점
+TRUSTED_SOURCES = {
+    "Reuters", "Bloomberg", "CNBC", "Wall Street Journal", "WSJ",
+    "Financial Times", "MarketWatch", "Barron's", "Forbes",
+    "Yahoo Finance", "Associated Press", "AP News",
+}
 
 
 def clean_text(value: str) -> str:
     value = html.unescape(value or "")
     value = re.sub(r"<[^>]+>", " ", value)
-    value = re.sub(r"\s+", " ", value).strip()
-    return value
+    return re.sub(r"\s+", " ", value).strip()
 
 
 def parse_published(entry) -> datetime:
@@ -62,23 +94,11 @@ def parse_published(entry) -> datetime:
     struct = entry.get("published_parsed") or entry.get("updated_parsed")
     if struct:
         return datetime(
-            struct.tm_year,
-            struct.tm_mon,
-            struct.tm_mday,
-            struct.tm_hour,
-            struct.tm_min,
-            struct.tm_sec,
-            tzinfo=timezone.utc,
+            struct.tm_year, struct.tm_mon, struct.tm_mday,
+            struct.tm_hour, struct.tm_min, struct.tm_sec,
+            tzinfo=timezone.utc
         )
-
     return datetime.now(timezone.utc)
-
-
-def normalize_title_for_fingerprint(title: str) -> str:
-    title = title.lower()
-    title = re.sub(r"\s+-\s+[^-]{1,80}$", "", title)
-    title = re.sub(r"[^a-z0-9가-힣]+", " ", title)
-    return re.sub(r"\s+", " ", title).strip()
 
 
 def source_from_entry(entry, title: str) -> str:
@@ -88,69 +108,117 @@ def source_from_entry(entry, title: str) -> str:
         if source_title:
             return source_title
 
-    # Google News RSS titles commonly end with " - Publisher"
     if " - " in title:
         possible = title.rsplit(" - ", 1)[-1].strip()
         if 1 < len(possible) <= 80:
             return possible
-
     return "Google News"
 
 
+def visible_title(title: str, source: str) -> str:
+    suffix = f" - {source}"
+    if source and title.endswith(suffix):
+        return title[:-len(suffix)].strip()
+    return title
+
+
+def normalize_title(title: str) -> str:
+    title = title.lower()
+    title = re.sub(r"[^a-z0-9가-힣]+", " ", title)
+    return re.sub(r"\s+", " ", title).strip()
+
+
 def fingerprint(title: str, source: str) -> str:
-    raw = f"{normalize_title_for_fingerprint(title)}|{source.lower().strip()}"
+    raw = f"{normalize_title(title)}|{source.lower().strip()}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def google_news_feed(symbol: str) -> str:
-    query = QUERY_MAP.get(symbol, f"{symbol} stock")
+def calculate_importance(title: str, source: str) -> int:
+    """
+    1~5 중요도.
+    기본 1점.
+    중요/시장 키워드 및 신뢰 매체에 따라 가점.
+    3점 이상만 DB에 저장.
+    """
+    text = title.lower()
+    score = 1
+
+    critical_hits = sum(1 for k in CRITICAL_KEYWORDS if k in text)
+    important_hits = sum(1 for k in IMPORTANT_KEYWORDS if k in text)
+    market_hits = sum(1 for k in MARKET_KEYWORDS if k in text)
+
+    if critical_hits:
+        score += 2
+    if critical_hits >= 2:
+        score += 1
+
+    if important_hits:
+        score += 1
+    if important_hits >= 2:
+        score += 1
+
+    if market_hits:
+        score += 1
+
+    if any(source.lower() == s.lower() for s in TRUSTED_SOURCES):
+        score += 1
+
+    # "breaking", "surges", "plunges" 같은 긴급성 표현
+    if re.search(r"\b(breaking|surges?|plunges?|soars?|tumbles?|halts?|warns?)\b", text):
+        score += 1
+
+    return max(1, min(score, 5))
+
+
+def google_news_feed(query: str) -> str:
     return (
         "https://news.google.com/rss/search?"
         f"q={quote_plus(query)}&hl=en-US&gl=US&ceid=US:en"
     )
 
 
-def fetch_entries(symbol: str) -> list[dict]:
-    feed_url = google_news_feed(symbol)
+def fetch_query(query: str) -> list[dict]:
+    url = google_news_feed(query)
     response = requests.get(
-        feed_url,
+        url,
         timeout=20,
-        headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml,text/xml,*/*"},
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "application/rss+xml,text/xml,*/*",
+        },
     )
     response.raise_for_status()
 
     parsed = feedparser.parse(response.content)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=MAX_ARTICLE_AGE_HOURS)
+    rows = []
 
-    rows: list[dict] = []
-    for entry in parsed.entries[:PER_SYMBOL_LIMIT]:
-        title = clean_text(entry.get("title") or "")
-        url = str(entry.get("link") or "").strip()
-        if not title or not url:
+    for entry in parsed.entries[:PER_FEED_LIMIT]:
+        raw_title = clean_text(entry.get("title") or "")
+        article_url = str(entry.get("link") or "").strip()
+        if not raw_title or not article_url:
             continue
 
         published = parse_published(entry)
         if published < cutoff:
             continue
 
-        source = source_from_entry(entry, title)
+        source = source_from_entry(entry, raw_title)
+        title = visible_title(raw_title, source)
+        importance = calculate_importance(title, source)
 
-        # Strip the trailing publisher from the visible title.
-        visible_title = title
-        suffix = f" - {source}"
-        if source and visible_title.endswith(suffix):
-            visible_title = visible_title[: -len(suffix)].strip()
+        if importance < MIN_IMPORTANCE:
+            continue
 
-        rows.append(
-            {
-                "symbol": symbol,
-                "title": visible_title,
-                "url": url,
-                "source": source,
-                "published_at": published.isoformat(),
-                "fingerprint": fingerprint(visible_title, source),
-            }
-        )
+        rows.append({
+            "symbol": None,
+            "title": title,
+            "url": article_url,
+            "source": source,
+            "importance": importance,
+            "published_at": published.isoformat(),
+            "fingerprint": fingerprint(title, source),
+        })
 
     return rows
 
@@ -166,30 +234,27 @@ def supabase_headers(extra: dict | None = None) -> dict:
     return headers
 
 
-def insert_rows(rows: list[dict]) -> int:
+def insert_rows(rows: list[dict]) -> None:
     if not rows:
-        return 0
+        return
 
     endpoint = f"{SUPABASE_URL}/rest/v1/stock_news?on_conflict=fingerprint"
     response = requests.post(
         endpoint,
         json=rows,
         timeout=30,
-        headers=supabase_headers(
-            {
-                "Prefer": "resolution=ignore-duplicates,return=minimal",
-            }
-        ),
+        headers=supabase_headers({
+            "Prefer": "resolution=ignore-duplicates,return=minimal",
+        }),
     )
     if response.status_code not in (200, 201, 204):
         raise RuntimeError(
             f"Supabase insert failed {response.status_code}: {response.text[:1000]}"
         )
-    return len(rows)
 
 
 def cleanup_old_rows() -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=RETENTION_HOURS)
     endpoint = (
         f"{SUPABASE_URL}/rest/v1/stock_news"
         f"?created_at=lt.{quote_plus(cutoff.isoformat())}"
@@ -212,25 +277,35 @@ def main() -> None:
             "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variable."
         )
 
-    all_rows: list[dict] = []
-    for symbol in SYMBOLS:
+    all_rows = []
+
+    for query in NEWS_QUERIES:
         try:
-            rows = fetch_entries(symbol)
-            print(f"[{symbol}] fetched {len(rows)} recent articles")
+            rows = fetch_query(query)
+            print(f"[{query}] important articles: {len(rows)}")
             all_rows.extend(rows)
         except Exception as exc:
-            print(f"[{symbol}] fetch failed: {exc}", file=sys.stderr)
+            print(f"[{query}] fetch failed: {exc}", file=sys.stderr)
 
-    # Remove duplicate fingerprints within this run.
+    # 같은 기사가 여러 검색어에 잡혀도 1개만 저장
     unique = {}
     for row in all_rows:
-        unique.setdefault(row["fingerprint"], row)
+        key = row["fingerprint"]
+        if key not in unique or row["importance"] > unique[key]["importance"]:
+            unique[key] = row
 
-    rows = list(unique.values())
+    rows = sorted(
+        unique.values(),
+        key=lambda r: (r["importance"], r["published_at"]),
+        reverse=True,
+    )
+
     insert_rows(rows)
     cleanup_old_rows()
 
-    print(f"Submitted {len(rows)} unique recent articles to Supabase.")
+    print(f"Submitted {len(rows)} market news articles with importance >= {MIN_IMPORTANCE}.")
+    for row in rows[:10]:
+        print(f"  {'★' * row['importance']} {row['title'][:100]}")
 
 
 if __name__ == "__main__":

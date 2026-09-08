@@ -5,7 +5,7 @@ on:
     # 기존 커뮤니티/연예 뉴스: 매시간 7분
     - cron: "7 * * * *"
 
-    # 주식 속보: 10분마다
+    # 주식 중요 속보: 10분마다
     - cron: "*/10 * * * *"
 
   workflow_dispatch:
@@ -64,7 +64,7 @@ jobs:
         run: npx --yes tsx scripts/update-todays-korea.ts
 
   stock_news:
-    name: Update Stock Breaking News
+    name: Update Important Stock Market News
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/10 * * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -87,10 +87,10 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          STOCK_NEWS_SYMBOLS: "NVDA,TSLA,QQQ,SOXL,PLTR"
-          MAX_ARTICLE_AGE_HOURS: "36"
-          PER_SYMBOL_LIMIT: "15"
-          RETENTION_DAYS: "14"
+          MIN_IMPORTANCE: "3"
+          MAX_ARTICLE_AGE_HOURS: "24"
+          PER_FEED_LIMIT: "40"
+          RETENTION_HOURS: "24"
         run: python scripts/fetch_stock_news.py
 
   google_ratings:
