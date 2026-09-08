@@ -76,6 +76,7 @@ function scoreTone(value?: number) {
 
 export default function StockLiveClient() {
   const wsRef = useRef<WebSocket | null>(null);
+  const bootstrappedRef = useRef(false);
   const [symbols, setSymbols] = useState<string[]>([]);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [status, setStatus] = useState("페이지 로드됨 · 로그인 확인 중...");
@@ -92,7 +93,7 @@ export default function StockLiveClient() {
     }
     const ws = new WebSocket(url);
     wsRef.current = ws;
-    ws.onopen = () => setStatus("실시간 분석 서버 연결됨");
+    ws.onopen = () => setStatus("PC #2 직접 WebSocket 연결됨 · Vercel 실시간 폴링 없음");
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
@@ -145,7 +146,7 @@ export default function StockLiveClient() {
     }
 
     try {
-      const response = await fetch("/api/stocks/session", {
+      // Vercel은 여기서 딱 한 번, 보안용 WebSocket URL/token 발급에만 사용합니다.\n      // 이후 1초 실시간 데이터는 브라우저가 PC #2(stock.7pocker.us)에서 직접 받습니다.\n      const response = await fetch("/api/stocks/session", {
         headers: { authorization: `Bearer ${session.access_token}` },
         cache: "no-store",
       });
@@ -162,37 +163,41 @@ export default function StockLiveClient() {
     }
   }, [connect]);
 
-  const stopLive = useCallback(async () => {
-    setStatus("실시간 분석 중지 중...");
-    const { data: { session } } = await supabase.auth.getSession();
-
-    try {
-      if (session?.access_token) {
-        const response = await fetch("/api/stocks/session", {
-          method: "DELETE",
-          headers: { authorization: `Bearer ${session.access_token}` },
-          cache: "no-store",
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data?.error || `HTTP ${response.status}`);
-        }
-      }
-
-      if (wsRef.current) {
-        const ws = wsRef.current;
-        wsRef.current = null;
-        try { ws.close(1000, "User stopped live analysis"); } catch {}
-      }
-      setStatus("실시간 분석 중지됨");
-    } catch (error) {
-      setStatus(error instanceof Error ? `STOP 실패: ${error.message}` : "STOP 실패");
+  const stopLive = useCallback(() => {
+    // Vercel API를 호출하지 않고 브라우저 ↔ PC #2 WebSocket만 종료합니다.
+    // PC #2 서버는 WebSocket disconnect를 감지해 자체 정리합니다.
+    if (wsRef.current) {
+      const ws = wsRef.current;
+      wsRef.current = null;
+      try { ws.close(1000, "User stopped live analysis"); } catch {}
     }
+    setStatus("실시간 분석 중지됨 · PC #2 WebSocket 종료");
   }, []);
 
   useEffect(() => {
-    void load();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => void load());
+    if (!bootstrappedRef.current) {
+      bootstrappedRef.current = true;
+      void load();
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // 로그인 상태가 실제로 바뀐 경우에만 다시 bootstrap 합니다.
+      if (!session?.user) {
+        setSymbols([]);
+        setSnapshots({});
+        setStatus("로그인이 필요합니다.");
+        if (wsRef.current) {
+          try { wsRef.current.close(); } catch {}
+          wsRef.current = null;
+        }
+        return;
+      }
+
+      if (!wsRef.current) {
+        void load();
+      }
+    });
+
     return () => {
       subscription.unsubscribe();
       if (wsRef.current) {
