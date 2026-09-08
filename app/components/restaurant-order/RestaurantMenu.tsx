@@ -9,14 +9,28 @@ import type { MenuOrderDraft } from "./MenuItemModal";
 import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
 import { getOptionGroups, groupKey, optionKey } from "./types";
 
+type PriceSource = "menu" | "pickup" | "delivery";
+
+type PriceDisplayMap = {
+  menu: PriceSource;
+  pickup: PriceSource;
+  delivery: PriceSource;
+};
+
+const DEFAULT_PRICE_DISPLAY_MAP: PriceDisplayMap = {
+  menu: "menu",
+  pickup: "pickup",
+  delivery: "delivery",
+};
+
 type PricedRestaurantMenuItem = RestaurantMenuItem & {
   pickup_price?: number | null;
   delivery_price?: number | null;
 };
 
-function getPriceForService(
+function getRawPrice(
   item: RestaurantMenuItem,
-  service: "menu" | "pickup" | "delivery",
+  source: PriceSource,
 ) {
   const priced = item as PricedRestaurantMenuItem;
 
@@ -35,30 +49,34 @@ function getPriceForService(
       ? pickup
       : Number(priced.delivery_price);
 
-  if (service === "delivery") {
-    return Number.isFinite(delivery as number)
-      ? delivery
-      : null;
+  if (source === "delivery") {
+    return Number.isFinite(delivery as number) ? delivery : null;
   }
 
-  if (service === "pickup") {
-    return Number.isFinite(pickup as number)
-      ? pickup
-      : null;
+  if (source === "pickup") {
+    return Number.isFinite(pickup as number) ? pickup : null;
   }
 
-  return Number.isFinite(base as number)
-    ? base
-    : null;
+  return Number.isFinite(base as number) ? base : null;
+}
+
+function getPriceForService(
+  item: RestaurantMenuItem,
+  service: "menu" | "pickup" | "delivery",
+  displayMap?: PriceDisplayMap,
+) {
+  const map = displayMap || DEFAULT_PRICE_DISPLAY_MAP;
+  return getRawPrice(item, map[service]);
 }
 
 function withServicePrice(
   item: RestaurantMenuItem,
   service: "menu" | "pickup" | "delivery",
+  displayMap?: PriceDisplayMap,
 ): RestaurantMenuItem {
   return {
     ...item,
-    price: getPriceForService(item, service),
+    price: getPriceForService(item, service, displayMap),
   };
 }
 
@@ -178,6 +196,9 @@ export default function RestaurantMenu({
     categories: [],
     items: [],
   });
+  const [priceDisplayByItem, setPriceDisplayByItem] = useState<
+    Record<number, PriceDisplayMap>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
@@ -484,6 +505,63 @@ export default function RestaurantMenu({
     effectiveDeliveryEnabled,
     orderingAvailable,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPriceDisplaySettings() {
+      try {
+        const response = await fetch(
+          `/api/businesses/${encodeURIComponent(businessId)}/menu-price-display`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error || "가격 표시 설정을 불러오지 못했습니다.",
+          );
+        }
+
+        if (cancelled) return;
+
+        const next: Record<number, PriceDisplayMap> = {};
+        for (const row of Array.isArray(payload?.items) ? payload.items : []) {
+          const itemId = Number(row?.menuItemId);
+          if (!Number.isInteger(itemId) || itemId <= 0) continue;
+
+          const normalizeSource = (
+            value: unknown,
+            fallback: PriceSource,
+          ): PriceSource =>
+            value === "menu" || value === "pickup" || value === "delivery"
+              ? value
+              : fallback;
+
+          next[itemId] = {
+            menu: normalizeSource(row?.menuSource, "menu"),
+            pickup: normalizeSource(row?.pickupSource, "pickup"),
+            delivery: normalizeSource(row?.deliverySource, "delivery"),
+          };
+        }
+
+        setPriceDisplayByItem(next);
+      } catch (loadError) {
+        if (!cancelled) {
+          console.error("Restaurant price display settings load failed:", loadError);
+        }
+      }
+    }
+
+    void loadPriceDisplaySettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1074,7 +1152,11 @@ export default function RestaurantMenu({
                       onClick={() => {
                         recordMenuItemClick(item, category.name);
                         setSelectedItem(
-                          withServicePrice(item, activeService),
+                          withServicePrice(
+                            item,
+                            activeService,
+                            priceDisplayByItem[item.id],
+                          ),
                         );
                       }}
                       className={`group flex min-h-[112px] w-full overflow-hidden rounded-xl border text-left transition ${
@@ -1098,7 +1180,11 @@ export default function RestaurantMenu({
                             {item.name}
                           </h3>
 
-                          {getPriceForService(item, activeService) != null ? (
+                          {getPriceForService(
+                            item,
+                            activeService,
+                            priceDisplayByItem[item.id],
+                          ) != null ? (
                             <span
                               className="shrink-0 text-sm font-black"
                               style={
@@ -1121,7 +1207,11 @@ export default function RestaurantMenu({
                             >
                               $
                               {Number(
-                                getPriceForService(item, activeService),
+                                getPriceForService(
+                                  item,
+                                  activeService,
+                                  priceDisplayByItem[item.id],
+                                ),
                               ).toFixed(2)}
                             </span>
                           ) : null}

@@ -88,6 +88,20 @@ type MenuItem = {
   menu_option_groups?: MenuOptionGroup[] | null;
 };
 
+type PriceSource = "menu" | "pickup" | "delivery";
+
+type PriceDisplayMap = {
+  menu: PriceSource;
+  pickup: PriceSource;
+  delivery: PriceSource;
+};
+
+const DEFAULT_PRICE_DISPLAY_MAP: PriceDisplayMap = {
+  menu: "menu",
+  pickup: "pickup",
+  delivery: "delivery",
+};
+
 type MenuResponse = {
   business?: {
     id: number;
@@ -399,6 +413,10 @@ export default function OwnerBusinessMenuPage() {
   const [priceInputs, setPriceInputs] = useState<Record<number, string>>({});
   const [pickupPriceInputs, setPickupPriceInputs] = useState<Record<number, string>>({});
   const [deliveryPriceInputs, setDeliveryPriceInputs] = useState<Record<number, string>>({});
+  const [priceDisplayByItem, setPriceDisplayByItem] = useState<
+    Record<number, PriceDisplayMap>
+  >({});
+  const [savingPriceDisplayKey, setSavingPriceDisplayKey] = useState("");
   const [deliveryPercentInput, setDeliveryPercentInput] = useState("15");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">(
     "all",
@@ -513,6 +531,71 @@ export default function OwnerBusinessMenuPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPriceDisplaySettings() {
+      if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/menu-price-display`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "가격 표시 설정을 불러오지 못했습니다.",
+          );
+        }
+
+        if (cancelled) return;
+
+        const next: Record<number, PriceDisplayMap> = {};
+        for (const row of Array.isArray(data?.items) ? data.items : []) {
+          const itemId = Number(row?.menuItemId);
+          if (!Number.isInteger(itemId) || itemId <= 0) continue;
+
+          const normalizeSource = (
+            value: unknown,
+            fallback: PriceSource,
+          ): PriceSource =>
+            value === "menu" || value === "pickup" || value === "delivery"
+              ? value
+              : fallback;
+
+          next[itemId] = {
+            menu: normalizeSource(row?.menuSource, "menu"),
+            pickup: normalizeSource(row?.pickupSource, "pickup"),
+            delivery: normalizeSource(row?.deliverySource, "delivery"),
+          };
+        }
+
+        setPriceDisplayByItem(next);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("PRICE DISPLAY SETTINGS LOAD ERROR", error);
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "가격 표시 설정을 불러오지 못했습니다.",
+          );
+        }
+      }
+    }
+
+    void loadPriceDisplaySettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
 
   const [savingOrderModes, setSavingOrderModes] = useState(false);
 
@@ -2895,6 +2978,74 @@ export default function OwnerBusinessMenuPage() {
     categoryAutoSaveTimers.current[categoryId] = setTimeout(() => {
       void saveOneCategory(categoryId);
     }, delay);
+  }
+
+  function getPriceDisplayMap(itemId: number): PriceDisplayMap {
+    return priceDisplayByItem[itemId] || DEFAULT_PRICE_DISPLAY_MAP;
+  }
+
+  async function setPriceDisplaySource(
+    itemId: number,
+    target: PriceSource,
+    source: PriceSource,
+  ) {
+    const previous = getPriceDisplayMap(itemId);
+    const next: PriceDisplayMap = {
+      ...previous,
+      [target]: source,
+    };
+
+    setPriceDisplayByItem((current) => ({
+      ...current,
+      [itemId]: next,
+    }));
+
+    const saveKey = `${itemId}:${target}`;
+    setSavingPriceDisplayKey(saveKey);
+    setMessage("가격 표시 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/menu-price-display`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            menuItemId: itemId,
+            menuSource: next.menu,
+            pickupSource: next.pickup,
+            deliverySource: next.delivery,
+          }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "가격 표시 설정 저장에 실패했습니다.");
+      }
+
+      setMessage(
+        `✓ ${target.toUpperCase()} 화면에 ${source.toUpperCase()} 금액을 표시합니다.`,
+      );
+    } catch (error) {
+      setPriceDisplayByItem((current) => ({
+        ...current,
+        [itemId]: previous,
+      }));
+      setMessage(
+        error instanceof Error
+          ? `가격 표시 설정 저장 실패: ${error.message}`
+          : "가격 표시 설정 저장에 실패했습니다.",
+      );
+    } finally {
+      setSavingPriceDisplayKey((current) =>
+        current === saveKey ? "" : current,
+      );
+    }
   }
 
   function updatePriceField(
@@ -5484,7 +5635,7 @@ export default function OwnerBusinessMenuPage() {
                       </div>
                     </div>
 
-                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_110px_110px_110px_80px_auto]">
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px_150px_150px_80px_auto]">
                       <select
                         value={item.category_id ?? ""}
                         onChange={(event) =>
@@ -5504,53 +5655,127 @@ export default function OwnerBusinessMenuPage() {
                         ))}
                       </select>
 
-                      <label className="rounded-xl border border-gray-200 bg-white px-2 py-1">
-                        <span className="block text-[9px] font-black uppercase text-gray-500">Menu</span>
-                        <div className="flex items-center">
-                          <span className="mr-1 text-xs font-black text-gray-500">$</span>
-                          <input
-                            value={priceInputs[item.id] ?? ""}
-                            onChange={(event) =>
-                              updatePriceField("menu", item.id, event.target.value)
-                            }
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            className="min-w-0 w-full bg-transparent py-1 text-sm font-black outline-none"
-                          />
-                        </div>
-                      </label>
+                      {(
+                        [
+                          {
+                            source: "menu" as PriceSource,
+                            title: "Menu",
+                            value: priceInputs[item.id] ?? "",
+                            border: "border-gray-200",
+                            bg: "bg-white",
+                            labelColor: "text-gray-500",
+                            inputColor: "",
+                          },
+                          {
+                            source: "pickup" as PriceSource,
+                            title: "Pickup",
+                            value: pickupPriceInputs[item.id] ?? "",
+                            border: "border-emerald-200",
+                            bg: "bg-emerald-50",
+                            labelColor: "text-emerald-700",
+                            inputColor: "text-emerald-950",
+                          },
+                          {
+                            source: "delivery" as PriceSource,
+                            title: "Delivery",
+                            value: deliveryPriceInputs[item.id] ?? "",
+                            border: "border-orange-200",
+                            bg: "bg-orange-50",
+                            labelColor: "text-orange-700",
+                            inputColor: "text-orange-950",
+                          },
+                        ] as const
+                      ).map((priceBox) => {
+                        const displayMap = getPriceDisplayMap(item.id);
 
-                      <label className="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-1">
-                        <span className="block text-[9px] font-black uppercase text-emerald-700">Pickup</span>
-                        <div className="flex items-center">
-                          <span className="mr-1 text-xs font-black text-emerald-700">$</span>
-                          <input
-                            value={pickupPriceInputs[item.id] ?? ""}
-                            onChange={(event) =>
-                              updatePriceField("pickup", item.id, event.target.value)
-                            }
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            className="min-w-0 w-full bg-transparent py-1 text-sm font-black text-emerald-950 outline-none"
-                          />
-                        </div>
-                      </label>
+                        return (
+                          <div
+                            key={priceBox.source}
+                            className={`rounded-xl border ${priceBox.border} ${priceBox.bg} px-2 py-1.5`}
+                          >
+                            <label>
+                              <span
+                                className={`block text-[9px] font-black uppercase ${priceBox.labelColor}`}
+                              >
+                                {priceBox.title}
+                              </span>
+                              <div className="flex items-center">
+                                <span
+                                  className={`mr-1 text-xs font-black ${priceBox.labelColor}`}
+                                >
+                                  $
+                                </span>
+                                <input
+                                  value={priceBox.value}
+                                  onChange={(event) =>
+                                    updatePriceField(
+                                      priceBox.source,
+                                      item.id,
+                                      event.target.value,
+                                    )
+                                  }
+                                  inputMode="decimal"
+                                  placeholder="0.00"
+                                  className={`min-w-0 w-full bg-transparent py-1 text-sm font-black outline-none ${priceBox.inputColor}`}
+                                />
+                              </div>
+                            </label>
 
-                      <label className="rounded-xl border border-orange-200 bg-orange-50 px-2 py-1">
-                        <span className="block text-[9px] font-black uppercase text-orange-700">Delivery</span>
-                        <div className="flex items-center">
-                          <span className="mr-1 text-xs font-black text-orange-700">$</span>
-                          <input
-                            value={deliveryPriceInputs[item.id] ?? ""}
-                            onChange={(event) =>
-                              updatePriceField("delivery", item.id, event.target.value)
-                            }
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            className="min-w-0 w-full bg-transparent py-1 text-sm font-black text-orange-950 outline-none"
-                          />
-                        </div>
-                      </label>
+                            <div className="mt-1.5 border-t border-black/5 pt-1.5">
+                              <p className="mb-1 text-[8px] font-black uppercase tracking-wide text-gray-400">
+                                이 금액을 표시
+                              </p>
+                              <div className="flex flex-wrap gap-x-2 gap-y-1">
+                                {(
+                                  [
+                                    ["menu", "메뉴"],
+                                    ["pickup", "픽업"],
+                                    ["delivery", "배달"],
+                                  ] as const
+                                ).map(([target, label]) => {
+                                  const checked =
+                                    displayMap[target] === priceBox.source;
+                                  const saveKey = `${item.id}:${target}`;
+
+                                  return (
+                                    <label
+                                      key={target}
+                                      className={`flex cursor-pointer items-center gap-1 text-[9px] font-black ${
+                                        checked
+                                          ? "text-[#172033]"
+                                          : "text-gray-400"
+                                      }`}
+                                      title={`${label} 화면에 ${priceBox.title} 금액 표시`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={
+                                          savingPriceDisplayKey === saveKey
+                                        }
+                                        onChange={(event) => {
+                                          // 각 화면(Menu/Pickup/Delivery)은 반드시
+                                          // 하나의 가격 원본만 사용합니다.
+                                          // 체크 해제만으로 빈 상태가 되지 않게 하고,
+                                          // 다른 가격의 같은 화면 체크박스를 누르면 자동 교체합니다.
+                                          if (!event.target.checked) return;
+                                          void setPriceDisplaySource(
+                                            item.id,
+                                            target,
+                                            priceBox.source,
+                                          );
+                                        }}
+                                        className="h-3 w-3 accent-[#172033]"
+                                      />
+                                      {label}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
 
                       <input
                         type="number"
