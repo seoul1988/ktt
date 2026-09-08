@@ -1,7 +1,7 @@
-"use client";
+
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Snapshot = {
@@ -276,23 +276,122 @@ export default function StockLiveClient() {
                   <th key={head} className="whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 font-black text-slate-950">{head}</th>
                 ))}
               </tr></thead>
-              <tbody>{rows.map(({ symbol, item }, index) => (
-                <tr key={symbol || `empty-${index}`} className="h-12">
-                  <Cell strong>{symbol || "-"}</Cell>
-                  <Cell>{symbol ? <button type="button" className="mx-auto flex h-7 w-7 items-center justify-center rounded-md bg-blue-600 font-black text-white">?</button> : "-"}</Cell>
-                  <Cell className={symbol ? textTone(item?.action) : ""}>{symbol ? <b>{item?.action || "DATA WAIT"}</b> : "-"}</Cell>
-                  <Cell>{item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
-                  <Cell className={textTone(item?.forecast)}>{item?.forecast || "-"}</Cell>
-                  <Cell className={scoreTone(item?.score)}>{item?.score ?? "-"}</Cell>
-                  <Cell className={riskTone(item?.down_risk)}>{item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}</Cell>
-                  <Cell>{item?.buy60 ?? "-"}</Cell><Cell>{item?.sell60 ?? "-"}</Cell>
-                  <Cell>{item ? fmt(item.vwap) : "-"}</Cell><Cell>{item ? fmt(item.ema9) : "-"}</Cell>
-                  <Cell>{item ? fmt(item.ema20) : "-"}</Cell><Cell>{item ? fmt(item.resistance) : "-"}</Cell>
-                  <Cell>{item ? fmt(item.local_support ?? item.support) : "-"}</Cell>
-                  <Cell className={textTone(item?.fast_drop)}>{item?.fast_drop || "-"}</Cell>
-                  <Cell className={textTone(item?.trend_1m)}>{item?.trend_1m || "-"}</Cell>
-                </tr>
-              ))}</tbody>
+              <tbody>
+              {rows.map(({ symbol, item }, index) => {
+                const isOpen = Boolean(symbol) && openSymbol === symbol;
+
+                return (
+                  <Fragment key={symbol || `empty-${index}`}>
+                    <tr className="h-12">
+                      <Cell strong>{symbol || "-"}</Cell>
+                      <Cell>
+                        {symbol ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenSymbol(isOpen ? "" : symbol)
+                            }
+                            aria-label={`${symbol} 상세보기`}
+                            aria-expanded={isOpen}
+                            className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md font-black text-white transition ${
+                              isOpen
+                                ? "bg-slate-900"
+                                : "bg-blue-600 hover:bg-blue-700"
+                            }`}
+                          >
+                            ?
+                          </button>
+                        ) : (
+                          "-"
+                        )}
+                      </Cell>
+                      <Cell className={symbol ? textTone(item?.action) : ""}>
+                        {symbol ? <b>{item?.action || "DATA WAIT"}</b> : "-"}
+                      </Cell>
+                      <Cell>{item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
+                      <Cell className={textTone(item?.forecast)}>{item?.forecast || "-"}</Cell>
+                      <Cell className={scoreTone(item?.score)}>{item?.score ?? "-"}</Cell>
+                      <Cell className={riskTone(item?.down_risk)}>
+                        {item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}
+                      </Cell>
+                      <Cell>{item?.buy60 ?? "-"}</Cell>
+                      <Cell>{item?.sell60 ?? "-"}</Cell>
+                      <Cell>{item ? fmt(item.vwap) : "-"}</Cell>
+                      <Cell>{item ? fmt(item.ema9) : "-"}</Cell>
+                      <Cell>{item ? fmt(item.ema20) : "-"}</Cell>
+                      <Cell>{item ? fmt(item.resistance) : "-"}</Cell>
+                      <Cell>{item ? fmt(item.local_support ?? item.support) : "-"}</Cell>
+                      <Cell className={textTone(item?.fast_drop)}>{item?.fast_drop || "-"}</Cell>
+                      <Cell className={textTone(item?.trend_1m)}>{item?.trend_1m || "-"}</Cell>
+                    </tr>
+
+                    {isOpen ? (
+                      <tr>
+                        <td
+                          colSpan={16}
+                          className="border-b border-slate-300 bg-slate-50 px-4 py-4"
+                        >
+                          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
+                            <DesktopDetail label="Ticker" value={symbol} />
+                            <DesktopDetail
+                              label="Price"
+                              value={item?.price != null ? `$${fmt(item.price)}` : "-"}
+                            />
+                            <DesktopDetail
+                              label="Action"
+                              value={item?.action || "DATA WAIT"}
+                              tone={textTone(item?.action)}
+                            />
+                            <DesktopDetail
+                              label="Forecast"
+                              value={item?.forecast || "-"}
+                              tone={textTone(item?.forecast)}
+                            />
+                            <DesktopDetail
+                              label="Score"
+                              value={item?.score ?? "-"}
+                              tone={scoreTone(item?.score)}
+                            />
+                            <DesktopDetail
+                              label="Down Risk"
+                              value={
+                                item?.down_risk != null
+                                  ? `${fmt(item.down_risk, 0)}%`
+                                  : "-"
+                              }
+                              tone={riskTone(item?.down_risk)}
+                            />
+                            <DesktopDetail label="Buy60" value={item?.buy60 ?? "-"} />
+                            <DesktopDetail label="Sell60" value={item?.sell60 ?? "-"} />
+                            <DesktopDetail label="VWAP" value={item ? fmt(item.vwap) : "-"} />
+                            <DesktopDetail label="EMA9" value={item ? fmt(item.ema9) : "-"} />
+                            <DesktopDetail label="EMA20" value={item ? fmt(item.ema20) : "-"} />
+                            <DesktopDetail
+                              label="Resistance"
+                              value={item ? fmt(item.resistance) : "-"}
+                            />
+                            <DesktopDetail
+                              label="Support"
+                              value={item ? fmt(item.local_support ?? item.support) : "-"}
+                            />
+                            <DesktopDetail
+                              label="Fast Drop"
+                              value={item?.fast_drop || "-"}
+                              tone={textTone(item?.fast_drop)}
+                            />
+                            <DesktopDetail
+                              label="1m Trend"
+                              value={item?.trend_1m || "-"}
+                              tone={textTone(item?.trend_1m)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
             </table>
           </div>
         </section>
@@ -303,6 +402,25 @@ export default function StockLiveClient() {
 
 function Cell({ children, strong = false, className = "" }: { children: React.ReactNode; strong?: boolean; className?: string }) {
   return <td className={`whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center ${strong ? "font-black text-slate-950" : "font-medium text-slate-700"} ${className}`}>{children}</td>;
+}
+
+function DesktopDetail({
+  label,
+  value,
+  tone = "",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: string;
+}) {
+  return (
+    <div className={`rounded-lg border border-slate-200 p-3 ${tone || "bg-white"}`}>
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 break-words text-sm font-black">{value}</div>
+    </div>
+  );
 }
 
 function MobileValue({ label, value, tone = "" }: { label: string; value: React.ReactNode; tone?: string }) {
