@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -821,9 +822,9 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
     .slice(0, 5);
 
   return (
-    <div className="-mx-1 overflow-x-scroll overscroll-x-contain px-1 pb-3 touch-pan-x md:overflow-x-auto">
+    <div className="overflow-x-auto pb-1">
       <div
-        className="grid w-max min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        className="grid min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
         style={{
           gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
         }}
