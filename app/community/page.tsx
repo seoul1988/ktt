@@ -1,398 +1,849 @@
-"use client";
-
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "../../lib/supabase";
+import CommunityBottomNav from "../components/CommunityBottomNav";
+import ProfileButton from "../components/ProfileButton";
 
-type SeedCandle = {
-  minute?: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume?: number;
-  live?: boolean;
-};
+import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
+import CommunityNewsCarousel from "../components/CommunityNewsCarousel";
+import CommunityAdsSlider from "../components/CommunityAdsSlider";
+import CommunityLiveStocks from "./components/CommunityLiveStocks";
 
-type LiveCandle = SeedCandle & {
-  minute: number;
-};
 
-type Snapshot = {
-  symbol: string;
-  ts?: number;
-  price?: number;
-  bid?: number;
-  ask?: number;
-  action?: string;
-  forecast?: string;
-  score?: number;
-  down_risk?: number;
-  buy60?: number;
-  sell60?: number;
-  vol_ratio?: number;
-  vwap?: number;
-  ema9?: number;
-  ema20?: number;
-  local_support?: number;
-  support?: number;
-  candles_1m?: SeedCandle[];
-};
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-const SYMBOLS = ["NVDA", "TSLA", "AAPL"] as const;
-type SymbolName = (typeof SYMBOLS)[number];
+export default async function CommunityPage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: events, error: eventsError } = await supabase
+    .from("community_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-function fmt(value: unknown, digits = 2) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n.toFixed(digits) : "-";
-}
-
-function compactFlow(value: unknown) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "-";
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return Math.round(n).toString();
-}
-
-function buyShare(item?: Snapshot) {
-  if (!item) return null;
-  const buy = Number(item.buy60 || 0);
-  const sell = Number(item.sell60 || 0);
-  const total = buy + sell;
-  return total > 0 ? (buy / total) * 100 : null;
-}
-
-function candleColor(candle: LiveCandle | undefined) {
-  if (!candle) return "bg-slate-300";
-  return candle.close >= candle.open ? "bg-[#16A34A]" : "bg-[#DC2626]";
-}
-
-function wickColor(candle: LiveCandle | undefined) {
-  if (!candle) return "bg-slate-300";
-  return candle.close >= candle.open ? "bg-[#16A34A]" : "bg-[#DC2626]";
-}
-
-function actionText(item?: Snapshot) {
-  const raw = String(item?.action || item?.forecast || "WAIT").toUpperCase();
-  if (raw.includes("SELL") || raw.includes("DOWN") || Number(item?.down_risk) >= 65) {
-    return { text: "DOWN RISK", cls: "bg-red-50 text-red-600" };
-  }
-  if (raw.includes("BUY")) {
-    return { text: "BUY WATCH", cls: "bg-emerald-50 text-emerald-700" };
-  }
-  return { text: "WAIT", cls: "bg-amber-50 text-amber-700" };
-}
-
-function mergeLiveCandle(
-  previous: LiveCandle[] | undefined,
-  item: Snapshot,
-): LiveCandle[] {
-  const price = Number(item.price);
-  const tsMs = Number(item.ts || Date.now() / 1000) * 1000;
-  const minute = Math.floor(tsMs / 60000);
-
-  // PC #2 is the source of truth for the mini 1-minute chart.
-  // This makes browser reloads and WebSocket reconnects immediately restore
-  // the last 3 candles instead of starting the chart over.
-  if (Array.isArray(item.candles_1m) && item.candles_1m.length) {
-    const serverCandles = item.candles_1m
-      .slice(-3)
-      .map((c, index, arr) => ({
-        minute:
-          Number.isFinite(Number(c.minute))
-            ? Number(c.minute)
-            : minute - (arr.length - 1 - index),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-      }))
-      .filter(
-        (c) =>
-          Number.isFinite(c.open) &&
-          Number.isFinite(c.high) &&
-          Number.isFinite(c.low) &&
-          Number.isFinite(c.close),
-      );
-
-    if (serverCandles.length) return serverCandles;
+  if (eventsError) {
+    console.error("community events error:", eventsError);
   }
 
-  // Fallback only if an older server does not send candles_1m.
-  if (!Number.isFinite(price) || price <= 0) return previous || [];
+  // Community Grand Opening:
+  // 커뮤니티 + 리스트에 모두 체크된 항목 중 가장 최근 1개만 표시합니다.
+  const { data: grandOpeningData, error: grandOpeningError } = await supabase
+    .from("grand_openings")
+    .select("*")
+    .eq("show_on_community", true)
+    .eq("show_in_list", true)
+    // Sale / Event End Date가 없으면 계속 표시,
+    // 날짜가 있으면 오늘까지 포함해서 표시하고 다음 날부터 숨깁니다.
+    .or(`end_date.is.null,end_date.gte.${today}`)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-  let next = [...(previous || [])];
-  const current = next[next.length - 1];
+  if (grandOpeningError) {
+    console.error("community grand opening error:", grandOpeningError);
+  }
 
-  if (!current || current.minute < minute) {
-    next.push({
-      minute,
-      open: price,
-      high: price,
-      low: price,
-      close: price,
+  const latestGrandOpening = grandOpeningData?.[0] ?? null;
+  const grandOpeningImage =
+    latestGrandOpening?.images?.[0] ||
+    latestGrandOpening?.image_url ||
+    "/event.png";
+
+  const { data: deals, error: dealsError } = await supabase
+    .from("deals")
+    .select("*")
+    .eq("status", "approved")
+    .eq("active", true)
+    .eq("deal_scope", "community")
+    .or(`end_date.is.null,end_date.gte.${today}`)
+    .order("created_at", { ascending: false })
+    .limit(6);
+
+  if (dealsError) {
+    console.error("community deals error:", dealsError);
+  }
+
+  const now = new Date().toISOString();
+
+  const { data: communityCoupons, error: communityCouponsError } = await supabase
+    .from("coupons")
+    .select("id,business_id,usage_limit,used_count,active,start_date,end_date")
+    .eq("active", true)
+    .lte("start_date", now)
+    .or(`end_date.is.null,end_date.gte.${now}`);
+
+  if (communityCouponsError) {
+    console.error("community coupons error:", communityCouponsError);
+  }
+
+  const activeCouponCount = (communityCoupons || []).filter((coupon: any) => {
+    const usageLimit = Number(coupon.usage_limit || 0);
+    const usedCount = Number(coupon.used_count || 0);
+
+    return !(usageLimit > 0 && usedCount >= usageLimit);
+  }).length;
+
+  // 두 번째 소스: /community/news에 직접 등록된 뉴스/공연·문화.
+  // 위의 자동 Community News(community_news)가 아니라 business_news에서
+  // 가장 최근 등록된 1건을 가져옵니다.
+  const { data: registeredNewsData, error: registeredNewsError } =
+    await supabase
+      .from("business_news")
+      .select(
+        "id, title, summary, category, image_url, published_at, published",
+      )
+      .order("id", { ascending: false })
+      .limit(1);
+
+  if (registeredNewsError) {
+    console.error("registered news/culture error:", registeredNewsError);
+  }
+
+  const latestRegisteredNews = registeredNewsData?.[0] ?? null;
+
+  const newsSelect =
+    "id, region, source, title, summary, article_url, image_url, published_at";
+
+  const [
+    { data: koreaNewsData, error: koreaNewsError },
+    { data: usNewsData, error: usNewsError },
+  ] = await Promise.all([
+    supabase
+      .from("community_news")
+      .select(newsSelect)
+      .eq("region", "korea")
+      .eq("active", true)
+      .order("published_at", {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .limit(12),
+
+    supabase
+      .from("community_news")
+      .select(newsSelect)
+      .eq("region", "us")
+      .eq("active", true)
+      .order("published_at", {
+        ascending: false,
+        nullsFirst: false,
+      })
+      .limit(12),
+  ]);
+
+  if (koreaNewsError) {
+    console.error("community korea news error:", {
+      message: koreaNewsError.message,
+      details: koreaNewsError.details,
+      hint: koreaNewsError.hint,
+      code: koreaNewsError.code,
     });
-  } else if (current.minute === minute) {
-    next[next.length - 1] = {
-      ...current,
-      high: Math.max(current.high, price),
-      low: Math.min(current.low, price),
-      close: price,
-    };
   }
 
-  return next.slice(-3);
-}
+  if (usNewsError) {
+    console.error("community us news error:", {
+      message: usNewsError.message,
+      details: usNewsError.details,
+      hint: usNewsError.hint,
+      code: usNewsError.code,
+    });
+  }
 
-function MiniCandle({
-  candle,
-  live,
-}: {
-  candle?: LiveCandle;
-  live?: boolean;
-}) {
-  if (!candle) {
-    return (
-      <div className="relative flex h-11 w-5 items-center justify-center">
-        <span className="h-4 w-2 rounded-[1px] bg-slate-200" />
-      </div>
+  const koreaNews = koreaNewsData ?? [];
+  const usNews = usNewsData ?? [];
+
+  // Latest 5 ads for the Community page
+  const { data: latestAdsData, error: latestAdsError } = await supabase
+    .from("ads")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  if (latestAdsError) {
+    console.error("community ads error:", latestAdsError);
+  }
+
+  const latestAds = (latestAdsData ?? []).filter((ad: any) =>
+    Boolean(
+      ad?.image_url ||
+      ad?.image ||
+      ad?.banner_url ||
+      ad?.thumbnail_url
+    ),
+  );
+
+  const { data: allBusinesses } = await supabase
+    .from("businesses")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  /*
+   * categories 테이블에는 hidden 컬럼이 없으므로 조회하지 않습니다.
+   * Community Map에 표시되는 카테고리만 가져옵니다.
+   */
+  const { data: categories, error: categoriesError } = await supabase
+    .from("categories")
+    .select("name, show_on_community_map")
+    .eq("show_on_community_map", true);
+
+  if (categoriesError) {
+    console.error(
+      "community categories error:",
+      categoriesError.message,
+      categoriesError.code,
     );
   }
 
-  const range = Math.max(candle.high - candle.low, 0.0001);
-  const bodyTop = Math.max(candle.open, candle.close);
-  const bodyBottom = Math.min(candle.open, candle.close);
-  const body = Math.max(bodyTop - bodyBottom, range * 0.14);
-
-  const wickHeight = Math.max(16, Math.min(38, 20 + range * 180));
-  const bodyHeight = Math.max(5, Math.min(22, (body / range) * wickHeight));
-  const highToBody = Math.max(0, candle.high - bodyTop);
-  const topOffset = Math.max(0, Math.min(wickHeight - bodyHeight, (highToBody / range) * wickHeight));
-
-  return (
-    <div className="relative flex h-11 w-5 justify-center">
-      <span
-        className={`absolute top-1 w-px ${wickColor(candle)}`}
-        style={{ height: `${wickHeight}px` }}
-      />
-      <span
-        className={`absolute w-3 rounded-[1px] ${candleColor(candle)}`}
-        style={{ height: `${bodyHeight}px`, top: `${4 + topOffset}px` }}
-      />
-      {live ? (
-        <span className="absolute -bottom-1 text-[6px] font-black leading-none text-[#DC2626]">
-          LIVE
-        </span>
-      ) : null}
-    </div>
+  const communityCategoryNames = new Set(
+    (categories ?? [])
+      .map((cat) => String(cat.name ?? "").trim().toLowerCase())
+      .filter(Boolean),
   );
-}
 
-export default function CommunityLiveStocks() {
-  const wsRef = useRef<WebSocket | null>(null);
-  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
-  const [candles, setCandles] = useState<Record<string, LiveCandle[]>>({});
-  const [status, setStatus] = useState("CONNECTING");
 
-  const connectWebSocket = useCallback((url: string) => {
-    if (!url) return;
 
-    if (wsRef.current) {
-      try { wsRef.current.close(); } catch {}
-    }
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
 
-    ws.onopen = () => setStatus("LIVE");
 
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        const list: Snapshot[] = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload)
-            ? payload
-            : payload?.symbol
-              ? [payload]
-              : [];
 
-        const wanted = list.filter((item) =>
-          SYMBOLS.includes(String(item?.symbol || "").toUpperCase() as SymbolName),
+
+  function getBusinessCategoryNames(biz: any): string[] {
+    const values = [
+      biz.category,
+      biz.category_name,
+      biz.categories,
+    ];
+
+    return values
+      .flatMap((value) => {
+        if (Array.isArray(value)) {
+          return value.map((item) => {
+            if (typeof item === "string") {
+              return item;
+            }
+
+            if (item && typeof item === "object") {
+              return (
+                item.name ??
+                item.category ??
+                item.category_name ??
+                ""
+              );
+            }
+
+            return "";
+          });
+        }
+
+        return String(value ?? "").split(",");
+      })
+      .map((category) => String(category).trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  const newBusinesses =
+    (allBusinesses ?? [])
+      .filter((biz) =>
+        getBusinessCategoryNames(biz).some((category) =>
+          communityCategoryNames.has(category),
+        ),
+      )
+      .slice(0, 6);
+
+  const featuredBusinesses =
+    (allBusinesses ?? [])
+      .filter((biz) => {
+        const isCommunityCategory = getBusinessCategoryNames(biz).some(
+          (category) => communityCategoryNames.has(category),
         );
 
-        setSnapshots((prev) => {
-          const next = { ...prev };
-          wanted.forEach((item) => {
-            const symbol = String(item.symbol).toUpperCase();
-            next[symbol] = item;
-          });
-          return next;
-        });
+        return isCommunityCategory && biz.featured_sponsor === true;
+      })
+      .slice(0, 3);
 
-        setCandles((prev) => {
-          const next = { ...prev };
-          wanted.forEach((item) => {
-            const symbol = String(item.symbol).toUpperCase();
-            next[symbol] = mergeLiveCandle(next[symbol], item);
-          });
-          return next;
-        });
-      } catch {}
-    };
-
-    ws.onerror = () => setStatus("RECONNECT");
-    ws.onclose = () => {
-      if (wsRef.current === ws) {
-        wsRef.current = null;
-        setStatus("RECONNECT");
-        retryRef.current = setTimeout(() => void start(), 3000);
-      }
-    };
-  }, []);
-
-  const start = useCallback(async () => {
-    setStatus("CONNECTING");
-
-    // Public homepage feed: no Supabase login required.
-    // Vercel Environment Variable:
-    // NEXT_PUBLIC_STOCK_PUBLIC_WS_URL=wss://YOUR-CLOUDFLARE-DOMAIN/ws/public
-    const rawUrl =
-      process.env.NEXT_PUBLIC_STOCK_PUBLIC_WS_URL?.trim() ||
-      process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim() ||
-      "wss://stock.7pocker.us/ws/public";
-
-    if (!rawUrl) {
-      setStatus("NO URL");
-      return;
-    }
-
-    let wsUrl = rawUrl;
-    try {
-      const parsed = new URL(rawUrl);
-      if (!parsed.pathname || parsed.pathname === "/") {
-        parsed.pathname = "/ws/public";
-        wsUrl = parsed.toString();
-      }
-    } catch {}
-
-    connectWebSocket(wsUrl);
-  }, [connectWebSocket]);
-
-  useEffect(() => {
-    void start();
-    return () => {
-      if (retryRef.current) clearTimeout(retryRef.current);
-      if (wsRef.current) {
-        try { wsRef.current.close(); } catch {}
-      }
-    };
-  }, [start]);
+  const eventCount = events?.length || 0;
+  const dealCount = deals?.length || 0;
 
   return (
-    <Link
-      href="/stock"
-      className="mb-5 block overflow-hidden rounded-[22px] border border-[#D9E2F1] bg-white px-3 py-3 shadow-sm transition hover:shadow-md active:scale-[0.995]"
-      aria-label="실시간 주식 정보 보기"
-    >
-      <div className="flex items-center justify-between gap-2 px-1">
-        <div>
-          <h2 className="text-[14px] font-black tracking-[-0.02em] text-[#172033]">
-            📈 Live Stock Watch
-          </h2>
-          <p className="mt-0.5 text-[8px] font-semibold text-[#6B6257]">
-            최근 1분봉 3개 · 마지막 봉 실시간
-          </p>
-        </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
-            status === "LIVE"
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-slate-100 text-slate-500"
-          }`}
-        >
-          ● {status}
-        </span>
-      </div>
+  <>
+  
+  
+    <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
+      <section className="mx-auto max-w-2xl px-5 pb-28 pt-6">
+        <div className="mb-6 flex items-start justify-between gap-4">
+  <div>
+    <p className="text-sm font-black text-[#C4483A]">
+      COMMUNITY
+    </p>
 
-      <div className="mt-3 grid grid-cols-3 divide-x divide-[#E5E7EB]">
-        {SYMBOLS.map((symbol) => {
-          const item = snapshots[symbol];
-          const stockCandles = candles[symbol] || [];
-          const lastThree = [
-            stockCandles[stockCandles.length - 3],
-            stockCandles[stockCandles.length - 2],
-            stockCandles[stockCandles.length - 1],
-          ];
-          const share = buyShare(item);
-          const action = actionText(item);
+    <h1 className="text-3xl font-black tracking-tight">
+      KTown Triangle
+    </h1>
 
-          return (
-            <div key={symbol} className="min-w-0 px-2 text-center">
-              <div className="flex h-12 items-center justify-center gap-1.5">
-                {lastThree.map((candle, index) => (
-                  <MiniCandle
-                    key={`${symbol}-${index}`}
-                    candle={candle}
-                    live={index === 2 && Boolean(candle)}
-                  />
-                ))}
+    <p className="mt-2 text-sm font-semibold text-[#6B6257]">
+      Discover Korean businesses.
+    </p>
+  </div>
+
+<div className="flex items-center gap-3">
+  <Link
+  href="https://kacctriangle.org"
+  target="_blank"
+>
+  <img
+    src="/kacc-logo.png"
+    alt="KACC Raleigh"
+    className="h-19 w-19 rounded-full object-contain cursor-pointer"
+  />
+</Link>
+
+
+
+
+  <ProfileButton />
+</div>
+</div>
+
+        {/* Korea / US News */}
+        <CommunityNewsCarousel
+          koreaNews={koreaNews as any[]}
+          usNews={usNews as any[]}
+        />
+
+        {/* Compact live NVDA / TSLA / AAPL */}
+        <CommunityLiveStocks />
+
+        {/* KTown Coupon Book */}
+        <section className="mb-5">
+          <Link
+            href="/coupons"
+            className="group relative block overflow-hidden rounded-[22px] bg-[#FFFDF8] shadow-sm transition hover:shadow-md active:scale-[0.995]"
+          >
+            <div className="pointer-events-none absolute inset-[6px] rounded-[16px] border-2 border-dashed border-[#E8B85E]" />
+
+            <div className="flex items-center gap-3 px-4 pb-3 pt-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#112B58] text-[22px] text-white shadow-sm">
+                🎟
               </div>
 
-              <p className="mt-1 text-[10px] font-black text-[#172033]">
-                {symbol}
-              </p>
-              <p className="mt-0.5 text-[16px] font-black leading-none text-[#172033]">
-                ${fmt(item?.price)}
-              </p>
+              <div className="min-w-0 flex-1">
+                <h2 className="truncate text-[18px] font-black tracking-[-0.02em] text-[#112B58]">
+                  KTOWN COUPON BOOK
+                </h2>
 
-              <div className={`mx-auto mt-2 w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
-                {action.text}
+                <p className="mt-0.5 text-[11px] font-black text-[#C4483A]">
+                  Eat · Shop · Save
+                </p>
+
+                <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold text-[#6B7280]">
+                  Triangle Local Deals in One Place
+                </p>
               </div>
 
-              <div className="mt-2 grid grid-cols-3 gap-1 border-t border-[#EEF0F3] pt-2">
-                <div>
-                  <p className="text-[6px] font-bold text-[#6B6257]">Buy60</p>
-                  <p className="mt-0.5 text-[9px] font-black text-[#16A34A]">
-                    {share == null ? "-" : `${share.toFixed(0)}%`}
-                  </p>
+              {activeCouponCount > 0 && (
+                <div className="shrink-0 rounded-full border border-[#F0D6B5] bg-[#FFF8EC] px-2.5 py-1 text-center">
+                  <span className="text-[11px] font-black text-[#C4483A]">
+                    {activeCouponCount}
+                  </span>
+                  <span className="ml-1 text-[8px] font-black uppercase tracking-wide text-[#8A8176]">
+                    Coupons
+                  </span>
                 </div>
-                <div>
-                  <p className="text-[6px] font-bold text-[#6B6257]">Risk</p>
-                  <p
-                    className={`mt-0.5 text-[9px] font-black ${
-                      Number(item?.down_risk) >= 65
-                        ? "text-[#DC2626]"
-                        : Number(item?.down_risk) >= 45
-                          ? "text-[#F59E0B]"
-                          : "text-[#16A34A]"
-                    }`}
-                  >
-                    {Number.isFinite(Number(item?.down_risk))
-                      ? `${Math.round(Number(item?.down_risk))}%`
-                      : "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[6px] font-bold text-[#6B6257]">Vol</p>
-                  <p className="mt-0.5 text-[9px] font-black text-[#2563EB]">
-                    {Number.isFinite(Number(item?.vol_ratio))
-                      ? `${Number(item?.vol_ratio).toFixed(1)}x`
-                      : "-"}
-                  </p>
-                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 px-3 pb-3">
+              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+                <p className="text-[13px] font-black text-[#C4483A]">25% OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Cleaners</p>
+              </div>
+
+              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+                <p className="text-[13px] font-black text-[#C4483A]">BOGO</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Coffee</p>
+              </div>
+
+              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
+                <p className="text-[13px] font-black text-[#C4483A]">$5 OFF</p>
+                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Bakery</p>
               </div>
             </div>
-          );
-        })}
-      </div>
 
-      <div className="mt-3 flex items-center justify-center gap-2 border-t border-[#EEF0F3] pt-2 text-[8px] font-bold text-[#7C746A]">
-        <span>Schwab live data</span>
-        <span>·</span>
-        <span className="font-black text-[#C4483A]">상세보기 →</span>
-      </div>
+            <div className="px-3 pb-3">
+              <span className="flex w-full items-center justify-center rounded-xl bg-[#112B58] px-4 py-2.5 text-[11px] font-black tracking-wide text-white shadow-sm transition group-hover:bg-[#1A3D73]">
+                VIEW ALL COUPONS →
+              </span>
+            </div>
+          </Link>
+        </section>
+
+        {/* Upcoming Events */}
+        <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">
+          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F3CFC7] bg-white text-xl shadow-sm">
+                🎉
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
+                  Events
+                </p>
+
+                <h2 className="text-xl font-black text-[#172033]">
+                  Upcoming Events
+                </h2>
+              </div>
+            </div>
+
+            <Link
+              href="/community/events"
+              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
+            >
+             →
+            </Link>
+          </div>
+
+          <div
+            className={
+              eventCount === 1
+                ? "grid grid-cols-1 gap-4"
+                : "flex gap-4 overflow-x-auto pb-1"
+            }
+          >
+            {events?.map((event) => (
+              <Link
+                key={event.id}
+                href={`/community/events/${event.id}`}
+                className={
+                  eventCount === 1
+                    ? "overflow-hidden rounded-3xl bg-white shadow-sm"
+                    : "min-w-[260px] overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+                }
+              >
+                <div
+                  className={
+                    eventCount === 1
+                      ? "relative h-64 w-full overflow-hidden bg-white"
+                      : "relative h-52 w-full overflow-hidden bg-white"
+                  }
+                >
+                  {event.image_url ? (
+                    <img
+                      src={event.image_url}
+                      alt={event.title || "Event"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
+                      No Photo
+                    </div>
+                  )}
+
+                  <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                    {event.category || "EVENT"}
+                  </div>
+                </div>
+
+                <div className={eventCount === 1 ? "p-5" : "p-4"}>
+                  <h3
+                    className={
+                      eventCount === 1
+                        ? "line-clamp-3 text-2xl font-black leading-tight"
+                        : "line-clamp-2 text-lg font-black"
+                    }
+                  >
+                    {event.title}
+                  </h3>
+
+                  <p className="mt-2 text-xs font-bold text-[#6B6257]">
+                    {event.event_date
+                      ? new Date(event.event_date).toLocaleDateString()
+                      : "Date TBA"}
+                  </p>
+
+                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
+                    {event.location || event.address || "Location TBA"}
+                  </p>
+
+                  {event.entry_fee && (
+                    <p className="mt-2 text-sm font-black text-[#C4483A]">
+                      🎟 {event.entry_fee}
+                    </p>
+                  )}
+
+                 
+                </div>
+              </Link>
+            ))}
+
+            {!eventCount && (
+              <div className="rounded-3xl bg-white p-6 text-sm font-bold text-[#6B6257] shadow-sm">
+                No events yet.
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Grand Opening — latest community/list enabled item */}
+        {latestGrandOpening && (
+          <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FFF1EE] p-3 shadow-sm">
+            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F3CFC7] bg-white text-xl shadow-sm">
+                  🎉
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
+                    Grand Opening
+                  </p>
+
+                  <h2 className="text-xl font-black text-[#172033]">
+                    Grand Opening
+                  </h2>
+                </div>
+              </div>
+
+              <Link
+                href="/grand-openings"
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
+              >
+                →
+              </Link>
+            </div>
+
+            <Link
+              href={`/grand-openings/${latestGrandOpening.id}`}
+              className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+            >
+              <div className="relative h-64 w-full overflow-hidden bg-[#E8DED1]">
+                <img
+                  src={grandOpeningImage}
+                  alt={
+                    latestGrandOpening.business_name ||
+                    latestGrandOpening.title ||
+                    "Grand Opening"
+                  }
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+
+                <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                  GRAND OPENING
+                </div>
+              </div>
+
+              <div className="p-5">
+                <h3 className="line-clamp-2 text-2xl font-black leading-tight">
+                  {latestGrandOpening.business_name ||
+                    latestGrandOpening.title ||
+                    "Grand Opening"}
+                </h3>
+              </div>
+            </Link>
+          </section>
+        )}
+
+        {/* Community Deals / fallback: latest News & Performance */}
+        {dealCount > 0 ? (
+          <section className="mb-8 overflow-hidden rounded-3xl border border-[#F1DEAB] bg-[#FFF4D8] p-3 shadow-sm">
+            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F1DEAB] bg-white text-xl shadow-sm">
+                  🏷️
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-[#B98000]">
+                    Deals
+                  </p>
+
+                  <h2 className="text-xl font-black text-[#172033]">
+                    Community Deals
+                  </h2>
+                </div>
+              </div>
+
+              <Link
+                href="/community/deals"
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B98000] shadow-sm"
+              >
+                →
+              </Link>
+            </div>
+
+            <div
+              className={
+                dealCount === 1
+                  ? "grid grid-cols-1 gap-4"
+                  : "flex gap-4 overflow-x-auto pb-1"
+              }
+            >
+              {deals?.map((deal) => (
+                <Link
+                  key={deal.id}
+                  href={`/community/deals/${deal.id}`}
+                  className={
+                    dealCount === 1
+                      ? "overflow-hidden rounded-3xl bg-white shadow-sm"
+                      : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
+                  }
+                >
+                  <div
+                    className={
+                      dealCount === 1
+                        ? "relative h-64 w-full overflow-hidden bg-[#E8DED1]"
+                        : "relative h-44 w-full overflow-hidden bg-[#E8DED1]"
+                    }
+                  >
+                    {deal.image_url ? (
+                      <img
+                        src={deal.image_url}
+                        alt={deal.title || "Deal"}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
+                        No Photo
+                      </div>
+                    )}
+
+                    <div className="absolute left-3 top-3 rounded-full bg-[#F4C95D] px-3 py-1 text-[10px] font-black text-[#172033] shadow-lg">
+                      DEAL
+                    </div>
+
+                    {(deal.discount_text || deal.discount) && (
+                      <div className="absolute bottom-3 left-3 rounded-full bg-[#C4483A] px-4 py-2 text-sm font-black text-white shadow-lg">
+                        {deal.discount_text || deal.discount}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className="line-clamp-2 text-lg font-black text-[#172033]">
+                      {deal.title || "Community Deal"}
+                    </h3>
+
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p className="line-clamp-1 text-sm font-bold text-[#6B6257]">
+                        {deal.business_name ||
+                          deal.business ||
+                          deal.store_name ||
+                          "Local Business"}
+                      </p>
+
+                      {deal.end_date && (
+                        <span className="shrink-0 text-xs font-black text-[#C4483A]">
+                          Ends {new Date(deal.end_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : (
+          <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
+            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#CBD7EA] bg-white text-xl shadow-sm">
+                  📰
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-[#465B7A]">
+                    REGISTERED NEWS
+                  </p>
+
+                  <h2 className="text-xl font-black text-[#172033]">
+                    {latestRegisteredNews?.category || "등록 뉴스"}
+                  </h2>
+                </div>
+              </div>
+
+              <Link
+                href="/community/news"
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#465B7A] shadow-sm"
+              >
+                →
+              </Link>
+            </div>
+
+            {latestRegisteredNews ? (
+              <Link
+                href={`/community/news/${latestRegisteredNews.id}`}
+                className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+              >
+                <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#DDE5F0]">
+                  {latestRegisteredNews.image_url ? (
+                    <img
+                      src={latestRegisteredNews.image_url}
+                      alt={latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-5xl">
+                      📰
+                    </div>
+                  )}
+
+                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                    LATEST
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  <h3 className="line-clamp-3 text-xl font-black leading-tight">
+                    {latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
+                  </h3>
+                </div>
+              </Link>
+            ) : (
+              <Link
+                href="/community/news"
+                className="flex min-h-[180px] items-center justify-center rounded-3xl bg-white p-6 text-center shadow-sm"
+              >
+                <div>
+                  <div className="text-4xl">📰</div>
+                  <p className="mt-3 text-lg font-black text-[#172033]">
+                    등록 뉴스
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-[#6B6257]">
+                    새 소식이 등록되면 여기에 가장 최근 소식이 표시됩니다.
+                  </p>
+                </div>
+              </Link>
+            )}
+          </section>
+        )}
+
+
+        {/* Featured Sponsor */}
+        <div className="relative mb-8">
+          <Link
+            href="/community/sponsors"
+            aria-label="View all featured sponsors"
+            className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#C4483A] text-sm font-black text-white shadow-lg transition hover:bg-[#A8382D] active:scale-[0.98]"
+          >
+            →
+          </Link>
+
+          <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
+        </div>
+
+        {/* Latest Ads */}
+        {latestAds.length > 0 && (
+          <div className="relative mb-8">
+            <Link
+              href="/ads"
+              aria-label="View all local ads"
+              className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#C4483A] text-sm font-black text-white shadow-lg transition hover:bg-[#A8382D] active:scale-[0.98]"
+            >
+              →
+            </Link>
+
+            <CommunityAdsSlider ads={latestAds as any[]} />
+          </div>
+        )}
+
+        {/* New in Raleigh */}
+        <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
+          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2A3448] text-sm font-black text-white shadow-sm">
+                NEW
+              </div>
+
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#2A3448]">
+                  New
+                </p>
+
+                <h2 className="text-xl font-black text-[#172033]">
+                  New in Raleigh
+                </h2>
+              </div>
+            </div>
+
+            <Link
+              href="https://www.ktowntriangle.com/community/directory"
+              className="rounded-full bg-[#C4483A] px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-[#A8382D]"
+            >
+              모두보기
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {newBusinesses?.map((biz) => (
+              <Link
+                key={biz.id}
+                href={`/business/${biz.id}?from=community`}
+                className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
+              >
+                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#E8DED1]">
+                  {biz.thumbnail_url || biz.image_url ? (
+                    <img
+                      src={biz.thumbnail_url || biz.image_url}
+                      alt={biz.name || "Business"}
+                      loading="lazy"
+                      decoding="async"
+                      className="absolute inset-0 block h-full w-full object-cover"
+                      style={{ objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
+                      No Photo
+                    </div>
+                  )}
+
+                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
+                    NEW
+                  </div>
+                </div>
+
+                <div className="p-3">
+                  <h3 className="line-clamp-1 text-sm font-black">
+                    {biz.name}
+                  </h3>
+
+                  <div className="mt-1 flex items-center justify-between gap-2">
+  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
+    {biz.category || "Business"}
+  </p>
+
+  <div className="shrink-0 text-xs">
+    <span className="font-black text-[#B98000]">
+      ★ {biz.rating || "New"}
+    </span>
+
+    {biz.review_count ? (
+      <span className="ml-1 text-[#6B6257]">
+        ({biz.review_count})
+      </span>
+    ) : null}
+  </div>
+</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+ <div className="mt-6">
+    <Link
+      href="community/search"
+      className="flex w-full items-center justify-center rounded-2xl border border-[#172033] bg-[#172033] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#24314d] active:scale-[0.98]"
+    >
+      🔍 Business Search →
     </Link>
+  </div>
+      </section>
+
+
+      <div id="community-bottom-nav-wrapper">
+  <CommunityBottomNav activeNav="community" />
+</div>
+    </main>
+	 </>
   );
 }
