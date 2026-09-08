@@ -72,6 +72,9 @@ type NewsItem = {
   source?: string;
   publishedAt?: string;
   url?: string;
+  imageUrl?: string;
+  description?: string;
+  shared?: boolean;
 };
 
 type MarketInfoPayload = {
@@ -164,6 +167,7 @@ export default function StockMonitorPage() {
     news: [],
   });
   const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
+  const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
 
 
   const getAccessToken = useCallback(async () => {
@@ -178,6 +182,39 @@ export default function StockMonitorPage() {
     }
 
     return session?.access_token || "";
+  }, []);
+
+  const loadSharedNews = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      setSharedNews([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("shared_news")
+      .select("id,title,url,source,description,image_url,published_at,created_at")
+      .eq("user_id", session.user.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("shared_news load error:", error);
+      return;
+    }
+
+    setSharedNews(
+      (data || []).map((row) => ({
+        id: String(row.id),
+        title: row.title || "공유 뉴스",
+        url: row.url || undefined,
+        source: row.source || "Shared",
+        publishedAt: row.published_at || row.created_at || undefined,
+        imageUrl: row.image_url || undefined,
+        description: row.description || undefined,
+        shared: true,
+      })),
+    );
   }, []);
 
   const connectWebSocket = useCallback((wsUrl?: string | null) => {
@@ -307,7 +344,10 @@ export default function StockMonitorPage() {
   }, []);
 
   useEffect(() => {
-    const refresh = () => void loadMarketInfo(symbols);
+    const refresh = () => {
+      void loadMarketInfo(symbols);
+      void loadSharedNews();
+    };
     const timer = window.setInterval(refresh, 15 * 60 * 1000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") refresh();
@@ -318,7 +358,7 @@ export default function StockMonitorPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [loadMarketInfo, symbols]);
+  }, [loadMarketInfo, loadSharedNews, symbols]);
 
   const openSession = useCallback(async () => {
     const {
@@ -362,9 +402,10 @@ export default function StockMonitorPage() {
     ]);
 
     void loadMarketInfo(loaded);
+    void loadSharedNews();
 
     setStatus(loaded.length ? "종목 준비 완료 · START를 누르세요." : "종목을 등록하세요.");
-  }, [connectWebSocket, loadMarketInfo]);
+  }, [connectWebSocket, loadMarketInfo, loadSharedNews]);
 
   useEffect(() => {
     let mounted = true;
@@ -690,13 +731,9 @@ export default function StockMonitorPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => {
-                window.location.assign("/stock/live");
-              }}
-              className="group flex min-h-[112px] w-full cursor-pointer items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
-              aria-label="LIVE DATA 열기"
+            <Link
+              href="/stock/live"
+              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
                 📈
@@ -708,7 +745,7 @@ export default function StockMonitorPage() {
                 </div>
               </div>
               <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
-            </button>
+            </Link>
 
             <DashboardCard
               icon="📅"
@@ -754,19 +791,44 @@ export default function StockMonitorPage() {
             <DashboardCard
               icon="📰"
               title="LATEST NEWS"
-              subtitle="등록 종목 중심 최신 뉴스"
+              subtitle="등록 종목 + 휴대폰에서 공유한 최신 뉴스"
               accent="rose"
             >
-              {marketInfo.news?.length ? (
+              {sharedNews.length || marketInfo.news?.length ? (
                 <div className="space-y-2">
-                  {marketInfo.news.slice(0, 6).map((news, index) => {
+                  {[...sharedNews, ...(marketInfo.news || [])].slice(0, 8).map((news, index) => {
                     const content = (
-                      <>
-                        <div className="text-sm font-bold leading-5 text-slate-900">{news.title || "-"}</div>
-                        <div className="mt-1 text-[11px] text-slate-500">
-                          {[news.symbol, news.source, news.publishedAt].filter(Boolean).join(" · ")}
+                      <div className="flex gap-3">
+                        {news.imageUrl ? (
+                          <img
+                            src={news.imageUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-16 w-20 shrink-0 rounded-lg border border-slate-100 object-cover"
+                            onError={(e) => { e.currentTarget.style.display = "none"; }}
+                          />
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            {news.shared ? (
+                              <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-black text-rose-700">SHARED</span>
+                            ) : null}
+                            <div className="min-w-0 flex-1 truncate text-sm font-bold leading-5 text-slate-900">
+                              {news.title || "-"}
+                            </div>
+                          </div>
+                          {news.description ? (
+                            <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-600">
+                              {news.description}
+                            </div>
+                          ) : null}
+                          <div className="mt-1 text-[10px] text-slate-500">
+                            {[news.symbol, news.source, news.publishedAt ? new Date(news.publishedAt).toLocaleString() : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
                         </div>
-                      </>
+                      </div>
                     );
 
                     return news.url ? (
@@ -775,14 +837,14 @@ export default function StockMonitorPage() {
                         href={news.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="block rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50"
+                        className="block rounded-lg border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50"
                       >
                         {content}
                       </a>
                     ) : (
                       <div
                         key={news.id || `${news.title}-${index}`}
-                        className="rounded-lg border border-slate-200 px-3 py-2"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2"
                       >
                         {content}
                       </div>
@@ -822,9 +884,9 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
     .slice(0, 5);
 
   return (
-    <div className="-mx-1 overflow-x-scroll overscroll-x-contain px-1 pb-3 touch-pan-x md:overflow-x-auto">
+    <div className="overflow-x-auto pb-1">
       <div
-        className="grid w-max min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        className="grid min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
         style={{
           gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
         }}
@@ -869,16 +931,12 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                         className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm"
                         title={item.company || symbol}
                       >
-                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black text-slate-400">
-                            {symbol.slice(0, 5)}
-                          </span>
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-white">
                           <img
-                            src={`https://companieslogo.com/api/starter/stock-symbol/${encodeURIComponent(symbol)}`}
-                            alt={`${item.company || symbol} logo`}
+                            src={`https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`}
+                            alt={`${symbol} logo`}
                             loading="lazy"
-                            referrerPolicy="no-referrer"
-                            className="relative z-10 h-7 w-7 object-contain"
+                            className="h-7 w-7 object-contain"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
                             }}
