@@ -182,7 +182,7 @@ export async function GET(
         .maybeSingle(),
       supabase
         .from("restaurant_order_private_settings")
-        .select("payment_provider,stripe_secret_key,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id")
+        .select("payment_provider,stripe_secret_key,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id")
         .eq("business_id", businessId)
         .maybeSingle(),
     ]);
@@ -246,8 +246,9 @@ export async function GET(
           privateSettings?.delivery_provider === "uber_direct" &&
           privateSettings?.uber_direct_enabled === true &&
           Boolean(
-            privateSettings?.uber_direct_customer_id ||
-              process.env.UBER_DIRECT_CUSTOMER_ID,
+            privateSettings?.uber_direct_client_id &&
+              privateSettings?.uber_direct_client_secret &&
+              privateSettings?.uber_direct_customer_id,
           ),
 
         paymentProvider,

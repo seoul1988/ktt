@@ -456,6 +456,20 @@ export default function OwnerBusinessMenuPage() {
   const [squareConnectError, setSquareConnectError] = useState("");
   const [disconnectingSquare, setDisconnectingSquare] = useState(false);
   const [savingPaymentCredentials, setSavingPaymentCredentials] = useState(false);
+
+  const [uberDirectEnabled, setUberDirectEnabled] = useState(false);
+  const [uberClientIdInput, setUberClientIdInput] = useState("");
+  const [uberClientSecretInput, setUberClientSecretInput] = useState("");
+  const [uberCustomerIdInput, setUberCustomerIdInput] = useState("");
+  const [uberWebhookSigningKeyInput, setUberWebhookSigningKeyInput] = useState("");
+  const [uberClientIdMasked, setUberClientIdMasked] = useState("");
+  const [uberCustomerIdMasked, setUberCustomerIdMasked] = useState("");
+  const [uberClientSecretConfigured, setUberClientSecretConfigured] = useState(false);
+  const [uberWebhookSigningKeyConfigured, setUberWebhookSigningKeyConfigured] = useState(false);
+  const [uberDirectConfigured, setUberDirectConfigured] = useState(false);
+  const [savingUberDirect, setSavingUberDirect] = useState(false);
+  const [testingUberDirect, setTestingUberDirect] = useState(false);
+  const [uberDirectMessage, setUberDirectMessage] = useState("");
   const [expandedOptionItemIds, setExpandedOptionItemIds] = useState<
     Set<number>
   >(new Set());
@@ -627,6 +641,140 @@ export default function OwnerBusinessMenuPage() {
       cancelled = true;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUberDirectSettings() {
+      if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/uber-direct-settings`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(data?.error || "Uber Direct 설정을 불러오지 못했습니다.");
+        }
+        if (cancelled) return;
+
+        setUberDirectEnabled(data?.uberDirectEnabled === true);
+        setUberDirectConfigured(data?.uberDirectConfigured === true);
+        setUberClientIdMasked(String(data?.uberClientIdMasked || ""));
+        setUberCustomerIdMasked(String(data?.uberCustomerIdMasked || ""));
+        setUberClientSecretConfigured(data?.uberClientSecretConfigured === true);
+        setUberWebhookSigningKeyConfigured(data?.uberWebhookSigningKeyConfigured === true);
+      } catch (error) {
+        if (!cancelled) {
+          setUberDirectMessage(
+            error instanceof Error ? error.message : "Uber Direct 설정을 불러오지 못했습니다.",
+          );
+        }
+      }
+    }
+
+    void loadUberDirectSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  async function saveUberDirectSettings() {
+    if (savingUberDirect) return;
+
+    setSavingUberDirect(true);
+    setUberDirectMessage("Uber Direct 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/uber-direct-settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            enabled: uberDirectEnabled,
+            clientId: uberClientIdInput.trim(),
+            clientSecret: uberClientSecretInput.trim(),
+            customerId: uberCustomerIdInput.trim(),
+            webhookSigningKey: uberWebhookSigningKeyInput.trim(),
+          }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "Uber Direct 설정 저장에 실패했습니다.");
+      }
+
+      setUberDirectEnabled(data?.uberDirectEnabled === true);
+      setUberDirectConfigured(data?.uberDirectConfigured === true);
+      setUberClientIdMasked(String(data?.uberClientIdMasked || ""));
+      setUberCustomerIdMasked(String(data?.uberCustomerIdMasked || ""));
+      setUberClientSecretConfigured(data?.uberClientSecretConfigured === true);
+      setUberWebhookSigningKeyConfigured(data?.uberWebhookSigningKeyConfigured === true);
+      setUberClientIdInput("");
+      setUberClientSecretInput("");
+      setUberCustomerIdInput("");
+      setUberWebhookSigningKeyInput("");
+      setUberDirectMessage("✓ Uber Direct 식당별 계정 설정 저장 완료");
+    } catch (error) {
+      setUberDirectMessage(
+        error instanceof Error
+          ? `Uber Direct 설정 저장 실패: ${error.message}`
+          : "Uber Direct 설정 저장에 실패했습니다.",
+      );
+    } finally {
+      setSavingUberDirect(false);
+    }
+  }
+
+  async function testUberDirectConnection() {
+    if (testingUberDirect || savingUberDirect) return;
+
+    setTestingUberDirect(true);
+    setUberDirectMessage("Uber Direct 연결 확인 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/uber-direct-settings`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: "test" }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "Uber Direct 연결 확인에 실패했습니다.");
+      }
+
+      setUberDirectMessage("✓ Uber Direct 인증 성공 · 이 식당 계정으로 연결됩니다.");
+    } catch (error) {
+      setUberDirectMessage(
+        error instanceof Error
+          ? `Uber Direct 연결 실패: ${error.message}`
+          : "Uber Direct 연결 확인에 실패했습니다.",
+      );
+    } finally {
+      setTestingUberDirect(false);
+    }
+  }
 
   async function savePaymentCredentials() {
     if (savingPaymentCredentials || paymentProvider !== "stripe") return;
@@ -4211,6 +4359,133 @@ export default function OwnerBusinessMenuPage() {
                 )}
               </div>
             )}
+          </div>
+
+          <div className="mt-4 rounded-2xl border-2 border-sky-200 bg-sky-50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-sky-700">
+                  Uber Direct Delivery
+                </p>
+                <h3 className="mt-1 text-base font-black text-[#172033]">
+                  식당별 Uber Direct 계정
+                </h3>
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                  이 식당의 Uber Direct 계정을 연결합니다. 배달 요청과 Uber 청구는 이 식당 계정 기준으로 처리됩니다.
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-3 py-1 text-[11px] font-black ${
+                  uberDirectConfigured
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                {uberDirectConfigured ? "CONFIGURED" : "NOT CONFIGURED"}
+              </span>
+            </div>
+
+            <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-sky-200 bg-white p-3">
+              <input
+                type="checkbox"
+                checked={uberDirectEnabled}
+                onChange={(event) => setUberDirectEnabled(event.target.checked)}
+                className="h-5 w-5 accent-sky-600"
+              />
+              <span>
+                <span className="block text-sm font-black text-[#172033]">Enable Uber Direct</span>
+                <span className="mt-0.5 block text-[11px] font-semibold text-gray-600">
+                  DELIVERY 주문에서 Uber Direct 자동 배차를 사용합니다.
+                </span>
+              </span>
+            </label>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-black text-gray-700">Client ID</span>
+                <input
+                  value={uberClientIdInput}
+                  onChange={(event) => setUberClientIdInput(event.target.value)}
+                  placeholder={uberClientIdMasked || "Uber Direct Client ID"}
+                  autoComplete="off"
+                  className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-500"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-black text-gray-700">Customer ID</span>
+                <input
+                  value={uberCustomerIdInput}
+                  onChange={(event) => setUberCustomerIdInput(event.target.value)}
+                  placeholder={uberCustomerIdMasked || "Uber Direct Customer ID"}
+                  autoComplete="off"
+                  className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-500"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-black text-gray-700">Client Secret</span>
+                <input
+                  type="password"
+                  value={uberClientSecretInput}
+                  onChange={(event) => setUberClientSecretInput(event.target.value)}
+                  placeholder={uberClientSecretConfigured ? "•••••••••••• (saved)" : "Uber Direct Client Secret"}
+                  autoComplete="new-password"
+                  className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-500"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-black text-gray-700">Webhook Signing Key</span>
+                <input
+                  type="password"
+                  value={uberWebhookSigningKeyInput}
+                  onChange={(event) => setUberWebhookSigningKeyInput(event.target.value)}
+                  placeholder={uberWebhookSigningKeyConfigured ? "•••••••••••• (saved)" : "Uber Direct Webhook Signing Key"}
+                  autoComplete="new-password"
+                  className="mt-1 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-sky-500"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void saveUberDirectSettings()}
+                disabled={savingUberDirect || testingUberDirect}
+                className="rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-black text-white hover:bg-sky-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {savingUberDirect ? "저장 중..." : "SAVE UBER DIRECT SETTINGS"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void testUberDirectConnection()}
+                disabled={savingUberDirect || testingUberDirect || !uberDirectConfigured}
+                className="rounded-xl border-2 border-sky-300 bg-white px-4 py-2.5 text-sm font-black text-sky-800 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {testingUberDirect ? "확인 중..." : "TEST CONNECTION"}
+              </button>
+            </div>
+
+            {uberDirectMessage ? (
+              <div
+                className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-black ${
+                  uberDirectMessage.startsWith("✓")
+                    ? "bg-emerald-100 text-emerald-800"
+                    : uberDirectMessage.includes("실패")
+                      ? "bg-red-100 text-red-700"
+                      : "bg-white text-sky-900"
+                }`}
+              >
+                {uberDirectMessage}
+              </div>
+            ) : null}
+
+            <p className="mt-3 text-[10px] font-semibold leading-4 text-gray-500">
+              저장된 Client Secret과 Webhook Signing Key는 다시 브라우저로 전송하지 않습니다. 값을 바꾸려면 새 값을 입력하고 다시 저장하세요.
+            </p>
           </div>
 
           <div className="mt-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">

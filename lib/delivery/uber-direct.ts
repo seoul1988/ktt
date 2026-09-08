@@ -56,47 +56,11 @@ function stringValue(...values: unknown[]) {
   return "";
 }
 
-function parseFullUsAddress(value: unknown): DirectAddress | null {
-  const raw = String(value ?? "")
-    .trim()
-    .replace(/\s+/g, " ")
-    .replace(
-      /(?:,\s*|\s+)(?:미국|USA|U\.S\.A\.|US|United States(?: of America)?)\s*$/i,
-      "",
-    )
-    .trim();
-
-  if (!raw) return null;
-
-  // Example supported:
-  // "107 N Columbia St, Chapel Hill, NC 27514"
-  const match = raw.match(
-    /^(.+?),\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/,
-  );
-
-  if (!match) return null;
-
-  const street1 = String(match[1] || "").trim();
-  const city = String(match[2] || "").trim();
-  const state = String(match[3] || "").trim().toUpperCase();
-  const zip = String(match[4] || "").trim();
-
-  if (!street1 || !city || !state || !zip) return null;
-
-  return {
-    street_address: [street1],
-    city,
-    state,
-    zip_code: zip,
-    country: "US",
-  };
-}
-
 function businessAddress(business: any): DirectAddress {
-  // First support databases that store street/city/state/ZIP separately.
   const street1 = stringValue(
     business?.address1,
     business?.street_address,
+    business?.address,
   );
   const street2 = stringValue(business?.address2);
   const city = stringValue(business?.city);
@@ -107,27 +71,19 @@ function businessAddress(business: any): DirectAddress {
     business?.postal_code,
   );
 
-  if (street1 && city && state && zip) {
-    return {
-      street_address: [street1, street2].filter(Boolean),
-      city,
-      state: state.toUpperCase(),
-      zip_code: zip,
-      country: "US",
-    };
+  if (!street1 || !city || !state || !zip) {
+    throw new Error(
+      "Restaurant pickup address is incomplete. Please complete the business address first.",
+    );
   }
 
-  // KTown businesses currently store the complete address in one `address`
-  // column, e.g.:
-  // "107 N Columbia St, Chapel Hill, NC 27514 미국"
-  const parsed = parseFullUsAddress(business?.address);
-  if (parsed) return parsed;
-
-  throw new Error(
-    `Restaurant pickup address could not be parsed. Current address: "${stringValue(
-      business?.address,
-    )}". Expected format: Street, City, ST ZIP.`,
-  );
+  return {
+    street_address: [street1, street2].filter(Boolean),
+    city,
+    state,
+    zip_code: zip,
+    country: "US",
+  };
 }
 
 function deliveryAddress(address: any): DirectAddress {
