@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -20,7 +20,7 @@ function firstHttpUrl(...values: Array<string | null>) {
   return "";
 }
 
-export default function ShareNewsPage() {
+function ShareNewsContent() {
   const params = useSearchParams();
   const router = useRouter();
   const sharedTitle = params.get("title") || "";
@@ -146,5 +146,24 @@ export default function ShareNewsPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+
+export default function ShareNewsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-[100dvh] bg-slate-50 px-4 py-6 text-slate-900">
+          <div className="mx-auto max-w-lg">
+            <div className="rounded-xl bg-white p-4 text-sm font-semibold text-slate-600 shadow-sm">
+              공유 내용을 불러오는 중...
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <ShareNewsContent />
+    </Suspense>
   );
 }
