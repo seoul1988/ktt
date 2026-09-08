@@ -168,6 +168,7 @@ export default function StockMonitorPage() {
     news: [],
   });
   const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
+  const [eventsModalOpen, setEventsModalOpen] = useState(false);
   const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
   const [stockNews, setStockNews] = useState<NewsItem[]>([]);
 
@@ -776,11 +777,19 @@ export default function StockMonitorPage() {
               subtitle="CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표"
               accent="amber"
             >
-              {marketInfo.events?.length ? (
-                <div className="space-y-1">
-                  {marketInfo.events.slice(0, 6).map((event, index) => {
-                    const row = (
-                      <div className="flex gap-3 border-b border-slate-100 px-1 py-2 last:border-0">
+              <button
+                type="button"
+                onClick={() => setEventsModalOpen(true)}
+                className="block w-full rounded-xl text-left transition hover:bg-amber-50/50 active:bg-amber-50"
+                aria-label="오늘의 주요 시장 이벤트 전체보기"
+              >
+                {marketInfo.events?.length ? (
+                  <div className="space-y-1">
+                    {marketInfo.events.slice(0, 6).map((event, index) => (
+                      <div
+                        key={event.id || `${event.title}-${index}`}
+                        className="flex gap-3 border-b border-slate-100 px-2 py-2 last:border-0"
+                      >
                         <div className="w-[72px] shrink-0 text-xs font-black text-slate-600">
                           {event.time || "TBD"}
                         </div>
@@ -794,30 +803,19 @@ export default function StockMonitorPage() {
                               .join(" · ")}
                           </div>
                         </div>
-                        {event.url ? (
-                          <div className="shrink-0 self-center text-sm font-black text-amber-600">→</div>
-                        ) : null}
+                        <div className="shrink-0 self-center text-sm font-black text-amber-600">
+                          →
+                        </div>
                       </div>
-                    );
-
-                    return event.url ? (
-                      <a
-                        key={event.id || `${event.title}-${index}`}
-                        href={event.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-lg hover:bg-amber-50"
-                      >
-                        {row}
-                      </a>
-                    ) : (
-                      <div key={event.id || `${event.title}-${index}`}>{row}</div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyBlock text={`오늘 예정된 중·고위험 시장 이벤트 없음 · ${marketInfoStatus}`} />
-              )}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
+                    오늘 예정된 중·고위험 시장 이벤트 없음 · {marketInfoStatus}
+                    <span className="ml-2 font-black text-amber-600">보기 →</span>
+                  </div>
+                )}
+              </button>
             </DashboardCard>
 
             <DashboardCard
@@ -890,6 +888,94 @@ export default function StockMonitorPage() {
 
        
       </div>
+      {eventsModalOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setEventsModalOpen(false)}
+        >
+          <div
+            className="max-h-[82vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-base font-black text-slate-950">TODAY'S EVENTS</div>
+                <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                  CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEventsModalOpen(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-lg font-black text-slate-600 hover:bg-slate-50"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[68vh] overflow-y-auto px-4 py-3">
+              {marketInfo.events?.length ? (
+                <div className="divide-y divide-slate-100">
+                  {marketInfo.events.map((event, index) => {
+                    const content = (
+                      <div className="flex gap-3 py-3">
+                        <div className="w-[78px] shrink-0 text-xs font-black text-slate-600">
+                          {event.time || "TBD"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-black leading-5 text-slate-900">
+                            {event.title || "-"}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                        {event.url ? (
+                          <div className="shrink-0 self-center text-sm font-black text-amber-600">
+                            →
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+
+                    return event.url ? (
+                      <a
+                        key={event.id || `${event.title}-${index}`}
+                        href={event.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg hover:bg-amber-50"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <div key={event.id || `${event.title}-${index}`}>{content}</div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+                  <div>
+                    <div className="text-sm font-black text-slate-700">
+                      오늘 예정된 중·고위험 시장 이벤트가 없습니다.
+                    </div>
+                    <div className="mt-2 text-xs font-semibold text-slate-500">
+                      {marketInfoStatus}
+                    </div>
+                    <div className="mt-4 text-[11px] leading-5 text-slate-500">
+                      CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표가 확인되면 여기에 표시됩니다.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </main>
   );
 }
