@@ -1,4 +1,4 @@
-"use client";
+
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -188,12 +188,132 @@ function MiniCandle({
   );
 }
 
+
+type MarketState = {
+  code: "OPEN" | "CLOSED" | "WEEKEND" | "HOLIDAY";
+  label: string;
+  detail: string;
+};
+
+function easternParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    weekday: get("weekday"),
+    hour: Number(get("hour")),
+    minute: Number(get("minute")),
+  };
+}
+
+function nthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number) {
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const offset = (weekday - first.getUTCDay() + 7) % 7;
+  return 1 + offset + (nth - 1) * 7;
+}
+
+function lastWeekdayOfMonth(year: number, month: number, weekday: number) {
+  const last = new Date(Date.UTC(year, month, 0));
+  return last.getUTCDate() - ((last.getUTCDay() - weekday + 7) % 7);
+}
+
+function observedFixedHoliday(year: number, month: number, day: number) {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  const dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
+  if (dow === 0) d.setUTCDate(d.getUTCDate() + 1);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function easterSunday(year: number) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function marketHolidayName(year: number, month: number, day: number): string | null {
+  const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const holidays = new Map<string, string>();
+
+  holidays.set(observedFixedHoliday(year, 1, 1), "New Year's Day");
+  holidays.set(`${year}-01-${String(nthWeekdayOfMonth(year, 1, 1, 3)).padStart(2, "0")}`, "Martin Luther King Jr. Day");
+  holidays.set(`${year}-02-${String(nthWeekdayOfMonth(year, 2, 1, 3)).padStart(2, "0")}`, "Presidents Day");
+
+  const goodFriday = easterSunday(year);
+  goodFriday.setUTCDate(goodFriday.getUTCDate() - 2);
+  holidays.set(`${goodFriday.getUTCFullYear()}-${String(goodFriday.getUTCMonth() + 1).padStart(2, "0")}-${String(goodFriday.getUTCDate()).padStart(2, "0")}`, "Good Friday");
+
+  holidays.set(`${year}-05-${String(lastWeekdayOfMonth(year, 5, 1)).padStart(2, "0")}`, "Memorial Day");
+  holidays.set(observedFixedHoliday(year, 6, 19), "Juneteenth");
+  holidays.set(observedFixedHoliday(year, 7, 4), "Independence Day");
+  holidays.set(`${year}-09-${String(nthWeekdayOfMonth(year, 9, 1, 1)).padStart(2, "0")}`, "Labor Day");
+  holidays.set(`${year}-11-${String(nthWeekdayOfMonth(year, 11, 4, 4)).padStart(2, "0")}`, "Thanksgiving Day");
+  holidays.set(observedFixedHoliday(year, 12, 25), "Christmas Day");
+
+  // New Year's Day can be observed on Dec 31 of the previous year.
+  holidays.set(observedFixedHoliday(year + 1, 1, 1), "New Year's Day");
+
+  return holidays.get(key) || null;
+}
+
+function getMarketState(now = new Date()): MarketState {
+  const et = easternParts(now);
+
+  if (et.weekday === "Sat" || et.weekday === "Sun") {
+    return { code: "WEEKEND", label: "주말 휴장", detail: "U.S. market closed" };
+  }
+
+  const holiday = marketHolidayName(et.year, et.month, et.day);
+  if (holiday) {
+    return { code: "HOLIDAY", label: "휴일", detail: holiday };
+  }
+
+  const minutes = et.hour * 60 + et.minute;
+  const open = 9 * 60 + 30;
+  const close = 16 * 60;
+
+  if (minutes >= open && minutes < close) {
+    return { code: "OPEN", label: "LIVE", detail: "Regular market open" };
+  }
+
+  return {
+    code: "CLOSED",
+    label: et.hour >= 16 ? "장 마감" : "장 시작 전",
+    detail: et.hour >= 16 ? "Regular market closed at 4:00 PM ET" : "Opens at 9:30 AM ET",
+  };
+}
+
 export default function CommunityLiveStocks() {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [candles, setCandles] = useState<Record<string, LiveCandle[]>>({});
   const [status, setStatus] = useState("CONNECTING");
+  const [marketState, setMarketState] = useState<MarketState>(() => getMarketState());
 
   const connectWebSocket = useCallback((url: string) => {
     if (!url) return;
@@ -246,13 +366,28 @@ export default function CommunityLiveStocks() {
     ws.onclose = () => {
       if (wsRef.current === ws) {
         wsRef.current = null;
-        setStatus("RECONNECT");
-        retryRef.current = setTimeout(() => void start(), 3000);
+        const state = getMarketState();
+        setMarketState(state);
+        if (state.code === "OPEN") {
+          setStatus("RECONNECT");
+          retryRef.current = setTimeout(() => void start(), 3000);
+        } else {
+          setStatus(state.label);
+        }
       }
     };
   }, []);
 
   const start = useCallback(async () => {
+    const state = getMarketState();
+    setMarketState(state);
+
+    // Community live feed is only needed during the regular U.S. market session.
+    if (state.code !== "OPEN") {
+      setStatus(state.label);
+      return;
+    }
+
     setStatus("CONNECTING");
 
     // Public homepage feed: no Supabase login required.
@@ -285,9 +420,35 @@ export default function CommunityLiveStocks() {
     return () => {
       if (retryRef.current) clearTimeout(retryRef.current);
       if (wsRef.current) {
-        try { wsRef.current.close(); } catch {}
+        const ws = wsRef.current;
+        wsRef.current = null;
+        try { ws.close(1000, "Community stock component unmounted"); } catch {}
       }
     };
+  }, [start]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const next = getMarketState();
+      setMarketState(next);
+
+      if (next.code !== "OPEN") {
+        if (retryRef.current) {
+          clearTimeout(retryRef.current);
+          retryRef.current = null;
+        }
+        if (wsRef.current) {
+          const ws = wsRef.current;
+          wsRef.current = null;
+          try { ws.close(1000, "Market closed"); } catch {}
+        }
+        setStatus(next.label);
+      } else if (!wsRef.current) {
+        void start();
+      }
+    }, 30_000);
+
+    return () => window.clearInterval(timer);
   }, [start]);
 
   return (
@@ -302,17 +463,21 @@ export default function CommunityLiveStocks() {
             📈 Live Stock Watch
           </h2>
           <p className="mt-0.5 text-[8px] font-semibold text-[#6B6257]">
-            최근 1분봉 3개 · 마지막 봉 실시간
+            {marketState.code === "OPEN"
+              ? "최근 1분봉 3개 · 마지막 봉 실시간"
+              : marketState.detail}
           </p>
         </div>
         <span
           className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
-            status === "LIVE"
+            marketState.code === "OPEN" && status === "LIVE"
               ? "bg-emerald-50 text-emerald-700"
-              : "bg-slate-100 text-slate-500"
+              : marketState.code === "HOLIDAY"
+                ? "bg-amber-50 text-amber-700"
+                : "bg-slate-100 text-slate-600"
           }`}
         >
-          ● {status}
+          ● {marketState.code === "OPEN" ? status : marketState.label}
         </span>
       </div>
 
