@@ -1,7 +1,8 @@
-
 "use client";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type SeedCandle = {
   minute?: number;
@@ -36,6 +37,15 @@ type Snapshot = {
   local_support?: number;
   support?: number;
   candles_1m?: SeedCandle[];
+};
+
+type MarketNews = {
+  id: number | string;
+  title: string;
+  url?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  importance?: number | null;
 };
 
 const SYMBOLS = ["NVDA", "TSLA", "AAPL"] as const;
@@ -314,6 +324,23 @@ export default function CommunityLiveStocks() {
   const [candles, setCandles] = useState<Record<string, LiveCandle[]>>({});
   const [status, setStatus] = useState("CONNECTING");
   const [marketState, setMarketState] = useState<MarketState>(() => getMarketState());
+  const [latestNews, setLatestNews] = useState<MarketNews[]>([]);
+
+  const loadLatestNews = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("stock_news")
+      .select("id,title,url,published_at,created_at,importance")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(4);
+
+    if (error) {
+      console.error("stock_news load error:", error);
+      return;
+    }
+
+    setLatestNews((data || []) as MarketNews[]);
+  }, []);
 
   const connectWebSocket = useCallback((url: string) => {
     if (!url) return;
@@ -417,6 +444,7 @@ export default function CommunityLiveStocks() {
 
   useEffect(() => {
     void start();
+    void loadLatestNews();
     return () => {
       if (retryRef.current) clearTimeout(retryRef.current);
       if (wsRef.current) {
@@ -425,7 +453,7 @@ export default function CommunityLiveStocks() {
         try { ws.close(1000, "Community stock component unmounted"); } catch {}
       }
     };
-  }, [start]);
+  }, [loadLatestNews, start]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -451,14 +479,24 @@ export default function CommunityLiveStocks() {
     return () => window.clearInterval(timer);
   }, [start]);
 
+  useEffect(() => {
+    if (marketState.code === "OPEN") return;
+
+    void loadLatestNews();
+    const timer = window.setInterval(() => {
+      void loadLatestNews();
+    }, 10 * 60 * 1000);
+
+    return () => window.clearInterval(timer);
+  }, [loadLatestNews, marketState.code]);
+
   return (
-    <Link
-      href="/stock"
-      className="mb-5 block overflow-hidden rounded-[22px] border border-[#D9E2F1] bg-white px-3 py-3 shadow-sm transition hover:shadow-md active:scale-[0.995]"
-      aria-label="실시간 주식 정보 보기"
+    <div
+      className="mb-5 block overflow-hidden rounded-[22px] border border-[#D9E2F1] bg-white px-3 py-3 shadow-sm"
+      aria-label="주식 정보"
     >
       <div className="flex items-center justify-between gap-2 px-1">
-        <div>
+        <div className="min-w-0">
           <h2 className="text-[14px] font-black tracking-[-0.02em] text-[#172033]">
             📈 Live Stock Watch
           </h2>
@@ -468,96 +506,151 @@ export default function CommunityLiveStocks() {
               : marketState.detail}
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
-            marketState.code === "OPEN" && status === "LIVE"
-              ? "bg-emerald-50 text-emerald-700"
-              : marketState.code === "HOLIDAY"
-                ? "bg-amber-50 text-amber-700"
-                : "bg-slate-100 text-slate-600"
-          }`}
+
+        <div className="flex shrink-0 items-center gap-2">
+          {marketState.code !== "OPEN" ? (
+            <Link
+              href="/stock"
+              className="text-[9px] font-black text-[#2563EB] hover:underline"
+            >
+              더보기 →
+            </Link>
+          ) : null}
+
+          <span
+            className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
+              marketState.code === "OPEN" && status === "LIVE"
+                ? "bg-emerald-50 text-emerald-700"
+                : marketState.code === "HOLIDAY"
+                  ? "bg-amber-50 text-amber-700"
+                  : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            ● {marketState.code === "OPEN" ? status : marketState.label}
+          </span>
+        </div>
+      </div>
+
+      {marketState.code === "OPEN" ? (
+        <Link
+          href="/stock"
+          className="mt-3 block transition active:scale-[0.995]"
+          aria-label="실시간 주식 정보 상세보기"
         >
-          ● {marketState.code === "OPEN" ? status : marketState.label}
-        </span>
-      </div>
+          <div className="grid grid-cols-3 divide-x divide-[#E5E7EB]">
+            {SYMBOLS.map((symbol) => {
+              const item = snapshots[symbol];
+              const stockCandles = candles[symbol] || [];
+              const lastThree = [
+                stockCandles[stockCandles.length - 3],
+                stockCandles[stockCandles.length - 2],
+                stockCandles[stockCandles.length - 1],
+              ];
+              const share = buyShare(item);
+              const action = actionText(item);
 
-      <div className="mt-3 grid grid-cols-3 divide-x divide-[#E5E7EB]">
-        {SYMBOLS.map((symbol) => {
-          const item = snapshots[symbol];
-          const stockCandles = candles[symbol] || [];
-          const lastThree = [
-            stockCandles[stockCandles.length - 3],
-            stockCandles[stockCandles.length - 2],
-            stockCandles[stockCandles.length - 1],
-          ];
-          const share = buyShare(item);
-          const action = actionText(item);
+              return (
+                <div key={symbol} className="min-w-0 px-2 text-center">
+                  <div className="flex h-12 items-center justify-center gap-1.5">
+                    {lastThree.map((candle, index) => (
+                      <MiniCandle
+                        key={`${symbol}-${index}`}
+                        candle={candle}
+                        live={index === 2 && Boolean(candle)}
+                      />
+                    ))}
+                  </div>
 
-          return (
-            <div key={symbol} className="min-w-0 px-2 text-center">
-              <div className="flex h-12 items-center justify-center gap-1.5">
-                {lastThree.map((candle, index) => (
-                  <MiniCandle
-                    key={`${symbol}-${index}`}
-                    candle={candle}
-                    live={index === 2 && Boolean(candle)}
-                  />
-                ))}
-              </div>
-
-              <p className="mt-1 text-[10px] font-black text-[#172033]">
-                {symbol}
-              </p>
-              <p className="mt-0.5 text-[16px] font-black leading-none text-[#172033]">
-                ${fmt(item?.price)}
-              </p>
-
-              <div className={`mx-auto mt-2 w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
-                {action.text}
-              </div>
-
-              <div className="mt-2 grid grid-cols-3 gap-1 border-t border-[#EEF0F3] pt-2">
-                <div>
-                  <p className="text-[6px] font-bold text-[#6B6257]">Buy60</p>
-                  <p className="mt-0.5 text-[9px] font-black text-[#16A34A]">
-                    {share == null ? "-" : `${share.toFixed(0)}%`}
+                  <p className="mt-1 text-[10px] font-black text-[#172033]">
+                    {symbol}
                   </p>
+                  <p className="mt-0.5 text-[16px] font-black leading-none text-[#172033]">
+                    ${fmt(item?.price)}
+                  </p>
+
+                  <div className={`mx-auto mt-2 w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
+                    {action.text}
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-3 gap-1 border-t border-[#EEF0F3] pt-2">
+                    <div>
+                      <p className="text-[6px] font-bold text-[#6B6257]">Buy60</p>
+                      <p className="mt-0.5 text-[9px] font-black text-[#16A34A]">
+                        {share == null ? "-" : `${share.toFixed(0)}%`}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[6px] font-bold text-[#6B6257]">Risk</p>
+                      <p
+                        className={`mt-0.5 text-[9px] font-black ${
+                          Number(item?.down_risk) >= 65
+                            ? "text-[#DC2626]"
+                            : Number(item?.down_risk) >= 45
+                              ? "text-[#F59E0B]"
+                              : "text-[#16A34A]"
+                        }`}
+                      >
+                        {Number.isFinite(Number(item?.down_risk))
+                          ? `${Math.round(Number(item?.down_risk))}%`
+                          : "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[6px] font-bold text-[#6B6257]">Vol</p>
+                      <p className="mt-0.5 text-[9px] font-black text-[#2563EB]">
+                        {Number.isFinite(Number(item?.vol_ratio))
+                          ? `${Number(item?.vol_ratio).toFixed(1)}x`
+                          : "-"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[6px] font-bold text-[#6B6257]">Risk</p>
-                  <p
-                    className={`mt-0.5 text-[9px] font-black ${
-                      Number(item?.down_risk) >= 65
-                        ? "text-[#DC2626]"
-                        : Number(item?.down_risk) >= 45
-                          ? "text-[#F59E0B]"
-                          : "text-[#16A34A]"
-                    }`}
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex items-center justify-center gap-2 border-t border-[#EEF0F3] pt-2 text-[8px] font-bold text-[#7C746A]">
+            <span>Schwab live data</span>
+            <span>·</span>
+            <span className="font-black text-[#C4483A]">상세보기 →</span>
+          </div>
+        </Link>
+      ) : (
+        <div className="mt-3 border-t border-[#EEF0F3] pt-2">
+          {latestNews.length ? (
+            <div className="divide-y divide-[#EEF0F3]">
+              {latestNews.slice(0, 4).map((news) => {
+                const newsTime = news.published_at || news.created_at;
+                return (
+                  <a
+                    key={news.id}
+                    href={news.url || "/stock"}
+                    target={news.url ? "_blank" : undefined}
+                    rel={news.url ? "noreferrer" : undefined}
+                    className="flex min-w-0 items-center gap-2 py-1.5 hover:bg-slate-50"
                   >
-                    {Number.isFinite(Number(item?.down_risk))
-                      ? `${Math.round(Number(item?.down_risk))}%`
-                      : "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[6px] font-bold text-[#6B6257]">Vol</p>
-                  <p className="mt-0.5 text-[9px] font-black text-[#2563EB]">
-                    {Number.isFinite(Number(item?.vol_ratio))
-                      ? `${Number(item?.vol_ratio).toFixed(1)}x`
-                      : "-"}
-                  </p>
-                </div>
-              </div>
+                    <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-[#172033]">
+                      {news.title}
+                    </span>
+                    <span className="shrink-0 text-[8px] font-semibold text-[#8B8175]">
+                      {newsTime
+                        ? new Date(newsTime).toLocaleTimeString("ko-KR", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </span>
+                  </a>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-3 flex items-center justify-center gap-2 border-t border-[#EEF0F3] pt-2 text-[8px] font-bold text-[#7C746A]">
-        <span>Schwab live data</span>
-        <span>·</span>
-        <span className="font-black text-[#C4483A]">상세보기 →</span>
-      </div>
-    </Link>
+          ) : (
+            <div className="py-5 text-center text-[9px] font-semibold text-[#8B8175]">
+              최신 주식 뉴스를 불러오는 중입니다.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
