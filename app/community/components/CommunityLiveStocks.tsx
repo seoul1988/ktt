@@ -242,9 +242,8 @@ export default function CommunityLiveStocks() {
     // Vercel Environment Variable:
     // NEXT_PUBLIC_STOCK_PUBLIC_WS_URL=wss://YOUR-CLOUDFLARE-DOMAIN/ws/public
     const rawUrl =
-  process.env.NEXT_PUBLIC_STOCK_PUBLIC_WS_URL?.trim() ||
-  process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim() ||
-
+      process.env.NEXT_PUBLIC_STOCK_PUBLIC_WS_URL?.trim() ||
+      process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim();
 
     if (!rawUrl) {
       setStatus("NO URL");
