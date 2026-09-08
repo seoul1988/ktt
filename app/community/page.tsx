@@ -1,849 +1,1178 @@
+"use client";
+
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+import { useRouter } from "next/navigation";
 import CommunityBottomNav from "../components/CommunityBottomNav";
 import ProfileButton from "../components/ProfileButton";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
-import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
-import CommunityNewsCarousel from "../components/CommunityNewsCarousel";
-import CommunityAdsSlider from "../components/CommunityAdsSlider";
-import CommunityLiveStocks from "./components/CommunityLiveStocks";
+type Snapshot = {
+  symbol: string;
+  ts?: number;
+  price?: number;
+  bid?: number;
+  ask?: number;
+  action?: string;
+  reason?: string;
+  forecast?: string;
+  score?: number;
+  down_risk?: number;
+  fast_drop?: string;
+  fast_drop_1m?: number;
+  fast_drop_2m?: number;
+  buy60?: number;
+  sell60?: number;
+  vwap?: number;
+  ema9?: number;
+  ema20?: number;
+  local_support?: number;
+  support?: number;
+  resistance?: number;
+  trend_1m?: string;
+  trend_score?: number;
+  ml_up5?: number;
+  dl_up5?: number;
+  dl_up10?: number;
+  dl_up15?: number;
+  sector?: string;
+  option_bias?: string;
+  option_score?: number;
+  zero_dte_key?: string;
+  zero_dte_label?: string;
+  sell_risk?: number;
+  pnl?: number;
+  entry?: number;
+  exp_5m?: string;
+  samples?: number;
+  vol_x?: number;
+  error?: string;
+};
 
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+type MarketEvent = {
+  id?: string;
+  time?: string;
+  title?: string;
+  importance?: "high" | "medium" | "low";
+  symbol?: string;
+  source?: string;
+  url?: string;
+};
 
-export default async function CommunityPage() {
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: events, error: eventsError } = await supabase
-    .from("community_events")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1);
+type EarningsItem = {
+  symbol?: string;
+  company?: string;
+  date?: string;
+  time?: string;
+  estimate?: string | number;
+  marketCap?: number;
+};
 
-  if (eventsError) {
-    console.error("community events error:", eventsError);
+type NewsItem = {
+  id?: string;
+  symbol?: string;
+  title?: string;
+  source?: string;
+  publishedAt?: string;
+  url?: string;
+  imageUrl?: string;
+  description?: string;
+  shared?: boolean;
+};
+
+type MarketInfoPayload = {
+  events?: MarketEvent[];
+  earnings?: EarningsItem[];
+  news?: NewsItem[];
+  updatedAt?: string;
+  source?: string;
+  warning?: string;
+  error?: string;
+};
+
+const MAX_SYMBOLS = 5;
+
+
+function cleanSymbol(value: string) {
+  return value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9.\-]/g, "")
+    .slice(0, 12);
+}
+
+function signalStyle(action?: string, risk?: number, fastDrop?: string) {
+  const a = (action || "").toUpperCase();
+  const f = (fastDrop || "").toUpperCase();
+  if (a.includes("SELL") || f.includes("CRITICAL") || Number(risk) >= 65) {
+    return "text-red-600";
   }
-
-  // Community Grand Opening:
-  // 커뮤니티 + 리스트에 모두 체크된 항목 중 가장 최근 1개만 표시합니다.
-  const { data: grandOpeningData, error: grandOpeningError } = await supabase
-    .from("grand_openings")
-    .select("*")
-    .eq("show_on_community", true)
-    .eq("show_in_list", true)
-    // Sale / Event End Date가 없으면 계속 표시,
-    // 날짜가 있으면 오늘까지 포함해서 표시하고 다음 날부터 숨깁니다.
-    .or(`end_date.is.null,end_date.gte.${today}`)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (grandOpeningError) {
-    console.error("community grand opening error:", grandOpeningError);
+  if (a.includes("BUY")) return "text-emerald-600";
+  if (a.includes("WARNING") || a.includes("WATCH") || Number(risk) >= 45) {
+    return "text-amber-600";
   }
+  return "text-slate-500";
+}
 
-  const latestGrandOpening = grandOpeningData?.[0] ?? null;
-  const grandOpeningImage =
-    latestGrandOpening?.images?.[0] ||
-    latestGrandOpening?.image_url ||
-    "/event.png";
 
-  const { data: deals, error: dealsError } = await supabase
-    .from("deals")
-    .select("*")
-    .eq("status", "approved")
-    .eq("active", true)
-    .eq("deal_scope", "community")
-    .or(`end_date.is.null,end_date.gte.${today}`)
-    .order("created_at", { ascending: false })
-    .limit(6);
+function earningsDateKey(value?: string) {
+  if (!value) return "TBD";
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 10);
+}
 
-  if (dealsError) {
-    console.error("community deals error:", dealsError);
+function earningsDayLabel(value: string) {
+  if (value === "TBD") return { dow: "TBD", day: "—", date: "Date TBD" };
+  const parsed = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return { dow: "", day: value, date: value };
   }
+  return {
+    dow: parsed.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+    day: String(parsed.getDate()),
+    date: parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+  };
+}
 
-  const now = new Date().toISOString();
+function earningsTimeLabel(value?: string) {
+  const v = String(value || "").toLowerCase();
+  if (!v) return "";
+  if (
+    v.includes("before") ||
+    v.includes("bmo") ||
+    v.includes("pre") ||
+    v.includes("morning")
+  ) return "Before Open";
+  if (
+    v.includes("after") ||
+    v.includes("amc") ||
+    v.includes("post") ||
+    v.includes("close")
+  ) return "After Close";
+  return value || "";
+}
 
-  const { data: communityCoupons, error: communityCouponsError } = await supabase
-    .from("coupons")
-    .select("id,business_id,usage_limit,used_count,active,start_date,end_date")
-    .eq("active", true)
-    .lte("start_date", now)
-    .or(`end_date.is.null,end_date.gte.${now}`);
+export default function StockMonitorPage() {
+  const router = useRouter();
+  const wsRef = useRef<WebSocket | null>(null);
+  const renewRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  if (communityCouponsError) {
-    console.error("community coupons error:", communityCouponsError);
-  }
+  const [symbols, setSymbols] = useState<string[]>([]);
+  const [tickerInputs, setTickerInputs] = useState<string[]>(["", "", "", "", ""]);
+  const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
+  const [openSymbol, setOpenSymbol] = useState("");
+  const [status, setStatus] = useState("로그인 확인 중...");
+  const [busy, setBusy] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+  const [userId, setUserId] = useState("");
+  const [marketInfo, setMarketInfo] = useState<MarketInfoPayload>({
+    events: [],
+    earnings: [],
+    news: [],
+  });
+  const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
+  const [eventsModalOpen, setEventsModalOpen] = useState(false);
+  const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
+  const [stockNews, setStockNews] = useState<NewsItem[]>([]);
 
-  const activeCouponCount = (communityCoupons || []).filter((coupon: any) => {
-    const usageLimit = Number(coupon.usage_limit || 0);
-    const usedCount = Number(coupon.used_count || 0);
 
-    return !(usageLimit > 0 && usedCount >= usageLimit);
-  }).length;
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
 
-  // 두 번째 소스: /community/news에 직접 등록된 뉴스/공연·문화.
-  // 위의 자동 Community News(community_news)가 아니라 business_news에서
-  // 가장 최근 등록된 1건을 가져옵니다.
-  const { data: registeredNewsData, error: registeredNewsError } =
-    await supabase
-      .from("business_news")
-      .select(
-        "id, title, summary, category, image_url, published_at, published",
-      )
-      .order("id", { ascending: false })
-      .limit(1);
+    if (error) {
+      console.error("Stock monitor session error:", error);
+      return "";
+    }
 
-  if (registeredNewsError) {
-    console.error("registered news/culture error:", registeredNewsError);
-  }
+    return session?.access_token || "";
+  }, []);
 
-  const latestRegisteredNews = registeredNewsData?.[0] ?? null;
+  const loadSharedNews = useCallback(async () => {
+    // 공유 뉴스는 로그인 여부와 관계없이 전체 최신 항목을 불러옵니다.
+    const { data, error } = await supabase
+      .from("shared_news")
+      .select("id,title,url,source,description,image_url,published_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(20);
 
-  const newsSelect =
-    "id, region, source, title, summary, article_url, image_url, published_at";
+    if (error) {
+      console.error("shared_news load error:", error);
+      return;
+    }
 
-  const [
-    { data: koreaNewsData, error: koreaNewsError },
-    { data: usNewsData, error: usNewsError },
-  ] = await Promise.all([
-    supabase
-      .from("community_news")
-      .select(newsSelect)
-      .eq("region", "korea")
-      .eq("active", true)
-      .order("published_at", {
-        ascending: false,
-        nullsFirst: false,
-      })
-      .limit(12),
-
-    supabase
-      .from("community_news")
-      .select(newsSelect)
-      .eq("region", "us")
-      .eq("active", true)
-      .order("published_at", {
-        ascending: false,
-        nullsFirst: false,
-      })
-      .limit(12),
-  ]);
-
-  if (koreaNewsError) {
-    console.error("community korea news error:", {
-      message: koreaNewsError.message,
-      details: koreaNewsError.details,
-      hint: koreaNewsError.hint,
-      code: koreaNewsError.code,
-    });
-  }
-
-  if (usNewsError) {
-    console.error("community us news error:", {
-      message: usNewsError.message,
-      details: usNewsError.details,
-      hint: usNewsError.hint,
-      code: usNewsError.code,
-    });
-  }
-
-  const koreaNews = koreaNewsData ?? [];
-  const usNews = usNewsData ?? [];
-
-  // Latest 5 ads for the Community page
-  const { data: latestAdsData, error: latestAdsError } = await supabase
-    .from("ads")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  if (latestAdsError) {
-    console.error("community ads error:", latestAdsError);
-  }
-
-  const latestAds = (latestAdsData ?? []).filter((ad: any) =>
-    Boolean(
-      ad?.image_url ||
-      ad?.image ||
-      ad?.banner_url ||
-      ad?.thumbnail_url
-    ),
-  );
-
-  const { data: allBusinesses } = await supabase
-    .from("businesses")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  /*
-   * categories 테이블에는 hidden 컬럼이 없으므로 조회하지 않습니다.
-   * Community Map에 표시되는 카테고리만 가져옵니다.
-   */
-  const { data: categories, error: categoriesError } = await supabase
-    .from("categories")
-    .select("name, show_on_community_map")
-    .eq("show_on_community_map", true);
-
-  if (categoriesError) {
-    console.error(
-      "community categories error:",
-      categoriesError.message,
-      categoriesError.code,
+    setSharedNews(
+      (data || []).map((row) => ({
+        id: String(row.id),
+        title: row.title || "공유 뉴스",
+        url: row.url || undefined,
+        source: row.source || "Shared",
+        publishedAt: row.published_at || row.created_at || undefined,
+        imageUrl: row.image_url || undefined,
+        description: row.description || undefined,
+        shared: true,
+      })),
     );
-  }
+  }, []);
 
-  const communityCategoryNames = new Set(
-    (categories ?? [])
-      .map((cat) => String(cat.name ?? "").trim().toLowerCase())
-      .filter(Boolean),
-  );
+  const loadStockNews = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("stock_news")
+      .select("id,symbol,title,url,source,published_at,created_at")
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error("stock_news load error:", error);
+      return;
+    }
+
+    setStockNews(
+      (data || []).map((row) => ({
+        id: `cron-${row.id}`,
+        symbol: row.symbol || undefined,
+        title: row.title || "주식 속보",
+        url: row.url || undefined,
+        source: row.source || undefined,
+        publishedAt: row.published_at || row.created_at || undefined,
+      })),
+    );
+  }, []);
+
+  const connectWebSocket = useCallback((wsUrl?: string | null) => {
+    if (!wsUrl) {
+      setStatus("종목은 저장되었습니다. 분석 서버 연결을 기다리는 중입니다.");
+      return;
+    }
+
+    if (wsRef.current) {
+      try { wsRef.current.close(); } catch {}
+    }
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (error) {
+      console.error("Invalid WebSocket URL:", error);
+      setIsLive(false);
+      setStatus("분석 서버 주소가 올바르지 않습니다.");
+      return;
+    }
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setIsLive(true);
+      setStatus("실시간 분석 서버 연결됨 · 데이터 수신 중");
+    };
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const list: Snapshot[] = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : payload?.symbol
+              ? [payload]
+              : payload?.snapshot?.symbol
+                ? [payload.snapshot]
+                : [];
+        setSnapshots((prev) => {
+          const next = { ...prev };
+          for (const item of list) {
+            if (item?.symbol) next[item.symbol] = item;
+          }
+          return next;
+        });
+      } catch (error) {
+        console.error("Stock WebSocket message error:", error);
+      }
+    };
+    ws.onerror = () => {
+      setIsLive(false);
+      setStatus("분석 서버 연결 오류 · 서버 실행 상태를 확인하세요.");
+    };
+    ws.onclose = () => {
+      if (wsRef.current === ws) {
+        wsRef.current = null;
+        setIsLive(false);
+        setStatus("분석 서버 연결이 끊어졌습니다.");
+      }
+    };
+  }, []);
 
 
+  const loadMarketInfo = useCallback(async (watchSymbols: string[]) => {
+    try {
+      setMarketInfoStatus("업데이트 중");
+      const query = watchSymbols.length
+        ? `?symbols=${encodeURIComponent(watchSymbols.join(","))}`
+        : "";
+      const response = await fetch(`/api/stocks/market-info${query}`, {
+        cache: "no-store",
+      });
 
+      const data = await response.json().catch(() => ({}));
 
+      if (!response.ok) {
+        setMarketInfo({ events: [], earnings: [], news: [] });
+        setMarketInfoStatus(data?.error || `이벤트 서버 HTTP ${response.status}`);
+        return;
+      }
 
+      const events: MarketEvent[] = Array.isArray(data?.events)
+        ? data.events.map((event: Record<string, unknown>, index: number) => {
+            const rawImportance = event.importance ?? event.risk;
+            const importanceText = String(rawImportance || "").toLowerCase();
+            const importance: MarketEvent["importance"] =
+              importanceText === "3" || importanceText.includes("high")
+                ? "high"
+                : importanceText === "2" || importanceText.includes("med")
+                  ? "medium"
+                  : "low";
 
+            return {
+              id: String(event.id || `event-${index}`),
+              time: String(event.time || "TBD"),
+              title: String(event.title || event.name || "-"),
+              importance,
+              symbol: event.symbol ? String(event.symbol) : undefined,
+            };
+          })
+        : [];
 
+      setMarketInfo({
+        events,
+        earnings: Array.isArray(data?.earnings) ? data.earnings : [],
+        news: Array.isArray(data?.news) ? data.news : [],
+        updatedAt: data?.updatedAt,
+        source: data?.source,
+        warning: data?.warning,
+      });
+      const updated = data?.updatedAt
+        ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "방금";
+      setMarketInfoStatus(
+        data?.warning ? `일부 연결 경고 · ${updated}` : `업데이트 ${updated}`,
+      );
+    } catch (error) {
+      setMarketInfo({ events: [], earnings: [], news: [] });
+      setMarketInfoStatus(
+        error instanceof Error ? error.message : "이벤트 서버 연결 실패",
+      );
+    }
+  }, []);
 
-  function getBusinessCategoryNames(biz: any): string[] {
-    const values = [
-      biz.category,
-      biz.category_name,
-      biz.categories,
-    ];
+  useEffect(() => {
+    const refresh = () => {
+      void loadMarketInfo(symbols);
+      void loadSharedNews();
+      void loadStockNews();
+    };
+    const timer = window.setInterval(refresh, 15 * 60 * 1000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
 
-    return values
-      .flatMap((value) => {
-        if (Array.isArray(value)) {
-          return value.map((item) => {
-            if (typeof item === "string") {
-              return item;
-            }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [loadMarketInfo, loadSharedNews, loadStockNews, symbols]);
 
-            if (item && typeof item === "object") {
-              return (
-                item.name ??
-                item.category ??
-                item.category_name ??
-                ""
-              );
-            }
+  const openSession = useCallback(async () => {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-            return "";
-          });
+    if (sessionError || !session?.user) {
+      setStatus("로그인 후 사용할 수 있습니다.");
+      return;
+    }
+
+    const uid = session.user.id;
+    setUserId(uid);
+
+    // 1) Watchlist는 Supabase에서 직접 읽습니다.
+    //    분석 서버 환경변수가 없어도 등록/새로고침 저장이 유지됩니다.
+    const { data: watchlistRow, error: watchlistError } = await supabase
+      .from("stock_watchlists")
+      .select("symbols")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    if (watchlistError) {
+      console.error("stock_watchlists load error:", watchlistError);
+      setStatus(`Watchlist 불러오기 실패: ${watchlistError.message}`);
+      return;
+    }
+
+    const loaded = Array.isArray(watchlistRow?.symbols)
+      ? watchlistRow.symbols.slice(0, MAX_SYMBOLS)
+      : [];
+
+    setSymbols(loaded);
+    setTickerInputs([
+      loaded[0] || "",
+      loaded[1] || "",
+      loaded[2] || "",
+      loaded[3] || "",
+      loaded[4] || "",
+    ]);
+
+    void loadMarketInfo(loaded);
+    void loadSharedNews();
+    void loadStockNews();
+
+    setStatus(loaded.length ? "종목 준비 완료 · START를 누르세요." : "종목을 등록하세요.");
+  }, [connectWebSocket, loadMarketInfo, loadSharedNews, loadStockNews]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function initialize() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!mounted) return;
+
+      if (session?.user) {
+        setUserId(session.user.id);
+        void openSession();
+      } else {
+        setStatus("로그인 정보를 기다리는 중...");
+      }
+    }
+
+    void initialize();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+
+      if (session?.user) {
+        setUserId(session.user.id);
+        void openSession();
+      } else {
+        setUserId("");
+        setStatus("로그인 후 사용할 수 있습니다.");
+        setSymbols([]);
+        setSnapshots({});
+        if (wsRef.current) {
+          try { wsRef.current.close(); } catch {}
         }
+      }
+    });
 
-        return String(value ?? "").split(",");
-      })
-      .map((category) => String(category).trim().toLowerCase())
-      .filter(Boolean);
-  }
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      if (renewRef.current) clearTimeout(renewRef.current);
+      if (wsRef.current) {
+        try { wsRef.current.close(); } catch {}
+      }
+    };
+  }, [openSession]);
 
-  const newBusinesses =
-    (allBusinesses ?? [])
-      .filter((biz) =>
-        getBusinessCategoryNames(biz).some((category) =>
-          communityCategoryNames.has(category),
-        ),
-      )
-      .slice(0, 6);
+  async function saveWatchlist(nextSymbols: string[]) {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  const featuredBusinesses =
-    (allBusinesses ?? [])
-      .filter((biz) => {
-        const isCommunityCategory = getBusinessCategoryNames(biz).some(
-          (category) => communityCategoryNames.has(category),
+    if (sessionError || !session?.user) {
+      setStatus("로그인이 필요합니다.");
+      return;
+    }
+
+    const uid = session.user.id;
+    setUserId(uid);
+    setBusy(true);
+    setStatus("종목 저장 중...");
+
+    try {
+      // 핵심: 먼저 Supabase에 직접 저장.
+      const { error: saveError } = await supabase
+        .from("stock_watchlists")
+        .upsert(
+          {
+            user_id: uid,
+            symbols: nextSymbols,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" },
         );
 
-        return isCommunityCategory && biz.featured_sponsor === true;
-      })
-      .slice(0, 3);
+      if (saveError) {
+        throw new Error(`Watchlist 저장 실패: ${saveError.message}`);
+      }
 
-  const eventCount = events?.length || 0;
-  const dealCount = deals?.length || 0;
+      // 저장 성공 즉시 화면 반영.
+      setSymbols(nextSymbols);
+      setTickerInputs([
+        nextSymbols[0] || "",
+        nextSymbols[1] || "",
+        nextSymbols[2] || "",
+        nextSymbols[3] || "",
+        nextSymbols[4] || "",
+      ]);
+
+      void loadMarketInfo(nextSymbols);
+
+      // /api/stocks/session은 GET 전용이므로 저장할 때 POST하지 않습니다.
+      // 실시간 연결은 사용자가 START를 누를 때 시작합니다.
+      setStatus("종목 저장 완료 · START를 누르세요.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "저장 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveTickerInputs() {
+    const nextSymbols: string[] = [];
+
+    for (const raw of tickerInputs) {
+      const symbol = cleanSymbol(raw);
+      if (symbol && !nextSymbols.includes(symbol)) {
+        nextSymbols.push(symbol);
+      }
+    }
+
+    await saveWatchlist(nextSymbols.slice(0, MAX_SYMBOLS));
+  }
+
+
+  async function startLive() {
+    const nextSymbols: string[] = [];
+
+    for (const raw of tickerInputs) {
+      const symbol = cleanSymbol(raw);
+      if (symbol && !nextSymbols.includes(symbol)) {
+        nextSymbols.push(symbol);
+      }
+    }
+
+    const finalSymbols = nextSymbols.slice(0, MAX_SYMBOLS);
+
+    if (!finalSymbols.length) {
+      setStatus("먼저 종목을 1개 이상 등록하세요.");
+      return;
+    }
+
+    // 입력창의 내용이 현재 저장된 종목과 다르면 먼저 저장합니다.
+    const changed =
+      finalSymbols.length !== symbols.length ||
+      finalSymbols.some((symbol, index) => symbol !== symbols[index]);
+
+    if (changed) await saveWatchlist(finalSymbols);
+
+    // 다른 페이지로 이동하지 않고 이 화면에서 분석 서버 세션을 시작합니다.
+    setBusy(true);
+    setIsLive(false);
+    setStatus("분석 서버 연결 요청 중...");
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setStatus("로그인이 필요합니다.");
+        return;
+      }
+
+      const response = await fetch("/api/stocks/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ symbols: finalSymbols }),
+        cache: "no-store",
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status}: ${data?.error || data?.message || "분석 서버 응답 오류"}`,
+        );
+      }
+
+      if (!data?.wsUrl) {
+        throw new Error(data?.serverWarning || "분석 서버의 wsUrl이 없습니다.");
+      }
+
+      connectWebSocket(data.wsUrl);
+      void loadMarketInfo(finalSymbols);
+    } catch (error) {
+      console.error("START error:", error);
+      setStatus(error instanceof Error ? `START 실패: ${error.message}` : "START 실패");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeSymbol(symbol: string) {
+    const next = symbols.filter((item) => item !== symbol);
+    setTickerInputs([
+      next[0] || "",
+      next[1] || "",
+      next[2] || "",
+      next[3] || "",
+      next[4] || "",
+    ]);
+    setSnapshots((prev) => {
+      const copy = { ...prev };
+      delete copy[symbol];
+      return copy;
+    });
+    if (openSymbol === symbol) setOpenSymbol("");
+    await saveWatchlist(next);
+  }
 
   return (
-  <>
-  
-  
-    <main className="min-h-screen bg-[#F8F3EC] text-[#172033]">
-      <section className="mx-auto max-w-2xl px-5 pb-28 pt-6">
-        <div className="mb-6 flex items-start justify-between gap-4">
-  <div>
-    <p className="text-sm font-black text-[#C4483A]">
-      COMMUNITY
-    </p>
-
-    <h1 className="text-3xl font-black tracking-tight">
-      KTown Triangle
-    </h1>
-
-    <p className="mt-2 text-sm font-semibold text-[#6B6257]">
-      Discover Korean businesses.
-    </p>
-  </div>
-
-<div className="flex items-center gap-3">
-  <Link
-  href="https://kacctriangle.org"
-  target="_blank"
->
-  <img
-    src="/kacc-logo.png"
-    alt="KACC Raleigh"
-    className="h-19 w-19 rounded-full object-contain cursor-pointer"
-  />
-</Link>
-
-
-
-
-  <ProfileButton />
-</div>
-</div>
-
-        {/* Korea / US News */}
-        <CommunityNewsCarousel
-          koreaNews={koreaNews as any[]}
-          usNews={usNews as any[]}
-        />
-
-        {/* Compact live NVDA / TSLA / AAPL */}
-        <CommunityLiveStocks />
-
-        {/* KTown Coupon Book */}
-        <section className="mb-5">
-          <Link
-            href="/coupons"
-            className="group relative block overflow-hidden rounded-[22px] bg-[#FFFDF8] shadow-sm transition hover:shadow-md active:scale-[0.995]"
+    <main className="min-h-screen bg-slate-50 pb-16">
+      <div className="mx-auto max-w-[1600px] px-3 py-4">
+        <header className="relative mb-4 flex h-12 items-center justify-between">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="z-10 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            aria-label="뒤로가기"
           >
-            <div className="pointer-events-none absolute inset-[6px] rounded-[16px] border-2 border-dashed border-[#E8B85E]" />
+            ←
+          </button>
 
-            <div className="flex items-center gap-3 px-4 pb-3 pt-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#112B58] text-[22px] text-white shadow-sm">
-                🎟
+          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-center">
+            <h1 className="text-lg font-black text-slate-950 sm:text-xl">
+              My Stock Monitor
+            </h1>
+          </div>
+
+          <div className="z-10 flex h-10 w-10 items-center justify-center">
+            <ProfileButton />
+          </div>
+        </header>
+
+        <section className="rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-1 text-sm font-black text-slate-950">
+              1) TICKERS (max 5):
+            </div>
+
+            {tickerInputs.map((value, index) => (
+              <input
+                key={index}
+                value={value}
+                onChange={(e) => {
+                  const next = [...tickerInputs];
+                  next[index] = cleanSymbol(e.target.value);
+                  setTickerInputs(next);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void saveTickerInputs();
+                }}
+                placeholder={index === 0 ? "NVDA" : ""}
+                maxLength={12}
+                disabled={busy}
+                className="h-8 w-[84px] rounded border border-slate-300 bg-white px-2 text-sm font-bold uppercase text-slate-900 outline-none focus:border-blue-500"
+              />
+            ))}
+
+            <button
+              onClick={() => void saveTickerInputs()}
+              disabled={busy}
+              className="h-8 rounded bg-blue-600 px-4 text-xs font-black text-white hover:bg-blue-700 disabled:opacity-40"
+            >
+              {busy ? "저장 중..." : symbols.length ? "등록 / 수정" : "등록"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void startLive()}
+              disabled={busy}
+              className={`h-8 rounded border px-5 text-xs font-black text-white disabled:opacity-40 ${
+                isLive
+                  ? "border-orange-500 bg-orange-500 ring-2 ring-orange-200"
+                  : "border-emerald-500 bg-emerald-600 hover:bg-emerald-700"
+              }`}
+            >
+              {busy ? "CONNECTING..." : isLive ? "RUNNING" : "START"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (wsRef.current) {
+                  try { wsRef.current.close(); } catch {}
+                  wsRef.current = null;
+                }
+                setIsLive(false);
+                setStatus("Stopped");
+              }}
+              className="h-8 rounded border border-red-300 bg-red-50 px-5 text-xs font-black text-red-700 hover:bg-red-100"
+            >
+              STOP
+            </button>
+
+            <span className="ml-2 text-xs font-semibold text-slate-600">{status}</span>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-bold text-slate-500">현재 저장:</span>
+            {symbols.length ? (
+              symbols.map((symbol) => (
+                <button
+                  key={symbol}
+                  onClick={() => void removeSymbol(symbol)}
+                  className="rounded-full bg-slate-100 px-2.5 py-1 font-bold text-slate-700 hover:bg-red-50 hover:text-red-600"
+                  title="이 종목 삭제"
+                >
+                  {symbol} ×
+                </button>
+              ))
+            ) : (
+              <span className="text-slate-400">등록된 종목이 없습니다.</span>
+            )}
+            {userId ? (
+              <span className="ml-auto text-[11px] text-slate-400">
+                USER {userId.slice(0, 8)}
+              </span>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="mt-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-black text-slate-950">Market Dashboard</h2>
+              <p className="text-xs text-slate-500">
+                등록 종목의 실시간 데이터, 오늘의 주요 이벤트, 어닝 일정, 최신 뉴스를 한 화면에서 확인합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadMarketInfo(symbols)}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              새로고침
+            </button>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Link
+              href="/stock/live"
+              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
+                📈
               </div>
-
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-[18px] font-black tracking-[-0.02em] text-[#112B58]">
-                  KTOWN COUPON BOOK
-                </h2>
-
-                <p className="mt-0.5 text-[11px] font-black text-[#C4483A]">
-                  Eat · Shop · Save
-                </p>
-
-                <p className="mt-0.5 line-clamp-1 text-[10px] font-semibold text-[#6B7280]">
-                  Triangle Local Deals in One Place
-                </p>
+                <div className="text-sm font-black tracking-wide text-slate-950">LIVE DATA</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  등록 종목의 실시간 분석 화면 열기
+                </div>
               </div>
+              <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
+            </Link>
 
-              {activeCouponCount > 0 && (
-                <div className="shrink-0 rounded-full border border-[#F0D6B5] bg-[#FFF8EC] px-2.5 py-1 text-center">
-                  <span className="text-[11px] font-black text-[#C4483A]">
-                    {activeCouponCount}
-                  </span>
-                  <span className="ml-1 text-[8px] font-black uppercase tracking-wide text-[#8A8176]">
-                    Coupons
-                  </span>
+            <DashboardCard
+              icon="📅"
+              title="TODAY'S EVENTS"
+              subtitle="CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표"
+              accent="amber"
+            >
+              <button
+                type="button"
+                onClick={() => setEventsModalOpen(true)}
+                className="block w-full rounded-xl text-left transition hover:bg-amber-50/50 active:bg-amber-50"
+                aria-label="오늘의 주요 시장 이벤트 전체보기"
+              >
+                {marketInfo.events?.length ? (
+                  <div className="space-y-1">
+                    {marketInfo.events.slice(0, 6).map((event, index) => (
+                      <div
+                        key={event.id || `${event.title}-${index}`}
+                        className="flex gap-3 border-b border-slate-100 px-2 py-2 last:border-0"
+                      >
+                        <div className="w-[72px] shrink-0 text-xs font-black text-slate-600">
+                          {event.time || "TBD"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-slate-900">
+                            {event.title || "-"}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-500">
+                            {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                        <div className="shrink-0 self-center text-sm font-black text-amber-600">
+                          →
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
+                    오늘 예정된 중·고위험 시장 이벤트 없음 · {marketInfoStatus}
+                    <span className="ml-2 font-black text-amber-600">보기 →</span>
+                  </div>
+                )}
+              </button>
+            </DashboardCard>
+
+            <DashboardCard
+              icon="💵"
+              title="EARNINGS SCHEDULE"
+              subtitle="날짜별 예정 실적 발표 회사"
+              accent="emerald"
+            >
+              {marketInfo.earnings?.length ? (
+                <EarningsCalendar items={marketInfo.earnings} />
+              ) : (
+                <EmptyBlock text={`어닝 데이터 ${marketInfoStatus}`} />
+              )}
+            </DashboardCard>
+
+            <DashboardCard
+              icon="📰"
+              title="LATEST NEWS"
+              subtitle="자동 수집 주식 속보 · 10분마다 업데이트"
+              accent="rose"
+            >
+              {stockNews.length ? (
+                <div className="space-y-2">
+                  {stockNews.slice(0, 10).map((news, index) => {
+                    const content = (
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold leading-5 text-slate-900">
+                          {news.title || "-"}
+                        </div>
+                        <div className="mt-1 text-[10px] text-slate-500">
+                          {news.publishedAt
+                            ? new Date(news.publishedAt).toLocaleString("ko-KR", {
+                                year: "numeric",
+                                month: "numeric",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })
+                            : ""}
+                        </div>
+                      </div>
+                    );
+
+                    return news.url ? (
+                      <a
+                        key={news.id || `${news.title}-${index}`}
+                        href={news.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg border border-slate-200 bg-white px-3 py-2 hover:bg-slate-50"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <div
+                        key={news.id || `${news.title}-${index}`}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2"
+                      >
+                        {content}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyBlock text="자동 수집된 주식 속보가 아직 없습니다." />
+              )}
+            </DashboardCard>
+          </div>
+        </section>
+
+       
+      </div>
+      {eventsModalOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setEventsModalOpen(false)}
+        >
+          <div
+            className="max-h-[82vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-base font-black text-slate-950">TODAY'S EVENTS</div>
+                <div className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                  CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEventsModalOpen(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 text-lg font-black text-slate-600 hover:bg-slate-50"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[68vh] overflow-y-auto px-4 py-3">
+              {marketInfo.events?.length ? (
+                <div className="divide-y divide-slate-100">
+                  {marketInfo.events.map((event, index) => {
+                    const content = (
+                      <div className="flex gap-3 py-3">
+                        <div className="w-[78px] shrink-0 text-xs font-black text-slate-600">
+                          {event.time || "TBD"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-black leading-5 text-slate-900">
+                            {event.title || "-"}
+                          </div>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                        {event.url ? (
+                          <div className="shrink-0 self-center text-sm font-black text-amber-600">
+                            →
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+
+                    return event.url ? (
+                      <a
+                        key={event.id || `${event.title}-${index}`}
+                        href={event.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg hover:bg-amber-50"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <div key={event.id || `${event.title}-${index}`}>{content}</div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+                  <div>
+                    <div className="text-sm font-black text-slate-700">
+                      오늘 예정된 중·고위험 시장 이벤트가 없습니다.
+                    </div>
+                    <div className="mt-2 text-xs font-semibold text-slate-500">
+                      {marketInfoStatus}
+                    </div>
+                    <div className="mt-4 text-[11px] leading-5 text-slate-500">
+                      CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표가 확인되면 여기에 표시됩니다.
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-
-            <div className="grid grid-cols-3 gap-2 px-3 pb-3">
-              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
-                <p className="text-[13px] font-black text-[#C4483A]">25% OFF</p>
-                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Cleaners</p>
-              </div>
-
-              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
-                <p className="text-[13px] font-black text-[#C4483A]">BOGO</p>
-                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Coffee</p>
-              </div>
-
-              <div className="rounded-xl border border-[#EFE7DC] bg-white px-2 py-2.5 text-center">
-                <p className="text-[13px] font-black text-[#C4483A]">$5 OFF</p>
-                <p className="mt-0.5 text-[9px] font-bold text-[#6B7280]">Bakery</p>
-              </div>
-            </div>
-
-            <div className="px-3 pb-3">
-              <span className="flex w-full items-center justify-center rounded-xl bg-[#112B58] px-4 py-2.5 text-[11px] font-black tracking-wide text-white shadow-sm transition group-hover:bg-[#1A3D73]">
-                VIEW ALL COUPONS →
-              </span>
-            </div>
-          </Link>
-        </section>
-
-        {/* Upcoming Events */}
-        <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FCE7E2] p-3 shadow-sm">
-          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F3CFC7] bg-white text-xl shadow-sm">
-                🎉
-              </div>
-
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
-                  Events
-                </p>
-
-                <h2 className="text-xl font-black text-[#172033]">
-                  Upcoming Events
-                </h2>
-              </div>
-            </div>
-
-            <Link
-              href="/community/events"
-              className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
-            >
-             →
-            </Link>
           </div>
-
-          <div
-            className={
-              eventCount === 1
-                ? "grid grid-cols-1 gap-4"
-                : "flex gap-4 overflow-x-auto pb-1"
-            }
-          >
-            {events?.map((event) => (
-              <Link
-                key={event.id}
-                href={`/community/events/${event.id}`}
-                className={
-                  eventCount === 1
-                    ? "overflow-hidden rounded-3xl bg-white shadow-sm"
-                    : "min-w-[260px] overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
-                }
-              >
-                <div
-                  className={
-                    eventCount === 1
-                      ? "relative h-64 w-full overflow-hidden bg-white"
-                      : "relative h-52 w-full overflow-hidden bg-white"
-                  }
-                >
-                  {event.image_url ? (
-                    <img
-                      src={event.image_url}
-                      alt={event.title || "Event"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#E8DED1] text-xs font-black text-[#6B6257]">
-                      No Photo
-                    </div>
-                  )}
-
-                  <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
-                    {event.category || "EVENT"}
-                  </div>
-                </div>
-
-                <div className={eventCount === 1 ? "p-5" : "p-4"}>
-                  <h3
-                    className={
-                      eventCount === 1
-                        ? "line-clamp-3 text-2xl font-black leading-tight"
-                        : "line-clamp-2 text-lg font-black"
-                    }
-                  >
-                    {event.title}
-                  </h3>
-
-                  <p className="mt-2 text-xs font-bold text-[#6B6257]">
-                    {event.event_date
-                      ? new Date(event.event_date).toLocaleDateString()
-                      : "Date TBA"}
-                  </p>
-
-                  <p className="mt-1 line-clamp-1 text-xs font-semibold text-[#6B6257]">
-                    {event.location || event.address || "Location TBA"}
-                  </p>
-
-                  {event.entry_fee && (
-                    <p className="mt-2 text-sm font-black text-[#C4483A]">
-                      🎟 {event.entry_fee}
-                    </p>
-                  )}
-
-                 
-                </div>
-              </Link>
-            ))}
-
-            {!eventCount && (
-              <div className="rounded-3xl bg-white p-6 text-sm font-bold text-[#6B6257] shadow-sm">
-                No events yet.
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Grand Opening — latest community/list enabled item */}
-        {latestGrandOpening && (
-          <section className="mb-8 overflow-hidden rounded-3xl border border-[#F3CFC7] bg-[#FFF1EE] p-3 shadow-sm">
-            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F3CFC7] bg-white text-xl shadow-sm">
-                  🎉
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-wide text-[#C4483A]">
-                    Grand Opening
-                  </p>
-
-                  <h2 className="text-xl font-black text-[#172033]">
-                    Grand Opening
-                  </h2>
-                </div>
-              </div>
-
-              <Link
-                href="/grand-openings"
-                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#C4483A] shadow-sm"
-              >
-                →
-              </Link>
-            </div>
-
-            <Link
-              href={`/grand-openings/${latestGrandOpening.id}`}
-              className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
-            >
-              <div className="relative h-64 w-full overflow-hidden bg-[#E8DED1]">
-                <img
-                  src={grandOpeningImage}
-                  alt={
-                    latestGrandOpening.business_name ||
-                    latestGrandOpening.title ||
-                    "Grand Opening"
-                  }
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                />
-
-                <div className="absolute left-3 top-3 rounded-full bg-[#C4483A] px-3 py-1 text-[10px] font-black text-white shadow-lg">
-                  GRAND OPENING
-                </div>
-              </div>
-
-              <div className="p-5">
-                <h3 className="line-clamp-2 text-2xl font-black leading-tight">
-                  {latestGrandOpening.business_name ||
-                    latestGrandOpening.title ||
-                    "Grand Opening"}
-                </h3>
-              </div>
-            </Link>
-          </section>
-        )}
-
-        {/* Community Deals / fallback: latest News & Performance */}
-        {dealCount > 0 ? (
-          <section className="mb-8 overflow-hidden rounded-3xl border border-[#F1DEAB] bg-[#FFF4D8] p-3 shadow-sm">
-            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#F1DEAB] bg-white text-xl shadow-sm">
-                  🏷️
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-wide text-[#B98000]">
-                    Deals
-                  </p>
-
-                  <h2 className="text-xl font-black text-[#172033]">
-                    Community Deals
-                  </h2>
-                </div>
-              </div>
-
-              <Link
-                href="/community/deals"
-                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B98000] shadow-sm"
-              >
-                →
-              </Link>
-            </div>
-
-            <div
-              className={
-                dealCount === 1
-                  ? "grid grid-cols-1 gap-4"
-                  : "flex gap-4 overflow-x-auto pb-1"
-              }
-            >
-              {deals?.map((deal) => (
-                <Link
-                  key={deal.id}
-                  href={`/community/deals/${deal.id}`}
-                  className={
-                    dealCount === 1
-                      ? "overflow-hidden rounded-3xl bg-white shadow-sm"
-                      : "min-w-[260px] overflow-hidden rounded-3xl bg-white shadow-sm"
-                  }
-                >
-                  <div
-                    className={
-                      dealCount === 1
-                        ? "relative h-64 w-full overflow-hidden bg-[#E8DED1]"
-                        : "relative h-44 w-full overflow-hidden bg-[#E8DED1]"
-                    }
-                  >
-                    {deal.image_url ? (
-                      <img
-                        src={deal.image_url}
-                        alt={deal.title || "Deal"}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
-                        No Photo
-                      </div>
-                    )}
-
-                    <div className="absolute left-3 top-3 rounded-full bg-[#F4C95D] px-3 py-1 text-[10px] font-black text-[#172033] shadow-lg">
-                      DEAL
-                    </div>
-
-                    {(deal.discount_text || deal.discount) && (
-                      <div className="absolute bottom-3 left-3 rounded-full bg-[#C4483A] px-4 py-2 text-sm font-black text-white shadow-lg">
-                        {deal.discount_text || deal.discount}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-4">
-                    <h3 className="line-clamp-2 text-lg font-black text-[#172033]">
-                      {deal.title || "Community Deal"}
-                    </h3>
-
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <p className="line-clamp-1 text-sm font-bold text-[#6B6257]">
-                        {deal.business_name ||
-                          deal.business ||
-                          deal.store_name ||
-                          "Local Business"}
-                      </p>
-
-                      {deal.end_date && (
-                        <span className="shrink-0 text-xs font-black text-[#C4483A]">
-                          Ends {new Date(deal.end_date).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : (
-          <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
-            <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#CBD7EA] bg-white text-xl shadow-sm">
-                  📰
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-wide text-[#465B7A]">
-                    REGISTERED NEWS
-                  </p>
-
-                  <h2 className="text-xl font-black text-[#172033]">
-                    {latestRegisteredNews?.category || "등록 뉴스"}
-                  </h2>
-                </div>
-              </div>
-
-              <Link
-                href="/community/news"
-                className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#465B7A] shadow-sm"
-              >
-                →
-              </Link>
-            </div>
-
-            {latestRegisteredNews ? (
-              <Link
-                href={`/community/news/${latestRegisteredNews.id}`}
-                className="block overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
-              >
-                <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#DDE5F0]">
-                  {latestRegisteredNews.image_url ? (
-                    <img
-                      src={latestRegisteredNews.image_url}
-                      alt={latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-5xl">
-                      📰
-                    </div>
-                  )}
-
-                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
-                    LATEST
-                  </div>
-                </div>
-
-                <div className="p-4">
-                  <h3 className="line-clamp-3 text-xl font-black leading-tight">
-                    {latestRegisteredNews.title || latestRegisteredNews.category || "등록 뉴스"}
-                  </h3>
-                </div>
-              </Link>
-            ) : (
-              <Link
-                href="/community/news"
-                className="flex min-h-[180px] items-center justify-center rounded-3xl bg-white p-6 text-center shadow-sm"
-              >
-                <div>
-                  <div className="text-4xl">📰</div>
-                  <p className="mt-3 text-lg font-black text-[#172033]">
-                    등록 뉴스
-                  </p>
-                  <p className="mt-2 text-sm font-bold text-[#6B6257]">
-                    새 소식이 등록되면 여기에 가장 최근 소식이 표시됩니다.
-                  </p>
-                </div>
-              </Link>
-            )}
-          </section>
-        )}
-
-
-        {/* Featured Sponsor */}
-        <div className="relative mb-8">
-          <Link
-            href="/community/sponsors"
-            aria-label="View all featured sponsors"
-            className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#C4483A] text-sm font-black text-white shadow-lg transition hover:bg-[#A8382D] active:scale-[0.98]"
-          >
-            →
-          </Link>
-
-          <CommunityFeaturedBusinessSlider businesses={featuredBusinesses} />
         </div>
+      ) : null}
 
-        {/* Latest Ads */}
-        {latestAds.length > 0 && (
-          <div className="relative mb-8">
-            <Link
-              href="/ads"
-              aria-label="View all local ads"
-              className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-[#C4483A] text-sm font-black text-white shadow-lg transition hover:bg-[#A8382D] active:scale-[0.98]"
+      <CommunityBottomNav />
+    </main>
+  );
+}
+
+
+
+
+function EarningsCalendar({ items }: { items: EarningsItem[] }) {
+  const grouped = items.reduce<Record<string, EarningsItem[]>>((acc, item) => {
+    const key = earningsDateKey(item.date);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  const dates = Object.keys(grouped)
+    .sort((a, b) => {
+      if (a === "TBD") return 1;
+      if (b === "TBD") return -1;
+      return a.localeCompare(b);
+    })
+    .slice(0, 5);
+
+  return (
+    <div
+      className="w-full overflow-x-auto overscroll-x-contain pb-3 md:overflow-x-visible"
+      style={{
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x",
+      }}
+    >
+      <div
+        className="grid w-max overflow-hidden rounded-xl border border-slate-200 bg-slate-100 md:w-full"
+        style={{
+          gridTemplateColumns:
+            typeof window !== "undefined" && window.innerWidth >= 768
+              ? `repeat(${Math.max(dates.length, 1)}, minmax(0, 1fr))`
+              : `repeat(${Math.max(dates.length, 1)}, 180px)`,
+        }}
+      >
+        {dates.map((date, dateIndex) => {
+          const label = earningsDayLabel(date);
+
+          // 날짜별 시가총액 큰 순서 → 최대 6개만 표시
+          const dayItems = [...(grouped[date] || [])]
+            .sort(
+              (a, b) =>
+                Number(b.marketCap || 0) - Number(a.marketCap || 0),
+            )
+            .slice(0, 6);
+
+          return (
+            <div
+              key={date}
+              className={dateIndex ? "border-l border-slate-200" : ""}
             >
-              →
-            </Link>
-
-            <CommunityAdsSlider ads={latestAds as any[]} />
-          </div>
-        )}
-
-        {/* New in Raleigh */}
-        <section className="mb-8 overflow-hidden rounded-3xl border border-[#CBD7EA] bg-[#EAF0FA] p-3 shadow-sm">
-          <div className="mb-4 flex items-center justify-between rounded-2xl px-2 py-2">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#2A3448] text-sm font-black text-white shadow-sm">
-                NEW
+              <div className="border-b border-slate-200 bg-slate-100 px-2 py-2 text-center">
+                <div className="text-[9px] font-black tracking-wider text-slate-500">
+                  {label.dow}
+                </div>
+                <div className="text-lg font-black leading-5 text-slate-900">
+                  {label.day}
+                </div>
+                <div className="mt-0.5 text-[9px] font-bold text-slate-400">
+                  {label.date}
+                </div>
               </div>
 
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-[#2A3448]">
-                  New
-                </p>
+              <div className="min-h-[310px] bg-slate-50 p-2">
+                <div className="space-y-2">
+                  {dayItems.map((item, index) => {
+                    const symbol = String(item.symbol || "?").toUpperCase();
+                    const timing = earningsTimeLabel(item.time);
 
-                <h2 className="text-xl font-black text-[#172033]">
-                  New in Raleigh
-                </h2>
+                    return (
+                      <div
+                        key={`${symbol}-${date}-${index}`}
+                        className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm"
+                        title={item.company || symbol}
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-white">
+                          <img
+                            src={`https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`}
+                            alt={`${symbol} logo`}
+                            loading="lazy"
+                            className="h-7 w-7 object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[11px] font-black text-slate-950">
+                            {symbol}
+                          </div>
+
+                          <div className="truncate text-[8px] font-semibold text-slate-500">
+                            {timing || "Time TBD"}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {!dayItems.length ? (
+                  <div className="flex min-h-[250px] items-center justify-center text-[10px] font-bold text-slate-400">
+                    No earnings
+                  </div>
+                ) : null}
               </div>
             </div>
+          );
+        })}
+      </div>
 
-            <Link
-              href="https://www.ktowntriangle.com/community/directory"
-              className="rounded-full bg-[#C4483A] px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-[#A8382D]"
-            >
-              모두보기
-            </Link>
-          </div>
+      <div className="mt-2 text-[10px] font-semibold text-slate-400">
+        날짜별 시가총액 상위 6개 · 실적 발표 시점만 표시
+      </div>
+    </div>
+  );
+}
 
-          <div className="grid grid-cols-2 gap-4">
-            {newBusinesses?.map((biz) => (
-              <Link
-                key={biz.id}
-                href={`/business/${biz.id}?from=community`}
-                className="overflow-hidden rounded-3xl bg-white text-[#172033] shadow-sm"
-              >
-                <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#E8DED1]">
-                  {biz.thumbnail_url || biz.image_url ? (
-                    <img
-                      src={biz.thumbnail_url || biz.image_url}
-                      alt={biz.name || "Business"}
-                      loading="lazy"
-                      decoding="async"
-                      className="absolute inset-0 block h-full w-full object-cover"
-                      style={{ objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-black text-[#6B6257]">
-                      No Photo
-                    </div>
-                  )}
 
-                  <div className="absolute left-3 top-3 rounded-full bg-[#2A3448] px-3 py-1 text-[10px] font-black text-white shadow-lg">
-                    NEW
-                  </div>
-                </div>
+function DashboardCard({
+  icon,
+  title,
+  subtitle,
+  accent,
+  children,
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  accent: "blue" | "amber" | "emerald" | "rose";
+  children: React.ReactNode;
+}) {
+  const accentClass = {
+    blue: "bg-blue-50 text-blue-700",
+    amber: "bg-amber-50 text-amber-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    rose: "bg-rose-50 text-rose-700",
+  }[accent];
 
-                <div className="p-3">
-                  <h3 className="line-clamp-1 text-sm font-black">
-                    {biz.name}
-                  </h3>
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-start gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${accentClass}`}>
+          {icon}
+        </div>
+        <div>
+          <div className="text-sm font-black tracking-wide text-slate-950">{title}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{subtitle}</div>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
 
-                  <div className="mt-1 flex items-center justify-between gap-2">
-  <p className="line-clamp-1 text-xs font-semibold text-[#6B6257]">
-    {biz.category || "Business"}
-  </p>
+function EmptyBlock({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
+      {text}
+    </div>
+  );
+}
 
-  <div className="shrink-0 text-xs">
-    <span className="font-black text-[#B98000]">
-      ★ {biz.rating || "New"}
-    </span>
-
-    {biz.review_count ? (
-      <span className="ml-1 text-[#6B6257]">
-        ({biz.review_count})
-      </span>
-    ) : null}
-  </div>
-</div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
- <div className="mt-6">
-    <Link
-      href="community/search"
-      className="flex w-full items-center justify-center rounded-2xl border border-[#172033] bg-[#172033] px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-[#24314d] active:scale-[0.98]"
+function Cell({
+  children,
+  strong = false,
+}: {
+  children: React.ReactNode;
+  strong?: boolean;
+}) {
+  return (
+    <td
+      className={`whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 text-center ${
+        strong ? "font-black text-slate-950" : "font-medium text-slate-700"
+      }`}
     >
-      🔍 Business Search →
-    </Link>
-  </div>
-      </section>
-
-
-      <div id="community-bottom-nav-wrapper">
-  <CommunityBottomNav activeNav="community" />
-</div>
-    </main>
-	 </>
+      {children}
+    </td>
   );
 }
