@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type SeedCandle = {
+  minute?: number;
   open: number;
   high: number;
   low: number;
   close: number;
+  volume?: number;
+  live?: boolean;
 };
 
 type LiveCandle = SeedCandle & {
@@ -85,26 +88,40 @@ function mergeLiveCandle(
   item: Snapshot,
 ): LiveCandle[] {
   const price = Number(item.price);
-  if (!Number.isFinite(price) || price <= 0) return previous || [];
-
   const tsMs = Number(item.ts || Date.now() / 1000) * 1000;
   const minute = Math.floor(tsMs / 60000);
 
-  let next = [...(previous || [])];
+  // PC #2 is the source of truth for the mini 1-minute chart.
+  // This makes browser reloads and WebSocket reconnects immediately restore
+  // the last 3 candles instead of starting the chart over.
+  if (Array.isArray(item.candles_1m) && item.candles_1m.length) {
+    const serverCandles = item.candles_1m
+      .slice(-3)
+      .map((c, index, arr) => ({
+        minute:
+          Number.isFinite(Number(c.minute))
+            ? Number(c.minute)
+            : minute - (arr.length - 1 - index),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+      }))
+      .filter(
+        (c) =>
+          Number.isFinite(c.open) &&
+          Number.isFinite(c.high) &&
+          Number.isFinite(c.low) &&
+          Number.isFinite(c.close),
+      );
 
-  // On first live packet, use server's recent Schwab 1m bars as visual seeds.
-  if (!next.length && Array.isArray(item.candles_1m)) {
-    const seeds = item.candles_1m.slice(-3);
-    const startMinute = minute - Math.max(0, seeds.length - 1);
-    next = seeds.map((c, index) => ({
-      minute: startMinute + index,
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-    }));
+    if (serverCandles.length) return serverCandles;
   }
 
+  // Fallback only if an older server does not send candles_1m.
+  if (!Number.isFinite(price) || price <= 0) return previous || [];
+
+  let next = [...(previous || [])];
   const current = next[next.length - 1];
 
   if (!current || current.minute < minute) {
@@ -243,7 +260,8 @@ export default function CommunityLiveStocks() {
     // NEXT_PUBLIC_STOCK_PUBLIC_WS_URL=wss://YOUR-CLOUDFLARE-DOMAIN/ws/public
     const rawUrl =
       process.env.NEXT_PUBLIC_STOCK_PUBLIC_WS_URL?.trim() ||
-      process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim();
+      process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim() ||
+      "wss://stock.7pocker.us/ws/public";
 
     if (!rawUrl) {
       setStatus("NO URL");
