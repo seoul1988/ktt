@@ -34,6 +34,18 @@ NEWS_QUERIES = [
     "earnings warning guidance stocks",
     "merger acquisition stocks breaking",
     "SEC investigation stocks breaking",
+
+    # 거시/지정학/원자재/반도체/대통령 발언
+    "war conflict geopolitical risk stocks market",
+    "Middle East war oil stocks market",
+    "Ukraine Russia war stocks market",
+    "oil crude OPEC market stocks",
+    "oil price surge drop stock market",
+    "semiconductor chips AI stocks market",
+    "semiconductor export controls tariffs stocks",
+    "White House president remarks economy stocks market",
+    "president tariffs trade sanctions stocks market",
+    "president Federal Reserve interest rates stocks",
 ]
 
 # 강한 시장 영향 키워드: 하나만 있어도 중요도 상승
@@ -46,6 +58,25 @@ CRITICAL_KEYWORDS = {
     "merger", "acquisition", "takeover", "buyout",
     "earnings warning", "profit warning", "guidance cut",
     "guidance raised", "earnings beat", "earnings miss",
+
+    # 전쟁 / 지정학
+    "war", "military strike", "missile", "airstrike", "invasion",
+    "ceasefire", "geopolitical", "middle east", "iran", "israel",
+    "russia", "ukraine", "taiwan", "north korea",
+
+    # 유가 / 원유
+    "oil price", "crude oil", "brent", "wti", "opec", "opec+",
+    "oil supply", "oil production", "oil embargo",
+
+    # 반도체 / 칩
+    "semiconductor", "chip export", "chip ban", "export controls",
+    "nvidia", "tsmc", "intel", "amd", "broadcom", "micron",
+    "ai chip", "chips act",
+
+    # 대통령 / 백악관의 시장 영향 발언
+    "white house", "president says", "president warns",
+    "president announces", "president tariff", "president trade",
+    "president sanctions", "president economy", "president fed",
 }
 
 # 보통 중요 키워드
@@ -57,6 +88,11 @@ IMPORTANT_KEYWORDS = {
     "default", "debt", "credit rating", "oil prices",
     "treasury yields", "bond yields", "geopolitical",
     "war", "attack", "shutdown",
+    "conflict", "ceasefire", "defense", "military",
+    "oil", "crude", "brent", "wti", "opec",
+    "semiconductor", "chip", "chips", "export control",
+    "white house", "president", "tariff", "trade policy",
+    "sanctions", "energy policy",
 }
 
 # 시장 전체/대형지수 관련이면 가점
@@ -159,6 +195,38 @@ def calculate_importance(title: str, source: str) -> int:
 
     if market_hits:
         score += 1
+
+    # 지정학/유가/반도체/대통령 발언 중 시장 연관성이 명확하면 추가 가점.
+    geopolitical_terms = (
+        "war", "military strike", "missile", "airstrike", "invasion",
+        "ceasefire", "geopolitical", "iran", "israel", "russia",
+        "ukraine", "taiwan", "north korea",
+    )
+    oil_terms = (
+        "oil", "crude", "brent", "wti", "opec", "energy prices",
+    )
+    chip_terms = (
+        "semiconductor", "chip", "nvidia", "tsmc", "intel", "amd",
+        "broadcom", "micron", "export controls", "chips act",
+    )
+    president_terms = (
+        "white house", "president", "tariff", "trade", "sanction",
+        "federal reserve", "interest rate", "economy", "jobs",
+        "inflation", "energy", "semiconductor", "china",
+    )
+
+    if any(term in text for term in geopolitical_terms):
+        score += 1
+    if any(term in text for term in oil_terms):
+        score += 1
+    if any(term in text for term in chip_terms):
+        score += 1
+
+    # 대통령/백악관 기사는 단순 정치 뉴스가 아니라 시장 관련 키워드가 같이 있을 때만 가점.
+    if ("president" in text or "white house" in text) and any(
+        term in text for term in president_terms[2:]
+    ):
+        score += 2
 
     if any(source.lower() == s.lower() for s in TRUSTED_SOURCES):
         score += 1
