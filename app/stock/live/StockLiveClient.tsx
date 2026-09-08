@@ -690,9 +690,13 @@ export default function StockMonitorPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <Link
-              href="/stock/live"
-              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
+            <button
+              type="button"
+              onClick={() => {
+                window.location.assign("/stock/live");
+              }}
+              className="group flex min-h-[112px] w-full cursor-pointer items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
+              aria-label="LIVE DATA 열기"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
                 📈
@@ -704,7 +708,7 @@ export default function StockMonitorPage() {
                 </div>
               </div>
               <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
-            </Link>
+            </button>
 
             <DashboardCard
               icon="📅"
