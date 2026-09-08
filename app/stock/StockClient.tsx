@@ -53,6 +53,8 @@ type MarketEvent = {
   title?: string;
   importance?: "high" | "medium" | "low";
   symbol?: string;
+  source?: string;
+  url?: string;
 };
 
 type EarningsItem = {
@@ -771,28 +773,50 @@ export default function StockMonitorPage() {
             <DashboardCard
               icon="📅"
               title="TODAY'S EVENTS"
-              subtitle="시장에 영향을 줄 수 있는 오늘의 일정"
+              subtitle="CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표"
               accent="amber"
             >
               {marketInfo.events?.length ? (
-                <div className="space-y-2">
-                  {marketInfo.events.slice(0, 6).map((event, index) => (
-                    <div key={event.id || `${event.title}-${index}`} className="flex gap-3 border-b border-slate-100 pb-2 last:border-0">
-                      <div className="w-[62px] shrink-0 text-xs font-black text-slate-600">
-                        {event.time || "-"}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-900">{event.title || "-"}</div>
-                        <div className="mt-0.5 text-[11px] text-slate-500">
-                          {event.symbol ? `${event.symbol} · ` : ""}
-                          {event.importance ? `중요도 ${event.importance}` : ""}
+                <div className="space-y-1">
+                  {marketInfo.events.slice(0, 6).map((event, index) => {
+                    const row = (
+                      <div className="flex gap-3 border-b border-slate-100 px-1 py-2 last:border-0">
+                        <div className="w-[72px] shrink-0 text-xs font-black text-slate-600">
+                          {event.time || "TBD"}
                         </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-slate-900">
+                            {event.title || "-"}
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-slate-500">
+                            {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                        {event.url ? (
+                          <div className="shrink-0 self-center text-sm font-black text-amber-600">→</div>
+                        ) : null}
                       </div>
-                    </div>
-                  ))}
+                    );
+
+                    return event.url ? (
+                      <a
+                        key={event.id || `${event.title}-${index}`}
+                        href={event.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg hover:bg-amber-50"
+                      >
+                        {row}
+                      </a>
+                    ) : (
+                      <div key={event.id || `${event.title}-${index}`}>{row}</div>
+                    );
+                  })}
                 </div>
               ) : (
-                <EmptyBlock text={`이벤트 데이터 ${marketInfoStatus}`} />
+                <EmptyBlock text={`오늘 예정된 중·고위험 시장 이벤트 없음 · ${marketInfoStatus}`} />
               )}
             </DashboardCard>
 
@@ -890,11 +914,20 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
     .slice(0, 5);
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div
+      className="w-full overflow-x-auto overscroll-x-contain pb-3 md:overflow-x-visible"
+      style={{
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x",
+      }}
+    >
       <div
-        className="grid min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        className="grid w-max overflow-hidden rounded-xl border border-slate-200 bg-slate-100 md:w-full"
         style={{
-          gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
+          gridTemplateColumns:
+            typeof window !== "undefined" && window.innerWidth >= 768
+              ? `repeat(${Math.max(dates.length, 1)}, minmax(0, 1fr))`
+              : `repeat(${Math.max(dates.length, 1)}, 180px)`,
         }}
       >
         {dates.map((date, dateIndex) => {
