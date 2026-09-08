@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -61,6 +62,7 @@ type EarningsItem = {
   date?: string;
   time?: string;
   estimate?: string | number;
+  marketCap?: number;
 };
 
 type NewsItem = {
@@ -688,9 +690,13 @@ export default function StockMonitorPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <Link
-              href="/stock/live"
-              className="group flex min-h-[112px] items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm transition hover:border-blue-400 hover:shadow-md"
+            <button
+              type="button"
+              onClick={() => {
+                window.location.assign("/stock/live");
+              }}
+              className="group flex min-h-[112px] w-full cursor-pointer items-center gap-4 rounded-2xl border border-blue-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-400 hover:shadow-md"
+              aria-label="LIVE DATA 열기"
             >
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-xl text-white shadow-sm">
                 📈
@@ -702,7 +708,7 @@ export default function StockMonitorPage() {
                 </div>
               </div>
               <div className="text-2xl font-black text-blue-600 transition group-hover:translate-x-1">→</div>
-            </Link>
+            </button>
 
             <DashboardCard
               icon="📅"
@@ -816,14 +822,23 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
     .slice(0, 5);
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div className="-mx-1 overflow-x-scroll overscroll-x-contain px-1 pb-3 touch-pan-x md:overflow-x-auto">
       <div
-        className="grid min-w-[720px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
-        style={{ gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(138px, 1fr))` }}
+        className="grid w-max min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
+        }}
       >
         {dates.map((date, dateIndex) => {
           const label = earningsDayLabel(date);
-          const dayItems = grouped[date] || [];
+
+          // 날짜별 시가총액 큰 순서 → 최대 6개만 표시
+          const dayItems = [...(grouped[date] || [])]
+            .sort(
+              (a, b) =>
+                Number(b.marketCap || 0) - Number(a.marketCap || 0),
+            )
+            .slice(0, 6);
 
           return (
             <div
@@ -842,8 +857,8 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                 </div>
               </div>
 
-              <div className="min-h-[190px] bg-slate-50 p-2">
-                <div className="grid grid-cols-2 gap-1.5">
+              <div className="min-h-[310px] bg-slate-50 p-2">
+                <div className="space-y-2">
                   {dayItems.map((item, index) => {
                     const symbol = String(item.symbol || "?").toUpperCase();
                     const timing = earningsTimeLabel(item.time);
@@ -851,33 +866,41 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                     return (
                       <div
                         key={`${symbol}-${date}-${index}`}
-                        title={[
-                          item.company || symbol,
-                          timing,
-                          item.estimate != null ? `Estimate ${item.estimate}` : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                        className="flex min-h-[54px] flex-col items-center justify-center rounded-lg border border-slate-200 bg-white px-1 py-1.5 text-center shadow-sm"
+                        className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm"
+                        title={item.company || symbol}
                       >
-                        <div className="flex h-7 min-w-7 items-center justify-center rounded-md bg-slate-900 px-1.5 text-[9px] font-black text-white">
-                          {symbol.slice(0, 5)}
+                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                          <span className="absolute inset-0 flex items-center justify-center text-[8px] font-black text-slate-400">
+                            {symbol.slice(0, 5)}
+                          </span>
+                          <img
+                            src={`https://companieslogo.com/api/starter/stock-symbol/${encodeURIComponent(symbol)}`}
+                            alt={`${item.company || symbol} logo`}
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className="relative z-10 h-7 w-7 object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                            }}
+                          />
                         </div>
-                        <div className="mt-1 max-w-full truncate text-[9px] font-black text-slate-800">
-                          {symbol}
-                        </div>
-                        {timing ? (
-                          <div className="mt-0.5 max-w-full truncate text-[7px] font-bold text-slate-400">
-                            {timing}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[11px] font-black text-slate-950">
+                            {symbol}
                           </div>
-                        ) : null}
+
+                          <div className="truncate text-[8px] font-semibold text-slate-500">
+                            {timing || "Time TBD"}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
 
                 {!dayItems.length ? (
-                  <div className="flex min-h-[150px] items-center justify-center text-[10px] font-bold text-slate-400">
+                  <div className="flex min-h-[250px] items-center justify-center text-[10px] font-bold text-slate-400">
                     No earnings
                   </div>
                 ) : null}
@@ -888,7 +911,7 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
       </div>
 
       <div className="mt-2 text-[10px] font-semibold text-slate-400">
-        회사 칸에 마우스를 올리면 회사명 · 발표시간 · 예상치를 확인할 수 있습니다.
+        날짜별 시가총액 상위 6개 · 실적 발표 시점만 표시
       </div>
     </div>
   );
