@@ -1,13 +1,13 @@
 {
-  "id": "/",
   "name": "KTown Triangle",
-  "short_name": "KTT",
+  "short_name": "KTown",
+  "description": "Korean community map and marketplace app",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F8F3EC",
   "theme_color": "#172033",
-
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -20,7 +20,6 @@
       "type": "image/png"
     }
   ],
-
   "share_target": {
     "action": "/share/news",
     "method": "GET",
@@ -30,13 +29,5 @@
       "text": "text",
       "url": "url"
     }
-  },
-
-  "related_applications": [
-    {
-      "platform": "webapp",
-      "url": "/manifest.webmanifest",
-      "id": "/"
-    }
-  ]
+  }
 }
