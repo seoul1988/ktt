@@ -1,5 +1,6 @@
 "use client";
 
+
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -273,13 +274,23 @@ export default function StockLiveClient() {
     try {
       // Vercel은 여기서 딱 한 번, 보안용 WebSocket URL/token 발급에만 사용합니다.
       // 이후 1초 실시간 데이터는 브라우저가 PC #2(stock.7pocker.us)에서 직접 받습니다.
-      // 등록 종목을 PC #2에도 동기화합니다.
-      // GET은 Supabase 목록만 읽고 PC #2 watchlist를 갱신하지 않을 수 있으므로
-      // START 시 POST로 현재 종목(NVDA/TSLA/AAPL/OKLO 등)을 한 번 전달합니다.
-      const response = await fetch("/api/stocks/session", {
+      // Vercel API를 거치지 않고 브라우저가 PC #2에 직접 종목을 전달합니다.
+      // NEXT_PUBLIC_KTOWN_STOCK_WS_URL=wss://stock.7pocker.us 만 있으면 됩니다.
+      const wsBase = (
+        process.env.NEXT_PUBLIC_KTOWN_STOCK_WS_URL ||
+        "wss://stock.7pocker.us"
+      )
+        .trim()
+        .replace(/\/ws\/public\/?$/, "")
+        .replace(/\/+$/, "");
+
+      const httpBase = wsBase
+        .replace(/^wss:\/\//i, "https://")
+        .replace(/^ws:\/\//i, "http://");
+
+      const response = await fetch(`${httpBase}/public/session`, {
         method: "POST",
         headers: {
-          authorization: `Bearer ${session.access_token}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({ symbols: list }),
@@ -290,9 +301,9 @@ export default function StockLiveClient() {
         setStatus(`연결 실패: ${payload?.error || `HTTP ${response.status}`}`);
       } else if (payload?.wsUrl) {
         setStatus(
-          payload?.serverSynced === false
-            ? "종목은 저장됐지만 PC #2 동기화 확인 필요"
-            : `PC #2 종목 동기화 완료 · ${list.join(", ")}`,
+          payload?.directPc2 === true
+            ? `PC #2 직접 종목 연결 완료 · ${list.join(", ")}`
+            : `PC #2 연결 확인 · ${list.join(", ")}`,
         );
         connect(payload.wsUrl);
       } else {
