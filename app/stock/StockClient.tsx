@@ -637,21 +637,17 @@ export default function StockMonitorPage() {
     setStatus("분석 서버 연결 요청 중...");
 
     try {
-      const token = await getAccessToken();
-      if (!token) {
-        setStatus("로그인이 필요합니다.");
-        return;
-      }
-
-      const response = await fetch("/api/stocks/session", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
+      const response = await fetch(
+        "https://stock.7pocker.us/public/session",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ symbols: finalSymbols }),
+          cache: "no-store",
         },
-        body: JSON.stringify({ symbols: finalSymbols }),
-        cache: "no-store",
-      });
+      );
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {

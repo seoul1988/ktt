@@ -574,9 +574,15 @@ export default function RootLayout({
               }
 
               let wasHidden = false;
-              let refreshing = false;
+              let checking = false;
 
               const updateServiceWorker = async () => {
+                if (checking) {
+                  return;
+                }
+
+                checking = true;
+
                 try {
                   const registration =
                     await navigator.serviceWorker.getRegistration();
@@ -589,19 +595,9 @@ export default function RootLayout({
                     "PWA update check failed:",
                     error
                   );
+                } finally {
+                  checking = false;
                 }
-              };
-
-              const refreshInstalledApp = async () => {
-                if (refreshing) {
-                  return;
-                }
-
-                refreshing = true;
-
-                await updateServiceWorker();
-
-                window.location.reload();
               };
 
               document.addEventListener(
@@ -621,7 +617,11 @@ export default function RootLayout({
                     wasHidden
                   ) {
                     wasHidden = false;
-                    refreshInstalledApp();
+
+                    // 탭이나 앱으로 다시 돌아왔을 때
+                    // Service Worker 업데이트만 확인합니다.
+                    // 페이지를 강제로 reload하지 않습니다.
+                    updateServiceWorker();
                   }
                 }
               );
@@ -630,7 +630,9 @@ export default function RootLayout({
                 "pageshow",
                 (event) => {
                   if (event.persisted) {
-                    refreshInstalledApp();
+                    // BFCache에서 돌아온 경우에도
+                    // 강제 새로고침 없이 업데이트만 확인합니다.
+                    updateServiceWorker();
                   }
                 }
               );

@@ -409,6 +409,13 @@ type PromotionType =
   | "percent_off"
   | "free_delivery";
 
+type PromotionRewardChoice = {
+  name: string;
+  price: number;
+  /** 이 GET Item에 개별 적용할 할인율. 100 = FREE */
+  discountPercent: number;
+};
+
 type MenuPromotion = {
   id: string;
   name: string;
@@ -417,11 +424,28 @@ type MenuPromotion = {
   getQty: number;
   minSpend: number;
   discountValue: number;
+  /** Buy X Get Y: 식당주인이 직접 입력하는 GET item 이름/정상가격 */
+  getItemName: string;
+  getItemPrice: number;
+  /** Spend $X Get Free Item: Checkout 전에 고객에게 보여줄 무료 선택 목록 */
+  rewardChoices: PromotionRewardChoice[];
+  /** 고객이 여러 GET Item 중 몇 개를 받을 수 있는지. 등록 수와 같으면 전부 자동 제공 */
+  rewardSelectCount: number;
   maxPerOrder: number;
   pickup: boolean;
   delivery: boolean;
   active: boolean;
 };
+
+type PromotionMenuRole = "trigger" | "reward" | "both" | "eligible";
+
+type PromotionItemAssignment = {
+  role: PromotionMenuRole;
+  /** Buy X Get Y에서 이 메뉴를 샀을 때 받을 메뉴. "same"이면 같은 메뉴. */
+  rewardItemId?: number | "same";
+};
+
+type PromotionAssignments = Record<number, Record<string, PromotionItemAssignment>>;
 
 const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
   buy_x_get_y: "Buy X Get Y",
@@ -440,6 +464,10 @@ function emptyPromotion(): MenuPromotion {
     getQty: 1,
     minSpend: 0,
     discountValue: 100,
+    getItemName: "",
+    getItemPrice: 0,
+    rewardChoices: [],
+    rewardSelectCount: 1,
     maxPerOrder: 1,
     pickup: true,
     delivery: true,
@@ -501,6 +529,7 @@ export default function OwnerBusinessMenuPage() {
 
   const [paymentProvider, setPaymentProvider] = useState<"stripe" | "square">("stripe");
   const [savingPaymentProvider, setSavingPaymentProvider] = useState(false);
+  const [paymentProviderOpen, setPaymentProviderOpen] = useState(false);
   const [orderSettingsMessage, setOrderSettingsMessage] = useState("");
 
   const [stripeSecretKeyInput, setStripeSecretKeyInput] = useState("");
@@ -521,6 +550,7 @@ export default function OwnerBusinessMenuPage() {
   const [savingPaymentCredentials, setSavingPaymentCredentials] = useState(false);
 
   const [uberDirectEnabled, setUberDirectEnabled] = useState(false);
+  const [uberDirectOpen, setUberDirectOpen] = useState(false);
   const [uberClientIdInput, setUberClientIdInput] = useState("");
   const [uberClientSecretInput, setUberClientSecretInput] = useState("");
   const [uberCustomerIdInput, setUberCustomerIdInput] = useState("");
@@ -567,6 +597,8 @@ export default function OwnerBusinessMenuPage() {
   const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
   const [promotionDraft, setPromotionDraft] = useState<MenuPromotion>(emptyPromotion());
   const [promotionMessage, setPromotionMessage] = useState("");
+  const [promotionAssignments, setPromotionAssignments] = useState<PromotionAssignments>({});
+  const [expandedPromotionItemIds, setExpandedPromotionItemIds] = useState<Set<number>>(new Set());
 
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { categoriesRef.current = categories; }, [categories]);
@@ -4108,6 +4140,30 @@ export default function OwnerBusinessMenuPage() {
             getQty: Math.max(1, Math.floor(Number(row?.getQty) || 1)),
             minSpend: Math.max(0, Number(row?.minSpend) || 0),
             discountValue: Math.max(0, Number(row?.discountValue) || 0),
+            getItemName: String(row?.getItemName || ""),
+            getItemPrice: Math.max(0, Number(row?.getItemPrice) || 0),
+            rewardChoices: (() => {
+              const choices = Array.isArray(row?.rewardChoices)
+                ? row.rewardChoices
+                    .map((choice: any) => ({
+                      name: String(choice?.name || "").trim(),
+                      price: Math.max(0, Number(choice?.price) || 0),
+                      discountPercent: Math.max(0, Math.min(100, Number(choice?.discountPercent ?? row?.discountValue ?? 100) || 0)),
+                    }))
+                    .filter((choice: PromotionRewardChoice) => choice.name)
+                : [];
+
+              // 이전 버전의 단일 GET Item도 새 다중 선택 목록으로 자동 이전합니다.
+              if (choices.length === 0 && String(row?.getItemName || "").trim()) {
+                choices.push({
+                  name: String(row.getItemName).trim(),
+                  price: Math.max(0, Number(row?.getItemPrice) || 0),
+                  discountPercent: Math.max(0, Math.min(100, Number(row?.discountValue ?? 100) || 0)),
+                });
+              }
+              return choices;
+            })(),
+            rewardSelectCount: Math.max(1, Math.floor(Number(row?.rewardSelectCount) || 1)),
             maxPerOrder: Math.max(1, Math.floor(Number(row?.maxPerOrder) || 1)),
             pickup: row?.pickup !== false,
             delivery: row?.delivery !== false,
@@ -4120,6 +4176,72 @@ export default function OwnerBusinessMenuPage() {
     } catch (error) {
       console.error("PROMOTION LIBRARY LOAD ERROR", error);
       setPromotions([]);
+    }
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    try {
+      const raw = window.localStorage.getItem(`ktown-menu-promotion-assignments:${businessId}`);
+      if (!raw) {
+        setPromotionAssignments({});
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setPromotionAssignments({});
+        return;
+      }
+
+      const normalized: PromotionAssignments = {};
+      for (const [itemIdKey, assignmentValue] of Object.entries(parsed)) {
+        const itemId = Number(itemIdKey);
+        if (!Number.isInteger(itemId) || itemId <= 0) continue;
+        if (!assignmentValue || typeof assignmentValue !== "object" || Array.isArray(assignmentValue)) continue;
+
+        const itemAssignments: Record<string, PromotionItemAssignment> = {};
+        for (const [promotionId, rawValue] of Object.entries(assignmentValue as Record<string, unknown>)) {
+          if (!promotionId) continue;
+
+          // 이전 버전(localStorage)의 문자열 role도 자동 변환해서 유지합니다.
+          if (typeof rawValue === "string") {
+            const role: PromotionMenuRole =
+              rawValue === "reward" || rawValue === "both" || rawValue === "eligible"
+                ? rawValue
+                : "trigger";
+            itemAssignments[promotionId] = { role };
+            continue;
+          }
+
+          if (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+            const row = rawValue as Record<string, unknown>;
+            const roleValue = row.role;
+            const role: PromotionMenuRole =
+              roleValue === "reward" || roleValue === "both" || roleValue === "eligible"
+                ? roleValue
+                : "trigger";
+            const rewardRaw = row.rewardItemId;
+            const rewardItemId =
+              rewardRaw === "same"
+                ? "same"
+                : Number.isInteger(Number(rewardRaw)) && Number(rewardRaw) > 0
+                  ? Number(rewardRaw)
+                  : undefined;
+            itemAssignments[promotionId] = { role, rewardItemId };
+          }
+        }
+
+        if (Object.keys(itemAssignments).length > 0) {
+          normalized[itemId] = itemAssignments;
+        }
+      }
+
+      setPromotionAssignments(normalized);
+    } catch (error) {
+      console.error("PROMOTION ASSIGNMENT LOAD ERROR", error);
+      setPromotionAssignments({});
     }
   }, [businessId]);
 
@@ -4163,10 +4285,24 @@ export default function OwnerBusinessMenuPage() {
     }
 
     if (promotionDraft.type === "buy_x_get_y") {
-      if (promotionDraft.buyQty < 1 || promotionDraft.getQty < 1) {
-        setPromotionMessage("BUY / GET 수량은 1 이상이어야 합니다.");
+      const validGetChoices = promotionDraft.rewardChoices.filter((choice) => choice.name.trim());
+      if (validGetChoices.length === 0) {
+        setPromotionMessage("고객이 선택할 GET Item을 1개 이상 등록하세요.");
         return;
       }
+      if (validGetChoices.some((choice) => Number(choice.price) < 0)) {
+        setPromotionMessage("GET Item 정상가격을 확인하세요.");
+        return;
+      }
+      if (validGetChoices.some((choice) => Number(choice.discountPercent) < 0 || Number(choice.discountPercent) > 100)) {
+        setPromotionMessage("GET Item 할인율은 0~100% 사이로 입력하세요.");
+        return;
+      }
+    }
+
+    if (promotionDraft.type === "spend_get_item" && promotionDraft.rewardChoices.length === 0) {
+      setPromotionMessage("고객이 선택할 무료 아이템을 1개 이상 등록하세요.");
+      return;
     }
 
     if (
@@ -4195,6 +4331,22 @@ export default function OwnerBusinessMenuPage() {
       getQty: Math.max(1, Math.floor(Number(promotionDraft.getQty) || 1)),
       minSpend: Math.max(0, Number(promotionDraft.minSpend) || 0),
       discountValue: Math.max(0, Number(promotionDraft.discountValue) || 0),
+      getItemName: promotionDraft.getItemName.trim(),
+      getItemPrice: Math.max(0, Number(promotionDraft.getItemPrice) || 0),
+      rewardChoices: promotionDraft.rewardChoices
+        .map((choice) => ({
+          name: choice.name.trim(),
+          price: Math.max(0, Number(choice.price) || 0),
+          discountPercent: Math.max(0, Math.min(100, Number(choice.discountPercent) || 0)),
+        }))
+        .filter((choice) => choice.name),
+      rewardSelectCount: Math.max(
+        1,
+        Math.min(
+          promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length || 1,
+          Math.floor(Number(promotionDraft.rewardSelectCount) || 1),
+        ),
+      ),
       maxPerOrder: Math.max(1, Math.floor(Number(promotionDraft.maxPerOrder) || 1)),
     };
 
@@ -4212,6 +4364,16 @@ export default function OwnerBusinessMenuPage() {
   function deletePromotion(promotion: MenuPromotion) {
     if (!window.confirm(`\"${promotion.name}\" 딜을 삭제하시겠습니까?`)) return;
     persistPromotions(promotions.filter((row) => row.id !== promotion.id));
+
+    const nextAssignments: PromotionAssignments = {};
+    for (const [itemIdKey, assignments] of Object.entries(promotionAssignments)) {
+      const nextItemAssignments = { ...assignments };
+      delete nextItemAssignments[promotion.id];
+      if (Object.keys(nextItemAssignments).length > 0) {
+        nextAssignments[Number(itemIdKey)] = nextItemAssignments;
+      }
+    }
+    persistPromotionAssignments(nextAssignments);
     setMessage("✓ 딜을 삭제했습니다.");
   }
 
@@ -4221,6 +4383,126 @@ export default function OwnerBusinessMenuPage() {
         row.id === promotionId ? { ...row, active: !row.active } : row,
       ),
     );
+  }
+
+  function updatePromotionInline(
+    promotionId: string,
+    patch: Partial<MenuPromotion>,
+  ) {
+    persistPromotions(
+      promotions.map((row) =>
+        row.id === promotionId ? { ...row, ...patch } : row,
+      ),
+    );
+  }
+
+  function persistPromotionAssignments(next: PromotionAssignments) {
+    setPromotionAssignments(next);
+    if (typeof window !== "undefined" && Number.isInteger(businessId) && businessId > 0) {
+      window.localStorage.setItem(
+        `ktown-menu-promotion-assignments:${businessId}`,
+        JSON.stringify(next),
+      );
+    }
+  }
+
+  function defaultPromotionRole(promotion: MenuPromotion): PromotionMenuRole {
+    if (promotion.type === "amount_off" || promotion.type === "percent_off" || promotion.type === "free_delivery") {
+      return "eligible";
+    }
+    return "trigger";
+  }
+
+  function togglePromotionForItem(itemId: number, promotion: MenuPromotion) {
+    const currentItemAssignments = promotionAssignments[itemId] || {};
+    const applied = Boolean(currentItemAssignments[promotion.id]);
+    const nextItemAssignments = { ...currentItemAssignments };
+
+    if (applied) {
+      delete nextItemAssignments[promotion.id];
+    } else {
+      nextItemAssignments[promotion.id] = { role: defaultPromotionRole(promotion) };
+    }
+
+    const next: PromotionAssignments = { ...promotionAssignments };
+    if (Object.keys(nextItemAssignments).length > 0) {
+      next[itemId] = nextItemAssignments;
+    } else {
+      delete next[itemId];
+    }
+
+    persistPromotionAssignments(next);
+    setMessage(applied ? "✓ 메뉴에서 딜 연결을 해제했습니다." : "✓ 메뉴에 딜을 연결했습니다.");
+  }
+
+  function setPromotionRoleForItem(
+    itemId: number,
+    promotionId: string,
+    role: PromotionMenuRole,
+  ) {
+    const currentAssignment = promotionAssignments[itemId]?.[promotionId];
+    const next: PromotionAssignments = {
+      ...promotionAssignments,
+      [itemId]: {
+        ...(promotionAssignments[itemId] || {}),
+        [promotionId]: {
+          ...(currentAssignment || { role }),
+          role,
+        },
+      },
+    };
+    persistPromotionAssignments(next);
+    setMessage("✓ 딜 설정을 저장했습니다.");
+  }
+
+  function setPromotionRewardItemForItem(
+    itemId: number,
+    promotionId: string,
+    rewardItemId: number | "same" | undefined,
+  ) {
+    const currentAssignment = promotionAssignments[itemId]?.[promotionId];
+    const next: PromotionAssignments = {
+      ...promotionAssignments,
+      [itemId]: {
+        ...(promotionAssignments[itemId] || {}),
+        [promotionId]: {
+          ...(currentAssignment || { role: "trigger" as PromotionMenuRole }),
+          role: "trigger",
+          rewardItemId,
+        },
+      },
+    };
+    persistPromotionAssignments(next);
+    setMessage("✓ 이 메뉴를 샀을 때 제공할 혜택 메뉴를 저장했습니다.");
+  }
+
+  function togglePromotionItemPanel(itemId: number) {
+    setExpandedPromotionItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  function promotionRoleOptions(promotion: MenuPromotion) {
+    if (promotion.type === "buy_x_get_y") {
+      return [
+        { value: "trigger" as PromotionMenuRole, label: "이 메뉴를 사면 혜택 적용" },
+        { value: "reward" as PromotionMenuRole, label: "이 메뉴를 무료·할인으로 제공" },
+        { value: "both" as PromotionMenuRole, label: "이 메뉴를 사면 같은 메뉴도 혜택" },
+      ];
+    }
+
+    if (promotion.type === "spend_get_item") {
+      return [
+        { value: "trigger" as PromotionMenuRole, label: "이 메뉴 금액을 $ 조건에 포함" },
+        { value: "reward" as PromotionMenuRole, label: "이 메뉴를 무료로 제공" },
+        { value: "both" as PromotionMenuRole, label: "금액에 포함 + 이 메뉴 무료" },
+      ];
+    }
+
+    return [{ value: "eligible" as PromotionMenuRole, label: "이 메뉴에 딜 적용" }];
   }
 
   return (
@@ -4505,15 +4787,30 @@ export default function OwnerBusinessMenuPage() {
           ) : null}
 
           <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-violet-700">
-                Payment Provider
-              </p>
-              <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
-                이 식당에서 Pay Now 결제에 사용할 회사를 선택하세요. 식당별로 다르게 저장됩니다.
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setPaymentProviderOpen((current) => !current)}
+              className="flex w-full items-start justify-between gap-3 text-left"
+              aria-expanded={paymentProviderOpen}
+            >
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-violet-700">
+                  Payment Provider
+                </p>
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                  이 식당에서 Pay Now 결제에 사용할 회사를 선택하세요. 식당별로 다르게 저장됩니다.
+                </p>
+                <p className="mt-1 text-[10px] font-black text-violet-800">
+                  현재 선택: {paymentProvider === "square" ? "SQUARE" : "STRIPE"}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-violet-700 px-3 py-2 text-[10px] font-black text-white">
+                {paymentProviderOpen ? "접기 ▲" : "펼치기 ▼"}
+              </span>
+            </button>
 
+            {paymentProviderOpen ? (
+              <>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -4704,10 +5001,17 @@ export default function OwnerBusinessMenuPage() {
                 )}
               </div>
             )}
+              </>
+            ) : null}
           </div>
 
           <div className="mt-4 rounded-2xl border-2 border-sky-200 bg-sky-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setUberDirectOpen((current) => !current)}
+              className="flex w-full flex-wrap items-start justify-between gap-3 text-left"
+              aria-expanded={uberDirectOpen}
+            >
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-sky-700">
                   Uber Direct Delivery
@@ -4720,17 +5024,24 @@ export default function OwnerBusinessMenuPage() {
                 </p>
               </div>
 
-              <span
-                className={`rounded-full px-3 py-1 text-[11px] font-black ${
-                  uberDirectConfigured
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-amber-100 text-amber-800"
-                }`}
-              >
-                {uberDirectConfigured ? "CONFIGURED" : "NOT CONFIGURED"}
-              </span>
-            </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-[11px] font-black ${
+                    uberDirectConfigured
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {uberDirectConfigured ? "CONFIGURED" : "NOT CONFIGURED"}
+                </span>
+                <span className="rounded-full bg-sky-700 px-3 py-2 text-[10px] font-black text-white">
+                  {uberDirectOpen ? "접기 ▲" : "펼치기 ▼"}
+                </span>
+              </div>
+            </button>
 
+            {uberDirectOpen ? (
+              <>
             <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-sky-200 bg-white p-3">
               <input
                 type="checkbox"
@@ -4831,6 +5142,8 @@ export default function OwnerBusinessMenuPage() {
             <p className="mt-3 text-[10px] font-semibold leading-4 text-gray-500">
               저장된 Client Secret과 Webhook Signing Key는 다시 브라우저로 전송하지 않습니다. 값을 바꾸려면 새 값을 입력하고 다시 저장하세요.
             </p>
+              </>
+            ) : null}
           </div>
 
           <div className="mt-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
@@ -5524,7 +5837,7 @@ export default function OwnerBusinessMenuPage() {
               </div>
 
               <div className="mt-4 space-y-2">
-                {promotions.length === 0 ? (
+                {promotions.filter((promotion) => promotion.type === "buy_x_get_y").length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50 p-5 text-center">
                     <p className="text-sm font-black text-orange-800">아직 등록된 딜이 없습니다.</p>
                     <p className="mt-1 text-xs font-semibold text-orange-700">
@@ -5668,54 +5981,161 @@ export default function OwnerBusinessMenuPage() {
                     </label>
 
                     {promotionDraft.type === "buy_x_get_y" ? (
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <label>
-                          <span className="mb-1 block text-xs font-black text-gray-700">BUY 수량</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={promotionDraft.buyQty}
-                            onChange={(event) =>
-                              setPromotionDraft((current) => ({
-                                ...current,
-                                buyQty: Math.max(1, Number(event.target.value) || 1),
-                              }))
-                            }
-                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
-                          />
-                        </label>
-                        <label>
-                          <span className="mb-1 block text-xs font-black text-gray-700">GET 수량</span>
-                          <input
-                            type="number"
-                            min={1}
-                            value={promotionDraft.getQty}
-                            onChange={(event) =>
-                              setPromotionDraft((current) => ({
-                                ...current,
-                                getQty: Math.max(1, Number(event.target.value) || 1),
-                              }))
-                            }
-                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
-                          />
-                        </label>
-                        <label>
-                          <span className="mb-1 block text-xs font-black text-gray-700">GET 할인 %</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={promotionDraft.discountValue}
-                            onChange={(event) =>
-                              setPromotionDraft((current) => ({
-                                ...current,
-                                discountValue: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
-                              }))
-                            }
-                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
-                          />
-                          <span className="mt-1 block text-[10px] font-bold text-gray-400">100 = FREE</span>
-                        </label>
+                      <div className="space-y-3 rounded-2xl border border-orange-200 bg-orange-50 p-3">
+
+                        <div className="rounded-2xl border border-green-200 bg-green-50 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="text-xs font-black text-green-900">고객이 선택할 GET Item</p>
+                              <p className="mt-0.5 text-[10px] font-bold text-green-800/70">French Fries, Soft Drink처럼 여러 개 등록할 수 있습니다. 아래에서 1개 선택 또는 여러 개 모두 제공을 정할 수 있습니다.</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPromotionDraft((current) => ({
+                                  ...current,
+                                  rewardChoices: [...current.rewardChoices, { name: "", price: 0, discountPercent: 100 }],
+                                }))
+                              }
+                              className="rounded-xl bg-green-700 px-3 py-2 text-[11px] font-black text-white"
+                            >
+                              + GET Item 추가
+                            </button>
+                          </div>
+
+                          <div className="mt-3 space-y-2">
+                            {promotionDraft.rewardChoices.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-green-300 bg-white p-3 text-center text-[11px] font-bold text-green-800">
+                                아직 등록된 GET Item이 없습니다. + GET Item 추가를 눌러 등록하세요.
+                              </div>
+                            ) : (
+                              promotionDraft.rewardChoices.map((choice, choiceIndex) => (
+                                <div key={`buy-reward-choice-${choiceIndex}`} className="grid gap-2 rounded-xl border border-green-200 bg-white p-2 sm:grid-cols-[1fr_120px_100px_auto]">
+                                  <input
+                                    value={choice.name}
+                                    onChange={(event) =>
+                                      setPromotionDraft((current) => ({
+                                        ...current,
+                                        rewardChoices: current.rewardChoices.map((row, index) =>
+                                          index === choiceIndex ? { ...row, name: event.target.value } : row,
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="예: French Fries / Soft Drink"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={choice.price}
+                                    onChange={(event) =>
+                                      setPromotionDraft((current) => ({
+                                        ...current,
+                                        rewardChoices: current.rewardChoices.map((row, index) =>
+                                          index === choiceIndex
+                                            ? { ...row, price: Math.max(0, Number(event.target.value) || 0) }
+                                            : row,
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="정상가격 $"
+                                    className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"
+                                  />
+                                  <div>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      value={choice.discountPercent}
+                                      onChange={(event) =>
+                                        setPromotionDraft((current) => ({
+                                          ...current,
+                                          rewardChoices: current.rewardChoices.map((row, index) =>
+                                            index === choiceIndex
+                                              ? { ...row, discountPercent: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }
+                                              : row,
+                                          ),
+                                        }))
+                                      }
+                                      placeholder="할인 %"
+                                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"
+                                    />
+                                    <span className="mt-1 block text-[9px] font-bold text-gray-500">100 = FREE</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPromotionDraft((current) => ({
+                                        ...current,
+                                        rewardChoices: current.rewardChoices.filter((_, index) => index !== choiceIndex),
+                                      }))
+                                    }
+                                    className="rounded-lg border border-red-200 px-3 py-2 text-[11px] font-black text-red-600"
+                                  >
+                                    삭제
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        {promotionDraft.rewardChoices.some((choice) => choice.name.trim()) ? (
+                          <>
+                            {promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length > 1 ? (
+                              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                                <p className="text-xs font-black text-blue-900">GET Item 제공 방식</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {Array.from(
+                                    { length: promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length },
+                                    (_, index) => index + 1,
+                                  ).map((count) => {
+                                    const total = promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length;
+                                    const selectedCount = Math.min(
+                                      total,
+                                      Math.max(1, Math.floor(Number(promotionDraft.rewardSelectCount) || 1)),
+                                    );
+                                    return (
+                                      <button
+                                        key={`reward-select-count-${count}`}
+                                        type="button"
+                                        onClick={() =>
+                                          setPromotionDraft((current) => ({
+                                            ...current,
+                                            rewardSelectCount: count,
+                                          }))
+                                        }
+                                        className={`rounded-xl border px-3 py-2 text-[11px] font-black ${
+                                          selectedCount === count
+                                            ? "border-blue-600 bg-blue-600 text-white"
+                                            : "border-blue-200 bg-white text-blue-900"
+                                        }`}
+                                      >
+                                        {count === total ? `${count}개 모두 FREE/할인 제공` : `${count}개 선택`}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <p className="mt-2 text-[10px] font-bold text-blue-800/70">
+                                  모두 제공을 선택하면 고객이 따로 고르지 않고 등록된 GET Item이 전부 자동 적용됩니다.
+                                </p>
+                              </div>
+                            ) : null}
+
+                            <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-black text-green-900">
+                              혜택: {promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).map((choice) => `${choice.name.trim()} ${choice.discountPercent >= 100 ? "FREE" : `${choice.discountPercent}% OFF`}`).join(" / ")}
+                              {promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length === 1
+                                ? " · 자동 제공"
+                                : Math.min(
+                                    promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length,
+                                    Math.max(1, Math.floor(Number(promotionDraft.rewardSelectCount) || 1)),
+                                  ) >= promotionDraft.rewardChoices.filter((choice) => choice.name.trim()).length
+                                  ? " · 전부 자동 제공"
+                                  : ` · ${Math.max(1, Math.floor(Number(promotionDraft.rewardSelectCount) || 1))}개 선택`}
+                            </div>
+                          </>
+                        ) : null}
                       </div>
                     ) : null}
 
@@ -5756,11 +6176,94 @@ export default function OwnerBusinessMenuPage() {
                               className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
                             />
                           </label>
+                        ) : promotionDraft.type === "spend_get_item" ? (
+                          <div className="rounded-xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-800">
+                            주문금액 조건을 만족하면 결제 전에 고객에게 아래 무료 아이템 목록을 보여주고 1개를 선택하게 합니다.
+                          </div>
                         ) : (
                           <div className="rounded-xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-800">
-                            Reward Item은 다음 단계에서 메뉴 화면에서 직접 선택합니다.
+                            주문금액 조건을 만족하면 자동 적용됩니다.
                           </div>
                         )}
+                      </div>
+                    ) : null}
+
+                    {promotionDraft.type === "spend_get_item" ? (
+                      <div className="rounded-2xl border border-green-200 bg-green-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-black text-green-900">결제 전 무료 아이템 선택 목록</p>
+                            <p className="mt-0.5 text-[10px] font-bold text-green-800/70">고객이 조건을 충족하면 Checkout 전에 이 목록이 표시됩니다.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPromotionDraft((current) => ({
+                                ...current,
+                                rewardChoices: [...current.rewardChoices, { name: "", price: 0, discountPercent: 100 }],
+                              }))
+                            }
+                            className="rounded-xl bg-green-700 px-3 py-2 text-[11px] font-black text-white"
+                          >
+                            + 무료 아이템 추가
+                          </button>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          {promotionDraft.rewardChoices.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-green-300 bg-white p-3 text-center text-[11px] font-bold text-green-800">
+                              아직 등록된 무료 아이템이 없습니다.
+                            </div>
+                          ) : (
+                            promotionDraft.rewardChoices.map((choice, choiceIndex) => (
+                              <div key={`reward-choice-${choiceIndex}`} className="grid gap-2 rounded-xl border border-green-200 bg-white p-2 sm:grid-cols-[1fr_140px_auto]">
+                                <input
+                                  value={choice.name}
+                                  onChange={(event) =>
+                                    setPromotionDraft((current) => ({
+                                      ...current,
+                                      rewardChoices: current.rewardChoices.map((row, index) =>
+                                        index === choiceIndex ? { ...row, name: event.target.value } : row,
+                                      ),
+                                    }))
+                                  }
+                                  placeholder="예: French Fries"
+                                  className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"
+                                />
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={choice.price}
+                                  onChange={(event) =>
+                                    setPromotionDraft((current) => ({
+                                      ...current,
+                                      rewardChoices: current.rewardChoices.map((row, index) =>
+                                        index === choiceIndex
+                                          ? { ...row, price: Math.max(0, Number(event.target.value) || 0) }
+                                          : row,
+                                      ),
+                                    }))
+                                  }
+                                  placeholder="정상가격 $"
+                                  className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-black"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setPromotionDraft((current) => ({
+                                      ...current,
+                                      rewardChoices: current.rewardChoices.filter((_, index) => index !== choiceIndex),
+                                    }))
+                                  }
+                                  className="rounded-lg border border-red-200 px-3 py-2 text-[11px] font-black text-red-600"
+                                >
+                                  삭제
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     ) : null}
 
@@ -6468,6 +6971,265 @@ export default function OwnerBusinessMenuPage() {
                           })}
                         </div>
                       )}
+                    </div>
+
+                    <div className="mt-3 overflow-hidden rounded-2xl border border-orange-200 bg-orange-50/70">
+                      <button
+                        type="button"
+                        onClick={() => togglePromotionItemPanel(item.id)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
+                        aria-expanded={expandedPromotionItemIds.has(item.id)}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-black text-orange-900">🔥 딜 적용</p>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black text-orange-700">
+                              {Object.keys(promotionAssignments[item.id] || {}).length}개 적용 중
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-[10px] font-semibold text-orange-900/60">
+                            Buy X Get Y 딜을 선택하면 이 메뉴가 구매 조건이 됩니다. GET Item과 할인은 딜 관리에서 설정합니다.
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-xl bg-orange-500 px-3 py-2 text-[10px] font-black text-white">
+                          {expandedPromotionItemIds.has(item.id) ? "접기 ▲" : "펼치기 ▼"}
+                        </span>
+                      </button>
+
+                      {expandedPromotionItemIds.has(item.id) ? (
+                        <div className="border-t border-orange-200 px-3 pb-3 pt-3">
+                          {promotions.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-orange-200 bg-white p-3 text-center">
+                              <p className="text-xs font-black text-orange-800">등록된 딜이 없습니다.</p>
+                              <p className="mt-1 text-[10px] font-semibold text-gray-500">
+                                위의 PROMOTIONS / 딜 관리에서 먼저 딜을 등록하세요.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {promotions.filter((promotion) => promotion.type === "buy_x_get_y").map((promotion) => {
+                                const assignment = promotionAssignments[item.id]?.[promotion.id];
+                                const applied = Boolean(assignment);
+
+                                return (
+                                  <div
+                                    key={`item-promotion-${item.id}-${promotion.id}`}
+                                    className={`rounded-xl border p-3 ${
+                                      applied
+                                        ? "border-orange-300 bg-white"
+                                        : "border-orange-100 bg-white/70"
+                                    } ${promotion.active ? "" : "opacity-60"}`}
+                                  >
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                      <label className="flex min-w-0 cursor-pointer items-start gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={applied}
+                                          onChange={() => togglePromotionForItem(item.id, promotion)}
+                                          className="mt-0.5 h-4 w-4 accent-orange-500"
+                                        />
+                                        <span className="min-w-0">
+                                          <span className="block truncate text-xs font-black text-[#172033]">
+                                            {promotion.name}
+                                          </span>
+                                          <span className="mt-0.5 block text-[10px] font-bold text-gray-500">
+                                            {PROMOTION_TYPE_LABELS[promotion.type]}
+                                            {!promotion.active ? " · 현재 OFF" : ""}
+                                          </span>
+
+                                          {applied && promotion.rewardChoices.some((choice) => choice.name.trim()) ? (
+                                            <span className="mt-2 block max-w-md">
+                                              <span className="block text-[9px] font-black uppercase tracking-wide text-orange-700">
+                                                GET Item
+                                              </span>
+                                              <span className="mt-1 flex flex-wrap gap-1">
+                                                {promotion.rewardChoices
+                                                  .filter((choice) => choice.name.trim())
+                                                  .map((choice, choiceIndex) => (
+                                                    <span
+                                                      key={`selected-get-${item.id}-${promotion.id}-${choiceIndex}`}
+                                                      className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-black text-orange-800"
+                                                    >
+                                                      {choice.name.trim()}
+                                                      {choice.price > 0 ? ` · $${choice.price.toFixed(2)}` : ""}
+                                                      {` · ${choice.discountPercent >= 100 ? "FREE" : `${choice.discountPercent}% OFF`}`}
+                                                    </span>
+                                                  ))}
+                                              </span>
+                                              <span className="mt-1 block text-[9px] font-bold text-gray-500">
+                                                {promotion.rewardChoices.filter((choice) => choice.name.trim()).length <= 1
+                                                  ? "1개 등록 · 자동 제공"
+                                                  : Math.min(
+                                                      promotion.rewardChoices.filter((choice) => choice.name.trim()).length,
+                                                      Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1)),
+                                                    ) >= promotion.rewardChoices.filter((choice) => choice.name.trim()).length
+                                                    ? "등록된 항목 전부 자동 제공"
+                                                    : `고객이 위 항목 중 ${Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1))}개 선택`}
+                                              </span>
+                                            </span>
+                                          ) : null}
+                                        </span>
+                                      </label>
+
+                                      {applied ? (
+                                        <div className="w-full rounded-xl border border-orange-200 bg-orange-50 p-3 sm:max-w-xl">
+                                          <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <div>
+                                              <p className="text-[11px] font-black text-orange-900">
+                                                이 메뉴 구매 시 고객이 선택할 GET Item
+                                              </p>
+                                              <p className="mt-0.5 text-[9px] font-bold text-orange-700/70">
+                                                French Fries, Soft Drink처럼 여러 개 등록할 수 있습니다.
+                                              </p>
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                updatePromotionInline(promotion.id, {
+                                                  rewardChoices: [...promotion.rewardChoices, { name: "", price: 0, discountPercent: 100 }],
+                                                })
+                                              }
+                                              className="rounded-lg bg-orange-600 px-2.5 py-2 text-[10px] font-black text-white"
+                                            >
+                                              + GET Item 추가
+                                            </button>
+                                          </div>
+
+                                          <div className="mt-3 space-y-2">
+                                            {promotion.rewardChoices.length === 0 ? (
+                                              <div className="rounded-lg border border-dashed border-orange-300 bg-white px-3 py-3 text-center text-[10px] font-bold text-orange-700">
+                                                GET Item을 추가하세요. 2개 이상 등록하면 1개 선택 또는 여러 개 모두 제공을 정할 수 있습니다.
+                                              </div>
+                                            ) : (
+                                              promotion.rewardChoices.map((choice, choiceIndex) => (
+                                                <div key={`inline-get-${promotion.id}-${choiceIndex}`} className="grid gap-2 rounded-lg border border-orange-200 bg-white p-2 sm:grid-cols-[1fr_110px_90px_auto]">
+                                                  <input
+                                                    value={choice.name}
+                                                    onChange={(event) =>
+                                                      updatePromotionInline(promotion.id, {
+                                                        rewardChoices: promotion.rewardChoices.map((row, index) =>
+                                                          index === choiceIndex ? { ...row, name: event.target.value } : row,
+                                                        ),
+                                                      })
+                                                    }
+                                                    placeholder="예: French Fries / Soft Drink"
+                                                    className="rounded-lg border border-orange-200 bg-white px-2.5 py-2 text-xs font-black outline-none focus:border-orange-400"
+                                                  />
+                                                  <input
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    value={choice.price}
+                                                    onChange={(event) =>
+                                                      updatePromotionInline(promotion.id, {
+                                                        rewardChoices: promotion.rewardChoices.map((row, index) =>
+                                                          index === choiceIndex
+                                                            ? { ...row, price: Math.max(0, Number(event.target.value) || 0) }
+                                                            : row,
+                                                        ),
+                                                      })
+                                                    }
+                                                    placeholder="정상가격 $"
+                                                    className="rounded-lg border border-orange-200 bg-white px-2.5 py-2 text-xs font-black outline-none focus:border-orange-400"
+                                                  />
+                                                  <div>
+                                                    <input
+                                                      type="number"
+                                                      min={0}
+                                                      max={100}
+                                                      value={choice.discountPercent}
+                                                      onChange={(event) =>
+                                                        updatePromotionInline(promotion.id, {
+                                                          rewardChoices: promotion.rewardChoices.map((row, index) =>
+                                                            index === choiceIndex
+                                                              ? { ...row, discountPercent: Math.max(0, Math.min(100, Number(event.target.value) || 0)) }
+                                                              : row,
+                                                          ),
+                                                        })
+                                                      }
+                                                      placeholder="할인 %"
+                                                      className="w-full rounded-lg border border-orange-200 bg-white px-2.5 py-2 text-xs font-black outline-none focus:border-orange-400"
+                                                    />
+                                                    <span className="mt-1 block text-[9px] font-bold text-gray-500">100 = FREE</span>
+                                                  </div>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      updatePromotionInline(promotion.id, {
+                                                        rewardChoices: promotion.rewardChoices.filter((_, index) => index !== choiceIndex),
+                                                      })
+                                                    }
+                                                    className="rounded-lg border border-red-200 px-2.5 py-2 text-[10px] font-black text-red-600"
+                                                  >
+                                                    삭제
+                                                  </button>
+                                                </div>
+                                              ))
+                                            )}
+                                          </div>
+
+                                          {promotion.rewardChoices.filter((choice) => choice.name.trim()).length > 1 ? (
+                                            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                                              <p className="text-[10px] font-black text-blue-900">GET Item 제공 방식</p>
+                                              <div className="mt-2 flex flex-wrap gap-2">
+                                                {Array.from(
+                                                  { length: promotion.rewardChoices.filter((choice) => choice.name.trim()).length },
+                                                  (_, index) => index + 1,
+                                                ).map((count) => {
+                                                  const total = promotion.rewardChoices.filter((choice) => choice.name.trim()).length;
+                                                  const selectedCount = Math.min(
+                                                    total,
+                                                    Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1)),
+                                                  );
+                                                  return (
+                                                    <button
+                                                      key={`inline-reward-select-count-${promotion.id}-${count}`}
+                                                      type="button"
+                                                      onClick={() =>
+                                                        updatePromotionInline(promotion.id, {
+                                                          rewardSelectCount: count,
+                                                        })
+                                                      }
+                                                      className={`rounded-lg border px-2.5 py-2 text-[10px] font-black ${
+                                                        selectedCount === count
+                                                          ? "border-blue-600 bg-blue-600 text-white"
+                                                          : "border-blue-200 bg-white text-blue-900"
+                                                      }`}
+                                                    >
+                                                      {count === total ? `${count}개 모두 제공` : `${count}개 선택`}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          ) : null}
+
+                                          <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+                                            <p className="text-[10px] font-bold text-green-800">혜택 미리보기</p>
+                                            <p className="mt-0.5 text-xs font-black text-green-900">
+                                              {item.name} 구매 → {promotion.rewardChoices.filter((choice) => choice.name.trim()).length > 0
+                                                ? promotion.rewardChoices.filter((choice) => choice.name.trim()).map((choice) => `${choice.name.trim()} ${choice.discountPercent >= 100 ? "FREE" : `${choice.discountPercent}% OFF`}`).join(" / ")
+                                                : "GET Item 입력 필요"}
+                                              {promotion.rewardChoices.filter((choice) => choice.name.trim()).length <= 1
+                                                ? " · 자동 제공"
+                                                : Math.min(
+                                                    promotion.rewardChoices.filter((choice) => choice.name.trim()).length,
+                                                    Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1)),
+                                                  ) >= promotion.rewardChoices.filter((choice) => choice.name.trim()).length
+                                                  ? " · 전부 자동 제공"
+                                                  : ` · ${Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1))}개 선택`}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-[#EEE5DA] pt-3">
