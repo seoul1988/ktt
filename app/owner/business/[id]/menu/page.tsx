@@ -402,6 +402,51 @@ async function readApiJson(response: Response) {
   }
 }
 
+type PromotionType =
+  | "buy_x_get_y"
+  | "spend_get_item"
+  | "amount_off"
+  | "percent_off"
+  | "free_delivery";
+
+type MenuPromotion = {
+  id: string;
+  name: string;
+  type: PromotionType;
+  buyQty: number;
+  getQty: number;
+  minSpend: number;
+  discountValue: number;
+  maxPerOrder: number;
+  pickup: boolean;
+  delivery: boolean;
+  active: boolean;
+};
+
+const PROMOTION_TYPE_LABELS: Record<PromotionType, string> = {
+  buy_x_get_y: "Buy X Get Y",
+  spend_get_item: "Spend $X Get Free Item",
+  amount_off: "Spend $X Get $ Off",
+  percent_off: "Spend $X Get % Off",
+  free_delivery: "Free Delivery",
+};
+
+function emptyPromotion(): MenuPromotion {
+  return {
+    id: "",
+    name: "",
+    type: "buy_x_get_y",
+    buyQty: 1,
+    getQty: 1,
+    minSpend: 0,
+    discountValue: 100,
+    maxPerOrder: 1,
+    pickup: true,
+    delivery: true,
+    active: true,
+  };
+}
+
 export default function OwnerBusinessMenuPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -512,6 +557,16 @@ export default function OwnerBusinessMenuPage() {
   const [optionCategoryNames, setOptionCategoryNames] = useState<string[]>(
     DEFAULT_OPTION_CATEGORY_NAMES,
   );
+
+
+  // STEP 1: Deal / Promotion Library.
+  // 현재 단계에서는 브라우저 localStorage에 저장합니다.
+  // 다음 단계에서 Supabase DB 테이블로 옮기면 다른 기기/직원 계정에서도 동일하게 공유됩니다.
+  const [promotionManagerOpen, setPromotionManagerOpen] = useState(false);
+  const [promotionEditorOpen, setPromotionEditorOpen] = useState(false);
+  const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
+  const [promotionDraft, setPromotionDraft] = useState<MenuPromotion>(emptyPromotion());
+  const [promotionMessage, setPromotionMessage] = useState("");
 
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { categoriesRef.current = categories; }, [categories]);
@@ -4019,6 +4074,55 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
+  useEffect(() => {
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    try {
+      const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
+      if (!raw) {
+        setPromotions([]);
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setPromotions([]);
+        return;
+      }
+
+      const normalized: MenuPromotion[] = parsed
+        .map((row: any, index: number) => {
+          const type: PromotionType =
+            row?.type === "spend_get_item" ||
+            row?.type === "amount_off" ||
+            row?.type === "percent_off" ||
+            row?.type === "free_delivery"
+              ? row.type
+              : "buy_x_get_y";
+
+          return {
+            id: String(row?.id || `promotion-${index}`),
+            name: String(row?.name || "Untitled Deal"),
+            type,
+            buyQty: Math.max(1, Math.floor(Number(row?.buyQty) || 1)),
+            getQty: Math.max(1, Math.floor(Number(row?.getQty) || 1)),
+            minSpend: Math.max(0, Number(row?.minSpend) || 0),
+            discountValue: Math.max(0, Number(row?.discountValue) || 0),
+            maxPerOrder: Math.max(1, Math.floor(Number(row?.maxPerOrder) || 1)),
+            pickup: row?.pickup !== false,
+            delivery: row?.delivery !== false,
+            active: row?.active !== false,
+          };
+        })
+        .filter((row: MenuPromotion) => row.id);
+
+      setPromotions(normalized);
+    } catch (error) {
+      console.error("PROMOTION LIBRARY LOAD ERROR", error);
+      setPromotions([]);
+    }
+  }, [businessId]);
+
   if (loading) {
     return (
       <main className="min-h-screen bg-[#F8F3EC] px-5 py-10 text-[#172033]">
@@ -4026,6 +4130,96 @@ export default function OwnerBusinessMenuPage() {
           메뉴를 불러오는 중...
         </div>
       </main>
+    );
+  }
+
+  function persistPromotions(next: MenuPromotion[]) {
+    setPromotions(next);
+    if (typeof window !== "undefined" && Number.isInteger(businessId) && businessId > 0) {
+      window.localStorage.setItem(
+        `ktown-menu-promotions:${businessId}`,
+        JSON.stringify(next),
+      );
+    }
+  }
+
+  function openNewPromotion() {
+    setPromotionDraft(emptyPromotion());
+    setPromotionMessage("");
+    setPromotionEditorOpen(true);
+  }
+
+  function openEditPromotion(promotion: MenuPromotion) {
+    setPromotionDraft({ ...promotion });
+    setPromotionMessage("");
+    setPromotionEditorOpen(true);
+  }
+
+  function savePromotionDraft() {
+    const name = promotionDraft.name.trim();
+    if (!name) {
+      setPromotionMessage("딜 이름을 입력하세요.");
+      return;
+    }
+
+    if (promotionDraft.type === "buy_x_get_y") {
+      if (promotionDraft.buyQty < 1 || promotionDraft.getQty < 1) {
+        setPromotionMessage("BUY / GET 수량은 1 이상이어야 합니다.");
+        return;
+      }
+    }
+
+    if (
+      promotionDraft.type === "spend_get_item" ||
+      promotionDraft.type === "amount_off" ||
+      promotionDraft.type === "percent_off" ||
+      promotionDraft.type === "free_delivery"
+    ) {
+      if (promotionDraft.minSpend <= 0) {
+        setPromotionMessage("최소 주문금액을 입력하세요.");
+        return;
+      }
+    }
+
+    const id =
+      promotionDraft.id ||
+      (typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `promotion-${Date.now()}`);
+
+    const saved: MenuPromotion = {
+      ...promotionDraft,
+      id,
+      name,
+      buyQty: Math.max(1, Math.floor(Number(promotionDraft.buyQty) || 1)),
+      getQty: Math.max(1, Math.floor(Number(promotionDraft.getQty) || 1)),
+      minSpend: Math.max(0, Number(promotionDraft.minSpend) || 0),
+      discountValue: Math.max(0, Number(promotionDraft.discountValue) || 0),
+      maxPerOrder: Math.max(1, Math.floor(Number(promotionDraft.maxPerOrder) || 1)),
+    };
+
+    const exists = promotions.some((row) => row.id === id);
+    const next = exists
+      ? promotions.map((row) => (row.id === id ? saved : row))
+      : [...promotions, saved];
+
+    persistPromotions(next);
+    setPromotionEditorOpen(false);
+    setPromotionMessage("");
+    setMessage(exists ? "✓ 딜을 수정했습니다." : "✓ 새 딜을 등록했습니다.");
+  }
+
+  function deletePromotion(promotion: MenuPromotion) {
+    if (!window.confirm(`\"${promotion.name}\" 딜을 삭제하시겠습니까?`)) return;
+    persistPromotions(promotions.filter((row) => row.id !== promotion.id));
+    setMessage("✓ 딜을 삭제했습니다.");
+  }
+
+  function togglePromotionActive(promotionId: string) {
+    persistPromotions(
+      promotions.map((row) =>
+        row.id === promotionId ? { ...row, active: !row.active } : row,
+      ),
     );
   }
 
@@ -5285,6 +5479,372 @@ export default function OwnerBusinessMenuPage() {
             </div>
           ) : null}
           </div>
+          ) : null}
+        </section>
+
+        <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
+          <button
+            type="button"
+            onClick={() => setPromotionManagerOpen((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl px-1 py-1 text-left"
+            aria-expanded={promotionManagerOpen}
+          >
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-orange-600">
+                Promotions
+              </p>
+              <h2 className="mt-1 text-xl font-black text-[#172033]">딜 관리</h2>
+              <p className="mt-1 text-xs font-bold text-gray-500">
+                {promotions.length}개 등록됨
+              </p>
+            </div>
+
+            <span className="flex h-10 min-w-[92px] items-center justify-center rounded-xl bg-orange-500 px-3 text-xs font-black text-white">
+              {promotionManagerOpen ? "접기 ▲" : "펼치기 ▼"}
+            </span>
+          </button>
+
+          {promotionManagerOpen ? (
+            <div className="mt-4 border-t border-orange-100 pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-[#172033]">등록된 딜 종류</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
+                    여기서는 딜의 규칙만 등록합니다. 다음 단계에서 각 메뉴에서는 이 목록에서 딜을 선택하고 BUY / REWARD 역할만 지정합니다.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={openNewPromotion}
+                  className="rounded-xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white"
+                >
+                  + 새 딜 추가
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {promotions.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-orange-200 bg-orange-50 p-5 text-center">
+                    <p className="text-sm font-black text-orange-800">아직 등록된 딜이 없습니다.</p>
+                    <p className="mt-1 text-xs font-semibold text-orange-700">
+                      예: Buy 1 Burger Get 1 Free, Spend $25 Get Free Fries
+                    </p>
+                  </div>
+                ) : (
+                  promotions.map((promotion) => (
+                    <div
+                      key={promotion.id}
+                      className="rounded-2xl border border-[#EEE5DA] bg-white p-3"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-sm font-black text-[#172033]">
+                              {promotion.name}
+                            </span>
+                            <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black text-orange-700">
+                              {PROMOTION_TYPE_LABELS[promotion.type]}
+                            </span>
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                                promotion.active
+                                  ? "bg-green-50 text-green-700"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {promotion.active ? "ACTIVE" : "OFF"}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 text-xs font-semibold text-gray-500">
+                            {promotion.type === "buy_x_get_y"
+                              ? `Buy ${promotion.buyQty} · Get ${promotion.getQty} · ${promotion.discountValue >= 100 ? "FREE" : `${promotion.discountValue}% OFF`}`
+                              : promotion.type === "spend_get_item"
+                                ? `$${promotion.minSpend.toFixed(2)} 이상 · 선택된 Reward Item 무료`
+                                : promotion.type === "amount_off"
+                                  ? `$${promotion.minSpend.toFixed(2)} 이상 · $${promotion.discountValue.toFixed(2)} OFF`
+                                  : promotion.type === "percent_off"
+                                    ? `$${promotion.minSpend.toFixed(2)} 이상 · ${promotion.discountValue}% OFF`
+                                    : `$${promotion.minSpend.toFixed(2)} 이상 · Free Delivery`}
+                            {` · 최대 ${promotion.maxPerOrder}회/주문`}
+                          </p>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => togglePromotionActive(promotion.id)}
+                            className={`rounded-xl px-3 py-2 text-xs font-black ${
+                              promotion.active
+                                ? "bg-green-50 text-green-700"
+                                : "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {promotion.active ? "사용 중" : "사용 안 함"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditPromotion(promotion)}
+                            className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deletePromotion(promotion)}
+                            className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {promotionEditorOpen ? (
+            <div
+              className="fixed inset-0 z-[12500] flex items-center justify-center bg-black/60 p-3 sm:p-6"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) setPromotionEditorOpen(false);
+              }}
+            >
+              <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 sm:px-5">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-orange-600">
+                      Promotions
+                    </p>
+                    <h3 className="text-lg font-black text-[#172033]">
+                      {promotionDraft.id ? "딜 수정" : "새 딜 추가"}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPromotionEditorOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700"
+                    aria-label="딜 관리 닫기"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                  <div className="space-y-4">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-black text-gray-700">딜 이름</span>
+                      <input
+                        value={promotionDraft.name}
+                        onChange={(event) =>
+                          setPromotionDraft((current) => ({ ...current, name: event.target.value }))
+                        }
+                        placeholder="예: Buy 1 Burger Get 1 Free"
+                        className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-bold outline-none focus:border-orange-400"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-black text-gray-700">딜 종류</span>
+                      <select
+                        value={promotionDraft.type}
+                        onChange={(event) =>
+                          setPromotionDraft((current) => ({
+                            ...current,
+                            type: event.target.value as PromotionType,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm font-black outline-none focus:border-orange-400"
+                      >
+                        <option value="buy_x_get_y">Buy X Get Y</option>
+                        <option value="spend_get_item">Spend $X Get Free Item</option>
+                        <option value="amount_off">Spend $X Get $ Off</option>
+                        <option value="percent_off">Spend $X Get % Off</option>
+                        <option value="free_delivery">Free Delivery</option>
+                      </select>
+                    </label>
+
+                    {promotionDraft.type === "buy_x_get_y" ? (
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <label>
+                          <span className="mb-1 block text-xs font-black text-gray-700">BUY 수량</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={promotionDraft.buyQty}
+                            onChange={(event) =>
+                              setPromotionDraft((current) => ({
+                                ...current,
+                                buyQty: Math.max(1, Number(event.target.value) || 1),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
+                          />
+                        </label>
+                        <label>
+                          <span className="mb-1 block text-xs font-black text-gray-700">GET 수량</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={promotionDraft.getQty}
+                            onChange={(event) =>
+                              setPromotionDraft((current) => ({
+                                ...current,
+                                getQty: Math.max(1, Number(event.target.value) || 1),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
+                          />
+                        </label>
+                        <label>
+                          <span className="mb-1 block text-xs font-black text-gray-700">GET 할인 %</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={promotionDraft.discountValue}
+                            onChange={(event) =>
+                              setPromotionDraft((current) => ({
+                                ...current,
+                                discountValue: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
+                          />
+                          <span className="mt-1 block text-[10px] font-bold text-gray-400">100 = FREE</span>
+                        </label>
+                      </div>
+                    ) : null}
+
+                    {promotionDraft.type !== "buy_x_get_y" ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label>
+                          <span className="mb-1 block text-xs font-black text-gray-700">최소 주문금액 $</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={promotionDraft.minSpend}
+                            onChange={(event) =>
+                              setPromotionDraft((current) => ({
+                                ...current,
+                                minSpend: Math.max(0, Number(event.target.value) || 0),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
+                          />
+                        </label>
+
+                        {promotionDraft.type === "amount_off" || promotionDraft.type === "percent_off" ? (
+                          <label>
+                            <span className="mb-1 block text-xs font-black text-gray-700">
+                              {promotionDraft.type === "amount_off" ? "할인금액 $" : "할인율 %"}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={promotionDraft.discountValue}
+                              onChange={(event) =>
+                                setPromotionDraft((current) => ({
+                                  ...current,
+                                  discountValue: Math.max(0, Number(event.target.value) || 0),
+                                }))
+                              }
+                              className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
+                            />
+                          </label>
+                        ) : (
+                          <div className="rounded-xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-800">
+                            Reward Item은 다음 단계에서 메뉴 화면에서 직접 선택합니다.
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label>
+                        <span className="mb-1 block text-xs font-black text-gray-700">주문당 최대 적용 횟수</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={promotionDraft.maxPerOrder}
+                          onChange={(event) =>
+                            setPromotionDraft((current) => ({
+                              ...current,
+                              maxPerOrder: Math.max(1, Number(event.target.value) || 1),
+                            }))
+                          }
+                          className="w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-black"
+                        />
+                      </label>
+
+                      <div>
+                        <span className="mb-1 block text-xs font-black text-gray-700">적용 주문 방식</span>
+                        <div className="flex min-h-[46px] items-center gap-4 rounded-xl border border-gray-200 px-3">
+                          <label className="flex items-center gap-2 text-xs font-black text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={promotionDraft.pickup}
+                              onChange={(event) =>
+                                setPromotionDraft((current) => ({ ...current, pickup: event.target.checked }))
+                              }
+                            />
+                            Pickup
+                          </label>
+                          <label className="flex items-center gap-2 text-xs font-black text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={promotionDraft.delivery}
+                              onChange={(event) =>
+                                setPromotionDraft((current) => ({ ...current, delivery: event.target.checked }))
+                              }
+                            />
+                            Delivery
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-3 text-xs font-black text-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={promotionDraft.active}
+                        onChange={(event) =>
+                          setPromotionDraft((current) => ({ ...current, active: event.target.checked }))
+                        }
+                      />
+                      이 딜 사용
+                    </label>
+
+                    {promotionMessage ? (
+                      <div className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600">
+                        {promotionMessage}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 p-4">
+                  <button
+                    type="button"
+                    onClick={() => setPromotionEditorOpen(false)}
+                    className="rounded-xl bg-gray-100 px-4 py-2.5 text-xs font-black text-gray-700"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={savePromotionDraft}
+                    className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-black text-white"
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : null}
         </section>
 

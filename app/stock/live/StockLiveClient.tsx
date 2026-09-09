@@ -1,4 +1,4 @@
-"use client";
+
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
@@ -273,14 +273,27 @@ export default function StockLiveClient() {
     try {
       // Vercel은 여기서 딱 한 번, 보안용 WebSocket URL/token 발급에만 사용합니다.
       // 이후 1초 실시간 데이터는 브라우저가 PC #2(stock.7pocker.us)에서 직접 받습니다.
+      // 등록 종목을 PC #2에도 동기화합니다.
+      // GET은 Supabase 목록만 읽고 PC #2 watchlist를 갱신하지 않을 수 있으므로
+      // START 시 POST로 현재 종목(NVDA/TSLA/AAPL/OKLO 등)을 한 번 전달합니다.
       const response = await fetch("/api/stocks/session", {
-        headers: { authorization: `Bearer ${session.access_token}` },
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${session.access_token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ symbols: list }),
         cache: "no-store",
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         setStatus(`연결 실패: ${payload?.error || `HTTP ${response.status}`}`);
       } else if (payload?.wsUrl) {
+        setStatus(
+          payload?.serverSynced === false
+            ? "종목은 저장됐지만 PC #2 동기화 확인 필요"
+            : `PC #2 종목 동기화 완료 · ${list.join(", ")}`,
+        );
         connect(payload.wsUrl);
       } else {
         setStatus(payload?.serverWarning || "등록 종목 표시됨 · 분석 서버 연결 대기");
@@ -373,11 +386,6 @@ export default function StockLiveClient() {
             <Link href="/stock" className="text-xs font-black text-blue-600 hover:underline">← Market Dashboard</Link>
             <h1 className="mt-2 text-2xl font-black text-slate-950">LIVE STOCK DATA</h1>
             <p className="mt-1 text-sm font-semibold text-slate-600">{status}</p>
-            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900">
-              ⚠️ 참고 자료용입니다. 본 페이지의 주가 데이터, 분석 신호, 예측 및 지표는
-              투자 권유 또는 매수·매도 추천이 아닙니다. 실제 투자 결정은 본인의 판단과
-              책임으로 하시기 바랍니다.
-            </div>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => void load()} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-black text-white hover:bg-blue-700">재연결</button>
