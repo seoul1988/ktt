@@ -375,21 +375,137 @@ async function fetchBenzingaTodayResults(): Promise<
   return result;
 }
 
+
+function longEnglishDate(dateKey: string) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(dt);
+}
+
+type BenzingaSymbolResult = {
+  estimate: number | null;
+  actual: number | null;
+  surprisePct: number | null;
+};
+
+async function fetchBenzingaSymbolResult(
+  symbol: string,
+  date: string,
+): Promise<BenzingaSymbolResult | null> {
+  try {
+    const url = `https://www.benzinga.com/quote/${encodeURIComponent(
+      symbol,
+    )}/earnings-forecasts`;
+
+    const response = await fetch(url, {
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "accept-language": "en-US,en;q=0.9",
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      console.error(
+        `Benzinga symbol earnings HTTP ${response.status} for ${symbol}`,
+      );
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Make the server-rendered page searchable as plain text.
+    const plain = decodeHtml(
+      html
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " "),
+    );
+
+    const targetDate = longEnglishDate(date); // ex: Sep 8, 2026
+    const dateIndex = plain.indexOf(targetDate);
+
+    if (dateIndex < 0) {
+      console.error(
+        `Benzinga ${symbol}: report date ${targetDate} not found`,
+      );
+      return null;
+    }
+
+    // The first dated EPS row on Benzinga is:
+    // Q1 | Sep 8, 2026 | $7.37 | $6.77 | 8.86 %
+    // Read only a short region after the exact report date so revenue values
+    // farther down the page cannot be mistaken for EPS.
+    const segment = plain.slice(
+      dateIndex + targetDate.length,
+      dateIndex + targetDate.length + 240,
+    );
+
+    const moneyMatches = [
+      ...segment.matchAll(/\$?\s*(-?\d+(?:\.\d+)?)/g),
+    ].map((m) => Number(m[1]));
+
+    // Need at least Actual EPS and Estimated EPS.
+    if (moneyMatches.length < 2) {
+      console.error(
+        `Benzinga ${symbol}: EPS numbers not found after ${targetDate}`,
+      );
+      return null;
+    }
+
+    const actual = Number.isFinite(moneyMatches[0])
+      ? moneyMatches[0]
+      : null;
+    const estimate = Number.isFinite(moneyMatches[1])
+      ? moneyMatches[1]
+      : null;
+
+    // Find the first percentage after the two EPS values.
+    const pctMatch = segment.match(/(-?\d+(?:\.\d+)?)\s*%/);
+    const surprisePct = pctMatch ? Number(pctMatch[1]) : null;
+
+    if (actual == null) return null;
+
+    return {
+      estimate,
+      actual,
+      surprisePct:
+        surprisePct != null && Number.isFinite(surprisePct)
+          ? surprisePct
+          : estimate != null && estimate !== 0
+            ? ((actual - estimate) / Math.abs(estimate)) * 100
+            : null,
+    };
+  } catch (error) {
+    console.error(
+      `Benzinga symbol earnings failed for ${symbol}:`,
+      error,
+    );
+    return null;
+  }
+}
+
 async function enrichTodayWithActuals(
   items: EarningsItem[],
   date: string,
 ): Promise<EarningsItem[]> {
   const today = easternTodayKey();
 
-  // 미래 날짜는 실제 EPS 조회하지 않음.
+  // Future dates do not need actual EPS lookup.
   if (date !== today || !items.length) return items;
-
-  // 1차: 오늘 발표 결과가 빠르게 반영되는 Benzinga 공개 earnings table.
-  const benzinga = await fetchBenzingaTodayResults();
 
   return Promise.all(
     items.map(async (item) => {
-      const bz = benzinga.get(item.symbol);
+      // 1) Strongest same-day fallback:
+      // fetch each company's Benzinga earnings page and match the exact date.
+      const bz = await fetchBenzingaSymbolResult(item.symbol, date);
 
       if (bz?.actual != null) {
         return {
@@ -401,33 +517,37 @@ async function enrichTodayWithActuals(
           actualEps: bz.actual,
           surprise:
             bz.surprisePct != null
-              ? `${bz.surprisePct >= 0 ? "+" : ""}${bz.surprisePct.toFixed(2)}%`
+              ? `${bz.surprisePct >= 0 ? "+" : ""}${bz.surprisePct.toFixed(
+                  2,
+                )}%`
               : null,
-          actualSource: "Benzinga",
+          actualSource: "Benzinga company earnings",
         };
       }
 
-      // 2차 fallback: Nasdaq company earnings-surprise.
+      // 2) Nasdaq fallback.
       try {
         const rows = await fetchNasdaqEarningsSurprise(item.symbol);
         if (!rows.length) return item;
 
-        // 오늘 날짜 exact match 우선.
         let reported = rows.find(
           (row) => toDateKey(row.dateReported) === date,
         );
 
-        // Nasdaq 반영 시각/날짜 포맷 차이를 대비해 최신 행이 오늘 또는 어제면 허용.
         if (!reported) {
           const latest = rows[0];
           const latestKey = toDateKey(latest?.dateReported);
+
           if (latestKey) {
             const latestDate = new Date(`${latestKey}T12:00:00Z`);
             const targetDate = new Date(`${date}T12:00:00Z`);
             const diffDays = Math.abs(
               (latestDate.getTime() - targetDate.getTime()) / 86_400_000,
             );
-            if (diffDays <= 1) reported = latest;
+
+            if (diffDays <= 1) {
+              reported = latest;
+            }
           }
         }
 
@@ -443,7 +563,10 @@ async function enrichTodayWithActuals(
             row.fiscalQtrEnd,
           ),
         );
-        const priorYearEps = priorYear ? toNumber(priorYear.eps) : null;
+
+        const priorYearEps = priorYear
+          ? toNumber(priorYear.eps)
+          : null;
 
         return {
           ...item,
@@ -463,7 +586,8 @@ async function enrichTodayWithActuals(
             surprise != null
               ? `${surprise >= 0 ? "+" : ""}${surprise.toFixed(2)}%`
               : null,
-          actualSource: actual != null ? "Nasdaq" : null,
+          actualSource:
+            actual != null ? "Nasdaq earnings surprise" : null,
         };
       } catch (error) {
         console.error(
@@ -564,7 +688,7 @@ export async function GET(request: NextRequest) {
       earningsDates: dates,
       updatedAt: new Date().toISOString(),
       source:
-        "Nasdaq Earnings Calendar + Benzinga Results + Nasdaq Earnings Surprise + KTown PC #2 events",
+        "Nasdaq Earnings Calendar + Benzinga Company Results + Nasdaq Earnings Surprise + KTown PC #2 events",
       warning: warnings.join(" · "),
     },
     {
