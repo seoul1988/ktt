@@ -1,4 +1,4 @@
-"use client";
+
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -40,6 +40,8 @@ type Snapshot = {
 
 const SYMBOLS = ["NVDA", "TSLA", "AAPL"] as const;
 type SymbolName = (typeof SYMBOLS)[number];
+
+const CANDLE_STORAGE_KEY = "ktown-community-live-candles-v1";
 
 function fmt(value: unknown, digits = 2) {
   const n = Number(value);
@@ -120,6 +122,53 @@ function actionText(item?: Snapshot) {
   return { text: "", cls: "" };
 }
 
+function loadStoredCandles(): Record<string, LiveCandle[]> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.sessionStorage.getItem(CANDLE_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+
+    const result: Record<string, LiveCandle[]> = {};
+
+    for (const symbol of SYMBOLS) {
+      const rows = Array.isArray(parsed[symbol]) ? parsed[symbol] : [];
+      result[symbol] = rows
+        .filter(
+          (c: LiveCandle) =>
+            Number.isFinite(Number(c?.minute)) &&
+            Number.isFinite(Number(c?.open)) &&
+            Number.isFinite(Number(c?.high)) &&
+            Number.isFinite(Number(c?.low)) &&
+            Number.isFinite(Number(c?.close)),
+        )
+        .slice(-3)
+        .map((c: LiveCandle) => ({
+          minute: Number(c.minute),
+          open: Number(c.open),
+          high: Number(c.high),
+          low: Number(c.low),
+          close: Number(c.close),
+        }));
+    }
+
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredCandles(candles: Record<string, LiveCandle[]>) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(CANDLE_STORAGE_KEY, JSON.stringify(candles));
+  } catch {}
+}
+
 function mergeLiveCandle(
   previous: LiveCandle[] | undefined,
   item: Snapshot,
@@ -132,21 +181,36 @@ function mergeLiveCandle(
 
   let next = [...(previous || [])];
 
-  // On first live packet, use server's recent Schwab 1m bars as visual seeds.
-  if (!next.length && Array.isArray(item.candles_1m)) {
-    const seeds = item.candles_1m.slice(-3);
-    const startMinute = minute - Math.max(0, seeds.length - 1);
-    next = seeds.map((c, index) => ({
-      minute: startMinute + index,
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-    }));
+  // PC #2의 실제 최근 1분봉 3개가 있으면 그것을 우선 사용합니다.
+  // 페이지 새로고침/재연결/컴포넌트 리마운트 후에도 회색 placeholder로
+  // 다시 시작하지 않고 실제 최근 봉을 즉시 복원합니다.
+  if (Array.isArray(item.candles_1m) && item.candles_1m.length) {
+    const serverCandles = item.candles_1m
+      .slice(-3)
+      .map((c, index, arr) => ({
+        minute: minute - (arr.length - 1 - index),
+        open: Number(c.open),
+        high: Number(c.high),
+        low: Number(c.low),
+        close: Number(c.close),
+      }))
+      .filter(
+        (c) =>
+          Number.isFinite(c.open) &&
+          Number.isFinite(c.high) &&
+          Number.isFinite(c.low) &&
+          Number.isFinite(c.close),
+      );
+
+    if (serverCandles.length) {
+      next = serverCandles;
+    }
   }
 
   const current = next[next.length - 1];
 
+  // 새 1분이 시작되면 기존 LIVE 봉을 지우지 않고 완료 봉으로 남긴 뒤
+  // 새 LIVE 봉 하나만 오른쪽에 추가합니다.
   if (!current || current.minute < minute) {
     next.push({
       minute,
@@ -215,7 +279,7 @@ export default function CommunityLiveStocks() {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
-  const [candles, setCandles] = useState<Record<string, LiveCandle[]>>({});
+  const [candles, setCandles] = useState<Record<string, LiveCandle[]>>(() => loadStoredCandles());
   const [status, setStatus] = useState("CONNECTING");
 
   const connectWebSocket = useCallback((url: string) => {
@@ -260,6 +324,7 @@ export default function CommunityLiveStocks() {
             const symbol = String(item.symbol).toUpperCase();
             next[symbol] = mergeLiveCandle(next[symbol], item);
           });
+          saveStoredCandles(next);
           return next;
         });
       } catch {}
@@ -385,12 +450,15 @@ export default function CommunityLiveStocks() {
               <p className="mt-0.5 text-[16px] font-black leading-none text-[#172033]">
                 ${fmt(item?.price)}
               </p>
+              <DayChangeLine item={item} />
 
-              {action.text ? (
-                <div className={`mx-auto mt-2 w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
-                  {action.text}
-                </div>
-              ) : null}
+              <div className="mt-2 flex h-[16px] items-center justify-center">
+                {action.text ? (
+                  <div className={`w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
+                    {action.text}
+                  </div>
+                ) : null}
+              </div>
 
               <div className="mt-2 grid grid-cols-3 gap-1 border-t border-[#EEF0F3] pt-2">
                 <div>
