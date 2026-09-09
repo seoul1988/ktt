@@ -753,11 +753,10 @@ async function fetchMarketEvents(): Promise<{
     }
 
     const events: MarketEvent[] = Array.isArray(data?.events)
-      ? data.events
-          .map((event: Record<string, unknown>, index: number) =>
+      ? data.events.map(
+          (event: Record<string, unknown>, index: number) =>
             normalizeMarketEvent(event, index),
-          )
-          .filter((event: MarketEvent) => event.importanceNumber >= 2)
+        )
       : [];
 
     events.sort((a, b) => {
