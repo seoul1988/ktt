@@ -278,6 +278,103 @@ async function fetchNasdaqEarningsSurprise(symbol: string): Promise<SurpriseRow[
   return Array.isArray(rows) ? rows : [];
 }
 
+
+function decodeHtml(value: string) {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&minus;/gi, "-")
+    .replace(/&#x2212;/gi, "-")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseMoneyNumber(value: string): number | null {
+  const cleaned = decodeHtml(value)
+    .replace(/\$/g, "")
+    .replace(/,/g, "")
+    .replace(/[^\d.+-]/g, "")
+    .trim();
+
+  if (!cleaned || cleaned === "-" || cleaned === "+") return null;
+
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+type BenzingaResult = {
+  symbol: string;
+  estimate: number | null;
+  actual: number | null;
+  surprisePct: number | null;
+};
+
+async function fetchBenzingaTodayResults(): Promise<
+  Map<string, BenzingaResult>
+> {
+  const result = new Map<string, BenzingaResult>();
+
+  try {
+    const response = await fetch("https://www.benzinga.com/earnings", {
+      headers: {
+        accept: "text/html,application/xhtml+xml",
+        "accept-language": "en-US,en;q=0.9",
+        "user-agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      console.error(`Benzinga earnings HTTP ${response.status}`);
+      return result;
+    }
+
+    const html = await response.text();
+    const rowMatches =
+      html.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) || [];
+
+    for (const rowHtml of rowMatches) {
+      const cells = [
+        ...rowHtml.matchAll(
+          /<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi,
+        ),
+      ]
+        .map((match) => decodeHtml(match[1]))
+        .filter(Boolean);
+
+      if (cells.length < 7) continue;
+
+      const symbol = String(cells[0] || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9.\-]/g, "");
+
+      if (!symbol || symbol.length > 12) continue;
+
+      const estimate = parseMoneyNumber(cells[4] || "");
+      const actual = parseMoneyNumber(cells[5] || "");
+      const surprisePct = parseMoneyNumber(cells[6] || "");
+
+      if (actual == null) continue;
+
+      result.set(symbol, {
+        symbol,
+        estimate,
+        actual,
+        surprisePct,
+      });
+    }
+  } catch (error) {
+    console.error("Benzinga earnings fallback failed:", error);
+  }
+
+  return result;
+}
+
 async function enrichTodayWithActuals(
   items: EarningsItem[],
   date: string,
