@@ -12,6 +12,9 @@ type EarningsItem = {
   estimate: string | number | null;
   marketCap: number;
   logoUrl: string;
+  actualEps?: string | number | null;
+  priorYearEps?: string | number | null;
+  surprise?: string | number | null;
 };
 
 function cleanSymbols(value: string | null) {
@@ -161,6 +164,28 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
         row.epsEstimate ??
         null;
 
+      const actualEps =
+        row.eps ??
+        row.actualEPS ??
+        row.actualEps ??
+        row.reportedEPS ??
+        row.reportedEps ??
+        null;
+
+      const priorYearEps =
+        row.lastYearEPS ??
+        row.priorYearEPS ??
+        row.previousEPS ??
+        row.previousEps ??
+        null;
+
+      const surprise =
+        row.surprise ??
+        row.epsSurprise ??
+        row.surprisePercent ??
+        row.surprisePct ??
+        null;
+
       const rawTime =
         row.time ||
         row.marketTime ||
@@ -190,6 +215,18 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
         logoUrl: symbol
           ? `https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`
           : "",
+        actualEps:
+          actualEps == null || String(actualEps).trim() === ""
+            ? null
+            : actualEps,
+        priorYearEps:
+          priorYearEps == null || String(priorYearEps).trim() === ""
+            ? null
+            : priorYearEps,
+        surprise:
+          surprise == null || String(surprise).trim() === ""
+            ? null
+            : surprise,
       };
     })
     .filter((item: EarningsItem) => Boolean(item.symbol))

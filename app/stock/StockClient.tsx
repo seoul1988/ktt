@@ -68,6 +68,9 @@ type EarningsItem = {
   estimate?: string | number;
   marketCap?: number;
   logoUrl?: string;
+  actualEps?: string | number | null;
+  priorYearEps?: string | number | null;
+  surprise?: string | number | null;
 };
 
 type NewsItem = {
@@ -174,6 +177,7 @@ export default function StockMonitorPage() {
   });
   const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
   const [eventsModalOpen, setEventsModalOpen] = useState(false);
+  const [selectedEarnings, setSelectedEarnings] = useState<EarningsItem | null>(null);
   const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
   const [stockNews, setStockNews] = useState<NewsItem[]>([]);
 
@@ -838,7 +842,10 @@ export default function StockMonitorPage() {
               accent="emerald"
             >
               {marketInfo.earnings?.length ? (
-                <EarningsCalendar items={marketInfo.earnings} />
+                <EarningsCalendar
+                  items={marketInfo.earnings}
+                  onSelect={(item) => setSelectedEarnings(item)}
+                />
               ) : (
                 <EmptyBlock text={`어닝 데이터 ${marketInfoStatus}`} />
               )}
@@ -869,7 +876,7 @@ export default function StockMonitorPage() {
                               })
                             : ""}
                         </div>
-                      </div>
+                      </button>
                     );
 
                     return news.url ? (
@@ -990,6 +997,131 @@ export default function StockMonitorPage() {
       ) : null}
 
       <CommunityBottomNav activeNav="community" />
+      {selectedEarnings ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setSelectedEarnings(null)}
+        >
+          <div
+            className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
+                  <img
+                    src={
+                      selectedEarnings.logoUrl ||
+                      `https://images.financialmodelingprep.com/symbol/${encodeURIComponent(
+                        String(selectedEarnings.symbol || ""),
+                      )}.png`
+                    }
+                    alt=""
+                    className="h-9 w-9 object-contain"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-lg font-black text-slate-950">
+                    {selectedEarnings.symbol || "-"}
+                  </div>
+                  <div className="truncate text-xs font-semibold text-slate-500">
+                    {selectedEarnings.company || ""}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEarnings(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-lg font-black text-slate-600"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3 px-4 py-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-[10px] font-bold text-slate-500">발표일</div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {selectedEarnings.date || "-"}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-[10px] font-bold text-slate-500">발표 시점</div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {earningsTimeLabel(selectedEarnings.time) || "Time TBD"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                  <div className="text-[10px] font-bold text-blue-600">EPS 예상</div>
+                  <div className="mt-1 text-base font-black text-blue-950">
+                    {selectedEarnings.estimate ?? "-"}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                  <div className="text-[10px] font-bold text-emerald-600">EPS 실제</div>
+                  <div className="mt-1 text-base font-black text-emerald-950">
+                    {selectedEarnings.actualEps ?? "발표 전"}
+                  </div>
+                </div>
+              </div>
+
+              {(() => {
+                const judgment = earningsResultJudgment(selectedEarnings);
+                return (
+                  <div className={`rounded-xl border p-3 ${judgment.className}`}>
+                    <div className="text-[10px] font-black uppercase tracking-wide opacity-70">
+                      실적 판단
+                    </div>
+                    <div className="mt-1 text-lg font-black">
+                      {judgment.label}
+                    </div>
+                    <div className="mt-1 text-xs font-semibold leading-5">
+                      {judgment.detail}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-[10px] font-bold text-slate-500">전년 EPS</div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {selectedEarnings.priorYearEps ?? "-"}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-[10px] font-bold text-slate-500">Surprise</div>
+                  <div className="mt-1 text-sm font-black text-slate-900">
+                    {selectedEarnings.surprise ?? "-"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-3">
+                <div className="text-[10px] font-bold text-slate-500">시가총액</div>
+                <div className="mt-1 text-sm font-black text-slate-900">
+                  {selectedEarnings.marketCap
+                    ? `$${Number(selectedEarnings.marketCap).toLocaleString("en-US")}`
+                    : "-"}
+                </div>
+              </div>
+
+              <div className="text-[10px] leading-4 text-slate-400">
+                발표 전에는 실제 EPS가 비어 있을 수 있으며, 발표 후 데이터 소스에 값이 제공되면 표시됩니다.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     </main>
   );
 }
@@ -997,7 +1129,95 @@ export default function StockMonitorPage() {
 
 
 
-function EarningsCalendar({ items }: { items: EarningsItem[] }) {
+function parseEpsNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const raw = String(value).trim().replace(/[$,%\s,]/g, "");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function earningsResultJudgment(item: EarningsItem) {
+  const estimate = parseEpsNumber(item.estimate);
+  const actual = parseEpsNumber(item.actualEps);
+
+  if (actual == null) {
+    return {
+      label: "발표 전",
+      detail:
+        estimate != null
+          ? `시장 예상 EPS는 ${estimate.toFixed(2)}입니다. 실제 실적 발표 후 예상치와 비교해 판단합니다.`
+          : "아직 실제 EPS가 발표되지 않았습니다.",
+      className: "border-slate-200 bg-slate-50 text-slate-700",
+    };
+  }
+
+  if (estimate == null) {
+    return {
+      label: "실적 발표",
+      detail: `실제 EPS는 ${actual.toFixed(2)}입니다. 비교 가능한 시장 예상치가 없어 Beat/Miss 판단은 보류합니다.`,
+      className: "border-blue-200 bg-blue-50 text-blue-800",
+    };
+  }
+
+  const diff = actual - estimate;
+  const absEstimate = Math.abs(estimate);
+  const pct = absEstimate > 0 ? (diff / absEstimate) * 100 : null;
+
+  let label = "예상 부합";
+  let tone = "border-amber-200 bg-amber-50 text-amber-900";
+  let verdict = "시장 예상과 대체로 비슷한 결과입니다.";
+
+  if (pct != null) {
+    if (pct >= 10) {
+      label = "매우 좋음";
+      tone = "border-emerald-300 bg-emerald-50 text-emerald-900";
+      verdict = "예상치를 크게 웃돈 강한 실적입니다.";
+    } else if (pct >= 3) {
+      label = "좋음";
+      tone = "border-emerald-200 bg-emerald-50 text-emerald-800";
+      verdict = "예상치를 웃돈 긍정적인 실적입니다.";
+    } else if (pct <= -10) {
+      label = "매우 나쁨";
+      tone = "border-red-300 bg-red-50 text-red-900";
+      verdict = "예상치를 크게 밑돈 약한 실적입니다.";
+    } else if (pct <= -3) {
+      label = "나쁨";
+      tone = "border-red-200 bg-red-50 text-red-800";
+      verdict = "예상치를 밑돈 부정적인 실적입니다.";
+    }
+  } else {
+    if (diff > 0) {
+      label = "좋음";
+      tone = "border-emerald-200 bg-emerald-50 text-emerald-800";
+      verdict = "예상치를 웃돈 긍정적인 실적입니다.";
+    } else if (diff < 0) {
+      label = "나쁨";
+      tone = "border-red-200 bg-red-50 text-red-800";
+      verdict = "예상치를 밑돈 부정적인 실적입니다.";
+    }
+  }
+
+  const diffText = diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2);
+  const pctText =
+    pct == null ? "" : ` · 예상 대비 ${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+
+  return {
+    label,
+    detail: `예상 EPS ${estimate.toFixed(2)} → 실제 EPS ${actual.toFixed(
+      2,
+    )} · 차이 ${diffText}${pctText}. ${verdict}`,
+    className: tone,
+  };
+}
+
+function EarningsCalendar({
+  items,
+  onSelect,
+}: {
+  items: EarningsItem[];
+  onSelect: (item: EarningsItem) => void;
+}) {
   const grouped = items.reduce<Record<string, EarningsItem[]>>((acc, item) => {
     const key = earningsDateKey(item.date);
     if (!acc[key]) acc[key] = [];
@@ -1059,10 +1279,12 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                     const timing = earningsTimeLabel(item.time);
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={`${symbol}-${date}-${index}`}
-                        className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm"
-                        title={item.company || symbol}
+                        onClick={() => onSelect(item)}
+                        className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-left shadow-sm transition hover:border-blue-300 hover:bg-blue-50 active:scale-[0.99]"
+                        title={`${item.company || symbol} 상세보기`}
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-white">
                           <img
