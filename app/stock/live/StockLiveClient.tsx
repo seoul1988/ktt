@@ -1,5 +1,3 @@
-
-
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -35,6 +33,8 @@ type Snapshot = {
   option_bias?: string;
   option_score?: number;
   vol_x?: number;
+  prev_close?: number;
+  day_change_pct?: number;
 };
 
 const MAX_SYMBOLS = 5;
@@ -42,6 +42,42 @@ const MAX_SYMBOLS = 5;
 function fmt(v: unknown, d = 2) {
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(d) : "-";
+}
+
+function dayChangePct(item?: Snapshot): number | null {
+  const direct = Number(item?.day_change_pct);
+  if (Number.isFinite(direct)) return direct;
+
+  const price = Number(item?.price);
+  const prev = Number(item?.prev_close);
+  if (!Number.isFinite(price) || !Number.isFinite(prev) || prev <= 0) return null;
+
+  return ((price - prev) / prev) * 100;
+}
+
+function DayChangeBadge({ item }: { item?: Snapshot }) {
+  const pct = dayChangePct(item);
+
+  if (pct == null) {
+    return <span className="text-xs font-bold text-slate-400">전일 대비 -</span>;
+  }
+
+  const up = pct > 0;
+  const down = pct < 0;
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-black ${
+        up
+          ? "bg-emerald-50 text-emerald-700"
+          : down
+            ? "bg-red-50 text-red-700"
+            : "bg-slate-100 text-slate-600"
+      }`}
+    >
+      {up ? "▲" : down ? "▼" : "—"} {Math.abs(pct).toFixed(2)}%
+    </span>
+  );
 }
 
 function textTone(value?: string) {
@@ -447,9 +483,14 @@ export default function StockLiveClient() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-lg font-black text-slate-950">{symbol}</div>
-                      <div className="text-xl font-black text-blue-700">
-                        {item?.price != null ? `$${fmt(item.price)}` : "-"}
+
+                      <div className="ml-auto flex items-center gap-2">
+                        <div className="text-xl font-black text-blue-700">
+                          {item?.price != null ? `$${fmt(item.price)}` : "-"}
+                        </div>
+                        <DayChangeBadge item={item} />
                       </div>
+
                       <span className="text-sm font-black text-slate-400">{isOpen ? "▲" : "▼"}</span>
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px]">
@@ -492,7 +533,7 @@ export default function StockLiveClient() {
           <div className="hidden overflow-x-auto border border-slate-300 md:block">
             <table className="w-full min-w-[1180px] border-collapse text-[11px]">
               <thead className="bg-slate-100"><tr>
-                {["Ticker", "?", "위험 신호", "Price", "Score", "Down Risk", "VWAP", "EMA9", "EMA20", "Resistance", "Support", "Fast Drop", "1m Trend"].map((head) => (
+                {["Ticker", "?", "위험 신호", "Price", "전일 대비", "Score", "Down Risk", "VWAP", "EMA9", "EMA20", "Resistance", "Support", "Fast Drop", "1m Trend"].map((head) => (
                   <th key={head} className="whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 font-black text-slate-950">{head}</th>
                 ))}
               </tr></thead>
@@ -527,6 +568,9 @@ export default function StockLiveClient() {
                         {symbol ? <b>{publicRiskStatus(item).label || "-"}</b> : "-"}
                       </Cell>
                       <Cell>{item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
+                      <Cell>
+                        {symbol ? <DayChangeBadge item={item} /> : "-"}
+                      </Cell>
                       <Cell className={scoreTone(item?.score)}>{item?.score ?? "-"}</Cell>
                       <Cell className={riskTone(item?.down_risk)}>
                         {item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}
@@ -625,6 +669,8 @@ function StockWhyModal({
             </b>
             {"  |  "}현재가:{" "}
             <b>{item?.price != null ? `$${fmt(item.price)}` : "-"}</b>
+            {"  |  "}전일 대비:{" "}
+            <DayChangeBadge item={item} />
           </div>
 
           <div className="mb-4">
