@@ -793,13 +793,28 @@ async function fetchMarketEvents(): Promise<{
         normalizeMarketEvent(event, index),
     );
 
+    const bridgeFile = data?.bridgeFile ? String(data.bridgeFile) : "";
+    const bridge = Boolean(data?.bridge);
+    const baseWarning = String(data?.warning || "");
+
+    const warning =
+      rawEvents.length === 0
+        ? [
+            baseWarning,
+            bridge ? "PC #2 JSON 브리지 응답은 왔지만 events가 0개입니다." : "PC #2 JSON 브리지 응답이 아닙니다.",
+            bridgeFile ? `bridgeFile=${bridgeFile}` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : baseWarning;
+
     return {
       events,
-      warning: String(data?.warning || ""),
+      warning,
       updatedAt: data?.updatedAt ? String(data.updatedAt) : undefined,
       source: data?.source ? String(data.source) : undefined,
-      bridge: Boolean(data?.bridge),
-      bridgeFile: data?.bridgeFile ? String(data.bridgeFile) : undefined,
+      bridge,
+      bridgeFile: bridgeFile || undefined,
       engineFile: data?.engineFile ? String(data.engineFile) : undefined,
       pc2EventCount: rawEvents.length,
     };
