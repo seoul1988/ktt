@@ -724,6 +724,10 @@ async function fetchMarketEvents(): Promise<{
   warning: string;
   updatedAt?: string;
   source?: string;
+  bridge?: boolean;
+  bridgeFile?: string;
+  engineFile?: string;
+  pc2EventCount?: number;
 }> {
   const apiBase = (process.env.KTOWN_STOCK_API_URL || "").replace(/\/+$/, "");
   const serverSecret = process.env.KTOWN_STOCK_SERVER_SECRET || "";
@@ -732,62 +736,88 @@ async function fetchMarketEvents(): Promise<{
     return {
       events: [],
       warning: "PC #2 market-events 환경변수 미연결",
+      pc2EventCount: 0,
     };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+
   try {
     const response = await fetch(`${apiBase}/internal/market-events`, {
-      headers: { "x-ktown-secret": serverSecret },
+      method: "GET",
+      headers: {
+        "x-ktown-secret": serverSecret,
+        accept: "application/json",
+      },
       cache: "no-store",
+      signal: controller.signal,
     });
-    const data = await response.json().catch(() => ({}));
+
+    const rawText = await response.text();
+
+    let data: Record<string, any> = {};
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      return {
+        events: [],
+        warning: `PC #2 market-events JSON 파싱 실패 · HTTP ${response.status}`,
+        pc2EventCount: 0,
+      };
+    }
 
     if (!response.ok) {
       return {
         events: [],
         warning:
-          data?.detail ||
-          data?.error ||
+          String(data?.detail || data?.error || "") ||
           `PC #2 market-events HTTP ${response.status}`,
+        updatedAt: data?.updatedAt ? String(data.updatedAt) : undefined,
+        source: data?.source ? String(data.source) : undefined,
+        bridge: Boolean(data?.bridge),
+        bridgeFile: data?.bridgeFile ? String(data.bridgeFile) : undefined,
+        engineFile: data?.engineFile ? String(data.engineFile) : undefined,
+        pc2EventCount: Array.isArray(data?.events) ? data.events.length : 0,
       };
     }
 
-    const events: MarketEvent[] = Array.isArray(data?.events)
-      ? data.events.map(
-          (event: Record<string, unknown>, index: number) =>
-            normalizeMarketEvent(event, index),
-        )
-      : [];
+    const rawEvents = Array.isArray(data?.events) ? data.events : [];
 
-    events.sort((a, b) => {
-      if (b.importanceNumber !== a.importanceNumber) {
-        return b.importanceNumber - a.importanceNumber;
-      }
-
-      const aTime = a.dateTime ? Date.parse(a.dateTime) : Number.MAX_SAFE_INTEGER;
-      const bTime = b.dateTime ? Date.parse(b.dateTime) : Number.MAX_SAFE_INTEGER;
-
-      if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
-        return aTime - bTime;
-      }
-
-      return a.time.localeCompare(b.time);
-    });
+    // IMPORTANT:
+    // PC #2 writes ktown_market_events.json and FastAPI returns that JSON.
+    // Do not filter by importance and do not reorder here.
+    // The website should mirror exactly what PC #2 saved.
+    const events: MarketEvent[] = rawEvents.map(
+      (event: Record<string, unknown>, index: number) =>
+        normalizeMarketEvent(event, index),
+    );
 
     return {
       events,
       warning: String(data?.warning || ""),
       updatedAt: data?.updatedAt ? String(data.updatedAt) : undefined,
       source: data?.source ? String(data.source) : undefined,
+      bridge: Boolean(data?.bridge),
+      bridgeFile: data?.bridgeFile ? String(data.bridgeFile) : undefined,
+      engineFile: data?.engineFile ? String(data.engineFile) : undefined,
+      pc2EventCount: rawEvents.length,
     };
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.name === "AbortError"
+          ? "PC #2 market-events 요청 시간 초과"
+          : `PC #2 market-events: ${error.message}`
+        : "PC #2 market-events 연결 실패";
+
     return {
       events: [],
-      warning:
-        error instanceof Error
-          ? `PC #2 market-events: ${error.message}`
-          : "PC #2 market-events 연결 실패",
+      warning: message,
+      pc2EventCount: 0,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -839,6 +869,10 @@ export async function GET(request: NextRequest) {
         eventResult.source ||
         "Nasdaq Earnings Calendar + Benzinga Company Results + Nasdaq Earnings Surprise + KTown PC #2 events",
       warning: warnings.join(" · "),
+      marketEventsBridge: eventResult.bridge ?? false,
+      marketEventsBridgeFile: eventResult.bridgeFile || "",
+      marketEventsEngineFile: eventResult.engineFile || "",
+      marketEventsPc2Count: eventResult.pc2EventCount ?? eventResult.events.length,
     },
     {
       status: 200,
