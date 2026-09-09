@@ -1015,20 +1015,14 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
 
   return (
     <div
-      className="w-full overflow-x-auto overscroll-x-contain pb-3 md:overflow-x-visible"
+      className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-3 md:overflow-x-visible"
       style={{
         WebkitOverflowScrolling: "touch",
-        touchAction: "pan-x",
+        touchAction: "pan-x pinch-zoom",
       }}
     >
       <div
-        className="grid w-max overflow-hidden rounded-xl border border-slate-200 bg-slate-100 md:w-full"
-        style={{
-          gridTemplateColumns:
-            typeof window !== "undefined" && window.innerWidth >= 768
-              ? `repeat(${Math.max(dates.length, 1)}, minmax(0, 1fr))`
-              : `repeat(${Math.max(dates.length, 1)}, 180px)`,
-        }}
+        className="grid w-[900px] grid-cols-5 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 md:w-full"
       >
         {dates.map((date, dateIndex) => {
           const label = earningsDayLabel(date);
