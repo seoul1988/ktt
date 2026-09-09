@@ -514,13 +514,38 @@ async function enrichTodayWithActuals(
 ): Promise<EarningsItem[]> {
   const today = easternTodayKey();
 
-  // Future dates do not need actual EPS lookup.
+  // Only today's schedule can have same-day actuals.
   if (date !== today || !items.length) return items;
+
+  // First fetch the Benzinga daily earnings table once.  The previous route
+  // already had this parser but did not use it, so actual EPS could remain null
+  // even after the company had reported.
+  const benzingaToday = await fetchBenzingaTodayResults();
 
   return Promise.all(
     items.map(async (item) => {
-      // 1) Strongest same-day fallback:
-      // fetch each company's Benzinga earnings page and match the exact date.
+      // 1) Fast same-day result table.
+      const daily = benzingaToday.get(item.symbol.toUpperCase());
+
+      if (daily?.actual != null) {
+        return {
+          ...item,
+          estimate:
+            daily.estimate != null
+              ? daily.estimate
+              : item.estimate,
+          actualEps: daily.actual,
+          surprise:
+            daily.surprisePct != null
+              ? `${daily.surprisePct >= 0 ? "+" : ""}${daily.surprisePct.toFixed(2)}%`
+              : daily.estimate != null && daily.estimate !== 0
+                ? `${(((daily.actual - daily.estimate) / Math.abs(daily.estimate)) * 100) >= 0 ? "+" : ""}${(((daily.actual - daily.estimate) / Math.abs(daily.estimate)) * 100).toFixed(2)}%`
+                : null,
+          actualSource: "Benzinga earnings calendar",
+        };
+      }
+
+      // 2) Company-specific Benzinga page, exact same-day report.
       const bz = await fetchBenzingaSymbolResult(item.symbol, date);
 
       if (bz?.actual != null) {
@@ -533,15 +558,13 @@ async function enrichTodayWithActuals(
           actualEps: bz.actual,
           surprise:
             bz.surprisePct != null
-              ? `${bz.surprisePct >= 0 ? "+" : ""}${bz.surprisePct.toFixed(
-                  2,
-                )}%`
+              ? `${bz.surprisePct >= 0 ? "+" : ""}${bz.surprisePct.toFixed(2)}%`
               : null,
           actualSource: "Benzinga company earnings",
         };
       }
 
-      // 2) Nasdaq fallback.
+      // 3) Nasdaq earnings-surprise fallback.
       try {
         const rows = await fetchNasdaqEarningsSurprise(item.symbol);
         if (!rows.length) return item;
@@ -550,26 +573,29 @@ async function enrichTodayWithActuals(
           (row) => toDateKey(row.dateReported) === date,
         );
 
+        // Some Nasdaq responses can lag by a date boundary.  Permit only the
+        // closest row within one day, and only when it actually has an EPS value.
         if (!reported) {
-          const latest = rows[0];
-          const latestKey = toDateKey(latest?.dateReported);
+          const candidate = rows.find((row) => {
+            const key = toDateKey(row.dateReported);
+            if (!key || toNumber(row.eps) == null) return false;
 
-          if (latestKey) {
-            const latestDate = new Date(`${latestKey}T12:00:00Z`);
+            const rowDate = new Date(`${key}T12:00:00Z`);
             const targetDate = new Date(`${date}T12:00:00Z`);
             const diffDays = Math.abs(
-              (latestDate.getTime() - targetDate.getTime()) / 86_400_000,
+              (rowDate.getTime() - targetDate.getTime()) / 86_400_000,
             );
+            return diffDays <= 1;
+          });
 
-            if (diffDays <= 1) {
-              reported = latest;
-            }
-          }
+          if (candidate) reported = candidate;
         }
 
         if (!reported) return item;
 
         const actual = toNumber(reported.eps);
+        if (actual == null) return item;
+
         const consensus = toNumber(reported.consensusForecast);
         const surprise = toNumber(reported.percentageSurprise);
 
@@ -590,10 +616,7 @@ async function enrichTodayWithActuals(
             consensus != null
               ? consensus
               : item.estimate,
-          actualEps:
-            actual != null
-              ? actual
-              : null,
+          actualEps: actual,
           priorYearEps:
             priorYearEps != null
               ? priorYearEps
@@ -601,9 +624,10 @@ async function enrichTodayWithActuals(
           surprise:
             surprise != null
               ? `${surprise >= 0 ? "+" : ""}${surprise.toFixed(2)}%`
-              : null,
-          actualSource:
-            actual != null ? "Nasdaq earnings surprise" : null,
+              : consensus != null && consensus !== 0
+                ? `${(((actual - consensus) / Math.abs(consensus)) * 100) >= 0 ? "+" : ""}${(((actual - consensus) / Math.abs(consensus)) * 100).toFixed(2)}%`
+                : null,
+          actualSource: "Nasdaq earnings surprise",
         };
       } catch (error) {
         console.error(
@@ -614,49 +638,6 @@ async function enrichTodayWithActuals(
       }
     }),
   );
-}
-
-function normalizeMarketEvent(
-  event: Record<string, unknown>,
-  index: number,
-): MarketEvent {
-  const rawImportance = event.importance ?? event.importanceNumber ?? event.risk;
-  const importanceText = String(rawImportance ?? "").toLowerCase();
-
-  const importanceNumber =
-    Number(event.importanceNumber) ||
-    (importanceText === "3" || importanceText.includes("high")
-      ? 3
-      : importanceText === "2" || importanceText.includes("med")
-        ? 2
-        : 1);
-
-  const importance: MarketEvent["importance"] =
-    importanceNumber >= 3
-      ? "high"
-      : importanceNumber === 2
-        ? "medium"
-        : "low";
-
-  const title = String(event.title || event.name || "-").trim();
-  const source = String(event.source || "").trim();
-  const url = String(event.url || "").trim();
-
-  return {
-    id: String(event.id || `market-event-${index}`),
-    time: String(event.time || "TBD"),
-    dateTime: event.dateTime ? String(event.dateTime) : undefined,
-    title,
-    name: event.name ? String(event.name) : title,
-    importance,
-    importanceNumber,
-    risk: event.risk ? String(event.risk) : undefined,
-    source: source || undefined,
-    actual: event.actual ? String(event.actual) : "",
-    forecast: event.forecast ? String(event.forecast) : "",
-    previous: event.previous ? String(event.previous) : "",
-    url: url || undefined,
-  };
 }
 
 async function fetchMarketEvents(): Promise<{
