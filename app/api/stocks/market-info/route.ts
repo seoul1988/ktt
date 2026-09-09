@@ -15,6 +15,7 @@ type EarningsItem = {
   actualEps?: string | number | null;
   priorYearEps?: string | number | null;
   surprise?: string | number | null;
+  actualSource?: string | null;
 };
 
 type SurpriseRow = {
@@ -283,19 +284,55 @@ async function enrichTodayWithActuals(
 ): Promise<EarningsItem[]> {
   const today = easternTodayKey();
 
-  // 미래 날짜는 실제 EPS를 조회할 이유가 없습니다.
+  // 미래 날짜는 실제 EPS 조회하지 않음.
   if (date !== today || !items.length) return items;
+
+  // 1차: 오늘 발표 결과가 빠르게 반영되는 Benzinga 공개 earnings table.
+  const benzinga = await fetchBenzingaTodayResults();
 
   return Promise.all(
     items.map(async (item) => {
+      const bz = benzinga.get(item.symbol);
+
+      if (bz?.actual != null) {
+        return {
+          ...item,
+          estimate:
+            bz.estimate != null
+              ? bz.estimate
+              : item.estimate,
+          actualEps: bz.actual,
+          surprise:
+            bz.surprisePct != null
+              ? `${bz.surprisePct >= 0 ? "+" : ""}${bz.surprisePct.toFixed(2)}%`
+              : null,
+          actualSource: "Benzinga",
+        };
+      }
+
+      // 2차 fallback: Nasdaq company earnings-surprise.
       try {
         const rows = await fetchNasdaqEarningsSurprise(item.symbol);
         if (!rows.length) return item;
 
-        // 오늘 실제 발표된 행을 찾습니다.
-        const reported = rows.find(
+        // 오늘 날짜 exact match 우선.
+        let reported = rows.find(
           (row) => toDateKey(row.dateReported) === date,
         );
+
+        // Nasdaq 반영 시각/날짜 포맷 차이를 대비해 최신 행이 오늘 또는 어제면 허용.
+        if (!reported) {
+          const latest = rows[0];
+          const latestKey = toDateKey(latest?.dateReported);
+          if (latestKey) {
+            const latestDate = new Date(`${latestKey}T12:00:00Z`);
+            const targetDate = new Date(`${date}T12:00:00Z`);
+            const diffDays = Math.abs(
+              (latestDate.getTime() - targetDate.getTime()) / 86_400_000,
+            );
+            if (diffDays <= 1) reported = latest;
+          }
+        }
 
         if (!reported) return item;
 
@@ -305,7 +342,7 @@ async function enrichTodayWithActuals(
 
         const priorYear = rows.find((row) =>
           sameFiscalQuarterPreviousYear(
-            reported.fiscalQtrEnd,
+            reported?.fiscalQtrEnd,
             row.fiscalQtrEnd,
           ),
         );
@@ -313,7 +350,6 @@ async function enrichTodayWithActuals(
 
         return {
           ...item,
-          // 발표 후에는 surprise feed의 consensus를 우선 사용.
           estimate:
             consensus != null
               ? consensus
@@ -330,6 +366,7 @@ async function enrichTodayWithActuals(
             surprise != null
               ? `${surprise >= 0 ? "+" : ""}${surprise.toFixed(2)}%`
               : null,
+          actualSource: actual != null ? "Nasdaq" : null,
         };
       } catch (error) {
         console.error(
@@ -430,7 +467,7 @@ export async function GET(request: NextRequest) {
       earningsDates: dates,
       updatedAt: new Date().toISOString(),
       source:
-        "Nasdaq Earnings Calendar + Nasdaq Earnings Surprise + KTown PC #2 events",
+        "Nasdaq Earnings Calendar + Benzinga Results + Nasdaq Earnings Surprise + KTown PC #2 events",
       warning: warnings.join(" · "),
     },
     {
