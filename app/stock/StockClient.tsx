@@ -853,41 +853,10 @@ export default function StockMonitorPage() {
                   void loadMarketEvents();
                   setEventsModalOpen(true);
                 }}
-                className="block w-full rounded-xl text-left transition hover:bg-amber-50/50 active:bg-amber-50"
+                className="flex min-h-[112px] w-full items-center justify-center rounded-xl border border-dashed border-amber-200 bg-amber-50/40 px-4 text-center text-sm font-black text-amber-700 transition hover:bg-amber-50 active:bg-amber-100"
                 aria-label="오늘의 주요 시장 이벤트 전체보기"
               >
-                {marketInfo.events?.length ? (
-                  <div className="space-y-1">
-                    {marketInfo.events.slice(0, 6).map((event, index) => (
-                      <div
-                        key={event.id || `${event.title}-${index}`}
-                        className="flex gap-3 border-b border-slate-100 px-2 py-2 last:border-0"
-                      >
-                        <div className="w-[72px] shrink-0 text-xs font-black text-slate-600">
-                          {event.time || "TBD"}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-bold text-slate-900">
-                            {event.title || "-"}
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-slate-500">
-                            {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                        </div>
-                        <div className="shrink-0 self-center text-sm font-black text-amber-600">
-                          →
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
-                    오늘 예정된 중·고위험 시장 이벤트 없음 · {marketEventsStatus}
-                    <span className="ml-2 font-black text-amber-600">보기 →</span>
-                  </div>
-                )}
+                오늘의 주요 시장 이벤트 보기 →
               </button>
             </DashboardCard>
 
@@ -993,44 +962,26 @@ export default function StockMonitorPage() {
             <div className="max-h-[68vh] overflow-y-auto px-4 py-3">
               {marketInfo.events?.length ? (
                 <div className="divide-y divide-slate-100">
-                  {marketInfo.events.map((event, index) => {
-                    const content = (
-                      <div className="flex gap-3 py-3">
-                        <div className="w-[78px] shrink-0 text-xs font-black text-slate-600">
-                          {event.time || "TBD"}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-black leading-5 text-slate-900">
-                            {event.title || "-"}
-                          </div>
-                          <div className="mt-1 text-[11px] text-slate-500">
-                            {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </div>
-                        </div>
-                        {event.url ? (
-                          <div className="shrink-0 self-center text-sm font-black text-amber-600">
-                            →
-                          </div>
-                        ) : null}
+                  {marketInfo.events.map((event, index) => (
+                    <div
+                      key={event.id || `${event.title}-${index}`}
+                      className="flex gap-3 py-3"
+                    >
+                      <div className="w-[78px] shrink-0 text-xs font-black text-slate-600">
+                        {event.time || "TBD"}
                       </div>
-                    );
-
-                    return event.url ? (
-                      <a
-                        key={event.id || `${event.title}-${index}`}
-                        href={event.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-lg hover:bg-amber-50"
-                      >
-                        {content}
-                      </a>
-                    ) : (
-                      <div key={event.id || `${event.title}-${index}`}>{content}</div>
-                    );
-                  })}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-black leading-5 text-slate-900">
+                          {event.title || "-"}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {[event.source, event.importance ? `중요도 ${event.importance}` : ""]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex min-h-[190px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
