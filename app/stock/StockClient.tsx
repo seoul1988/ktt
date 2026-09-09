@@ -322,7 +322,7 @@ export default function StockMonitorPage() {
 
     ws.onopen = () => {
       setIsLive(true);
-      setStatus("실시간 분석 서버 연결됨 · 데이터 수신 중");
+      setStatus("PC #2 직접 연결됨 · 5종목 데이터 수신 중");
     };
     ws.onmessage = (event) => {
       try {
@@ -697,17 +697,14 @@ export default function StockMonitorPage() {
     setStatus("분석 서버 연결 요청 중...");
 
     try {
-      const token = await getAccessToken();
-      if (!token) {
-        setStatus("로그인이 필요합니다.");
-        return;
-      }
-
-      const response = await fetch("/api/stocks/session", {
+      // START는 Vercel API를 거치지 않습니다.
+      // 브라우저가 PC #2에 5개 종목을 직접 등록하고,
+      // PC #2가 직접 서명한 WebSocket URL을 돌려줍니다.
+      const response = await fetch("https://stock.7pocker.us/public/session", {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          authorization: `Bearer ${token}`,
+          accept: "application/json",
         },
         body: JSON.stringify({ symbols: finalSymbols }),
         cache: "no-store",
