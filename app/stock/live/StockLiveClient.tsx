@@ -1,4 +1,4 @@
-"use client";
+
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
@@ -72,6 +72,41 @@ function scoreTone(value?: number) {
   if (n >= 60) return "bg-emerald-100 text-emerald-800 font-black";
   if (n >= 40) return "bg-amber-100 text-amber-800 font-black";
   return "bg-red-100 text-red-800 font-black";
+}
+
+function publicRiskStatus(item?: Snapshot) {
+  const risk = Number(item?.down_risk);
+  const fastDrop = String(item?.fast_drop || "").toUpperCase();
+
+  if (fastDrop.includes("CRITICAL") || (Number.isFinite(risk) && risk >= 75)) {
+    return {
+      label: "고위험",
+      detail: "단기 하락 위험이 매우 높게 감지되었습니다.",
+      tone: "bg-red-100 text-red-800 font-black",
+    };
+  }
+
+  if (fastDrop.includes("WARNING") || (Number.isFinite(risk) && risk >= 60)) {
+    return {
+      label: "하락 위험",
+      detail: "단기 하락 위험이 높게 감지되었습니다.",
+      tone: "bg-red-100 text-red-800 font-black",
+    };
+  }
+
+  if (fastDrop.includes("WATCH") || (Number.isFinite(risk) && risk >= 45)) {
+    return {
+      label: "위험 관찰",
+      detail: "단기 하락 위험 신호를 관찰 중입니다.",
+      tone: "bg-amber-100 text-amber-800 font-black",
+    };
+  }
+
+  return {
+    label: "",
+    detail: "",
+    tone: "",
+  };
 }
 
 
@@ -418,19 +453,29 @@ export default function StockLiveClient() {
                       <span className="text-sm font-black text-slate-400">{isOpen ? "▲" : "▼"}</span>
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px]">
-                      <MobileValue label="ACTION" value={item?.action || "DATA WAIT"} tone={textTone(item?.action)} />
-                      <MobileValue label="SCORE" value={item?.score ?? "-"} tone={scoreTone(item?.score)} />
-                      <MobileValue label="RISK" value={item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"} tone={riskTone(item?.down_risk)} />
+                      <MobileValue
+                        label="위험 신호"
+                        value={publicRiskStatus(item).label || "-"}
+                        tone={publicRiskStatus(item).tone}
+                      />
+                      <MobileValue
+                        label="하락 위험"
+                        value={item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}
+                        tone={riskTone(item?.down_risk)}
+                      />
+                      <MobileValue label="분석 점수" value={item?.score ?? "-"} tone={scoreTone(item?.score)} />
                     </div>
                   </button>
 
                   {isOpen ? (
                     <div className="border-t border-slate-200 bg-slate-50 p-3">
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <MobileDetail label="Forecast" value={item?.forecast || "-"} tone={textTone(item?.forecast)} />
                         <MobileDetail label="1m Trend" value={item?.trend_1m || "-"} tone={textTone(item?.trend_1m)} />
-                        <MobileDetail label="Buy60" value={item?.buy60 ?? "-"} />
-                        <MobileDetail label="Sell60" value={item?.sell60 ?? "-"} />
+                        <MobileDetail
+                          label="위험 상태"
+                          value={publicRiskStatus(item).label || "-"}
+                          tone={publicRiskStatus(item).tone}
+                        />
                         <MobileDetail label="VWAP" value={item ? fmt(item.vwap) : "-"} />
                         <MobileDetail label="EMA9 / EMA20" value={item ? `${fmt(item.ema9)} / ${fmt(item.ema20)}` : "-"} />
                         <MobileDetail label="Resistance" value={item ? fmt(item.resistance) : "-"} />
@@ -447,7 +492,7 @@ export default function StockLiveClient() {
           <div className="hidden overflow-x-auto border border-slate-300 md:block">
             <table className="w-full min-w-[1180px] border-collapse text-[11px]">
               <thead className="bg-slate-100"><tr>
-                {["Ticker", "?", "Action", "Price", "Forecast", "Score", "Down Risk", "Buy60", "Sell60", "VWAP", "EMA9", "EMA20", "Resistance", "Support", "Fast Drop", "1m Trend"].map((head) => (
+                {["Ticker", "?", "위험 신호", "Price", "Score", "Down Risk", "VWAP", "EMA9", "EMA20", "Resistance", "Support", "Fast Drop", "1m Trend"].map((head) => (
                   <th key={head} className="whitespace-nowrap border-b border-r border-slate-300 px-2 py-2 font-black text-slate-950">{head}</th>
                 ))}
               </tr></thead>
@@ -464,7 +509,7 @@ export default function StockLiveClient() {
                           <button
                             type="button"
                             onClick={() => setPopupSymbol(symbol)}
-                            aria-label={`${symbol} 현재 판단 설명`}
+                            aria-label={`${symbol} 위험 정보 설명`}
                             aria-expanded={isPopupOpen}
                             className={`mx-auto flex h-7 w-7 items-center justify-center rounded-md font-black text-white transition ${
                               isPopupOpen
@@ -478,17 +523,14 @@ export default function StockLiveClient() {
                           "-"
                         )}
                       </Cell>
-                      <Cell className={symbol ? textTone(item?.action) : ""}>
-                        {symbol ? <b>{item?.action || "DATA WAIT"}</b> : "-"}
+                      <Cell className={symbol ? publicRiskStatus(item).tone : ""}>
+                        {symbol ? <b>{publicRiskStatus(item).label || "-"}</b> : "-"}
                       </Cell>
                       <Cell>{item?.price != null ? `$${fmt(item.price)}` : "-"}</Cell>
-                      <Cell className={textTone(item?.forecast)}>{item?.forecast || "-"}</Cell>
                       <Cell className={scoreTone(item?.score)}>{item?.score ?? "-"}</Cell>
                       <Cell className={riskTone(item?.down_risk)}>
                         {item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}
                       </Cell>
-                      <Cell>{item?.buy60 ?? "-"}</Cell>
-                      <Cell>{item?.sell60 ?? "-"}</Cell>
                       <Cell>{item ? fmt(item.vwap) : "-"}</Cell>
                       <Cell>{item ? fmt(item.ema9) : "-"}</Cell>
                       <Cell>{item ? fmt(item.ema20) : "-"}</Cell>
@@ -519,25 +561,16 @@ export default function StockLiveClient() {
 
 
 function signalSentence(item?: Snapshot) {
-  const action = String(item?.action || "WAIT").toUpperCase();
+  const risk = publicRiskStatus(item);
 
-  if (action.includes("SELL")) {
-    return "🔴 현재는 매수보다 포지션 위험 관리가 우선인 신호입니다.";
+  if (risk.label) {
+    return `⚠️ ${risk.detail}`;
   }
-  if (action.includes("BUY")) {
-    return "🟢 매수 조건이 상당 부분 충족된 상태입니다.";
-  }
-  if (action.includes("WARNING") || action.includes("DANGER")) {
-    return "🟠 하락 위험 경고가 감지되었습니다. 신규 진입보다 확인이 우선입니다.";
-  }
-  return "🟡 WAIT: 일부 조건이 아직 동시에 맞지 않습니다.";
+
+  return "현재 공개 화면에 표시할 수준의 단기 하락 위험 경고는 없습니다.";
 }
 
-function formatK(v?: number) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return "-";
-  return Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(Math.round(n));
-}
+
 
 function StockWhyModal({
   symbol,
@@ -549,14 +582,6 @@ function StockWhyModal({
   onClose: () => void;
 }) {
   const support = item?.local_support ?? item?.support;
-  const buy = Number(item?.buy60);
-  const sell = Number(item?.sell60);
-  const totalFlow = buy + sell;
-  const buyPct =
-    Number.isFinite(totalFlow) && totalFlow > 0
-      ? Math.round((buy / totalFlow) * 100)
-      : null;
-
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/35 p-3"
@@ -567,7 +592,7 @@ function StockWhyModal({
       <div className="max-h-[90vh] w-full max-w-[720px] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-100 px-4 py-3">
           <div className="font-black text-slate-950">
-            {symbol} — Why? / Current Situation
+            {symbol} — Risk Information
           </div>
           <button
             type="button"
@@ -581,7 +606,7 @@ function StockWhyModal({
 
         <div className="flex items-center justify-between gap-3 bg-slate-50 px-4 py-3">
           <h2 className="text-lg font-black text-slate-950">
-            {symbol} 현재 판단 설명
+            {symbol} 위험 정보
           </h2>
           <span className="text-xs font-semibold text-slate-500">
             실시간 계산값 기준
@@ -603,9 +628,9 @@ function StockWhyModal({
           </div>
 
           <div className="mb-4">
-            현재 판단: <b>{item?.action || "WAIT"}</b>
-            {"  |  "}Forecast <b>{item?.forecast || "-"}</b>
-            {"  |  "}Score <b>{item?.score ?? "-"}</b>
+            위험 상태: <b>{publicRiskStatus(item).label || "특이 위험 없음"}</b>
+            {"  |  "}하락 위험 <b>{item?.down_risk != null ? `${fmt(item.down_risk, 0)}%` : "-"}</b>
+            {"  |  "}분석 점수 <b>{item?.score ?? "-"}</b>
           </div>
 
           <div className="space-y-1">
@@ -630,12 +655,6 @@ function StockWhyModal({
 
             <div>
               🔴 Fast Drop: <b>{item?.fast_drop || "NONE"}</b>
-            </div>
-
-            <div>
-              🟢 60초 수급: Buy <b>{formatK(item?.buy60)}</b> / Sell{" "}
-              <b>{formatK(item?.sell60)}</b>
-              {buyPct != null ? ` — 매수 비중 ${buyPct}%` : ""}
             </div>
 
             <div>
@@ -672,8 +691,8 @@ function StockWhyModal({
           <div className="font-bold">{signalSentence(item)}</div>
 
           <div className="mt-4">
-            프로그램 판단 근거:{" "}
-            <b>{item?.reason || "현재 서버가 전달한 판단 근거가 없습니다."}</b>
+            위험 안내:{" "}
+            <b>{publicRiskStatus(item).detail || "현재 공개 화면에 표시할 수준의 단기 하락 위험 경고는 없습니다."}</b>
           </div>
         </div>
 
