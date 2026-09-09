@@ -876,7 +876,7 @@ export default function StockMonitorPage() {
                               })
                             : ""}
                         </div>
-                      </button>
+                      </div>
                     );
 
                     return news.url ? (
@@ -1310,7 +1310,7 @@ function EarningsCalendar({
                             {timing || "Time TBD"}
                           </div>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
