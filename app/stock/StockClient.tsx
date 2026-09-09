@@ -53,8 +53,10 @@ type Snapshot = {
 type MarketEvent = {
   id?: string;
   time?: string;
+  dateTime?: string;
   title?: string;
   importance?: "high" | "medium" | "low";
+  risk?: string;
   symbol?: string;
   source?: string;
   url?: string;
@@ -342,9 +344,13 @@ export default function StockMonitorPage() {
             return {
               id: String(event.id || `event-${index}`),
               time: String(event.time || "TBD"),
+              dateTime: event.dateTime ? String(event.dateTime) : undefined,
               title: String(event.title || event.name || "-"),
               importance,
+              risk: event.risk ? String(event.risk) : undefined,
               symbol: event.symbol ? String(event.symbol) : undefined,
+              source: event.source ? String(event.source) : undefined,
+              url: event.url ? String(event.url) : undefined,
             };
           })
         : [];
@@ -796,7 +802,10 @@ export default function StockMonitorPage() {
             >
               <button
                 type="button"
-                onClick={() => setEventsModalOpen(true)}
+                onClick={() => {
+                  void loadMarketInfo(symbols);
+                  setEventsModalOpen(true);
+                }}
                 className="block w-full rounded-xl text-left transition hover:bg-amber-50/50 active:bg-amber-50"
                 aria-label="오늘의 주요 시장 이벤트 전체보기"
               >
