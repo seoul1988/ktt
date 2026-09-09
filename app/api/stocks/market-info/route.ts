@@ -17,6 +17,22 @@ type EarningsItem = {
   surprise?: string | number | null;
 };
 
+type SurpriseRow = {
+  fiscalQtrEnd?: string;
+  dateReported?: string;
+  eps?: string | number | null;
+  consensusForecast?: string | number | null;
+  percentageSurprise?: string | number | null;
+};
+
+const NASDAQ_HEADERS = {
+  accept: "application/json, text/plain, */*",
+  "accept-language": "en-US,en;q=0.9",
+  "user-agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
+  referer: "https://www.nasdaq.com/",
+};
+
 function cleanSymbols(value: string | null) {
   return (value || "")
     .split(",")
@@ -54,7 +70,6 @@ function nextFiveWeekdays() {
 
   return result;
 }
-
 
 function parseMarketCap(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -113,17 +128,55 @@ function normalizeTime(value: unknown) {
   return text || "TBD";
 }
 
+function toDateKey(value: unknown): string {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  // Already YYYY-MM-DD.
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+  // Nasdaq commonly returns MM/DD/YYYY.
+  const us = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (us) {
+    return `${us[3]}-${String(Number(us[1])).padStart(2, "0")}-${String(
+      Number(us[2]),
+    ).padStart(2, "0")}`;
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function toNumber(value: unknown): number | null {
+  if (value == null) return null;
+  const raw = String(value).trim().replace(/[$,%\s,]/g, "");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sameFiscalQuarterPreviousYear(
+  currentFiscalQtrEnd: unknown,
+  candidateFiscalQtrEnd: unknown,
+) {
+  const current = toDateKey(currentFiscalQtrEnd);
+  const candidate = toDateKey(candidateFiscalQtrEnd);
+  if (!current || !candidate) return false;
+
+  const [cy, cm] = current.split("-").map(Number);
+  const [py, pm] = candidate.split("-").map(Number);
+  return py === cy - 1 && pm === cm;
+}
+
 async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
-  const url = `https://api.nasdaq.com/api/calendar/earnings?date=${encodeURIComponent(date)}`;
+  const url = `https://api.nasdaq.com/api/calendar/earnings?date=${encodeURIComponent(
+    date,
+  )}`;
 
   const response = await fetch(url, {
-    headers: {
-      accept: "application/json, text/plain, */*",
-      "accept-language": "en-US,en;q=0.9",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36",
-      referer: "https://www.nasdaq.com/",
-    },
+    headers: NASDAQ_HEADERS,
     cache: "no-store",
   });
 
@@ -138,9 +191,8 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
       ? payload.rows
       : [];
 
-  // 해당 날짜의 어닝 회사를 모두 읽은 뒤 시가총액을 계산합니다.
-  // 이후 시가총액 내림차순으로 정렬하고 최대 10개만 반환합니다.
-  // 예: 8개면 8개 전부, 13개면 시총 상위 10개.
+  // 해당 날짜의 전체 어닝 회사를 읽고 시총 순으로 최대 10개.
+  // 8개면 8개, 13개면 시총 상위 10개.
   return rows
     .map((row: Record<string, unknown>) => {
       const symbol = String(
@@ -162,28 +214,6 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
         row.consensusEPSForecast ??
         row.estimate ??
         row.epsEstimate ??
-        null;
-
-      const actualEps =
-        row.eps ??
-        row.actualEPS ??
-        row.actualEps ??
-        row.reportedEPS ??
-        row.reportedEps ??
-        null;
-
-      const priorYearEps =
-        row.lastYearEPS ??
-        row.priorYearEPS ??
-        row.previousEPS ??
-        row.previousEps ??
-        null;
-
-      const surprise =
-        row.surprise ??
-        row.epsSurprise ??
-        row.surprisePercent ??
-        row.surprisePct ??
         null;
 
       const rawTime =
@@ -213,25 +243,103 @@ async function fetchNasdaqEarnings(date: string): Promise<EarningsItem[]> {
             : String(estimate),
         marketCap,
         logoUrl: symbol
-          ? `https://images.financialmodelingprep.com/symbol/${encodeURIComponent(symbol)}.png`
+          ? `https://images.financialmodelingprep.com/symbol/${encodeURIComponent(
+              symbol,
+            )}.png`
           : "",
-        actualEps:
-          actualEps == null || String(actualEps).trim() === ""
-            ? null
-            : actualEps,
-        priorYearEps:
-          priorYearEps == null || String(priorYearEps).trim() === ""
-            ? null
-            : priorYearEps,
-        surprise:
-          surprise == null || String(surprise).trim() === ""
-            ? null
-            : surprise,
+        actualEps: null,
+        priorYearEps: null,
+        surprise: null,
       };
     })
     .filter((item: EarningsItem) => Boolean(item.symbol))
     .sort((a: EarningsItem, b: EarningsItem) => b.marketCap - a.marketCap)
     .slice(0, 10);
+}
+
+async function fetchNasdaqEarningsSurprise(symbol: string): Promise<SurpriseRow[]> {
+  const url = `https://api.nasdaq.com/api/company/${encodeURIComponent(
+    symbol.toLowerCase(),
+  )}/earnings-surprise`;
+
+  const response = await fetch(url, {
+    headers: {
+      ...NASDAQ_HEADERS,
+      referer: `https://www.nasdaq.com/market-activity/stocks/${symbol.toLowerCase()}/earnings`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) return [];
+
+  const payload = await response.json().catch(() => ({}));
+  const rows = payload?.data?.earningsSurpriseTable?.rows;
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function enrichTodayWithActuals(
+  items: EarningsItem[],
+  date: string,
+): Promise<EarningsItem[]> {
+  const today = easternTodayKey();
+
+  // 미래 날짜는 실제 EPS를 조회할 이유가 없습니다.
+  if (date !== today || !items.length) return items;
+
+  return Promise.all(
+    items.map(async (item) => {
+      try {
+        const rows = await fetchNasdaqEarningsSurprise(item.symbol);
+        if (!rows.length) return item;
+
+        // 오늘 실제 발표된 행을 찾습니다.
+        const reported = rows.find(
+          (row) => toDateKey(row.dateReported) === date,
+        );
+
+        if (!reported) return item;
+
+        const actual = toNumber(reported.eps);
+        const consensus = toNumber(reported.consensusForecast);
+        const surprise = toNumber(reported.percentageSurprise);
+
+        const priorYear = rows.find((row) =>
+          sameFiscalQuarterPreviousYear(
+            reported.fiscalQtrEnd,
+            row.fiscalQtrEnd,
+          ),
+        );
+        const priorYearEps = priorYear ? toNumber(priorYear.eps) : null;
+
+        return {
+          ...item,
+          // 발표 후에는 surprise feed의 consensus를 우선 사용.
+          estimate:
+            consensus != null
+              ? consensus
+              : item.estimate,
+          actualEps:
+            actual != null
+              ? actual
+              : null,
+          priorYearEps:
+            priorYearEps != null
+              ? priorYearEps
+              : null,
+          surprise:
+            surprise != null
+              ? `${surprise >= 0 ? "+" : ""}${surprise.toFixed(2)}%`
+              : null,
+        };
+      } catch (error) {
+        console.error(
+          `Nasdaq earnings surprise failed for ${item.symbol}:`,
+          error,
+        );
+        return item;
+      }
+    }),
+  );
 }
 
 async function fetchMarketEvents() {
@@ -285,9 +393,12 @@ export async function GET(request: NextRequest) {
     fetchMarketEvents(),
     ...dates.map(async (date) => {
       try {
+        const scheduled = await fetchNasdaqEarnings(date);
+        const data = await enrichTodayWithActuals(scheduled, date);
+
         return {
           date,
-          data: await fetchNasdaqEarnings(date),
+          data,
           warning: "",
         };
       } catch (error) {
@@ -295,7 +406,9 @@ export async function GET(request: NextRequest) {
           date,
           data: [] as EarningsItem[],
           warning:
-            error instanceof Error ? error.message : "Nasdaq earnings 연결 실패",
+            error instanceof Error
+              ? error.message
+              : "Nasdaq earnings 연결 실패",
         };
       }
     }),
@@ -308,9 +421,6 @@ export async function GET(request: NextRequest) {
 
   const warnings = [eventResult.warning, ...earningsWarnings].filter(Boolean);
 
-  // IMPORTANT:
-  // Earnings are independent of PC #2.  Therefore a missing PC #2 environment
-  // variable must NOT make the entire Market Dashboard return HTTP 503.
   return NextResponse.json(
     {
       symbols,
@@ -319,7 +429,8 @@ export async function GET(request: NextRequest) {
       news: [],
       earningsDates: dates,
       updatedAt: new Date().toISOString(),
-      source: "Nasdaq Earnings Calendar + KTown PC #2 events",
+      source:
+        "Nasdaq Earnings Calendar + Nasdaq Earnings Surprise + KTown PC #2 events",
       warning: warnings.join(" · "),
     },
     {
