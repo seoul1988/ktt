@@ -229,6 +229,7 @@ export default function StockMonitorPage() {
   });
   const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
   const [eventsModalOpen, setEventsModalOpen] = useState(false);
+  const [selectedEarnings, setSelectedEarnings] = useState<EarningsItem | null>(null);
   const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
   const [stockNews, setStockNews] = useState<NewsItem[]>([]);
 
@@ -924,7 +925,7 @@ export default function StockMonitorPage() {
               accent="emerald"
             >
               {marketInfo.earnings?.length ? (
-                <EarningsCalendar items={marketInfo.earnings} />
+                <EarningsCalendar items={marketInfo.earnings} onSelect={setSelectedEarnings} />
               ) : (
                 <EmptyBlock text={`어닝 데이터 ${marketInfoStatus}`} />
               )}
@@ -986,6 +987,87 @@ export default function StockMonitorPage() {
         </section>
 
        
+
+
+        {selectedEarnings ? (
+          <div
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/45 p-4"
+            onClick={() => setSelectedEarnings(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="earnings-detail-title"
+              className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                <div className="min-w-0">
+                  <h2
+                    id="earnings-detail-title"
+                    className="truncate text-base font-black tracking-wide text-slate-950"
+                  >
+                    {String(selectedEarnings.symbol || "").toUpperCase()} EARNINGS
+                  </h2>
+                  <div className="mt-1 truncate text-xs font-semibold text-slate-500">
+                    {selectedEarnings.company || "Company"}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedEarnings(null)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-lg font-black text-slate-600 hover:bg-slate-50"
+                  aria-label="닫기"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="space-y-3 p-5 text-sm">
+                <div className="grid grid-cols-[110px_1fr] gap-2">
+                  <div className="font-bold text-slate-500">Date</div>
+                  <div className="font-black text-slate-900">
+                    {selectedEarnings.date || "TBD"}
+                  </div>
+
+                  <div className="font-bold text-slate-500">Time</div>
+                  <div className="font-black text-slate-900">
+                    {earningsTimeLabel(selectedEarnings.time) || "Time TBD"}
+                  </div>
+
+                  <div className="font-bold text-slate-500">Estimate EPS</div>
+                  <div className="font-black text-slate-900">
+                    {selectedEarnings.estimate != null
+                      ? String(selectedEarnings.estimate)
+                      : "-"}
+                  </div>
+
+                  <div className="font-bold text-slate-500">Actual EPS</div>
+                  <div className="font-black text-slate-900">
+                    {selectedEarnings.actualEps != null
+                      ? String(selectedEarnings.actualEps)
+                      : earningsReleaseHasPassed(selectedEarnings)
+                        ? "결과 대기"
+                        : "발표 전"}
+                  </div>
+
+                  <div className="font-bold text-slate-500">Surprise</div>
+                  <div className="font-black text-slate-900">
+                    {selectedEarnings.surprise != null
+                      ? String(selectedEarnings.surprise)
+                      : "-"}
+                  </div>
+
+                  <div className="font-bold text-slate-500">Source</div>
+                  <div className="font-black text-slate-900">
+                    {selectedEarnings.actualSource || "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {eventsModalOpen ? (
           <div
@@ -1096,7 +1178,13 @@ export default function StockMonitorPage() {
 
 
 
-function EarningsCalendar({ items }: { items: EarningsItem[] }) {
+function EarningsCalendar({
+  items,
+  onSelect,
+}: {
+  items: EarningsItem[];
+  onSelect: (item: EarningsItem) => void;
+}) {
   const grouped = items.reduce<Record<string, EarningsItem[]>>((acc, item) => {
     const key = earningsDateKey(item.date);
     if (!acc[key]) acc[key] = [];
@@ -1162,9 +1250,11 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                     const timing = earningsTimeLabel(item.time);
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={`${symbol}-${date}-${index}`}
-                        className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 shadow-sm"
+                        onClick={() => onSelect(item)}
+                        className="flex min-h-[44px] w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-left shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
                         title={item.company || symbol}
                       >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-slate-100 bg-white">
@@ -1177,7 +1267,7 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
                               e.currentTarget.style.display = "none";
                             }}
                           />
-                        </div>
+                        </button>
 
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[11px] font-black text-slate-950">
