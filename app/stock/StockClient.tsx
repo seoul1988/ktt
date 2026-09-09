@@ -1210,7 +1210,7 @@ function EarningsCalendar({
       }}
     >
       <div
-        className="grid w-max min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        className="grid w-max min-w-[780px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
         style={{
           gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
         }}
@@ -1218,13 +1218,13 @@ function EarningsCalendar({
         {dates.map((date, dateIndex) => {
           const label = earningsDayLabel(date);
 
-          // 날짜별 시가총액 큰 순서 → 최대 6개만 표시
+          // 날짜별 시가총액 큰 순서 → 최대 10개만 표시
           const dayItems = [...(grouped[date] || [])]
             .sort(
               (a, b) =>
                 Number(b.marketCap || 0) - Number(a.marketCap || 0),
             )
-            .slice(0, 6);
+            .slice(0, 10);
 
           return (
             <div
@@ -1243,7 +1243,7 @@ function EarningsCalendar({
                 </div>
               </div>
 
-              <div className="min-h-[310px] bg-slate-50 p-2">
+              <div className="min-h-[510px] bg-slate-50 p-2">
                 <div className="space-y-2">
                   {dayItems.map((item, index) => {
                     const symbol = String(item.symbol || "?").toUpperCase();
@@ -1267,7 +1267,7 @@ function EarningsCalendar({
                               e.currentTarget.style.display = "none";
                             }}
                           />
-                        </button>
+                        </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[11px] font-black text-slate-950">
@@ -1278,7 +1278,7 @@ function EarningsCalendar({
                             {timing || "Time TBD"}
                           </div>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1295,7 +1295,7 @@ function EarningsCalendar({
       </div>
 
       <div className="mt-2 text-[10px] font-semibold text-slate-400">
-        날짜별 시가총액 상위 6개 · 실적 발표 시점만 표시
+        날짜별 시가총액 상위 10개 · 실적 발표 시점만 표시
       </div>
     </div>
   );
@@ -1363,3 +1363,4 @@ function Cell({
     </td>
   );
 }
+
