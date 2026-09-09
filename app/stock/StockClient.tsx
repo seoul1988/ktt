@@ -1028,72 +1028,51 @@ export default function StockMonitorPage() {
               <div className="max-h-[70vh] overflow-y-auto p-4">
                 {marketInfo.events?.length ? (
                   <div className="space-y-1">
-                    {marketInfo.events.map((event, index) => {
-                      const row = (
-                        <div className="flex gap-3 border-b border-slate-100 px-2 py-3 last:border-0">
-                          <div className="w-[72px] shrink-0 text-xs font-black text-slate-700">
-                            {event.time || "TBD"}
+                    {marketInfo.events.map((event, index) => (
+                      <div
+                        key={event.id || `${event.title}-${index}`}
+                        className="flex gap-3 border-b border-slate-100 px-2 py-3 last:border-0"
+                      >
+                        <div className="w-[72px] shrink-0 text-xs font-black text-slate-700">
+                          {event.time || "TBD"}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-black text-slate-950">
+                            {event.title || "-"}
                           </div>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-black text-slate-950">
-                              {event.title || "-"}
-                            </div>
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            {[
+                              event.source,
+                              event.importance
+                                ? `중요도 ${event.importance}`
+                                : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
 
-                            <div className="mt-1 text-[11px] text-slate-500">
+                          {(event.actual ||
+                            event.forecast ||
+                            event.previous) ? (
+                            <div className="mt-1 text-[11px] font-semibold text-slate-600">
                               {[
-                                event.source,
-                                event.importance
-                                  ? `중요도 ${event.importance}`
+                                event.actual ? `Actual ${event.actual}` : "",
+                                event.forecast
+                                  ? `Forecast ${event.forecast}`
+                                  : "",
+                                event.previous
+                                  ? `Previous ${event.previous}`
                                   : "",
                               ]
                                 .filter(Boolean)
                                 .join(" · ")}
                             </div>
-
-                            {(event.actual ||
-                              event.forecast ||
-                              event.previous) ? (
-                              <div className="mt-1 text-[11px] font-semibold text-slate-600">
-                                {[
-                                  event.actual ? `Actual ${event.actual}` : "",
-                                  event.forecast
-                                    ? `Forecast ${event.forecast}`
-                                    : "",
-                                  event.previous
-                                    ? `Previous ${event.previous}`
-                                    : "",
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          {event.url ? (
-                            <div className="shrink-0 self-center text-base font-black text-amber-600">
-                              →
-                            </div>
                           ) : null}
                         </div>
-                      );
-
-                      return event.url ? (
-                        <a
-                          key={event.id || `${event.title}-${index}`}
-                          href={event.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block rounded-lg hover:bg-amber-50"
-                        >
-                          {row}
-                        </a>
-                      ) : (
-                        <div key={event.id || `${event.title}-${index}`}>
-                          {row}
-                        </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="flex min-h-[170px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center">
