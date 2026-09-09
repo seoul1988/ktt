@@ -373,6 +373,11 @@ export default function StockLiveClient() {
             <Link href="/stock" className="text-xs font-black text-blue-600 hover:underline">← Market Dashboard</Link>
             <h1 className="mt-2 text-2xl font-black text-slate-950">LIVE STOCK DATA</h1>
             <p className="mt-1 text-sm font-semibold text-slate-600">{status}</p>
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900">
+              ⚠️ 참고 자료용입니다. 본 페이지의 주가 데이터, 분석 신호, 예측 및 지표는
+              투자 권유 또는 매수·매도 추천이 아닙니다. 실제 투자 결정은 본인의 판단과
+              책임으로 하시기 바랍니다.
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => void load()} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-black text-white hover:bg-blue-700">재연결</button>
