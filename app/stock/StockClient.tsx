@@ -1,4 +1,4 @@
-"use client";
+
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -178,6 +178,7 @@ export default function StockMonitorPage() {
     news: [],
   });
   const [marketInfoStatus, setMarketInfoStatus] = useState("연결 대기");
+  const [marketEventsStatus, setMarketEventsStatus] = useState("연결 대기");
   const [eventsModalOpen, setEventsModalOpen] = useState(false);
   const [selectedEarnings, setSelectedEarnings] = useState<EarningsItem | null>(null);
   const [sharedNews, setSharedNews] = useState<NewsItem[]>([]);
@@ -312,21 +313,19 @@ export default function StockMonitorPage() {
   }, []);
 
 
-  const loadMarketInfo = useCallback(async (watchSymbols: string[]) => {
+  const loadMarketEvents = useCallback(async () => {
     try {
-      setMarketInfoStatus("업데이트 중");
-      const query = watchSymbols.length
-        ? `?symbols=${encodeURIComponent(watchSymbols.join(","))}`
-        : "";
-      const response = await fetch(`/api/stocks/market-info${query}`, {
-        cache: "no-store",
-      });
+      setMarketEventsStatus("업데이트 중");
+
+      const response = await fetch(
+        "https://stock.7pocker.us/public/market-events",
+        { cache: "no-store" },
+      );
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setMarketInfo({ events: [], earnings: [], news: [] });
-        setMarketInfoStatus(data?.error || `이벤트 서버 HTTP ${response.status}`);
+        setMarketEventsStatus(`마켓 이벤트 HTTP ${response.status}`);
         return;
       }
 
@@ -355,14 +354,55 @@ export default function StockMonitorPage() {
           })
         : [];
 
-      setMarketInfo({
+      setMarketInfo((prev) => ({
+        ...prev,
         events,
+      }));
+
+      const updated = data?.updatedAt
+        ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "방금";
+
+      setMarketEventsStatus(
+        data?.warning ? `일부 연결 경고 · ${updated}` : `업데이트 ${updated}`,
+      );
+    } catch (error) {
+      console.error("market events load error:", error);
+      setMarketEventsStatus(
+        error instanceof Error ? error.message : "마켓 이벤트 연결 실패",
+      );
+    }
+  }, []);
+
+  const loadMarketInfo = useCallback(async (watchSymbols: string[]) => {
+    try {
+      setMarketInfoStatus("업데이트 중");
+      const query = watchSymbols.length
+        ? `?symbols=${encodeURIComponent(watchSymbols.join(","))}`
+        : "";
+      const response = await fetch(`/api/stocks/market-info${query}`, {
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setMarketInfo((prev) => ({ ...prev, earnings: [], news: [] }));
+        setMarketInfoStatus(data?.error || `이벤트 서버 HTTP ${response.status}`);
+        return;
+      }
+
+      setMarketInfo((prev) => ({
+        ...prev,
         earnings: Array.isArray(data?.earnings) ? data.earnings : [],
         news: Array.isArray(data?.news) ? data.news : [],
         updatedAt: data?.updatedAt,
         source: data?.source,
         warning: data?.warning,
-      });
+      }));
       const updated = data?.updatedAt
         ? new Date(data.updatedAt).toLocaleTimeString("ko-KR", {
             hour: "2-digit",
@@ -383,6 +423,7 @@ export default function StockMonitorPage() {
   useEffect(() => {
     const refresh = () => {
       void loadMarketInfo(symbols);
+      void loadMarketEvents();
       void loadSharedNews();
       void loadStockNews();
     };
@@ -396,7 +437,7 @@ export default function StockMonitorPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [loadMarketInfo, loadSharedNews, loadStockNews, symbols]);
+  }, [loadMarketInfo, loadMarketEvents, loadSharedNews, loadStockNews, symbols]);
 
   const openSession = useCallback(async () => {
     const {
@@ -440,11 +481,12 @@ export default function StockMonitorPage() {
     ]);
 
     void loadMarketInfo(loaded);
+    void loadMarketEvents();
     void loadSharedNews();
     void loadStockNews();
 
     setStatus(loaded.length ? "종목 준비 완료 · START를 누르세요." : "종목을 등록하세요.");
-  }, [connectWebSocket, loadMarketInfo, loadSharedNews, loadStockNews]);
+  }, [connectWebSocket, loadMarketInfo, loadMarketEvents, loadSharedNews, loadStockNews]);
 
   useEffect(() => {
     let mounted = true;
@@ -539,6 +581,7 @@ export default function StockMonitorPage() {
       ]);
 
       void loadMarketInfo(nextSymbols);
+      void loadMarketEvents();
 
       // /api/stocks/session은 GET 전용이므로 저장할 때 POST하지 않습니다.
       // 실시간 연결은 사용자가 START를 누를 때 시작합니다.
@@ -623,6 +666,7 @@ export default function StockMonitorPage() {
 
       connectWebSocket(data.wsUrl);
       void loadMarketInfo(finalSymbols);
+      void loadMarketEvents();
     } catch (error) {
       console.error("START error:", error);
       setStatus(error instanceof Error ? `START 실패: ${error.message}` : "START 실패");
@@ -770,7 +814,10 @@ export default function StockMonitorPage() {
             </div>
             <button
               type="button"
-              onClick={() => void loadMarketInfo(symbols)}
+              onClick={() => {
+                void loadMarketInfo(symbols);
+                void loadMarketEvents();
+              }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
             >
               새로고침
@@ -803,7 +850,7 @@ export default function StockMonitorPage() {
               <button
                 type="button"
                 onClick={() => {
-                  void loadMarketInfo(symbols);
+                  void loadMarketEvents();
                   setEventsModalOpen(true);
                 }}
                 className="block w-full rounded-xl text-left transition hover:bg-amber-50/50 active:bg-amber-50"
@@ -837,7 +884,7 @@ export default function StockMonitorPage() {
                   </div>
                 ) : (
                   <div className="flex min-h-[112px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-xs font-semibold text-slate-500">
-                    오늘 예정된 중·고위험 시장 이벤트 없음 · {marketInfoStatus}
+                    오늘 예정된 중·고위험 시장 이벤트 없음 · {marketEventsStatus}
                     <span className="ml-2 font-black text-amber-600">보기 →</span>
                   </div>
                 )}
@@ -992,7 +1039,7 @@ export default function StockMonitorPage() {
                       오늘 예정된 중·고위험 시장 이벤트가 없습니다.
                     </div>
                     <div className="mt-2 text-xs font-semibold text-slate-500">
-                      {marketInfoStatus}
+                      {marketEventsStatus}
                     </div>
                     <div className="mt-4 text-[11px] leading-5 text-slate-500">
                       CPI · Fed/FOMC · 고용 · GDP · 대통령 주요 발표가 확인되면 여기에 표시됩니다.
