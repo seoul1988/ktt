@@ -5,13 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type SeedCandle = {
-  minute?: number;
   open: number;
   high: number;
   low: number;
   close: number;
-  volume?: number;
-  live?: boolean;
 };
 
 type LiveCandle = SeedCandle & {
@@ -36,16 +33,9 @@ type Snapshot = {
   ema20?: number;
   local_support?: number;
   support?: number;
+  prev_close?: number;
+  day_change_pct?: number;
   candles_1m?: SeedCandle[];
-};
-
-type MarketNews = {
-  id: number | string;
-  title: string;
-  url?: string | null;
-  published_at?: string | null;
-  created_at?: string | null;
-  importance?: number | null;
 };
 
 const SYMBOLS = ["NVDA", "TSLA", "AAPL"] as const;
@@ -54,6 +44,38 @@ type SymbolName = (typeof SYMBOLS)[number];
 function fmt(value: unknown, digits = 2) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n.toFixed(digits) : "-";
+}
+
+function dayChangePct(item?: Snapshot): number | null {
+  const direct = Number(item?.day_change_pct);
+  if (Number.isFinite(direct)) return direct;
+
+  const price = Number(item?.price);
+  const prev = Number(item?.prev_close);
+  if (!Number.isFinite(price) || !Number.isFinite(prev) || prev <= 0) return null;
+
+  return ((price - prev) / prev) * 100;
+}
+
+function DayChangeLine({ item }: { item?: Snapshot }) {
+  const pct = dayChangePct(item);
+
+  if (pct == null) {
+    return <div className="mt-1 text-[10px] font-bold text-slate-400">전일 대비 -</div>;
+  }
+
+  const up = pct > 0;
+  const down = pct < 0;
+
+  return (
+    <div
+      className={`mt-1 text-[11px] font-black ${
+        up ? "text-emerald-600" : down ? "text-red-600" : "text-slate-500"
+      }`}
+    >
+      {up ? "▲" : down ? "▼" : "—"} {Math.abs(pct).toFixed(2)}%
+    </div>
+  );
 }
 
 function compactFlow(value: unknown) {
@@ -83,14 +105,19 @@ function wickColor(candle: LiveCandle | undefined) {
 }
 
 function actionText(item?: Snapshot) {
-  const raw = String(item?.action || item?.forecast || "WAIT").toUpperCase();
-  if (raw.includes("SELL") || raw.includes("DOWN") || Number(item?.down_risk) >= 65) {
-    return { text: "DOWN RISK", cls: "bg-red-50 text-red-600" };
+  const risk = Number(item?.down_risk);
+
+  if (Number.isFinite(risk) && risk >= 75) {
+    return { text: "고위험", cls: "bg-red-50 text-red-700" };
   }
-  if (raw.includes("BUY")) {
-    return { text: "BUY WATCH", cls: "bg-emerald-50 text-emerald-700" };
+  if (Number.isFinite(risk) && risk >= 60) {
+    return { text: "하락 위험", cls: "bg-red-50 text-red-600" };
   }
-  return { text: "WAIT", cls: "bg-amber-50 text-amber-700" };
+  if (Number.isFinite(risk) && risk >= 45) {
+    return { text: "위험 관찰", cls: "bg-amber-50 text-amber-700" };
+  }
+
+  return { text: "", cls: "" };
 }
 
 function mergeLiveCandle(
@@ -98,40 +125,26 @@ function mergeLiveCandle(
   item: Snapshot,
 ): LiveCandle[] {
   const price = Number(item.price);
+  if (!Number.isFinite(price) || price <= 0) return previous || [];
+
   const tsMs = Number(item.ts || Date.now() / 1000) * 1000;
   const minute = Math.floor(tsMs / 60000);
 
-  // PC #2 is the source of truth for the mini 1-minute chart.
-  // This makes browser reloads and WebSocket reconnects immediately restore
-  // the last 3 candles instead of starting the chart over.
-  if (Array.isArray(item.candles_1m) && item.candles_1m.length) {
-    const serverCandles = item.candles_1m
-      .slice(-3)
-      .map((c, index, arr) => ({
-        minute:
-          Number.isFinite(Number(c.minute))
-            ? Number(c.minute)
-            : minute - (arr.length - 1 - index),
-        open: Number(c.open),
-        high: Number(c.high),
-        low: Number(c.low),
-        close: Number(c.close),
-      }))
-      .filter(
-        (c) =>
-          Number.isFinite(c.open) &&
-          Number.isFinite(c.high) &&
-          Number.isFinite(c.low) &&
-          Number.isFinite(c.close),
-      );
+  let next = [...(previous || [])];
 
-    if (serverCandles.length) return serverCandles;
+  // On first live packet, use server's recent Schwab 1m bars as visual seeds.
+  if (!next.length && Array.isArray(item.candles_1m)) {
+    const seeds = item.candles_1m.slice(-3);
+    const startMinute = minute - Math.max(0, seeds.length - 1);
+    next = seeds.map((c, index) => ({
+      minute: startMinute + index,
+      open: Number(c.open),
+      high: Number(c.high),
+      low: Number(c.low),
+      close: Number(c.close),
+    }));
   }
 
-  // Fallback only if an older server does not send candles_1m.
-  if (!Number.isFinite(price) || price <= 0) return previous || [];
-
-  let next = [...(previous || [])];
   const current = next[next.length - 1];
 
   if (!current || current.minute < minute) {
@@ -198,149 +211,12 @@ function MiniCandle({
   );
 }
 
-
-type MarketState = {
-  code: "OPEN" | "CLOSED" | "WEEKEND" | "HOLIDAY";
-  label: string;
-  detail: string;
-};
-
-function easternParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-
-  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
-  return {
-    year: Number(get("year")),
-    month: Number(get("month")),
-    day: Number(get("day")),
-    weekday: get("weekday"),
-    hour: Number(get("hour")),
-    minute: Number(get("minute")),
-  };
-}
-
-function nthWeekdayOfMonth(year: number, month: number, weekday: number, nth: number) {
-  const first = new Date(Date.UTC(year, month - 1, 1));
-  const offset = (weekday - first.getUTCDay() + 7) % 7;
-  return 1 + offset + (nth - 1) * 7;
-}
-
-function lastWeekdayOfMonth(year: number, month: number, weekday: number) {
-  const last = new Date(Date.UTC(year, month, 0));
-  return last.getUTCDate() - ((last.getUTCDay() - weekday + 7) % 7);
-}
-
-function observedFixedHoliday(year: number, month: number, day: number) {
-  const d = new Date(Date.UTC(year, month - 1, day));
-  const dow = d.getUTCDay();
-  if (dow === 6) d.setUTCDate(d.getUTCDate() - 1);
-  if (dow === 0) d.setUTCDate(d.getUTCDate() + 1);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-}
-
-function easterSunday(year: number) {
-  const a = year % 19;
-  const b = Math.floor(year / 100);
-  const c = year % 100;
-  const d = Math.floor(b / 4);
-  const e = b % 4;
-  const f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4);
-  const k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function marketHolidayName(year: number, month: number, day: number): string | null {
-  const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const holidays = new Map<string, string>();
-
-  holidays.set(observedFixedHoliday(year, 1, 1), "New Year's Day");
-  holidays.set(`${year}-01-${String(nthWeekdayOfMonth(year, 1, 1, 3)).padStart(2, "0")}`, "Martin Luther King Jr. Day");
-  holidays.set(`${year}-02-${String(nthWeekdayOfMonth(year, 2, 1, 3)).padStart(2, "0")}`, "Presidents Day");
-
-  const goodFriday = easterSunday(year);
-  goodFriday.setUTCDate(goodFriday.getUTCDate() - 2);
-  holidays.set(`${goodFriday.getUTCFullYear()}-${String(goodFriday.getUTCMonth() + 1).padStart(2, "0")}-${String(goodFriday.getUTCDate()).padStart(2, "0")}`, "Good Friday");
-
-  holidays.set(`${year}-05-${String(lastWeekdayOfMonth(year, 5, 1)).padStart(2, "0")}`, "Memorial Day");
-  holidays.set(observedFixedHoliday(year, 6, 19), "Juneteenth");
-  holidays.set(observedFixedHoliday(year, 7, 4), "Independence Day");
-  holidays.set(`${year}-09-${String(nthWeekdayOfMonth(year, 9, 1, 1)).padStart(2, "0")}`, "Labor Day");
-  holidays.set(`${year}-11-${String(nthWeekdayOfMonth(year, 11, 4, 4)).padStart(2, "0")}`, "Thanksgiving Day");
-  holidays.set(observedFixedHoliday(year, 12, 25), "Christmas Day");
-
-  // New Year's Day can be observed on Dec 31 of the previous year.
-  holidays.set(observedFixedHoliday(year + 1, 1, 1), "New Year's Day");
-
-  return holidays.get(key) || null;
-}
-
-function getMarketState(now = new Date()): MarketState {
-  const et = easternParts(now);
-
-  if (et.weekday === "Sat" || et.weekday === "Sun") {
-    return { code: "WEEKEND", label: "주말 휴장", detail: "U.S. market closed" };
-  }
-
-  const holiday = marketHolidayName(et.year, et.month, et.day);
-  if (holiday) {
-    return { code: "HOLIDAY", label: "휴일", detail: holiday };
-  }
-
-  const minutes = et.hour * 60 + et.minute;
-  const open = 9 * 60 + 30;
-  const close = 16 * 60;
-
-  if (minutes >= open && minutes < close) {
-    return { code: "OPEN", label: "LIVE", detail: "Regular market open" };
-  }
-
-  return {
-    code: "CLOSED",
-    label: et.hour >= 16 ? "장 마감" : "장 시작 전",
-    detail: et.hour >= 16 ? "Regular market closed at 4:00 PM ET" : "Opens at 9:30 AM ET",
-  };
-}
-
 export default function CommunityLiveStocks() {
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [candles, setCandles] = useState<Record<string, LiveCandle[]>>({});
   const [status, setStatus] = useState("CONNECTING");
-  const [marketState, setMarketState] = useState<MarketState>(() => getMarketState());
-  const [latestNews, setLatestNews] = useState<MarketNews[]>([]);
-
-  const loadLatestNews = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("stock_news")
-      .select("id,title,url,published_at,created_at,importance")
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(4);
-
-    if (error) {
-      console.error("stock_news load error:", error);
-      return;
-    }
-
-    setLatestNews((data || []) as MarketNews[]);
-  }, []);
 
   const connectWebSocket = useCallback((url: string) => {
     if (!url) return;
@@ -393,264 +269,171 @@ export default function CommunityLiveStocks() {
     ws.onclose = () => {
       if (wsRef.current === ws) {
         wsRef.current = null;
-        const state = getMarketState();
-        setMarketState(state);
-        if (state.code === "OPEN") {
-          setStatus("RECONNECT");
-          retryRef.current = setTimeout(() => void start(), 3000);
-        } else {
-          setStatus(state.label);
-        }
+        setStatus("RECONNECT");
+        retryRef.current = setTimeout(() => void start(), 3000);
       }
     };
   }, []);
 
   const start = useCallback(async () => {
-    const state = getMarketState();
-    setMarketState(state);
-
-    // Community live feed is only needed during the regular U.S. market session.
-    if (state.code !== "OPEN") {
-      setStatus(state.label);
-      return;
-    }
-
     setStatus("CONNECTING");
 
-    // Public homepage feed: no Supabase login required.
-    // Vercel Environment Variable:
-    // NEXT_PUBLIC_STOCK_PUBLIC_WS_URL=wss://YOUR-CLOUDFLARE-DOMAIN/ws/public
-    const rawUrl =
-      process.env.NEXT_PUBLIC_STOCK_PUBLIC_WS_URL?.trim() ||
-      process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim() ||
-      "wss://stock.7pocker.us/ws/public";
-
-    if (!rawUrl) {
-      setStatus("NO URL");
+    // Best for the public KTown page: set this Vercel env var to the FastAPI
+    // websocket, e.g. wss://your-stock-server.example.com/ws
+    const publicWsUrl = process.env.NEXT_PUBLIC_STOCK_WS_URL?.trim();
+    if (publicWsUrl) {
+      connectWebSocket(publicWsUrl);
       return;
     }
 
-    let wsUrl = rawUrl;
+    // Fallback to the existing authenticated /api/stocks/session route.
+    // This keeps the component compatible with the current /stock setup.
     try {
-      const parsed = new URL(rawUrl);
-      if (!parsed.pathname || parsed.pathname === "/") {
-        parsed.pathname = "/ws/public";
-        wsUrl = parsed.toString();
-      }
-    } catch {}
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    connectWebSocket(wsUrl);
+      if (!session?.access_token) {
+        setStatus("LOGIN");
+        return;
+      }
+
+      const response = await fetch("/api/stocks/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ symbols: [...SYMBOLS] }),
+        cache: "no-store",
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data?.wsUrl) {
+        connectWebSocket(data.wsUrl);
+      } else {
+        setStatus("WAIT");
+      }
+    } catch {
+      setStatus("WAIT");
+    }
   }, [connectWebSocket]);
 
   useEffect(() => {
     void start();
-    void loadLatestNews();
     return () => {
       if (retryRef.current) clearTimeout(retryRef.current);
       if (wsRef.current) {
-        const ws = wsRef.current;
-        wsRef.current = null;
-        try { ws.close(1000, "Community stock component unmounted"); } catch {}
+        try { wsRef.current.close(); } catch {}
       }
     };
-  }, [loadLatestNews, start]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const next = getMarketState();
-      setMarketState(next);
-
-      if (next.code !== "OPEN") {
-        if (retryRef.current) {
-          clearTimeout(retryRef.current);
-          retryRef.current = null;
-        }
-        if (wsRef.current) {
-          const ws = wsRef.current;
-          wsRef.current = null;
-          try { ws.close(1000, "Market closed"); } catch {}
-        }
-        setStatus(next.label);
-      } else if (!wsRef.current) {
-        void start();
-      }
-    }, 30_000);
-
-    return () => window.clearInterval(timer);
   }, [start]);
 
-  useEffect(() => {
-    if (marketState.code === "OPEN") return;
-
-    void loadLatestNews();
-    const timer = window.setInterval(() => {
-      void loadLatestNews();
-    }, 10 * 60 * 1000);
-
-    return () => window.clearInterval(timer);
-  }, [loadLatestNews, marketState.code]);
-
   return (
-    <div
-      className="mb-5 block overflow-hidden rounded-[22px] border border-[#D9E2F1] bg-white px-3 py-3 shadow-sm"
-      aria-label="주식 정보"
+    <Link
+      href="/stock"
+      className="mb-5 block overflow-hidden rounded-[22px] border border-[#D9E2F1] bg-white px-3 py-3 shadow-sm transition hover:shadow-md active:scale-[0.995]"
+      aria-label="실시간 주식 정보 보기"
     >
       <div className="flex items-center justify-between gap-2 px-1">
-        <div className="min-w-0">
+        <div>
           <h2 className="text-[14px] font-black tracking-[-0.02em] text-[#172033]">
             📈 Live Stock Watch
           </h2>
           <p className="mt-0.5 text-[8px] font-semibold text-[#6B6257]">
-            {marketState.code === "OPEN"
-              ? "최근 1분봉 3개 · 마지막 봉 실시간"
-              : marketState.detail}
+            최근 1분봉 3개 · 마지막 봉 실시간
           </p>
         </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          {marketState.code !== "OPEN" ? (
-            <Link
-              href="/stock"
-              className="text-[9px] font-black text-[#2563EB] hover:underline"
-            >
-              더보기 →
-            </Link>
-          ) : null}
-
-          <span
-            className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
-              marketState.code === "OPEN" && status === "LIVE"
-                ? "bg-emerald-50 text-emerald-700"
-                : marketState.code === "HOLIDAY"
-                  ? "bg-amber-50 text-amber-700"
-                  : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            ● {marketState.code === "OPEN" ? status : marketState.label}
-          </span>
-        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-1 text-[8px] font-black ${
+            status === "LIVE"
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          ● {status}
+        </span>
       </div>
 
-      {marketState.code === "OPEN" ? (
-        <Link
-          href="/stock"
-          className="mt-3 block transition active:scale-[0.995]"
-          aria-label="실시간 주식 정보 상세보기"
-        >
-          <div className="grid grid-cols-3 divide-x divide-[#E5E7EB]">
-            {SYMBOLS.map((symbol) => {
-              const item = snapshots[symbol];
-              const stockCandles = candles[symbol] || [];
-              const lastThree = [
-                stockCandles[stockCandles.length - 3],
-                stockCandles[stockCandles.length - 2],
-                stockCandles[stockCandles.length - 1],
-              ];
-              const share = buyShare(item);
-              const action = actionText(item);
+      <div className="mt-3 grid grid-cols-3 divide-x divide-[#E5E7EB]">
+        {SYMBOLS.map((symbol) => {
+          const item = snapshots[symbol];
+          const stockCandles = candles[symbol] || [];
+          const lastThree = [
+            stockCandles[stockCandles.length - 3],
+            stockCandles[stockCandles.length - 2],
+            stockCandles[stockCandles.length - 1],
+          ];
+          const share = buyShare(item);
+          const action = actionText(item);
 
-              return (
-                <div key={symbol} className="min-w-0 px-2 text-center">
-                  <div className="flex h-12 items-center justify-center gap-1.5">
-                    {lastThree.map((candle, index) => (
-                      <MiniCandle
-                        key={`${symbol}-${index}`}
-                        candle={candle}
-                        live={index === 2 && Boolean(candle)}
-                      />
-                    ))}
-                  </div>
+          return (
+            <div key={symbol} className="min-w-0 px-2 text-center">
+              <div className="flex h-12 items-center justify-center gap-1.5">
+                {lastThree.map((candle, index) => (
+                  <MiniCandle
+                    key={`${symbol}-${index}`}
+                    candle={candle}
+                    live={index === 2 && Boolean(candle)}
+                  />
+                ))}
+              </div>
 
-                  <p className="mt-1 text-[10px] font-black text-[#172033]">
-                    {symbol}
-                  </p>
-                  <p className="mt-0.5 text-[16px] font-black leading-none text-[#172033]">
-                    ${fmt(item?.price)}
-                  </p>
+              <p className="mt-1 text-[10px] font-black text-[#172033]">
+                {symbol}
+              </p>
+              <p className="mt-0.5 text-[16px] font-black leading-none text-[#172033]">
+                ${fmt(item?.price)}
+              </p>
 
-                  <div className={`mx-auto mt-2 w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
-                    {action.text}
-                  </div>
-
-                  <div className="mt-2 grid grid-cols-3 gap-1 border-t border-[#EEF0F3] pt-2">
-                    <div>
-                      <p className="text-[6px] font-bold text-[#6B6257]">Buy60</p>
-                      <p className="mt-0.5 text-[9px] font-black text-[#16A34A]">
-                        {share == null ? "-" : `${share.toFixed(0)}%`}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[6px] font-bold text-[#6B6257]">Risk</p>
-                      <p
-                        className={`mt-0.5 text-[9px] font-black ${
-                          Number(item?.down_risk) >= 65
-                            ? "text-[#DC2626]"
-                            : Number(item?.down_risk) >= 45
-                              ? "text-[#F59E0B]"
-                              : "text-[#16A34A]"
-                        }`}
-                      >
-                        {Number.isFinite(Number(item?.down_risk))
-                          ? `${Math.round(Number(item?.down_risk))}%`
-                          : "-"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[6px] font-bold text-[#6B6257]">Vol</p>
-                      <p className="mt-0.5 text-[9px] font-black text-[#2563EB]">
-                        {Number.isFinite(Number(item?.vol_ratio))
-                          ? `${Number(item?.vol_ratio).toFixed(1)}x`
-                          : "-"}
-                      </p>
-                    </div>
-                  </div>
+              {action.text ? (
+                <div className={`mx-auto mt-2 w-fit rounded-full px-2 py-0.5 text-[7px] font-black ${action.cls}`}>
+                  {action.text}
                 </div>
-              );
-            })}
-          </div>
+              ) : null}
 
-          <div className="mt-3 flex items-center justify-center gap-2 border-t border-[#EEF0F3] pt-2 text-[8px] font-bold text-[#7C746A]">
-            <span>Schwab live data</span>
-            <span>·</span>
-            <span className="font-black text-[#C4483A]">상세보기 →</span>
-          </div>
-        </Link>
-      ) : (
-        <div className="mt-3 border-t border-[#EEF0F3] pt-2">
-          {latestNews.length ? (
-            <div className="divide-y divide-[#EEF0F3]">
-              {latestNews.slice(0, 4).map((news) => {
-                const newsTime = news.published_at || news.created_at;
-                return (
-                  <a
-                    key={news.id}
-                    href={news.url || "/stock"}
-                    target={news.url ? "_blank" : undefined}
-                    rel={news.url ? "noreferrer" : undefined}
-                    className="flex min-w-0 items-center gap-2 py-1.5 hover:bg-slate-50"
+              <div className="mt-2 grid grid-cols-3 gap-1 border-t border-[#EEF0F3] pt-2">
+                <div>
+                  <p className="text-[6px] font-bold text-[#6B6257]">Buy60</p>
+                  <p className="mt-0.5 text-[9px] font-black text-[#16A34A]">
+                    {share == null ? "-" : `${share.toFixed(0)}%`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[6px] font-bold text-[#6B6257]">Risk</p>
+                  <p
+                    className={`mt-0.5 text-[9px] font-black ${
+                      Number(item?.down_risk) >= 65
+                        ? "text-[#DC2626]"
+                        : Number(item?.down_risk) >= 45
+                          ? "text-[#F59E0B]"
+                          : "text-[#16A34A]"
+                    }`}
                   >
-                    <span className="min-w-0 flex-1 truncate text-[10px] font-bold text-[#172033]">
-                      {news.title}
-                    </span>
-                    <span className="shrink-0 text-[8px] font-semibold text-[#8B8175]">
-                      {newsTime
-                        ? new Date(newsTime).toLocaleTimeString("ko-KR", {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : ""}
-                    </span>
-                  </a>
-                );
-              })}
+                    {Number.isFinite(Number(item?.down_risk))
+                      ? `${Math.round(Number(item?.down_risk))}%`
+                      : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[6px] font-bold text-[#6B6257]">Vol</p>
+                  <p className="mt-0.5 text-[9px] font-black text-[#2563EB]">
+                    {Number.isFinite(Number(item?.vol_ratio))
+                      ? `${Number(item?.vol_ratio).toFixed(1)}x`
+                      : "-"}
+                  </p>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="py-5 text-center text-[9px] font-semibold text-[#8B8175]">
-              최신 주식 뉴스를 불러오는 중입니다.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-2 border-t border-[#EEF0F3] pt-2 text-[8px] font-bold text-[#7C746A]">
+        <span>Schwab live data</span>
+        <span>·</span>
+        <span className="font-black text-[#C4483A]">상세보기 →</span>
+      </div>
+    </Link>
   );
 }
