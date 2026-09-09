@@ -1116,9 +1116,16 @@ function EarningsCalendar({ items }: { items: EarningsItem[] }) {
     .slice(0, 5);
 
   return (
-    <div className="overflow-x-auto pb-1">
+    <div
+      className="w-full min-w-0 max-w-full overflow-x-scroll overflow-y-hidden pb-2"
+      style={{
+        WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x",
+        overscrollBehaviorX: "contain",
+      }}
+    >
       <div
-        className="grid min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
+        className="grid w-max min-w-[760px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
         style={{
           gridTemplateColumns: `repeat(${Math.max(dates.length, 1)}, minmax(145px, 1fr))`,
         }}
@@ -1229,7 +1236,7 @@ function DashboardCard({
   }[accent];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex items-start gap-3">
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg ${accentClass}`}>
           {icon}
