@@ -1,3 +1,4 @@
+"use client";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
