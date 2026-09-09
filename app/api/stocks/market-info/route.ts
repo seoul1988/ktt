@@ -640,6 +640,85 @@ async function enrichTodayWithActuals(
   );
 }
 
+
+function normalizeMarketEvent(
+  event: Record<string, unknown>,
+  index: number,
+): MarketEvent {
+  const rawImportance =
+    event.importanceNumber ??
+    event.importance ??
+    event.risk ??
+    1;
+
+  const importanceText = String(rawImportance).toLowerCase();
+
+  let importanceNumber = Number(event.importanceNumber);
+
+  if (!Number.isFinite(importanceNumber) || importanceNumber <= 0) {
+    if (
+      importanceText === "3" ||
+      importanceText.includes("high") ||
+      importanceText.includes("critical")
+    ) {
+      importanceNumber = 3;
+    } else if (
+      importanceText === "2" ||
+      importanceText.includes("medium") ||
+      importanceText.includes("watch")
+    ) {
+      importanceNumber = 2;
+    } else {
+      importanceNumber = 1;
+    }
+  }
+
+  const importance: MarketEvent["importance"] =
+    importanceNumber >= 3
+      ? "high"
+      : importanceNumber === 2
+        ? "medium"
+        : "low";
+
+  const title = String(event.title || event.name || "-").trim();
+  const source = String(event.source || "").trim();
+  const url = String(event.url || "").trim();
+
+  return {
+    id: String(event.id || `market-event-${index}`),
+    time: String(event.time || "TBD"),
+    dateTime:
+      event.dateTime != null && String(event.dateTime).trim()
+        ? String(event.dateTime)
+        : undefined,
+    title,
+    name:
+      event.name != null && String(event.name).trim()
+        ? String(event.name)
+        : title,
+    importance,
+    importanceNumber,
+    risk:
+      event.risk != null && String(event.risk).trim()
+        ? String(event.risk)
+        : undefined,
+    source: source || undefined,
+    actual:
+      event.actual != null
+        ? String(event.actual)
+        : "",
+    forecast:
+      event.forecast != null
+        ? String(event.forecast)
+        : "",
+    previous:
+      event.previous != null
+        ? String(event.previous)
+        : "",
+    url: url || undefined,
+  };
+}
+
 async function fetchMarketEvents(): Promise<{
   events: MarketEvent[];
   warning: string;
