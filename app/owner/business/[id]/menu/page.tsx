@@ -686,6 +686,8 @@ export default function OwnerBusinessMenuPage() {
   }, [businessId]);
 
   const [savingOrderModes, setSavingOrderModes] = useState(false);
+  const [enforceBusinessHours, setEnforceBusinessHours] = useState(true);
+  const [savingBusinessHoursRule, setSavingBusinessHoursRule] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -714,6 +716,7 @@ export default function OwnerBusinessMenuPage() {
         setMenuModeEnabled(modes.menu !== false);
         setPickupModeEnabled(modes.pickup === true);
         setDeliveryModeEnabled(modes.delivery === true);
+        setEnforceBusinessHours(data?.enforceBusinessHours !== false);
 
         setDeliveryFeePolicyMode(
           data?.deliveryFeePolicyMode === "customer_100" ||
@@ -1078,6 +1081,80 @@ export default function OwnerBusinessMenuPage() {
       );
     } finally {
       setDisconnectingSquare(false);
+    }
+  }
+
+  async function updateBusinessHoursRule(checked: boolean) {
+    if (savingBusinessHoursRule) return;
+
+    if (!checked) {
+      const confirmed = window.confirm(
+        "⚠️ 영업시간 제한을 해제하면 영업시간 외에도 실제 고객이 주문할 수 있습니다.\n\n테스트가 끝나면 반드시 다시 체크해 주세요.\n\n계속하시겠습니까?",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    const previous = enforceBusinessHours;
+
+    setEnforceBusinessHours(checked);
+    setSavingBusinessHoursRule(true);
+    setOrderSettingsMessage(
+      checked
+        ? "영업시간 내 주문만 받도록 저장 중..."
+        : "⚠️ 영업시간 제한 해제 저장 중...",
+    );
+
+    try {
+      const token = await getAccessToken();
+
+      const response = await fetch(
+        `/api/owner/business/${businessId}/order-settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            enforceBusinessHours: checked,
+          }),
+        },
+      );
+
+      const data = await readApiJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "영업시간 주문 제한 설정 저장에 실패했습니다.",
+        );
+      }
+
+      const saved =
+        typeof data?.enforceBusinessHours === "boolean"
+          ? data.enforceBusinessHours
+          : checked;
+
+      setEnforceBusinessHours(saved);
+
+      setOrderSettingsMessage(
+        saved
+          ? "✓ 영업시간 내에만 주문을 받습니다."
+          : "⚠️ 테스트 모드: 영업시간 외에도 주문을 받습니다.",
+      );
+    } catch (error) {
+      setEnforceBusinessHours(previous);
+
+      setOrderSettingsMessage(
+        error instanceof Error
+          ? `저장 실패: ${error.message}`
+          : "영업시간 주문 제한 설정 저장 실패",
+      );
+    } finally {
+      setSavingBusinessHoursRule(false);
     }
   }
 
@@ -4548,7 +4625,7 @@ export default function OwnerBusinessMenuPage() {
         )}
 
         <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-orange-600">
                 Online Order Settings
@@ -4558,7 +4635,35 @@ export default function OwnerBusinessMenuPage() {
                 메뉴 보기만 할지, 자체 웹사이트에서 PICKUP / DELIVERY 주문을 받을지 선택하세요.
               </p>
             </div>
+
+            <label
+              className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 transition ${
+                enforceBusinessHours
+                  ? "border-emerald-400 bg-emerald-50"
+                  : "border-red-400 bg-red-50"
+              }`}
+              title="체크하면 영업시간에만 주문을 받고, 해제하면 테스트용으로 언제든 주문을 받을 수 있습니다."
+            >
+              <input
+                type="checkbox"
+                checked={enforceBusinessHours}
+                onChange={(event) =>
+                  void updateBusinessHoursRule(event.target.checked)
+                }
+                disabled={savingBusinessHoursRule}
+                className="h-5 w-5 accent-emerald-600 disabled:cursor-wait disabled:opacity-60"
+              />
+              <span className="text-xs font-black text-[#172033]">
+                영업시간에만 주문 받기
+              </span>
+            </label>
           </div>
+
+          {!enforceBusinessHours ? (
+            <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2 text-xs font-black text-red-800">
+              ⚠️ 테스트 모드 활성화: 현재 영업시간 외에도 고객 주문이 가능합니다. 테스트 후 반드시 다시 체크하세요.
+            </div>
+          ) : null}
 
           {orderSettingsMessage ? (
             <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-900">

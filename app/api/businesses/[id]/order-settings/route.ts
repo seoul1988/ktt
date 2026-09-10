@@ -176,13 +176,13 @@ export async function GET(
       supabase
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode,enforce_business_hours",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
       supabase
         .from("restaurant_order_private_settings")
-        .select("payment_provider,stripe_secret_key,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id")
+        .select("payment_provider,stripe_secret_key,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id")
         .eq("business_id", businessId)
         .maybeSingle(),
     ]);
@@ -216,7 +216,21 @@ export async function GET(
           )
         : Boolean(privateSettings?.stripe_secret_key);
 
-    const orderWindow = getOrderWindow(business.hours, 15);
+    const enforceBusinessHours =
+      settings?.enforce_business_hours !== false;
+
+    const rawOrderWindow =
+      getOrderWindow(business.hours, 15);
+
+    const orderWindow = enforceBusinessHours
+      ? rawOrderWindow
+      : {
+          enforceable: false,
+          open: true,
+          reason: "",
+          closesAt: null as string | null,
+          cutoffAt: null as string | null,
+        };
 
     const tipPresets = Array.isArray(settings?.tip_presets)
       ? settings.tip_presets
@@ -230,7 +244,10 @@ export async function GET(
         businessName: business.name || "Restaurant",
 
         orderingOpen: orderWindow.open,
-        orderingHoursEnforced: orderWindow.enforceable,
+        orderingHoursEnforced:
+          enforceBusinessHours &&
+          orderWindow.enforceable,
+        enforceBusinessHours,
         orderingClosedReason: orderWindow.reason,
         orderingClosesAt: orderWindow.closesAt,
         orderingCutoffAt: orderWindow.cutoffAt,
@@ -246,13 +263,20 @@ export async function GET(
           privateSettings?.delivery_provider === "uber_direct" &&
           privateSettings?.uber_direct_enabled === true &&
           Boolean(
-            privateSettings?.uber_direct_client_id &&
-              privateSettings?.uber_direct_client_secret &&
-              privateSettings?.uber_direct_customer_id,
+            privateSettings?.uber_direct_customer_id ||
+              process.env.UBER_DIRECT_CUSTOMER_ID,
           ),
 
         paymentProvider,
         onlinePaymentEnabled,
+        deliveryFeePolicyMode:
+          settings?.delivery_fee_policy_mode === "menu_price"
+            ? "menu_price"
+            : settings?.delivery_fee_policy_mode === "customer_100"
+              ? "customer_100"
+              : settings?.delivery_fee_policy_mode === "restaurant_100"
+                ? "restaurant_100"
+                : "order_amount",
         payAtPickupEnabled: settings?.pay_at_pickup_enabled !== false,
         smsEnabled: settings?.sms_enabled === true,
 

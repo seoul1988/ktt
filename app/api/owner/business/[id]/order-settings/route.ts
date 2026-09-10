@@ -293,7 +293,7 @@ export async function GET(
     } = await access.supabase
       .from("restaurant_order_settings")
       .select(
-        "tax_rate,delivery_fee_policy_mode,delivery_fee_share_rules",
+        "tax_rate,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours",
       )
       .eq("business_id", businessId)
       .maybeSingle();
@@ -334,6 +334,8 @@ export async function GET(
           normalizeDeliveryFeeShareRules(
             settings?.delivery_fee_share_rules,
           ),
+        enforceBusinessHours:
+          settings?.enforce_business_hours !== false,
       },
       {
         headers: {
@@ -419,12 +421,19 @@ export async function PUT(
         "deliveryFeeShareRules",
       );
 
+    const hasEnforceBusinessHours =
+      Object.prototype.hasOwnProperty.call(
+        body || {},
+        "enforceBusinessHours",
+      );
+
     if (
       !hasModes &&
       !hasTax &&
       !hasProvider &&
       !hasDeliveryFeePolicyMode &&
-      !hasDeliveryFeeShareRules
+      !hasDeliveryFeeShareRules &&
+      !hasEnforceBusinessHours
     ) {
       return NextResponse.json(
         { error: "저장할 설정이 없습니다." },
@@ -453,6 +462,10 @@ export async function PUT(
 
     let deliveryFeeShareRules:
       | DeliveryFeeShareRule[]
+      | undefined;
+
+    let enforceBusinessHours:
+      | boolean
       | undefined;
 
     if (hasDeliveryFeePolicyMode) {
@@ -755,6 +768,34 @@ export async function PUT(
         );
     }
 
+    if (hasEnforceBusinessHours) {
+      const enabled =
+        body.enforceBusinessHours !== false;
+
+      const {
+        data: savedHoursRule,
+        error: hoursRuleError,
+      } = await access.supabase
+        .from("restaurant_order_settings")
+        .upsert(
+          {
+            business_id: businessId,
+            enforce_business_hours: enabled,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "business_id" },
+        )
+        .select("enforce_business_hours")
+        .single();
+
+      if (hoursRuleError) {
+        throw hoursRuleError;
+      }
+
+      enforceBusinessHours =
+        savedHoursRule?.enforce_business_hours !== false;
+    }
+
     if (hasProvider) {
       const provider =
         body.paymentProvider === "square"
@@ -820,6 +861,9 @@ export async function PUT(
           : {}),
         ...(deliveryFeeShareRules
           ? { deliveryFeeShareRules }
+          : {}),
+        ...(enforceBusinessHours !== undefined
+          ? { enforceBusinessHours }
           : {}),
       },
       {

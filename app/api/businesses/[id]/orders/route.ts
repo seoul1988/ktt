@@ -441,7 +441,7 @@ export async function POST(
       db
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_policy_mode,delivery_fee_share_rules",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,tax_rate,pickup_prep_minutes,delivery_prep_minutes,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -457,9 +457,16 @@ export async function POST(
         .maybeSingle(),
     ]);
 
+    const enforceBusinessHours =
+      settings?.enforce_business_hours !== false;
+
     const orderWindow = getOrderWindow(business?.hours, 15);
 
-    if (orderWindow.enforceable && !orderWindow.open) {
+    if (
+      enforceBusinessHours &&
+      orderWindow.enforceable &&
+      !orderWindow.open
+    ) {
       return NextResponse.json(
         {
           error: orderWindow.reason || "Online ordering is currently closed.",
