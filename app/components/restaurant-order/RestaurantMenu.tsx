@@ -9,15 +9,28 @@ import type { MenuOrderDraft } from "./MenuItemModal";
 import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
 import { getOptionGroups, groupKey, optionKey } from "./types";
 
+type PriceSource = "menu" | "pickup" | "delivery";
+
+type PriceDisplayMap = {
+  menu: PriceSource;
+  pickup: PriceSource;
+  delivery: PriceSource;
+};
+
+const DEFAULT_PRICE_DISPLAY_MAP: PriceDisplayMap = {
+  menu: "menu",
+  pickup: "pickup",
+  delivery: "delivery",
+};
+
 type PricedRestaurantMenuItem = RestaurantMenuItem & {
   pickup_price?: number | null;
   delivery_price?: number | null;
 };
 
-function getPriceForService(
+function getRawPrice(
   item: RestaurantMenuItem,
-  service: "menu" | "pickup" | "delivery",
-  useDeliveryMenuPrice = false,
+  source: PriceSource,
 ) {
   const priced = item as PricedRestaurantMenuItem;
 
@@ -36,41 +49,34 @@ function getPriceForService(
       ? pickup
       : Number(priced.delivery_price);
 
-  if (service === "delivery") {
-    // 4번째 배달료 정책(menu_price)을 선택한 경우에만
-    // 메뉴별 delivery_price를 고객에게 표시합니다.
-    const deliveryBase = useDeliveryMenuPrice
-      ? delivery
-      : pickup;
-
-    return Number.isFinite(deliveryBase as number)
-      ? deliveryBase
-      : null;
+  if (source === "delivery") {
+    return Number.isFinite(delivery as number) ? delivery : null;
   }
 
-  if (service === "pickup") {
-    return Number.isFinite(pickup as number)
-      ? pickup
-      : null;
+  if (source === "pickup") {
+    return Number.isFinite(pickup as number) ? pickup : null;
   }
 
-  return Number.isFinite(base as number)
-    ? base
-    : null;
+  return Number.isFinite(base as number) ? base : null;
+}
+
+function getPriceForService(
+  item: RestaurantMenuItem,
+  service: "menu" | "pickup" | "delivery",
+  displayMap?: PriceDisplayMap,
+) {
+  const map = displayMap || DEFAULT_PRICE_DISPLAY_MAP;
+  return getRawPrice(item, map[service]);
 }
 
 function withServicePrice(
   item: RestaurantMenuItem,
   service: "menu" | "pickup" | "delivery",
-  useDeliveryMenuPrice = false,
+  displayMap?: PriceDisplayMap,
 ): RestaurantMenuItem {
   return {
     ...item,
-    price: getPriceForService(
-      item,
-      service,
-      useDeliveryMenuPrice,
-    ),
+    price: getPriceForService(item, service, displayMap),
   };
 }
 
@@ -96,90 +102,6 @@ type Props = {
   // RestaurantMenu 자체 floating cart 버튼은 숨깁니다.
   externalCartButton?: boolean;
 };
-
-
-
-type PromotionRewardChoice = {
-  name: string;
-  price: number;
-  discountPercent: number;
-};
-
-type MenuPromotion = {
-  id: string;
-  name: string;
-  type: "buy_x_get_y" | "spend_get_item" | "amount_off" | "percent_off" | "free_delivery";
-  buyQty: number;
-  getQty: number;
-  minSpend: number;
-  discountValue: number;
-  rewardChoices: PromotionRewardChoice[];
-  rewardSelectCount: number;
-  maxPerOrder: number;
-  pickup: boolean;
-  delivery: boolean;
-  active: boolean;
-};
-
-type PromotionAssignment = { role?: "trigger" | "reward" | "both" | "eligible" };
-type PromotionAssignments = Record<number, Record<string, PromotionAssignment>>;
-
-export type AppliedPromotionReward = {
-  promotionId: string;
-  promotionName: string;
-  triggerMenuItemId?: number;
-  itemName: string;
-  regularPrice: number;
-  discountPercent: number;
-  finalPrice: number;
-};
-
-function readPromotions(businessId: number): MenuPromotion[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((row: any) => ({
-        id: String(row?.id || ""),
-        name: String(row?.name || "Deal"),
-        type: row?.type || "buy_x_get_y",
-        buyQty: Math.max(1, Number(row?.buyQty) || 1),
-        getQty: Math.max(1, Number(row?.getQty) || 1),
-        minSpend: Math.max(0, Number(row?.minSpend) || 0),
-        discountValue: Math.max(0, Number(row?.discountValue) || 0),
-        rewardChoices: Array.isArray(row?.rewardChoices)
-          ? row.rewardChoices
-              .map((choice: any) => ({
-                name: String(choice?.name || "").trim(),
-                price: Math.max(0, Number(choice?.price) || 0),
-                discountPercent: Math.max(0, Math.min(100, Number(choice?.discountPercent ?? 100) || 0)),
-              }))
-              .filter((choice: PromotionRewardChoice) => choice.name)
-          : [],
-        rewardSelectCount: Math.max(1, Math.floor(Number(row?.rewardSelectCount) || 1)),
-        maxPerOrder: Math.max(1, Number(row?.maxPerOrder) || 1),
-        pickup: row?.pickup !== false,
-        delivery: row?.delivery !== false,
-        active: row?.active !== false,
-      }))
-      .filter((row: MenuPromotion) => row.id && row.active);
-  } catch {
-    return [];
-  }
-}
-
-function readPromotionAssignments(businessId: number): PromotionAssignments {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(`ktown-menu-promotion-assignments:${businessId}`);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
 
 type StoredCartItem = {
   cartItemId: string;
@@ -274,6 +196,9 @@ export default function RestaurantMenu({
     categories: [],
     items: [],
   });
+  const [priceDisplayByItem, setPriceDisplayByItem] = useState<
+    Record<number, PriceDisplayMap>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
@@ -285,14 +210,10 @@ export default function RestaurantMenu({
   const [resolvedMenuEnabled, setResolvedMenuEnabled] = useState(menuEnabled);
   const [resolvedPickupEnabled, setResolvedPickupEnabled] = useState(pickupEnabled);
   const [resolvedDeliveryEnabled, setResolvedDeliveryEnabled] = useState(deliveryEnabled);
-  const [deliveryMenuPriceEnabled, setDeliveryMenuPriceEnabled] = useState(false);
 
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
-  const [promotionAssignments, setPromotionAssignments] = useState<PromotionAssignments>({});
-  const [selectedPromotionRewards, setSelectedPromotionRewards] = useState<Record<string, PromotionRewardChoice[]>>({});
   const [isIPhone, setIsIPhone] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
@@ -392,90 +313,6 @@ export default function RestaurantMenu({
     0,
   );
 
-  function getPromotionsForMenuItem(menuItemId: number) {
-    return promotions.filter((promotion) => {
-      if (!promotion.active) return false;
-      if (activeService === "pickup" && !promotion.pickup) return false;
-      if (activeService === "delivery" && !promotion.delivery) return false;
-      return Boolean(promotionAssignments[menuItemId]?.[promotion.id]);
-    });
-  }
-
-  const availablePromotions = promotions.filter((promotion) => {
-    if (!promotion.active) return false;
-    if (activeService === "pickup" && !promotion.pickup) return false;
-    if (activeService === "delivery" && !promotion.delivery) return false;
-
-    if (promotion.type === "spend_get_item") {
-      return cartSubtotal >= promotion.minSpend && promotion.rewardChoices.length > 0;
-    }
-
-    if (promotion.type !== "buy_x_get_y") return false;
-
-    return cartItems.some((cartItem) => {
-      const assignment = promotionAssignments[cartItem.menuItemId]?.[promotion.id];
-      if (!assignment) return false;
-      const role = typeof assignment === "string" ? assignment : assignment.role;
-      if (role !== "trigger" && role !== "both") return false;
-      return Math.max(1, Number(cartItem.quantity) || 1) >= Math.max(1, Number(promotion.buyQty) || 1);
-    });
-  });
-
-  function getPromotionSelectionCount(promotion: MenuPromotion) {
-    const total = promotion.rewardChoices.length;
-    if (total <= 0) return 0;
-    return Math.min(
-      total,
-      Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1)),
-    );
-  }
-
-  function promotionNeedsCustomerSelection(promotion: MenuPromotion) {
-    const total = promotion.rewardChoices.length;
-    if (total <= 1) return false;
-
-    const requiredCount = getPromotionSelectionCount(promotion);
-    if (requiredCount >= total) return false;
-
-    const selected = selectedPromotionRewards[promotion.id] || [];
-    return selected.length < requiredCount;
-  }
-
-  const appliedPromotionRewards: AppliedPromotionReward[] = availablePromotions
-    .flatMap((promotion) => {
-      const total = promotion.rewardChoices.length;
-      if (total === 0) return [];
-
-      const requiredCount = getPromotionSelectionCount(promotion);
-      const selectedChoices =
-        total === 1 || requiredCount >= total
-          ? promotion.rewardChoices
-          : (selectedPromotionRewards[promotion.id] || []).slice(0, requiredCount);
-
-      const trigger = cartItems.find((cartItem) =>
-        Boolean(promotionAssignments[cartItem.menuItemId]?.[promotion.id]),
-      );
-
-      return selectedChoices.map((choice) => {
-        const regularPrice = Math.max(0, Number(choice.price) || 0);
-        const discountPercent = Math.max(
-          0,
-          Math.min(100, Number(choice.discountPercent) || 0),
-        );
-        const finalPrice = regularPrice * (1 - discountPercent / 100);
-
-        return {
-          promotionId: promotion.id,
-          promotionName: promotion.name,
-          triggerMenuItemId: trigger?.menuItemId,
-          itemName: choice.name,
-          regularPrice,
-          discountPercent,
-          finalPrice,
-        };
-      });
-    });
-
   function recordMenuItemClick(
     item: RestaurantMenuItem,
     categoryName: string,
@@ -543,9 +380,6 @@ export default function RestaurantMenu({
         setResolvedMenuEnabled(modes.menu !== false);
         setResolvedPickupEnabled(modes.pickup === true);
         setResolvedDeliveryEnabled(modes.delivery === true);
-        setDeliveryMenuPriceEnabled(
-          payload?.deliveryFeePolicyMode === "menu_price",
-        );
       } catch (settingsError) {
         if (cancelled) return;
 
@@ -566,20 +400,6 @@ export default function RestaurantMenu({
       cancelled = true;
     };
   }, [businessId, menuEnabled, pickupEnabled, deliveryEnabled]);
-
-  useEffect(() => {
-    const syncPromotions = () => {
-      setPromotions(readPromotions(businessId));
-      setPromotionAssignments(readPromotionAssignments(businessId));
-    };
-    syncPromotions();
-    window.addEventListener("storage", syncPromotions);
-    window.addEventListener("focus", syncPromotions);
-    return () => {
-      window.removeEventListener("storage", syncPromotions);
-      window.removeEventListener("focus", syncPromotions);
-    };
-  }, [businessId]);
 
   useEffect(() => {
     setCartItems(readStoredCart(businessId));
@@ -685,6 +505,63 @@ export default function RestaurantMenu({
     effectiveDeliveryEnabled,
     orderingAvailable,
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPriceDisplaySettings() {
+      try {
+        const response = await fetch(
+          `/api/businesses/${encodeURIComponent(businessId)}/menu-price-display`,
+          {
+            cache: "no-store",
+          },
+        );
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error || "가격 표시 설정을 불러오지 못했습니다.",
+          );
+        }
+
+        if (cancelled) return;
+
+        const next: Record<number, PriceDisplayMap> = {};
+        for (const row of Array.isArray(payload?.items) ? payload.items : []) {
+          const itemId = Number(row?.menuItemId);
+          if (!Number.isInteger(itemId) || itemId <= 0) continue;
+
+          const normalizeSource = (
+            value: unknown,
+            fallback: PriceSource,
+          ): PriceSource =>
+            value === "menu" || value === "pickup" || value === "delivery"
+              ? value
+              : fallback;
+
+          next[itemId] = {
+            menu: normalizeSource(row?.menuSource, "menu"),
+            pickup: normalizeSource(row?.pickupSource, "pickup"),
+            delivery: normalizeSource(row?.deliverySource, "delivery"),
+          };
+        }
+
+        setPriceDisplayByItem(next);
+      } catch (loadError) {
+        if (!cancelled) {
+          console.error("Restaurant price display settings load failed:", loadError);
+        }
+      }
+    }
+
+    void loadPriceDisplaySettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1275,7 +1152,11 @@ export default function RestaurantMenu({
                       onClick={() => {
                         recordMenuItemClick(item, category.name);
                         setSelectedItem(
-                          withServicePrice(item, activeService, deliveryMenuPriceEnabled),
+                          withServicePrice(
+                            item,
+                            activeService,
+                            priceDisplayByItem[item.id],
+                          ),
                         );
                       }}
                       className={`group flex min-h-[112px] w-full overflow-hidden rounded-xl border text-left transition ${
@@ -1299,7 +1180,11 @@ export default function RestaurantMenu({
                             {item.name}
                           </h3>
 
-                          {getPriceForService(item, activeService, deliveryMenuPriceEnabled) != null ? (
+                          {getPriceForService(
+                            item,
+                            activeService,
+                            priceDisplayByItem[item.id],
+                          ) != null ? (
                             <span
                               className="shrink-0 text-sm font-black"
                               style={
@@ -1322,28 +1207,15 @@ export default function RestaurantMenu({
                             >
                               $
                               {Number(
-                                getPriceForService(item, activeService, deliveryMenuPriceEnabled),
+                                getPriceForService(
+                                  item,
+                                  activeService,
+                                  priceDisplayByItem[item.id],
+                                ),
                               ).toFixed(2)}
                             </span>
                           ) : null}
                         </div>
-
-                        {(() => {
-                          const itemPromos = getPromotionsForMenuItem(item.id);
-                          if (!itemPromos.length) return null;
-                          return (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {itemPromos.map((promotion) => (
-                                <span
-                                  key={promotion.id}
-                                  className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white"
-                                >
-                                  🔥 {promotion.name}
-                                </span>
-                              ))}
-                            </div>
-                          );
-                        })()}
 
                         {item.description ? (
                           <p className="mt-2 line-clamp-3 text-xs font-medium leading-5 opacity-65 sm:text-sm">
@@ -1549,96 +1421,6 @@ export default function RestaurantMenu({
                           : "border-t border-gray-200 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4"
                       }
                     >
-                      {availablePromotions.length ? (
-                        <div className="mb-4 space-y-3">
-                          {availablePromotions.map((promotion) => (
-                            <div key={promotion.id} className="rounded-2xl border border-orange-200 bg-orange-50 p-3">
-                              <p className="text-xs font-black text-orange-700">🎁 {promotion.name}</p>
-                              {promotion.rewardChoices.length === 1 ||
-                              getPromotionSelectionCount(promotion) >= promotion.rewardChoices.length ? (
-                                <>
-                                  <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                                    {promotion.rewardChoices.length === 1
-                                      ? "혜택이 자동 적용됩니다."
-                                      : "등록된 혜택이 모두 자동 적용됩니다."}
-                                  </p>
-                                  <div className="mt-2 grid gap-2">
-                                    {promotion.rewardChoices.map((choice, choiceIndex) => (
-                                      <div
-                                        key={`${promotion.id}-auto-${choice.name}-${choiceIndex}`}
-                                        className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-3 py-2"
-                                      >
-                                        <span className="text-xs font-black text-gray-900">✓ {choice.name}</span>
-                                        <span className="text-[11px] font-black text-green-700">
-                                          {choice.discountPercent >= 100
-                                            ? "FREE · AUTO APPLIED"
-                                            : `${choice.discountPercent}% OFF · AUTO APPLIED`}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                                    혜택 상품을 {getPromotionSelectionCount(promotion)}개 선택하세요.
-                                  </p>
-                                  <div className="mt-2 grid gap-2">
-                                    {promotion.rewardChoices.map((choice, choiceIndex) => {
-                                      const currentSelected = selectedPromotionRewards[promotion.id] || [];
-                                      const selected = currentSelected.some(
-                                        (row) => row.name === choice.name,
-                                      );
-                                      const maxSelected = getPromotionSelectionCount(promotion);
-                                      const discountText =
-                                        choice.discountPercent >= 100
-                                          ? "FREE"
-                                          : `${choice.discountPercent}% OFF`;
-
-                                      return (
-                                        <button
-                                          key={`${promotion.id}-${choice.name}-${choiceIndex}`}
-                                          type="button"
-                                          onClick={() =>
-                                            setSelectedPromotionRewards((current) => {
-                                              const existing = current[promotion.id] || [];
-                                              const isSelected = existing.some(
-                                                (row) => row.name === choice.name,
-                                              );
-
-                                              const next = isSelected
-                                                ? existing.filter((row) => row.name !== choice.name)
-                                                : existing.length < maxSelected
-                                                  ? [...existing, choice]
-                                                  : existing;
-
-                                              return { ...current, [promotion.id]: next };
-                                            })
-                                          }
-                                          className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left ${
-                                            selected
-                                              ? "border-orange-500 bg-white ring-2 ring-orange-200"
-                                              : "border-orange-100 bg-white"
-                                          }`}
-                                        >
-                                          <span className="text-xs font-black text-gray-900">
-                                            {selected ? "✓ " : "□ "}
-                                            {choice.name}
-                                          </span>
-                                          <span className="text-[11px] font-black text-green-700">
-                                            {discountText}
-                                          </span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-gray-600">Subtotal</span>
                         <span className="text-xl font-black">${cartSubtotal.toFixed(2)}</span>
@@ -1675,18 +1457,17 @@ export default function RestaurantMenu({
                         {cartItems.length ? (
                           <button
                             type="button"
-                            disabled={availablePromotions.some(promotionNeedsCustomerSelection)}
                             onClick={() => {
                               setCartOpen(false);
                               setCheckoutOpen(true);
                             }}
                             className={
                               isIPhone
-                                ? `col-span-2 rounded-xl px-4 py-2.5 text-xs font-black text-white ${availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
-                                : `col-span-2 rounded-xl px-4 py-3 text-xs font-black text-white ${availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
+                                ? "col-span-2 rounded-xl bg-gray-950 px-4 py-2.5 text-xs font-black text-white"
+                                : "col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
                             }
                           >
-                            {availablePromotions.some(promotionNeedsCustomerSelection) ? "SELECT DEAL ITEM" : "CHECKOUT"}
+                            CHECKOUT
                           </button>
                         ) : null}
                       </div>
@@ -1708,7 +1489,6 @@ export default function RestaurantMenu({
               : "pickup"
           }
           cartItems={cartItems}
-          promotionRewards={appliedPromotionRewards}
           onClose={() => setCheckoutOpen(false)}
           onOrderPlaced={() => {
             clearCart();
@@ -1750,14 +1530,6 @@ export default function RestaurantMenu({
           backgroundColor={backgroundColor}
           textColor={textColor}
           orderEnabled={orderingAvailable}
-          dealPromotions={getPromotionsForMenuItem(selectedItem.id)}
-          selectedPromotionRewards={selectedPromotionRewards}
-          onPromotionRewardChange={(promotionId, choices) =>
-            setSelectedPromotionRewards((current) => ({
-              ...current,
-              [promotionId]: choices,
-            }))
-          }
           onAddToOrder={handleAddToOrder}
           onClose={() =>
             setSelectedItem(null)

@@ -176,7 +176,7 @@ export async function GET(
       supabase
         .from("restaurant_order_settings")
         .select(
-          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode,enforce_business_hours",
+          "pickup_enabled,delivery_enabled,pay_at_pickup_enabled,sms_enabled,pickup_prep_minutes,delivery_prep_minutes,tax_rate,tip_presets,delivery_fee_policy_mode",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -216,21 +216,7 @@ export async function GET(
           )
         : Boolean(privateSettings?.stripe_secret_key);
 
-    const enforceBusinessHours =
-      settings?.enforce_business_hours !== false;
-
-    const rawOrderWindow =
-      getOrderWindow(business.hours, 15);
-
-    const orderWindow = enforceBusinessHours
-      ? rawOrderWindow
-      : {
-          enforceable: false,
-          open: true,
-          reason: "",
-          closesAt: null as string | null,
-          cutoffAt: null as string | null,
-        };
+    const orderWindow = getOrderWindow(business.hours, 15);
 
     const tipPresets = Array.isArray(settings?.tip_presets)
       ? settings.tip_presets
@@ -244,10 +230,7 @@ export async function GET(
         businessName: business.name || "Restaurant",
 
         orderingOpen: orderWindow.open,
-        orderingHoursEnforced:
-          enforceBusinessHours &&
-          orderWindow.enforceable,
-        enforceBusinessHours,
+        orderingHoursEnforced: orderWindow.enforceable,
         orderingClosedReason: orderWindow.reason,
         orderingClosesAt: orderWindow.closesAt,
         orderingCutoffAt: orderWindow.cutoffAt,
@@ -266,17 +249,15 @@ export async function GET(
             privateSettings?.uber_direct_customer_id ||
               process.env.UBER_DIRECT_CUSTOMER_ID,
           ),
+        deliveryFeePolicyMode:
+          settings?.delivery_fee_policy_mode === "customer_100" ||
+          settings?.delivery_fee_policy_mode === "restaurant_100" ||
+          settings?.delivery_fee_policy_mode === "menu_price"
+            ? settings.delivery_fee_policy_mode
+            : "order_amount",
 
         paymentProvider,
         onlinePaymentEnabled,
-        deliveryFeePolicyMode:
-          settings?.delivery_fee_policy_mode === "menu_price"
-            ? "menu_price"
-            : settings?.delivery_fee_policy_mode === "customer_100"
-              ? "customer_100"
-              : settings?.delivery_fee_policy_mode === "restaurant_100"
-                ? "restaurant_100"
-                : "order_amount",
         payAtPickupEnabled: settings?.pay_at_pickup_enabled !== false,
         smsEnabled: settings?.sms_enabled === true,
 

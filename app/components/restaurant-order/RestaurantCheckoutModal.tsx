@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type CheckoutCartItem = {
@@ -29,38 +29,109 @@ type PublicSettings = {
   deliveryPrepMinutes: number;
   taxRate: number;
   tipPresets: number[];
+  deliveryProvider?: string | null;
+  deliveryDispatchEnabled?: boolean;
+  deliveryFeePolicyMode?:
+    | "customer_100"
+    | "order_amount"
+    | "restaurant_100"
+    | "menu_price";
 };
 
-export type AppliedPromotionReward = {
-  promotionId: string;
-  promotionName: string;
-  triggerMenuItemId?: number;
-  itemName: string;
-  regularPrice: number;
-  discountPercent: number;
-  finalPrice: number;
+type DeliveryFeeShareRule = {
+  maxSubtotal: number | null;
+  customerPercent: number;
+};
+
+type DeliveryQuoteBreakdown = {
+  provider: string;
+  providerFeeCents: number;
+  customerFeeCents: number;
+  restaurantFeeCents: number;
+  customerSharePercent: number;
+  restaurantSharePercent: number;
+  orderSubtotal: number;
+  feeShareRules: DeliveryFeeShareRule[];
 };
 
 type Props = {
   businessId: number;
   fulfillmentType: "pickup" | "delivery";
   cartItems: CheckoutCartItem[];
-  promotionRewards?: AppliedPromotionReward[];
   onClose: () => void;
   onOrderPlaced: () => void;
 };
 
 const CUSTOMER_KEY = "restaurant-order-customer";
 
+type SquarePreparedPayment = {
+  orderId: number;
+  orderNumber: string;
+  applicationId: string;
+  locationId: string;
+  amount: string;
+  amountCents: number;
+  currencyCode: string;
+};
+
+let squareSdkPromise: Promise<void> | null = null;
+
+function loadSquareSdk() {
+  if (typeof window === "undefined") return Promise.resolve();
+  if ((window as any).Square) return Promise.resolve();
+  if (squareSdkPromise) return squareSdkPromise;
+
+  squareSdkPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[data-ktown-square-web-payments="1"]',
+    );
+
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener(
+        "error",
+        () => reject(new Error("Square payment library could not be loaded.")),
+        { once: true },
+      );
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://web.squarecdn.com/v1/square.js";
+    script.async = true;
+    script.dataset.ktownSquareWebPayments = "1";
+    script.onload = () => resolve();
+    script.onerror = () =>
+      reject(new Error("Square payment library could not be loaded."));
+    document.head.appendChild(script);
+  });
+
+  return squareSdkPromise;
+}
+
 function money(value: number) {
   return `$${Math.max(0, value).toFixed(2)}`;
+}
+
+function deliveryPolicyRangeLabel(
+  rules: DeliveryFeeShareRule[],
+  index: number,
+) {
+  const rule = rules[index];
+  const previousMax = index > 0 ? rules[index - 1]?.maxSubtotal : null;
+  const minimum = previousMax == null ? 0 : Number(previousMax) + 0.01;
+
+  if (rule?.maxSubtotal == null) {
+    return `${money(minimum)}+`;
+  }
+
+  return `${money(minimum)} – ${money(Number(rule.maxSubtotal))}`;
 }
 
 export default function RestaurantCheckoutModal({
   businessId,
   fulfillmentType,
   cartItems,
-  promotionRewards = [],
   onClose,
   onOrderPlaced,
 }: Props) {
@@ -73,30 +144,74 @@ export default function RestaurantCheckoutModal({
   const [stateCode, setStateCode] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [deliveryNote, setDeliveryNote] = useState("");
+  const [orderNote, setOrderNote] = useState("");
   const [pickupTime, setPickupTime] = useState("asap");
   const [customTime, setCustomTime] = useState("");
   const [customDate, setCustomDate] = useState("");
   const [customHour, setCustomHour] = useState("12");
   const [customMinute, setCustomMinute] = useState("00");
   const [customPeriod, setCustomPeriod] = useState<"AM" | "PM">("PM");
-  const paymentMethod: "online" = "online";
+  const paymentMethod = "online" as const;
   const [tipPercent, setTipPercent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [squarePrepared, setSquarePrepared] =
+    useState<SquarePreparedPayment | null>(null);
+  const [squareMethodsLoading, setSquareMethodsLoading] = useState(false);
+  const [squareCardReady, setSquareCardReady] = useState(false);
+  const [cardPaymentOpen, setCardPaymentOpen] = useState(false);
+  const [squareGoogleReady, setSquareGoogleReady] = useState(false);
+  const [squareAppleReady, setSquareAppleReady] = useState(false);
+  const [squarePaying, setSquarePaying] = useState(false);
 
-  const menuSubtotal = useMemo(
+  // Uber Direct delivery quote
+  const [deliveryQuoteId, setDeliveryQuoteId] = useState("");
+  const [deliveryFeeCents, setDeliveryFeeCents] = useState(0);
+  const [deliveryQuoteBreakdown, setDeliveryQuoteBreakdown] =
+    useState<DeliveryQuoteBreakdown | null>(null);
+  const [deliveryPolicyOpen, setDeliveryPolicyOpen] = useState(false);
+  const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
+  const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
+
+  const isSafariBrowser = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+
+    const ua = navigator.userAgent;
+    const vendor = navigator.vendor || "";
+
+    return (
+      /Safari/i.test(ua) &&
+      /Apple Computer/i.test(vendor) &&
+      !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Chromium|Edg|OPR|Android/i.test(ua)
+    );
+  }, []);
+
+  const squarePaymentsRef = useRef<any>(null);
+  const squareCardRef = useRef<any>(null);
+  const squareGoogleRef = useRef<any>(null);
+  const squareAppleRef = useRef<any>(null);
+
+  const address1Ref = useRef<HTMLInputElement>(null);
+  const address2Ref = useRef<HTMLInputElement>(null);
+  const cityRef = useRef<HTMLInputElement>(null);
+  const stateCodeRef = useRef<HTMLInputElement>(null);
+  const postalCodeRef = useRef<HTMLInputElement>(null);
+
+  const subtotal = useMemo(
     () => cartItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0), 0),
     [cartItems],
   );
-  const promotionItemsTotal = useMemo(
-    () => promotionRewards.reduce((sum, reward) => sum + Math.max(0, Number(reward.finalPrice) || 0), 0),
-    [promotionRewards],
-  );
-  const subtotal = menuSubtotal + promotionItemsTotal;
   const tax = subtotal * Math.max(0, Number(settings?.taxRate || 0));
   const tip = subtotal * (tipPercent / 100);
-  const estimatedTotal = subtotal + tax + tip;
+  const useDeliveryMenuPrice =
+    fulfillmentType === "delivery" &&
+    settings?.deliveryFeePolicyMode === "menu_price";
+  const deliveryFee =
+    fulfillmentType === "delivery" && !useDeliveryMenuPrice
+      ? deliveryFeeCents / 100
+      : 0;
+  const estimatedTotal = subtotal + tax + tip + deliveryFee;
 
   useEffect(() => {
     try {
@@ -126,13 +241,445 @@ export default function RestaurantCheckoutModal({
     return () => { cancelled = true; };
   }, [businessId]);
 
+  useEffect(() => {
+    if (!squarePrepared) return;
+
+    let cancelled = false;
+
+    setSquareMethodsLoading(true);
+    setSquareCardReady(false);
+    setCardPaymentOpen(false);
+    setSquareGoogleReady(false);
+    setSquareAppleReady(false);
+    setError("");
+
+    (async () => {
+      try {
+        await loadSquareSdk();
+        if (cancelled) return;
+
+        const Square = (window as any).Square;
+        if (!Square) {
+          throw new Error("Square payment library is unavailable.");
+        }
+
+        const payments = Square.payments(
+          squarePrepared.applicationId,
+          squarePrepared.locationId,
+        );
+        squarePaymentsRef.current = payments;
+
+        const paymentRequest = payments.paymentRequest({
+          countryCode: "US",
+          currencyCode: squarePrepared.currencyCode || "USD",
+          total: {
+            amount: squarePrepared.amount,
+            label: "KTown Order",
+          },
+        });
+
+        try {
+          const card = await payments.card();
+          if (!cancelled) {
+            squareCardRef.current = card;
+            await card.attach("#ktown-square-card");
+            if (!cancelled) setSquareCardReady(true);
+          }
+        } catch (cardError) {
+          console.error("Square card init:", cardError);
+        }
+
+        try {
+          const googlePay = await payments.googlePay(paymentRequest);
+          if (!cancelled) {
+            squareGoogleRef.current = googlePay;
+            await googlePay.attach("#ktown-square-google-pay", {
+              buttonColor: "black",
+              buttonType: "long",
+              buttonSizeMode: "fill",
+              buttonRadius: 4,
+              buttonBorderType: "no_border",
+            });
+            if (!cancelled) setSquareGoogleReady(true);
+          }
+        } catch {
+          // Google Pay is only shown on supported devices/browsers.
+        }
+
+        if (isSafariBrowser) {
+          try {
+            const applePay = await payments.applePay(paymentRequest);
+            if (!cancelled) {
+              squareAppleRef.current = applePay;
+              setSquareAppleReady(true);
+            }
+          } catch {
+            // Apple Pay stays hidden when Safari/device support is unavailable.
+          }
+        }
+
+        if (
+          !cancelled &&
+          !squareCardRef.current &&
+          !squareGoogleRef.current &&
+          !squareAppleRef.current
+        ) {
+          throw new Error(
+            "No supported Square payment method is available on this device.",
+          );
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Payment form could not be loaded.",
+          );
+        }
+      } finally {
+        if (!cancelled) setSquareMethodsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+
+      for (const ref of [
+        squareCardRef,
+        squareGoogleRef,
+        squareAppleRef,
+      ]) {
+        try {
+          ref.current?.destroy?.();
+        } catch {}
+        ref.current = null;
+      }
+
+      squarePaymentsRef.current = null;
+    };
+  }, [squarePrepared, isSafariBrowser]);
+
+  function billingContact() {
+    return {
+      givenName: name.trim(),
+      phone: phone.trim(),
+      countryCode: "US",
+      ...(fulfillmentType === "delivery"
+        ? {
+            addressLines: [
+              address1.trim(),
+              address2.trim(),
+            ].filter(Boolean),
+            city: city.trim(),
+            state: stateCode.trim(),
+            postalCode: postalCode.trim(),
+          }
+        : {}),
+    };
+  }
+
+  async function finishSquarePayment(
+    method: "card" | "google" | "apple",
+  ) {
+    if (!squarePrepared || squarePaying) return;
+
+    setSquarePaying(true);
+    setError("");
+
+    try {
+      const amount = squarePrepared.amount;
+      const currencyCode =
+        squarePrepared.currencyCode || "USD";
+
+      let tokenResult: any;
+      let verificationToken = "";
+
+      if (method === "card") {
+        if (!squareCardRef.current) {
+          throw new Error("Card payment is not ready.");
+        }
+
+        tokenResult = await squareCardRef.current.tokenize({
+          amount,
+          currencyCode,
+          intent: "CHARGE",
+          billingContact: billingContact(),
+          customerInitiated: true,
+          sellerKeyedIn: false,
+        });
+      } else if (method === "google") {
+        if (!squareGoogleRef.current) {
+          throw new Error("Google Pay is not available.");
+        }
+        tokenResult = await squareGoogleRef.current.tokenize();
+      } else {
+        if (!squareAppleRef.current) {
+          throw new Error("Apple Pay is not available.");
+        }
+        tokenResult = await squareAppleRef.current.tokenize();
+      }
+
+      if (tokenResult?.status !== "OK" || !tokenResult?.token) {
+        const detail = Array.isArray(tokenResult?.errors)
+          ? tokenResult.errors
+              .map((item: any) => item?.message || item?.detail || item?.code)
+              .filter(Boolean)
+              .join(" / ")
+          : "";
+        throw new Error(detail || "Payment information could not be verified.");
+      }
+
+      if (
+        method !== "card" &&
+        squarePaymentsRef.current?.verifyBuyer
+      ) {
+        const verification = await squarePaymentsRef.current.verifyBuyer(
+          tokenResult.token,
+          {
+            amount,
+            currencyCode,
+            intent: "CHARGE",
+            billingContact: billingContact(),
+          },
+        );
+        verificationToken = String(verification?.token || "");
+      }
+
+      const attemptId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const response = await fetch(
+        `/api/businesses/${businessId}/orders/${squarePrepared.orderId}/square-pay`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sourceId: tokenResult.token,
+            verificationToken,
+            attemptId,
+
+            // 실제로 고객이 사용한 결제수단을 서버에 전달합니다.
+            // DB 저장은 Square가 COMPLETED를 반환한 뒤 서버에서만 수행합니다.
+            paymentMethodType:
+              method === "apple"
+                ? "apple_pay"
+                : method === "google"
+                  ? "google_pay"
+                  : "card",
+          }),
+        },
+      );
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || "Payment could not be completed.",
+        );
+      }
+
+      onOrderPlaced();
+      alert(`Order #${squarePrepared.orderNumber} paid and received.`);
+      onClose();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Payment could not be completed.",
+      );
+    } finally {
+      setSquarePaying(false);
+    }
+  }
+
+  async function getUberDirectQuote() {
+    if (fulfillmentType !== "delivery") return;
+
+    // Browser autofill can visually populate an input without immediately
+    // updating React state. Read the actual input values as a fallback.
+    const nextAddress1 = (address1Ref.current?.value || address1 || "").trim();
+    const nextAddress2 = (address2Ref.current?.value || address2 || "").trim();
+    const nextCity = (cityRef.current?.value || city || "").trim();
+    const nextStateCode = (stateCodeRef.current?.value || stateCode || "").trim();
+    const nextPostalCode = (postalCodeRef.current?.value || postalCode || "").trim();
+
+    const missingFields = [
+      !nextAddress1 ? "Street address" : "",
+      !nextCity ? "City" : "",
+      !nextStateCode ? "State" : "",
+      !nextPostalCode ? "ZIP" : "",
+    ].filter(Boolean);
+
+    if (missingFields.length) {
+      setDeliveryQuoteError(
+        `Missing delivery address field(s): ${missingFields.join(", ")}.`,
+      );
+      return;
+    }
+
+    // Keep React state synchronized with any browser-autofilled values.
+    setAddress1(nextAddress1);
+    setAddress2(nextAddress2);
+    setCity(nextCity);
+    setStateCode(nextStateCode);
+    setPostalCode(nextPostalCode);
+
+    setDeliveryQuoteLoading(true);
+    setDeliveryQuoteError("");
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/businesses/${businessId}/delivery/quote`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deliveryAddress: {
+              address1: nextAddress1,
+              address2: nextAddress2,
+              city: nextCity,
+              state: nextStateCode,
+              postalCode: nextPostalCode,
+            },
+            dropoffPhone: phone.trim(),
+            orderSubtotal: Number(subtotal.toFixed(2)),
+          }),
+        },
+      );
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          payload?.error || "Delivery quote could not be calculated.",
+        );
+      }
+
+      setDeliveryQuoteId(String(payload?.quoteId || ""));
+      setDeliveryFeeCents(
+        Math.max(
+          0,
+          Number(
+            payload?.customerFeeCents ??
+              payload?.deliveryFeeCents ??
+              payload?.feeCents ??
+              0,
+          ) || 0,
+        ),
+      );
+
+      const providerFeeCents = Math.max(
+        0,
+        Number(
+          payload?.providerFeeCents ??
+            payload?.uberFeeCents ??
+            payload?.fullDeliveryFeeCents ??
+            payload?.feeCents ??
+            0,
+        ) || 0,
+      );
+      const customerFeeCents = Math.max(
+        0,
+        Number(
+          payload?.customerFeeCents ??
+            payload?.deliveryFeeCents ??
+            payload?.feeCents ??
+            0,
+        ) || 0,
+      );
+      const restaurantFeeCents = Math.max(
+        0,
+        Number(
+          payload?.restaurantFeeCents ??
+            providerFeeCents - customerFeeCents,
+        ) || 0,
+      );
+      const customerSharePercent = Math.max(
+        0,
+        Math.min(100, Number(payload?.customerSharePercent ?? 100) || 0),
+      );
+      const feeShareRules: DeliveryFeeShareRule[] = Array.isArray(
+        payload?.feeShareRules,
+      )
+        ? payload.feeShareRules.map((rule: any) => ({
+            maxSubtotal:
+              rule?.maxSubtotal == null ? null : Number(rule.maxSubtotal),
+            customerPercent: Math.max(
+              0,
+              Math.min(100, Number(rule?.customerPercent) || 0),
+            ),
+          }))
+        : [];
+
+      setDeliveryQuoteBreakdown({
+        provider: String(payload?.provider || "uber_direct"),
+        providerFeeCents,
+        customerFeeCents,
+        restaurantFeeCents,
+        customerSharePercent,
+        restaurantSharePercent: Math.max(0, 100 - customerSharePercent),
+        orderSubtotal: Number(payload?.orderSubtotal ?? subtotal),
+        feeShareRules,
+      });
+    } catch (e) {
+      setDeliveryQuoteId("");
+      setDeliveryFeeCents(0);
+      setDeliveryQuoteBreakdown(null);
+      setDeliveryQuoteError(
+        e instanceof Error
+          ? e.message
+          : "Delivery quote could not be calculated.",
+      );
+    } finally {
+      setDeliveryQuoteLoading(false);
+    }
+  }
+
   async function submitOrder() {
     setError("");
     if (!name.trim()) return setError("Please enter your name.");
     if (!phone.trim()) return setError("Please enter your phone number.");
+    const submitAddress1 =
+      (address1Ref.current?.value || address1 || "").trim();
+    const submitAddress2 =
+      (address2Ref.current?.value || address2 || "").trim();
+    const submitCity =
+      (cityRef.current?.value || city || "").trim();
+    const submitStateCode =
+      (stateCodeRef.current?.value || stateCode || "").trim();
+    const submitPostalCode =
+      (postalCodeRef.current?.value || postalCode || "").trim();
+
     if (fulfillmentType === "delivery") {
-      if (!address1.trim() || !city.trim() || !stateCode.trim() || !postalCode.trim()) {
-        return setError("Please enter the complete delivery address.");
+      const missingSubmitFields = [
+        !submitAddress1 ? "Street address" : "",
+        !submitCity ? "City" : "",
+        !submitStateCode ? "State" : "",
+        !submitPostalCode ? "ZIP" : "",
+      ].filter(Boolean);
+
+      if (missingSubmitFields.length) {
+        return setError(
+          `Missing delivery address field(s): ${missingSubmitFields.join(", ")}.`,
+        );
+      }
+
+      // Keep React state synchronized with the values actually visible
+      // in the browser, including browser-autofilled address fields.
+      setAddress1(submitAddress1);
+      setAddress2(submitAddress2);
+      setCity(submitCity);
+      setStateCode(submitStateCode);
+      setPostalCode(submitPostalCode);
+
+      if (
+        settings?.deliveryProvider === "uber_direct" &&
+        settings?.deliveryDispatchEnabled &&
+        !deliveryQuoteId
+      ) {
+        return setError("Please calculate the delivery fee before paying.");
       }
     }
     if (pickupTime === "custom" && !customDate) return setError("Please select a date.");
@@ -154,8 +701,12 @@ export default function RestaurantCheckoutModal({
           fulfillmentType,
           customer: { name: name.trim(), phone: phone.trim() },
           deliveryAddress: fulfillmentType === "delivery" ? {
-            address1: address1.trim(), address2: address2.trim(), city: city.trim(),
-            state: stateCode.trim(), postalCode: postalCode.trim(), note: deliveryNote.trim(),
+            address1: submitAddress1,
+            address2: submitAddress2,
+            city: submitCity,
+            state: submitStateCode,
+            postalCode: submitPostalCode,
+            note: deliveryNote.trim(),
           } : null,
           requestedTime: pickupTime === "custom"
             ? (() => {
@@ -167,15 +718,11 @@ export default function RestaurantCheckoutModal({
             : pickupTime,
           paymentMethod,
           tipPercent,
-          promotionRewards: promotionRewards.map((reward) => ({
-            promotionId: reward.promotionId,
-            promotionName: reward.promotionName,
-            triggerMenuItemId: reward.triggerMenuItemId,
-            itemName: reward.itemName,
-            regularPrice: reward.regularPrice,
-            discountPercent: reward.discountPercent,
-            finalPrice: reward.finalPrice,
-          })),
+          deliveryQuoteId:
+            fulfillmentType === "delivery" && deliveryQuoteId
+              ? deliveryQuoteId
+              : null,
+          orderNote: orderNote.trim().slice(0, 500),
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
@@ -186,6 +733,23 @@ export default function RestaurantCheckoutModal({
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error || "주문을 완료하지 못했습니다.");
+
+      if (
+        payload?.paymentProvider === "square" &&
+        payload?.paymentRequired &&
+        payload?.squarePayment
+      ) {
+        setSquarePrepared({
+          orderId: Number(payload.orderId),
+          orderNumber: String(payload.orderNumber || ""),
+          applicationId: String(payload.squarePayment.applicationId || ""),
+          locationId: String(payload.squarePayment.locationId || ""),
+          amount: String(payload.squarePayment.amount || "0.00"),
+          amountCents: Number(payload.squarePayment.amountCents || 0),
+          currencyCode: String(payload.squarePayment.currencyCode || "USD"),
+        });
+        return;
+      }
 
       if (payload.checkoutUrl) {
         window.location.href = payload.checkoutUrl;
@@ -205,8 +769,14 @@ export default function RestaurantCheckoutModal({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
           <button type="button" onClick={onClose} className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black">×</button>
@@ -217,6 +787,185 @@ export default function RestaurantCheckoutModal({
           {loading ? <div className="py-10 text-center text-sm font-bold text-gray-500">Loading…</div> : null}
 
           {!loading && settings ? <>
+            {squarePrepared ? (
+              <>
+                <section className="rounded-2xl border p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[.16em] text-gray-400">
+                        SECURE PAYMENT
+                      </p>
+                      <h3 className="mt-1 text-lg font-black">
+                        Order #{squarePrepared.orderNumber}
+                      </h3>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Your name and phone were already received by KTown. No duplicate contact form.
+                      </p>
+                    </div>
+                    <b className="shrink-0 whitespace-nowrap text-xl">{money(Number(squarePrepared.amount))}</b>
+                  </div>
+                </section>
+
+                {error ? (
+                  <div className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700">
+                    {error}
+                  </div>
+                ) : null}
+
+                <section className="rounded-2xl border p-4">
+                  <h3 className="font-black">Payment</h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {isSafariBrowser
+                      ? "Apple Pay · Google Pay · Credit / Debit Card"
+                      : "Google Pay · Credit / Debit Card"}
+                  </p>
+
+                  {squareMethodsLoading ? (
+                    <div className="py-6 text-center text-sm font-bold text-gray-500">
+                      Loading secure payment…
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 space-y-3">
+                    {isSafariBrowser ? (
+                      <>
+                        <button
+                          id="ktown-apple-pay-button"
+                          type="button"
+                          aria-label="Pay with Apple Pay"
+                          onClick={() => finishSquarePayment("apple")}
+                          disabled={!squareAppleReady || squarePaying}
+                          className={`h-12 w-full overflow-hidden rounded-xl ${
+                            squareAppleReady ? "block" : "hidden"
+                          }`}
+                        />
+                        <style jsx>{`
+                          #ktown-apple-pay-button {
+                            -webkit-appearance: -apple-pay-button;
+                            -apple-pay-button-type: pay;
+                            -apple-pay-button-style: black;
+                          }
+                        `}</style>
+                      </>
+                    ) : null}
+
+                    <div
+                      className={
+                        squareGoogleReady
+                          ? "relative h-12 w-full overflow-hidden rounded-md bg-black"
+                          : "min-h-[1px]"
+                      }
+                    >
+                      <div
+                        id="ktown-square-google-pay"
+                        onClick={() => {
+                          if (squareGoogleReady && !squarePaying) {
+                            finishSquarePayment("google");
+                          }
+                        }}
+                        className={
+                          squareGoogleReady
+                            ? "h-12 w-full"
+                            : "min-h-[1px]"
+                        }
+                      />
+
+                      {squareGoogleReady ? (
+                        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-md bg-black text-white">
+                          <span className="text-[17px] font-medium">
+                            Buy with
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className="text-[23px] font-black leading-none"
+                              style={{
+                                background:
+                                  "conic-gradient(from -45deg,#4285F4 0 25%,#34A853 25% 50%,#FBBC05 50% 75%,#EA4335 75% 100%)",
+                                WebkitBackgroundClip: "text",
+                                backgroundClip: "text",
+                                color: "transparent",
+                              }}
+                              aria-hidden="true"
+                            >
+                              G
+                            </span>
+                            <span className="text-[22px] font-medium leading-none">
+                              Pay
+                            </span>
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="overflow-hidden rounded-xl border bg-white">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          squareCardReady &&
+                          setCardPaymentOpen((current) => !current)
+                        }
+                        disabled={!squareCardReady || squarePaying}
+                        aria-expanded={cardPaymentOpen}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <span className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-8 w-10 shrink-0 items-center justify-center rounded-md bg-gray-100 text-lg">
+                            💳
+                          </span>
+
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black text-gray-950">
+                              Credit / Debit Card
+                            </span>
+                            <span className="mt-0.5 block text-[11px] text-gray-500">
+                              {squareCardReady
+                                ? "Tap to enter card details"
+                                : "Loading secure card form…"}
+                            </span>
+                          </span>
+                        </span>
+
+                        <span
+                          className={`shrink-0 text-sm font-black text-gray-500 transition-transform ${
+                            cardPaymentOpen ? "rotate-180" : ""
+                          }`}
+                        >
+                          ▼
+                        </span>
+                      </button>
+
+                      <div
+                        className={`overflow-hidden transition-all duration-200 ${
+                          cardPaymentOpen
+                            ? "max-h-[430px] border-t opacity-100"
+                            : "max-h-0 opacity-0"
+                        }`}
+                      >
+                        <div className="p-3">
+                          <div id="ktown-square-card" />
+
+                          <button
+                            type="button"
+                            onClick={() => finishSquarePayment("card")}
+                            disabled={!squareCardReady || squarePaying}
+                            className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+                          >
+                            {squarePaying
+                              ? "PROCESSING…"
+                              : `PAY ${money(Number(squarePrepared.amount))}`}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-[10px] text-gray-500">
+                    Payment is securely processed by Square. KTown does not store card numbers.
+                  </p>
+                </section>
+              </>
+            ) : (
+              <>
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Customer Information</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -228,13 +977,100 @@ export default function RestaurantCheckoutModal({
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">
               <h3 className="font-black">Delivery Address</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <input value={address1} onChange={(e) => setAddress1(e.target.value)} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={address2} onChange={(e) => setAddress2(e.target.value)} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
-                <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={stateCode} onChange={(e) => setStateCode(e.target.value)} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input ref={address1Ref} name="address-line1" autoComplete="address-line1" value={address1} onChange={(e) => {
+                  setAddress1(e.target.value);
+                  setDeliveryQuoteId("");
+                  setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
+                  setDeliveryQuoteError("");
+                }} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
+                <input ref={address2Ref} name="address-line2" autoComplete="address-line2" value={address2} onChange={(e) => {
+                  setAddress2(e.target.value);
+                  setDeliveryQuoteId("");
+                  setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
+                  setDeliveryQuoteError("");
+                }} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
+                <input ref={cityRef} name="address-level2" autoComplete="address-level2" value={city} onChange={(e) => {
+                  setCity(e.target.value);
+                  setDeliveryQuoteId("");
+                  setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
+                  setDeliveryQuoteError("");
+                }} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input ref={stateCodeRef} name="address-level1" autoComplete="address-level1" value={stateCode} onChange={(e) => {
+                  setStateCode(e.target.value);
+                  setDeliveryQuoteId("");
+                  setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
+                  setDeliveryQuoteError("");
+                }} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input ref={postalCodeRef} name="postal-code" autoComplete="postal-code" value={postalCode} onChange={(e) => {
+                  setPostalCode(e.target.value);
+                  setDeliveryQuoteId("");
+                  setDeliveryFeeCents(0);
+                  setDeliveryQuoteBreakdown(null);
+                  setDeliveryQuoteError("");
+                }} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
+
+              {settings?.deliveryProvider === "uber_direct" &&
+              settings?.deliveryDispatchEnabled ? (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={getUberDirectQuote}
+                    disabled={deliveryQuoteLoading}
+                    className="w-full rounded-xl border-2 border-gray-950 px-4 py-3 text-sm font-black disabled:opacity-50"
+                  >
+                    {deliveryQuoteLoading
+                      ? "CALCULATING DELIVERY FEE…"
+                      : deliveryQuoteId
+                        ? "RECALCULATE DELIVERY FEE"
+                        : "CALCULATE DELIVERY FEE"}
+                  </button>
+
+                  {deliveryQuoteError ? (
+                    <p className="mt-2 text-xs font-bold text-red-600">
+                      {deliveryQuoteError}
+                    </p>
+                  ) : null}
+
+                  {deliveryQuoteId ? (
+                    <div className="mt-2 rounded-xl bg-gray-50 px-3 py-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-1.5 font-bold">
+                          Delivery fee
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryPolicyOpen(true)}
+                            aria-label="View delivery fee policy"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-600 bg-blue-600 text-[11px] font-black text-white"
+                          >
+                            ?
+                          </button>
+                        </span>
+                        <b>{money(deliveryFee)}</b>
+                      </div>
+
+                      {deliveryQuoteBreakdown ? (
+                        <div className="mt-2 border-t border-gray-200 pt-2 text-[11px] leading-5 text-gray-600">
+                          <p>
+                            Your order subtotal is {money(deliveryQuoteBreakdown.orderSubtotal)}.
+                          </p>
+                          <p>
+                            Based on this restaurant&apos;s delivery policy, you pay {deliveryQuoteBreakdown.customerSharePercent}% of the {money(deliveryQuoteBreakdown.providerFeeCents / 100)} courier fee.
+                            {deliveryQuoteBreakdown.restaurantFeeCents > 0
+                              ? ` The restaurant covers ${money(deliveryQuoteBreakdown.restaurantFeeCents / 100)}.`
+                              : ""}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </section> : null}
 
             <section className="rounded-2xl border p-4">
@@ -279,87 +1115,170 @@ export default function RestaurantCheckoutModal({
 
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Tip</h3>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {[0, ...(settings.tipPresets || [])].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setTipPercent(Number(p))}
-                    className={`rounded-full border px-3 py-2 text-xs font-black ${
-                      tipPercent === Number(p) ? "bg-gray-950 text-white" : "bg-white"
-                    }`}
-                  >
-                    {p === 0 ? "No tip" : `${p}%`}
-                  </button>
-                ))}
+              <div className="mt-3 flex flex-wrap gap-2">{[0, ...(settings.tipPresets || [])].map((p) => <button key={p} type="button" onClick={() => setTipPercent(Number(p))} className={`rounded-full border px-3 py-2 text-xs font-black ${tipPercent === Number(p) ? "bg-gray-950 text-white" : "bg-white"}`}>{p === 0 ? "No tip" : `${p}%`}</button>)}</div>
+            </section>
 
-                <label className="ml-auto flex items-center gap-1 rounded-full border bg-white px-3 py-1.5">
-                  <span className="text-xs font-black">Custom</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="1"
-                    value={tipPercent}
-                    onChange={(event) => {
-                      const value = Math.max(
-                        0,
-                        Math.min(100, Number(event.target.value) || 0),
-                      );
-                      setTipPercent(value);
-                    }}
-                    className="w-14 bg-transparent text-center text-xs font-black outline-none"
-                    inputMode="decimal"
-                    aria-label="Custom tip percentage"
-                  />
-                  <span className="text-xs font-black">%</span>
-                </label>
+            <section className="rounded-2xl border p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-black">Order Notes / Additional Requests</h3>
+                <span className="text-[10px] font-bold text-gray-400">
+                  {orderNote.length}/500
+                </span>
               </div>
+              <p className="mt-1 text-xs text-gray-500">
+                Add any instructions that apply to the entire order.
+              </p>
+              <textarea
+                value={orderNote}
+                onChange={(e) => setOrderNote(e.target.value.slice(0, 500))}
+                rows={3}
+                maxLength={500}
+                placeholder="Example: Please include extra napkins, utensils, or other order requests."
+                className="mt-3 w-full resize-none rounded-xl border px-3 py-3 text-sm outline-none focus:border-gray-900"
+              />
             </section>
 
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Payment</h3>
-              <div className="mt-3 space-y-2">
-                {settings.onlinePaymentEnabled ? <div className="rounded-xl border p-3"><span><b>Pay Online</b><span className="block text-xs text-gray-500">Apple Pay · Google Pay · Card</span></span></div> : null}
+
+              <div
+                className={`mt-3 flex items-start gap-3 rounded-2xl border-2 p-4 ${
+                  settings.onlinePaymentEnabled
+                    ? "border-emerald-600 bg-emerald-50"
+                    : "border-gray-200 bg-gray-50 opacity-50"
+                }`}
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-emerald-600">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
+                </span>
+
+                <span>
+                  <b className="block text-sm">Pay Now</b>
+                  <span className="mt-1 block text-xs text-gray-500">
+                    {isSafariBrowser
+                      ? "Apple Pay · Google Pay · Card"
+                      : "Google Pay · Card"}
+                  </span>
+
+                  {!settings.onlinePaymentEnabled ? (
+                    <span className="mt-1 block text-[10px] font-bold text-red-500">
+                      Online payment is not configured yet.
+                    </span>
+                  ) : null}
+                </span>
               </div>
             </section>
 
             <section className="rounded-2xl bg-gray-50 p-4 text-sm">
-              {promotionRewards.length ? (
-                <div className="mb-3 space-y-2 rounded-xl border border-orange-200 bg-orange-50 p-3">
-                  <p className="text-[11px] font-black uppercase tracking-wide text-orange-700">PROMOTION</p>
-                  {promotionRewards.map((reward) => (
-                    <div key={`${reward.promotionId}-${reward.itemName}`} className="flex items-start justify-between gap-3 text-xs">
-                      <div>
-                        <p className="font-black">🎁 {reward.itemName}</p>
-                        <p className="text-[10px] font-semibold text-gray-500">{reward.promotionName} · {reward.discountPercent >= 100 ? "FREE" : `${reward.discountPercent}% OFF`}</p>
-                      </div>
-                      <div className="text-right font-black">
-                        {reward.discountPercent >= 100 ? (
-                          <span className="text-green-700">FREE</span>
-                        ) : (
-                          <>
-                            <span className="mr-1 text-[10px] font-semibold text-gray-400 line-through">{money(reward.regularPrice)}</span>
-                            <span>{money(reward.finalPrice)}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="flex items-center justify-between gap-3"><span className="min-w-0">Subtotal</span><b className="shrink-0 whitespace-nowrap">{money(subtotal)}</b></div>
+              <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
+              <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
+              {fulfillmentType === "delivery" && !useDeliveryMenuPrice ? (
+                <>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      Delivery fee
+                      {deliveryQuoteId ? (
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryPolicyOpen(true)}
+                          aria-label="View delivery fee policy"
+                          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-blue-600 bg-blue-600 text-[11px] font-black text-white"
+                        >
+                          ?
+                        </button>
+                      ) : null}
+                    </span>
+                    <b className="shrink-0 whitespace-nowrap">
+                      {deliveryQuoteLoading ? "Calculating…" : money(deliveryFee)}
+                    </b>
+                  </div>
+                  {deliveryQuoteId && deliveryQuoteBreakdown ? (
+                    <p className="mt-1 text-[10px] leading-4 text-gray-500">
+                      Order {money(deliveryQuoteBreakdown.orderSubtotal)} · Customer pays {deliveryQuoteBreakdown.customerSharePercent}% of courier fee
+                    </p>
+                  ) : null}
+                </>
               ) : null}
-              <div className="flex justify-between"><span>Subtotal</span><b>{money(subtotal)}</b></div>
-              <div className="mt-2 flex justify-between"><span>Estimated tax</span><b>{money(tax)}</b></div>
-              <div className="mt-2 flex justify-between"><span>Tip</span><b>{money(tip)}</b></div>
-              <div className="mt-3 flex justify-between border-t pt-3 text-lg"><b>Estimated total</b><b>{money(estimatedTotal)}</b></div>
+              <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3 text-lg"><b className="min-w-0 whitespace-nowrap">Estimated total</b><b className="shrink-0 whitespace-nowrap">{money(estimatedTotal)}</b></div>
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : "CONTINUE TO PAYMENT"}</button>
+            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : "PAY NOW"}</button>
+              </>
+            )}
           </> : null}
         </div>
       </div>
+
+      {deliveryPolicyOpen && deliveryQuoteBreakdown ? (
+        <div
+          className="fixed inset-0 z-[14000] flex items-end justify-center bg-black/55 p-3 sm:items-center"
+          onClick={() => setDeliveryPolicyOpen(false)}
+        >
+          <div
+            className="max-h-[82vh] w-full overflow-y-auto rounded-3xl bg-white p-5 text-gray-950 shadow-2xl sm:max-w-lg"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[.16em] text-gray-400">
+                  Delivery Fee Policy
+                </p>
+                <h3 className="mt-1 text-xl font-black">How delivery fees are shared</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeliveryPolicyOpen(false)}
+                className="h-9 w-9 shrink-0 rounded-full bg-gray-100 text-lg font-black"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              The delivery partner provides the courier quote. Your share of that fee is based on the food order subtotal before tax and tip. The restaurant covers the remaining share.
+            </p>
+
+            <div className="mt-4 overflow-hidden rounded-2xl border">
+              <div className="grid grid-cols-[1.25fr_.75fr_.75fr] bg-gray-50 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-gray-500">
+                <span>Order subtotal</span>
+                <span className="text-right">You pay</span>
+                <span className="text-right">Restaurant</span>
+              </div>
+              {(deliveryQuoteBreakdown.feeShareRules || []).map((rule, index) => (
+                <div
+                  key={`${rule.maxSubtotal ?? "plus"}-${index}`}
+                  className="grid grid-cols-[1.25fr_.75fr_.75fr] border-t px-3 py-3 text-xs"
+                >
+                  <span className="font-bold">
+                    {deliveryPolicyRangeLabel(deliveryQuoteBreakdown.feeShareRules, index)}
+                  </span>
+                  <span className="text-right font-black">{rule.customerPercent}%</span>
+                  <span className="text-right font-black">{Math.max(0, 100 - rule.customerPercent)}%</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm leading-6">
+              <p className="font-black">Your current order</p>
+              <p className="mt-1 text-gray-600">
+                Subtotal {money(deliveryQuoteBreakdown.orderSubtotal)} · Courier quote {money(deliveryQuoteBreakdown.providerFeeCents / 100)}
+              </p>
+              <p className="text-gray-600">
+                You pay {deliveryQuoteBreakdown.customerSharePercent}% = {money(deliveryQuoteBreakdown.customerFeeCents / 100)}. Restaurant pays {money(deliveryQuoteBreakdown.restaurantFeeCents / 100)}.
+              </p>
+            </div>
+
+            <p className="mt-3 text-[10px] leading-4 text-gray-500">
+              If the cart, delivery address, or courier quote changes, the delivery fee may be recalculated before payment.
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>,
     document.body,
   );
 }
+
+
