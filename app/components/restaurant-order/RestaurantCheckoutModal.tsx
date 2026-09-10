@@ -128,6 +128,17 @@ function deliveryPolicyRangeLabel(
   return `${money(minimum)} – ${money(Number(rule.maxSubtotal))}`;
 }
 
+function formatEstimateTime(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+  });
+}
+
 export default function RestaurantCheckoutModal({
   businessId,
   fulfillmentType,
@@ -173,6 +184,9 @@ export default function RestaurantCheckoutModal({
   const [deliveryPolicyOpen, setDeliveryPolicyOpen] = useState(false);
   const [deliveryQuoteLoading, setDeliveryQuoteLoading] = useState(false);
   const [deliveryQuoteError, setDeliveryQuoteError] = useState("");
+  const [driverPickupMinutes, setDriverPickupMinutes] = useState<number | null>(null);
+  const [estimatedDropoffAt, setEstimatedDropoffAt] = useState<string | null>(null);
+  const [deliveryDurationMinutes, setDeliveryDurationMinutes] = useState<number | null>(null);
 
   const isSafariBrowser = useMemo(() => {
     if (typeof navigator === "undefined") return false;
@@ -558,6 +572,9 @@ export default function RestaurantCheckoutModal({
       }
 
       setDeliveryQuoteId(String(payload?.quoteId || ""));
+      setDriverPickupMinutes(payload?.pickupMinutes == null ? null : Math.max(0, Number(payload.pickupMinutes) || 0));
+      setEstimatedDropoffAt(payload?.dropoffEta ? String(payload.dropoffEta) : null);
+      setDeliveryDurationMinutes(payload?.durationMinutes == null ? null : Math.max(0, Number(payload.durationMinutes) || 0));
       setDeliveryFeeCents(
         Math.max(
           0,
@@ -627,6 +644,9 @@ export default function RestaurantCheckoutModal({
       setDeliveryQuoteId("");
       setDeliveryFeeCents(0);
       setDeliveryQuoteBreakdown(null);
+      setDriverPickupMinutes(null);
+      setEstimatedDropoffAt(null);
+      setDeliveryDurationMinutes(null);
       setDeliveryQuoteError(
         e instanceof Error
           ? e.message
@@ -982,6 +1002,9 @@ export default function RestaurantCheckoutModal({
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteBreakdown(null);
+                  setDriverPickupMinutes(null);
+                  setEstimatedDropoffAt(null);
+                  setDeliveryDurationMinutes(null);
                   setDeliveryQuoteError("");
                 }} placeholder="Street address *" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
                 <input ref={address2Ref} name="address-line2" autoComplete="address-line2" value={address2} onChange={(e) => {
@@ -989,6 +1012,9 @@ export default function RestaurantCheckoutModal({
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteBreakdown(null);
+                  setDriverPickupMinutes(null);
+                  setEstimatedDropoffAt(null);
+                  setDeliveryDurationMinutes(null);
                   setDeliveryQuoteError("");
                 }} placeholder="Apt / Suite" className="sm:col-span-2 rounded-xl border px-3 py-3 text-sm" />
                 <input ref={cityRef} name="address-level2" autoComplete="address-level2" value={city} onChange={(e) => {
@@ -996,6 +1022,9 @@ export default function RestaurantCheckoutModal({
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteBreakdown(null);
+                  setDriverPickupMinutes(null);
+                  setEstimatedDropoffAt(null);
+                  setDeliveryDurationMinutes(null);
                   setDeliveryQuoteError("");
                 }} placeholder="City *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input ref={stateCodeRef} name="address-level1" autoComplete="address-level1" value={stateCode} onChange={(e) => {
@@ -1003,6 +1032,9 @@ export default function RestaurantCheckoutModal({
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteBreakdown(null);
+                  setDriverPickupMinutes(null);
+                  setEstimatedDropoffAt(null);
+                  setDeliveryDurationMinutes(null);
                   setDeliveryQuoteError("");
                 }} placeholder="State *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input ref={postalCodeRef} name="postal-code" autoComplete="postal-code" value={postalCode} onChange={(e) => {
@@ -1010,6 +1042,9 @@ export default function RestaurantCheckoutModal({
                   setDeliveryQuoteId("");
                   setDeliveryFeeCents(0);
                   setDeliveryQuoteBreakdown(null);
+                  setDriverPickupMinutes(null);
+                  setEstimatedDropoffAt(null);
+                  setDeliveryDurationMinutes(null);
                   setDeliveryQuoteError("");
                 }} placeholder="ZIP *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={deliveryNote} onChange={(e) => setDeliveryNote(e.target.value)} placeholder="Gate code / delivery note" className="rounded-xl border px-3 py-3 text-sm" />
@@ -1039,34 +1074,33 @@ export default function RestaurantCheckoutModal({
 
                   {deliveryQuoteId ? (
                     <div className="mt-2 rounded-xl bg-gray-50 px-3 py-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex items-center gap-1.5 font-bold">
-                          Delivery fee
-                          <button
-                            type="button"
-                            onClick={() => setDeliveryPolicyOpen(true)}
-                            aria-label="View delivery fee policy"
-                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-blue-600 bg-blue-600 text-[11px] font-black text-white"
-                          >
-                            ?
-                          </button>
-                        </span>
-                        <b>{money(deliveryFee)}</b>
-                      </div>
-
-                      {deliveryQuoteBreakdown ? (
-                        <div className="mt-2 border-t border-gray-200 pt-2 text-[11px] leading-5 text-gray-600">
-                          <p>
-                            Your order subtotal is {money(deliveryQuoteBreakdown.orderSubtotal)}.
-                          </p>
-                          <p>
-                            Based on this restaurant&apos;s delivery policy, you pay {deliveryQuoteBreakdown.customerSharePercent}% of the {money(deliveryQuoteBreakdown.providerFeeCents / 100)} courier fee.
-                            {deliveryQuoteBreakdown.restaurantFeeCents > 0
-                              ? ` The restaurant covers ${money(deliveryQuoteBreakdown.restaurantFeeCents / 100)}.`
-                              : ""}
-                          </p>
+                      {!useDeliveryMenuPrice ? (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="flex items-center gap-1.5 font-bold">Delivery fee</span>
+                          <b>{money(deliveryFee)}</b>
                         </div>
                       ) : null}
+
+                      <div className={`${!useDeliveryMenuPrice ? "mt-2 border-t border-gray-200 pt-2" : ""} grid gap-1.5 text-[12px]`}>
+                        {driverPickupMinutes != null ? (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-bold text-gray-600">Driver pickup</span>
+                            <b className="text-gray-950">about {Math.round(driverPickupMinutes)} min</b>
+                          </div>
+                        ) : null}
+
+                        {estimatedDropoffAt ? (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-bold text-gray-600">Estimated delivery</span>
+                            <b className="text-gray-950">{formatEstimateTime(estimatedDropoffAt)} ET</b>
+                          </div>
+                        ) : deliveryDurationMinutes != null ? (
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-bold text-gray-600">Estimated delivery</span>
+                            <b className="text-gray-950">about {Math.round(deliveryDurationMinutes)} min</b>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                 </div>
