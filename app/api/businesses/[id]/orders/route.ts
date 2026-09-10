@@ -153,10 +153,13 @@ type DeliveryFeeShareRule = {
 type DeliveryFeePolicyMode =
   | "customer_100"
   | "order_amount"
-  | "restaurant_100";
+  | "restaurant_100"
+  | "menu_price";
 
 function normalizeDeliveryFeePolicyMode(value: unknown): DeliveryFeePolicyMode {
-  return value === "customer_100" || value === "restaurant_100"
+  return value === "customer_100" ||
+    value === "restaurant_100" ||
+    value === "menu_price"
     ? value
     : "order_amount";
 }
@@ -748,7 +751,10 @@ export async function POST(
               );
 
         const baseUnitPrice =
-          fulfillmentType === "delivery"
+          fulfillmentType === "delivery" &&
+          normalizeDeliveryFeePolicyMode(
+            settings?.delivery_fee_policy_mode,
+          ) === "menu_price"
             ? delivery
             : pickup;
 
@@ -968,7 +974,8 @@ export async function POST(
       const customerPercent =
         deliveryFeePolicyMode === "customer_100"
           ? 100
-          : deliveryFeePolicyMode === "restaurant_100"
+          : deliveryFeePolicyMode === "restaurant_100" ||
+              deliveryFeePolicyMode === "menu_price"
             ? 0
             : deliveryCustomerPercent(
                 subtotal,

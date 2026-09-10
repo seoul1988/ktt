@@ -120,7 +120,8 @@ type DeliveryFeeShareRule = {
 type DeliveryFeePolicyMode =
   | "customer_100"
   | "order_amount"
-  | "restaurant_100";
+  | "restaurant_100"
+  | "menu_price";
 
 const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: 19.99, customerPercent: 100 },
@@ -716,7 +717,8 @@ export default function OwnerBusinessMenuPage() {
 
         setDeliveryFeePolicyMode(
           data?.deliveryFeePolicyMode === "customer_100" ||
-          data?.deliveryFeePolicyMode === "restaurant_100"
+          data?.deliveryFeePolicyMode === "restaurant_100" ||
+          data?.deliveryFeePolicyMode === "menu_price"
             ? data.deliveryFeePolicyMode
             : "order_amount",
         );
@@ -1238,7 +1240,8 @@ export default function OwnerBusinessMenuPage() {
       if (
         data?.deliveryFeePolicyMode === "customer_100" ||
         data?.deliveryFeePolicyMode === "order_amount" ||
-        data?.deliveryFeePolicyMode === "restaurant_100"
+        data?.deliveryFeePolicyMode === "restaurant_100" ||
+        data?.deliveryFeePolicyMode === "menu_price"
       ) {
         setDeliveryFeePolicyMode(data.deliveryFeePolicyMode);
       }
@@ -4629,11 +4632,11 @@ export default function OwnerBusinessMenuPage() {
                   배달료 부담 방식
                 </h3>
                 <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
-                  아래 3가지 중 하나만 선택하세요. 주문금액별 분할을 선택하면 세부 설정이 열립니다.
+                  아래 4가지 중 하나만 선택하세요. 메뉴가격 사용을 선택하면 고객에게 별도 배달료를 청구하지 않고 각 메뉴의 Delivery 가격으로 판매합니다.
                 </p>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   {
                     value: "customer_100" as DeliveryFeePolicyMode,
@@ -4649,6 +4652,11 @@ export default function OwnerBusinessMenuPage() {
                     value: "restaurant_100" as DeliveryFeePolicyMode,
                     title: "식당이 100% 부담",
                     description: "고객에게 배달료를 청구하지 않습니다.",
+                  },
+                  {
+                    value: "menu_price" as DeliveryFeePolicyMode,
+                    title: "Delivery 메뉴가격 사용",
+                    description: "이 옵션을 선택한 경우에만 고객 DELIVERY 화면과 실제 주문에 메뉴별 Delivery 가격을 적용합니다.",
                   },
                 ].map((option) => (
                   <label
@@ -4678,6 +4686,18 @@ export default function OwnerBusinessMenuPage() {
                   </label>
                 ))}
               </div>
+
+              {deliveryFeePolicyMode === "menu_price" ? (
+                <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4">
+                  <p className="text-sm font-black text-emerald-900">
+                    ✓ 4번째 옵션 활성화 · Delivery 메뉴가격 적용 · 고객 배달료 $0
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold leading-5 text-emerald-800">
+                    고객이 DELIVERY로 주문하면 각 메뉴에 입력된 Delivery 가격이 적용됩니다.
+                    Uber Direct의 실제 배달비는 고객 결제에 별도 추가하지 않습니다.
+                  </p>
+                </div>
+              ) : null}
 
               {deliveryFeePolicyMode === "order_amount" ? (
                 <>

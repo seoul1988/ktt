@@ -17,6 +17,7 @@ type PricedRestaurantMenuItem = RestaurantMenuItem & {
 function getPriceForService(
   item: RestaurantMenuItem,
   service: "menu" | "pickup" | "delivery",
+  useDeliveryMenuPrice = false,
 ) {
   const priced = item as PricedRestaurantMenuItem;
 
@@ -36,8 +37,14 @@ function getPriceForService(
       : Number(priced.delivery_price);
 
   if (service === "delivery") {
-    return Number.isFinite(delivery as number)
+    // 4번째 배달료 정책(menu_price)을 선택한 경우에만
+    // 메뉴별 delivery_price를 고객에게 표시합니다.
+    const deliveryBase = useDeliveryMenuPrice
       ? delivery
+      : pickup;
+
+    return Number.isFinite(deliveryBase as number)
+      ? deliveryBase
       : null;
   }
 
@@ -55,10 +62,15 @@ function getPriceForService(
 function withServicePrice(
   item: RestaurantMenuItem,
   service: "menu" | "pickup" | "delivery",
+  useDeliveryMenuPrice = false,
 ): RestaurantMenuItem {
   return {
     ...item,
-    price: getPriceForService(item, service),
+    price: getPriceForService(
+      item,
+      service,
+      useDeliveryMenuPrice,
+    ),
   };
 }
 
@@ -273,6 +285,7 @@ export default function RestaurantMenu({
   const [resolvedMenuEnabled, setResolvedMenuEnabled] = useState(menuEnabled);
   const [resolvedPickupEnabled, setResolvedPickupEnabled] = useState(pickupEnabled);
   const [resolvedDeliveryEnabled, setResolvedDeliveryEnabled] = useState(deliveryEnabled);
+  const [deliveryMenuPriceEnabled, setDeliveryMenuPriceEnabled] = useState(false);
 
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -530,6 +543,9 @@ export default function RestaurantMenu({
         setResolvedMenuEnabled(modes.menu !== false);
         setResolvedPickupEnabled(modes.pickup === true);
         setResolvedDeliveryEnabled(modes.delivery === true);
+        setDeliveryMenuPriceEnabled(
+          payload?.deliveryFeePolicyMode === "menu_price",
+        );
       } catch (settingsError) {
         if (cancelled) return;
 
@@ -1259,7 +1275,7 @@ export default function RestaurantMenu({
                       onClick={() => {
                         recordMenuItemClick(item, category.name);
                         setSelectedItem(
-                          withServicePrice(item, activeService),
+                          withServicePrice(item, activeService, deliveryMenuPriceEnabled),
                         );
                       }}
                       className={`group flex min-h-[112px] w-full overflow-hidden rounded-xl border text-left transition ${
@@ -1283,7 +1299,7 @@ export default function RestaurantMenu({
                             {item.name}
                           </h3>
 
-                          {getPriceForService(item, activeService) != null ? (
+                          {getPriceForService(item, activeService, deliveryMenuPriceEnabled) != null ? (
                             <span
                               className="shrink-0 text-sm font-black"
                               style={
@@ -1306,7 +1322,7 @@ export default function RestaurantMenu({
                             >
                               $
                               {Number(
-                                getPriceForService(item, activeService),
+                                getPriceForService(item, activeService, deliveryMenuPriceEnabled),
                               ).toFixed(2)}
                             </span>
                           ) : null}

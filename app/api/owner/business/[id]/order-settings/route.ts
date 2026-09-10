@@ -12,10 +12,13 @@ type DeliveryFeeShareRule = {
 type DeliveryFeePolicyMode =
   | "customer_100"
   | "order_amount"
-  | "restaurant_100";
+  | "restaurant_100"
+  | "menu_price";
 
 function normalizeDeliveryFeePolicyMode(value: unknown): DeliveryFeePolicyMode {
-  return value === "customer_100" || value === "restaurant_100"
+  return value === "customer_100" ||
+    value === "restaurant_100" ||
+    value === "menu_price"
     ? value
     : "order_amount";
 }
@@ -454,7 +457,14 @@ export async function PUT(
 
     if (hasDeliveryFeePolicyMode) {
       const rawMode = String(body.deliveryFeePolicyMode || "");
-      if (!["customer_100", "order_amount", "restaurant_100"].includes(rawMode)) {
+      if (
+        ![
+          "customer_100",
+          "order_amount",
+          "restaurant_100",
+          "menu_price",
+        ].includes(rawMode)
+      ) {
         return NextResponse.json(
           { error: "배달료 부담 정책이 올바르지 않습니다." },
           { status: 400 },
