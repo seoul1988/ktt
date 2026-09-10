@@ -1,4 +1,4 @@
-
+"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,6 +35,45 @@ type Snapshot = {
   support?: number;
   candles_1m?: SeedCandle[];
 };
+
+type ClosedNewsItem = {
+  id: string;
+  title: string;
+  url?: string;
+  source?: string;
+  publishedAt?: string;
+};
+
+type MarketState = "OPEN" | "CLOSED" | "WEEKEND" | "HOLIDAY";
+
+const MARKET_HOLIDAYS = new Set([
+  "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
+  "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07",
+  "2026-11-26", "2026-12-25",
+  "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26",
+  "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06",
+  "2027-11-25", "2027-12-24",
+]);
+
+function getMarketState(now = new Date()): MarketState {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+    weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const weekday = get("weekday");
+  if (weekday === "Sat" || weekday === "Sun") return "WEEKEND";
+  if (MARKET_HOLIDAYS.has(date)) return "HOLIDAY";
+  const minutes = Number(get("hour")) * 60 + Number(get("minute"));
+  return minutes >= 570 && minutes < 960 ? "OPEN" : "CLOSED";
+}
+
+function closedLabel(state: MarketState) {
+  if (state === "HOLIDAY") return "미국 증시 휴일";
+  if (state === "WEEKEND") return "주말 · 장 마감";
+  return "장 마감";
+}
 
 const SYMBOLS = ["NVDA", "TSLA", "AAPL"] as const;
 type SymbolName = (typeof SYMBOLS)[number];
@@ -178,6 +217,9 @@ export default function CommunityLiveStocks() {
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>({});
   const [candles, setCandles] = useState<Record<string, LiveCandle[]>>({});
   const [status, setStatus] = useState("CONNECTING");
+  const [marketState, setMarketState] = useState<MarketState>(() => getMarketState());
+  const marketStateRef = useRef<MarketState>(getMarketState());
+  const [closedNews, setClosedNews] = useState<ClosedNewsItem[]>([]);
 
   const connectWebSocket = useCallback((url: string) => {
     if (!url) return;
@@ -230,13 +272,21 @@ export default function CommunityLiveStocks() {
     ws.onclose = () => {
       if (wsRef.current === ws) {
         wsRef.current = null;
-        setStatus("RECONNECT");
-        retryRef.current = setTimeout(() => void start(), 3000);
+        if (marketStateRef.current === "OPEN") {
+          setStatus("RECONNECT");
+          retryRef.current = setTimeout(() => void start(), 3000);
+        } else {
+          setStatus("CLOSED");
+        }
       }
     };
   }, []);
 
   const start = useCallback(async () => {
+    if (marketStateRef.current !== "OPEN") {
+      setStatus("CLOSED");
+      return;
+    }
     setStatus("CONNECTING");
 
     // Best for the public KTown page: set this Vercel env var to the FastAPI
@@ -280,15 +330,91 @@ export default function CommunityLiveStocks() {
     }
   }, [connectWebSocket]);
 
+  const loadClosedNews = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("shared_news")
+      .select("id,title,url,source,published_at,created_at")
+      .order("created_at", { ascending: false })
+      .limit(6);
+    if (error) {
+      console.error("closed-market news load error:", error);
+      return;
+    }
+    setClosedNews((data || []).map((row) => ({
+      id: String(row.id),
+      title: row.title || "최신 뉴스",
+      url: row.url || undefined,
+      source: row.source || undefined,
+      publishedAt: row.published_at || row.created_at || undefined,
+    })));
+  }, []);
+
   useEffect(() => {
-    void start();
+    const applyMarketState = () => {
+      const next = getMarketState();
+      marketStateRef.current = next;
+      setMarketState(next);
+
+      if (next === "OPEN") {
+        if (!wsRef.current) void start();
+      } else {
+        if (retryRef.current) {
+          clearTimeout(retryRef.current);
+          retryRef.current = null;
+        }
+        if (wsRef.current) {
+          const ws = wsRef.current;
+          wsRef.current = null;
+          try { ws.close(1000, "Market closed"); } catch {}
+        }
+        setStatus("CLOSED");
+        void loadClosedNews();
+      }
+    };
+
+    applyMarketState();
+    const timer = window.setInterval(applyMarketState, 30_000);
     return () => {
+      window.clearInterval(timer);
       if (retryRef.current) clearTimeout(retryRef.current);
       if (wsRef.current) {
         try { wsRef.current.close(); } catch {}
       }
     };
-  }, [start]);
+  }, [start, loadClosedNews]);
+
+  if (marketState !== "OPEN") {
+    return (
+      <section className="mb-5 overflow-hidden rounded-[22px] border border-[#D9E2F1] bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[14px] font-black tracking-[-0.02em] text-[#172033]">📰 Latest News</h2>
+            <p className="mt-0.5 text-[8px] font-semibold text-[#6B6257]">장 마감 중에는 최신 뉴스를 표시합니다</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[8px] font-black text-slate-600">
+            ● {closedLabel(marketState)}
+          </span>
+        </div>
+        <div className="mt-3 divide-y divide-[#EEF0F3]">
+          {closedNews.length ? closedNews.slice(0, 4).map((news) => {
+            const body = (
+              <div className="py-2.5">
+                <div className="line-clamp-2 text-[11px] font-black leading-4 text-[#172033]">{news.title}</div>
+                <div className="mt-1 text-[8px] font-semibold text-[#7C746A]">
+                  {[news.source, news.publishedAt ? new Date(news.publishedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) : ""].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+            );
+            return news.url ? (
+              <a key={news.id} href={news.url} target="_blank" rel="noreferrer" className="block hover:bg-slate-50">{body}</a>
+            ) : <div key={news.id}>{body}</div>;
+          }) : (
+            <div className="py-8 text-center text-[10px] font-bold text-slate-400">최신 뉴스를 불러오는 중...</div>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <Link
