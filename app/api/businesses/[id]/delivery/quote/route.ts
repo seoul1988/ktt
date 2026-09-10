@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrderAdmin } from "@/lib/restaurant-order/server";
 import { createUberDirectQuote } from "@/lib/delivery/uber-direct";
+import { createDoorDashQuote } from "@/lib/delivery/doordash";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -122,7 +123,18 @@ export async function POST(
       db
         .from("restaurant_order_private_settings")
         .select(
-          "delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,delivery_fee_markup_cents",
+          [
+            "delivery_provider",
+            "uber_direct_enabled",
+            "uber_direct_client_id",
+            "uber_direct_client_secret",
+            "uber_direct_customer_id",
+            "doordash_enabled",
+            "doordash_external_business_id",
+            "doordash_external_store_id",
+            "doordash_status",
+            "delivery_fee_markup_cents",
+          ].join(","),
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -140,11 +152,10 @@ export async function POST(
     if (privateError) throw privateError;
     if (orderSettingsError) throw orderSettingsError;
 
-    const quote = await createUberDirectQuote({
-      business,
-      privateSettings,
-      dropoffAddress,
-    });
+    const useDoorDash =
+      privateSettings?.doordash_enabled === true &&
+      Boolean(privateSettings?.doordash_external_business_id) &&
+      Boolean(privateSettings?.doordash_external_store_id);
 
     const policyMode = normalizeDeliveryFeePolicyMode(
       orderSettings?.delivery_fee_policy_mode,
@@ -154,10 +165,59 @@ export async function POST(
       orderSettings?.delivery_fee_share_rules,
     );
 
-    const providerFeeCents = Math.max(
+    let provider = "";
+    let quoteId = "";
+    let providerFeeCents = 0;
+    let markupCents = Math.max(
       0,
-      Math.round(Number(quote.customerFeeCents || 0)),
+      Math.round(Number(privateSettings?.delivery_fee_markup_cents || 0)),
     );
+    let expiresAt: string | null = null;
+    let pickupTimeEstimated: string | null = null;
+    let dropoffTimeEstimated: string | null = null;
+    let dropoffTimeEstimatedLowerBound: string | null = null;
+    let dropoffTimeEstimatedUpperBound: string | null = null;
+
+    if (useDoorDash) {
+      const quote = await createDoorDashQuote({
+        privateSettings,
+        dropoffAddress,
+        orderSubtotal,
+      });
+
+      provider = "doordash";
+      quoteId = quote.id;
+      providerFeeCents = Math.max(
+        0,
+        Math.round(Number(quote.feeCents || 0) + markupCents),
+      );
+      pickupTimeEstimated = quote.pickupTimeEstimated;
+      dropoffTimeEstimated = quote.dropoffTimeEstimated;
+      dropoffTimeEstimatedLowerBound =
+        quote.dropoffTimeEstimatedLowerBound;
+      dropoffTimeEstimatedUpperBound =
+        quote.dropoffTimeEstimatedUpperBound;
+    } else {
+      const quote = await createUberDirectQuote({
+        business,
+        privateSettings,
+        dropoffAddress,
+      });
+
+      provider = "uber_direct";
+      quoteId = quote.id;
+      providerFeeCents = Math.max(
+        0,
+        Math.round(Number(quote.customerFeeCents || 0)),
+      );
+      markupCents = Math.max(
+        0,
+        Math.round(Number(quote.markupCents || 0)),
+      );
+      expiresAt = quote.expires || null;
+      pickupTimeEstimated = null;
+      dropoffTimeEstimated = quote.dropoff_eta || null;
+    }
 
     const customerPercent =
       policyMode === "customer_100"
@@ -181,19 +241,19 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      provider: "uber_direct",
-      quoteId: quote.id,
+      provider,
+      quoteId,
       feeCents: customerFeeCents,
       customerFeeCents,
       providerFeeCents,
       restaurantFeeCents,
-      uberFeeCents: quote.uberFeeCents,
-      markupCents: quote.markupCents,
-      expiresAt: quote.expires || null,
-      durationMinutes: quote.duration || null,
-      pickupMinutes: quote.pickup_duration || null,
-      dropoffEta: quote.dropoff_eta || null,
-      currency: quote.currency_type || "USD",
+      markupCents,
+      expiresAt,
+      pickupTimeEstimated,
+      dropoffTimeEstimated,
+      dropoffTimeEstimatedLowerBound,
+      dropoffTimeEstimatedUpperBound,
+      currency: "USD",
       deliveryFeePolicyMode: policyMode,
       customerSharePercent: customerPercent,
       restaurantSharePercent: Math.max(
@@ -209,7 +269,7 @@ export async function POST(
         error:
           error instanceof Error
             ? error.message
-            : "Delivery quote could not be created.",
+            : JSON.stringify(error),
       },
       { status: 400 },
     );
