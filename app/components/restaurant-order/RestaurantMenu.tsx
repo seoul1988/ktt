@@ -28,6 +28,65 @@ type PricedRestaurantMenuItem = RestaurantMenuItem & {
   delivery_price?: number | null;
 };
 
+type MenuPromotion = {
+  id: string;
+  name: string;
+  type:
+    | "buy_x_get_y"
+    | "spend_get_item"
+    | "amount_off"
+    | "percent_off"
+    | "item_percent_off"
+    | "free_delivery";
+  minSpend: number;
+  discountValue: number;
+  pickup: boolean;
+  delivery: boolean;
+  active: boolean;
+};
+
+type PromotionAssignment = {
+  role?: "trigger" | "reward" | "both" | "eligible";
+};
+
+type PromotionAssignments = Record<number, Record<string, PromotionAssignment>>;
+
+function readPromotions(businessId: number): MenuPromotion[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row: any) => ({
+        id: String(row?.id || ""),
+        name: String(row?.name || "Deal"),
+        type: row?.type || "buy_x_get_y",
+        minSpend: Math.max(0, Number(row?.minSpend) || 0),
+        discountValue: Math.max(0, Math.min(100, Number(row?.discountValue) || 0)),
+        pickup: row?.pickup !== false,
+        delivery: row?.delivery !== false,
+        active: row?.active !== false,
+      }))
+      .filter((row: MenuPromotion) => row.id && row.active);
+  } catch {
+    return [];
+  }
+}
+
+function readPromotionAssignments(businessId: number): PromotionAssignments {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(
+      `ktown-menu-promotion-assignments:${businessId}`,
+    );
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function getRawPrice(
   item: RestaurantMenuItem,
   source: PriceSource,
@@ -214,6 +273,9 @@ export default function RestaurantMenu({
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
+  const [promotionAssignments, setPromotionAssignments] =
+    useState<PromotionAssignments>({});
   const [isIPhone, setIsIPhone] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
@@ -246,6 +308,32 @@ export default function RestaurantMenu({
       window.removeEventListener("orientationchange", updateMobileViewport);
     };
   }, []);
+
+  useEffect(() => {
+    const loadDeals = () => {
+      setPromotions(readPromotions(businessId));
+      setPromotionAssignments(readPromotionAssignments(businessId));
+    };
+
+    loadDeals();
+    window.addEventListener("focus", loadDeals);
+
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key === `ktown-menu-promotions:${businessId}` ||
+        event.key === `ktown-menu-promotion-assignments:${businessId}`
+      ) {
+        loadDeals();
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      window.removeEventListener("focus", loadDeals);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [businessId]);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
@@ -312,6 +400,46 @@ export default function RestaurantMenu({
     (sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0),
     0,
   );
+
+  function getItemPercentDeals(menuItemId: number) {
+    return promotions.filter((promotion) => {
+      if (!promotion.active || promotion.type !== "item_percent_off") return false;
+      if (activeService === "pickup" && !promotion.pickup) return false;
+      if (activeService === "delivery" && !promotion.delivery) return false;
+      return Boolean(promotionAssignments[menuItemId]?.[promotion.id]);
+    });
+  }
+
+  function getItemDiscountPercent(menuItemId: number) {
+    return getItemPercentDeals(menuItemId).reduce(
+      (highest, promotion) =>
+        Math.max(
+          highest,
+          Math.max(0, Math.min(100, Number(promotion.discountValue) || 0)),
+        ),
+      0,
+    );
+  }
+
+  function getDiscountedServicePrice(item: RestaurantMenuItem) {
+    const regularPrice = getPriceForService(
+      item,
+      activeService,
+      priceDisplayByItem[item.id],
+    );
+
+    if (regularPrice == null) {
+      return { regularPrice: null, finalPrice: null, discountPercent: 0 };
+    }
+
+    const discountPercent = getItemDiscountPercent(item.id);
+    const finalPrice =
+      discountPercent > 0
+        ? Math.max(0, regularPrice * (1 - discountPercent / 100))
+        : regularPrice;
+
+    return { regularPrice, finalPrice, discountPercent };
+  }
 
   function recordMenuItemClick(
     item: RestaurantMenuItem,
@@ -1155,13 +1283,17 @@ export default function RestaurantMenu({
                       type="button"
                       onClick={() => {
                         recordMenuItemClick(item, category.name);
-                        setSelectedItem(
-                          withServicePrice(
-                            item,
-                            activeService,
-                            priceDisplayByItem[item.id],
-                          ),
+                        const pricedItem = withServicePrice(
+                          item,
+                          activeService,
+                          priceDisplayByItem[item.id],
                         );
+                        const { finalPrice } = getDiscountedServicePrice(item);
+
+                        setSelectedItem({
+                          ...pricedItem,
+                          price: finalPrice == null ? pricedItem.price : finalPrice,
+                        });
                       }}
                       className={`group flex min-h-[112px] w-full overflow-hidden rounded-xl border text-left transition ${
                         isBunsMenu
@@ -1184,41 +1316,48 @@ export default function RestaurantMenu({
                             {item.name}
                           </h3>
 
-                          {getPriceForService(
-                            item,
-                            activeService,
-                            priceDisplayByItem[item.id],
-                          ) != null ? (
-                            <span
-                              className="shrink-0 text-sm font-black"
-                              style={
-                                isBunsMenu
-                                  ? {
-                                      color:
-                                        bunsCategoryAccents[
-                                          Math.max(
-                                            0,
-                                            visibleCategories.findIndex(
-                                              (entry) =>
-                                                entry.id === category.id,
-                                            ),
-                                          ) %
-                                            bunsCategoryAccents.length
-                                        ],
-                                    }
-                                  : undefined
-                              }
-                            >
-                              $
-                              {Number(
-                                getPriceForService(
-                                  item,
-                                  activeService,
-                                  priceDisplayByItem[item.id],
-                                ),
-                              ).toFixed(2)}
-                            </span>
-                          ) : null}
+                          {(() => {
+                            const {
+                              regularPrice,
+                              finalPrice,
+                              discountPercent,
+                            } = getDiscountedServicePrice(item);
+
+                            if (regularPrice == null || finalPrice == null) return null;
+
+                            const accentColor = isBunsMenu
+                              ? bunsCategoryAccents[
+                                  Math.max(
+                                    0,
+                                    visibleCategories.findIndex(
+                                      (entry) => entry.id === category.id,
+                                    ),
+                                  ) % bunsCategoryAccents.length
+                                ]
+                              : undefined;
+
+                            return (
+                              <span className="shrink-0 text-right text-sm font-black">
+                                {discountPercent > 0 ? (
+                                  <>
+                                    <span className="mr-1 text-[11px] font-bold opacity-50 line-through">
+                                      ${Number(regularPrice).toFixed(2)}
+                                    </span>
+                                    <span style={{ color: accentColor }}>
+                                      ${Number(finalPrice).toFixed(2)}
+                                    </span>
+                                    <span className="ml-1 block text-[9px] font-black text-green-500">
+                                      {discountPercent}% OFF
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span style={{ color: accentColor }}>
+                                    ${Number(finalPrice).toFixed(2)}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         {item.description ? (
@@ -1534,6 +1673,14 @@ export default function RestaurantMenu({
           backgroundColor={backgroundColor}
           textColor={textColor}
           orderEnabled={orderingAvailable}
+          dealPromotions={getItemPercentDeals(selectedItem.id).map((promotion) => ({
+            id: promotion.id,
+            name: promotion.name,
+            type: promotion.type,
+            rewardChoices: [],
+            rewardSelectCount: 1,
+            discountValue: promotion.discountValue,
+          }))}
           onAddToOrder={handleAddToOrder}
           onClose={() =>
             setSelectedItem(null)

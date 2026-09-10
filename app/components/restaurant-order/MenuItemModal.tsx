@@ -18,7 +18,14 @@ export type MenuOrderDraft = {
 export type MenuDealDisplay = {
   id: string;
   name: string;
-  type: "buy_x_get_y" | "spend_get_item" | "amount_off" | "percent_off" | "free_delivery";
+  type:
+    | "buy_x_get_y"
+    | "spend_get_item"
+    | "amount_off"
+    | "percent_off"
+    | "item_percent_off"
+    | "free_delivery";
+  discountValue?: number;
   rewardChoices: Array<{
     name: string;
     price: number;
@@ -362,9 +369,28 @@ export default function MenuItemModal({
     );
   });
 
+  const itemPercentDeal = dealPromotions
+    .filter((promotion) => promotion.type === "item_percent_off")
+    .sort(
+      (a, b) =>
+        Number(b.discountValue || 0) - Number(a.discountValue || 0),
+    )[0];
+
+  const itemDiscountPercent = Math.max(
+    0,
+    Math.min(100, Number(itemPercentDeal?.discountValue || 0)),
+  );
+
+  const discountedBasePrice = Math.max(0, Number(item.price || 0));
+
+  const regularBasePrice =
+    itemDiscountPercent > 0 && itemDiscountPercent < 100
+      ? discountedBasePrice / (1 - itemDiscountPercent / 100)
+      : discountedBasePrice;
+
   const unitPrice = Math.max(
     0,
-    Number(item.price || 0) + optionExtra,
+    discountedBasePrice + optionExtra,
   );
 
   const totalPrice =
@@ -482,6 +508,15 @@ export default function MenuItemModal({
                   </span>
                   <div className="min-w-0">
                     <p className="text-xs font-black text-orange-900">{promotion.name}</p>
+                    {promotion.type === "item_percent_off" ? (
+                      <p className="mt-2 text-[11px] font-black text-green-700">
+                        {Math.max(
+                          0,
+                          Math.min(100, Number(promotion.discountValue || 0)),
+                        )}% OFF menu price · automatically applied
+                      </p>
+                    ) : null}
+
                     {promotion.type === "buy_x_get_y" && promotion.rewardChoices.length ? (
                       <p className="mt-0.5 text-[11px] font-bold leading-4 text-orange-800">
                         GET: {promotion.rewardChoices.map((choice) => {
@@ -519,9 +554,21 @@ export default function MenuItemModal({
             </div>
 
             {item.price != null ? (
-              <p className="mt-1 text-[15px] font-black">
-                ${Number(item.price).toFixed(2)}
-              </p>
+              <div className="mt-1 flex items-center gap-2">
+                {itemDiscountPercent > 0 ? (
+                  <span className="text-[12px] font-bold opacity-50 line-through">
+                    ${Number(regularBasePrice).toFixed(2)}
+                  </span>
+                ) : null}
+                <span className="text-[15px] font-black">
+                  ${Number(discountedBasePrice).toFixed(2)}
+                </span>
+                {itemDiscountPercent > 0 ? (
+                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-black text-green-700">
+                    {itemDiscountPercent}% OFF
+                  </span>
+                ) : null}
+              </div>
             ) : null}
 
             {item.description ? (
