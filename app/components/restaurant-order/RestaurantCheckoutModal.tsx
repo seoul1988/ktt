@@ -149,6 +149,7 @@ export default function RestaurantCheckoutModal({
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [smsConsent, setSmsConsent] = useState(false);
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
   const [city, setCity] = useState("");
@@ -743,6 +744,7 @@ export default function RestaurantCheckoutModal({
               ? deliveryQuoteId
               : null,
           orderNote: orderNote.trim().slice(0, 500),
+          smsConsent: settings?.smsEnabled ? smsConsent : false,
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
@@ -992,6 +994,21 @@ export default function RestaurantCheckoutModal({
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone *" inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
+
+              {settings.smsEnabled ? (
+                <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
+                  <input
+                    type="checkbox"
+                    checked={smsConsent}
+                    onChange={(e) => setSmsConsent(e.target.checked)}
+                    className="mt-1 h-4 w-4 shrink-0 accent-gray-950"
+                  />
+                  <span className="text-[11px] leading-5 text-gray-600">
+                    <b className="block text-xs text-gray-950">Send me order updates by text message</b>
+                    Receive transactional text messages from KTown Triangle about this order, including order confirmation, status, pickup/delivery, and cancellation updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help.
+                  </span>
+                </label>
+              ) : null}
             </section>
 
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">
