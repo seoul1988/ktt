@@ -17,6 +17,24 @@ type DeliveryFeeShareRule = {
   customerPercent: number;
 };
 
+type PrivateSettingsRow = {
+  delivery_provider?: string | null;
+  uber_direct_enabled?: boolean | null;
+  uber_direct_client_id?: string | null;
+  uber_direct_client_secret?: string | null;
+  uber_direct_customer_id?: string | null;
+  doordash_enabled?: boolean | null;
+  doordash_external_business_id?: string | null;
+  doordash_external_store_id?: string | null;
+  doordash_status?: string | null;
+  delivery_fee_markup_cents?: number | null;
+};
+
+type OrderSettingsRow = {
+  delivery_fee_policy_mode?: string | null;
+  delivery_fee_share_rules?: unknown;
+};
+
 const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: 19.99, customerPercent: 100 },
   { maxSubtotal: 29.99, customerPercent: 70 },
@@ -111,8 +129,8 @@ export async function POST(
 
     const [
       { data: business, error: businessError },
-      { data: privateSettings, error: privateError },
-      { data: orderSettings, error: orderSettingsError },
+      { data: privateSettingsRaw, error: privateError },
+      { data: orderSettingsRaw, error: orderSettingsError },
     ] = await Promise.all([
       db
         .from("businesses")
@@ -123,18 +141,7 @@ export async function POST(
       db
         .from("restaurant_order_private_settings")
         .select(
-          [
-            "delivery_provider",
-            "uber_direct_enabled",
-            "uber_direct_client_id",
-            "uber_direct_client_secret",
-            "uber_direct_customer_id",
-            "doordash_enabled",
-            "doordash_external_business_id",
-            "doordash_external_store_id",
-            "doordash_status",
-            "delivery_fee_markup_cents",
-          ].join(","),
+          "delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,doordash_enabled,doordash_external_business_id,doordash_external_store_id,doordash_status,delivery_fee_markup_cents",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -151,6 +158,12 @@ export async function POST(
     if (businessError) throw businessError;
     if (privateError) throw privateError;
     if (orderSettingsError) throw orderSettingsError;
+
+    const privateSettings =
+      (privateSettingsRaw ?? null) as PrivateSettingsRow | null;
+
+    const orderSettings =
+      (orderSettingsRaw ?? null) as OrderSettingsRow | null;
 
     const useDoorDash =
       privateSettings?.doordash_enabled === true &&
@@ -191,6 +204,7 @@ export async function POST(
         0,
         Math.round(Number(quote.feeCents || 0) + markupCents),
       );
+
       pickupTimeEstimated = quote.pickupTimeEstimated;
       dropoffTimeEstimated = quote.dropoffTimeEstimated;
       dropoffTimeEstimatedLowerBound =
@@ -215,7 +229,6 @@ export async function POST(
         Math.round(Number(quote.markupCents || 0)),
       );
       expiresAt = quote.expires || null;
-      pickupTimeEstimated = null;
       dropoffTimeEstimated = quote.dropoff_eta || null;
     }
 
