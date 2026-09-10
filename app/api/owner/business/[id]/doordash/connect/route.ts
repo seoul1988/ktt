@@ -89,11 +89,14 @@ function createDoorDashJwt() {
   const keyId = String(process.env.DOORDASH_KEY_ID || "").trim();
   const signingSecret = String(process.env.DOORDASH_SIGNING_SECRET || "").trim();
 
-  if (!developerId || !keyId || !signingSecret) {
-    throw new Error(
-      "Vercel에 DOORDASH_DEVELOPER_ID, DOORDASH_KEY_ID, DOORDASH_SIGNING_SECRET을 먼저 등록하세요.",
-    );
-  }
+ if (!developerId || !keyId || !signingSecret) {
+  throw new Error(
+    `DoorDash ENV 확인: ` +
+      `DEVELOPER_ID=${developerId ? "OK" : "MISSING"}, ` +
+      `KEY_ID=${keyId ? "OK" : "MISSING"}, ` +
+      `SIGNING_SECRET=${signingSecret ? "OK" : "MISSING"}`
+  );
+}
 
   const now = Math.floor(Date.now() / 1000);
   const header = {
