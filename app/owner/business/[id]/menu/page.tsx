@@ -564,6 +564,18 @@ export default function OwnerBusinessMenuPage() {
   const [savingUberDirect, setSavingUberDirect] = useState(false);
   const [testingUberDirect, setTestingUberDirect] = useState(false);
   const [uberDirectMessage, setUberDirectMessage] = useState("");
+
+  // DoorDash Drive uses one KTown developer credential set on the server.
+  // Each restaurant stores only its DoorDash Business / Store mapping.
+  const [doorDashOpen, setDoorDashOpen] = useState(false);
+  const [doorDashEnabled, setDoorDashEnabled] = useState(false);
+  const [doorDashConfigured, setDoorDashConfigured] = useState(false);
+  const [doorDashBusinessId, setDoorDashBusinessId] = useState("");
+  const [doorDashStoreId, setDoorDashStoreId] = useState("");
+  const [doorDashStatus, setDoorDashStatus] = useState("");
+  const [savingDoorDash, setSavingDoorDash] = useState(false);
+  const [connectingDoorDash, setConnectingDoorDash] = useState(false);
+  const [doorDashMessage, setDoorDashMessage] = useState("");
   const [expandedOptionItemIds, setExpandedOptionItemIds] = useState<
     Set<number>
   >(new Set());
@@ -860,6 +872,133 @@ export default function OwnerBusinessMenuPage() {
       cancelled = true;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDoorDashSettings() {
+      if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/doordash/settings`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(data?.error || "DoorDash 설정을 불러오지 못했습니다.");
+        }
+        if (cancelled) return;
+
+        setDoorDashEnabled(data?.doorDashEnabled === true);
+        setDoorDashConfigured(data?.doorDashConfigured === true);
+        setDoorDashBusinessId(String(data?.externalBusinessId || ""));
+        setDoorDashStoreId(String(data?.externalStoreId || ""));
+        setDoorDashStatus(String(data?.status || ""));
+      } catch (error) {
+        if (!cancelled) {
+          setDoorDashMessage(
+            error instanceof Error ? error.message : "DoorDash 설정을 불러오지 못했습니다.",
+          );
+        }
+      }
+    }
+
+    void loadDoorDashSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  async function saveDoorDashSettings(nextEnabled = doorDashEnabled) {
+    if (savingDoorDash || connectingDoorDash) return;
+
+    setSavingDoorDash(true);
+    setDoorDashMessage("DoorDash 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/doordash/settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ enabled: nextEnabled }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "DoorDash 설정 저장에 실패했습니다.");
+      }
+
+      setDoorDashEnabled(data?.doorDashEnabled === true);
+      setDoorDashConfigured(data?.doorDashConfigured === true);
+      setDoorDashBusinessId(String(data?.externalBusinessId || ""));
+      setDoorDashStoreId(String(data?.externalStoreId || ""));
+      setDoorDashStatus(String(data?.status || ""));
+      setDoorDashMessage("✓ DoorDash 설정 저장 완료");
+    } catch (error) {
+      setDoorDashMessage(
+        error instanceof Error
+          ? `DoorDash 설정 저장 실패: ${error.message}`
+          : "DoorDash 설정 저장에 실패했습니다.",
+      );
+    } finally {
+      setSavingDoorDash(false);
+    }
+  }
+
+  async function connectDoorDash() {
+    if (connectingDoorDash || savingDoorDash) return;
+
+    setConnectingDoorDash(true);
+    setDoorDashMessage("DoorDash Business / Store 연결 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/doordash/connect`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "DoorDash 연결에 실패했습니다.");
+      }
+
+      setDoorDashEnabled(data?.doorDashEnabled === true);
+      setDoorDashConfigured(data?.doorDashConfigured === true);
+      setDoorDashBusinessId(String(data?.externalBusinessId || ""));
+      setDoorDashStoreId(String(data?.externalStoreId || ""));
+      setDoorDashStatus(String(data?.status || ""));
+      setDoorDashMessage("✓ DoorDash Business / Store 연결 완료");
+    } catch (error) {
+      setDoorDashMessage(
+        error instanceof Error
+          ? `DoorDash 연결 실패: ${error.message}`
+          : "DoorDash 연결에 실패했습니다.",
+      );
+    } finally {
+      setConnectingDoorDash(false);
+    }
+  }
 
   async function saveUberDirectSettings() {
     if (savingUberDirect) return;
@@ -5267,6 +5406,133 @@ export default function OwnerBusinessMenuPage() {
             <p className="mt-3 text-[10px] font-semibold leading-4 text-gray-500">
               저장된 Client Secret과 Webhook Signing Key는 다시 브라우저로 전송하지 않습니다. 값을 바꾸려면 새 값을 입력하고 다시 저장하세요.
             </p>
+              </>
+            ) : null}
+          </div>
+
+          <div className="mt-4 rounded-2xl border-2 border-red-200 bg-red-50 p-4">
+            <button
+              type="button"
+              onClick={() => setDoorDashOpen((current) => !current)}
+              className="flex w-full flex-wrap items-start justify-between gap-3 text-left"
+              aria-expanded={doorDashOpen}
+            >
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-red-700">
+                  DoorDash Drive Delivery
+                </p>
+                <h3 className="mt-1 text-base font-black text-[#172033]">
+                  KTown 중앙 DoorDash 계정
+                </h3>
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                  식당주는 DoorDash API 키를 입력하지 않습니다. KTown 공용 Credential로 이 식당의 Business / Store를 연결합니다.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-[11px] font-black ${
+                    doorDashConfigured
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {doorDashConfigured ? "CONNECTED" : "NOT CONNECTED"}
+                </span>
+                <span className="rounded-full bg-red-600 px-3 py-2 text-[10px] font-black text-white">
+                  {doorDashOpen ? "접기 ▲" : "펼치기 ▼"}
+                </span>
+              </div>
+            </button>
+
+            {doorDashOpen ? (
+              <>
+                <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-red-200 bg-white p-3">
+                  <input
+                    type="checkbox"
+                    checked={doorDashEnabled}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setDoorDashEnabled(checked);
+                      void saveDoorDashSettings(checked);
+                    }}
+                    disabled={!doorDashConfigured || savingDoorDash || connectingDoorDash}
+                    className="h-5 w-5 accent-red-600"
+                  />
+                  <span>
+                    <span className="block text-sm font-black text-[#172033]">Enable DoorDash Drive</span>
+                    <span className="mt-0.5 block text-[11px] font-semibold text-gray-600">
+                      연결 완료 후 DELIVERY 주문에서 이 매장의 DoorDash 배달을 사용할 수 있습니다.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-red-200 bg-white p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">DoorDash Business ID</div>
+                    <div className="mt-1 break-all text-sm font-black text-[#172033]">
+                      {doorDashBusinessId || `ktown-biz-${businessId}`}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-red-200 bg-white p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">DoorDash Store ID</div>
+                    <div className="mt-1 break-all text-sm font-black text-[#172033]">
+                      {doorDashStoreId || `ktown-store-${businessId}`}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-red-200 bg-white p-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Status</span>
+                  <span className={`ml-2 text-xs font-black ${
+                    doorDashConfigured ? "text-emerald-700" : "text-amber-700"
+                  }`}>
+                    {doorDashStatus || (doorDashConfigured ? "active" : "not_connected")}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void connectDoorDash()}
+                    disabled={connectingDoorDash || savingDoorDash}
+                    className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {connectingDoorDash
+                      ? "DOORDASH 연결 중..."
+                      : doorDashConfigured
+                        ? "SYNC / RECONNECT DOORDASH"
+                        : "CONNECT TO DOORDASH"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void saveDoorDashSettings()}
+                    disabled={!doorDashConfigured || connectingDoorDash || savingDoorDash}
+                    className="rounded-xl border-2 border-red-300 bg-white px-4 py-2.5 text-sm font-black text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingDoorDash ? "저장 중..." : "SAVE DOORDASH SETTINGS"}
+                  </button>
+                </div>
+
+                {doorDashMessage ? (
+                  <div
+                    className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-black ${
+                      doorDashMessage.startsWith("✓")
+                        ? "bg-emerald-100 text-emerald-800"
+                        : doorDashMessage.includes("실패")
+                          ? "bg-red-100 text-red-700"
+                          : "bg-white text-red-900"
+                    }`}
+                  >
+                    {doorDashMessage}
+                  </div>
+                ) : null}
+
+                <p className="mt-3 text-[10px] font-semibold leading-4 text-gray-500">
+                  DoorDash Developer ID / Key ID / Signing Secret은 Vercel 서버에만 저장합니다. 식당 관리자 화면에는 노출하지 않습니다.
+                </p>
               </>
             ) : null}
           </div>

@@ -1,0 +1,203 @@
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function adminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error("Supabase server environment variables are missing.");
+  }
+
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+async function requireAccess(request: Request, businessId: number) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+  if (!token) {
+    return { ok: false as const, status: 401, error: "로그인이 필요합니다." };
+  }
+
+  const supabase = adminClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser(token);
+
+  if (authError || !user) {
+    return {
+      ok: false as const,
+      status: 401,
+      error: "로그인 세션이 올바르지 않습니다.",
+    };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+
+  if (String(profile?.role || "").toLowerCase() === "admin") {
+    return { ok: true as const, supabase };
+  }
+
+  const { data: owner, error: ownerError } = await supabase
+    .from("business_owners")
+    .select("business_id,status")
+    .eq("business_id", businessId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (ownerError) throw ownerError;
+
+  const status = String(owner?.status || "").toLowerCase();
+  if (!owner || !["approved", "active"].includes(status)) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "이 비즈니스를 관리할 권한이 없습니다.",
+    };
+  }
+
+  return { ok: true as const, supabase };
+}
+
+async function loadRow(supabase: any, businessId: number) {
+  const { data, error } = await supabase
+    .from("restaurant_order_private_settings")
+    .select(
+      "business_id,doordash_enabled,doordash_external_business_id,doordash_external_store_id,doordash_status,doordash_connected_at",
+    )
+    .eq("business_id", businessId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+function responseShape(row: any) {
+  const externalBusinessId = String(
+    row?.doordash_external_business_id || "",
+  ).trim();
+  const externalStoreId = String(row?.doordash_external_store_id || "").trim();
+
+  return {
+    doorDashEnabled: row?.doordash_enabled === true,
+    doorDashConfigured: Boolean(externalBusinessId && externalStoreId),
+    externalBusinessId,
+    externalStoreId,
+    status: String(row?.doordash_status || ""),
+    connectedAt: row?.doordash_connected_at || null,
+  };
+}
+
+function jsonError(error: unknown, fallback: string, status = 500) {
+  const message = error instanceof Error ? error.message : fallback;
+  console.error("[owner doordash settings]", error);
+  return NextResponse.json({ error: message }, { status });
+}
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await context.params;
+    const businessId = Number(id);
+
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return NextResponse.json(
+        { error: "잘못된 비즈니스 ID입니다." },
+        { status: 400 },
+      );
+    }
+
+    const access = await requireAccess(request, businessId);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status },
+      );
+    }
+
+    const row = await loadRow(access.supabase, businessId);
+    return NextResponse.json(responseShape(row));
+  } catch (error) {
+    return jsonError(error, "DoorDash 설정을 불러오지 못했습니다.");
+  }
+}
+
+export async function PUT(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await context.params;
+    const businessId = Number(id);
+
+    if (!Number.isInteger(businessId) || businessId <= 0) {
+      return NextResponse.json(
+        { error: "잘못된 비즈니스 ID입니다." },
+        { status: 400 },
+      );
+    }
+
+    const access = await requireAccess(request, businessId);
+    if (!access.ok) {
+      return NextResponse.json(
+        { error: access.error },
+        { status: access.status },
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const current = (await loadRow(access.supabase, businessId)) || {};
+    const enabled = body?.enabled === true;
+
+    const externalBusinessId = String(
+      current?.doordash_external_business_id || "",
+    ).trim();
+    const externalStoreId = String(
+      current?.doordash_external_store_id || "",
+    ).trim();
+
+    if (enabled && (!externalBusinessId || !externalStoreId)) {
+      return NextResponse.json(
+        { error: "먼저 CONNECT TO DOORDASH로 이 식당을 연결하세요." },
+        { status: 400 },
+      );
+    }
+
+    const { data, error } = await access.supabase
+      .from("restaurant_order_private_settings")
+      .upsert(
+        {
+          business_id: businessId,
+          doordash_enabled: enabled,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "business_id" },
+      )
+      .select(
+        "business_id,doordash_enabled,doordash_external_business_id,doordash_external_store_id,doordash_status,doordash_connected_at",
+      )
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true, ...responseShape(data) });
+  } catch (error) {
+    return jsonError(error, "DoorDash 설정 저장에 실패했습니다.");
+  }
+}
