@@ -965,14 +965,14 @@ export default function RestaurantMenu({
                 className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black transition-all ${
                   activeService === "pickup"
                     ? isBunsMenu
-                      ? "border-[#FFD21A] bg-[#FFD21A] text-black shadow-[0_0_0_3px_rgba(255,210,26,0.22)]"
+                      ? "border-white bg-white text-black shadow-[0_0_0_3px_rgba(255,255,255,0.16)]"
                       : "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_3px_rgba(5,150,105,0.18)]"
                     : isBunsMenu
                       ? "border-white/30 bg-transparent text-white/80 hover:border-white/60"
                       : "border-gray-300 bg-white text-gray-700 hover:border-gray-500"
                 }`}
               >
-                {activeService === "pickup" ? "✓ PICKUP · SELECTED" : "PICKUP"}
+                PICKUP
               </button>
             ) : null}
 
@@ -984,14 +984,14 @@ export default function RestaurantMenu({
                 className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black transition-all ${
                   activeService === "delivery"
                     ? isBunsMenu
-                      ? "border-[#FFD21A] bg-[#FFD21A] text-black shadow-[0_0_0_3px_rgba(255,210,26,0.22)]"
+                      ? "border-white bg-white text-black shadow-[0_0_0_3px_rgba(255,255,255,0.16)]"
                       : "border-blue-600 bg-blue-600 text-white shadow-[0_0_0_3px_rgba(37,99,235,0.18)]"
                     : isBunsMenu
                       ? "border-white/30 bg-transparent text-white/80 hover:border-white/60"
                       : "border-gray-300 bg-white text-gray-700 hover:border-gray-500"
                 }`}
               >
-                {activeService === "delivery" ? "✓ DELIVERY · SELECTED" : "DELIVERY"}
+                DELIVERY
               </button>
             ) : null}
           </div>
