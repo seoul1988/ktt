@@ -89,14 +89,11 @@ function createDoorDashJwt() {
   const keyId = String(process.env.DOORDASH_KEY_ID || "").trim();
   const signingSecret = String(process.env.DOORDASH_SIGNING_SECRET || "").trim();
 
- if (!developerId || !keyId || !signingSecret) {
-  throw new Error(
-    `DoorDash ENV 확인: ` +
-      `DEVELOPER_ID=${developerId ? "OK" : "MISSING"}, ` +
-      `KEY_ID=${keyId ? "OK" : "MISSING"}, ` +
-      `SIGNING_SECRET=${signingSecret ? "OK" : "MISSING"}`
-  );
-}
+  if (!developerId || !keyId || !signingSecret) {
+    throw new Error(
+      "Vercel에 DOORDASH_DEVELOPER_ID, DOORDASH_KEY_ID, DOORDASH_SIGNING_SECRET을 먼저 등록하세요.",
+    );
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const header = {
@@ -318,7 +315,26 @@ async function ensureStore(args: {
 }
 
 function jsonError(error: unknown, fallback: string, status = 500) {
-  const message = error instanceof Error ? error.message : fallback;
+  let message = fallback;
+
+  if (error instanceof Error) {
+    message = error.message || fallback;
+  } else if (error && typeof error === "object") {
+    const e = error as Record<string, unknown>;
+    const parts = [
+      e.message,
+      e.details,
+      e.hint,
+      e.code ? `code=${String(e.code)}` : "",
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+
+    if (parts.length) message = parts.join(" · ");
+  } else if (typeof error === "string" && error.trim()) {
+    message = error.trim();
+  }
+
   console.error("[owner doordash connect]", error);
   return NextResponse.json({ error: message }, { status });
 }
@@ -352,7 +368,14 @@ export async function POST(
       .eq("id", businessId)
       .maybeSingle();
 
-    if (businessError) throw businessError;
+    if (businessError) {
+      throw new Error(
+        `Supabase businesses 조회 실패: ${businessError.message || "Unknown error"}` +
+          `${businessError.details ? ` · ${businessError.details}` : ""}` +
+          `${businessError.hint ? ` · ${businessError.hint}` : ""}` +
+          `${businessError.code ? ` · code=${businessError.code}` : ""}`,
+      );
+    }
     if (!business) {
       return NextResponse.json({ error: "Business not found." }, { status: 404 });
     }
@@ -411,7 +434,14 @@ export async function POST(
       )
       .single();
 
-    if (saveError) throw saveError;
+    if (saveError) {
+      throw new Error(
+        `Supabase DoorDash 설정 저장 실패: ${saveError.message || "Unknown error"}` +
+          `${saveError.details ? ` · ${saveError.details}` : ""}` +
+          `${saveError.hint ? ` · ${saveError.hint}` : ""}` +
+          `${saveError.code ? ` · code=${saveError.code}` : ""}`,
+      );
+    }
 
     return NextResponse.json({
       ok: true,
