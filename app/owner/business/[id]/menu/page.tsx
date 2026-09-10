@@ -948,11 +948,10 @@ export default function OwnerBusinessMenuPage() {
       setDoorDashStatus(String(data?.status || ""));
       setDoorDashMessage("✓ DoorDash 설정 저장 완료");
     } catch (error) {
-      setDoorDashMessage(
-        error instanceof Error
-          ? `DoorDash 설정 저장 실패: ${error.message}`
-          : "DoorDash 설정 저장에 실패했습니다.",
-      );
+      // DoorDash 저장 오류의 상세 내용은 관리자 화면에 노출하지 않습니다.
+      // 디버깅이 필요할 때만 브라우저 Console에서 확인합니다.
+      console.error("DOORDASH SETTINGS SAVE ERROR", error);
+      setDoorDashMessage("");
     } finally {
       setSavingDoorDash(false);
     }
@@ -5516,14 +5515,12 @@ export default function OwnerBusinessMenuPage() {
                   </button>
                 </div>
 
-                {doorDashMessage ? (
+                {doorDashMessage && !doorDashMessage.includes("실패") ? (
                   <div
                     className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-black ${
                       doorDashMessage.startsWith("✓")
                         ? "bg-emerald-100 text-emerald-800"
-                        : doorDashMessage.includes("실패")
-                          ? "bg-red-100 text-red-700"
-                          : "bg-white text-red-900"
+                        : "bg-white text-red-900"
                     }`}
                   >
                     {doorDashMessage}
