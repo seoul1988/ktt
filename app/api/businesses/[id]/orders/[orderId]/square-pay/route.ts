@@ -1,10 +1,15 @@
-import { randomUUID } from "crypto";
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import {
   getOrderAdmin,
   moneyCents,
 } from "@/lib/restaurant-order/server";
 import { dispatchUberDirectOrder } from "@/lib/delivery/uber-direct";
+import {
+  centralTwilioConfig,
+  isKtownSmsEnabled,
+  sendTwilioSms,
+} from "@/lib/restaurant-order/twilio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +29,20 @@ function squareErrorDetail(payload: any, fallback: string) {
       .join(" / ");
   }
   return fallback;
+}
+
+function tokenHash(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function publicBaseUrl(request: Request) {
+  const configured = String(process.env.KTOWN_PUBLIC_URL || "")
+    .trim()
+    .replace(/\/+$/, "");
+
+  if (configured) return configured;
+
+  return new URL(request.url).origin;
 }
 
 export async function POST(
@@ -63,52 +82,6 @@ export async function POST(
       .replace(/[^a-zA-Z0-9_-]/g, "")
       .slice(0, 80);
 
-    const rawPaymentMethodType = String(
-      body?.paymentMethodType || "",
-    )
-      .trim()
-      .toLowerCase();
-
-    const paymentMethodType =
-      rawPaymentMethodType === "apple_pay" ||
-      rawPaymentMethodType === "google_pay" ||
-      rawPaymentMethodType === "card"
-        ? rawPaymentMethodType
-        : "";
-
-    if (!paymentMethodType) {
-      return NextResponse.json(
-        { error: "Valid payment method type is required." },
-        { status: 400 },
-      );
-    }
-
-    const buyerEmailAddress = String(
-      body?.buyerEmailAddress || "",
-    )
-      .trim()
-      .toLowerCase()
-      .slice(0, 254);
-
-    const buyerPhoneNumber = String(
-      body?.buyerPhoneNumber || "",
-    )
-      .trim()
-      .slice(0, 40);
-
-    if (
-      buyerEmailAddress &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-        buyerEmailAddress,
-      )
-    ) {
-      return NextResponse.json(
-        { error: "Please enter a valid email address." },
-        { status: 400 },
-      );
-    }
-
-
     if (!sourceId) {
       return NextResponse.json(
         { error: "Payment token is required." },
@@ -121,11 +94,12 @@ export async function POST(
     const [
       { data: order, error: orderError },
       { data: privateSettings, error: privateError },
+      { data: business, error: businessError },
     ] = await Promise.all([
       db
         .from("restaurant_orders")
         .select(
-          "id,business_id,order_number,total,payment_status,square_order_id,square_payment_id",
+          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
         )
         .eq("id", ktownOrderId)
         .eq("business_id", businessId)
@@ -134,9 +108,15 @@ export async function POST(
       db
         .from("restaurant_order_private_settings")
         .select(
-          "payment_provider,square_access_token,square_location_id",
+          "payment_provider,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id",
         )
         .eq("business_id", businessId)
+        .maybeSingle(),
+
+      db
+        .from("businesses")
+        .select("id,name")
+        .eq("id", businessId)
         .maybeSingle(),
     ]);
 
@@ -149,6 +129,10 @@ export async function POST(
 
     if (privateError) {
       throw privateError;
+    }
+
+    if (businessError) {
+      throw businessError;
     }
 
     if (
@@ -179,36 +163,12 @@ export async function POST(
       order.payment_status === "paid" &&
       order.square_payment_id
     ) {
-      let delivery: any = null;
-
-      try {
-        delivery = await dispatchUberDirectOrder({
-          db,
-          businessId,
-          orderId: ktownOrderId,
-        });
-      } catch (deliveryError) {
-        console.error(
-          "Uber Direct automatic dispatch retry failed:",
-          deliveryError,
-        );
-        delivery = {
-          ok: false,
-          error:
-            deliveryError instanceof Error
-              ? deliveryError.message
-              : "Courier dispatch failed.",
-        };
-      }
-
       return NextResponse.json({
         ok: true,
         alreadyPaid: true,
         paymentStatus: "paid",
         paymentId: order.square_payment_id,
-        paymentMethodType,
         orderNumber: order.order_number,
-        delivery,
       });
     }
 
@@ -244,22 +204,6 @@ export async function POST(
           location_id:
             privateSettings.square_location_id,
           autocomplete: true,
-          ...(buyerEmailAddress
-            ? {
-                buyer_email_address:
-                  buyerEmailAddress,
-              }
-            : {}),
-          ...(buyerPhoneNumber
-            ? {
-                buyer_phone_number:
-                  buyerPhoneNumber,
-              }
-            : {}),
-          customer_details: {
-            customer_initiated: true,
-            seller_keyed_in: false,
-          },
           ...(verificationToken
             ? {
                 verification_token:
@@ -321,14 +265,19 @@ export async function POST(
       );
     }
 
+    const paidAt = new Date();
+    const cancelExpiresAt = new Date(paidAt.getTime() + 3 * 60 * 1000);
+    const rawCancelToken = randomBytes(24).toString("base64url");
+    const cancelTokenHash = tokenHash(rawCancelToken);
+
     const { error: updateError } = await db
       .from("restaurant_orders")
       .update({
         payment_status: "paid",
         square_payment_id: paymentId,
-
-        // Save the actual Square method only after COMPLETED.
-        payment_method_type: paymentMethodType,
+        paid_at: paidAt.toISOString(),
+        cancel_token_hash: cancelTokenHash,
+        cancel_expires_at: cancelExpiresAt.toISOString(),
       })
       .eq("id", ktownOrderId)
       .eq("business_id", businessId);
@@ -362,13 +311,76 @@ export async function POST(
       };
     }
 
+    let sms: any = null;
+
+    if (
+      isKtownSmsEnabled() &&
+      order.sms_consent === true &&
+      !order.sms_sent_at
+    ) {
+      const twilio = centralTwilioConfig();
+
+      if (twilio) {
+        const cancelUrl =
+          `${publicBaseUrl(request)}/c/${encodeURIComponent(rawCancelToken)}`;
+        const restaurantName = String(
+          business?.name || "Restaurant",
+        ).trim();
+        const fulfillmentLabel =
+          order.fulfillment_type === "delivery" ? "Delivery" : "Pickup";
+
+        const message = [
+          `KTown Triangle - ${restaurantName}`,
+          `Order #${order.order_number} confirmed.`,
+          `${fulfillmentLabel} · Total $${Number(order.total || 0).toFixed(2)}`,
+          "",
+          "Cancel Order (within 3 minutes):",
+          cancelUrl,
+          "",
+          "Reply STOP to opt out or HELP for help.",
+        ].join("\n");
+
+        try {
+          sms = await sendTwilioSms(
+            twilio,
+            String(order.customer_phone || ""),
+            message,
+          );
+
+          const { error: smsSaveError } = await db
+            .from("restaurant_orders")
+            .update({
+              sms_sent_at: new Date().toISOString(),
+              sms_message_sid: sms.sid || null,
+            })
+            .eq("id", ktownOrderId)
+            .eq("business_id", businessId);
+
+          if (smsSaveError) {
+            console.error("ORDER SMS SAVE ERROR", smsSaveError);
+          }
+        } catch (smsError) {
+          console.error("ORDER SMS ERROR", smsError);
+          // Payment and delivery remain successful even if SMS fails.
+          sms = {
+            ok: false,
+            error:
+              smsError instanceof Error
+                ? smsError.message
+                : "SMS failed.",
+          };
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       paymentStatus: "paid",
       paymentId,
-      paymentMethodType,
       orderNumber: order.order_number,
       delivery,
+      smsQueued: !!sms && sms?.ok !== false,
+      cancelExpiresAt: cancelExpiresAt.toISOString(),
     });
   } catch (error) {
     console.error("Square direct payment error:", error);

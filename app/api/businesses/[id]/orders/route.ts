@@ -365,6 +365,13 @@ export async function POST(
       body?.customer?.phone,
     );
 
+    // SMS stays completely off until the Twilio toll-free number is approved.
+    // After approval, set NEXT_PUBLIC_TWILIO_SMS_ENABLED=true in Vercel and redeploy.
+    const smsProgramEnabled =
+      process.env.NEXT_PUBLIC_TWILIO_SMS_ENABLED === "true";
+    const requestedSmsConsent =
+      smsProgramEnabled && body?.smsConsent === true;
+
     const customerEmail = String(
       body?.customer?.email || "",
     )
@@ -459,6 +466,10 @@ export async function POST(
 
     const enforceBusinessHours =
       settings?.enforce_business_hours !== false;
+
+    const smsConsent =
+      requestedSmsConsent &&
+      settings?.sms_enabled === true;
 
     const orderWindow = getOrderWindow(business?.hours, 15);
 
@@ -1022,6 +1033,10 @@ export async function POST(
           customerName,
         customer_phone:
           customerPhone,
+        sms_consent:
+          smsConsent,
+        sms_consent_at:
+          smsConsent ? new Date().toISOString() : null,
         delivery_address:
           address,
         requested_time: String(
@@ -1482,45 +1497,11 @@ export async function POST(
       });
     }
 
-    const twilioAccountSid =
-      privateSettings?.twilio_account_sid || "";
-
-    const twilioAuthToken =
-      privateSettings?.twilio_auth_token || "";
-
-    const twilioPhoneNumber =
-      privateSettings?.twilio_phone_number || "";
-
-    if (
-      settings?.sms_enabled &&
-      twilioAccountSid &&
-      twilioAuthToken &&
-      twilioPhoneNumber
-    ) {
-      sendTwilioSms(
-        {
-          accountSid: twilioAccountSid,
-          authToken: twilioAuthToken,
-          fromNumber: twilioPhoneNumber,
-        },
-        customerPhone,
-        `${
-          business?.name ||
-          "Restaurant"
-        }: Order #${number} received. ${
-          fulfillmentType ===
-          "pickup"
-            ? "We'll text you when it's ready."
-            : "Your delivery order is being prepared."
-        }`,
-      ).catch(
-        (error) =>
-          console.error(
-            "ORDER SMS ERROR",
-            error,
-          ),
-      );
-    }
+    // NOTE:
+    // All orders in this route require online payment and return from the
+    // Square/Stripe branches above. Do not send an order-confirmation SMS here.
+    // Send it only after the payment endpoint/webhook has verified payment.
+    // `smsConsent` is captured above from the checkout request for that flow.
 
     return NextResponse.json({
       ok: true,

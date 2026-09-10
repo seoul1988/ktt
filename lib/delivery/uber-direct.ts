@@ -22,8 +22,16 @@ type UberQuote = {
   dropoff_deadline?: string;
 };
 
-const tokenCache = new Map<string, { value: string; expiresAt: number }>();
+let cachedToken:
+  | {
+      value: string;
+      expiresAt: number;
+    }
+  | null = null;
 
+function env(name: string) {
+  return String(process.env[name] || "").trim();
+}
 
 function normalizePhone(value: unknown) {
   const raw = String(value ?? "").trim();
@@ -102,21 +110,24 @@ function directAddressJson(address: DirectAddress) {
   return JSON.stringify(address);
 }
 
-async function getAccessToken(privateSettings: any) {
+async function getAccessToken() {
   const now = Date.now();
-  const clientId = stringValue(privateSettings?.uber_direct_client_id);
-  const clientSecret = stringValue(privateSettings?.uber_direct_client_secret);
+
+  if (
+    cachedToken &&
+    cachedToken.value &&
+    cachedToken.expiresAt > now + 60_000
+  ) {
+    return cachedToken.value;
+  }
+
+  const clientId = env("UBER_DIRECT_CLIENT_ID");
+  const clientSecret = env("UBER_DIRECT_CLIENT_SECRET");
 
   if (!clientId || !clientSecret) {
     throw new Error(
-      "This restaurant has not configured its Uber Direct Client ID / Client Secret.",
+      "Uber Direct credentials are not configured.",
     );
-  }
-
-  const cacheKey = clientId;
-  const cached = tokenCache.get(cacheKey);
-  if (cached?.value && cached.expiresAt > now + 60_000) {
-    return cached.value;
   }
 
   const body = new URLSearchParams({
@@ -126,14 +137,17 @@ async function getAccessToken(privateSettings: any) {
     scope: "eats.deliveries",
   });
 
-  const response = await fetch("https://auth.uber.com/oauth/v2/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+  const response = await fetch(
+    "https://auth.uber.com/oauth/v2/token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      cache: "no-store",
     },
-    body,
-    cache: "no-store",
-  });
+  );
 
   const payload = await response.json().catch(() => ({}));
 
@@ -145,19 +159,25 @@ async function getAccessToken(privateSettings: any) {
     );
   }
 
-  const next = {
+  cachedToken = {
     value: String(payload.access_token),
     expiresAt:
       now +
-      Math.max(300, Number(payload.expires_in || 3600) - 120) * 1000,
+      Math.max(
+        300,
+        Number(payload.expires_in || 3600) - 120,
+      ) *
+        1000,
   };
 
-  tokenCache.set(cacheKey, next);
-  return next.value;
+  return cachedToken.value;
 }
 
 function getCustomerId(privateSettings: any) {
-  const customerId = stringValue(privateSettings?.uber_direct_customer_id);
+  const customerId = stringValue(
+    privateSettings?.uber_direct_customer_id,
+    env("UBER_DIRECT_CUSTOMER_ID"),
+  );
 
   if (!customerId) {
     throw new Error(
@@ -196,7 +216,7 @@ export async function createUberDirectQuote(args: {
     );
   }
 
-  const token = await getAccessToken(args.privateSettings);
+  const token = await getAccessToken();
   const customerId = getCustomerId(args.privateSettings);
 
   const pickup = businessAddress(args.business);
@@ -303,7 +323,7 @@ export async function dispatchUberDirectOrder(args: {
     db
       .from("restaurant_order_private_settings")
       .select(
-        "delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,uber_direct_webhook_signing_key,delivery_fee_markup_cents,pickup_phone_override",
+        "delivery_provider,uber_direct_enabled,uber_direct_customer_id,delivery_fee_markup_cents",
       )
       .eq("business_id", businessId)
       .maybeSingle(),
@@ -370,7 +390,7 @@ export async function dispatchUberDirectOrder(args: {
       .eq("business_id", businessId);
   }
 
-  const token = await getAccessToken(privateSettings);
+  const token = await getAccessToken();
   const customerId = getCustomerId(privateSettings);
   const pickup = businessAddress(business);
   const dropoff = deliveryAddress(order.delivery_address);
@@ -501,5 +521,55 @@ export async function dispatchUberDirectOrder(args: {
     status,
     trackingUrl: trackingUrl || null,
     feeCents: Number(payload?.fee || 0),
+  };
+}
+
+
+/**
+ * Cancel an already-created Uber Direct delivery.
+ * This does not decide customer refund policy; it only cancels the courier job.
+ */
+export async function cancelUberDirectDelivery(args: {
+  privateSettings: any;
+  deliveryId: string;
+}) {
+  const deliveryId = String(args.deliveryId || "").trim();
+
+  if (!deliveryId) {
+    return { skipped: true, reason: "no_delivery_id" };
+  }
+
+  const token = await getAccessToken();
+  const customerId = getCustomerId(args.privateSettings);
+
+  const response = await fetch(
+    `https://api.uber.com/v1/customers/${encodeURIComponent(
+      customerId,
+    )}/deliveries/${encodeURIComponent(deliveryId)}/cancel`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      errorDetail(
+        payload,
+        `Uber Direct cancellation failed (HTTP ${response.status}).`,
+      ),
+    );
+  }
+
+  return {
+    ok: true,
+    deliveryId,
+    status: String(payload?.status || "canceled"),
   };
 }
