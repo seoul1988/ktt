@@ -293,7 +293,7 @@ export async function GET(
     } = await access.supabase
       .from("restaurant_order_settings")
       .select(
-        "tax_rate,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours",
+        "tax_rate,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,sms_enabled",
       )
       .eq("business_id", businessId)
       .maybeSingle();
@@ -336,6 +336,8 @@ export async function GET(
           ),
         enforceBusinessHours:
           settings?.enforce_business_hours !== false,
+        smsEnabled:
+          settings?.sms_enabled === true,
       },
       {
         headers: {
@@ -427,13 +429,20 @@ export async function PUT(
         "enforceBusinessHours",
       );
 
+    const hasSmsEnabled =
+      Object.prototype.hasOwnProperty.call(
+        body || {},
+        "smsEnabled",
+      );
+
     if (
       !hasModes &&
       !hasTax &&
       !hasProvider &&
       !hasDeliveryFeePolicyMode &&
       !hasDeliveryFeeShareRules &&
-      !hasEnforceBusinessHours
+      !hasEnforceBusinessHours &&
+      !hasSmsEnabled
     ) {
       return NextResponse.json(
         { error: "저장할 설정이 없습니다." },
@@ -465,6 +474,10 @@ export async function PUT(
       | undefined;
 
     let enforceBusinessHours:
+      | boolean
+      | undefined;
+
+    let smsEnabled:
       | boolean
       | undefined;
 
@@ -796,6 +809,30 @@ export async function PUT(
         savedHoursRule?.enforce_business_hours !== false;
     }
 
+    if (hasSmsEnabled) {
+      const enabled = body.smsEnabled === true;
+
+      const {
+        data: savedSms,
+        error: smsError,
+      } = await access.supabase
+        .from("restaurant_order_settings")
+        .upsert(
+          {
+            business_id: businessId,
+            sms_enabled: enabled,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "business_id" },
+        )
+        .select("sms_enabled")
+        .single();
+
+      if (smsError) throw smsError;
+
+      smsEnabled = savedSms?.sms_enabled === true;
+    }
+
     if (hasProvider) {
       const provider =
         body.paymentProvider === "square"
@@ -864,6 +901,9 @@ export async function PUT(
           : {}),
         ...(enforceBusinessHours !== undefined
           ? { enforceBusinessHours }
+          : {}),
+        ...(smsEnabled !== undefined
+          ? { smsEnabled }
           : {}),
       },
       {

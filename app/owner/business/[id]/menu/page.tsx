@@ -529,6 +529,9 @@ export default function OwnerBusinessMenuPage() {
   const [taxRateInput, setTaxRateInput] = useState("0");
   const [savingTaxRate, setSavingTaxRate] = useState(false);
 
+  const [smsEnabled, setSmsEnabled] = useState(false);
+  const [savingSmsEnabled, setSavingSmsEnabled] = useState(false);
+
   const [paymentProvider, setPaymentProvider] = useState<"stripe" | "square">("stripe");
   const [savingPaymentProvider, setSavingPaymentProvider] = useState(false);
   const [paymentProviderOpen, setPaymentProviderOpen] = useState(false);
@@ -751,6 +754,8 @@ export default function OwnerBusinessMenuPage() {
         setPaymentProvider(
           data?.paymentProvider === "square" ? "square" : "stripe",
         );
+
+        setSmsEnabled(data?.smsEnabled === true);
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "온라인 주문 설정을 불러오지 못했습니다.");
@@ -761,6 +766,51 @@ export default function OwnerBusinessMenuPage() {
     void loadOrderModes();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  async function saveSmsEnabled(nextEnabled: boolean) {
+    if (savingSmsEnabled) return;
+
+    const previous = smsEnabled;
+    setSmsEnabled(nextEnabled);
+    setSavingSmsEnabled(true);
+    setOrderSettingsMessage("SMS 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/order-settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ smsEnabled: nextEnabled }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "SMS 설정 저장에 실패했습니다.");
+      }
+
+      setSmsEnabled(data?.smsEnabled === true);
+      setOrderSettingsMessage(
+        data?.smsEnabled === true
+          ? "✓ SMS Order Updates 사용"
+          : "✓ SMS Order Updates 사용 안 함",
+      );
+    } catch (error) {
+      setSmsEnabled(previous);
+      setOrderSettingsMessage(
+        error instanceof Error
+          ? `SMS 설정 저장 실패: ${error.message}`
+          : "SMS 설정 저장에 실패했습니다.",
+      );
+    } finally {
+      setSavingSmsEnabled(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -4801,6 +4851,42 @@ export default function OwnerBusinessMenuPage() {
               </button>
             </div>
           ) : null}
+
+          <div className="mt-4 rounded-2xl border-2 border-sky-200 bg-sky-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-sky-700">
+                  Customer SMS
+                </p>
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                  주문 확인, 상태 업데이트, 3분 취소 링크를 고객에게 문자로 보낼지 식당별로 선택합니다.
+                </p>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={smsEnabled}
+                  disabled={savingSmsEnabled}
+                  onChange={(event) => {
+                    void saveSmsEnabled(event.target.checked);
+                  }}
+                  className="h-5 w-5 accent-sky-700"
+                />
+                <span className="text-sm font-black text-sky-900">
+                  {savingSmsEnabled
+                    ? "저장 중..."
+                    : smsEnabled
+                      ? "SMS ON"
+                      : "SMS OFF"}
+                </span>
+              </label>
+            </div>
+
+            <p className="mt-3 text-[10px] font-semibold leading-5 text-gray-500">
+              Twilio 전체 마스터가 승인 후 ON 되어야 실제 고객 화면에 SMS 동의가 표시되고 문자가 발송됩니다.
+            </p>
+          </div>
 
           <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
             <button
