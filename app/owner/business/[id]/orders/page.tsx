@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import CommunityBottomNav from "@/app/components/CommunityBottomNav";
-import ProfileButton from "@/app/components/ProfileButton";
+import CommunityBottomNav from "../../components/CommunityBottomNav";
+import ProfileButton from "../../components/ProfileButton";
 import { supabase } from "@/lib/supabase";
 
 function raleighDateTime(value: unknown) {
@@ -61,6 +61,7 @@ export default function OwnerOrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refundingOrderId, setRefundingOrderId] = useState<number | null>(null);
 
   const [dateFilter, setDateFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
@@ -115,6 +116,71 @@ export default function OwnerOrdersPage() {
   }, [businessId]);
 
   async function status(orderId: number, next: string) {
+    const order = orders.find((row) => Number(row.id) === Number(orderId));
+
+    // Paid Square orders are actually refunded when CANCELLED is selected.
+    if (
+      next === "cancelled" &&
+      order &&
+      String(order.payment_status || "").toLowerCase() === "paid" &&
+      String(order.square_payment_id || "").trim()
+    ) {
+      const total = Number(order.total || 0).toFixed(2);
+      const ok = window.confirm(
+        `Refund $${total} to the original payment method and cancel Order #${order.order_number}?`,
+      );
+
+      if (!ok) return;
+
+      try {
+        setRefundingOrderId(orderId);
+        const t = await token();
+
+        const r = await fetch(
+          `/api/owner/business/${businessId}/orders/${orderId}/refund`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${t}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        const j = await r.json();
+
+        if (!r.ok) {
+          return alert(j.error || "Refund failed.");
+        }
+
+        if (j.refundStatus === "PENDING") {
+          alert(
+            `Refund request submitted for Order #${order.order_number}. Square status: PENDING.`,
+          );
+        } else {
+          alert(
+            `Order #${order.order_number} cancelled. $${total} refund completed.`,
+          );
+        }
+
+        await load();
+        return;
+      } catch (e: any) {
+        alert(e?.message || "Refund failed.");
+        return;
+      } finally {
+        setRefundingOrderId(null);
+      }
+    }
+
+    // For non-paid orders, CANCELLED remains a normal order-status change.
+    if (next === "cancelled" && order) {
+      const ok = window.confirm(
+        `Cancel Order #${order.order_number}? No Square refund is required.`,
+      );
+      if (!ok) return;
+    }
+
     const t = await token();
 
     const r = await fetch(
@@ -369,8 +435,16 @@ export default function OwnerOrdersPage() {
                     ${Number(o.total || 0).toFixed(2)}
                   </div>
 
-                  <div className="text-xs font-bold">
-                    {o.payment_status}
+                  <div
+                    className={`text-xs font-black ${
+                      String(o.payment_status || "").toLowerCase() === "refunded"
+                        ? "text-red-600"
+                        : String(o.payment_status || "").toLowerCase() === "refund_pending"
+                          ? "text-amber-600"
+                          : ""
+                    }`}
+                  >
+                    {String(o.payment_status || "").toUpperCase()}
                   </div>
                 </div>
               </div>
@@ -402,13 +476,28 @@ export default function OwnerOrdersPage() {
                   <button
                     key={s}
                     onClick={() => void status(o.id, s)}
-                    className={`rounded-full border px-3 py-2 text-xs font-black ${
+                    disabled={
+                      refundingOrderId === o.id ||
+                      (s === "cancelled" &&
+                        String(o.payment_status || "").toLowerCase() === "refunded")
+                    }
+                    className={`rounded-full border px-3 py-2 text-xs font-black disabled:cursor-not-allowed disabled:opacity-50 ${
                       o.order_status === s
-                        ? "bg-gray-950 text-white"
-                        : ""
+                        ? s === "cancelled"
+                          ? "bg-red-600 text-white"
+                          : "bg-gray-950 text-white"
+                        : s === "cancelled" &&
+                            String(o.payment_status || "").toLowerCase() === "paid"
+                          ? "border-red-500 text-red-600"
+                          : ""
                     }`}
                   >
-                    {s.toUpperCase()}
+                    {s === "cancelled" && refundingOrderId === o.id
+                      ? "REFUNDING…"
+                      : s === "cancelled" &&
+                          String(o.payment_status || "").toLowerCase() === "refunded"
+                        ? "REFUNDED"
+                        : s.toUpperCase()}
                   </button>
                 ))}
               </div>
