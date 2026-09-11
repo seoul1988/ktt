@@ -656,7 +656,7 @@ export default function OwnerBusinessMenuPage() {
   // Deal / Promotion Library.
   // Supabase DB에 저장하여 모든 기기/브라우저에서 동일하게 공유합니다.
   // 기존 localStorage 데이터는 DB가 비어 있을 때 한 번 자동 이전합니다.
-  const [promotionManagerOpen, setPromotionManagerOpen] = useState(false);
+  const [promotionManagerOpen, setPromotionManagerOpen] = useState(true);
   const [promotionEditorOpen, setPromotionEditorOpen] = useState(false);
   const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
   const [promotionDraft, setPromotionDraft] = useState<MenuPromotion>(emptyPromotion());
