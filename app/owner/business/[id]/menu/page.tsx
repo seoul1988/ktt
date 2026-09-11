@@ -572,6 +572,18 @@ export default function OwnerBusinessMenuPage() {
   const [savingUberDirect, setSavingUberDirect] = useState(false);
   const [testingUberDirect, setTestingUberDirect] = useState(false);
   const [uberDirectMessage, setUberDirectMessage] = useState("");
+
+  // DoorDash Drive uses one KTown developer credential set on the server.
+  // Each restaurant stores only its DoorDash Business / Store mapping.
+  const [doorDashOpen, setDoorDashOpen] = useState(false);
+  const [doorDashEnabled, setDoorDashEnabled] = useState(false);
+  const [doorDashConfigured, setDoorDashConfigured] = useState(false);
+  const [doorDashBusinessId, setDoorDashBusinessId] = useState("");
+  const [doorDashStoreId, setDoorDashStoreId] = useState("");
+  const [doorDashStatus, setDoorDashStatus] = useState("");
+  const [savingDoorDash, setSavingDoorDash] = useState(false);
+  const [connectingDoorDash, setConnectingDoorDash] = useState(false);
+  const [doorDashMessage, setDoorDashMessage] = useState("");
   const [expandedOptionItemIds, setExpandedOptionItemIds] = useState<
     Set<number>
   >(new Set());
@@ -913,6 +925,130 @@ export default function OwnerBusinessMenuPage() {
       cancelled = true;
     };
   }, [businessId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDoorDashSettings() {
+      if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/doordash/settings`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(data?.error || "DoorDash 설정을 불러오지 못했습니다.");
+        }
+        if (cancelled) return;
+
+        setDoorDashEnabled(data?.doorDashEnabled === true);
+        setDoorDashConfigured(data?.doorDashConfigured === true);
+        setDoorDashBusinessId(String(data?.externalBusinessId || ""));
+        setDoorDashStoreId(String(data?.externalStoreId || ""));
+        setDoorDashStatus(String(data?.status || ""));
+      } catch (error) {
+        if (!cancelled) {
+          console.error("DOORDASH SETTINGS LOAD ERROR", error);
+          setDoorDashMessage("");
+        }
+      }
+    }
+
+    void loadDoorDashSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  async function saveDoorDashSettings(nextEnabled = doorDashEnabled) {
+    if (savingDoorDash || connectingDoorDash) return;
+
+    setSavingDoorDash(true);
+    setDoorDashMessage("DoorDash 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/doordash/settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ enabled: nextEnabled }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "DoorDash 설정 저장에 실패했습니다.");
+      }
+
+      setDoorDashEnabled(data?.doorDashEnabled === true);
+      setDoorDashConfigured(data?.doorDashConfigured === true);
+      setDoorDashBusinessId(String(data?.externalBusinessId || ""));
+      setDoorDashStoreId(String(data?.externalStoreId || ""));
+      setDoorDashStatus(String(data?.status || ""));
+      setDoorDashMessage("✓ DoorDash 설정 저장 완료");
+    } catch (error) {
+      console.error("DOORDASH SETTINGS SAVE ERROR", error);
+      setDoorDashMessage("");
+    } finally {
+      setSavingDoorDash(false);
+    }
+  }
+
+  async function connectDoorDash() {
+    if (connectingDoorDash || savingDoorDash) return;
+
+    setConnectingDoorDash(true);
+    setDoorDashMessage("DoorDash Business / Store 연결 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/doordash/connect`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({}),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "DoorDash 연결에 실패했습니다.");
+      }
+
+      setDoorDashEnabled(data?.doorDashEnabled === true);
+      setDoorDashConfigured(data?.doorDashConfigured === true);
+      setDoorDashBusinessId(String(data?.externalBusinessId || ""));
+      setDoorDashStoreId(String(data?.externalStoreId || ""));
+      setDoorDashStatus(String(data?.status || ""));
+      setDoorDashMessage("✓ DoorDash Business / Store 연결 완료");
+    } catch (error) {
+      setDoorDashMessage(
+        error instanceof Error
+          ? `DoorDash 연결 실패: ${error.message}`
+          : "DoorDash 연결에 실패했습니다.",
+      );
+    } finally {
+      setConnectingDoorDash(false);
+    }
+  }
 
   async function saveUberDirectSettings() {
     if (savingUberDirect) return;
