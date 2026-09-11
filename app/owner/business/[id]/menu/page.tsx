@@ -4986,27 +4986,51 @@ export default function OwnerBusinessMenuPage() {
               </p>
             </div>
 
-            <label
-              className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 transition ${
-                enforceBusinessHours
-                  ? "border-emerald-400 bg-emerald-50"
-                  : "border-red-400 bg-red-50"
-              }`}
-              title="체크하면 영업시간에만 주문을 받고, 해제하면 테스트용으로 언제든 주문을 받을 수 있습니다."
-            >
-              <input
-                type="checkbox"
-                checked={enforceBusinessHours}
-                onChange={(event) =>
-                  void updateBusinessHoursRule(event.target.checked)
-                }
-                disabled={savingBusinessHoursRule}
-                className="h-5 w-5 accent-emerald-600 disabled:cursor-wait disabled:opacity-60"
-              />
-              <span className="text-xs font-black text-[#172033]">
-                영업시간에만 주문 받기
-              </span>
-            </label>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 transition ${
+                  enforceBusinessHours
+                    ? "border-emerald-400 bg-emerald-50"
+                    : "border-red-400 bg-red-50"
+                }`}
+                title="체크하면 영업시간에만 주문을 받고, 해제하면 테스트용으로 언제든 주문을 받을 수 있습니다."
+              >
+                <input
+                  type="checkbox"
+                  checked={enforceBusinessHours}
+                  onChange={(event) =>
+                    void updateBusinessHoursRule(event.target.checked)
+                  }
+                  disabled={savingBusinessHoursRule}
+                  className="h-5 w-5 accent-emerald-600 disabled:cursor-wait disabled:opacity-60"
+                />
+                <span className="text-xs font-black text-[#172033]">
+                  영업시간에만 주문 받기
+                </span>
+              </label>
+
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 transition ${
+                  smsEnabled
+                    ? "border-blue-400 bg-blue-50"
+                    : "border-gray-300 bg-gray-50"
+                }`}
+                title="체크하면 주문 상태 업데이트를 SMS로 보낼 수 있도록 설정합니다."
+              >
+                <input
+                  type="checkbox"
+                  checked={smsEnabled}
+                  onChange={(event) =>
+                    void saveSmsEnabled(event.target.checked)
+                  }
+                  disabled={savingSmsEnabled}
+                  className="h-5 w-5 accent-blue-600 disabled:cursor-wait disabled:opacity-60"
+                />
+                <span className="text-xs font-black text-[#172033]">
+                  SMS Order Updates 사용
+                </span>
+              </label>
+            </div>
           </div>
 
           {!enforceBusinessHours ? (
