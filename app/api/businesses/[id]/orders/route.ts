@@ -1229,96 +1229,60 @@ export async function POST(
                     }
                   : {}),
                 fulfillments: [
-                  fulfillmentType === "pickup"
-                    ? {
-                        type: "PICKUP",
-                        state: "PROPOSED",
-                        pickup_details: {
-                          schedule_type: "ASAP",
-                          prep_time_duration: `PT${Math.max(
-                            1,
-                            Number(settings?.pickup_prep_minutes || 20),
-                          )}M`,
-                          recipient: {
-                            display_name: customerName,
-                            phone_number: customerPhone,
-                            ...(customerEmail
-                              ? { email_address: customerEmail }
-                              : {}),
-                          },
-                          note: [
-                            `KTown order #${number} · Requested: ${String(
-                              body?.requestedTime || "asap",
-                            ).slice(0, 80)}`,
-                            orderNote
-                              ? `Order notes: ${orderNote}`
-                              : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
-                            .slice(0, 500),
-                        },
-                      }
-                    : {
-                        type: "DELIVERY",
-                        state: "PROPOSED",
-                        delivery_details: {
-                          schedule_type: "ASAP",
-                          prep_time_duration: `PT${Math.max(
-                            1,
-                            Number(settings?.delivery_prep_minutes || 45),
-                          )}M`,
-                          recipient: {
-                            display_name: customerName,
-                            phone_number: customerPhone,
-                            ...(customerEmail
-                              ? { email_address: customerEmail }
-                              : {}),
-                            address: {
-                              address_line_1: String(
-                                address?.address1 || "",
-                              ).slice(0, 500),
-                              ...(address?.address2
-                                ? {
-                                    address_line_2: String(
-                                      address.address2,
-                                    ).slice(0, 500),
-                                  }
-                                : {}),
-                              locality: String(
-                                address?.city || "",
-                              ).slice(0, 255),
-                              administrative_district_level_1: String(
-                                address?.state || "",
-                              )
-                                .trim()
-                                .toUpperCase()
-                                .slice(0, 3),
-                              postal_code: String(
-                                address?.postalCode || "",
-                              ).slice(0, 32),
-                              country: "US",
-                            },
-                          },
-                          ...(
-                            address?.note || orderNote
-                              ? {
-                                  dropoff_notes: [
-                                    address?.note
-                                      ? String(address.note).trim()
-                                      : "",
-                                    orderNote
-                                      ? `Order notes: ${orderNote}`
-                                      : "",
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" | ")
-                                    .slice(0, 550),
-                                }
-                              : {}
-                          ),
-                        },
+                  {
+                    // Square POS/printer receives every KTown online order as PICKUP
+                    // so Pickup and Delivery orders use the same online-order print flow.
+                    // KTown still keeps the real fulfillment_type in restaurant_orders,
+                    // and Uber Direct still handles actual delivery separately.
+                    type: "PICKUP",
+                    state: "PROPOSED",
+                    pickup_details: {
+                      schedule_type: "ASAP",
+                      prep_time_duration: `PT${Math.max(
+                        1,
+                        Number(
+                          fulfillmentType === "delivery"
+                            ? settings?.delivery_prep_minutes || 45
+                            : settings?.pickup_prep_minutes || 20,
+                        ),
+                      )}M`,
+                      recipient: {
+                        display_name: customerName,
+                        phone_number: customerPhone,
+                        ...(customerEmail
+                          ? { email_address: customerEmail }
+                          : {}),
                       },
+                      note: [
+                        fulfillmentType === "delivery"
+                          ? "DELIVERY ORDER"
+                          : "PICKUP ORDER",
+                        `KTown order #${number} · Requested: ${String(
+                          body?.requestedTime || "asap",
+                        ).slice(0, 80)}`,
+                        fulfillmentType === "delivery"
+                          ? `Deliver to: ${[
+                              address?.address1,
+                              address?.address2,
+                              address?.city,
+                              address?.state,
+                              address?.postalCode,
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}`
+                          : "",
+                        fulfillmentType === "delivery" && address?.note
+                          ? `Delivery notes: ${String(address.note).trim()}`
+                          : "",
+                        orderNote
+                          ? `Order notes: ${orderNote}`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                        .slice(0, 500),
+                    },
+                  },
                 ],
               },
             }),
