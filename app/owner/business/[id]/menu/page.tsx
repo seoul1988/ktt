@@ -4858,8 +4858,7 @@ export default function OwnerBusinessMenuPage() {
         )}
 
         <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-orange-600">
                 Online Order Settings
