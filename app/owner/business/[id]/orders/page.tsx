@@ -46,6 +46,9 @@ function paymentLabel(order: any) {
   if (type === "pay_at_store") return "Pay at Store";
 
   const method = String(order.payment_method || "").toLowerCase();
+  if (method === "online" && String(order.square_payment_id || "").trim()) {
+    return "Card";
+  }
   if (method === "online") return "Online";
   if (method === "card") return "Card";
   if (method === "cash") return "Cash";

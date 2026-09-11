@@ -73,6 +73,15 @@ export async function POST(
 
     const body = await request.json();
     const sourceId = String(body?.sourceId || "").trim();
+    const requestedPaymentMethod = String(body?.paymentMethod || "")
+      .trim()
+      .toLowerCase();
+    const paymentMethodType =
+      requestedPaymentMethod === "apple_pay" ||
+      requestedPaymentMethod === "google_pay" ||
+      requestedPaymentMethod === "card"
+        ? requestedPaymentMethod
+        : "card";
     const verificationToken = String(
       body?.verificationToken || "",
     ).trim();
@@ -274,6 +283,8 @@ export async function POST(
       .from("restaurant_orders")
       .update({
         payment_status: "paid",
+        payment_method: "online",
+        payment_method_type: paymentMethodType,
         square_payment_id: paymentId,
         paid_at: paidAt.toISOString(),
         cancel_token_hash: cancelTokenHash,
