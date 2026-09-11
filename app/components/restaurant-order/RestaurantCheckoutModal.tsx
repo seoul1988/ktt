@@ -38,6 +38,66 @@ type PublicSettings = {
     | "menu_price";
 };
 
+type PromoCodeSettings = {
+  enabled: boolean;
+  code: string;
+  discountPercent: number;
+  minimumOrder: number;
+  startDate: string;
+  endDate: string;
+};
+
+function normalizePromoCodeSettings(value: unknown): PromoCodeSettings | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const row = value as Record<string, unknown>;
+  const code = String(row.code || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "")
+    .slice(0, 40);
+
+  const settings: PromoCodeSettings = {
+    enabled: row.enabled === true,
+    code,
+    discountPercent: Math.max(
+      0,
+      Math.min(100, Number(row.discountPercent) || 0),
+    ),
+    minimumOrder: Math.max(0, Number(row.minimumOrder) || 0),
+    startDate: String(row.startDate || "").slice(0, 10),
+    endDate: String(row.endDate || "").slice(0, 10),
+  };
+
+  return settings.enabled && settings.code && settings.discountPercent > 0
+    ? settings
+    : null;
+}
+
+function raleighDateKey() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const value = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "";
+
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function isPromoDateActive(settings: PromoCodeSettings | null) {
+  if (!settings?.enabled) return false;
+
+  const today = raleighDateKey();
+  if (settings.startDate && today < settings.startDate) return false;
+  if (settings.endDate && today > settings.endDate) return false;
+
+  return true;
+}
+
 type DeliveryFeeShareRule = {
   maxSubtotal: number | null;
   customerPercent: number;
@@ -189,6 +249,13 @@ export default function RestaurantCheckoutModal({
   const [squareAppleReady, setSquareAppleReady] = useState(false);
   const [squarePaying, setSquarePaying] = useState(false);
 
+  // Promo Code
+  const [promoCodeSettings, setPromoCodeSettings] =
+    useState<PromoCodeSettings | null>(null);
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromoCode, setAppliedPromoCode] = useState("");
+  const [promoCodeMessage, setPromoCodeMessage] = useState("");
+
   // Uber Direct delivery quote
   const [deliveryQuoteId, setDeliveryQuoteId] = useState("");
   const [deliveryFeeCents, setDeliveryFeeCents] = useState(0);
@@ -244,7 +311,32 @@ export default function RestaurantCheckoutModal({
   );
 
   const subtotal = menuSubtotal + promotionItemsTotal;
-  const tax = subtotal * Math.max(0, Number(settings?.taxRate || 0));
+
+  const promoCodeVisible = isPromoDateActive(promoCodeSettings);
+
+  const promoCodeApplied =
+    promoCodeVisible &&
+    Boolean(appliedPromoCode) &&
+    appliedPromoCode === promoCodeSettings?.code &&
+    subtotal >= Math.max(0, Number(promoCodeSettings?.minimumOrder || 0));
+
+  const promoDiscount = promoCodeApplied
+    ? Math.round(
+        subtotal *
+          (Math.max(
+            0,
+            Math.min(100, Number(promoCodeSettings?.discountPercent || 0)),
+          ) /
+            100) *
+          100,
+      ) / 100
+    : 0;
+
+  const discountedSubtotal = Math.max(0, subtotal - promoDiscount);
+  const tax =
+    discountedSubtotal * Math.max(0, Number(settings?.taxRate || 0));
+
+  // Keep the existing tip behavior unchanged.
   const tip = subtotal * (tipPercent / 100);
   const useDeliveryMenuPrice =
     fulfillmentType === "delivery" &&
@@ -253,7 +345,7 @@ export default function RestaurantCheckoutModal({
     fulfillmentType === "delivery" && !useDeliveryMenuPrice
       ? deliveryFeeCents / 100
       : 0;
-  const estimatedTotal = subtotal + tax + tip + deliveryFee;
+  const estimatedTotal = discountedSubtotal + tax + tip + deliveryFee;
 
   useEffect(() => {
     try {
@@ -282,6 +374,99 @@ export default function RestaurantCheckoutModal({
     })();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/businesses/${businessId}/promotions`,
+          { cache: "no-store" },
+        );
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error || "프로모션 코드 설정을 불러오지 못했습니다.",
+          );
+        }
+
+        if (cancelled) return;
+
+        const promo = normalizePromoCodeSettings(payload?.promoCode);
+        setPromoCodeSettings(promo);
+
+        if (!isPromoDateActive(promo)) {
+          setPromoCodeInput("");
+          setAppliedPromoCode("");
+          setPromoCodeMessage("");
+        }
+      } catch (promoError) {
+        console.error("PROMO CODE LOAD ERROR", promoError);
+
+        if (!cancelled) {
+          setPromoCodeSettings(null);
+          setPromoCodeInput("");
+          setAppliedPromoCode("");
+          setPromoCodeMessage("");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  useEffect(() => {
+    if (
+      appliedPromoCode &&
+      promoCodeSettings &&
+      subtotal < Math.max(0, Number(promoCodeSettings.minimumOrder || 0))
+    ) {
+      setAppliedPromoCode("");
+      setPromoCodeMessage(
+        `Minimum order ${money(promoCodeSettings.minimumOrder)} required.`,
+      );
+    }
+  }, [subtotal, appliedPromoCode, promoCodeSettings]);
+
+  function applyPromoCode() {
+    if (!promoCodeVisible || !promoCodeSettings) return;
+
+    const entered = promoCodeInput
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "")
+      .slice(0, 40);
+
+    if (!entered) {
+      setAppliedPromoCode("");
+      setPromoCodeMessage("Enter a promo code.");
+      return;
+    }
+
+    if (entered !== promoCodeSettings.code) {
+      setAppliedPromoCode("");
+      setPromoCodeMessage("Promo code is not valid.");
+      return;
+    }
+
+    if (subtotal < promoCodeSettings.minimumOrder) {
+      setAppliedPromoCode("");
+      setPromoCodeMessage(
+        `Minimum order ${money(promoCodeSettings.minimumOrder)} required.`,
+      );
+      return;
+    }
+
+    setPromoCodeInput(entered);
+    setAppliedPromoCode(entered);
+    setPromoCodeMessage(
+      `✓ ${promoCodeSettings.discountPercent}% discount applied.`,
+    );
+  }
 
   useEffect(() => {
     if (!squarePrepared) return;
@@ -766,6 +951,7 @@ export default function RestaurantCheckoutModal({
             : pickupTime,
           paymentMethod,
           tipPercent,
+          promoCode: promoCodeApplied ? appliedPromoCode : null,
           deliveryQuoteId:
             fulfillmentType === "delivery" && deliveryQuoteId
               ? deliveryQuoteId
@@ -1200,6 +1386,72 @@ export default function RestaurantCheckoutModal({
               ) : null}
             </section>
 
+            {promoCodeVisible && promoCodeSettings ? (
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-black">Promo Code</h3>
+                    <p className="mt-1 text-xs text-gray-600">
+                      {promoCodeSettings.minimumOrder > 0
+                        ? `${promoCodeSettings.discountPercent}% off orders of ${money(
+                            promoCodeSettings.minimumOrder,
+                          )} or more`
+                        : `${promoCodeSettings.discountPercent}% off your order`}
+                    </p>
+                  </div>
+
+                  {promoCodeApplied ? (
+                    <span className="rounded-full bg-emerald-700 px-2.5 py-1 text-[10px] font-black text-white">
+                      APPLIED
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={promoCodeInput}
+                    onChange={(event) => {
+                      setPromoCodeInput(
+                        event.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9_-]/g, "")
+                          .slice(0, 40),
+                      );
+                      if (appliedPromoCode) setAppliedPromoCode("");
+                      setPromoCodeMessage("");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        applyPromoCode();
+                      }
+                    }}
+                    placeholder="Enter promo code"
+                    autoCapitalize="characters"
+                    className="min-w-0 flex-1 rounded-xl border border-emerald-200 bg-white px-3 py-3 text-sm font-black uppercase outline-none focus:border-emerald-500"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={applyPromoCode}
+                    className="shrink-0 rounded-xl bg-emerald-700 px-4 py-3 text-xs font-black text-white hover:bg-emerald-800"
+                  >
+                    APPLY
+                  </button>
+                </div>
+
+                {promoCodeMessage ? (
+                  <p
+                    className={`mt-2 text-xs font-black ${
+                      promoCodeApplied ? "text-emerald-700" : "text-red-600"
+                    }`}
+                  >
+                    {promoCodeMessage}
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Tip</h3>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1295,6 +1547,14 @@ export default function RestaurantCheckoutModal({
 
             <section className="rounded-2xl bg-gray-50 p-4 text-sm">
               <div className="flex items-center justify-between gap-3"><span className="min-w-0">Subtotal</span><b className="shrink-0 whitespace-nowrap">{money(subtotal)}</b></div>
+              {promoCodeApplied && promoDiscount > 0 ? (
+                <div className="mt-2 flex items-center justify-between gap-3 text-emerald-700">
+                  <span className="min-w-0 font-black">
+                    Promo {appliedPromoCode} ({promoCodeSettings?.discountPercent}%)
+                  </span>
+                  <b className="shrink-0 whitespace-nowrap">-{money(promoDiscount)}</b>
+                </div>
+              ) : null}
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Estimated tax</span><b className="shrink-0 whitespace-nowrap">{money(tax)}</b></div>
               <div className="mt-2 flex items-center justify-between gap-3"><span className="min-w-0">Tip</span><b className="shrink-0 whitespace-nowrap">{money(tip)}</b></div>
               {fulfillmentType === "delivery" && !useDeliveryMenuPrice ? (

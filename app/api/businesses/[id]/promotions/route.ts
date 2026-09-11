@@ -29,6 +29,38 @@ function safeAssignments(value: unknown) {
     : {};
 }
 
+function publicPromoCode(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const row = value as Record<string, unknown>;
+  const enabled = row.enabled === true;
+  const code = String(row.code || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "")
+    .slice(0, 40);
+  const discountPercent = Math.max(
+    0,
+    Math.min(100, Number(row.discountPercent) || 0),
+  );
+  const minimumOrder = Math.max(0, Number(row.minimumOrder) || 0);
+  const startDate = String(row.startDate || "").slice(0, 10);
+  const endDate = String(row.endDate || "").slice(0, 10);
+
+  if (!enabled || !code || discountPercent <= 0) return null;
+
+  return {
+    enabled,
+    code,
+    discountPercent,
+    minimumOrder,
+    startDate,
+    endDate,
+  };
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -63,9 +95,11 @@ export async function GET(
     );
 
     const rawAssignments = safeAssignments(data?.assignments);
+    const promoCode = publicPromoCode(rawAssignments["__promo_code__"]);
     const assignments: Record<string, any> = {};
 
     for (const [itemId, value] of Object.entries(rawAssignments)) {
+      if (itemId === "__promo_code__") continue;
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
 
       const filtered: Record<string, any> = {};
@@ -86,6 +120,7 @@ export async function GET(
       {
         promotions,
         assignments,
+        promoCode,
         updatedAt: data?.updated_at || null,
       },
       {

@@ -403,6 +403,49 @@ async function readApiJson(response: Response) {
   }
 }
 
+type PromoCodeSettings = {
+  enabled: boolean;
+  code: string;
+  discountPercent: number;
+  minimumOrder: number;
+  startDate: string;
+  endDate: string;
+};
+
+const DEFAULT_PROMO_CODE_SETTINGS: PromoCodeSettings = {
+  enabled: false,
+  code: "",
+  discountPercent: 10,
+  minimumOrder: 0,
+  startDate: "",
+  endDate: "",
+};
+
+const PROMO_CODE_ASSIGNMENT_KEY = "__promo_code__";
+
+function normalizePromoCodeSettings(value: unknown): PromoCodeSettings {
+  const row =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return {
+    enabled: row.enabled === true,
+    code: String(row.code || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "")
+      .slice(0, 40),
+    discountPercent: Math.max(
+      0,
+      Math.min(100, Number(row.discountPercent) || 0),
+    ),
+    minimumOrder: Math.max(0, Number(row.minimumOrder) || 0),
+    startDate: String(row.startDate || "").slice(0, 10),
+    endDate: String(row.endDate || "").slice(0, 10),
+  };
+}
+
 type PromotionType =
   | "buy_x_get_y"
   | "spend_get_item"
@@ -620,6 +663,13 @@ export default function OwnerBusinessMenuPage() {
   const [promotionMessage, setPromotionMessage] = useState("");
   const [promotionAssignments, setPromotionAssignments] = useState<PromotionAssignments>({});
   const [expandedPromotionItemIds, setExpandedPromotionItemIds] = useState<Set<number>>(new Set());
+
+  // Promo Code settings are stored inside the existing promotion-state JSON
+  // under a reserved key so no other menu/order settings are changed here.
+  const [promoCodeSettings, setPromoCodeSettings] =
+    useState<PromoCodeSettings>(DEFAULT_PROMO_CODE_SETTINGS);
+  const [savingPromoCodeSettings, setSavingPromoCodeSettings] = useState(false);
+  const [promoCodeMessage, setPromoCodeMessage] = useState("");
 
   useEffect(() => { itemsRef.current = items; }, [items]);
   useEffect(() => { categoriesRef.current = categories; }, [categories]);
@@ -4515,6 +4565,11 @@ export default function OwnerBusinessMenuPage() {
         if (data?.initialized === true) {
           setPromotions(normalizePromotions(data?.promotions));
           setPromotionAssignments(normalizeAssignments(data?.assignments));
+          setPromoCodeSettings(
+            normalizePromoCodeSettings(
+              data?.assignments?.[PROMO_CODE_ASSIGNMENT_KEY],
+            ),
+          );
 
           // DB가 기준이 된 뒤에는 예전 브라우저 저장본을 제거합니다.
           try {
@@ -4579,6 +4634,11 @@ export default function OwnerBusinessMenuPage() {
 
           setPromotions(normalizePromotions(migrated?.promotions));
           setPromotionAssignments(normalizeAssignments(migrated?.assignments));
+          setPromoCodeSettings(
+            normalizePromoCodeSettings(
+              migrated?.assignments?.[PROMO_CODE_ASSIGNMENT_KEY],
+            ),
+          );
 
           try {
             window.localStorage.removeItem(`ktown-menu-promotions:${businessId}`);
@@ -4593,6 +4653,7 @@ export default function OwnerBusinessMenuPage() {
 
         setPromotions([]);
         setPromotionAssignments({});
+        setPromoCodeSettings(DEFAULT_PROMO_CODE_SETTINGS);
       } catch (error) {
         if (cancelled) return;
 
@@ -4812,7 +4873,12 @@ export default function OwnerBusinessMenuPage() {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ assignments: next }),
+            body: JSON.stringify({
+              assignments: {
+                ...next,
+                [PROMO_CODE_ASSIGNMENT_KEY]: promoCodeSettings,
+              },
+            }),
           },
         );
 
@@ -4829,6 +4895,102 @@ export default function OwnerBusinessMenuPage() {
         );
       }
     })();
+  }
+
+  async function savePromoCodeSettings() {
+    if (savingPromoCodeSettings) return;
+
+    const normalized: PromoCodeSettings = {
+      enabled: promoCodeSettings.enabled,
+      code: promoCodeSettings.code
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_-]/g, "")
+        .slice(0, 40),
+      discountPercent: Math.max(
+        0,
+        Math.min(100, Number(promoCodeSettings.discountPercent) || 0),
+      ),
+      minimumOrder: Math.max(
+        0,
+        Number(promoCodeSettings.minimumOrder) || 0,
+      ),
+      startDate: String(promoCodeSettings.startDate || "").slice(0, 10),
+      endDate: String(promoCodeSettings.endDate || "").slice(0, 10),
+    };
+
+    if (normalized.enabled && !normalized.code) {
+      setPromoCodeMessage("프로모션 코드를 입력하세요.");
+      return;
+    }
+
+    if (
+      normalized.enabled &&
+      (normalized.discountPercent <= 0 ||
+        normalized.discountPercent > 100)
+    ) {
+      setPromoCodeMessage("할인율은 0보다 크고 100% 이하여야 합니다.");
+      return;
+    }
+
+    if (
+      normalized.startDate &&
+      normalized.endDate &&
+      normalized.endDate < normalized.startDate
+    ) {
+      setPromoCodeMessage("종료일은 시작일보다 빠를 수 없습니다.");
+      return;
+    }
+
+    setSavingPromoCodeSettings(true);
+    setPromoCodeMessage("프로모션 코드 설정 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/promotions`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            assignments: {
+              ...promotionAssignments,
+              [PROMO_CODE_ASSIGNMENT_KEY]: normalized,
+            },
+          }),
+        },
+      );
+
+      const data = await readApiJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "프로모션 코드 설정 저장에 실패했습니다.",
+        );
+      }
+
+      const saved = normalizePromoCodeSettings(
+        data?.assignments?.[PROMO_CODE_ASSIGNMENT_KEY] ?? normalized,
+      );
+
+      setPromoCodeSettings(saved);
+      setPromoCodeMessage(
+        saved.enabled
+          ? `✓ ${saved.code} · ${saved.discountPercent}% 할인 사용`
+          : "✓ 프로모션 코드 사용 안 함",
+      );
+    } catch (error) {
+      setPromoCodeMessage(
+        error instanceof Error
+          ? `프로모션 코드 저장 실패: ${error.message}`
+          : "프로모션 코드 설정 저장에 실패했습니다.",
+      );
+    } finally {
+      setSavingPromoCodeSettings(false);
+    }
   }
 
   function defaultPromotionRole(promotion: MenuPromotion): PromotionMenuRole {
@@ -6443,6 +6605,205 @@ export default function OwnerBusinessMenuPage() {
 
           {promotionManagerOpen ? (
             <div className="mt-4 border-t border-orange-100 pt-4">
+              <div className="mb-5 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-emerald-700">
+                      Promo Code
+                    </p>
+                    <h3 className="mt-1 text-base font-black text-[#172033]">
+                      프로모션 코드
+                    </h3>
+                    <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                      체크하면 고객이 Checkout에서 코드를 입력해 할인받을 수 있습니다.
+                    </p>
+                  </div>
+
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 ${
+                      promoCodeSettings.enabled
+                        ? "border-emerald-500 bg-white"
+                        : "border-gray-300 bg-gray-50"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={promoCodeSettings.enabled}
+                      onChange={(event) =>
+                        setPromoCodeSettings((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                      disabled={savingPromoCodeSettings}
+                      className="h-5 w-5 accent-emerald-600"
+                    />
+                    <span className="text-xs font-black text-[#172033]">
+                      {promoCodeSettings.enabled
+                        ? "프로모션 코드 사용"
+                        : "프로모션 코드 사용 안 함"}
+                    </span>
+                  </label>
+                </div>
+
+                {promoCodeSettings.enabled ? (
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-black text-gray-700">
+                        코드
+                      </span>
+                      <input
+                        value={promoCodeSettings.code}
+                        onChange={(event) =>
+                          setPromoCodeSettings((current) => ({
+                            ...current,
+                            code: event.target.value
+                              .toUpperCase()
+                              .replace(/[^A-Z0-9_-]/g, "")
+                              .slice(0, 40),
+                          }))
+                        }
+                        placeholder="예: BUNS10"
+                        autoCapitalize="characters"
+                        className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-black uppercase outline-none focus:border-emerald-500"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-black text-gray-700">
+                        할인율 (%)
+                      </span>
+                      <div className="flex overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="100"
+                          step="0.01"
+                          value={promoCodeSettings.discountPercent}
+                          onChange={(event) =>
+                            setPromoCodeSettings((current) => ({
+                              ...current,
+                              discountPercent: Math.max(
+                                0,
+                                Math.min(100, Number(event.target.value) || 0),
+                              ),
+                            }))
+                          }
+                          className="min-w-0 flex-1 px-3 py-2.5 text-right text-sm font-black outline-none"
+                        />
+                        <span className="flex items-center px-3 text-sm font-black text-emerald-800">
+                          %
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-black text-gray-700">
+                        최소 주문금액
+                      </span>
+                      <div className="flex overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                        <span className="flex items-center pl-3 text-sm font-black text-gray-600">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={promoCodeSettings.minimumOrder}
+                          onChange={(event) =>
+                            setPromoCodeSettings((current) => ({
+                              ...current,
+                              minimumOrder: Math.max(
+                                0,
+                                Number(event.target.value) || 0,
+                              ),
+                            }))
+                          }
+                          className="min-w-0 flex-1 px-2 py-2.5 text-right text-sm font-black outline-none"
+                        />
+                      </div>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-black text-gray-700">
+                        시작일
+                      </span>
+                      <input
+                        type="date"
+                        value={promoCodeSettings.startDate}
+                        onChange={(event) =>
+                          setPromoCodeSettings((current) => ({
+                            ...current,
+                            startDate: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-black text-gray-700">
+                        종료일
+                      </span>
+                      <input
+                        type="date"
+                        value={promoCodeSettings.endDate}
+                        onChange={(event) =>
+                          setPromoCodeSettings((current) => ({
+                            ...current,
+                            endDate: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500"
+                      />
+                    </label>
+
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => void savePromoCodeSettings()}
+                        disabled={savingPromoCodeSettings}
+                        className="w-full rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-black text-white hover:bg-emerald-800 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {savingPromoCodeSettings
+                          ? "저장 중..."
+                          : "프로모션 코드 설정 저장"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[11px] font-bold text-gray-600">
+                    현재 고객 Checkout에서 프로모션 코드를 사용하지 않습니다.
+                  </div>
+                )}
+
+                {!promoCodeSettings.enabled ? (
+                  <button
+                    type="button"
+                    onClick={() => void savePromoCodeSettings()}
+                    disabled={savingPromoCodeSettings}
+                    className="mt-3 w-full rounded-xl bg-gray-700 px-4 py-2.5 text-sm font-black text-white hover:bg-gray-800 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {savingPromoCodeSettings ? "저장 중..." : "사용 안 함 저장"}
+                  </button>
+                ) : null}
+
+                {promoCodeMessage ? (
+                  <div
+                    className={`mt-3 rounded-xl px-3 py-2 text-xs font-black ${
+                      promoCodeMessage.includes("실패") ||
+                      promoCodeMessage.includes("입력") ||
+                      promoCodeMessage.includes("빠를") ||
+                      promoCodeMessage.includes("이하여야")
+                        ? "bg-red-50 text-red-700"
+                        : "bg-white text-emerald-800"
+                    }`}
+                  >
+                    {promoCodeMessage}
+                  </div>
+                ) : null}
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-black text-[#172033]">등록된 딜 종류</p>

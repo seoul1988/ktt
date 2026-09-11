@@ -172,6 +172,52 @@ const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: null, customerPercent: 0 },
 ];
 
+function easternDateKey() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const value = (type: string) =>
+    parts.find((part) => part.type === type)?.value || "";
+
+  return `${value("year")}-${value("month")}-${value("day")}`;
+}
+
+function normalizePromoCode(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const row = value as Record<string, unknown>;
+  const enabled = row.enabled === true;
+  const code = String(row.code || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "")
+    .slice(0, 40);
+  const discountPercent = Math.max(
+    0,
+    Math.min(100, Number(row.discountPercent) || 0),
+  );
+  const minimumOrder = Math.max(0, Number(row.minimumOrder) || 0);
+  const startDate = String(row.startDate || "").slice(0, 10);
+  const endDate = String(row.endDate || "").slice(0, 10);
+
+  if (!enabled || !code || discountPercent <= 0) return null;
+
+  return {
+    enabled,
+    code,
+    discountPercent,
+    minimumOrder,
+    startDate,
+    endDate,
+  };
+}
+
 function deliveryCustomerPercent(
   subtotal: number,
   value: unknown,
@@ -932,13 +978,74 @@ export async function POST(
         0,
       );
 
+    const requestedPromoCode = String(body?.promoCode || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "")
+      .slice(0, 40);
+
+    let appliedPromoCode = "";
+    let promoDiscountPercent = 0;
+    let promoDiscount = 0;
+
+    if (requestedPromoCode) {
+      const { data: promotionState, error: promotionStateError } = await db
+        .from("restaurant_promotion_state")
+        .select("assignments")
+        .eq("business_id", businessId)
+        .maybeSingle();
+
+      if (promotionStateError) {
+        throw promotionStateError;
+      }
+
+      const assignments =
+        promotionState?.assignments &&
+        typeof promotionState.assignments === "object" &&
+        !Array.isArray(promotionState.assignments)
+          ? (promotionState.assignments as Record<string, unknown>)
+          : {};
+
+      const promo = normalizePromoCode(assignments["__promo_code__"]);
+
+      if (!promo || requestedPromoCode !== promo.code) {
+        throw new Error("Promo code is not valid.");
+      }
+
+      const today = easternDateKey();
+
+      if (
+        (promo.startDate && today < promo.startDate) ||
+        (promo.endDate && today > promo.endDate)
+      ) {
+        throw new Error("Promo code is not active today.");
+      }
+
+      if (subtotal < promo.minimumOrder) {
+        throw new Error(
+          `Minimum order $${promo.minimumOrder.toFixed(2)} required for this promo code.`,
+        );
+      }
+
+      appliedPromoCode = promo.code;
+      promoDiscountPercent = promo.discountPercent;
+      promoDiscount =
+        Math.round(
+          subtotal *
+            (promoDiscountPercent / 100) *
+            100,
+        ) / 100;
+    }
+
+    const discountedSubtotal = Math.max(0, subtotal - promoDiscount);
+
     const taxRate = Math.max(
       0,
       Number(settings?.tax_rate || 0),
     );
 
     const tax =
-      subtotal * taxRate;
+      discountedSubtotal * taxRate;
 
     const squareTaxPercentage =
       (taxRate * 100)
@@ -1012,7 +1119,7 @@ export async function POST(
     }
 
     const total =
-      subtotal + tax + tip + deliveryFee;
+      discountedSubtotal + tax + tip + deliveryFee;
 
     const number =
       orderNumber();
@@ -1185,6 +1292,15 @@ export async function POST(
                             ],
                           }
                         : {}),
+                      ...(promoDiscount > 0
+                        ? {
+                            applied_discounts: [
+                              {
+                                discount_uid: "ktown-promo-code",
+                              },
+                            ],
+                          }
+                        : {}),
                       ...(note
                         ? { note }
                         : {}),
@@ -1215,6 +1331,19 @@ export async function POST(
                       ]
                     : []),
                 ],
+                ...(promoDiscount > 0
+                  ? {
+                      discounts: [
+                        {
+                          uid: "ktown-promo-code",
+                          name: `Promo ${appliedPromoCode}`,
+                          type: "FIXED_PERCENTAGE",
+                          percentage: String(promoDiscountPercent),
+                          scope: "LINE_ITEM",
+                        },
+                      ],
+                    }
+                  : {}),
                 ...(tax > 0 && squareTaxPercentage
                   ? {
                       taxes: [
@@ -1273,6 +1402,9 @@ export async function POST(
                           : "",
                         fulfillmentType === "delivery" && address?.note
                           ? `Delivery notes: ${String(address.note).trim()}`
+                          : "",
+                        appliedPromoCode
+                          ? `Promo ${appliedPromoCode}: ${promoDiscountPercent}% off (-$${promoDiscount.toFixed(2)})`
                           : "",
                         orderNote
                           ? `Order notes: ${orderNote}`
