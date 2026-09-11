@@ -2653,7 +2653,7 @@ export default function OwnerBusinessMenuPage() {
     try {
       if (changedItemIds.length > 0) {
         const progressText =
-          `공용 옵션 저장 중... (${template.options.length}개 / 적용 메뉴 ${changedItemIds.length}개 · 한 번에 저장)`;
+          `옵션 저장 중... (${template.options.length}개 / 적용 메뉴 ${changedItemIds.length}개 · 한 번에 저장)`;
         setMessage(progressText);
         setOptionTemplateSaveMessage(progressText);
 
@@ -2762,8 +2762,8 @@ export default function OwnerBusinessMenuPage() {
         changedItemIds.length > 0
           ? `✓ "${template.name}" ${template.options.length}개 저장 완료 / 적용 메뉴 ${changedItemIds.length}개 DB 동기화 완료`
           : wasEdit
-            ? `✓ "${template.name}" 공용 옵션을 수정했습니다. 현재 이 옵션을 사용하는 메뉴는 없습니다.`
-            : `✓ "${template.name}" 공용 옵션을 등록했습니다.`;
+            ? `✓ "${template.name}" 옵션을 수정했습니다. 현재 이 옵션을 사용하는 메뉴는 없습니다.`
+            : `✓ "${template.name}" 옵션을 등록했습니다.`;
 
       setMessage(successText);
       setOptionTemplateSaveMessage(successText);
@@ -2783,7 +2783,7 @@ export default function OwnerBusinessMenuPage() {
           : String(error || "");
 
       const failureText =
-        `공용 옵션 메뉴 DB 동기화 실패${detail ? `: ${detail}` : ""}`;
+        `옵션 메뉴 DB 동기화 실패${detail ? `: ${detail}` : ""}`;
 
       setMessage(failureText);
       setOptionTemplateSaveMessage(failureText);
@@ -2808,7 +2808,7 @@ export default function OwnerBusinessMenuPage() {
   }
 
   function deleteOptionTemplate(templateId: string) {
-    if (!window.confirm("이 공용 옵션 그룹을 삭제할까요?")) return;
+    if (!window.confirm("이 옵션 그룹을 삭제할까요?")) return;
 
     persistOptionTemplates(
       optionTemplates.filter((template) => template.id !== templateId),
@@ -2818,7 +2818,7 @@ export default function OwnerBusinessMenuPage() {
       resetOptionTemplateForm();
     }
 
-    setMessage("✓ 공용 옵션 그룹을 삭제했습니다.");
+    setMessage("✓ 옵션 그룹을 삭제했습니다.");
   }
 
   function applyOptionTemplateToItem(itemId: number) {
@@ -2828,7 +2828,7 @@ export default function OwnerBusinessMenuPage() {
     );
 
     if (!template) {
-      setMessage("불러올 공용 옵션을 선택하세요.");
+      setMessage("불러올 옵션을 선택하세요.");
       return;
     }
 
@@ -2855,7 +2855,7 @@ export default function OwnerBusinessMenuPage() {
     });
 
     setMessage(
-      `✓ "${template.name}" 공용 옵션을 메뉴에 추가했습니다. 아래 전체 저장을 눌러 DB에 반영하세요.`,
+      `✓ "${template.name}" 옵션을 메뉴에 추가했습니다. 아래 전체 저장을 눌러 DB에 반영하세요.`,
     );
   }
 
@@ -2943,7 +2943,7 @@ export default function OwnerBusinessMenuPage() {
     };
 
     persistOptionTemplates([...optionTemplates, template]);
-    setMessage(`✓ "${baseName}" 옵션을 공용 옵션에 저장했습니다.`);
+    setMessage(`✓ "${baseName}" 옵션을 옵션 라이브러리에 저장했습니다.`);
   }
 
   async function getAccessToken() {
@@ -6198,8 +6198,8 @@ export default function OwnerBusinessMenuPage() {
                     {savingOptionTemplate
                       ? "저장 중..."
                       : editingTemplateId
-                        ? "공용 옵션 수정 저장"
-                        : "공용 옵션 등록"}
+                        ? "옵션 수정 저장"
+                        : "옵션 등록"}
                   </button>
                 </div>
 
@@ -6221,7 +6221,7 @@ export default function OwnerBusinessMenuPage() {
 
               {optionTemplates.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-center text-xs font-bold text-gray-500">
-                  등록된 공용 옵션이 없습니다.
+                  등록된 옵션이 없습니다.
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -7957,7 +7957,7 @@ export default function OwnerBusinessMenuPage() {
                       <div className="mt-3 space-y-3 rounded-2xl border border-[#E8DED1] bg-[#FBF8F4] p-3 sm:p-4">
                         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
                           <p className="text-xs font-black text-blue-900">
-                            공용 옵션에서 불러오기
+                            옵션에서 불러오기
                           </p>
 
                           <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -7971,7 +7971,7 @@ export default function OwnerBusinessMenuPage() {
                               }
                               className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black outline-none"
                             >
-                              <option value="">공용 옵션 선택</option>
+                              <option value="">옵션 선택</option>
                               {optionTemplates.map((template) => (
                                 <option key={template.id} value={template.id}>
                                   {template.name}
@@ -8073,7 +8073,7 @@ export default function OwnerBusinessMenuPage() {
                                       }
                                       className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
                                     >
-                                      공용 옵션 저장
+                                      옵션 저장
                                     </button>
 
                                     <button
