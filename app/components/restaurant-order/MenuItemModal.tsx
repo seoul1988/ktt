@@ -421,32 +421,38 @@ export default function MenuItemModal({
    * 2) Combo It!
    * 3) 나머지 OPTION 그룹
    */
-  const displayGroups = useMemo(
-    () =>
-      groups
-        .map((group, originalIndex) => ({
-          group,
-          originalIndex,
-          isRequired: getGroupRules(group).minimum > 0,
-          isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
-        }))
-        .sort((a, b) => {
-          const rank = (row: {
-            isRequired: boolean;
-            isComboIt: boolean;
-          }) => {
-            if (row.isRequired) return 0;
-            if (row.isComboIt) return 1;
-            return 2;
-          };
+  const displayGroups = useMemo(() => {
+    let comboItSeen = false;
 
-          const rankDifference = rank(a) - rank(b);
-          return rankDifference !== 0
-            ? rankDifference
-            : a.originalIndex - b.originalIndex;
-        }),
-    [groups],
-  );
+    return groups
+      .map((group, originalIndex) => ({
+        group,
+        originalIndex,
+        isRequired: getGroupRules(group).minimum > 0,
+        isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
+      }))
+      .filter((row) => {
+        if (!row.isComboIt) return true;
+        if (comboItSeen) return false;
+        comboItSeen = true;
+        return true;
+      })
+      .sort((a, b) => {
+        const rank = (row: {
+          isRequired: boolean;
+          isComboIt: boolean;
+        }) => {
+          if (row.isRequired) return 0;
+          if (row.isComboIt) return 1;
+          return 2;
+        };
+
+        const rankDifference = rank(a) - rank(b);
+        return rankDifference !== 0
+          ? rankDifference
+          : a.originalIndex - b.originalIndex;
+      });
+  }, [groups]);
 
   return createPortal(
     <>
