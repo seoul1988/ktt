@@ -120,7 +120,8 @@ type DeliveryFeeShareRule = {
 type DeliveryFeePolicyMode =
   | "customer_100"
   | "order_amount"
-  | "restaurant_100";
+  | "restaurant_100"
+  | "menu_price";
 
 const DEFAULT_DELIVERY_FEE_SHARE_RULES: DeliveryFeeShareRule[] = [
   { maxSubtotal: 19.99, customerPercent: 100 },
@@ -517,6 +518,9 @@ export default function OwnerBusinessMenuPage() {
   const [pickupModeEnabled, setPickupModeEnabled] = useState(false);
   const [deliveryModeEnabled, setDeliveryModeEnabled] = useState(false);
 
+  const [enforceBusinessHours, setEnforceBusinessHours] = useState(true);
+  const [savingBusinessHoursRule, setSavingBusinessHoursRule] = useState(false);
+
   const [deliveryFeePolicyMode, setDeliveryFeePolicyMode] =
     useState<DeliveryFeePolicyMode>("order_amount");
   const [deliveryFeeShareRules, setDeliveryFeeShareRules] =
@@ -594,9 +598,9 @@ export default function OwnerBusinessMenuPage() {
   );
 
 
-  // STEP 1: Deal / Promotion Library.
-  // 현재 단계에서는 브라우저 localStorage에 저장합니다.
-  // 다음 단계에서 Supabase DB 테이블로 옮기면 다른 기기/직원 계정에서도 동일하게 공유됩니다.
+  // Deal / Promotion Library.
+  // Supabase DB에 저장하여 모든 기기/브라우저에서 동일하게 공유합니다.
+  // 기존 localStorage 데이터는 DB가 비어 있을 때 한 번 자동 이전합니다.
   const [promotionManagerOpen, setPromotionManagerOpen] = useState(false);
   const [promotionEditorOpen, setPromotionEditorOpen] = useState(false);
   const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
@@ -718,10 +722,12 @@ export default function OwnerBusinessMenuPage() {
         setMenuModeEnabled(modes.menu !== false);
         setPickupModeEnabled(modes.pickup === true);
         setDeliveryModeEnabled(modes.delivery === true);
+        setEnforceBusinessHours(data?.enforceBusinessHours !== false);
 
         setDeliveryFeePolicyMode(
           data?.deliveryFeePolicyMode === "customer_100" ||
-          data?.deliveryFeePolicyMode === "restaurant_100"
+          data?.deliveryFeePolicyMode === "restaurant_100" ||
+          data?.deliveryFeePolicyMode === "menu_price"
             ? data.deliveryFeePolicyMode
             : "order_amount",
         );
@@ -1131,6 +1137,80 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
+  async function updateBusinessHoursRule(checked: boolean) {
+    if (savingBusinessHoursRule) return;
+
+    if (!checked) {
+      const confirmed = window.confirm(
+        "⚠️ 영업시간 제한을 해제하면 영업시간 외에도 실제 고객이 주문할 수 있습니다.\n\n테스트가 끝나면 반드시 다시 체크해 주세요.\n\n계속하시겠습니까?",
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    const previous = enforceBusinessHours;
+
+    setEnforceBusinessHours(checked);
+    setSavingBusinessHoursRule(true);
+    setOrderSettingsMessage(
+      checked
+        ? "영업시간 내 주문만 받도록 저장 중..."
+        : "⚠️ 영업시간 제한 해제 저장 중...",
+    );
+
+    try {
+      const token = await getAccessToken();
+
+      const response = await fetch(
+        `/api/owner/business/${businessId}/order-settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            enforceBusinessHours: checked,
+          }),
+        },
+      );
+
+      const data = await readApiJson(response);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            "영업시간 주문 제한 설정 저장에 실패했습니다.",
+        );
+      }
+
+      const saved =
+        typeof data?.enforceBusinessHours === "boolean"
+          ? data.enforceBusinessHours
+          : checked;
+
+      setEnforceBusinessHours(saved);
+
+      setOrderSettingsMessage(
+        saved
+          ? "✓ 영업시간 내에만 주문을 받습니다."
+          : "⚠️ 테스트 모드: 영업시간 외에도 주문을 받습니다.",
+      );
+    } catch (error) {
+      setEnforceBusinessHours(previous);
+
+      setOrderSettingsMessage(
+        error instanceof Error
+          ? `저장 실패: ${error.message}`
+          : "영업시간 주문 제한 설정 저장 실패",
+      );
+    } finally {
+      setSavingBusinessHoursRule(false);
+    }
+  }
+
   async function updateRestaurantOrderMode(
     key: "menu" | "pickup" | "delivery",
     checked: boolean,
@@ -1290,7 +1370,8 @@ export default function OwnerBusinessMenuPage() {
       if (
         data?.deliveryFeePolicyMode === "customer_100" ||
         data?.deliveryFeePolicyMode === "order_amount" ||
-        data?.deliveryFeePolicyMode === "restaurant_100"
+        data?.deliveryFeePolicyMode === "restaurant_100" ||
+        data?.deliveryFeePolicyMode === "menu_price"
       ) {
         setDeliveryFeePolicyMode(data.deliveryFeePolicyMode);
       }
@@ -4158,23 +4239,16 @@ export default function OwnerBusinessMenuPage() {
     }
   }
 
+
   useEffect(() => {
     if (!Number.isInteger(businessId) || businessId <= 0) return;
 
-    try {
-      const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
-      if (!raw) {
-        setPromotions([]);
-        return;
-      }
+    let cancelled = false;
 
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        setPromotions([]);
-        return;
-      }
+    function normalizePromotions(value: unknown): MenuPromotion[] {
+      if (!Array.isArray(value)) return [];
 
-      const normalized: MenuPromotion[] = parsed
+      return value
         .map((row: any, index: number) => {
           const type: PromotionType =
             row?.type === "spend_get_item" ||
@@ -4184,6 +4258,33 @@ export default function OwnerBusinessMenuPage() {
             row?.type === "free_delivery"
               ? row.type
               : "buy_x_get_y";
+
+          const rewardChoices: PromotionRewardChoice[] = Array.isArray(row?.rewardChoices)
+            ? row.rewardChoices
+                .map((choice: any) => ({
+                  name: String(choice?.name || "").trim(),
+                  price: Math.max(0, Number(choice?.price) || 0),
+                  discountPercent: Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      Number(choice?.discountPercent ?? row?.discountValue ?? 100) || 0,
+                    ),
+                  ),
+                }))
+                .filter((choice: PromotionRewardChoice) => choice.name)
+            : [];
+
+          if (rewardChoices.length === 0 && String(row?.getItemName || "").trim()) {
+            rewardChoices.push({
+              name: String(row.getItemName).trim(),
+              price: Math.max(0, Number(row?.getItemPrice) || 0),
+              discountPercent: Math.max(
+                0,
+                Math.min(100, Number(row?.discountValue ?? 100) || 0),
+              ),
+            });
+          }
 
           return {
             id: String(row?.id || `promotion-${index}`),
@@ -4195,28 +4296,11 @@ export default function OwnerBusinessMenuPage() {
             discountValue: Math.max(0, Number(row?.discountValue) || 0),
             getItemName: String(row?.getItemName || ""),
             getItemPrice: Math.max(0, Number(row?.getItemPrice) || 0),
-            rewardChoices: (() => {
-              const choices = Array.isArray(row?.rewardChoices)
-                ? row.rewardChoices
-                    .map((choice: any) => ({
-                      name: String(choice?.name || "").trim(),
-                      price: Math.max(0, Number(choice?.price) || 0),
-                      discountPercent: Math.max(0, Math.min(100, Number(choice?.discountPercent ?? row?.discountValue ?? 100) || 0)),
-                    }))
-                    .filter((choice: PromotionRewardChoice) => choice.name)
-                : [];
-
-              // 이전 버전의 단일 GET Item도 새 다중 선택 목록으로 자동 이전합니다.
-              if (choices.length === 0 && String(row?.getItemName || "").trim()) {
-                choices.push({
-                  name: String(row.getItemName).trim(),
-                  price: Math.max(0, Number(row?.getItemPrice) || 0),
-                  discountPercent: Math.max(0, Math.min(100, Number(row?.discountValue ?? 100) || 0)),
-                });
-              }
-              return choices;
-            })(),
-            rewardSelectCount: Math.max(1, Math.floor(Number(row?.rewardSelectCount) || 1)),
+            rewardChoices,
+            rewardSelectCount: Math.max(
+              1,
+              Math.floor(Number(row?.rewardSelectCount) || 1),
+            ),
             maxPerOrder: Math.max(1, Math.floor(Number(row?.maxPerOrder) || 1)),
             pickup: row?.pickup !== false,
             delivery: row?.delivery !== false,
@@ -4224,44 +4308,38 @@ export default function OwnerBusinessMenuPage() {
           };
         })
         .filter((row: MenuPromotion) => row.id);
-
-      setPromotions(normalized);
-    } catch (error) {
-      console.error("PROMOTION LIBRARY LOAD ERROR", error);
-      setPromotions([]);
     }
-  }, [businessId]);
 
-  useEffect(() => {
-    if (!Number.isInteger(businessId) || businessId <= 0) return;
-
-    try {
-      const raw = window.localStorage.getItem(`ktown-menu-promotion-assignments:${businessId}`);
-      if (!raw) {
-        setPromotionAssignments({});
-        return;
-      }
-
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setPromotionAssignments({});
-        return;
-      }
+    function normalizeAssignments(value: unknown): PromotionAssignments {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 
       const normalized: PromotionAssignments = {};
-      for (const [itemIdKey, assignmentValue] of Object.entries(parsed)) {
+
+      for (const [itemIdKey, assignmentValue] of Object.entries(
+        value as Record<string, unknown>,
+      )) {
         const itemId = Number(itemIdKey);
         if (!Number.isInteger(itemId) || itemId <= 0) continue;
-        if (!assignmentValue || typeof assignmentValue !== "object" || Array.isArray(assignmentValue)) continue;
+        if (
+          !assignmentValue ||
+          typeof assignmentValue !== "object" ||
+          Array.isArray(assignmentValue)
+        ) {
+          continue;
+        }
 
         const itemAssignments: Record<string, PromotionItemAssignment> = {};
-        for (const [promotionId, rawValue] of Object.entries(assignmentValue as Record<string, unknown>)) {
+
+        for (const [promotionId, rawValue] of Object.entries(
+          assignmentValue as Record<string, unknown>,
+        )) {
           if (!promotionId) continue;
 
-          // 이전 버전(localStorage)의 문자열 role도 자동 변환해서 유지합니다.
           if (typeof rawValue === "string") {
             const role: PromotionMenuRole =
-              rawValue === "reward" || rawValue === "both" || rawValue === "eligible"
+              rawValue === "reward" ||
+              rawValue === "both" ||
+              rawValue === "eligible"
                 ? rawValue
                 : "trigger";
             itemAssignments[promotionId] = { role };
@@ -4272,9 +4350,12 @@ export default function OwnerBusinessMenuPage() {
             const row = rawValue as Record<string, unknown>;
             const roleValue = row.role;
             const role: PromotionMenuRole =
-              roleValue === "reward" || roleValue === "both" || roleValue === "eligible"
+              roleValue === "reward" ||
+              roleValue === "both" ||
+              roleValue === "eligible"
                 ? roleValue
                 : "trigger";
+
             const rewardRaw = row.rewardItemId;
             const rewardItemId =
               rewardRaw === "same"
@@ -4282,6 +4363,7 @@ export default function OwnerBusinessMenuPage() {
                 : Number.isInteger(Number(rewardRaw)) && Number(rewardRaw) > 0
                   ? Number(rewardRaw)
                   : undefined;
+
             itemAssignments[promotionId] = { role, rewardItemId };
           }
         }
@@ -4291,11 +4373,126 @@ export default function OwnerBusinessMenuPage() {
         }
       }
 
-      setPromotionAssignments(normalized);
-    } catch (error) {
-      console.error("PROMOTION ASSIGNMENT LOAD ERROR", error);
-      setPromotionAssignments({});
+      return normalized;
     }
+
+    async function loadPromotionState() {
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/promotions`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(data?.error || "딜 설정을 불러오지 못했습니다.");
+        }
+
+        if (cancelled) return;
+
+        if (data?.initialized === true) {
+          setPromotions(normalizePromotions(data?.promotions));
+          setPromotionAssignments(normalizeAssignments(data?.assignments));
+
+          // DB가 기준이 된 뒤에는 예전 브라우저 저장본을 제거합니다.
+          try {
+            window.localStorage.removeItem(`ktown-menu-promotions:${businessId}`);
+            window.localStorage.removeItem(
+              `ktown-menu-promotion-assignments:${businessId}`,
+            );
+          } catch {}
+
+          return;
+        }
+
+        // DB가 아직 비어 있을 때만 이 브라우저의 예전 localStorage를 자동 이전합니다.
+        let legacyPromotions: MenuPromotion[] = [];
+        let legacyAssignments: PromotionAssignments = {};
+
+        try {
+          const promotionRaw = window.localStorage.getItem(
+            `ktown-menu-promotions:${businessId}`,
+          );
+          const assignmentRaw = window.localStorage.getItem(
+            `ktown-menu-promotion-assignments:${businessId}`,
+          );
+
+          legacyPromotions = normalizePromotions(
+            promotionRaw ? JSON.parse(promotionRaw) : [],
+          );
+          legacyAssignments = normalizeAssignments(
+            assignmentRaw ? JSON.parse(assignmentRaw) : {},
+          );
+        } catch (legacyError) {
+          console.error("LEGACY PROMOTION MIGRATION READ ERROR", legacyError);
+        }
+
+        if (
+          legacyPromotions.length > 0 ||
+          Object.keys(legacyAssignments).length > 0
+        ) {
+          const migrateResponse = await fetch(
+            `/api/owner/business/${businessId}/promotions`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                promotions: legacyPromotions,
+                assignments: legacyAssignments,
+              }),
+            },
+          );
+
+          const migrated = await readApiJson(migrateResponse);
+          if (!migrateResponse.ok) {
+            throw new Error(
+              migrated?.error || "기존 딜 데이터를 DB로 이전하지 못했습니다.",
+            );
+          }
+
+          if (cancelled) return;
+
+          setPromotions(normalizePromotions(migrated?.promotions));
+          setPromotionAssignments(normalizeAssignments(migrated?.assignments));
+
+          try {
+            window.localStorage.removeItem(`ktown-menu-promotions:${businessId}`);
+            window.localStorage.removeItem(
+              `ktown-menu-promotion-assignments:${businessId}`,
+            );
+          } catch {}
+
+          setMessage("✓ 이 브라우저의 기존 딜 데이터를 Supabase DB로 이전했습니다.");
+          return;
+        }
+
+        setPromotions([]);
+        setPromotionAssignments({});
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error("PROMOTION DB LOAD ERROR", error);
+        setMessage(
+          error instanceof Error
+            ? `딜 DB 불러오기 실패: ${error.message}`
+            : "딜 DB를 불러오지 못했습니다.",
+        );
+      }
+    }
+
+    void loadPromotionState();
+
+    return () => {
+      cancelled = true;
+    };
   }, [businessId]);
 
   if (loading) {
@@ -4310,12 +4507,37 @@ export default function OwnerBusinessMenuPage() {
 
   function persistPromotions(next: MenuPromotion[]) {
     setPromotions(next);
-    if (typeof window !== "undefined" && Number.isInteger(businessId) && businessId > 0) {
-      window.localStorage.setItem(
-        `ktown-menu-promotions:${businessId}`,
-        JSON.stringify(next),
-      );
-    }
+
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    void (async () => {
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/promotions`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ promotions: next }),
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(data?.error || "딜 저장에 실패했습니다.");
+        }
+      } catch (error) {
+        console.error("PROMOTION DB SAVE ERROR", error);
+        setMessage(
+          error instanceof Error
+            ? `딜 DB 저장 실패: ${error.message}`
+            : "딜 DB 저장에 실패했습니다.",
+        );
+      }
+    })();
   }
 
   function openNewPromotion() {
@@ -4459,12 +4681,37 @@ export default function OwnerBusinessMenuPage() {
 
   function persistPromotionAssignments(next: PromotionAssignments) {
     setPromotionAssignments(next);
-    if (typeof window !== "undefined" && Number.isInteger(businessId) && businessId > 0) {
-      window.localStorage.setItem(
-        `ktown-menu-promotion-assignments:${businessId}`,
-        JSON.stringify(next),
-      );
-    }
+
+    if (!Number.isInteger(businessId) || businessId <= 0) return;
+
+    void (async () => {
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/promotions`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ assignments: next }),
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(data?.error || "메뉴별 딜 연결 저장에 실패했습니다.");
+        }
+      } catch (error) {
+        console.error("PROMOTION ASSIGNMENT DB SAVE ERROR", error);
+        setMessage(
+          error instanceof Error
+            ? `메뉴별 딜 연결 DB 저장 실패: ${error.message}`
+            : "메뉴별 딜 연결 DB 저장에 실패했습니다.",
+        );
+      }
+    })();
   }
 
   function defaultPromotionRole(promotion: MenuPromotion): PromotionMenuRole {
@@ -4612,6 +4859,7 @@ export default function OwnerBusinessMenuPage() {
 
         <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-orange-600">
                 Online Order Settings
@@ -4621,7 +4869,35 @@ export default function OwnerBusinessMenuPage() {
                 메뉴 보기만 할지, 자체 웹사이트에서 PICKUP / DELIVERY 주문을 받을지 선택하세요.
               </p>
             </div>
+
+            <label
+              className={`flex cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 transition ${
+                enforceBusinessHours
+                  ? "border-emerald-400 bg-emerald-50"
+                  : "border-red-400 bg-red-50"
+              }`}
+              title="체크하면 영업시간에만 주문을 받고, 해제하면 테스트용으로 언제든 주문을 받을 수 있습니다."
+            >
+              <input
+                type="checkbox"
+                checked={enforceBusinessHours}
+                onChange={(event) =>
+                  void updateBusinessHoursRule(event.target.checked)
+                }
+                disabled={savingBusinessHoursRule}
+                className="h-5 w-5 accent-emerald-600 disabled:cursor-wait disabled:opacity-60"
+              />
+              <span className="text-xs font-black text-[#172033]">
+                영업시간에만 주문 받기
+              </span>
+            </label>
           </div>
+
+          {!enforceBusinessHours ? (
+            <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-3 py-2 text-xs font-black text-red-800">
+              ⚠️ 테스트 모드 활성화: 현재 영업시간 외에도 고객 주문이 가능합니다. 테스트 후 반드시 다시 체크하세요.
+            </div>
+          ) : null}
 
           {orderSettingsMessage ? (
             <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-900">
@@ -4695,11 +4971,11 @@ export default function OwnerBusinessMenuPage() {
                   배달료 부담 방식
                 </h3>
                 <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
-                  아래 3가지 중 하나만 선택하세요. 주문금액별 분할을 선택하면 세부 설정이 열립니다.
+                  아래 4가지 중 하나만 선택하세요. 메뉴가격 사용을 선택하면 고객에게 별도 배달료를 청구하지 않고 각 메뉴의 Delivery 가격으로 판매합니다.
                 </p>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {[
                   {
                     value: "customer_100" as DeliveryFeePolicyMode,
@@ -4715,6 +4991,11 @@ export default function OwnerBusinessMenuPage() {
                     value: "restaurant_100" as DeliveryFeePolicyMode,
                     title: "식당이 100% 부담",
                     description: "고객에게 배달료를 청구하지 않습니다.",
+                  },
+                  {
+                    value: "menu_price" as DeliveryFeePolicyMode,
+                    title: "Delivery 메뉴가격 사용",
+                    description: "이 옵션을 선택한 경우에만 고객 DELIVERY 화면과 실제 주문에 메뉴별 Delivery 가격을 적용합니다.",
                   },
                 ].map((option) => (
                   <label
@@ -4744,6 +5025,18 @@ export default function OwnerBusinessMenuPage() {
                   </label>
                 ))}
               </div>
+
+              {deliveryFeePolicyMode === "menu_price" ? (
+                <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4">
+                  <p className="text-sm font-black text-emerald-900">
+                    ✓ 4번째 옵션 활성화 · Delivery 메뉴가격 적용 · 고객 배달료 $0
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold leading-5 text-emerald-800">
+                    고객이 DELIVERY로 주문하면 각 메뉴에 입력된 Delivery 가격이 적용됩니다.
+                    Uber Direct의 실제 배달비는 고객 결제에 별도 추가하지 않습니다.
+                  </p>
+                </div>
+              ) : null}
 
               {deliveryFeePolicyMode === "order_amount" ? (
                 <>
@@ -4851,42 +5144,6 @@ export default function OwnerBusinessMenuPage() {
               </button>
             </div>
           ) : null}
-
-          <div className="mt-4 rounded-2xl border-2 border-sky-200 bg-sky-50 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wider text-sky-700">
-                  Customer SMS
-                </p>
-                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
-                  주문 확인, 상태 업데이트, 3분 취소 링크를 고객에게 문자로 보낼지 식당별로 선택합니다.
-                </p>
-              </div>
-
-              <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={smsEnabled}
-                  disabled={savingSmsEnabled}
-                  onChange={(event) => {
-                    void saveSmsEnabled(event.target.checked);
-                  }}
-                  className="h-5 w-5 accent-sky-700"
-                />
-                <span className="text-sm font-black text-sky-900">
-                  {savingSmsEnabled
-                    ? "저장 중..."
-                    : smsEnabled
-                      ? "SMS ON"
-                      : "SMS OFF"}
-                </span>
-              </label>
-            </div>
-
-            <p className="mt-3 text-[10px] font-semibold leading-5 text-gray-500">
-              Twilio 전체 마스터가 승인 후 ON 되어야 실제 고객 화면에 SMS 동의가 표시되고 문자가 발송됩니다.
-            </p>
-          </div>
 
           <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
             <button
@@ -5244,6 +5501,131 @@ export default function OwnerBusinessMenuPage() {
             <p className="mt-3 text-[10px] font-semibold leading-4 text-gray-500">
               저장된 Client Secret과 Webhook Signing Key는 다시 브라우저로 전송하지 않습니다. 값을 바꾸려면 새 값을 입력하고 다시 저장하세요.
             </p>
+              </>
+            ) : null}
+          </div>
+
+          <div className="mt-4 rounded-2xl border-2 border-red-200 bg-red-50 p-4">
+            <button
+              type="button"
+              onClick={() => setDoorDashOpen((current) => !current)}
+              className="flex w-full flex-wrap items-start justify-between gap-3 text-left"
+              aria-expanded={doorDashOpen}
+            >
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-red-700">
+                  DoorDash Drive Delivery
+                </p>
+                <h3 className="mt-1 text-base font-black text-[#172033]">
+                  KTown 중앙 DoorDash 계정
+                </h3>
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-gray-600">
+                  식당주는 DoorDash API 키를 입력하지 않습니다. KTown 공용 Credential로 이 식당의 Business / Store를 연결합니다.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={`rounded-full px-3 py-1 text-[11px] font-black ${
+                    doorDashConfigured
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {doorDashConfigured ? "CONNECTED" : "NOT CONNECTED"}
+                </span>
+                <span className="rounded-full bg-red-600 px-3 py-2 text-[10px] font-black text-white">
+                  {doorDashOpen ? "접기 ▲" : "펼치기 ▼"}
+                </span>
+              </div>
+            </button>
+
+            {doorDashOpen ? (
+              <>
+                <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-red-200 bg-white p-3">
+                  <input
+                    type="checkbox"
+                    checked={doorDashEnabled}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setDoorDashEnabled(checked);
+                      void saveDoorDashSettings(checked);
+                    }}
+                    disabled={!doorDashConfigured || savingDoorDash || connectingDoorDash}
+                    className="h-5 w-5 accent-red-600"
+                  />
+                  <span>
+                    <span className="block text-sm font-black text-[#172033]">Enable DoorDash Drive</span>
+                    <span className="mt-0.5 block text-[11px] font-semibold text-gray-600">
+                      연결 완료 후 DELIVERY 주문에서 이 매장의 DoorDash 배달을 사용할 수 있습니다.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-red-200 bg-white p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">DoorDash Business ID</div>
+                    <div className="mt-1 break-all text-sm font-black text-[#172033]">
+                      {doorDashBusinessId || `ktown-biz-${businessId}`}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-red-200 bg-white p-3">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-gray-500">DoorDash Store ID</div>
+                    <div className="mt-1 break-all text-sm font-black text-[#172033]">
+                      {doorDashStoreId || `ktown-store-${businessId}`}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-red-200 bg-white p-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Status</span>
+                  <span className={`ml-2 text-xs font-black ${
+                    doorDashConfigured ? "text-emerald-700" : "text-amber-700"
+                  }`}>
+                    {doorDashStatus || (doorDashConfigured ? "active" : "not_connected")}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void connectDoorDash()}
+                    disabled={connectingDoorDash || savingDoorDash}
+                    className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {connectingDoorDash
+                      ? "DOORDASH 연결 중..."
+                      : doorDashConfigured
+                        ? "SYNC / RECONNECT DOORDASH"
+                        : "CONNECT TO DOORDASH"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void saveDoorDashSettings()}
+                    disabled={!doorDashConfigured || connectingDoorDash || savingDoorDash}
+                    className="rounded-xl border-2 border-red-300 bg-white px-4 py-2.5 text-sm font-black text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingDoorDash ? "저장 중..." : "SAVE DOORDASH SETTINGS"}
+                  </button>
+                </div>
+
+                {doorDashMessage && !doorDashMessage.includes("실패") ? (
+                  <div
+                    className={`mt-3 rounded-xl px-3 py-2 text-[11px] font-black ${
+                      doorDashMessage.startsWith("✓")
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-white text-red-900"
+                    }`}
+                  >
+                    {doorDashMessage}
+                  </div>
+                ) : null}
+
+                <p className="mt-3 text-[10px] font-semibold leading-4 text-gray-500">
+                  DoorDash Developer ID / Key ID / Signing Secret은 Vercel 서버에만 저장합니다. 식당 관리자 화면에는 노출하지 않습니다.
+                </p>
               </>
             ) : null}
           </div>

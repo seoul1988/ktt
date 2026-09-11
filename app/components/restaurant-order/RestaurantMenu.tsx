@@ -9,87 +9,14 @@ import type { MenuOrderDraft } from "./MenuItemModal";
 import type { RestaurantMenuItem, RestaurantMenuPayload } from "./types";
 import { getOptionGroups, groupKey, optionKey } from "./types";
 
-type PriceSource = "menu" | "pickup" | "delivery";
-
-type PriceDisplayMap = {
-  menu: PriceSource;
-  pickup: PriceSource;
-  delivery: PriceSource;
-};
-
-const DEFAULT_PRICE_DISPLAY_MAP: PriceDisplayMap = {
-  menu: "menu",
-  pickup: "pickup",
-  delivery: "delivery",
-};
-
 type PricedRestaurantMenuItem = RestaurantMenuItem & {
   pickup_price?: number | null;
   delivery_price?: number | null;
 };
 
-type MenuPromotion = {
-  id: string;
-  name: string;
-  type:
-    | "buy_x_get_y"
-    | "spend_get_item"
-    | "amount_off"
-    | "percent_off"
-    | "item_percent_off"
-    | "free_delivery";
-  minSpend: number;
-  discountValue: number;
-  pickup: boolean;
-  delivery: boolean;
-  active: boolean;
-};
-
-type PromotionAssignment = {
-  role?: "trigger" | "reward" | "both" | "eligible";
-};
-
-type PromotionAssignments = Record<number, Record<string, PromotionAssignment>>;
-
-function readPromotions(businessId: number): MenuPromotion[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((row: any) => ({
-        id: String(row?.id || ""),
-        name: String(row?.name || "Deal"),
-        type: row?.type || "buy_x_get_y",
-        minSpend: Math.max(0, Number(row?.minSpend) || 0),
-        discountValue: Math.max(0, Math.min(100, Number(row?.discountValue) || 0)),
-        pickup: row?.pickup !== false,
-        delivery: row?.delivery !== false,
-        active: row?.active !== false,
-      }))
-      .filter((row: MenuPromotion) => row.id && row.active);
-  } catch {
-    return [];
-  }
-}
-
-function readPromotionAssignments(businessId: number): PromotionAssignments {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(
-      `ktown-menu-promotion-assignments:${businessId}`,
-    );
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function getRawPrice(
+function getPriceForService(
   item: RestaurantMenuItem,
-  source: PriceSource,
+  service: "menu" | "pickup" | "delivery",
 ) {
   const priced = item as PricedRestaurantMenuItem;
 
@@ -108,34 +35,30 @@ function getRawPrice(
       ? pickup
       : Number(priced.delivery_price);
 
-  if (source === "delivery") {
-    return Number.isFinite(delivery as number) ? delivery : null;
+  if (service === "delivery") {
+    return Number.isFinite(delivery as number)
+      ? delivery
+      : null;
   }
 
-  if (source === "pickup") {
-    return Number.isFinite(pickup as number) ? pickup : null;
+  if (service === "pickup") {
+    return Number.isFinite(pickup as number)
+      ? pickup
+      : null;
   }
 
-  return Number.isFinite(base as number) ? base : null;
-}
-
-function getPriceForService(
-  item: RestaurantMenuItem,
-  service: "menu" | "pickup" | "delivery",
-  displayMap?: PriceDisplayMap,
-) {
-  const map = displayMap || DEFAULT_PRICE_DISPLAY_MAP;
-  return getRawPrice(item, map[service]);
+  return Number.isFinite(base as number)
+    ? base
+    : null;
 }
 
 function withServicePrice(
   item: RestaurantMenuItem,
   service: "menu" | "pickup" | "delivery",
-  displayMap?: PriceDisplayMap,
 ): RestaurantMenuItem {
   return {
     ...item,
-    price: getPriceForService(item, service, displayMap),
+    price: getPriceForService(item, service),
   };
 }
 
@@ -161,6 +84,90 @@ type Props = {
   // RestaurantMenu 자체 floating cart 버튼은 숨깁니다.
   externalCartButton?: boolean;
 };
+
+
+
+type PromotionRewardChoice = {
+  name: string;
+  price: number;
+  discountPercent: number;
+};
+
+type MenuPromotion = {
+  id: string;
+  name: string;
+  type: "buy_x_get_y" | "spend_get_item" | "amount_off" | "percent_off" | "free_delivery";
+  buyQty: number;
+  getQty: number;
+  minSpend: number;
+  discountValue: number;
+  rewardChoices: PromotionRewardChoice[];
+  rewardSelectCount: number;
+  maxPerOrder: number;
+  pickup: boolean;
+  delivery: boolean;
+  active: boolean;
+};
+
+type PromotionAssignment = { role?: "trigger" | "reward" | "both" | "eligible" };
+type PromotionAssignments = Record<number, Record<string, PromotionAssignment>>;
+
+export type AppliedPromotionReward = {
+  promotionId: string;
+  promotionName: string;
+  triggerMenuItemId?: number;
+  itemName: string;
+  regularPrice: number;
+  discountPercent: number;
+  finalPrice: number;
+};
+
+function readPromotions(businessId: number): MenuPromotion[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((row: any) => ({
+        id: String(row?.id || ""),
+        name: String(row?.name || "Deal"),
+        type: row?.type || "buy_x_get_y",
+        buyQty: Math.max(1, Number(row?.buyQty) || 1),
+        getQty: Math.max(1, Number(row?.getQty) || 1),
+        minSpend: Math.max(0, Number(row?.minSpend) || 0),
+        discountValue: Math.max(0, Number(row?.discountValue) || 0),
+        rewardChoices: Array.isArray(row?.rewardChoices)
+          ? row.rewardChoices
+              .map((choice: any) => ({
+                name: String(choice?.name || "").trim(),
+                price: Math.max(0, Number(choice?.price) || 0),
+                discountPercent: Math.max(0, Math.min(100, Number(choice?.discountPercent ?? 100) || 0)),
+              }))
+              .filter((choice: PromotionRewardChoice) => choice.name)
+          : [],
+        rewardSelectCount: Math.max(1, Math.floor(Number(row?.rewardSelectCount) || 1)),
+        maxPerOrder: Math.max(1, Number(row?.maxPerOrder) || 1),
+        pickup: row?.pickup !== false,
+        delivery: row?.delivery !== false,
+        active: row?.active !== false,
+      }))
+      .filter((row: MenuPromotion) => row.id && row.active);
+  } catch {
+    return [];
+  }
+}
+
+function readPromotionAssignments(businessId: number): PromotionAssignments {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(`ktown-menu-promotion-assignments:${businessId}`);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 type StoredCartItem = {
   cartItemId: string;
@@ -255,9 +262,6 @@ export default function RestaurantMenu({
     categories: [],
     items: [],
   });
-  const [priceDisplayByItem, setPriceDisplayByItem] = useState<
-    Record<number, PriceDisplayMap>
-  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
@@ -274,8 +278,8 @@ export default function RestaurantMenu({
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [promotions, setPromotions] = useState<MenuPromotion[]>([]);
-  const [promotionAssignments, setPromotionAssignments] =
-    useState<PromotionAssignments>({});
+  const [promotionAssignments, setPromotionAssignments] = useState<PromotionAssignments>({});
+  const [selectedPromotionRewards, setSelectedPromotionRewards] = useState<Record<string, PromotionRewardChoice[]>>({});
   const [isIPhone, setIsIPhone] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
@@ -308,32 +312,6 @@ export default function RestaurantMenu({
       window.removeEventListener("orientationchange", updateMobileViewport);
     };
   }, []);
-
-  useEffect(() => {
-    const loadDeals = () => {
-      setPromotions(readPromotions(businessId));
-      setPromotionAssignments(readPromotionAssignments(businessId));
-    };
-
-    loadDeals();
-    window.addEventListener("focus", loadDeals);
-
-    const onStorage = (event: StorageEvent) => {
-      if (
-        event.key === `ktown-menu-promotions:${businessId}` ||
-        event.key === `ktown-menu-promotion-assignments:${businessId}`
-      ) {
-        loadDeals();
-      }
-    };
-
-    window.addEventListener("storage", onStorage);
-
-    return () => {
-      window.removeEventListener("focus", loadDeals);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, [businessId]);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
@@ -401,45 +379,89 @@ export default function RestaurantMenu({
     0,
   );
 
-  function getItemPercentDeals(menuItemId: number) {
+  function getPromotionsForMenuItem(menuItemId: number) {
     return promotions.filter((promotion) => {
-      if (!promotion.active || promotion.type !== "item_percent_off") return false;
+      if (!promotion.active) return false;
       if (activeService === "pickup" && !promotion.pickup) return false;
       if (activeService === "delivery" && !promotion.delivery) return false;
       return Boolean(promotionAssignments[menuItemId]?.[promotion.id]);
     });
   }
 
-  function getItemDiscountPercent(menuItemId: number) {
-    return getItemPercentDeals(menuItemId).reduce(
-      (highest, promotion) =>
-        Math.max(
-          highest,
-          Math.max(0, Math.min(100, Number(promotion.discountValue) || 0)),
-        ),
-      0,
-    );
-  }
+  const availablePromotions = promotions.filter((promotion) => {
+    if (!promotion.active) return false;
+    if (activeService === "pickup" && !promotion.pickup) return false;
+    if (activeService === "delivery" && !promotion.delivery) return false;
 
-  function getDiscountedServicePrice(item: RestaurantMenuItem) {
-    const regularPrice = getPriceForService(
-      item,
-      activeService,
-      priceDisplayByItem[item.id],
-    );
-
-    if (regularPrice == null) {
-      return { regularPrice: null, finalPrice: null, discountPercent: 0 };
+    if (promotion.type === "spend_get_item") {
+      return cartSubtotal >= promotion.minSpend && promotion.rewardChoices.length > 0;
     }
 
-    const discountPercent = getItemDiscountPercent(item.id);
-    const finalPrice =
-      discountPercent > 0
-        ? Math.max(0, regularPrice * (1 - discountPercent / 100))
-        : regularPrice;
+    if (promotion.type !== "buy_x_get_y") return false;
 
-    return { regularPrice, finalPrice, discountPercent };
+    return cartItems.some((cartItem) => {
+      const assignment = promotionAssignments[cartItem.menuItemId]?.[promotion.id];
+      if (!assignment) return false;
+      const role = typeof assignment === "string" ? assignment : assignment.role;
+      if (role !== "trigger" && role !== "both") return false;
+      return Math.max(1, Number(cartItem.quantity) || 1) >= Math.max(1, Number(promotion.buyQty) || 1);
+    });
+  });
+
+  function getPromotionSelectionCount(promotion: MenuPromotion) {
+    const total = promotion.rewardChoices.length;
+    if (total <= 0) return 0;
+    return Math.min(
+      total,
+      Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1)),
+    );
   }
+
+  function promotionNeedsCustomerSelection(promotion: MenuPromotion) {
+    const total = promotion.rewardChoices.length;
+    if (total <= 1) return false;
+
+    const requiredCount = getPromotionSelectionCount(promotion);
+    if (requiredCount >= total) return false;
+
+    const selected = selectedPromotionRewards[promotion.id] || [];
+    return selected.length < requiredCount;
+  }
+
+  const appliedPromotionRewards: AppliedPromotionReward[] = availablePromotions
+    .flatMap((promotion) => {
+      const total = promotion.rewardChoices.length;
+      if (total === 0) return [];
+
+      const requiredCount = getPromotionSelectionCount(promotion);
+      const selectedChoices =
+        total === 1 || requiredCount >= total
+          ? promotion.rewardChoices
+          : (selectedPromotionRewards[promotion.id] || []).slice(0, requiredCount);
+
+      const trigger = cartItems.find((cartItem) =>
+        Boolean(promotionAssignments[cartItem.menuItemId]?.[promotion.id]),
+      );
+
+      return selectedChoices.map((choice) => {
+        const regularPrice = Math.max(0, Number(choice.price) || 0);
+        const discountPercent = Math.max(
+          0,
+          Math.min(100, Number(choice.discountPercent) || 0),
+        );
+        const finalPrice = regularPrice * (1 - discountPercent / 100);
+
+        return {
+          promotionId: promotion.id,
+          promotionName: promotion.name,
+          triggerMenuItemId: trigger?.menuItemId,
+          itemName: choice.name,
+          regularPrice,
+          discountPercent,
+          finalPrice,
+        };
+      });
+    });
 
   function recordMenuItemClick(
     item: RestaurantMenuItem,
@@ -528,6 +550,95 @@ export default function RestaurantMenu({
       cancelled = true;
     };
   }, [businessId, menuEnabled, pickupEnabled, deliveryEnabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPromotionsFromDb() {
+      try {
+        const response = await fetch(
+          `/api/businesses/${encodeURIComponent(businessId)}/promotions`,
+          {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" },
+          },
+        );
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "딜 정보를 불러오지 못했습니다.");
+        }
+
+        if (cancelled) return;
+
+        const nextPromotions: MenuPromotion[] = Array.isArray(payload?.promotions)
+          ? payload.promotions
+              .map((row: any) => ({
+                id: String(row?.id || ""),
+                name: String(row?.name || "Deal"),
+                type: row?.type || "buy_x_get_y",
+                buyQty: Math.max(1, Number(row?.buyQty) || 1),
+                getQty: Math.max(1, Number(row?.getQty) || 1),
+                minSpend: Math.max(0, Number(row?.minSpend) || 0),
+                discountValue: Math.max(0, Number(row?.discountValue) || 0),
+                rewardChoices: Array.isArray(row?.rewardChoices)
+                  ? row.rewardChoices
+                      .map((choice: any) => ({
+                        name: String(choice?.name || "").trim(),
+                        price: Math.max(0, Number(choice?.price) || 0),
+                        discountPercent: Math.max(
+                          0,
+                          Math.min(
+                            100,
+                            Number(choice?.discountPercent ?? 100) || 0,
+                          ),
+                        ),
+                      }))
+                      .filter((choice: PromotionRewardChoice) => choice.name)
+                  : [],
+                rewardSelectCount: Math.max(
+                  1,
+                  Math.floor(Number(row?.rewardSelectCount) || 1),
+                ),
+                maxPerOrder: Math.max(1, Number(row?.maxPerOrder) || 1),
+                pickup: row?.pickup !== false,
+                delivery: row?.delivery !== false,
+                active: row?.active !== false,
+              }))
+              .filter((row: MenuPromotion) => row.id && row.active)
+          : [];
+
+        const nextAssignments =
+          payload?.assignments &&
+          typeof payload.assignments === "object" &&
+          !Array.isArray(payload.assignments)
+            ? (payload.assignments as PromotionAssignments)
+            : {};
+
+        setPromotions(nextPromotions);
+        setPromotionAssignments(nextAssignments);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("PROMOTION DB LOAD ERROR", error);
+        setPromotions([]);
+        setPromotionAssignments({});
+      }
+    }
+
+    void loadPromotionsFromDb();
+
+    const refresh = () => {
+      void loadPromotionsFromDb();
+    };
+
+    window.addEventListener("focus", refresh);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refresh);
+    };
+  }, [businessId]);
 
   useEffect(() => {
     setCartItems(readStoredCart(businessId));
@@ -633,63 +744,6 @@ export default function RestaurantMenu({
     effectiveDeliveryEnabled,
     orderingAvailable,
   ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPriceDisplaySettings() {
-      try {
-        const response = await fetch(
-          `/api/businesses/${encodeURIComponent(businessId)}/menu-price-display`,
-          {
-            cache: "no-store",
-          },
-        );
-
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            payload?.error || "가격 표시 설정을 불러오지 못했습니다.",
-          );
-        }
-
-        if (cancelled) return;
-
-        const next: Record<number, PriceDisplayMap> = {};
-        for (const row of Array.isArray(payload?.items) ? payload.items : []) {
-          const itemId = Number(row?.menuItemId);
-          if (!Number.isInteger(itemId) || itemId <= 0) continue;
-
-          const normalizeSource = (
-            value: unknown,
-            fallback: PriceSource,
-          ): PriceSource =>
-            value === "menu" || value === "pickup" || value === "delivery"
-              ? value
-              : fallback;
-
-          next[itemId] = {
-            menu: normalizeSource(row?.menuSource, "menu"),
-            pickup: normalizeSource(row?.pickupSource, "pickup"),
-            delivery: normalizeSource(row?.deliverySource, "delivery"),
-          };
-        }
-
-        setPriceDisplayByItem(next);
-      } catch (loadError) {
-        if (!cancelled) {
-          console.error("Restaurant price display settings load failed:", loadError);
-        }
-      }
-    }
-
-    void loadPriceDisplaySettings();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [businessId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1089,15 +1143,14 @@ export default function RestaurantMenu({
               <button
                 type="button"
                 onClick={() => setActiveService("pickup")}
-                aria-pressed={activeService === "pickup"}
-                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black transition-all ${
+                className={`shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
                   activeService === "pickup"
                     ? isBunsMenu
-                      ? "border-white bg-white text-black shadow-[0_0_0_3px_rgba(255,255,255,0.16)]"
-                      : "border-emerald-600 bg-emerald-600 text-white shadow-[0_0_0_3px_rgba(5,150,105,0.18)]"
+                      ? "border-white/30 bg-white/12 text-white"
+                      : "border-gray-300 bg-gray-900 text-white"
                     : isBunsMenu
-                      ? "border-white/30 bg-transparent text-white/80 hover:border-white/60"
-                      : "border-gray-300 bg-white text-gray-700 hover:border-gray-500"
+                      ? "border-white/20 bg-white/5 text-gray-200"
+                      : "border-gray-300 bg-gray-100 text-gray-800"
                 }`}
               >
                 PICKUP
@@ -1108,15 +1161,12 @@ export default function RestaurantMenu({
               <button
                 type="button"
                 onClick={() => setActiveService("delivery")}
-                aria-pressed={activeService === "delivery"}
-                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black transition-all ${
+                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
                   activeService === "delivery"
-                    ? isBunsMenu
-                      ? "border-white bg-white text-black shadow-[0_0_0_3px_rgba(255,255,255,0.16)]"
-                      : "border-blue-600 bg-blue-600 text-white shadow-[0_0_0_3px_rgba(37,99,235,0.18)]"
+                    ? "border-blue-400 bg-blue-600 text-white"
                     : isBunsMenu
-                      ? "border-white/30 bg-transparent text-white/80 hover:border-white/60"
-                      : "border-gray-300 bg-white text-gray-700 hover:border-gray-500"
+                      ? "border-blue-400/60 bg-blue-400/10 text-blue-300"
+                      : "border-blue-500 bg-blue-100 text-blue-950"
                 }`}
               >
                 DELIVERY
@@ -1283,17 +1333,9 @@ export default function RestaurantMenu({
                       type="button"
                       onClick={() => {
                         recordMenuItemClick(item, category.name);
-                        const pricedItem = withServicePrice(
-                          item,
-                          activeService,
-                          priceDisplayByItem[item.id],
+                        setSelectedItem(
+                          withServicePrice(item, activeService),
                         );
-                        const { finalPrice } = getDiscountedServicePrice(item);
-
-                        setSelectedItem({
-                          ...pricedItem,
-                          price: finalPrice == null ? pricedItem.price : finalPrice,
-                        });
                       }}
                       className={`group flex min-h-[112px] w-full overflow-hidden rounded-xl border text-left transition ${
                         isBunsMenu
@@ -1316,49 +1358,51 @@ export default function RestaurantMenu({
                             {item.name}
                           </h3>
 
-                          {(() => {
-                            const {
-                              regularPrice,
-                              finalPrice,
-                              discountPercent,
-                            } = getDiscountedServicePrice(item);
-
-                            if (regularPrice == null || finalPrice == null) return null;
-
-                            const accentColor = isBunsMenu
-                              ? bunsCategoryAccents[
-                                  Math.max(
-                                    0,
-                                    visibleCategories.findIndex(
-                                      (entry) => entry.id === category.id,
-                                    ),
-                                  ) % bunsCategoryAccents.length
-                                ]
-                              : undefined;
-
-                            return (
-                              <span className="shrink-0 text-right text-sm font-black">
-                                {discountPercent > 0 ? (
-                                  <>
-                                    <span className="mr-1 text-[11px] font-bold opacity-50 line-through">
-                                      ${Number(regularPrice).toFixed(2)}
-                                    </span>
-                                    <span style={{ color: accentColor }}>
-                                      ${Number(finalPrice).toFixed(2)}
-                                    </span>
-                                    <span className="ml-1 block text-[9px] font-black text-green-500">
-                                      {discountPercent}% OFF
-                                    </span>
-                                  </>
-                                ) : (
-                                  <span style={{ color: accentColor }}>
-                                    ${Number(finalPrice).toFixed(2)}
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          })()}
+                          {getPriceForService(item, activeService) != null ? (
+                            <span
+                              className="shrink-0 text-sm font-black"
+                              style={
+                                isBunsMenu
+                                  ? {
+                                      color:
+                                        bunsCategoryAccents[
+                                          Math.max(
+                                            0,
+                                            visibleCategories.findIndex(
+                                              (entry) =>
+                                                entry.id === category.id,
+                                            ),
+                                          ) %
+                                            bunsCategoryAccents.length
+                                        ],
+                                    }
+                                  : undefined
+                              }
+                            >
+                              $
+                              {Number(
+                                getPriceForService(item, activeService),
+                              ).toFixed(2)}
+                            </span>
+                          ) : null}
                         </div>
+
+                        {(() => {
+                          const itemPromos = getPromotionsForMenuItem(item.id);
+                          if (!itemPromos.length) return null;
+                          return (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {itemPromos.map((promotion) => (
+                                <span
+                                  key={promotion.id}
+                                  className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white"
+                                >
+                                  🔥 {promotion.name}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
 
                         {item.description ? (
                           <p className="mt-2 line-clamp-3 text-xs font-medium leading-5 opacity-65 sm:text-sm">
@@ -1564,6 +1608,96 @@ export default function RestaurantMenu({
                           : "border-t border-gray-200 px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4"
                       }
                     >
+                      {availablePromotions.length ? (
+                        <div className="mb-4 space-y-3">
+                          {availablePromotions.map((promotion) => (
+                            <div key={promotion.id} className="rounded-2xl border border-orange-200 bg-orange-50 p-3">
+                              <p className="text-xs font-black text-orange-700">🎁 {promotion.name}</p>
+                              {promotion.rewardChoices.length === 1 ||
+                              getPromotionSelectionCount(promotion) >= promotion.rewardChoices.length ? (
+                                <>
+                                  <p className="mt-1 text-[11px] font-semibold text-gray-600">
+                                    {promotion.rewardChoices.length === 1
+                                      ? "혜택이 자동 적용됩니다."
+                                      : "등록된 혜택이 모두 자동 적용됩니다."}
+                                  </p>
+                                  <div className="mt-2 grid gap-2">
+                                    {promotion.rewardChoices.map((choice, choiceIndex) => (
+                                      <div
+                                        key={`${promotion.id}-auto-${choice.name}-${choiceIndex}`}
+                                        className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 px-3 py-2"
+                                      >
+                                        <span className="text-xs font-black text-gray-900">✓ {choice.name}</span>
+                                        <span className="text-[11px] font-black text-green-700">
+                                          {choice.discountPercent >= 100
+                                            ? "FREE · AUTO APPLIED"
+                                            : `${choice.discountPercent}% OFF · AUTO APPLIED`}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="mt-1 text-[11px] font-semibold text-gray-600">
+                                    혜택 상품을 {getPromotionSelectionCount(promotion)}개 선택하세요.
+                                  </p>
+                                  <div className="mt-2 grid gap-2">
+                                    {promotion.rewardChoices.map((choice, choiceIndex) => {
+                                      const currentSelected = selectedPromotionRewards[promotion.id] || [];
+                                      const selected = currentSelected.some(
+                                        (row) => row.name === choice.name,
+                                      );
+                                      const maxSelected = getPromotionSelectionCount(promotion);
+                                      const discountText =
+                                        choice.discountPercent >= 100
+                                          ? "FREE"
+                                          : `${choice.discountPercent}% OFF`;
+
+                                      return (
+                                        <button
+                                          key={`${promotion.id}-${choice.name}-${choiceIndex}`}
+                                          type="button"
+                                          onClick={() =>
+                                            setSelectedPromotionRewards((current) => {
+                                              const existing = current[promotion.id] || [];
+                                              const isSelected = existing.some(
+                                                (row) => row.name === choice.name,
+                                              );
+
+                                              const next = isSelected
+                                                ? existing.filter((row) => row.name !== choice.name)
+                                                : existing.length < maxSelected
+                                                  ? [...existing, choice]
+                                                  : existing;
+
+                                              return { ...current, [promotion.id]: next };
+                                            })
+                                          }
+                                          className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left ${
+                                            selected
+                                              ? "border-orange-500 bg-white ring-2 ring-orange-200"
+                                              : "border-orange-100 bg-white"
+                                          }`}
+                                        >
+                                          <span className="text-xs font-black text-gray-900">
+                                            {selected ? "✓ " : "□ "}
+                                            {choice.name}
+                                          </span>
+                                          <span className="text-[11px] font-black text-green-700">
+                                            {discountText}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-bold text-gray-600">Subtotal</span>
                         <span className="text-xl font-black">${cartSubtotal.toFixed(2)}</span>
@@ -1600,17 +1734,18 @@ export default function RestaurantMenu({
                         {cartItems.length ? (
                           <button
                             type="button"
+                            disabled={availablePromotions.some(promotionNeedsCustomerSelection)}
                             onClick={() => {
                               setCartOpen(false);
                               setCheckoutOpen(true);
                             }}
                             className={
                               isIPhone
-                                ? "col-span-2 rounded-xl bg-gray-950 px-4 py-2.5 text-xs font-black text-white"
-                                : "col-span-2 rounded-xl bg-gray-950 px-4 py-3 text-xs font-black text-white"
+                                ? `col-span-2 rounded-xl px-4 py-2.5 text-xs font-black text-white ${availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
+                                : `col-span-2 rounded-xl px-4 py-3 text-xs font-black text-white ${availablePromotions.some(promotionNeedsCustomerSelection) ? "cursor-not-allowed bg-gray-400" : "bg-gray-950"}`
                             }
                           >
-                            CHECKOUT
+                            {availablePromotions.some(promotionNeedsCustomerSelection) ? "SELECT DEAL ITEM" : "CHECKOUT"}
                           </button>
                         ) : null}
                       </div>
@@ -1632,6 +1767,7 @@ export default function RestaurantMenu({
               : "pickup"
           }
           cartItems={cartItems}
+          promotionRewards={appliedPromotionRewards}
           onClose={() => setCheckoutOpen(false)}
           onOrderPlaced={() => {
             clearCart();
@@ -1673,14 +1809,14 @@ export default function RestaurantMenu({
           backgroundColor={backgroundColor}
           textColor={textColor}
           orderEnabled={orderingAvailable}
-          dealPromotions={getItemPercentDeals(selectedItem.id).map((promotion) => ({
-            id: promotion.id,
-            name: promotion.name,
-            type: promotion.type,
-            rewardChoices: [],
-            rewardSelectCount: 1,
-            discountValue: promotion.discountValue,
-          }))}
+          dealPromotions={getPromotionsForMenuItem(selectedItem.id)}
+          selectedPromotionRewards={selectedPromotionRewards}
+          onPromotionRewardChange={(promotionId, choices) =>
+            setSelectedPromotionRewards((current) => ({
+              ...current,
+              [promotionId]: choices,
+            }))
+          }
           onAddToOrder={handleAddToOrder}
           onClose={() =>
             setSelectedItem(null)
