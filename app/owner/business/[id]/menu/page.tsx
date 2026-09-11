@@ -1796,27 +1796,8 @@ export default function OwnerBusinessMenuPage() {
     };
   }, [businessId]);
 
-  // 공용 옵션이 불러와지면 첫 그룹의 실제 옵션 항목을
-  // 관리 입력창에도 바로 보여줍니다. "수정" 버튼을 누르지 않아도 확인 가능합니다.
-  useEffect(() => {
-    if (editingTemplateId || templateOptionsInput.length > 0) return;
-    if (optionTemplates.length === 0) return;
 
-    const first = optionTemplates[0];
-    setEditingTemplateId(first.id);
-    setTemplateNameInput(first.name);
-    setTemplateDescriptionInput(first.description || "");
-    setTemplateRequiredInput(first.required);
-    setTemplateMinInput(first.minSelect);
-    setTemplateMaxInput(first.maxSelect);
-    setTemplateOptionsInput(
-      first.options.map((option, index) => ({
-        ...option,
-        displayOrder: index,
-      })),
-    );
-  }, [optionTemplates, editingTemplateId, templateOptionsInput.length]);
-
+  // 새 옵션 입력창을 기본 상태로 유지합니다.
 
   function mergeTemplateCollections(
     base: MenuOptionTemplate[],
@@ -5956,7 +5937,7 @@ export default function OwnerBusinessMenuPage() {
                       Option Library
                     </p>
                     <h3 className="text-lg font-black text-[#172033]">
-                      {editingTemplateId ? "옵션 수정" : "옵션 추가 / 관리"}
+                      {editingTemplateId ? "옵션 수정" : "새 옵션 추가"}
                     </h3>
                   </div>
 
@@ -6199,7 +6180,7 @@ export default function OwnerBusinessMenuPage() {
                       ? "저장 중..."
                       : editingTemplateId
                         ? "옵션 수정 저장"
-                        : "옵션 등록"}
+                        : "+ 옵션 등록"}
                   </button>
                 </div>
 
