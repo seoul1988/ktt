@@ -35,21 +35,30 @@ function publicPromoCode(value: unknown) {
   }
 
   const row = value as Record<string, unknown>;
+
   const enabled = row.enabled === true;
   const code = String(row.code || "")
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 40);
+
   const discountPercent = Math.max(
     0,
     Math.min(100, Number(row.discountPercent) || 0),
   );
-  const minimumOrder = Math.max(0, Number(row.minimumOrder) || 0);
+
+  const minimumOrder = Math.max(
+    0,
+    Number(row.minimumOrder) || 0,
+  );
+
   const startDate = String(row.startDate || "").slice(0, 10);
   const endDate = String(row.endDate || "").slice(0, 10);
 
-  if (!enabled || !code || discountPercent <= 0) return null;
+  if (!enabled || !code || discountPercent <= 0) {
+    return null;
+  }
 
   return {
     enabled,
@@ -95,11 +104,19 @@ export async function GET(
     );
 
     const rawAssignments = safeAssignments(data?.assignments);
-    const promoCode = publicPromoCode(rawAssignments["__promo_code__"]);
+
+    // Promo Code settings are stored in the existing assignments JSON
+    // under the reserved "__promo_code__" key.
+    const promoCode = publicPromoCode(
+      rawAssignments["__promo_code__"],
+    );
+
     const assignments: Record<string, any> = {};
 
     for (const [itemId, value] of Object.entries(rawAssignments)) {
+      // Reserved Promo Code settings are not menu-item assignments.
       if (itemId === "__promo_code__") continue;
+
       if (!value || typeof value !== "object" || Array.isArray(value)) continue;
 
       const filtered: Record<string, any> = {};

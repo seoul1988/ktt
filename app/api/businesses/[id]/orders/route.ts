@@ -192,21 +192,30 @@ function normalizePromoCode(value: unknown) {
   }
 
   const row = value as Record<string, unknown>;
+
   const enabled = row.enabled === true;
   const code = String(row.code || "")
     .trim()
     .toUpperCase()
     .replace(/[^A-Z0-9_-]/g, "")
     .slice(0, 40);
+
   const discountPercent = Math.max(
     0,
     Math.min(100, Number(row.discountPercent) || 0),
   );
-  const minimumOrder = Math.max(0, Number(row.minimumOrder) || 0);
+
+  const minimumOrder = Math.max(
+    0,
+    Number(row.minimumOrder) || 0,
+  );
+
   const startDate = String(row.startDate || "").slice(0, 10);
   const endDate = String(row.endDate || "").slice(0, 10);
 
-  if (!enabled || !code || discountPercent <= 0) return null;
+  if (!enabled || !code || discountPercent <= 0) {
+    return null;
+  }
 
   return {
     enabled,
@@ -989,7 +998,10 @@ export async function POST(
     let promoDiscount = 0;
 
     if (requestedPromoCode) {
-      const { data: promotionState, error: promotionStateError } = await db
+      const {
+        data: promotionState,
+        error: promotionStateError,
+      } = await db
         .from("restaurant_promotion_state")
         .select("assignments")
         .eq("business_id", businessId)
@@ -1006,10 +1018,15 @@ export async function POST(
           ? (promotionState.assignments as Record<string, unknown>)
           : {};
 
-      const promo = normalizePromoCode(assignments["__promo_code__"]);
+      const promo = normalizePromoCode(
+        assignments["__promo_code__"],
+      );
 
       if (!promo || requestedPromoCode !== promo.code) {
-        throw new Error("Promo code is not valid.");
+        return NextResponse.json(
+          { error: "Promo code is not valid." },
+          { status: 400 },
+        );
       }
 
       const today = easternDateKey();
@@ -1018,12 +1035,20 @@ export async function POST(
         (promo.startDate && today < promo.startDate) ||
         (promo.endDate && today > promo.endDate)
       ) {
-        throw new Error("Promo code is not active today.");
+        return NextResponse.json(
+          { error: "Promo code is not active today." },
+          { status: 400 },
+        );
       }
 
       if (subtotal < promo.minimumOrder) {
-        throw new Error(
-          `Minimum order $${promo.minimumOrder.toFixed(2)} required for this promo code.`,
+        return NextResponse.json(
+          {
+            error: `Minimum order $${promo.minimumOrder.toFixed(
+              2,
+            )} required for this promo code.`,
+          },
+          { status: 400 },
         );
       }
 
@@ -1037,7 +1062,10 @@ export async function POST(
         ) / 100;
     }
 
-    const discountedSubtotal = Math.max(0, subtotal - promoDiscount);
+    const discountedSubtotal = Math.max(
+      0,
+      subtotal - promoDiscount,
+    );
 
     const taxRate = Math.max(
       0,
@@ -1151,7 +1179,15 @@ export async function POST(
             "asap",
         ).slice(0, 80),
         order_note:
-          orderNote || null,
+          [
+            appliedPromoCode
+              ? `Promo ${appliedPromoCode}: ${promoDiscountPercent}% off (-$${promoDiscount.toFixed(2)})`
+              : "",
+            orderNote,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+            .slice(0, 500) || null,
         payment_method:
           paymentMethod,
         payment_status: "pending",
