@@ -194,7 +194,30 @@ export default function MenuItemModal({
   onAddToOrder,
   onClose,
 }: Props) {
-  const groups = useMemo(() => getOptionGroups(item), [item]);
+  const groups = useMemo(() => {
+    const rawGroups = getOptionGroups(item);
+    const seen = new Set<string>();
+
+    return rawGroups.filter((group) => {
+      const signature = JSON.stringify({
+        name: String(group.name || "").trim().toLowerCase(),
+        description: String((group as any)?.description || "").trim().toLowerCase(),
+        required: Boolean(group.required),
+        minSelect: toSafeInteger(group.minSelect),
+        maxSelect:
+          group.maxSelect == null ? null : toSafeInteger(group.maxSelect),
+        options: (Array.isArray(group.options) ? group.options : []).map((option) => ({
+          name: String(option?.name || "").trim().toLowerCase(),
+          priceDelta: Number(option?.priceDelta || 0),
+          soldOut: Boolean(option?.soldOut),
+        })),
+      });
+
+      if (seen.has(signature)) return false;
+      seen.add(signature);
+      return true;
+    });
+  }, [item]);
 
   // 이 state 자체가 항상 그룹 maximum 안에 있도록 유지한다.
   const [selections, setSelections] = useState<OptionSelectionState>({});
@@ -421,38 +444,32 @@ export default function MenuItemModal({
    * 2) Combo It!
    * 3) 나머지 OPTION 그룹
    */
-  const displayGroups = useMemo(() => {
-    let comboItSeen = false;
+  const displayGroups = useMemo(
+    () =>
+      groups
+        .map((group, originalIndex) => ({
+          group,
+          originalIndex,
+          isRequired: getGroupRules(group).minimum > 0,
+          isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
+        }))
+        .sort((a, b) => {
+          const rank = (row: {
+            isRequired: boolean;
+            isComboIt: boolean;
+          }) => {
+            if (row.isRequired) return 0;
+            if (row.isComboIt) return 1;
+            return 2;
+          };
 
-    return groups
-      .map((group, originalIndex) => ({
-        group,
-        originalIndex,
-        isRequired: getGroupRules(group).minimum > 0,
-        isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
-      }))
-      .filter((row) => {
-        if (!row.isComboIt) return true;
-        if (comboItSeen) return false;
-        comboItSeen = true;
-        return true;
-      })
-      .sort((a, b) => {
-        const rank = (row: {
-          isRequired: boolean;
-          isComboIt: boolean;
-        }) => {
-          if (row.isRequired) return 0;
-          if (row.isComboIt) return 1;
-          return 2;
-        };
-
-        const rankDifference = rank(a) - rank(b);
-        return rankDifference !== 0
-          ? rankDifference
-          : a.originalIndex - b.originalIndex;
-      });
-  }, [groups]);
+          const rankDifference = rank(a) - rank(b);
+          return rankDifference !== 0
+            ? rankDifference
+            : a.originalIndex - b.originalIndex;
+        }),
+    [groups],
+  );
 
   return createPortal(
     <>
@@ -706,10 +723,9 @@ export default function MenuItemModal({
                       originalIndex,
                     );
                     const { maximum } = getGroupRules(group);
-                    const groupDescription = getRawGroupDescription(
-                      item,
-                      originalIndex,
-                    );
+                    const groupDescription =
+                      String((group as any)?.description || "").trim() ||
+                      getRawGroupDescription(item, originalIndex);
 
                     const comboDescription =
                       groupDescription ||
