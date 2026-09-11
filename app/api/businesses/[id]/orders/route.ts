@@ -259,6 +259,57 @@ function deliveryCustomerPercent(
 }
 
 
+function normalizeBusinessPickupAddress(business: any) {
+  if (!business || typeof business !== "object") {
+    return business;
+  }
+
+  const currentStreet = String(
+    business?.address1 ||
+      business?.street_address ||
+      "",
+  ).trim();
+
+  const currentCity = String(business?.city || "").trim();
+  const currentState = String(business?.state || "").trim();
+  const currentZip = String(
+    business?.zip ||
+      business?.zipcode ||
+      business?.postal_code ||
+      "",
+  ).trim();
+
+  if (currentStreet && currentCity && currentState && currentZip) {
+    return business;
+  }
+
+  const fullAddress = String(business?.address || "")
+    .replace(/\s+(?:미국|USA|US|United States)\s*$/i, "")
+    .trim();
+
+  if (!fullAddress) {
+    return business;
+  }
+
+  const match = fullAddress.match(
+    /^(.*),\s*([^,]+),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/,
+  );
+
+  if (!match) {
+    return business;
+  }
+
+  const [, street, city, state, zip] = match;
+
+  return {
+    ...business,
+    address1: currentStreet || street.trim(),
+    city: currentCity || city.trim(),
+    state: currentState || state.trim().toUpperCase(),
+    zip: currentZip || zip.trim(),
+  };
+}
+
 function cleanSelectionLabel(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
@@ -1110,7 +1161,7 @@ export async function POST(
       isUberDirectEnabled(privateSettings)
     ) {
       const directQuote = await createUberDirectQuote({
-        business,
+        business: normalizeBusinessPickupAddress(business),
         privateSettings,
         dropoffAddress: address,
       });
