@@ -91,6 +91,59 @@ function customerSharePercent(
   return 100;
 }
 
+function normalizeBusinessPickupAddress(business: any) {
+  if (!business || typeof business !== "object") {
+    return business;
+  }
+
+  const currentStreet = String(
+    business?.address1 ||
+      business?.street_address ||
+      "",
+  ).trim();
+  const currentCity = String(business?.city || "").trim();
+  const currentState = String(business?.state || "").trim();
+  const currentZip = String(
+    business?.zip ||
+      business?.zipcode ||
+      business?.postal_code ||
+      "",
+  ).trim();
+
+  // If the DB already has separate address fields, keep them exactly as-is.
+  if (currentStreet && currentCity && currentState && currentZip) {
+    return business;
+  }
+
+  const fullAddress = String(business?.address || "")
+    .replace(/\s+(?:미국|USA|US|United States)\s*$/i, "")
+    .trim();
+
+  if (!fullAddress) {
+    return business;
+  }
+
+  // Example supported by the current businesses table:
+  // "107 N Columbia St, Chapel Hill, NC 27514 미국"
+  const match = fullAddress.match(
+    /^(.*),\s*([^,]+),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/,
+  );
+
+  if (!match) {
+    return business;
+  }
+
+  const [, street, city, state, zip] = match;
+
+  return {
+    ...business,
+    address1: currentStreet || street.trim(),
+    city: currentCity || city.trim(),
+    state: currentState || state.trim().toUpperCase(),
+    zip: currentZip || zip.trim(),
+  };
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -212,8 +265,10 @@ export async function POST(
       dropoffTimeEstimatedUpperBound =
         quote.dropoffTimeEstimatedUpperBound;
     } else {
+      const uberBusiness = normalizeBusinessPickupAddress(business);
+
       const quote = await createUberDirectQuote({
-        business,
+        business: uberBusiness,
         privateSettings,
         dropoffAddress,
       });
