@@ -54,20 +54,26 @@ type DeliveryQuoteBreakdown = {
   feeShareRules: DeliveryFeeShareRule[];
 };
 
+export type AppliedPromotionReward = {
+  promotionId: string;
+  promotionName: string;
+  triggerMenuItemId?: number;
+  itemName: string;
+  regularPrice: number;
+  discountPercent: number;
+  finalPrice: number;
+};
+
 type Props = {
   businessId: number;
   fulfillmentType: "pickup" | "delivery";
   cartItems: CheckoutCartItem[];
+  promotionRewards?: AppliedPromotionReward[];
   onClose: () => void;
   onOrderPlaced: () => void;
 };
 
 const CUSTOMER_KEY = "restaurant-order-customer";
-
-// Keep all SMS wording/controls hidden until Twilio toll-free approval.
-// After approval: set NEXT_PUBLIC_TWILIO_SMS_ENABLED=true in Vercel and redeploy.
-const SMS_UI_ENABLED =
-  process.env.NEXT_PUBLIC_TWILIO_SMS_ENABLED === "true";
 
 type SquarePreparedPayment = {
   orderId: number;
@@ -148,6 +154,7 @@ export default function RestaurantCheckoutModal({
   businessId,
   fulfillmentType,
   cartItems,
+  promotionRewards = [],
   onClose,
   onOrderPlaced,
 }: Props) {
@@ -218,10 +225,25 @@ export default function RestaurantCheckoutModal({
   const stateCodeRef = useRef<HTMLInputElement>(null);
   const postalCodeRef = useRef<HTMLInputElement>(null);
 
-  const subtotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0), 0),
+  const menuSubtotal = useMemo(
+    () =>
+      cartItems.reduce(
+        (sum, item) => sum + Math.max(0, Number(item.totalPrice) || 0),
+        0,
+      ),
     [cartItems],
   );
+
+  const promotionItemsTotal = useMemo(
+    () =>
+      promotionRewards.reduce(
+        (sum, reward) => sum + Math.max(0, Number(reward.finalPrice) || 0),
+        0,
+      ),
+    [promotionRewards],
+  );
+
+  const subtotal = menuSubtotal + promotionItemsTotal;
   const tax = subtotal * Math.max(0, Number(settings?.taxRate || 0));
   const tip = subtotal * (tipPercent / 100);
   const useDeliveryMenuPrice =
@@ -749,7 +771,16 @@ export default function RestaurantCheckoutModal({
               ? deliveryQuoteId
               : null,
           orderNote: orderNote.trim().slice(0, 500),
-          smsConsent: SMS_UI_ENABLED && settings?.smsEnabled === true ? smsConsent : false,
+          smsConsent: settings?.smsEnabled ? smsConsent : false,
+          promotionRewards: promotionRewards.map((reward) => ({
+            promotionId: reward.promotionId,
+            promotionName: reward.promotionName,
+            triggerMenuItemId: reward.triggerMenuItemId,
+            itemName: reward.itemName,
+            regularPrice: Number(reward.regularPrice) || 0,
+            discountPercent: Number(reward.discountPercent) || 0,
+            finalPrice: Number(reward.finalPrice) || 0,
+          })),
           items: cartItems.map((item) => ({
             menuItemId: item.menuItemId,
             quantity: item.quantity,
@@ -1000,7 +1031,7 @@ export default function RestaurantCheckoutModal({
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone *" inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
 
-              {SMS_UI_ENABLED && settings?.smsEnabled === true ? (
+              {settings.smsEnabled ? (
                 <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
                   <input
                     type="checkbox"
