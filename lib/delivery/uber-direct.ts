@@ -296,8 +296,13 @@ export async function dispatchUberDirectOrder(args: {
   db: SupabaseAdmin;
   businessId: number;
   orderId: number;
+  prepMinutes?: number;
 }) {
   const { db, businessId, orderId } = args;
+  const prepMinutes = Math.max(
+    0,
+    Math.min(180, Math.round(Number(args.prepMinutes ?? 15) || 0)),
+  );
 
   const [
     { data: order, error: orderError },
@@ -435,6 +440,16 @@ export async function dispatchUberDirectOrder(args: {
       },
       body: JSON.stringify({
         quote_id: quoteId,
+        // Tell Uber when the food is expected to be ready so the courier
+        // is dispatched around the restaurant's preparation time instead
+        // of being sent immediately.
+        ...(prepMinutes > 0
+          ? {
+              pickup_ready_dt: new Date(
+                Date.now() + prepMinutes * 60_000,
+              ).toISOString(),
+            }
+          : {}),
         pickup_name: String(
           business?.name || "KTown Restaurant",
         ).slice(0, 100),

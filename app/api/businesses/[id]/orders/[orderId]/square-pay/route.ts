@@ -293,6 +293,7 @@ export async function POST(
         db,
         businessId,
         orderId: ktownOrderId,
+        prepMinutes: 15,
       });
     } catch (deliveryError) {
       console.error(
