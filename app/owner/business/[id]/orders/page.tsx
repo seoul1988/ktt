@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import CommunityBottomNav from "../../components/CommunityBottomNav";
-import ProfileButton from "../../components/ProfileButton";
+import CommunityBottomNav from "../../../components/CommunityBottomNav";
+import ProfileButton from "../../../components/ProfileButton";
 import { supabase } from "@/lib/supabase";
 
 function raleighDateTime(value: unknown) {
