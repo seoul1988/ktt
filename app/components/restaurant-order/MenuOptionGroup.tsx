@@ -185,9 +185,11 @@ export default function MenuOptionGroup({
         </h3>
 
         <span
-          className={`shrink-0 rounded border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${
+          className={`shrink-0 rounded border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition-colors ${
             minimum > 0
-              ? "border-red-700 bg-red-600 text-white shadow-sm"
+              ? valid
+                ? "border-red-200 bg-red-50 text-red-400"
+                : "border-red-700 bg-red-600 text-white shadow-sm"
               : valid
                 ? "border-black/20 bg-white text-black"
                 : "border-amber-300 bg-amber-50 text-amber-800"
