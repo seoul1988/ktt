@@ -1202,7 +1202,44 @@ export default function RestaurantCheckoutModal({
 
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Tip</h3>
-              <div className="mt-3 flex flex-wrap gap-2">{[0, ...(settings.tipPresets || [])].map((p) => <button key={p} type="button" onClick={() => setTipPercent(Number(p))} className={`rounded-full border px-3 py-2 text-xs font-black ${tipPercent === Number(p) ? "bg-gray-950 text-white" : "bg-white"}`}>{p === 0 ? "No tip" : `${p}%`}</button>)}</div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {[0, ...(settings.tipPresets || [])].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setTipPercent(Number(p))}
+                    className={`rounded-full border px-3 py-2 text-xs font-black ${
+                      tipPercent === Number(p)
+                        ? "bg-gray-950 text-white"
+                        : "bg-white"
+                    }`}
+                  >
+                    {p === 0 ? "No tip" : `${p}%`}
+                  </button>
+                ))}
+
+                <label className="ml-auto flex items-center gap-1 rounded-full border bg-white px-3 py-1.5">
+                  <span className="text-xs font-black">Custom</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="1"
+                    value={tipPercent}
+                    onChange={(event) => {
+                      const value = Math.max(
+                        0,
+                        Math.min(100, Number(event.target.value) || 0),
+                      );
+                      setTipPercent(value);
+                    }}
+                    className="w-14 bg-transparent text-center text-xs font-black outline-none"
+                    inputMode="decimal"
+                    aria-label="Custom tip percentage"
+                  />
+                  <span className="text-xs font-black">%</span>
+                </label>
+              </div>
             </section>
 
             <section className="rounded-2xl border p-4">
