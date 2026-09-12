@@ -1846,7 +1846,7 @@ export default function OwnerBusinessMenuPage() {
     async function loadDbOptionLibrary() {
       const { data: groups, error: groupError } = await supabase
         .from("menu_option_groups")
-        .select("id, name, required, min_select, max_select, sort_order, active")
+        .select("id, name, required, min_select, max_select, sort_order, active, sub_option_group_no, is_sub_option_only")
         .eq("business_id", businessId)
         .eq("active", true)
         .order("sort_order", { ascending: true });
@@ -1864,7 +1864,7 @@ export default function OwnerBusinessMenuPage() {
       if (groupIds.length > 0) {
         const { data: choiceRows, error: choiceError } = await supabase
           .from("menu_option_choices")
-          .select("id, option_group_id, name, price_delta, sort_order, active, sold_out")
+          .select("id, option_group_id, name, price_delta, sort_order, active, sold_out, use_sub_option, sub_option_group_no")
           .in("option_group_id", groupIds)
           .eq("active", true)
           .order("sort_order", { ascending: true });
@@ -1890,6 +1890,12 @@ export default function OwnerBusinessMenuPage() {
           group.max_select == null
             ? null
             : Math.max(0, Number(group.max_select) || 0),
+        subOptionGroupNo:
+          group.sub_option_group_no == null
+            ? null
+            : Number(group.sub_option_group_no),
+        isSubOptionOnly:
+          group.is_sub_option_only === true,
         options: choices
           .filter((choice) => Number(choice.option_group_id) === Number(group.id))
           .map((choice, optionIndex) => ({
@@ -1897,6 +1903,11 @@ export default function OwnerBusinessMenuPage() {
             priceDelta: Number(choice.price_delta || 0),
             soldOut: Boolean(choice.sold_out),
             displayOrder: Number(choice.sort_order ?? optionIndex),
+            useSubOption: choice.use_sub_option === true,
+            subOptionGroupNo:
+              choice.sub_option_group_no == null
+                ? null
+                : Number(choice.sub_option_group_no),
           })),
       }));
 
@@ -2771,6 +2782,44 @@ export default function OwnerBusinessMenuPage() {
 
     persistOptionTemplates(nextTemplates);
 
+    // 서브옵션은 메뉴별 복사본이 아니라 공용 SUB 번호 라이브러리에 저장합니다.
+    // 고객 화면에서는 부모 옵션의 subOptionGroupNo로 이 공용 라이브러리를 조회합니다.
+    if (template.isSubOptionOnly && template.subOptionGroupNo != null) {
+      try {
+        const token = await getAccessToken();
+        const libraryResponse = await fetch(
+          `/api/owner/business/${businessId}/sub-options`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ template }),
+          },
+        );
+
+        const libraryData = await readApiJson(libraryResponse);
+
+        if (!libraryResponse.ok) {
+          throw new Error(
+            libraryData?.error ||
+              "서브옵션 라이브러리 저장에 실패했습니다.",
+          );
+        }
+      } catch (error) {
+        const failureText =
+          error instanceof Error
+            ? `서브옵션 라이브러리 저장 실패: ${error.message}`
+            : "서브옵션 라이브러리 저장에 실패했습니다.";
+
+        setMessage(failureText);
+        setOptionTemplateSaveMessage(failureText);
+        setSavingOptionTemplate(false);
+        return;
+      }
+    }
+
     const changedItemIds: number[] = [];
 
     const nextItems = itemsRef.current.map((item) => {
@@ -3028,8 +3077,47 @@ export default function OwnerBusinessMenuPage() {
     setOptionTemplateOpen(true);
   }
 
-  function deleteOptionTemplate(templateId: string) {
+  async function deleteOptionTemplate(templateId: string) {
     if (!window.confirm("이 옵션 그룹을 삭제할까요?")) return;
+
+    const target =
+      optionTemplates.find((template) => template.id === templateId) || null;
+
+    if (
+      target?.isSubOptionOnly &&
+      target.subOptionGroupNo != null
+    ) {
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/owner/business/${businessId}/sub-options`,
+          {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              subOptionGroupNo: target.subOptionGroupNo,
+            }),
+          },
+        );
+
+        const data = await readApiJson(response);
+        if (!response.ok) {
+          throw new Error(
+            data?.error || "서브옵션 삭제에 실패했습니다.",
+          );
+        }
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? `서브옵션 삭제 실패: ${error.message}`
+            : "서브옵션 삭제에 실패했습니다.",
+        );
+        return;
+      }
+    }
 
     persistOptionTemplates(
       optionTemplates.filter((template) => template.id !== templateId),

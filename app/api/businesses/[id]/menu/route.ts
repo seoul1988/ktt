@@ -153,6 +153,7 @@ export async function GET(
       { data: items, error: itemError },
       { data: optionGroups, error: optionGroupError },
       { data: optionItems, error: optionItemError },
+      { data: libraryGroups, error: libraryGroupError },
     ] = await Promise.all([
       supabase
         .from("business_menu_categories")
@@ -189,12 +190,112 @@ export async function GET(
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
         .order("id", { ascending: true }),
+
+      supabase
+        .from("menu_option_groups")
+        .select(
+          "id,name,required,min_select,max_select,sort_order,active,sub_option_group_no,is_sub_option_only",
+        )
+        .eq("business_id", businessId)
+        .eq("active", true)
+        .eq("is_sub_option_only", true)
+        .not("sub_option_group_no", "is", null)
+        .order("sort_order", { ascending: true }),
     ]);
 
     if (categoryError) throw categoryError;
     if (itemError) throw itemError;
     if (optionGroupError) throw optionGroupError;
     if (optionItemError) throw optionItemError;
+    if (libraryGroupError) throw libraryGroupError;
+
+    const libraryGroupRows = Array.isArray(libraryGroups)
+      ? libraryGroups
+      : [];
+    const libraryGroupIds = libraryGroupRows
+      .map((group) => Number(group.id))
+      .filter(
+        (value) => Number.isInteger(value) && value > 0,
+      );
+
+    let libraryChoices: any[] = [];
+
+    if (libraryGroupIds.length > 0) {
+      const {
+        data: choiceRows,
+        error: libraryChoiceError,
+      } = await supabase
+        .from("menu_option_choices")
+        .select(
+          "id,option_group_id,name,price_delta,sort_order,active,sold_out,use_sub_option,sub_option_group_no",
+        )
+        .in("option_group_id", libraryGroupIds)
+        .eq("active", true)
+        .order("sort_order", { ascending: true });
+
+      if (libraryChoiceError) throw libraryChoiceError;
+      libraryChoices = Array.isArray(choiceRows)
+        ? choiceRows
+        : [];
+    }
+
+    const subOptionLibraryByNo = new Map<number, any>();
+
+    for (const group of libraryGroupRows) {
+      const groupNo = Number(group.sub_option_group_no);
+
+      if (
+        !Number.isInteger(groupNo) ||
+        groupNo <= 0
+      ) {
+        continue;
+      }
+
+      const options = libraryChoices
+        .filter(
+          (choice) =>
+            Number(choice.option_group_id) === Number(group.id),
+        )
+        .map((choice, optionIndex) => ({
+          id: choice.id,
+          name: choice.name,
+          priceDelta: Number(choice.price_delta ?? 0),
+          price_delta: Number(choice.price_delta ?? 0),
+          soldOut: choice.sold_out === true,
+          sold_out: choice.sold_out === true,
+          is_available: choice.sold_out !== true,
+          displayOrder: Number(choice.sort_order ?? optionIndex),
+          display_order: Number(choice.sort_order ?? optionIndex),
+          useSubOption: false,
+          use_sub_option: false,
+          subOptionGroupNo: null,
+          sub_option_group_no: null,
+        }));
+
+      subOptionLibraryByNo.set(groupNo, {
+        id: `sub-library-${group.id}`,
+        name: group.name,
+        required: group.required === true,
+        is_required: group.required === true,
+        minSelect: Math.max(0, Number(group.min_select ?? 0)),
+        min_select: Math.max(0, Number(group.min_select ?? 0)),
+        maxSelect:
+          group.max_select == null
+            ? null
+            : Math.max(0, Number(group.max_select)),
+        max_select:
+          group.max_select == null
+            ? null
+            : Math.max(0, Number(group.max_select)),
+        displayOrder: 9999,
+        display_order: 9999,
+        subOptionGroupNo: groupNo,
+        sub_option_group_no: groupNo,
+        isSubOptionOnly: true,
+        is_sub_option_only: true,
+        options,
+      });
+    }
 
     const optionItemsByGroup = new Map<number, any[]>();
 
@@ -283,8 +384,51 @@ export async function GET(
             .getPublicUrl(item.image_path).data.publicUrl
         : null;
 
-      const groups =
+      const baseGroups =
         optionGroupsByMenu.get(Number(item.id)) || [];
+
+      const referencedSubOptionNumbers = new Set<number>();
+
+      for (const group of baseGroups) {
+        for (const option of Array.isArray(group?.options)
+          ? group.options
+          : []) {
+          const groupNo = Number(
+            option?.subOptionGroupNo ??
+              option?.sub_option_group_no ??
+              0,
+          );
+
+          if (
+            (option?.useSubOption === true ||
+              option?.use_sub_option === true) &&
+            Number.isInteger(groupNo) &&
+            groupNo > 0
+          ) {
+            referencedSubOptionNumbers.add(groupNo);
+          }
+        }
+      }
+
+      const attachedSubOptionGroups = Array.from(
+        referencedSubOptionNumbers,
+      )
+        .map((groupNo) =>
+          subOptionLibraryByNo.get(groupNo),
+        )
+        .filter(Boolean)
+        .map((group, index) => ({
+          ...group,
+          displayOrder: baseGroups.length + index,
+          display_order: baseGroups.length + index,
+        }));
+
+      const groups = [
+        ...baseGroups.filter(
+          (group) => group?.isSubOptionOnly !== true,
+        ),
+        ...attachedSubOptionGroups,
+      ];
 
       const basePrice =
         item.price === null ||
