@@ -2560,7 +2560,9 @@ export default function OwnerBusinessMenuPage() {
         minSelect: Math.max(0, Number(templateMinInput) || 0),
         maxSelect: templateMaxInput == null ? null : Math.max(0, templateMaxInput),
         subOptionGroupNo: templateSubOptionGroupNoInput,
-        isSubOptionOnly: templateIsSubOptionOnlyInput,
+        isSubOptionOnly:
+          templateSubOptionGroupNoInput != null &&
+          Number(templateSubOptionGroupNoInput) > 0,
         options: sourceOptions,
       };
     }
@@ -2746,7 +2748,10 @@ export default function OwnerBusinessMenuPage() {
         templateSubOptionGroupNoInput == null
           ? null
           : Math.max(1, Math.floor(templateSubOptionGroupNoInput)),
-      isSubOptionOnly: templateIsSubOptionOnlyInput,
+      // SUB 번호가 있으면 자동으로 서브옵션 전용입니다.
+      isSubOptionOnly:
+        templateSubOptionGroupNoInput != null &&
+        Number(templateSubOptionGroupNoInput) > 0,
       options: templateOptionsInput.map((option, index) => ({
         name: option.name.trim() || `Option ${index + 1}`,
         priceDelta: Number(Number(option.priceDelta || 0).toFixed(2)),
@@ -3067,7 +3072,9 @@ export default function OwnerBusinessMenuPage() {
     setTemplateMinInput(template.minSelect);
     setTemplateMaxInput(template.maxSelect);
     setTemplateSubOptionGroupNoInput(template.subOptionGroupNo ?? null);
-    setTemplateIsSubOptionOnlyInput(Boolean(template.isSubOptionOnly));
+    setTemplateIsSubOptionOnlyInput(
+      Number(template.subOptionGroupNo || 0) > 0,
+    );
     setTemplateOptionsInput(
       template.options.map((option, index) => ({
         ...option,
@@ -6768,46 +6775,36 @@ export default function OwnerBusinessMenuPage() {
                   </label>
                 </div>
 
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <label className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
-                    <span className="block text-[10px] font-black text-violet-700">
-                      서브옵션 그룹 번호
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={
-                        templateSubOptionGroupNoInput == null
-                          ? ""
-                          : templateSubOptionGroupNoInput
-                      }
-                      placeholder="예: 1001"
-                      onChange={(event) =>
-                        setTemplateSubOptionGroupNoInput(
-                          event.target.value === ""
-                            ? null
-                            : Math.max(
-                                1,
-                                Math.floor(Number(event.target.value) || 1),
-                              ),
-                        )
-                      }
-                      className="mt-1 w-full bg-transparent text-sm font-black outline-none"
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-800">
-                    <input
-                      type="checkbox"
-                      checked={templateIsSubOptionOnlyInput}
-                      disabled={subOptionRegistrationMode}
-                      onChange={(event) =>
-                        setTemplateIsSubOptionOnlyInput(event.target.checked)
-                      }
-                    />
-                    서브옵션 전용 그룹
-                  </label>
-                </div>
+                {(subOptionRegistrationMode || templateIsSubOptionOnlyInput) && (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+                      <span className="block text-[10px] font-black text-violet-700">
+                        서브옵션 그룹 번호
+                      </span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={
+                          templateSubOptionGroupNoInput == null
+                            ? ""
+                            : templateSubOptionGroupNoInput
+                        }
+                        placeholder="예: 1001"
+                        onChange={(event) =>
+                          setTemplateSubOptionGroupNoInput(
+                            event.target.value === ""
+                              ? null
+                              : Math.max(
+                                  1,
+                                  Math.floor(Number(event.target.value) || 1),
+                                ),
+                          )
+                        }
+                        className="mt-1 w-full bg-transparent text-sm font-black outline-none"
+                      />
+                    </label>
+                  </div>
+                )}
 
                 <div className="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-white">
                   {templateOptionsInput.length === 0 ? (
