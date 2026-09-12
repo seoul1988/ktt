@@ -564,7 +564,7 @@ export async function POST(
           "restaurant_order_private_settings",
         )
         .select(
-          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number,delivery_provider,uber_direct_enabled,uber_direct_customer_id,delivery_fee_markup_cents,pickup_phone_override",
+          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number,delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,delivery_fee_markup_cents,pickup_phone_override",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
