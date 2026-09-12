@@ -19,6 +19,10 @@ type MenuOption = {
   priceDelta: number;
   soldOut: boolean;
   displayOrder: number;
+  /** 선택 시 연결된 서브옵션 그룹을 펼칠지 여부 */
+  useSubOption?: boolean;
+  /** 연결할 서브옵션 그룹 번호 */
+  subOptionGroupNo?: number | null;
 };
 
 type MenuOptionGroup = {
@@ -29,6 +33,10 @@ type MenuOptionGroup = {
   minSelect: number | "";
   maxSelect: number | null;
   displayOrder: number;
+  /** 다른 옵션에서 참조할 수 있는 서브옵션 그룹 번호 */
+  subOptionGroupNo?: number | null;
+  /** true면 부모 옵션이 선택됐을 때만 표시할 그룹 */
+  isSubOptionOnly?: boolean;
   options: MenuOption[];
 };
 
@@ -40,6 +48,10 @@ type MenuOptionTemplate = {
   required: boolean;
   minSelect: number;
   maxSelect: number | null;
+  /** 옵션 라이브러리의 서브옵션 그룹 번호 */
+  subOptionGroupNo?: number | null;
+  /** 이 그룹은 서브옵션 전용 */
+  isSubOptionOnly?: boolean;
   options: MenuOption[];
 };
 
@@ -166,11 +178,41 @@ function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
       0,
       Math.floor(Number(group?.displayOrder) || groupIndex),
     ),
+    subOptionGroupNo: (() => {
+      const value =
+        (group as any)?.subOptionGroupNo ??
+        (group as any)?.sub_option_group_no;
+      if (value == null || value === "") return null;
+      const numberValue = Number(value);
+      return Number.isInteger(numberValue) && numberValue > 0
+        ? numberValue
+        : null;
+    })(),
+    isSubOptionOnly: Boolean(
+      (group as any)?.isSubOptionOnly ??
+        (group as any)?.is_sub_option_only ??
+        false,
+    ),
     options: Array.isArray(group?.options)
       ? group.options.map((option, optionIndex) => ({
           name: String(option?.name || `Option ${optionIndex + 1}`),
           priceDelta: Number(option?.priceDelta || 0),
           soldOut: Boolean(option?.soldOut),
+          useSubOption: Boolean(
+            (option as any)?.useSubOption ??
+              (option as any)?.use_sub_option ??
+              false,
+          ),
+          subOptionGroupNo: (() => {
+            const value =
+              (option as any)?.subOptionGroupNo ??
+              (option as any)?.sub_option_group_no;
+            if (value == null || value === "") return null;
+            const numberValue = Number(value);
+            return Number.isInteger(numberValue) && numberValue > 0
+              ? numberValue
+              : null;
+          })(),
           displayOrder: Math.max(
             0,
             Math.floor(Number(option?.displayOrder) || optionIndex),
@@ -641,6 +683,10 @@ export default function OwnerBusinessMenuPage() {
   const [templateRequiredInput, setTemplateRequiredInput] = useState(false);
   const [templateMinInput, setTemplateMinInput] = useState<number | "">("");
   const [templateMaxInput, setTemplateMaxInput] = useState<number | null>(null);
+  const [templateSubOptionGroupNoInput, setTemplateSubOptionGroupNoInput] =
+    useState<number | null>(null);
+  const [templateIsSubOptionOnlyInput, setTemplateIsSubOptionOnlyInput] =
+    useState(false);
   const [templateOptionsInput, setTemplateOptionsInput] = useState<MenuOption[]>([]);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [savingOptionTemplate, setSavingOptionTemplate] = useState(false);
@@ -1751,11 +1797,29 @@ export default function OwnerBusinessMenuPage() {
                 0,
                 Math.floor(Number(template.maxSelect) || 0),
               ),
+        subOptionGroupNo: (() => {
+          const value = (template as any)?.subOptionGroupNo;
+          if (value == null || value === "") return null;
+          const numberValue = Number(value);
+          return Number.isInteger(numberValue) && numberValue > 0
+            ? numberValue
+            : null;
+        })(),
+        isSubOptionOnly: Boolean((template as any)?.isSubOptionOnly),
         options: Array.isArray(template?.options)
           ? template.options.map((option, optionIndex) => ({
               name: String(option?.name || `Option ${optionIndex + 1}`),
               priceDelta: Number(option?.priceDelta || 0),
               soldOut: Boolean(option?.soldOut),
+              useSubOption: Boolean((option as any)?.useSubOption),
+              subOptionGroupNo: (() => {
+                const value = (option as any)?.subOptionGroupNo;
+                if (value == null || value === "") return null;
+                const numberValue = Number(value);
+                return Number.isInteger(numberValue) && numberValue > 0
+                  ? numberValue
+                  : null;
+              })(),
               displayOrder: optionIndex,
             }))
           : [],
@@ -1913,6 +1977,10 @@ export default function OwnerBusinessMenuPage() {
           existing.options.length === 0 ? template.minSelect : existing.minSelect,
         maxSelect:
           existing.options.length === 0 ? template.maxSelect : existing.maxSelect,
+        subOptionGroupNo:
+          existing.subOptionGroupNo ?? template.subOptionGroupNo ?? null,
+        isSubOptionOnly:
+          existing.isSubOptionOnly ?? template.isSubOptionOnly ?? false,
         options: mergedOptions.map((option, index) => ({
           ...option,
           displayOrder: index,
@@ -1940,6 +2008,8 @@ export default function OwnerBusinessMenuPage() {
           required: group.required,
           minSelect: Number(group.minSelect) || 0,
           maxSelect: group.maxSelect,
+          subOptionGroupNo: group.subOptionGroupNo ?? null,
+          isSubOptionOnly: Boolean(group.isSubOptionOnly),
           options: group.options.map((option, optionIndex) => ({
             ...option,
             displayOrder: optionIndex,
@@ -2259,6 +2329,8 @@ export default function OwnerBusinessMenuPage() {
       setTemplateRequiredInput(targetTemplate.required);
       setTemplateMinInput(targetTemplate.minSelect);
       setTemplateMaxInput(targetTemplate.maxSelect);
+      setTemplateSubOptionGroupNoInput(targetTemplate.subOptionGroupNo ?? null);
+      setTemplateIsSubOptionOnlyInput(Boolean(targetTemplate.isSubOptionOnly));
       setTemplateOptionsInput(
         targetTemplate.options.map((option, index) => ({
           ...option,
@@ -2366,6 +2438,8 @@ export default function OwnerBusinessMenuPage() {
     setTemplateRequiredInput(false);
     setTemplateMinInput(0);
     setTemplateMaxInput(null);
+    setTemplateSubOptionGroupNoInput(null);
+    setTemplateIsSubOptionOnlyInput(false);
     setTemplateOptionsInput([]);
   }
 
@@ -2377,6 +2451,8 @@ export default function OwnerBusinessMenuPage() {
         priceDelta: 0,
         soldOut: false,
         displayOrder: current.length,
+        useSubOption: false,
+        subOptionGroupNo: null,
       },
     ]);
   }
@@ -2444,6 +2520,8 @@ export default function OwnerBusinessMenuPage() {
         required: templateRequiredInput,
         minSelect: Math.max(0, Number(templateMinInput) || 0),
         maxSelect: templateMaxInput == null ? null : Math.max(0, templateMaxInput),
+        subOptionGroupNo: templateSubOptionGroupNoInput,
+        isSubOptionOnly: templateIsSubOptionOnlyInput,
         options: sourceOptions,
       };
     }
@@ -2585,6 +2663,24 @@ export default function OwnerBusinessMenuPage() {
       return;
     }
 
+    const invalidSubOption = templateOptionsInput.find(
+      (option) =>
+        option.useSubOption &&
+        (!Number.isInteger(Number(option.subOptionGroupNo)) ||
+          Number(option.subOptionGroupNo) <= 0),
+    );
+
+    if (invalidSubOption) {
+      setMessage(
+        `"${invalidSubOption.name}"의 서브옵션 그룹 번호를 입력하세요.`,
+      );
+      setOptionTemplateSaveMessage(
+        "서브옵션 사용 항목에는 그룹 번호가 필요합니다.",
+      );
+      setSavingOptionTemplate(false);
+      return;
+    }
+
     const oldTemplate = editingTemplateId
       ? optionTemplates.find((row) => row.id === editingTemplateId) || null
       : null;
@@ -2607,11 +2703,24 @@ export default function OwnerBusinessMenuPage() {
         templateMaxInput == null
           ? null
           : Math.max(0, templateMaxInput),
+      subOptionGroupNo:
+        templateSubOptionGroupNoInput == null
+          ? null
+          : Math.max(1, Math.floor(templateSubOptionGroupNoInput)),
+      isSubOptionOnly: templateIsSubOptionOnlyInput,
       options: templateOptionsInput.map((option, index) => ({
         name: option.name.trim() || `Option ${index + 1}`,
         priceDelta: Number(Number(option.priceDelta || 0).toFixed(2)),
         soldOut: Boolean(option.soldOut),
         displayOrder: index,
+        useSubOption: Boolean(option.useSubOption),
+        subOptionGroupNo:
+          option.useSubOption && option.subOptionGroupNo != null
+            ? Math.max(
+                1,
+                Math.floor(Number(option.subOptionGroupNo) || 1),
+              )
+            : null,
       })),
     };
 
@@ -2658,6 +2767,8 @@ export default function OwnerBusinessMenuPage() {
           minSelect: template.minSelect,
           maxSelect: template.maxSelect,
           displayOrder: groupIndex,
+          subOptionGroupNo: template.subOptionGroupNo ?? null,
+          isSubOptionOnly: Boolean(template.isSubOptionOnly),
           options: template.options.map((option, optionIndex) => ({
             ...option,
             displayOrder: optionIndex,
@@ -2829,6 +2940,8 @@ export default function OwnerBusinessMenuPage() {
     setTemplateRequiredInput(template.required);
     setTemplateMinInput(template.minSelect);
     setTemplateMaxInput(template.maxSelect);
+    setTemplateSubOptionGroupNoInput(template.subOptionGroupNo ?? null);
+    setTemplateIsSubOptionOnlyInput(Boolean(template.isSubOptionOnly));
     setTemplateOptionsInput(
       template.options.map((option, index) => ({
         ...option,
@@ -2872,6 +2985,8 @@ export default function OwnerBusinessMenuPage() {
         minSelect: template.minSelect,
         maxSelect: template.maxSelect,
         displayOrder: groups.length,
+        subOptionGroupNo: template.subOptionGroupNo ?? null,
+        isSubOptionOnly: Boolean(template.isSubOptionOnly),
         options: template.options.map((option, index) => ({
           ...option,
           displayOrder: index,
@@ -2967,6 +3082,8 @@ export default function OwnerBusinessMenuPage() {
       required: group.required,
       minSelect: Number(group.minSelect) || 0,
       maxSelect: group.maxSelect,
+      subOptionGroupNo: group.subOptionGroupNo ?? null,
+      isSubOptionOnly: Boolean(group.isSubOptionOnly),
       options: group.options.map((option, index) => ({
         ...option,
         displayOrder: index,
@@ -3208,6 +3325,14 @@ export default function OwnerBusinessMenuPage() {
             priceDelta: Number(priceDelta.toFixed(2)),
             soldOut: Boolean(option.soldOut),
             displayOrder: optionIndex,
+            useSubOption: Boolean(option.useSubOption),
+            subOptionGroupNo:
+              option.useSubOption && option.subOptionGroupNo != null
+                ? Math.max(
+                    1,
+                    Math.floor(Number(option.subOptionGroupNo) || 1),
+                  )
+                : null,
           };
         });
 
@@ -3217,6 +3342,14 @@ export default function OwnerBusinessMenuPage() {
           minSelect,
           maxSelect,
           displayOrder: groupIndex,
+          subOptionGroupNo:
+            group.subOptionGroupNo == null
+              ? null
+              : Math.max(
+                  1,
+                  Math.floor(Number(group.subOptionGroupNo) || 1),
+                ),
+          isSubOptionOnly: Boolean(group.isSubOptionOnly),
           options,
         };
       }),
@@ -6032,6 +6165,16 @@ export default function OwnerBusinessMenuPage() {
                           <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
                             {template.options.length}개
                           </span>
+                          {template.subOptionGroupNo ? (
+                            <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700">
+                              SUB #{template.subOptionGroupNo}
+                            </span>
+                          ) : null}
+                          {template.isSubOptionOnly ? (
+                            <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800">
+                              서브전용
+                            </span>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => {
@@ -6236,6 +6379,46 @@ export default function OwnerBusinessMenuPage() {
                   </label>
                 </div>
 
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <label className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+                    <span className="block text-[10px] font-black text-violet-700">
+                      서브옵션 그룹 번호
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={
+                        templateSubOptionGroupNoInput == null
+                          ? ""
+                          : templateSubOptionGroupNoInput
+                      }
+                      placeholder="예: 1001"
+                      onChange={(event) =>
+                        setTemplateSubOptionGroupNoInput(
+                          event.target.value === ""
+                            ? null
+                            : Math.max(
+                                1,
+                                Math.floor(Number(event.target.value) || 1),
+                              ),
+                        )
+                      }
+                      className="mt-1 w-full bg-transparent text-sm font-black outline-none"
+                    />
+                  </label>
+
+                  <label className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-800">
+                    <input
+                      type="checkbox"
+                      checked={templateIsSubOptionOnlyInput}
+                      onChange={(event) =>
+                        setTemplateIsSubOptionOnlyInput(event.target.checked)
+                      }
+                    />
+                    서브옵션 전용 그룹
+                  </label>
+                </div>
+
                 <div className="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-white">
                   {templateOptionsInput.length === 0 ? (
                     <div className="px-3 py-4 text-center text-xs font-bold text-gray-400">
@@ -6245,7 +6428,7 @@ export default function OwnerBusinessMenuPage() {
                     templateOptionsInput.map((option, optionIndex) => (
                       <div
                         key={`template-option-${optionIndex}`}
-                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_96px_150px_auto_auto]"
+                        className="grid gap-2 border-b border-gray-100 p-2 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_96px_150px_120px_110px_auto_auto]"
                       >
                         <input
                           value={option.name}
@@ -6314,6 +6497,46 @@ export default function OwnerBusinessMenuPage() {
                             </option>
                           ))}
                         </select>
+
+                        <label className="flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-2 text-[10px] font-black text-violet-800">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(option.useSubOption)}
+                            onChange={(event) =>
+                              updateTemplateOption(optionIndex, {
+                                useSubOption: event.target.checked,
+                                subOptionGroupNo: event.target.checked
+                                  ? option.subOptionGroupNo ?? null
+                                  : null,
+                              })
+                            }
+                          />
+                          서브옵션 사용
+                        </label>
+
+                        <input
+                          type="number"
+                          min={1}
+                          disabled={!option.useSubOption}
+                          value={
+                            option.subOptionGroupNo == null
+                              ? ""
+                              : option.subOptionGroupNo
+                          }
+                          placeholder="그룹 번호"
+                          onChange={(event) =>
+                            updateTemplateOption(optionIndex, {
+                              subOptionGroupNo:
+                                event.target.value === ""
+                                  ? null
+                                  : Math.max(
+                                      1,
+                                      Math.floor(Number(event.target.value) || 1),
+                                    ),
+                            })
+                          }
+                          className="rounded-lg border border-violet-200 bg-white px-2 py-2 text-[10px] font-black outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                        />
 
                         <label className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-2 text-[10px] font-black">
                           <input
