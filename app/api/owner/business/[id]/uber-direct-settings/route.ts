@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -116,6 +117,32 @@ async function loadRow(supabase: any, businessId: number) {
   return data;
 }
 
+/**
+ * Secret 원문은 절대 응답하지 않고 SHA-256 지문만 반환합니다.
+ * PowerShell / Supabase에서 계산한 SHA-256과 비교하면
+ * 실제 Vercel 서버가 어느 Secret을 읽고 있는지 확인할 수 있습니다.
+ */
+function credentialDebug(
+  businessId: number,
+  clientId: string,
+  clientSecret: string,
+  customerId: string,
+) {
+  return {
+    businessId,
+    clientIdMasked: mask(clientId),
+    clientIdLength: clientId.length,
+    clientSecretLength: clientSecret.length,
+    clientSecretSha256: createHash("sha256")
+      .update(clientSecret, "utf8")
+      .digest("hex"),
+    customerIdMasked: mask(customerId),
+    customerIdLength: customerId.length,
+    authUrl: "https://auth.uber.com/oauth/v2/token",
+    scope: "eats.deliveries",
+  };
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -178,7 +205,9 @@ export async function PUT(
     const webhookSigningKey = String(body?.webhookSigningKey || "").trim();
     const enabled = body?.enabled === true;
 
-    const nextClientId = clientId || String(current?.uber_direct_client_id || "").trim();
+    // 입력칸을 비운 채 저장해도 기존 값을 유지합니다.
+    const nextClientId =
+      clientId || String(current?.uber_direct_client_id || "").trim();
     const nextClientSecret =
       clientSecret || String(current?.uber_direct_client_secret || "").trim();
     const nextCustomerId =
@@ -251,9 +280,13 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}));
     if (body?.action !== "test") {
-      return NextResponse.json({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+      return NextResponse.json(
+        { error: "지원하지 않는 요청입니다." },
+        { status: 400 },
+      );
     }
 
+    // 연결 테스트는 반드시 DB에 저장된 식당별 자격증명을 사용합니다.
     const row = await loadRow(access.supabase, businessId);
     const clientId = String(row?.uber_direct_client_id || "").trim();
     const clientSecret = String(row?.uber_direct_client_secret || "").trim();
@@ -266,36 +299,63 @@ export async function POST(
       );
     }
 
-    const tokenResponse = await fetch("https://auth.uber.com/oauth/v2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: "client_credentials",
-        scope: "eats.deliveries",
-      }),
-      cache: "no-store",
-    });
+    const debug = credentialDebug(
+      businessId,
+      clientId,
+      clientSecret,
+      customerId,
+    );
+
+    const tokenResponse = await fetch(
+      "https://auth.uber.com/oauth/v2/token",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "client_credentials",
+          scope: "eats.deliveries",
+        }),
+        cache: "no-store",
+      },
+    );
 
     const tokenPayload = await tokenResponse.json().catch(() => ({}));
 
     if (!tokenResponse.ok || !tokenPayload?.access_token) {
+      const uberMessage =
+        tokenPayload?.error_description ||
+        tokenPayload?.error ||
+        `Uber 인증 실패 (HTTP ${tokenResponse.status})`;
+
+      console.error("[owner uber-direct-settings] Uber auth failed", {
+        status: tokenResponse.status,
+        uberError: tokenPayload?.error || null,
+        uberErrorDescription: tokenPayload?.error_description || null,
+        debug,
+      });
+
       return NextResponse.json(
         {
-          error:
-            tokenPayload?.error_description ||
-            tokenPayload?.error ||
-            `Uber 인증 실패 (HTTP ${tokenResponse.status})`,
+          error: uberMessage,
+          uberStatus: tokenResponse.status,
+          uberError: tokenPayload?.error || null,
+          debug,
         },
         { status: 400 },
       );
     }
 
+    // 성공했을 때도 동일한 지문을 반환하므로
+    // 실제 배포 서버가 올바른 DB 값을 읽는지 확인할 수 있습니다.
     return NextResponse.json({
       ok: true,
       authenticated: true,
       customerIdMasked: mask(customerId),
+      debug,
     });
   } catch (error) {
     return jsonError(error, "Uber Direct 연결 확인에 실패했습니다.");
