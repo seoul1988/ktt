@@ -4,6 +4,16 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type NormalizedSubOptionChoice = {
+  name: string;
+  price_delta: number;
+  sort_order: number;
+  active: boolean;
+  sold_out: boolean;
+  use_sub_option: boolean;
+  sub_option_group_no: number | null;
+};
+
 function getSupabaseAdmin() {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -158,8 +168,8 @@ export async function PUT(
       ? template.options
       : [];
 
-    const normalizedOptions = options.map(
-      (option: any, index: number) => {
+    const normalizedOptions: NormalizedSubOptionChoice[] = options.map(
+      (option: any, index: number): NormalizedSubOptionChoice => {
         const optionName = String(option?.name || "").trim();
         if (!optionName) {
           throw new Error(
@@ -263,7 +273,7 @@ export async function PUT(
       const { error: insertChoicesError } = await supabase
         .from("menu_option_choices")
         .insert(
-          normalizedOptions.map((option) => ({
+          normalizedOptions.map((option: NormalizedSubOptionChoice) => ({
             option_group_id: groupId,
             ...option,
           })),
