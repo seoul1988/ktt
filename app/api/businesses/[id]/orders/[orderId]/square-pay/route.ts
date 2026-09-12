@@ -73,7 +73,7 @@ export async function POST(
 
     const body = await request.json();
     const sourceId = String(body?.sourceId || "").trim();
-    const requestedPaymentMethod = String(body?.paymentMethod || "")
+    const requestedPaymentMethod = String(body?.paymentMethodType || "")
       .trim()
       .toLowerCase();
     const paymentMethodType =
