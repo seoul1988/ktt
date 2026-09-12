@@ -257,11 +257,14 @@ export async function createUberDirectQuote(args: {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    console.error(
+      "UBER DIRECT QUOTE ERROR",
+      response.status,
+      JSON.stringify(payload),
+    );
+
     throw new Error(
-      errorDetail(
-        payload,
-        `Uber Direct quote failed (HTTP ${response.status}).`,
-      ),
+      `Uber Direct quote failed (${response.status}): ${JSON.stringify(payload)}`,
     );
   }
 
