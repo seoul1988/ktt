@@ -566,112 +566,111 @@ export default function MenuItemModal({
     [groups],
   );
 
-  function childGroupsForParent(
+  function childGroupsForOption(
     parentGroup: ReturnType<typeof getOptionGroups>[number],
     parentIndex: number,
+    optionIndex: number,
   ) {
+    const option = parentGroup.options[optionIndex];
+    if (!option) return [];
+
     const values =
       safeSelections[groupKey(parentGroup, parentIndex)] || {};
 
-    const childIndexes = new Set<number>();
+    const quantity = toSafeInteger(
+      values[optionKey(option, optionIndex)],
+    );
 
-    parentGroup.options.forEach((option, optionIndex) => {
-      const quantity = toSafeInteger(
-        values[optionKey(option, optionIndex)],
+    const useSubOption = Boolean(
+      (option as any)?.useSubOption,
+    );
+
+    const subOptionGroupNo = Number(
+      (option as any)?.subOptionGroupNo || 0,
+    );
+
+    if (
+      quantity <= 0 ||
+      !useSubOption ||
+      !Number.isInteger(subOptionGroupNo) ||
+      subOptionGroupNo <= 0
+    ) {
+      return [];
+    }
+
+    return groups
+      .map((candidate, candidateIndex) => ({
+        group: candidate,
+        originalIndex: candidateIndex,
+      }))
+      .filter(
+        ({ group }) =>
+          Boolean((group as any)?.isSubOptionOnly) &&
+          Number((group as any)?.subOptionGroupNo || 0) ===
+            subOptionGroupNo,
       );
-
-      const useSubOption = Boolean(
-        (option as any)?.useSubOption,
-      );
-
-      const subOptionGroupNo = Number(
-        (option as any)?.subOptionGroupNo || 0,
-      );
-
-      if (
-        quantity <= 0 ||
-        !useSubOption ||
-        !Number.isInteger(subOptionGroupNo) ||
-        subOptionGroupNo <= 0
-      ) {
-        return;
-      }
-
-      groups.forEach((candidate, candidateIndex) => {
-        if (
-          Boolean((candidate as any)?.isSubOptionOnly) &&
-          Number((candidate as any)?.subOptionGroupNo || 0) ===
-            subOptionGroupNo
-        ) {
-          childIndexes.add(candidateIndex);
-        }
-      });
-    });
-
-    return Array.from(childIndexes)
-      .sort((a, b) => a - b)
-      .map((childIndex) => ({
-        group: groups[childIndex],
-        originalIndex: childIndex,
-      }));
   }
 
-  function renderChildGroups(
+  function renderChildGroupsForOption(
     parentGroup: ReturnType<typeof getOptionGroups>[number],
     parentIndex: number,
+    optionIndex: number,
   ) {
-    const children = childGroupsForParent(
+    const children = childGroupsForOption(
       parentGroup,
       parentIndex,
+      optionIndex,
     );
 
     if (children.length === 0) return null;
 
     return (
-      <div className="mt-3 space-y-3 border-l-4 border-violet-300 pl-3">
-        {children.map(({ group, originalIndex }) => {
-          const childKey = groupKey(group, originalIndex);
-          const description = String(
-            (group as any)?.description || "",
-          ).trim();
+      <div className="pb-3 pl-3">
+        <div className="space-y-3 border-l-4 border-violet-300 pl-3">
+          {children.map(({ group, originalIndex }) => {
+            const childKey = groupKey(group, originalIndex);
+            const description = String(
+              (group as any)?.description || "",
+            ).trim();
 
-          return (
-            <div
-              key={`sub-option-${childKey}`}
-              className="rounded-xl border border-violet-200 bg-violet-50/70 p-3"
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-wider text-violet-700">
-                    Sub Option
-                  </p>
-                  {description ? (
-                    <p className="mt-1 text-[11px] font-bold text-gray-600">
-                      {description}
+            return (
+              <div
+                key={`sub-option-${childKey}`}
+                className="rounded-xl border border-violet-200 bg-violet-50/80 p-3"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-violet-700">
+                      Sub Option
                     </p>
-                  ) : null}
+                    {description ? (
+                      <p className="mt-1 text-[11px] font-bold text-gray-600">
+                        {description}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-700">
+                    #{Number((group as any)?.subOptionGroupNo || 0)}
+                  </span>
                 </div>
 
-                <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-700">
-                  #{Number((group as any)?.subOptionGroupNo || 0)}
-                </span>
+                <MenuOptionGroup
+                  group={group}
+                  groupIndex={originalIndex}
+                  quantities={safeSelections[childKey] || {}}
+                  onSetQuantity={(childOptionIndex, quantity) =>
+                    setOptionQuantity(
+                      originalIndex,
+                      childOptionIndex,
+                      quantity,
+                    )
+                  }
+                />
               </div>
-
-              <MenuOptionGroup
-                group={group}
-                groupIndex={originalIndex}
-                quantities={safeSelections[childKey] || {}}
-                onSetQuantity={(optionIndex, quantity) =>
-                  setOptionQuantity(
-                    originalIndex,
-                    optionIndex,
-                    quantity,
-                  )
-                }
-              />
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -1001,10 +1000,16 @@ export default function MenuItemModal({
                                       quantity,
                                     )
                                   }
+                                  renderAfterOption={(optionIndex) =>
+                                    renderChildGroupsForOption(
+                                      group,
+                                      originalIndex,
+                                      optionIndex,
+                                    )
+                                  }
                                 />
                               </div>
 
-                              {renderChildGroups(group, originalIndex)}
                             </>
                           )}
                         </div>
@@ -1037,10 +1042,16 @@ export default function MenuItemModal({
                                 quantity,
                               )
                             }
+                            renderAfterOption={(optionIndex) =>
+                              renderChildGroupsForOption(
+                                group,
+                                originalIndex,
+                                optionIndex,
+                              )
+                            }
                           />
                         </div>
 
-                        {renderChildGroups(group, originalIndex)}
                       </div>
                     );
                   },

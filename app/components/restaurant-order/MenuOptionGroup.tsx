@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment, type ReactNode } from "react";
 import type { MenuOptionGroup as MenuOptionGroupType } from "./types";
 import { optionKey } from "./types";
 
@@ -8,6 +9,8 @@ type Props = {
   groupIndex: number;
   quantities: Record<string, number>;
   onSetQuantity: (optionIndex: number, requestedQuantity: number) => void;
+  /** 선택 항목 바로 아래에 추가 UI를 펼칠 때 사용 */
+  renderAfterOption?: (optionIndex: number) => ReactNode;
 };
 
 function toInt(value: unknown) {
@@ -70,6 +73,7 @@ export default function MenuOptionGroup({
   groupIndex,
   quantities,
   onSetQuantity,
+  renderAfterOption,
 }: Props) {
   const { minimum, maximum } = getRules(group);
 
@@ -207,37 +211,40 @@ export default function MenuOptionGroup({
 
           if (singleChoice) {
             return (
-              <label
-                key={`${groupIndex}:${key}`}
-                className={`flex cursor-pointer items-center gap-3 py-3 text-sm ${
-                  option.soldOut ? "cursor-not-allowed opacity-40" : ""
-                }`}
-              >
-                <input
-                  type="radio"
-                  name={`menu-option-group-${groupIndex}`}
-                  checked={checked}
-                  disabled={option.soldOut}
-                  onChange={() => {
-                    if (option.soldOut) return;
-                    setQuantitySafely(optionIndex, 1);
-                  }}
-                  className="h-4 w-4"
-                />
+              <Fragment key={`${groupIndex}:${key}`}>
+                <label
+                  className={`flex cursor-pointer items-center gap-3 py-3 text-sm ${
+                    option.soldOut ? "cursor-not-allowed opacity-40" : ""
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`menu-option-group-${groupIndex}`}
+                    checked={checked}
+                    disabled={option.soldOut}
+                    onChange={() => {
+                      if (option.soldOut) return;
+                      setQuantitySafely(optionIndex, 1);
+                    }}
+                    className="h-4 w-4"
+                  />
 
-                <span className="min-w-0 flex-1 font-semibold">
-                  {option.name}
-                  {option.soldOut ? " · Sold Out" : ""}
-                </span>
+                  <span className="min-w-0 flex-1 font-semibold">
+                    {option.name}
+                    {option.soldOut ? " · Sold Out" : ""}
+                  </span>
 
-                <span className="shrink-0 text-xs font-bold opacity-60">
-                  {option.priceDelta > 0
-                    ? `+$${option.priceDelta.toFixed(2)}`
-                    : option.priceDelta < 0
-                      ? `-$${Math.abs(option.priceDelta).toFixed(2)}`
-                      : "+$0.00"}
-                </span>
-              </label>
+                  <span className="shrink-0 text-xs font-bold opacity-60">
+                    {option.priceDelta > 0
+                      ? `+$${option.priceDelta.toFixed(2)}`
+                      : option.priceDelta < 0
+                        ? `-$${Math.abs(option.priceDelta).toFixed(2)}`
+                        : "+$0.00"}
+                  </span>
+                </label>
+
+                {renderAfterOption?.(optionIndex)}
+              </Fragment>
             );
           }
 
@@ -246,41 +253,44 @@ export default function MenuOptionGroup({
             (!checked && maximumReached);
 
           return (
-            <label
-              key={`${groupIndex}:${key}`}
-              className={`flex cursor-pointer items-center gap-3 py-3 text-sm ${
-                option.soldOut ? "cursor-not-allowed opacity-40" : ""
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="font-semibold">
-                  {option.name}
-                  {option.soldOut ? " · Sold Out" : ""}
-                </div>
-                {option.priceDelta !== 0 ? (
-                  <div className="mt-0.5 text-xs font-medium opacity-65">
-                    {option.priceDelta > 0
-                      ? `$${option.priceDelta.toFixed(2)}`
-                      : `-$${Math.abs(option.priceDelta).toFixed(2)}`}
+            <Fragment key={`${groupIndex}:${key}`}>
+              <label
+                className={`flex cursor-pointer items-center gap-3 py-3 text-sm ${
+                  option.soldOut ? "cursor-not-allowed opacity-40" : ""
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">
+                    {option.name}
+                    {option.soldOut ? " · Sold Out" : ""}
                   </div>
-                ) : null}
-              </div>
+                  {option.priceDelta !== 0 ? (
+                    <div className="mt-0.5 text-xs font-medium opacity-65">
+                      {option.priceDelta > 0
+                        ? `$${option.priceDelta.toFixed(2)}`
+                        : `-$${Math.abs(option.priceDelta).toFixed(2)}`}
+                    </div>
+                  ) : null}
+                </div>
 
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={cannotSelectNew}
-                onChange={(event) => {
-                  if (event.target.checked) {
-                    if (maximumReached) return;
-                    setQuantitySafely(optionIndex, 1);
-                  } else {
-                    setQuantitySafely(optionIndex, 0);
-                  }
-                }}
-                className="h-5 w-5 shrink-0 rounded border-black/25 accent-black"
-              />
-            </label>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={cannotSelectNew}
+                  onChange={(event) => {
+                    if (event.target.checked) {
+                      if (maximumReached) return;
+                      setQuantitySafely(optionIndex, 1);
+                    } else {
+                      setQuantitySafely(optionIndex, 0);
+                    }
+                  }}
+                  className="h-5 w-5 shrink-0 rounded border-black/25 accent-black"
+                />
+              </label>
+
+              {renderAfterOption?.(optionIndex)}
+            </Fragment>
           );
         })}
       </div>
