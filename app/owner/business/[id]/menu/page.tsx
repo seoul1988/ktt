@@ -2777,7 +2777,7 @@ export default function OwnerBusinessMenuPage() {
       const groups = normalizeOptionGroups(item);
       let changed = false;
 
-      const nextGroups = groups.map((group, groupIndex) => {
+      let nextGroups = groups.map((group, groupIndex) => {
         const groupKey = group.name.trim().toLowerCase();
 
         // 수정 전 이름 또는 수정 후 이름이 같은 그룹은
@@ -2804,7 +2804,51 @@ export default function OwnerBusinessMenuPage() {
         };
       });
 
+      if (
+        template.isSubOptionOnly &&
+        template.subOptionGroupNo != null
+      ) {
+        const groupNo = Number(template.subOptionGroupNo);
+        const isReferenced = nextGroups.some(
+          (group) =>
+            !group.isSubOptionOnly &&
+            group.options.some(
+              (option) =>
+                option.useSubOption === true &&
+                Number(option.subOptionGroupNo || 0) === groupNo,
+            ),
+        );
+
+        if (isReferenced) {
+          const existingChildIndex = nextGroups.findIndex(
+            (group) =>
+              group.isSubOptionOnly === true &&
+              Number(group.subOptionGroupNo || 0) === groupNo,
+          );
+
+          const childGroup = templateToOptionGroup(
+            template,
+            existingChildIndex >= 0
+              ? existingChildIndex
+              : nextGroups.length,
+          );
+
+          if (existingChildIndex >= 0) {
+            nextGroups[existingChildIndex] = childGroup;
+          } else {
+            nextGroups = [...nextGroups, childGroup];
+          }
+
+          changed = true;
+        }
+      }
+
       if (!changed) return item;
+
+      nextGroups = nextGroups.map((group, index) => ({
+        ...group,
+        displayOrder: index,
+      }));
 
       changedItemIds.push(item.id);
 
@@ -2994,6 +3038,95 @@ export default function OwnerBusinessMenuPage() {
     setMessage("✓ 옵션 그룹을 삭제했습니다.");
   }
 
+  function templateToOptionGroup(
+    template: MenuOptionTemplate,
+    displayOrder: number,
+  ): MenuOptionGroup {
+    return {
+      name: template.name,
+      description: template.description || "",
+      required: template.required,
+      minSelect: template.minSelect,
+      maxSelect: template.maxSelect,
+      displayOrder,
+      subOptionGroupNo: template.subOptionGroupNo ?? null,
+      isSubOptionOnly: Boolean(template.isSubOptionOnly),
+      options: template.options.map((option, index) => ({
+        ...option,
+        displayOrder: index,
+        // 서브옵션 그룹 내부 항목은 또 다른 서브옵션을 호출하지 않습니다.
+        ...(template.isSubOptionOnly
+          ? { useSubOption: false, subOptionGroupNo: null }
+          : {}),
+      })),
+    };
+  }
+
+  function ensureReferencedSubOptionGroups(
+    groups: MenuOptionGroup[],
+  ): MenuOptionGroup[] {
+    const referencedNumbers = new Set<number>();
+
+    for (const group of groups) {
+      if (group.isSubOptionOnly) continue;
+
+      for (const option of group.options) {
+        const groupNo = Number(option.subOptionGroupNo || 0);
+        if (
+          option.useSubOption &&
+          Number.isInteger(groupNo) &&
+          groupNo > 0
+        ) {
+          referencedNumbers.add(groupNo);
+        }
+      }
+    }
+
+    let next = groups.map((group, index) => ({
+      ...group,
+      displayOrder: index,
+    }));
+
+    for (const groupNo of referencedNumbers) {
+      const childTemplate = optionTemplates.find(
+        (template) =>
+          template.isSubOptionOnly === true &&
+          Number(template.subOptionGroupNo || 0) === groupNo,
+      );
+
+      if (!childTemplate) continue;
+
+      const existingIndex = next.findIndex(
+        (group) =>
+          group.isSubOptionOnly === true &&
+          Number(group.subOptionGroupNo || 0) === groupNo,
+      );
+
+      const childGroup = templateToOptionGroup(
+        childTemplate,
+        existingIndex >= 0 ? existingIndex : next.length,
+      );
+
+      if (existingIndex >= 0) {
+        next[existingIndex] = childGroup;
+      } else {
+        next.push(childGroup);
+      }
+    }
+
+    // 부모 옵션에서 더 이상 참조하지 않는 서브옵션 전용 그룹은 제거합니다.
+    next = next.filter(
+      (group) =>
+        !group.isSubOptionOnly ||
+        referencedNumbers.has(Number(group.subOptionGroupNo || 0)),
+    );
+
+    return next.map((group, index) => ({
+      ...group,
+      displayOrder: index,
+    }));
+  }
+
   function applyOptionTemplateToItem(itemId: number) {
     const templateId = selectedTemplateByItem[itemId];
     const template = optionTemplates.find(
@@ -3005,23 +3138,18 @@ export default function OwnerBusinessMenuPage() {
       return;
     }
 
-    updateOptionGroups(itemId, (groups) => [
-      ...groups,
-      {
-        name: template.name,
-        description: template.description || "",
-        required: template.required,
-        minSelect: template.minSelect,
-        maxSelect: template.maxSelect,
-        displayOrder: groups.length,
-        subOptionGroupNo: template.subOptionGroupNo ?? null,
-        isSubOptionOnly: Boolean(template.isSubOptionOnly),
-        options: template.options.map((option, index) => ({
-          ...option,
-          displayOrder: index,
-        })),
-      },
-    ]);
+    updateOptionGroups(itemId, (groups) => {
+      const withoutSameGroup = groups.filter(
+        (group) =>
+          group.name.trim().toLowerCase() !==
+          template.name.trim().toLowerCase(),
+      );
+
+      return ensureReferencedSubOptionGroups([
+        ...withoutSameGroup,
+        templateToOptionGroup(template, withoutSameGroup.length),
+      ]);
+    });
 
     setExpandedOptionItemIds((current) => {
       const next = new Set(current);
@@ -3046,24 +3174,16 @@ export default function OwnerBusinessMenuPage() {
       );
 
       if (existingIndex >= 0) {
-        return groups.filter((_, index) => index !== existingIndex);
+        const withoutTemplate = groups.filter(
+          (_, index) => index !== existingIndex,
+        );
+        return ensureReferencedSubOptionGroups(withoutTemplate);
       }
 
-      return [
+      return ensureReferencedSubOptionGroups([
         ...groups,
-        {
-          name: template.name,
-          description: template.description || "",
-          required: template.required,
-          minSelect: template.minSelect,
-          maxSelect: template.maxSelect,
-          displayOrder: groups.length,
-          options: template.options.map((option, index) => ({
-            ...option,
-            displayOrder: index,
-          })),
-        },
-      ];
+        templateToOptionGroup(template, groups.length),
+      ]);
     });
 
     setMessage(`✓ ${template.name} 옵션을 변경했습니다. 자동 저장됩니다.`);
@@ -6230,6 +6350,7 @@ export default function OwnerBusinessMenuPage() {
                               >
                                 삭제
                               </button>
+                              </div>
                             </div>
                           </div>
 
@@ -6303,24 +6424,22 @@ export default function OwnerBusinessMenuPage() {
                       .map((template) => (
                         <div
                           key={`quick-sub-library-${template.id}`}
-                          className="rounded-xl border-2 border-violet-300 bg-white p-3 shadow-sm"
+                          className="rounded-xl border-2 border-violet-300 bg-violet-50 p-3 shadow-sm"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-black text-violet-950">
-                                {template.name}
-                              </p>
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                <span className="rounded-full bg-violet-600 px-2 py-1 text-[10px] font-black text-white">
-                                  SUB #{template.subOptionGroupNo ?? "-"}
-                                </span>
-                                <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800">
-                                  {template.options.length}개 항목
-                                </span>
-                              </div>
-                            </div>
+                          <div>
+                            <p className="break-words text-sm font-black leading-5 text-violet-950">
+                              {template.name}
+                            </p>
 
-                            <div className="flex shrink-0 items-center gap-1">
+                            <div className="mt-2 flex flex-wrap items-center gap-1">
+                              <span className="rounded-full bg-violet-600 px-2 py-1 text-[10px] font-black text-white">
+                                SUB #{template.subOptionGroupNo ?? "-"}
+                              </span>
+                              <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800">
+                                {template.options.length}개 항목
+                              </span>
+
+                              <div className="ml-auto flex shrink-0 items-center gap-1">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -6677,45 +6796,53 @@ export default function OwnerBusinessMenuPage() {
                           ))}
                         </select>
 
-                        <label className="flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-2 text-[10px] font-black text-violet-800">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(option.useSubOption)}
-                            onChange={(event) =>
-                              updateTemplateOption(optionIndex, {
-                                useSubOption: event.target.checked,
-                                subOptionGroupNo: event.target.checked
-                                  ? option.subOptionGroupNo ?? null
-                                  : null,
-                              })
-                            }
-                          />
-                          서브옵션 사용
-                        </label>
+                        {!templateIsSubOptionOnlyInput ? (
+                          <>
+                            <label className="flex items-center justify-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 py-2 text-[10px] font-black text-violet-800">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(option.useSubOption)}
+                                onChange={(event) =>
+                                  updateTemplateOption(optionIndex, {
+                                    useSubOption: event.target.checked,
+                                    subOptionGroupNo: event.target.checked
+                                      ? option.subOptionGroupNo ?? null
+                                      : null,
+                                  })
+                                }
+                              />
+                              서브옵션 사용
+                            </label>
 
-                        <input
-                          type="number"
-                          min={1}
-                          disabled={!option.useSubOption}
-                          value={
-                            option.subOptionGroupNo == null
-                              ? ""
-                              : option.subOptionGroupNo
-                          }
-                          placeholder="그룹 번호"
-                          onChange={(event) =>
-                            updateTemplateOption(optionIndex, {
-                              subOptionGroupNo:
-                                event.target.value === ""
-                                  ? null
-                                  : Math.max(
-                                      1,
-                                      Math.floor(Number(event.target.value) || 1),
-                                    ),
-                            })
-                          }
-                          className="rounded-lg border border-violet-200 bg-white px-2 py-2 text-[10px] font-black outline-none disabled:bg-gray-100 disabled:text-gray-400"
-                        />
+                            <input
+                              type="number"
+                              min={1}
+                              disabled={!option.useSubOption}
+                              value={
+                                option.subOptionGroupNo == null
+                                  ? ""
+                                  : option.subOptionGroupNo
+                              }
+                              placeholder="그룹 번호"
+                              onChange={(event) =>
+                                updateTemplateOption(optionIndex, {
+                                  subOptionGroupNo:
+                                    event.target.value === ""
+                                      ? null
+                                      : Math.max(
+                                          1,
+                                          Math.floor(Number(event.target.value) || 1),
+                                        ),
+                                })
+                              }
+                              className="rounded-lg border border-violet-200 bg-white px-2 py-2 text-[10px] font-black outline-none disabled:bg-gray-100 disabled:text-gray-400"
+                            />
+                          </>
+                        ) : (
+                          <div className="sm:col-span-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[10px] font-black text-violet-700">
+                            이 항목은 SUB #{templateSubOptionGroupNoInput ?? "-"} 안의 선택 항목입니다.
+                          </div>
+                        )}
 
                         <label className="flex items-center justify-center gap-1 rounded-lg bg-gray-50 px-2 py-2 text-[10px] font-black">
                           <input
@@ -6771,7 +6898,7 @@ export default function OwnerBusinessMenuPage() {
                           ? "서브옵션 수정 저장"
                           : "옵션 수정 저장"
                         : subOptionRegistrationMode
-                          ? "+ 서브옵션 등록"
+                          ? "서브옵션 저장"
                           : "+ 옵션 등록"}
                   </button>
                 </div>
