@@ -6350,7 +6350,6 @@ export default function OwnerBusinessMenuPage() {
                               >
                                 삭제
                               </button>
-                              </div>
                             </div>
                           </div>
 
