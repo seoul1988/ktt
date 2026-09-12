@@ -6174,100 +6174,218 @@ export default function OwnerBusinessMenuPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="w-full text-xs font-semibold leading-5 text-gray-600">현재 메뉴에 등록된 옵션을 자동으로 모아 종류별로 보여줍니다. 필요한 그룹은 바로 수정하거나 삭제할 수 있습니다.</p>
 
-            <div className="w-full rounded-2xl border border-blue-100 bg-blue-50 p-3">
-              {optionTemplates.length === 0 ? (
-                <div className="rounded-xl bg-white p-4 text-center text-xs font-bold text-gray-500">
-                  아직 등록된 옵션이 없습니다. 메뉴에 저장된 옵션이 있으면 자동으로 이곳에 나타납니다.
+            <div className="w-full space-y-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-blue-700">
+                      일반 옵션 목록
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold text-gray-500">
+                      일반 주문 옵션 그룹
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-blue-700">
+                    {optionTemplates.filter((template) => !template.isSubOptionOnly).length}개
+                  </span>
                 </div>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {optionTemplates.map((template) => (
-                    <div
-                      key={`quick-library-${template.id}`}
-                      className="rounded-xl border border-blue-100 bg-white p-3"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="min-w-0 flex-1 text-sm font-black text-[#172033]">
-                          {template.name}
-                        </p>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
-                            {template.options.length}개
-                          </span>
-                          {template.subOptionGroupNo ? (
-                            <span className="rounded-full bg-violet-50 px-2 py-1 text-[10px] font-black text-violet-700">
-                              SUB #{template.subOptionGroupNo}
+
+                {optionTemplates.filter((template) => !template.isSubOptionOnly).length === 0 ? (
+                  <div className="rounded-xl bg-white p-4 text-center text-xs font-bold text-gray-500">
+                    아직 등록된 일반 옵션이 없습니다.
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {optionTemplates
+                      .filter((template) => !template.isSubOptionOnly)
+                      .map((template) => (
+                        <div
+                          key={`quick-library-${template.id}`}
+                          className="rounded-xl border border-blue-100 bg-white p-3"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 flex-1 text-sm font-black text-[#172033]">
+                              {template.name}
+                            </p>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                                {template.options.length}개
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  editOptionTemplate(template);
+                                  setOptionLibraryOpen(true);
+                                }}
+                                className="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700 hover:bg-blue-100"
+                                title={`${template.name} 수정`}
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteOptionTemplate(template.id)}
+                                className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-600 hover:bg-red-100"
+                                title={`${template.name} 삭제`}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+
+                          <label className="mt-2 block">
+                            <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-gray-500">
+                              주문 화면 설명
                             </span>
-                          ) : null}
-                          {template.isSubOptionOnly ? (
-                            <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800">
-                              서브전용
-                            </span>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              editOptionTemplate(template);
-                              setOptionLibraryOpen(true);
-                            }}
-                            className="rounded-lg bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700 hover:bg-blue-100"
-                            title={`${template.name} 수정`}
-                          >
-                            수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteOptionTemplate(template.id)}
-                            className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-600 hover:bg-red-100"
-                            title={`${template.name} 삭제`}
-                          >
-                            삭제
-                          </button>
+                            <textarea
+                              value={template.description || ""}
+                              onChange={(event) =>
+                                updateOptionTemplateDescription(
+                                  template.id,
+                                  template.name,
+                                  event.target.value,
+                                )
+                              }
+                              rows={2}
+                              maxLength={240}
+                              placeholder="예: Includes: Fries · Dipping Sauce · Drink"
+                              className="w-full resize-none rounded-lg border border-blue-100 bg-blue-50/40 px-2.5 py-2 text-[11px] font-semibold leading-4 text-gray-700 outline-none focus:border-blue-400 focus:bg-white"
+                            />
+                          </label>
+
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {template.options.slice(0, 4).map((option, optionIndex) => (
+                              <span
+                                key={`quick-library-${template.id}-${optionIndex}`}
+                                className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-gray-700"
+                              >
+                                {option.name}
+                                {Number(option.priceDelta || 0) > 0
+                                  ? ` +$${Number(option.priceDelta).toFixed(2)}`
+                                  : ""}
+                              </span>
+                            ))}
+                            {template.options.length > 4 ? (
+                              <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                                +{template.options.length - 4}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
+                      ))}
+                  </div>
+                )}
+              </div>
 
-                      <label className="mt-2 block">
-                        <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-gray-500">
-                          주문 화면 설명
-                        </span>
-                        <textarea
-                          value={template.description || ""}
-                          onChange={(event) =>
-                            updateOptionTemplateDescription(
-                              template.id,
-                              template.name,
-                              event.target.value,
-                            )
-                          }
-                          rows={2}
-                          maxLength={240}
-                          placeholder="예: Includes: Fries · Dipping Sauce · Drink"
-                          className="w-full resize-none rounded-lg border border-blue-100 bg-blue-50/40 px-2.5 py-2 text-[11px] font-semibold leading-4 text-gray-700 outline-none focus:border-blue-400 focus:bg-white"
-                        />
-                      </label>
-
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {template.options.slice(0, 4).map((option, optionIndex) => (
-                          <span
-                            key={`quick-library-${template.id}-${optionIndex}`}
-                            className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[10px] font-bold text-gray-700"
-                          >
-                            {option.name}
-                            {Number(option.priceDelta || 0) > 0
-                              ? ` +$${Number(option.priceDelta).toFixed(2)}`
-                              : ""}
-                          </span>
-                        ))}
-                        {template.options.length > 4 ? (
-                          <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
-                            +{template.options.length - 4}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
+              <div className="rounded-2xl border-2 border-violet-300 bg-violet-100/70 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-violet-800">
+                      서브옵션 목록
+                    </p>
+                    <p className="mt-1 text-[11px] font-bold text-violet-700">
+                      부모 옵션에서 그룹 번호로 연결되는 전용 서브옵션
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-violet-800">
+                    {optionTemplates.filter((template) => template.isSubOptionOnly).length}개
+                  </span>
                 </div>
-              )}
+
+                {optionTemplates.filter((template) => template.isSubOptionOnly).length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-violet-300 bg-white/80 p-4 text-center text-xs font-bold text-violet-700">
+                    아직 등록된 서브옵션이 없습니다. 아래의 “+ 서브옵션 등록” 버튼으로 추가하세요.
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {optionTemplates
+                      .filter((template) => template.isSubOptionOnly)
+                      .map((template) => (
+                        <div
+                          key={`quick-sub-library-${template.id}`}
+                          className="rounded-xl border-2 border-violet-300 bg-white p-3 shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-black text-violet-950">
+                                {template.name}
+                              </p>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                <span className="rounded-full bg-violet-600 px-2 py-1 text-[10px] font-black text-white">
+                                  SUB #{template.subOptionGroupNo ?? "-"}
+                                </span>
+                                <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800">
+                                  {template.options.length}개 항목
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  editOptionTemplate(template);
+                                  setOptionLibraryOpen(true);
+                                }}
+                                className="rounded-lg bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800 hover:bg-violet-200"
+                                title={`${template.name} 수정`}
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteOptionTemplate(template.id)}
+                                className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-600 hover:bg-red-100"
+                                title={`${template.name} 삭제`}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </div>
+
+                          <label className="mt-2 block">
+                            <span className="mb-1 block text-[10px] font-black uppercase tracking-wide text-violet-700">
+                              주문 화면 설명
+                            </span>
+                            <textarea
+                              value={template.description || ""}
+                              onChange={(event) =>
+                                updateOptionTemplateDescription(
+                                  template.id,
+                                  template.name,
+                                  event.target.value,
+                                )
+                              }
+                              rows={2}
+                              maxLength={240}
+                              placeholder="예: Shake flavor를 선택하세요"
+                              className="w-full resize-none rounded-lg border border-violet-200 bg-violet-50/60 px-2.5 py-2 text-[11px] font-semibold leading-4 text-gray-700 outline-none focus:border-violet-400 focus:bg-white"
+                            />
+                          </label>
+
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {template.options.slice(0, 6).map((option, optionIndex) => (
+                              <span
+                                key={`quick-sub-library-${template.id}-${optionIndex}`}
+                                className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-900"
+                              >
+                                {option.name}
+                                {Number(option.priceDelta || 0) > 0
+                                  ? ` +$${Number(option.priceDelta).toFixed(2)}`
+                                  : ""}
+                              </span>
+                            ))}
+                            {template.options.length > 6 ? (
+                              <span className="rounded-full border border-violet-200 bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-800">
+                                +{template.options.length - 6}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
