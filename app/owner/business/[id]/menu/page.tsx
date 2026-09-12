@@ -3085,16 +3085,115 @@ export default function OwnerBusinessMenuPage() {
   }
 
   async function deleteOptionTemplate(templateId: string) {
-    if (!window.confirm("이 옵션 그룹을 삭제할까요?")) return;
-
     const target =
       optionTemplates.find((template) => template.id === templateId) || null;
 
-    if (
-      target?.isSubOptionOnly &&
-      target.subOptionGroupNo != null
-    ) {
-      try {
+    if (!target) {
+      setMessage("삭제할 옵션 그룹을 찾을 수 없습니다.");
+      return;
+    }
+
+    const targetName = target.name.trim();
+    const targetKey = targetName.toLowerCase();
+    const targetSubOptionGroupNo =
+      target.isSubOptionOnly && target.subOptionGroupNo != null
+        ? Number(target.subOptionGroupNo)
+        : null;
+
+    const changedItemIds: number[] = [];
+
+    const nextItems = itemsRef.current.map((item) => {
+      const groups = normalizeOptionGroups(item);
+      let changed = false;
+
+      const nextGroups = groups
+        .filter((group) => {
+          const sameName = group.name.trim().toLowerCase() === targetKey;
+          const sameSubOptionGroup =
+            targetSubOptionGroupNo != null &&
+            group.isSubOptionOnly === true &&
+            Number(group.subOptionGroupNo || 0) === targetSubOptionGroupNo;
+
+          if (sameName || sameSubOptionGroup) {
+            changed = true;
+            return false;
+          }
+
+          return true;
+        })
+        .map((group) => {
+          // 서브옵션 라이브러리를 삭제할 때 부모 옵션에 남아 있는 참조도 같이 제거합니다.
+          if (targetSubOptionGroupNo == null || group.isSubOptionOnly) {
+            return group;
+          }
+
+          let optionChanged = false;
+          const nextOptions = group.options.map((option) => {
+            if (
+              option.useSubOption === true &&
+              Number(option.subOptionGroupNo || 0) === targetSubOptionGroupNo
+            ) {
+              optionChanged = true;
+              return {
+                ...option,
+                useSubOption: false,
+                subOptionGroupNo: null,
+              };
+            }
+
+            return option;
+          });
+
+          if (!optionChanged) return group;
+          changed = true;
+
+          return {
+            ...group,
+            options: nextOptions,
+          };
+        })
+        .map((group, groupIndex) => ({
+          ...group,
+          displayOrder: groupIndex,
+          options: group.options.map((option, optionIndex) => ({
+            ...option,
+            displayOrder: optionIndex,
+          })),
+        }));
+
+      if (!changed) return item;
+
+      changedItemIds.push(item.id);
+
+      return {
+        ...item,
+        option_groups: nextGroups,
+        optionGroups: nextGroups,
+        menu_option_groups: nextGroups,
+      };
+    });
+
+    const confirmMessage =
+      changedItemIds.length > 0
+        ? `"${targetName}" 옵션 그룹을 삭제할까요?\n\n현재 ${changedItemIds.length}개 메뉴에 적용되어 있습니다. 옵션 라이브러리와 적용된 메뉴에서 함께 삭제됩니다.`
+        : `"${targetName}" 옵션 그룹을 삭제할까요?`;
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setMessage(`"${targetName}" 옵션 삭제 중...`);
+
+    try {
+      // 기존 자동저장이 삭제 직전의 오래된 옵션 상태를 다시 DB에 쓰지 않도록 취소합니다.
+      changedItemIds.forEach((itemId) => {
+        const timer = itemAutoSaveTimers.current[itemId];
+        if (timer) {
+          clearTimeout(timer);
+          delete itemAutoSaveTimers.current[itemId];
+        }
+      });
+
+      // 기존 서브옵션 삭제 API 동작은 그대로 유지합니다.
+      if (targetSubOptionGroupNo != null) {
         const token = await getAccessToken();
         const response = await fetch(
           `/api/owner/business/${businessId}/sub-options`,
@@ -3105,36 +3204,126 @@ export default function OwnerBusinessMenuPage() {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              subOptionGroupNo: target.subOptionGroupNo,
+              subOptionGroupNo: targetSubOptionGroupNo,
             }),
           },
         );
 
         const data = await readApiJson(response);
         if (!response.ok) {
-          throw new Error(
-            data?.error || "서브옵션 삭제에 실패했습니다.",
-          );
+          throw new Error(data?.error || "서브옵션 삭제에 실패했습니다.");
         }
-      } catch (error) {
-        setMessage(
-          error instanceof Error
-            ? `서브옵션 삭제 실패: ${error.message}`
-            : "서브옵션 삭제에 실패했습니다.",
-        );
-        return;
       }
+
+      // 이미 각 메뉴에 복사되어 있는 같은 옵션 그룹도 DB에서 함께 제거합니다.
+      if (changedItemIds.length > 0) {
+        const token = await getAccessToken();
+        const changedIdSet = new Set(changedItemIds);
+        const changedPayloadItems = nextItems
+          .filter((item) => changedIdSet.has(item.id))
+          .map((item) => normalizeItemForSave(item));
+
+        changedItemIds.forEach((itemId) => {
+          setItemSaveStatus((current) => ({
+            ...current,
+            [itemId]: "saving",
+          }));
+        });
+
+        let response = await fetch(`/api/owner/business/${businessId}/menu`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            categories: [],
+            items: changedPayloadItems,
+          }),
+        });
+
+        let data = await readApiJson(response);
+
+        // 서버가 부분 batch PATCH를 허용하지 않는 경우 전체 메뉴 저장으로 한 번만 재시도합니다.
+        if (!response.ok) {
+          const normalizedCategories = categoriesRef.current.map((category) => ({
+            id: category.id,
+            name: category.name.trim(),
+            display_order: Number(category.display_order ?? 999),
+            is_active: category.is_active,
+          }));
+
+          const normalizedItems = nextItems.map((item) =>
+            normalizeItemForSave(item),
+          );
+
+          response = await fetch(`/api/owner/business/${businessId}/menu`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              categories: normalizedCategories,
+              items: normalizedItems,
+            }),
+          });
+
+          data = await readApiJson(response);
+        }
+
+        if (!response.ok) {
+          const serverMessage =
+            data?.error ||
+            data?.message ||
+            `HTTP ${response.status} 메뉴 저장 실패`;
+
+          changedItemIds.forEach((itemId) => {
+            setItemSaveStatus((current) => ({
+              ...current,
+              [itemId]: "error",
+            }));
+          });
+
+          throw new Error(serverMessage);
+        }
+
+        changedItemIds.forEach((itemId) => {
+          setItemSaveStatus((current) => ({
+            ...current,
+            [itemId]: "saved",
+          }));
+        });
+      }
+
+      // DB 동기화가 성공한 뒤 화면 상태와 옵션 라이브러리를 갱신합니다.
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+
+      persistOptionTemplates(
+        optionTemplates.filter((template) => template.id !== templateId),
+      );
+
+      if (editingTemplateId === templateId) {
+        resetOptionTemplateForm();
+        setOptionTemplateOpen(false);
+      }
+
+      setMessage(
+        changedItemIds.length > 0
+          ? `✓ "${targetName}" 옵션 삭제 완료 · 적용 메뉴 ${changedItemIds.length}개에서도 DB 삭제 완료`
+          : `✓ "${targetName}" 옵션 그룹을 삭제했습니다.`,
+      );
+    } catch (error) {
+      // 삭제 실패 시 기존 화면/라이브러리 상태는 유지합니다.
+      const message =
+        error instanceof Error
+          ? error.message
+          : String(error || "옵션 삭제 실패");
+
+      console.warn("OPTION TEMPLATE DELETE SYNC ERROR:", message);
+      setMessage(`옵션 삭제 DB 동기화 실패: ${message}`);
     }
-
-    persistOptionTemplates(
-      optionTemplates.filter((template) => template.id !== templateId),
-    );
-
-    if (editingTemplateId === templateId) {
-      resetOptionTemplateForm();
-    }
-
-    setMessage("✓ 옵션 그룹을 삭제했습니다.");
   }
 
   function templateToOptionGroup(
