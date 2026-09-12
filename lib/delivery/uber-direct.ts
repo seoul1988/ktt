@@ -22,12 +22,13 @@ type UberQuote = {
   dropoff_deadline?: string;
 };
 
-let cachedToken:
-  | {
-      value: string;
-      expiresAt: number;
-    }
-  | null = null;
+const cachedTokens = new Map<
+  string,
+  {
+    value: string;
+    expiresAt: number;
+  }
+>();
 
 function env(name: string) {
   return String(process.env[name] || "").trim();
@@ -110,8 +111,29 @@ function directAddressJson(address: DirectAddress) {
   return JSON.stringify(address);
 }
 
-async function getAccessToken() {
+async function getAccessToken(privateSettings: any) {
   const now = Date.now();
+
+  const clientId = stringValue(
+    privateSettings?.uber_direct_client_id,
+    env("UBER_DIRECT_CLIENT_ID"),
+  );
+  const clientSecret = stringValue(
+    privateSettings?.uber_direct_client_secret,
+    env("UBER_DIRECT_CLIENT_SECRET"),
+  );
+
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      "Uber Direct credentials are not configured.",
+    );
+  }
+
+  // Cache tokens separately for each restaurant credential pair.
+  // Including the secret in the in-memory cache key also prevents a rotated
+  // secret from reusing a token created with the previous credential.
+  const cacheKey = `${clientId}\u0000${clientSecret}`;
+  const cachedToken = cachedTokens.get(cacheKey);
 
   if (
     cachedToken &&
@@ -119,15 +141,6 @@ async function getAccessToken() {
     cachedToken.expiresAt > now + 60_000
   ) {
     return cachedToken.value;
-  }
-
-  const clientId = env("UBER_DIRECT_CLIENT_ID");
-  const clientSecret = env("UBER_DIRECT_CLIENT_SECRET");
-
-  if (!clientId || !clientSecret) {
-    throw new Error(
-      "Uber Direct credentials are not configured.",
-    );
   }
 
   const body = new URLSearchParams({
@@ -159,7 +172,7 @@ async function getAccessToken() {
     );
   }
 
-  cachedToken = {
+  const nextCachedToken = {
     value: String(payload.access_token),
     expiresAt:
       now +
@@ -170,7 +183,8 @@ async function getAccessToken() {
         1000,
   };
 
-  return cachedToken.value;
+  cachedTokens.set(cacheKey, nextCachedToken);
+  return nextCachedToken.value;
 }
 
 function getCustomerId(privateSettings: any) {
@@ -216,7 +230,7 @@ export async function createUberDirectQuote(args: {
     );
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(args.privateSettings);
   const customerId = getCustomerId(args.privateSettings);
 
   const pickup = businessAddress(args.business);
@@ -328,7 +342,7 @@ export async function dispatchUberDirectOrder(args: {
     db
       .from("restaurant_order_private_settings")
       .select(
-        "delivery_provider,uber_direct_enabled,uber_direct_customer_id,delivery_fee_markup_cents",
+        "delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,delivery_fee_markup_cents",
       )
       .eq("business_id", businessId)
       .maybeSingle(),
@@ -395,7 +409,7 @@ export async function dispatchUberDirectOrder(args: {
       .eq("business_id", businessId);
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(privateSettings);
   const customerId = getCustomerId(privateSettings);
   const pickup = businessAddress(business);
   const dropoff = deliveryAddress(order.delivery_address);
@@ -554,7 +568,7 @@ export async function cancelUberDirectDelivery(args: {
     return { skipped: true, reason: "no_delivery_id" };
   }
 
-  const token = await getAccessToken();
+  const token = await getAccessToken(args.privateSettings);
   const customerId = getCustomerId(args.privateSettings);
 
   const response = await fetch(
