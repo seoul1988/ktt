@@ -2845,6 +2845,10 @@ export default function OwnerBusinessMenuPage() {
 
       if (!changed) return item;
 
+      // 부모 옵션(예: Combo It!)을 수정해서 SUB #1001을 연결한 경우에도
+      // 같은 메뉴 안에 해당 서브옵션 전용 그룹을 자동으로 붙여 저장합니다.
+      nextGroups = ensureReferencedSubOptionGroups(nextGroups);
+
       nextGroups = nextGroups.map((group, index) => ({
         ...group,
         displayOrder: index,
