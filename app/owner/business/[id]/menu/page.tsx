@@ -6500,7 +6500,8 @@ export default function OwnerBusinessMenuPage() {
                             ) : null}
                           </div>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
