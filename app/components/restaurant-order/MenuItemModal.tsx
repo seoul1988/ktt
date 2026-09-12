@@ -206,10 +206,20 @@ export default function MenuItemModal({
         minSelect: toSafeInteger(group.minSelect),
         maxSelect:
           group.maxSelect == null ? null : toSafeInteger(group.maxSelect),
+        subOptionGroupNo:
+          (group as any)?.subOptionGroupNo == null
+            ? null
+            : Number((group as any)?.subOptionGroupNo),
+        isSubOptionOnly: Boolean((group as any)?.isSubOptionOnly),
         options: (Array.isArray(group.options) ? group.options : []).map((option) => ({
           name: String(option?.name || "").trim().toLowerCase(),
           priceDelta: Number(option?.priceDelta || 0),
           soldOut: Boolean(option?.soldOut),
+          useSubOption: Boolean((option as any)?.useSubOption),
+          subOptionGroupNo:
+            (option as any)?.subOptionGroupNo == null
+              ? null
+              : Number((option as any)?.subOptionGroupNo),
         })),
       });
 
@@ -346,6 +356,77 @@ export default function MenuItemModal({
     [groups, selections],
   );
 
+  const activeChildGroupIndexes = useMemo(() => {
+    const indexes = new Set<number>();
+
+    groups.forEach((group, groupIndex) => {
+      if (Boolean((group as any)?.isSubOptionOnly)) return;
+
+      const values =
+        safeSelections[groupKey(group, groupIndex)] || {};
+
+      group.options.forEach((option, optionIndex) => {
+        const quantity = toSafeInteger(
+          values[optionKey(option, optionIndex)],
+        );
+
+        const useSubOption = Boolean(
+          (option as any)?.useSubOption,
+        );
+
+        const subOptionGroupNo = Number(
+          (option as any)?.subOptionGroupNo || 0,
+        );
+
+        if (
+          quantity <= 0 ||
+          !useSubOption ||
+          !Number.isInteger(subOptionGroupNo) ||
+          subOptionGroupNo <= 0
+        ) {
+          return;
+        }
+
+        groups.forEach((candidate, candidateIndex) => {
+          if (
+            Boolean((candidate as any)?.isSubOptionOnly) &&
+            Number((candidate as any)?.subOptionGroupNo || 0) ===
+              subOptionGroupNo
+          ) {
+            indexes.add(candidateIndex);
+          }
+        });
+      });
+    });
+
+    return indexes;
+  }, [groups, safeSelections]);
+
+  useEffect(() => {
+    setSelections((current) => {
+      let changed = false;
+      const next: OptionSelectionState = { ...current };
+
+      groups.forEach((group, groupIndex) => {
+        if (
+          !Boolean((group as any)?.isSubOptionOnly) ||
+          activeChildGroupIndexes.has(groupIndex)
+        ) {
+          return;
+        }
+
+        const gKey = groupKey(group, groupIndex);
+
+        if (next[gKey]) {
+          delete next[gKey];
+          changed = true;
+        }
+      });
+
+      return changed ? next : current;
+    });
+  }, [groups, activeChildGroupIndexes]);
+
   const optionExtra = groups.reduce(
     (groupTotal, group, groupIndex) => {
       const values =
@@ -372,6 +453,17 @@ export default function MenuItemModal({
   );
 
   const optionsValid = groups.every((group, groupIndex) => {
+    const isSubOptionOnly = Boolean(
+      (group as any)?.isSubOptionOnly,
+    );
+
+    if (
+      isSubOptionOnly &&
+      !activeChildGroupIndexes.has(groupIndex)
+    ) {
+      return true;
+    }
+
     const values =
       safeSelections[groupKey(group, groupIndex)] || {};
 
@@ -453,6 +545,9 @@ export default function MenuItemModal({
           isRequired: getGroupRules(group).minimum > 0,
           isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
         }))
+        .filter(
+          (row) => !Boolean((row.group as any)?.isSubOptionOnly),
+        )
         .sort((a, b) => {
           const rank = (row: {
             isRequired: boolean;
@@ -470,6 +565,116 @@ export default function MenuItemModal({
         }),
     [groups],
   );
+
+  function childGroupsForParent(
+    parentGroup: ReturnType<typeof getOptionGroups>[number],
+    parentIndex: number,
+  ) {
+    const values =
+      safeSelections[groupKey(parentGroup, parentIndex)] || {};
+
+    const childIndexes = new Set<number>();
+
+    parentGroup.options.forEach((option, optionIndex) => {
+      const quantity = toSafeInteger(
+        values[optionKey(option, optionIndex)],
+      );
+
+      const useSubOption = Boolean(
+        (option as any)?.useSubOption,
+      );
+
+      const subOptionGroupNo = Number(
+        (option as any)?.subOptionGroupNo || 0,
+      );
+
+      if (
+        quantity <= 0 ||
+        !useSubOption ||
+        !Number.isInteger(subOptionGroupNo) ||
+        subOptionGroupNo <= 0
+      ) {
+        return;
+      }
+
+      groups.forEach((candidate, candidateIndex) => {
+        if (
+          Boolean((candidate as any)?.isSubOptionOnly) &&
+          Number((candidate as any)?.subOptionGroupNo || 0) ===
+            subOptionGroupNo
+        ) {
+          childIndexes.add(candidateIndex);
+        }
+      });
+    });
+
+    return Array.from(childIndexes)
+      .sort((a, b) => a - b)
+      .map((childIndex) => ({
+        group: groups[childIndex],
+        originalIndex: childIndex,
+      }));
+  }
+
+  function renderChildGroups(
+    parentGroup: ReturnType<typeof getOptionGroups>[number],
+    parentIndex: number,
+  ) {
+    const children = childGroupsForParent(
+      parentGroup,
+      parentIndex,
+    );
+
+    if (children.length === 0) return null;
+
+    return (
+      <div className="mt-3 space-y-3 border-l-4 border-violet-300 pl-3">
+        {children.map(({ group, originalIndex }) => {
+          const childKey = groupKey(group, originalIndex);
+          const description = String(
+            (group as any)?.description || "",
+          ).trim();
+
+          return (
+            <div
+              key={`sub-option-${childKey}`}
+              className="rounded-xl border border-violet-200 bg-violet-50/70 p-3"
+            >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-violet-700">
+                    Sub Option
+                  </p>
+                  {description ? (
+                    <p className="mt-1 text-[11px] font-bold text-gray-600">
+                      {description}
+                    </p>
+                  ) : null}
+                </div>
+
+                <span className="rounded-full bg-violet-100 px-2 py-1 text-[10px] font-black text-violet-700">
+                  #{Number((group as any)?.subOptionGroupNo || 0)}
+                </span>
+              </div>
+
+              <MenuOptionGroup
+                group={group}
+                groupIndex={originalIndex}
+                quantities={safeSelections[childKey] || {}}
+                onSetQuantity={(optionIndex, quantity) =>
+                  setOptionQuantity(
+                    originalIndex,
+                    optionIndex,
+                    quantity,
+                  )
+                }
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return createPortal(
     <>
@@ -798,6 +1003,8 @@ export default function MenuItemModal({
                                   }
                                 />
                               </div>
+
+                              {renderChildGroups(group, originalIndex)}
                             </>
                           )}
                         </div>
@@ -832,6 +1039,8 @@ export default function MenuItemModal({
                             }
                           />
                         </div>
+
+                        {renderChildGroups(group, originalIndex)}
                       </div>
                     );
                   },

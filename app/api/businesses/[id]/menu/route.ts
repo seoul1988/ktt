@@ -175,7 +175,7 @@ export async function GET(
       supabase
         .from("business_menu_option_groups")
         .select(
-          "id,menu_item_id,name,is_required,min_select,max_select,display_order",
+          "id,menu_item_id,name,is_required,min_select,max_select,display_order,sub_option_group_no,is_sub_option_only",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -184,7 +184,7 @@ export async function GET(
       supabase
         .from("business_menu_option_items")
         .select(
-          "id,option_group_id,name,price_delta,is_available,display_order",
+          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -212,6 +212,16 @@ export async function GET(
         is_available: option.is_available !== false,
         displayOrder: Number(option.display_order ?? 0),
         display_order: Number(option.display_order ?? 0),
+        useSubOption: option.use_sub_option === true,
+        use_sub_option: option.use_sub_option === true,
+        subOptionGroupNo:
+          option.sub_option_group_no == null
+            ? null
+            : Number(option.sub_option_group_no),
+        sub_option_group_no:
+          option.sub_option_group_no == null
+            ? null
+            : Number(option.sub_option_group_no),
       });
 
       optionItemsByGroup.set(groupId, list);
@@ -243,6 +253,16 @@ export async function GET(
         max_select: maxSelect,
         displayOrder: Number(group.display_order ?? 0),
         display_order: Number(group.display_order ?? 0),
+        subOptionGroupNo:
+          group.sub_option_group_no == null
+            ? null
+            : Number(group.sub_option_group_no),
+        sub_option_group_no:
+          group.sub_option_group_no == null
+            ? null
+            : Number(group.sub_option_group_no),
+        isSubOptionOnly: group.is_sub_option_only === true,
+        is_sub_option_only: group.is_sub_option_only === true,
         options:
           optionItemsByGroup.get(Number(group.id)) || [],
       });

@@ -676,6 +676,7 @@ export default function OwnerBusinessMenuPage() {
   const [optionTemplates, setOptionTemplates] = useState<MenuOptionTemplate[]>([]);
   const [optionLibraryOpen, setOptionLibraryOpen] = useState(false);
   const [optionTemplateOpen, setOptionTemplateOpen] = useState(false);
+  const [subOptionRegistrationMode, setSubOptionRegistrationMode] = useState(false);
   const [expandedOptionTemplateIds, setExpandedOptionTemplateIds] = useState<Set<string>>(new Set());
   const [expandedSavedOptionKeys, setExpandedSavedOptionKeys] = useState<Set<string>>(new Set());
   const [templateNameInput, setTemplateNameInput] = useState("");
@@ -2443,6 +2444,33 @@ export default function OwnerBusinessMenuPage() {
     setTemplateOptionsInput([]);
   }
 
+  function openNewOptionTemplate() {
+    resetOptionTemplateForm();
+    setSubOptionRegistrationMode(false);
+    setOptionTemplateOpen(true);
+  }
+
+  function openNewSubOptionTemplate() {
+    resetOptionTemplateForm();
+
+    const usedNumbers = optionTemplates
+      .map((template) => Number(template.subOptionGroupNo || 0))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    let nextNumber = 1001;
+    while (usedNumbers.includes(nextNumber)) {
+      nextNumber += 1;
+    }
+
+    setTemplateSubOptionGroupNoInput(nextNumber);
+    setTemplateIsSubOptionOnlyInput(true);
+    setTemplateRequiredInput(true);
+    setTemplateMinInput(1);
+    setTemplateMaxInput(1);
+    setSubOptionRegistrationMode(true);
+    setOptionTemplateOpen(true);
+  }
+
   function addTemplateOption() {
     setTemplateOptionsInput((current) => [
       ...current,
@@ -2934,6 +2962,7 @@ export default function OwnerBusinessMenuPage() {
   }
 
   function editOptionTemplate(template: MenuOptionTemplate) {
+    setSubOptionRegistrationMode(Boolean(template.isSubOptionOnly));
     setEditingTemplateId(template.id);
     setTemplateNameInput(template.name);
     setTemplateDescriptionInput(template.description || "");
@@ -6241,13 +6270,23 @@ export default function OwnerBusinessMenuPage() {
               )}
             </div>
 
-            <button
-              type="button"
-              onClick={() => setOptionTemplateOpen(true)}
-              className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-black text-blue-700"
-            >
-              옵션 추가 / 관리
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openNewOptionTemplate}
+                className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-xs font-black text-blue-700"
+              >
+                + 옵션 그룹 등록
+              </button>
+
+              <button
+                type="button"
+                onClick={openNewSubOptionTemplate}
+                className="rounded-xl border border-violet-300 bg-violet-600 px-4 py-2 text-xs font-black text-white hover:bg-violet-700"
+              >
+                + 서브옵션 등록
+              </button>
+            </div>
           </div>
 
           {optionTemplateOpen ? (
@@ -6256,6 +6295,7 @@ export default function OwnerBusinessMenuPage() {
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) {
                   setOptionTemplateOpen(false);
+                  setSubOptionRegistrationMode(false);
                 }
               }}
             >
@@ -6266,13 +6306,22 @@ export default function OwnerBusinessMenuPage() {
                       Option Library
                     </p>
                     <h3 className="text-lg font-black text-[#172033]">
-                      {editingTemplateId ? "옵션 수정" : "새 옵션 추가"}
+                      {editingTemplateId
+                        ? templateIsSubOptionOnlyInput
+                          ? "서브옵션 수정"
+                          : "옵션 수정"
+                        : subOptionRegistrationMode
+                          ? "새 서브옵션 등록"
+                          : "새 옵션 추가"}
                     </h3>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => setOptionTemplateOpen(false)}
+                    onClick={() => {
+                      setOptionTemplateOpen(false);
+                      setSubOptionRegistrationMode(false);
+                    }}
                     className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xl font-black text-gray-700 hover:bg-gray-200"
                     aria-label="옵션 관리 닫기"
                   >
@@ -6282,6 +6331,17 @@ export default function OwnerBusinessMenuPage() {
 
                 <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
                   <div className="space-y-4">
+                    {subOptionRegistrationMode || templateIsSubOptionOnlyInput ? (
+                      <div className="rounded-2xl border border-violet-200 bg-violet-50 p-3">
+                        <p className="text-xs font-black text-violet-800">
+                          서브옵션 그룹 등록
+                        </p>
+                        <p className="mt-1 text-[11px] font-bold leading-5 text-violet-700">
+                          이 그룹은 고객 화면에 단독으로 표시되지 않고, 부모 옵션에서 같은 그룹 번호를 연결했을 때만 표시됩니다.
+                        </p>
+                      </div>
+                    ) : null}
+
                     <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                   <input
@@ -6411,6 +6471,7 @@ export default function OwnerBusinessMenuPage() {
                     <input
                       type="checkbox"
                       checked={templateIsSubOptionOnlyInput}
+                      disabled={subOptionRegistrationMode}
                       onChange={(event) =>
                         setTemplateIsSubOptionOnlyInput(event.target.checked)
                       }
@@ -6588,8 +6649,12 @@ export default function OwnerBusinessMenuPage() {
                     {savingOptionTemplate
                       ? "저장 중..."
                       : editingTemplateId
-                        ? "옵션 수정 저장"
-                        : "+ 옵션 등록"}
+                        ? templateIsSubOptionOnlyInput
+                          ? "서브옵션 수정 저장"
+                          : "옵션 수정 저장"
+                        : subOptionRegistrationMode
+                          ? "+ 서브옵션 등록"
+                          : "+ 옵션 등록"}
                   </button>
                 </div>
 

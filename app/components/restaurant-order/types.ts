@@ -3,6 +3,10 @@ export type MenuOptionItem = {
   priceDelta: number;
   soldOut: boolean;
   displayOrder: number;
+  /** 선택 시 연결된 서브옵션 그룹을 펼칠지 여부 */
+  useSubOption?: boolean;
+  /** 연결할 서브옵션 그룹 번호 */
+  subOptionGroupNo?: number | null;
 };
 
 export type MenuOptionGroup = {
@@ -13,6 +17,10 @@ export type MenuOptionGroup = {
   minSelect: number;
   maxSelect: number | null;
   displayOrder: number;
+  /** 다른 옵션에서 참조할 수 있는 서브옵션 그룹 번호 */
+  subOptionGroupNo?: number | null;
+  /** true면 부모 옵션이 선택됐을 때만 표시 */
+  isSubOptionOnly?: boolean;
   options: MenuOptionItem[];
 };
 
@@ -71,6 +79,24 @@ export function getOptionGroups(item: RestaurantMenuItem | null): MenuOptionGrou
             ? Math.max(0, Math.floor(maxSelect))
             : null,
         displayOrder: Number(group.displayOrder ?? group.display_order ?? groupIndex) || groupIndex,
+        subOptionGroupNo: (() => {
+          const value =
+            group.subOptionGroupNo ??
+            group.sub_option_group_no;
+
+          if (value == null || value === "") return null;
+
+          const numberValue = Number(value);
+
+          return Number.isInteger(numberValue) && numberValue > 0
+            ? numberValue
+            : null;
+        })(),
+        isSubOptionOnly: Boolean(
+          group.isSubOptionOnly ??
+          group.is_sub_option_only ??
+          false,
+        ),
         options: rawOptions
           .map((rawOption, optionIndex) => {
             const option = rawOption as MenuOptionItem & Record<string, unknown>;
@@ -79,6 +105,24 @@ export function getOptionGroups(item: RestaurantMenuItem | null): MenuOptionGrou
               name: String(option.name || option.option_name || `Option ${optionIndex + 1}`),
               priceDelta: Number.isFinite(price) ? price : 0,
               soldOut: Boolean(option.soldOut ?? option.sold_out ?? false),
+              useSubOption: Boolean(
+                option.useSubOption ??
+                option.use_sub_option ??
+                false,
+              ),
+              subOptionGroupNo: (() => {
+                const value =
+                  option.subOptionGroupNo ??
+                  option.sub_option_group_no;
+
+                if (value == null || value === "") return null;
+
+                const numberValue = Number(value);
+
+                return Number.isInteger(numberValue) && numberValue > 0
+                  ? numberValue
+                  : null;
+              })(),
               displayOrder:
                 Number(option.displayOrder ?? option.display_order ?? optionIndex) || optionIndex,
             };

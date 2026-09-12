@@ -315,7 +315,7 @@ export async function GET(
       supabase
         .from("business_menu_option_groups")
         .select(
-          "id,menu_item_id,name,is_required,min_select,max_select,display_order",
+          "id,menu_item_id,name,is_required,min_select,max_select,display_order,sub_option_group_no,is_sub_option_only",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -324,7 +324,7 @@ export async function GET(
       supabase
         .from("business_menu_option_items")
         .select(
-          "id,option_group_id,name,price_delta,is_available,display_order",
+          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -353,6 +353,16 @@ export async function GET(
         is_available: option.is_available !== false,
         displayOrder: Number(option.display_order ?? 0),
         display_order: Number(option.display_order ?? 0),
+        useSubOption: option.use_sub_option === true,
+        use_sub_option: option.use_sub_option === true,
+        subOptionGroupNo:
+          option.sub_option_group_no == null
+            ? null
+            : Number(option.sub_option_group_no),
+        sub_option_group_no:
+          option.sub_option_group_no == null
+            ? null
+            : Number(option.sub_option_group_no),
       });
 
       optionItemsByGroup.set(groupId, list);
@@ -382,6 +392,16 @@ export async function GET(
         max_select: rules.maxSelect,
         displayOrder: Number(group.display_order ?? 0),
         display_order: Number(group.display_order ?? 0),
+        subOptionGroupNo:
+          group.sub_option_group_no == null
+            ? null
+            : Number(group.sub_option_group_no),
+        sub_option_group_no:
+          group.sub_option_group_no == null
+            ? null
+            : Number(group.sub_option_group_no),
+        isSubOptionOnly: group.is_sub_option_only === true,
+        is_sub_option_only: group.is_sub_option_only === true,
         options:
           optionItemsByGroup.get(Number(group.id)) || [],
       });
@@ -688,7 +708,7 @@ export async function POST(
         await supabase
           .from("business_menu_option_groups")
           .select(
-            "id,name,is_required,min_select,max_select,display_order",
+            "id,name,is_required,min_select,max_select,display_order,sub_option_group_no,is_sub_option_only",
           )
           .eq("business_id", businessId)
           .eq("menu_item_id", itemId)
@@ -708,7 +728,7 @@ export async function POST(
           await supabase
             .from("business_menu_option_items")
             .select(
-              "option_group_id,name,price_delta,is_available,display_order",
+              "option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
             )
             .eq("business_id", businessId)
             .in("option_group_id", sourceGroupIds)
@@ -746,6 +766,12 @@ export async function POST(
             display_order: Number(
               sourceGroup.display_order ?? 0,
             ),
+            sub_option_group_no:
+              sourceGroup.sub_option_group_no == null
+                ? null
+                : Number(sourceGroup.sub_option_group_no),
+            is_sub_option_only:
+              sourceGroup.is_sub_option_only === true,
           })
           .select("id")
           .single();
@@ -774,6 +800,12 @@ export async function POST(
                   display_order: Number(
                     option.display_order ?? 0,
                   ),
+                  use_sub_option:
+                    option.use_sub_option === true,
+                  sub_option_group_no:
+                    option.sub_option_group_no == null
+                      ? null
+                      : Number(option.sub_option_group_no),
                 })),
               );
 
@@ -797,6 +829,12 @@ export async function POST(
           displayOrder: Number(
             sourceGroup.display_order ?? 0,
           ),
+          subOptionGroupNo:
+            sourceGroup.sub_option_group_no == null
+              ? null
+              : Number(sourceGroup.sub_option_group_no),
+          isSubOptionOnly:
+            sourceGroup.is_sub_option_only === true,
           options: sourceOptions.map((option) => ({
             name: option.name,
             priceDelta: Number(
@@ -804,6 +842,12 @@ export async function POST(
             ),
             soldOut:
               option.is_available === false,
+            useSubOption:
+              option.use_sub_option === true,
+            subOptionGroupNo:
+              option.sub_option_group_no == null
+                ? null
+                : Number(option.sub_option_group_no),
             displayOrder: Number(
               option.display_order ?? 0,
             ),
@@ -1160,6 +1204,30 @@ export async function PATCH(
                 );
               }
 
+              const useSubOption =
+                rawOption?.useSubOption === true ||
+                rawOption?.use_sub_option === true;
+
+              const rawSubOptionGroupNo =
+                rawOption?.subOptionGroupNo ??
+                rawOption?.sub_option_group_no;
+
+              const subOptionGroupNo =
+                rawSubOptionGroupNo == null ||
+                String(rawSubOptionGroupNo).trim() === ""
+                  ? null
+                  : Number(rawSubOptionGroupNo);
+
+              if (
+                useSubOption &&
+                (!Number.isInteger(subOptionGroupNo) ||
+                  Number(subOptionGroupNo) <= 0)
+              ) {
+                throw new Error(
+                  `${name} / ${groupName} / ${optionName}: 서브옵션 그룹 번호가 올바르지 않습니다.`,
+                );
+              }
+
               return {
                 name: optionName,
                 price_delta: Number(
@@ -1172,9 +1240,34 @@ export async function PATCH(
                     rawOption?.is_available === false
                   ),
                 display_order: optionIndex,
+                use_sub_option: useSubOption,
+                sub_option_group_no:
+                  useSubOption && subOptionGroupNo != null
+                    ? Number(subOptionGroupNo)
+                    : null,
               };
             },
           );
+
+          const rawSubOptionGroupNo =
+            rawGroup?.subOptionGroupNo ??
+            rawGroup?.sub_option_group_no;
+
+          const subOptionGroupNo =
+            rawSubOptionGroupNo == null ||
+            String(rawSubOptionGroupNo).trim() === ""
+              ? null
+              : Number(rawSubOptionGroupNo);
+
+          if (
+            subOptionGroupNo != null &&
+            (!Number.isInteger(subOptionGroupNo) ||
+              subOptionGroupNo <= 0)
+          ) {
+            throw new Error(
+              `${name} / ${groupName}: 서브옵션 그룹 번호가 올바르지 않습니다.`,
+            );
+          }
 
           return {
             name: groupName,
@@ -1182,6 +1275,13 @@ export async function PATCH(
             min_select: minSelect,
             max_select: maxSelect,
             display_order: groupIndex,
+            sub_option_group_no:
+              subOptionGroupNo == null
+                ? null
+                : Number(subOptionGroupNo),
+            is_sub_option_only:
+              rawGroup?.isSubOptionOnly === true ||
+              rawGroup?.is_sub_option_only === true,
             options,
           };
         },
@@ -1254,6 +1354,10 @@ export async function PATCH(
             min_select: group.min_select,
             max_select: group.max_select,
             display_order: group.display_order,
+            sub_option_group_no:
+              group.sub_option_group_no,
+            is_sub_option_only:
+              group.is_sub_option_only,
           })
           .select("id")
           .single();
@@ -1271,6 +1375,8 @@ export async function PATCH(
               price_delta: number;
               is_available: boolean;
               display_order: number;
+              use_sub_option: boolean;
+              sub_option_group_no: number | null;
             }) => ({
               business_id: businessId,
               option_group_id:
@@ -1281,6 +1387,10 @@ export async function PATCH(
                 option.is_available,
               display_order:
                 option.display_order,
+              use_sub_option:
+                option.use_sub_option,
+              sub_option_group_no:
+                option.sub_option_group_no,
             }),
           );
 
