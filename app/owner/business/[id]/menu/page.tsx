@@ -4218,8 +4218,8 @@ export default function OwnerBusinessMenuPage() {
     groupIndex: number,
     optionIndex: number,
   ) {
-    setItems((current) =>
-      current.map((item) => {
+    setItems((current) => {
+      const next = current.map((item) => {
         if (item.id !== itemId) return item;
 
         const groups = normalizeOptionGroups(item);
@@ -4246,10 +4246,14 @@ export default function OwnerBusinessMenuPage() {
           optionGroups: nextGroups,
           menu_option_groups: nextGroups,
         };
-      }),
-    );
+      });
 
-    setMessage("✓ 옵션을 화면에서 삭제했습니다. 아래 전체 저장을 눌러 DB에 반영하세요.");
+      itemsRef.current = next;
+      return next;
+    });
+
+    scheduleItemAutoSave(itemId);
+    setMessage("✓ 옵션을 삭제했습니다. 자동 저장됩니다.");
   }
 
   function moveOption(
@@ -4940,6 +4944,14 @@ export default function OwnerBusinessMenuPage() {
                     priceDelta: Number(priceDelta.toFixed(2)),
                     soldOut: Boolean(option.soldOut),
                     displayOrder: optionIndex,
+                    useSubOption: Boolean(option.useSubOption),
+                    subOptionGroupNo:
+                      option.useSubOption && option.subOptionGroupNo != null
+                        ? Math.max(
+                            1,
+                            Math.floor(Number(option.subOptionGroupNo) || 1),
+                          )
+                        : null,
                   };
                 },
               );
@@ -4954,6 +4966,14 @@ export default function OwnerBusinessMenuPage() {
                   1,
                   Math.floor(Number(group.receiptPrintOrder) || groupIndex + 1),
                 ),
+                subOptionGroupNo:
+                  group.subOptionGroupNo == null
+                    ? null
+                    : Math.max(
+                        1,
+                        Math.floor(Number(group.subOptionGroupNo) || 1),
+                      ),
+                isSubOptionOnly: Boolean(group.isSubOptionOnly),
                 options,
               };
             },
