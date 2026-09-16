@@ -350,7 +350,7 @@ export async function POST(
           order.fulfillment_type === "delivery" ? "Delivery" : "Pickup";
 
         const message = [
-          `KTown Triangle - ${restaurantName}`,
+          ` ${restaurantName}`,
           `Order #${order.order_number} confirmed.`,
           `${fulfillmentLabel} · Total $${Number(order.total || 0).toFixed(2)}`,
           "",
