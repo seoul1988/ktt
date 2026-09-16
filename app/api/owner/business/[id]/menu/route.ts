@@ -315,7 +315,7 @@ export async function GET(
       supabase
         .from("business_menu_option_groups")
         .select(
-          "id,menu_item_id,name,is_required,min_select,max_select,display_order,sub_option_group_no,is_sub_option_only",
+          "id,menu_item_id,name,is_required,min_select,max_select,display_order,receipt_print_order,sub_option_group_no,is_sub_option_only",
         )
         .eq("business_id", businessId)
         .order("display_order", { ascending: true })
@@ -392,6 +392,12 @@ export async function GET(
         max_select: rules.maxSelect,
         displayOrder: Number(group.display_order ?? 0),
         display_order: Number(group.display_order ?? 0),
+        receiptPrintOrder: Number(
+          group.receipt_print_order ?? group.display_order ?? 999,
+        ),
+        receipt_print_order: Number(
+          group.receipt_print_order ?? group.display_order ?? 999,
+        ),
         subOptionGroupNo:
           group.sub_option_group_no == null
             ? null
@@ -708,7 +714,7 @@ export async function POST(
         await supabase
           .from("business_menu_option_groups")
           .select(
-            "id,name,is_required,min_select,max_select,display_order,sub_option_group_no,is_sub_option_only",
+            "id,name,is_required,min_select,max_select,display_order,receipt_print_order,sub_option_group_no,is_sub_option_only",
           )
           .eq("business_id", businessId)
           .eq("menu_item_id", itemId)
@@ -765,6 +771,11 @@ export async function POST(
                 : Number(sourceGroup.max_select),
             display_order: Number(
               sourceGroup.display_order ?? 0,
+            ),
+            receipt_print_order: Number(
+              sourceGroup.receipt_print_order ??
+                sourceGroup.display_order ??
+                999,
             ),
             sub_option_group_no:
               sourceGroup.sub_option_group_no == null
@@ -828,6 +839,16 @@ export async function POST(
           maxSelect: rules.maxSelect,
           displayOrder: Number(
             sourceGroup.display_order ?? 0,
+          ),
+          receiptPrintOrder: Number(
+            sourceGroup.receipt_print_order ??
+              sourceGroup.display_order ??
+              999,
+          ),
+          receipt_print_order: Number(
+            sourceGroup.receipt_print_order ??
+              sourceGroup.display_order ??
+              999,
           ),
           subOptionGroupNo:
             sourceGroup.sub_option_group_no == null
@@ -1249,6 +1270,19 @@ export async function PATCH(
             },
           );
 
+          const rawReceiptPrintOrder =
+            rawGroup?.receiptPrintOrder ??
+            rawGroup?.receipt_print_order;
+
+          const receiptPrintOrder =
+            rawReceiptPrintOrder == null ||
+            String(rawReceiptPrintOrder).trim() === ""
+              ? 999
+              : Math.max(
+                  0,
+                  Math.floor(Number(rawReceiptPrintOrder) || 0),
+                );
+
           const rawSubOptionGroupNo =
             rawGroup?.subOptionGroupNo ??
             rawGroup?.sub_option_group_no;
@@ -1275,6 +1309,7 @@ export async function PATCH(
             min_select: minSelect,
             max_select: maxSelect,
             display_order: groupIndex,
+            receipt_print_order: receiptPrintOrder,
             sub_option_group_no:
               subOptionGroupNo == null
                 ? null
@@ -1354,6 +1389,7 @@ export async function PATCH(
             min_select: group.min_select,
             max_select: group.max_select,
             display_order: group.display_order,
+            receipt_print_order: group.receipt_print_order,
             sub_option_group_no:
               group.sub_option_group_no,
             is_sub_option_only:

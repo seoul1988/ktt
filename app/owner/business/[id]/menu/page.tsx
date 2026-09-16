@@ -33,6 +33,8 @@ type MenuOptionGroup = {
   minSelect: number | "";
   maxSelect: number | null;
   displayOrder: number;
+  /** 주방 영수증 출력 순서. 낮은 숫자가 먼저 출력됩니다. */
+  receiptPrintOrder?: number;
   /** 다른 옵션에서 참조할 수 있는 서브옵션 그룹 번호 */
   subOptionGroupNo?: number | null;
   /** true면 부모 옵션이 선택됐을 때만 표시할 그룹 */
@@ -48,6 +50,8 @@ type MenuOptionTemplate = {
   required: boolean;
   minSelect: number;
   maxSelect: number | null;
+  /** 주방 영수증 출력 순서. 낮은 숫자가 먼저 출력됩니다. */
+  receiptPrintOrder?: number;
   /** 옵션 라이브러리의 서브옵션 그룹 번호 */
   subOptionGroupNo?: number | null;
   /** 이 그룹은 서브옵션 전용 */
@@ -177,6 +181,13 @@ function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
     displayOrder: Math.max(
       0,
       Math.floor(Number(group?.displayOrder) || groupIndex),
+    ),
+    receiptPrintOrder: Math.max(
+      1,
+      Math.floor(
+        Number((group as any)?.receiptPrintOrder ?? (group as any)?.receipt_print_order) ||
+          groupIndex + 1,
+      ),
     ),
     subOptionGroupNo: (() => {
       const value =
@@ -1846,7 +1857,7 @@ export default function OwnerBusinessMenuPage() {
     async function loadDbOptionLibrary() {
       const { data: groups, error: groupError } = await supabase
         .from("menu_option_groups")
-        .select("id, name, required, min_select, max_select, sort_order, active, sub_option_group_no, is_sub_option_only")
+        .select("id, name, required, min_select, max_select, sort_order, receipt_print_order, active, sub_option_group_no, is_sub_option_only")
         .eq("business_id", businessId)
         .eq("active", true)
         .order("sort_order", { ascending: true });
@@ -1890,6 +1901,10 @@ export default function OwnerBusinessMenuPage() {
           group.max_select == null
             ? null
             : Math.max(0, Number(group.max_select) || 0),
+        receiptPrintOrder: Math.max(
+          1,
+          Math.floor(Number(group.receipt_print_order) || groupIndex + 1),
+        ),
         subOptionGroupNo:
           group.sub_option_group_no == null
             ? null
@@ -1989,6 +2004,8 @@ export default function OwnerBusinessMenuPage() {
           existing.options.length === 0 ? template.minSelect : existing.minSelect,
         maxSelect:
           existing.options.length === 0 ? template.maxSelect : existing.maxSelect,
+        receiptPrintOrder:
+          existing.receiptPrintOrder ?? template.receiptPrintOrder ?? existingIndex + 1,
         subOptionGroupNo:
           existing.subOptionGroupNo ?? template.subOptionGroupNo ?? null,
         isSubOptionOnly:
@@ -2020,6 +2037,7 @@ export default function OwnerBusinessMenuPage() {
           required: group.required,
           minSelect: Number(group.minSelect) || 0,
           maxSelect: group.maxSelect,
+          receiptPrintOrder: group.receiptPrintOrder ?? group.displayOrder + 1,
           subOptionGroupNo: group.subOptionGroupNo ?? null,
           isSubOptionOnly: Boolean(group.isSubOptionOnly),
           options: group.options.map((option, optionIndex) => ({
@@ -2066,6 +2084,50 @@ export default function OwnerBusinessMenuPage() {
         JSON.stringify(next),
       );
     }
+  }
+
+  function updateOptionTemplateReceiptPrintOrder(
+    templateId: string,
+    templateName: string,
+    value: number,
+  ) {
+    const receiptPrintOrder = Math.max(1, Math.floor(Number(value) || 1));
+
+    const nextTemplates = optionTemplates.map((template) =>
+      template.id === templateId
+        ? { ...template, receiptPrintOrder }
+        : template,
+    );
+    persistOptionTemplates(nextTemplates);
+
+    const templateKey = templateName.trim().toLowerCase();
+    const changedItemIds: number[] = [];
+
+    setItems((current) => {
+      const next = current.map((item) => {
+        const currentGroups = normalizeOptionGroups(item);
+        let changed = false;
+        const nextGroups = currentGroups.map((group) => {
+          if (group.name.trim().toLowerCase() !== templateKey) return group;
+          if (group.receiptPrintOrder === receiptPrintOrder) return group;
+          changed = true;
+          return { ...group, receiptPrintOrder };
+        });
+        if (!changed) return item;
+        changedItemIds.push(item.id);
+        return {
+          ...item,
+          option_groups: nextGroups,
+          optionGroups: nextGroups,
+          menu_option_groups: nextGroups,
+        };
+      });
+      itemsRef.current = next;
+      return next;
+    });
+
+    changedItemIds.forEach((itemId) => scheduleItemAutoSave(itemId));
+    setMessage(`✓ 영수증 출력 순서 ${receiptPrintOrder}번으로 저장합니다.`);
   }
 
   function updateOptionTemplateDescription(
@@ -2744,6 +2806,9 @@ export default function OwnerBusinessMenuPage() {
         templateMaxInput == null
           ? null
           : Math.max(0, templateMaxInput),
+      receiptPrintOrder:
+        oldTemplate?.receiptPrintOrder ??
+        Math.max(1, optionTemplates.findIndex((row) => row.id === editingTemplateId) + 1 || optionTemplates.length + 1),
       subOptionGroupNo:
         templateSubOptionGroupNoInput == null
           ? null
@@ -2849,6 +2914,7 @@ export default function OwnerBusinessMenuPage() {
           minSelect: template.minSelect,
           maxSelect: template.maxSelect,
           displayOrder: groupIndex,
+          receiptPrintOrder: template.receiptPrintOrder ?? group.receiptPrintOrder ?? groupIndex + 1,
           subOptionGroupNo: template.subOptionGroupNo ?? null,
           isSubOptionOnly: Boolean(template.isSubOptionOnly),
           options: template.options.map((option, optionIndex) => ({
@@ -3337,6 +3403,7 @@ export default function OwnerBusinessMenuPage() {
       minSelect: template.minSelect,
       maxSelect: template.maxSelect,
       displayOrder,
+      receiptPrintOrder: template.receiptPrintOrder ?? displayOrder + 1,
       subOptionGroupNo: template.subOptionGroupNo ?? null,
       isSubOptionOnly: Boolean(template.isSubOptionOnly),
       options: template.options.map((option, index) => ({
@@ -3418,7 +3485,7 @@ export default function OwnerBusinessMenuPage() {
   function applyOptionTemplateToItem(itemId: number) {
     const templateId = selectedTemplateByItem[itemId];
     const template = optionTemplates.find(
-      (row) => row.id === templateId,
+      (row) => row.id === templateId && !row.isSubOptionOnly,
     );
 
     if (!template) {
@@ -3454,6 +3521,10 @@ export default function OwnerBusinessMenuPage() {
     itemId: number,
     template: MenuOptionTemplate,
   ) {
+    // 서브옵션 전용 그룹은 메뉴에서 직접 선택/해제하지 않습니다.
+    // 부모 옵션 항목의 SUB 그룹 번호로만 자동 연결됩니다.
+    if (template.isSubOptionOnly) return;
+
     const templateKey = template.name.trim().toLowerCase();
 
     updateOptionGroups(itemId, (groups) => {
@@ -3779,6 +3850,10 @@ export default function OwnerBusinessMenuPage() {
           minSelect,
           maxSelect,
           displayOrder: groupIndex,
+          receiptPrintOrder: Math.max(
+            1,
+            Math.floor(Number(group.receiptPrintOrder) || groupIndex + 1),
+          ),
           subOptionGroupNo:
             group.subOptionGroupNo == null
               ? null
@@ -4921,6 +4996,10 @@ export default function OwnerBusinessMenuPage() {
                 minSelect,
                 maxSelect,
                 displayOrder: groupIndex,
+                receiptPrintOrder: Math.max(
+                  1,
+                  Math.floor(Number(group.receiptPrintOrder) || groupIndex + 1),
+                ),
                 options,
               };
             },
@@ -6616,9 +6695,31 @@ export default function OwnerBusinessMenuPage() {
                               {template.name}
                             </p>
                             <div className="flex shrink-0 items-center gap-1">
-                              <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
-                                {template.options.length}개
-                              </span>
+                              <label
+                                className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700"
+                                title="영수증 출력 순서 · 낮은 숫자가 먼저 프린트됩니다."
+                              >
+                                <span>출력</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={template.receiptPrintOrder ??
+                                    optionTemplates
+                                      .filter((row) => !row.isSubOptionOnly)
+                                      .findIndex((row) => row.id === template.id) + 1}
+                                  onChange={(event) =>
+                                    updateOptionTemplateReceiptPrintOrder(
+                                      template.id,
+                                      template.name,
+                                      Number(event.target.value),
+                                    )
+                                  }
+                                  onClick={(event) => event.stopPropagation()}
+                                  className="w-10 rounded-md border border-blue-200 bg-white px-1 py-0.5 text-center text-[10px] font-black text-blue-800 outline-none focus:border-blue-500"
+                                  aria-label={`${template.name} 영수증 출력 순서`}
+                                />
+                              </label>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -8727,17 +8828,19 @@ export default function OwnerBusinessMenuPage() {
                           </p>
                         </div>
                         <span className="text-[10px] font-black text-blue-700">
-                          {normalizeOptionGroups(item).length}개 적용 중
+                          {normalizeOptionGroups(item).filter((group) => !group.isSubOptionOnly).length}개 적용 중
                         </span>
                       </div>
 
-                      {optionTemplates.length === 0 ? (
+                      {optionTemplates.filter((template) => !template.isSubOptionOnly).length === 0 ? (
                         <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-bold text-gray-500">
                           등록된 옵션이 없습니다. 위의 옵션 목록에서 먼저 옵션을 등록하세요.
                         </p>
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">
-                          {optionTemplates.map((template) => {
+                          {optionTemplates
+                            .filter((template) => !template.isSubOptionOnly)
+                            .map((template) => {
                             const appliedGroup = normalizeOptionGroups(item).find(
                               (group) =>
                                 group.name.trim().toLowerCase() ===
@@ -9149,7 +9252,9 @@ export default function OwnerBusinessMenuPage() {
                               className="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black outline-none"
                             >
                               <option value="">옵션 선택</option>
-                              {optionTemplates.map((template) => (
+                              {optionTemplates
+                                .filter((template) => !template.isSubOptionOnly)
+                                .map((template) => (
                                 <option key={template.id} value={template.id}>
                                   {template.name}
                                 </option>
@@ -9163,7 +9268,7 @@ export default function OwnerBusinessMenuPage() {
                               }
                               disabled={
                                 !selectedTemplateByItem[item.id] ||
-                                optionTemplates.length === 0
+                                optionTemplates.filter((template) => !template.isSubOptionOnly).length === 0
                               }
                               className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white disabled:opacity-40"
                             >

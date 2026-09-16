@@ -723,7 +723,7 @@ export async function POST(
     } = await db
       .from("business_menu_option_groups")
       .select(
-        "id,menu_item_id,name,is_required,min_select,max_select,display_order",
+        "id,menu_item_id,name,is_required,min_select,max_select,display_order,receipt_print_order,sub_option_group_no,is_sub_option_only",
       )
       .eq("business_id", businessId)
       .in("menu_item_id", ids)
@@ -747,7 +747,7 @@ export async function POST(
       } = await db
         .from("business_menu_option_items")
         .select(
-          "id,option_group_id,name,price_delta,is_available,display_order",
+          "id,option_group_id,name,price_delta,is_available,display_order,use_sub_option,sub_option_group_no",
         )
         .eq("business_id", businessId)
         .in("option_group_id", optionGroupIds)
@@ -899,11 +899,60 @@ export async function POST(
           };
         }> = [];
 
-        groups.forEach((group: any, groupIndex: number) => {
+        const indexedGroups = groups.map(
+          (group: any, originalGroupIndex: number) => ({
+            group,
+            originalGroupIndex,
+          }),
+        );
+
+        const subOptionGroupsByNo = new Map<
+          number,
+          { group: any; originalGroupIndex: number }
+        >();
+
+        for (const entry of indexedGroups) {
+          const subOptionGroupNo = Number(
+            entry.group.sub_option_group_no || 0,
+          );
+
+          if (
+            entry.group.is_sub_option_only === true &&
+            Number.isInteger(subOptionGroupNo) &&
+            subOptionGroupNo > 0
+          ) {
+            subOptionGroupsByNo.set(subOptionGroupNo, entry);
+          }
+        }
+
+        const mainGroups = indexedGroups
+          .filter(
+            ({ group }) => group.is_sub_option_only !== true,
+          )
+          .sort((a, b) => {
+            const aOrder = Number(
+              a.group.receipt_print_order ?? 999,
+            );
+            const bOrder = Number(
+              b.group.receipt_print_order ?? 999,
+            );
+
+            if (aOrder !== bOrder) {
+              return aOrder - bOrder;
+            }
+
+            return a.originalGroupIndex - b.originalGroupIndex;
+          });
+
+        const processGroup = (
+          group: any,
+          originalGroupIndex: number,
+          allowSubOptions: boolean,
+        ) => {
           const groupName = String(group.name || "");
           const selectedGroup = selectedBucket(
             selections,
-            groupIndex,
+            originalGroupIndex,
             groupName,
           );
 
@@ -962,6 +1011,7 @@ export async function POST(
 
             optionExtra += optionAmount;
 
+            // Print the selected main option first.
             squareModifiers.push({
               name:
                 selectedQuantity > 1
@@ -972,6 +1022,24 @@ export async function POST(
                 currency: "USD",
               },
             });
+
+            // If this option opens a SUB group, print the selected SUB option(s)
+            // immediately below the parent option on the Square receipt/ticket.
+            if (allowSubOptions && option.use_sub_option === true) {
+              const subOptionGroupNo = Number(
+                option.sub_option_group_no || 0,
+              );
+              const childEntry =
+                subOptionGroupsByNo.get(subOptionGroupNo);
+
+              if (childEntry) {
+                processGroup(
+                  childEntry.group,
+                  childEntry.originalGroupIndex,
+                  false,
+                );
+              }
+            }
           });
 
           const minimum = Math.max(
@@ -1005,7 +1073,11 @@ export async function POST(
               `Too many selections were made for "${groupName}".`,
             );
           }
-        });
+        };
+
+        for (const { group, originalGroupIndex } of mainGroups) {
+          processGroup(group, originalGroupIndex, true);
+        }
 
         const unitPrice = Math.max(
           0,
