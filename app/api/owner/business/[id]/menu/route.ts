@@ -752,8 +752,16 @@ export async function POST(
       }
 
       const duplicatedGroups: any[] = [];
+      const seenSourceGroupNames = new Set<string>();
+      const sourceGroupsToCopy = (sourceGroups || []).filter((sourceGroup) => {
+        if (sourceGroup.is_sub_option_only === true) return false;
+        const key = String(sourceGroup.name || "").trim().toLowerCase();
+        if (!key || seenSourceGroupNames.has(key)) return false;
+        seenSourceGroupNames.add(key);
+        return true;
+      });
 
-      for (const sourceGroup of sourceGroups || []) {
+      for (const sourceGroup of sourceGroupsToCopy) {
         const {
           data: newGroup,
           error: newGroupError,
@@ -1145,7 +1153,22 @@ export async function PATCH(
 
       const rawGroups = readOptionPayload(rawItem);
 
-      const normalizedGroups = rawGroups.map(
+      // 서브옵션 전용 그룹은 각 메뉴에 복사 저장하지 않습니다.
+      // 같은 이름의 일반 옵션 그룹이 중복되어 들어와도 한 번만 저장합니다.
+      const seenGroupNames = new Set<string>();
+      const cleanRawGroups = rawGroups.filter((rawGroup: any) => {
+        const isSubOptionOnly =
+          rawGroup?.isSubOptionOnly === true ||
+          rawGroup?.is_sub_option_only === true;
+        if (isSubOptionOnly) return false;
+
+        const key = String(rawGroup?.name || "").trim().toLowerCase();
+        if (!key || seenGroupNames.has(key)) return false;
+        seenGroupNames.add(key);
+        return true;
+      });
+
+      const normalizedGroups = cleanRawGroups.map(
         (rawGroup: any, groupIndex: number) => {
           const groupName = String(
             rawGroup?.name || "",

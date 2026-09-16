@@ -169,7 +169,7 @@ function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
 
   if (!Array.isArray(raw)) return [];
 
-  return raw.map((group, groupIndex) => ({
+  const normalized = raw.map((group, groupIndex) => ({
     name: String(group?.name || `Option Group ${groupIndex + 1}`),
     description: String((group as any)?.description || "").trim(),
     required: Boolean(group?.required),
@@ -231,6 +231,19 @@ function normalizeOptionGroups(item: MenuItem): MenuOptionGroup[] {
         }))
       : [],
   }));
+
+  // 메뉴에는 서브옵션 전용 그룹을 저장/표시하지 않습니다.
+  // 같은 이름의 일반 옵션 그룹이 중복되어 있으면 첫 번째 것만 유지합니다.
+  const seen = new Set<string>();
+  return normalized
+    .filter((group) => !group.isSubOptionOnly)
+    .filter((group) => {
+      const key = group.name.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((group, index) => ({ ...group, displayOrder: index }));
 }
 
 function nextDisplayOrder<T extends { displayOrder: number }>(rows: T[]) {
@@ -2924,44 +2937,8 @@ export default function OwnerBusinessMenuPage() {
         };
       });
 
-      if (
-        template.isSubOptionOnly &&
-        template.subOptionGroupNo != null
-      ) {
-        const groupNo = Number(template.subOptionGroupNo);
-        const isReferenced = nextGroups.some(
-          (group) =>
-            !group.isSubOptionOnly &&
-            group.options.some(
-              (option) =>
-                option.useSubOption === true &&
-                Number(option.subOptionGroupNo || 0) === groupNo,
-            ),
-        );
-
-        if (isReferenced) {
-          const existingChildIndex = nextGroups.findIndex(
-            (group) =>
-              group.isSubOptionOnly === true &&
-              Number(group.subOptionGroupNo || 0) === groupNo,
-          );
-
-          const childGroup = templateToOptionGroup(
-            template,
-            existingChildIndex >= 0
-              ? existingChildIndex
-              : nextGroups.length,
-          );
-
-          if (existingChildIndex >= 0) {
-            nextGroups[existingChildIndex] = childGroup;
-          } else {
-            nextGroups = [...nextGroups, childGroup];
-          }
-
-          changed = true;
-        }
-      }
+      // 서브옵션 전용 템플릿은 공용 라이브러리에만 저장합니다.
+      // 각 메뉴의 option_groups 안으로 자동 복사하지 않습니다.
 
       if (!changed) return item;
 
@@ -3420,66 +3397,22 @@ export default function OwnerBusinessMenuPage() {
   function ensureReferencedSubOptionGroups(
     groups: MenuOptionGroup[],
   ): MenuOptionGroup[] {
-    const referencedNumbers = new Set<number>();
+    // 서브옵션은 공용 라이브러리에서만 관리합니다.
+    // 메뉴에는 일반 옵션 그룹만 유지하고, 같은 이름의 중복 그룹도 제거합니다.
+    const seen = new Set<string>();
 
-    for (const group of groups) {
-      if (group.isSubOptionOnly) continue;
-
-      for (const option of group.options) {
-        const groupNo = Number(option.subOptionGroupNo || 0);
-        if (
-          option.useSubOption &&
-          Number.isInteger(groupNo) &&
-          groupNo > 0
-        ) {
-          referencedNumbers.add(groupNo);
-        }
-      }
-    }
-
-    let next = groups.map((group, index) => ({
-      ...group,
-      displayOrder: index,
-    }));
-
-    for (const groupNo of referencedNumbers) {
-      const childTemplate = optionTemplates.find(
-        (template) =>
-          template.isSubOptionOnly === true &&
-          Number(template.subOptionGroupNo || 0) === groupNo,
-      );
-
-      if (!childTemplate) continue;
-
-      const existingIndex = next.findIndex(
-        (group) =>
-          group.isSubOptionOnly === true &&
-          Number(group.subOptionGroupNo || 0) === groupNo,
-      );
-
-      const childGroup = templateToOptionGroup(
-        childTemplate,
-        existingIndex >= 0 ? existingIndex : next.length,
-      );
-
-      if (existingIndex >= 0) {
-        next[existingIndex] = childGroup;
-      } else {
-        next.push(childGroup);
-      }
-    }
-
-    // 부모 옵션에서 더 이상 참조하지 않는 서브옵션 전용 그룹은 제거합니다.
-    next = next.filter(
-      (group) =>
-        !group.isSubOptionOnly ||
-        referencedNumbers.has(Number(group.subOptionGroupNo || 0)),
-    );
-
-    return next.map((group, index) => ({
-      ...group,
-      displayOrder: index,
-    }));
+    return groups
+      .filter((group) => !group.isSubOptionOnly)
+      .filter((group) => {
+        const key = group.name.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((group, index) => ({
+        ...group,
+        displayOrder: index,
+      }));
   }
 
   function applyOptionTemplateToItem(itemId: number) {
