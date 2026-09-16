@@ -3398,7 +3398,10 @@ export default function OwnerBusinessMenuPage() {
       minSelect: template.minSelect,
       maxSelect: template.maxSelect,
       displayOrder,
-      receiptPrintOrder: template.receiptPrintOrder ?? displayOrder + 1,
+      receiptPrintOrder:
+        template.receiptPrintOrder === ""
+          ? displayOrder + 1
+          : template.receiptPrintOrder ?? displayOrder + 1,
       subOptionGroupNo: template.subOptionGroupNo ?? null,
       isSubOptionOnly: Boolean(template.isSubOptionOnly),
       options: template.options.map((option, index) => ({
