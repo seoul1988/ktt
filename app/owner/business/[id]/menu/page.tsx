@@ -51,7 +51,7 @@ type MenuOptionTemplate = {
   minSelect: number;
   maxSelect: number | null;
   /** 주방 영수증 출력 순서. 낮은 숫자가 먼저 출력됩니다. */
-  receiptPrintOrder?: number;
+  receiptPrintOrder?: number | "";
   /** 옵션 라이브러리의 서브옵션 그룹 번호 */
   subOptionGroupNo?: number | null;
   /** 이 그룹은 서브옵션 전용 */
@@ -2102,8 +2102,21 @@ export default function OwnerBusinessMenuPage() {
   function updateOptionTemplateReceiptPrintOrder(
     templateId: string,
     templateName: string,
-    value: number,
+    value: number | "",
   ) {
+    // 입력 중에는 빈 값을 허용합니다.
+    // 그래서 Backspace로 기존 숫자를 완전히 지운 뒤 새 숫자를 입력할 수 있습니다.
+    if (value === "") {
+      persistOptionTemplates(
+        optionTemplates.map((template) =>
+          template.id === templateId
+            ? { ...template, receiptPrintOrder: "" }
+            : template,
+        ),
+      );
+      return;
+    }
+
     const receiptPrintOrder = Math.max(1, Math.floor(Number(value) || 1));
 
     const nextTemplates = optionTemplates.map((template) =>
@@ -6645,11 +6658,11 @@ export default function OwnerBusinessMenuPage() {
                                     updateOptionTemplateReceiptPrintOrder(
                                       template.id,
                                       template.name,
-                                      Number(event.target.value),
+                                      event.target.value === "" ? "" : Number(event.target.value),
                                     )
                                   }
                                   onClick={(event) => event.stopPropagation()}
-                                  className="w-10 rounded-md border border-blue-200 bg-white px-1 py-0.5 text-center text-[10px] font-black text-blue-800 outline-none focus:border-blue-500"
+                                  className="w-16 rounded-md border border-blue-200 bg-white px-2 py-0.5 text-center text-[10px] font-black text-blue-800 outline-none focus:border-blue-500"
                                   aria-label={`${template.name} 영수증 출력 순서`}
                                 />
                               </label>
