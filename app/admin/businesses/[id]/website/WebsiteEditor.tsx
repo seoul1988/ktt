@@ -14812,6 +14812,7 @@ export function PublicWebsiteRenderer({
   const [mobileHeaderSpacerHeight, setMobileHeaderSpacerHeight] =
     useState(0);
   const [mobileCartCount, setMobileCartCount] = useState(0);
+  const [customerTrackingUrl, setCustomerTrackingUrl] = useState("");
 
   /*
    * 공개 사이트의 첫 화면이 그려지기 전에 휴대폰 여부를 판정합니다.
@@ -14858,6 +14859,52 @@ export function PublicWebsiteRenderer({
     );
     return () => window.clearInterval(timer);
   }, []);
+
+  // 결제한 Delivery 고객의 브라우저에만 배송조회 버튼을 최대 1시간 표시합니다.
+  useEffect(() => {
+    const cookieName = `ktown_delivery_tracking_${business.id}=`;
+
+    const readTrackingCookie = () => {
+      try {
+        const rawCookie = document.cookie
+          .split("; " )
+          .find((item) => item.startsWith(cookieName));
+
+        if (!rawCookie) {
+          setCustomerTrackingUrl("");
+          return 0;
+        }
+
+        const payload = JSON.parse(
+          decodeURIComponent(rawCookie.slice(cookieName.length)),
+        ) as { url?: string; expiresAt?: string };
+
+        const expiresAt = new Date(String(payload.expiresAt || "")).getTime();
+        const url = String(payload.url || "").trim();
+
+        if (!url || !Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
+          setCustomerTrackingUrl("");
+          return 0;
+        }
+
+        setCustomerTrackingUrl(url);
+        return expiresAt;
+      } catch {
+        setCustomerTrackingUrl("");
+        return 0;
+      }
+    };
+
+    const expiresAt = readTrackingCookie();
+    if (!expiresAt) return;
+
+    const timeout = window.setTimeout(
+      () => setCustomerTrackingUrl(""),
+      Math.max(0, expiresAt - Date.now()) + 250,
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [business.id]);
 
   // RestaurantMenu 장바구니 상태를 모바일 하단 버튼과 동기화합니다.
   useEffect(() => {
@@ -15901,7 +15948,7 @@ export function PublicWebsiteRenderer({
           : null}
 
         {device === "mobile" &&
-        (mobileHoursButtonEnabled || mobileActionButtonEnabled) &&
+        (mobileHoursButtonEnabled || mobileActionButtonEnabled || Boolean(customerTrackingUrl)) &&
         typeof document !== "undefined"
           ? createPortal(
               <nav
@@ -15938,6 +15985,27 @@ export function PublicWebsiteRenderer({
                         </span>
                         <span className="block truncate text-[9px] font-bold text-gray-500">
                           HOURS · {mobileHoursStatus.detail}
+                        </span>
+                      </span>
+                    </button>
+                  ) : null}
+
+                  {customerTrackingUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => window.location.assign(customerTrackingUrl)}
+                      aria-label="배송조회"
+                      className="ml-auto flex min-h-[56px] shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-white shadow-md transition active:scale-[0.98] active:bg-blue-700"
+                    >
+                      <span aria-hidden="true" className="text-[20px] leading-none">
+                        🚚
+                      </span>
+                      <span className="min-w-0 text-left leading-tight">
+                        <span className="block truncate text-[12px] font-black">
+                          배송조회
+                        </span>
+                        <span className="block truncate text-[9px] font-bold text-blue-100">
+                          DELIVERY TRACKING
                         </span>
                       </span>
                     </button>

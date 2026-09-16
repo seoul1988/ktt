@@ -279,6 +279,12 @@ export async function POST(
     const rawCancelToken = randomBytes(24).toString("base64url");
     const cancelTokenHash = tokenHash(rawCancelToken);
 
+    const trackingExpiresAt = new Date(
+      paidAt.getTime() + 60 * 60 * 1000,
+    );
+    const rawTrackingToken = randomBytes(32).toString("base64url");
+    const trackingTokenHash = tokenHash(rawTrackingToken);
+
     const { error: updateError } = await db
       .from("restaurant_orders")
       .update({
@@ -289,6 +295,8 @@ export async function POST(
         paid_at: paidAt.toISOString(),
         cancel_token_hash: cancelTokenHash,
         cancel_expires_at: cancelExpiresAt.toISOString(),
+        tracking_token_hash: trackingTokenHash,
+        tracking_expires_at: trackingExpiresAt.toISOString(),
       })
       .eq("id", ktownOrderId)
       .eq("business_id", businessId);
@@ -385,7 +393,10 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({
+    const trackingUrl =
+      `/orders/track/${encodeURIComponent(rawTrackingToken)}`;
+
+    const response = NextResponse.json({
       ok: true,
       paymentStatus: "paid",
       paymentId,
@@ -393,7 +404,31 @@ export async function POST(
       delivery,
       smsQueued: !!sms && sms?.ok !== false,
       cancelExpiresAt: cancelExpiresAt.toISOString(),
+      trackingUrl,
+      trackingExpiresAt: trackingExpiresAt.toISOString(),
     });
+
+    // 같은 브라우저에서 결제한 Delivery 고객에게만 1시간 동안 배송조회 버튼을 표시합니다.
+    if (order.fulfillment_type === "delivery") {
+      response.cookies.set(
+        `ktown_delivery_tracking_${businessId}`,
+        encodeURIComponent(
+          JSON.stringify({
+            url: trackingUrl,
+            expiresAt: trackingExpiresAt.toISOString(),
+          }),
+        ),
+        {
+          maxAge: 60 * 60,
+          path: "/",
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+          httpOnly: false,
+        },
+      );
+    }
+
+    return response;
   } catch (error) {
     console.error("Square direct payment error:", error);
     return NextResponse.json(
