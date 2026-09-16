@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { cancelUberDirectDelivery } from "@/lib/delivery/uber-direct";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -154,7 +155,7 @@ export async function POST(
       db
         .from("restaurant_orders")
         .select(
-          "id,business_id,order_number,total,payment_status,order_status,square_payment_id",
+          "id,business_id,order_number,total,payment_status,order_status,square_payment_id,fulfillment_type,delivery_provider,delivery_external_id,delivery_status",
         )
         .eq("id", ktownOrderId)
         .eq("business_id", businessId)
@@ -163,7 +164,7 @@ export async function POST(
       db
         .from("restaurant_order_private_settings")
         .select(
-          "payment_provider,square_access_token,square_location_id",
+          "payment_provider,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -301,6 +302,34 @@ export async function POST(
       );
     }
 
+    let uberCancellation: any = null;
+    let deliveryStatus = order.delivery_status || null;
+    let deliveryLastError: string | null = null;
+
+    if (
+      order.fulfillment_type === "delivery" &&
+      order.delivery_provider === "uber_direct" &&
+      order.delivery_external_id
+    ) {
+      try {
+        uberCancellation = await cancelUberDirectDelivery({
+          privateSettings,
+          deliveryId: String(order.delivery_external_id),
+        });
+        deliveryStatus = "cancelled";
+      } catch (uberError) {
+        deliveryStatus = "cancel_failed";
+        deliveryLastError =
+          uberError instanceof Error
+            ? uberError.message
+            : "Uber Direct cancellation failed.";
+        console.error(
+          "UBER DIRECT CANCEL AFTER OWNER CANCEL ERROR",
+          uberError,
+        );
+      }
+    }
+
     // A Square refund can be completed immediately or remain pending.
     // Do not claim completion until Square says COMPLETED.
     if (refundStatus === "COMPLETED") {
@@ -309,6 +338,8 @@ export async function POST(
         .update({
           order_status: "cancelled",
           payment_status: "refunded",
+          delivery_status: deliveryStatus,
+          delivery_last_error: deliveryLastError,
           updated_at: new Date().toISOString(),
         })
         .eq("id", ktownOrderId)
@@ -323,6 +354,11 @@ export async function POST(
         orderStatus: "cancelled",
         paymentStatus: "refunded",
         orderNumber: order.order_number,
+        uberCancellation,
+        deliveryCancellationWarning:
+          deliveryStatus === "cancel_failed"
+            ? "The food order was refunded, but the delivery cancellation needs restaurant attention."
+            : null,
       });
     }
 
@@ -332,6 +368,8 @@ export async function POST(
         .update({
           order_status: "cancelled",
           payment_status: "refund_pending",
+          delivery_status: deliveryStatus,
+          delivery_last_error: deliveryLastError,
           updated_at: new Date().toISOString(),
         })
         .eq("id", ktownOrderId)
@@ -346,6 +384,11 @@ export async function POST(
         orderStatus: "cancelled",
         paymentStatus: "refund_pending",
         orderNumber: order.order_number,
+        uberCancellation,
+        deliveryCancellationWarning:
+          deliveryStatus === "cancel_failed"
+            ? "The food order refund is pending, but the delivery cancellation needs restaurant attention."
+            : null,
       });
     }
 
