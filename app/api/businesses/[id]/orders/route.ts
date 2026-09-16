@@ -761,6 +761,114 @@ export async function POST(
       optionItemRows = data || [];
     }
 
+    /*
+     * Shared SUB option library.
+     *
+     * SUB-only groups are no longer copied into business_menu_option_groups
+     * for every menu item. Load them once from the common option library and
+     * resolve them by sub_option_group_no.
+     */
+    const {
+      data: sharedSubGroupRows,
+      error: sharedSubGroupError,
+    } = await db
+      .from("menu_option_groups")
+      .select(
+        "id,name,required,min_select,max_select,sort_order,active,sub_option_group_no,is_sub_option_only",
+      )
+      .eq("business_id", businessId)
+      .eq("active", true)
+      .eq("is_sub_option_only", true)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (sharedSubGroupError) {
+      throw sharedSubGroupError;
+    }
+
+    const sharedSubGroupIds = (sharedSubGroupRows || [])
+      .map((group: any) => Number(group.id))
+      .filter((groupId: number) => Number.isInteger(groupId) && groupId > 0);
+
+    let sharedSubChoiceRows: any[] = [];
+
+    if (sharedSubGroupIds.length > 0) {
+      const {
+        data,
+        error,
+      } = await db
+        .from("menu_option_choices")
+        .select(
+          "id,option_group_id,name,price_delta,sort_order,active,sold_out,use_sub_option,sub_option_group_no",
+        )
+        .in("option_group_id", sharedSubGroupIds)
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      sharedSubChoiceRows = data || [];
+    }
+
+    const sharedSubOptionsByGroup = new Map<number, any[]>();
+
+    for (const choice of sharedSubChoiceRows) {
+      const groupId = Number(choice.option_group_id);
+      const list = sharedSubOptionsByGroup.get(groupId) || [];
+
+      list.push({
+        id: choice.id,
+        option_group_id: groupId,
+        name: choice.name,
+        price_delta: Number(choice.price_delta || 0),
+        is_available: choice.active !== false && choice.sold_out !== true,
+        display_order: Number(choice.sort_order || 0),
+        use_sub_option: choice.use_sub_option === true,
+        sub_option_group_no:
+          choice.sub_option_group_no == null
+            ? null
+            : Number(choice.sub_option_group_no),
+      });
+
+      sharedSubOptionsByGroup.set(groupId, list);
+    }
+
+    const sharedSubOptionGroupsByNo = new Map<number, any>();
+
+    for (const group of sharedSubGroupRows || []) {
+      const groupNo = Number((group as any).sub_option_group_no || 0);
+
+      if (!Number.isInteger(groupNo) || groupNo <= 0) {
+        continue;
+      }
+
+      const groupId = Number((group as any).id);
+
+      // Keep the first active library group for a SUB number if bad legacy
+      // duplicates exist; the admin library should normally have one.
+      if (!sharedSubOptionGroupsByNo.has(groupNo)) {
+        sharedSubOptionGroupsByNo.set(groupNo, {
+          id: groupId,
+          name: String((group as any).name || `SUB ${groupNo}`),
+          is_required: (group as any).required === true,
+          min_select: Number((group as any).min_select || 0),
+          max_select:
+            (group as any).max_select == null
+              ? null
+              : Number((group as any).max_select),
+          display_order: Number((group as any).sort_order || 0),
+          receipt_print_order: 999,
+          sub_option_group_no: groupNo,
+          is_sub_option_only: true,
+          __sharedSubOptions:
+            sharedSubOptionsByGroup.get(groupId) || [],
+        });
+      }
+    }
+
     const groupsByMenuItem = new Map<number, any[]>();
 
     for (const group of optionGroupRows || []) {
@@ -911,6 +1019,18 @@ export async function POST(
           { group: any; originalGroupIndex: number }
         >();
 
+        // Preferred source: the shared SUB library.
+        // A synthetic index of -1 is fine because selectedBucket() also
+        // falls back to the group name (for example "Shake").
+        for (const [groupNo, sharedGroup] of sharedSubOptionGroupsByNo) {
+          subOptionGroupsByNo.set(groupNo, {
+            group: sharedGroup,
+            originalGroupIndex: -1,
+          });
+        }
+
+        // Backward compatibility only: if an old menu still has a copied
+        // SUB-only group, use it only when the shared library has no entry.
         for (const entry of indexedGroups) {
           const subOptionGroupNo = Number(
             entry.group.sub_option_group_no || 0,
@@ -919,7 +1039,8 @@ export async function POST(
           if (
             entry.group.is_sub_option_only === true &&
             Number.isInteger(subOptionGroupNo) &&
-            subOptionGroupNo > 0
+            subOptionGroupNo > 0 &&
+            !subOptionGroupsByNo.has(subOptionGroupNo)
           ) {
             subOptionGroupsByNo.set(subOptionGroupNo, entry);
           }
@@ -957,7 +1078,9 @@ export async function POST(
           );
 
           const options =
-            optionsByGroup.get(Number(group.id)) || [];
+            Array.isArray(group.__sharedSubOptions)
+              ? group.__sharedSubOptions
+              : optionsByGroup.get(Number(group.id)) || [];
 
           let groupSelectionCount = 0;
 
