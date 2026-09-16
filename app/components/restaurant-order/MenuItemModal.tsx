@@ -544,11 +544,20 @@ export default function MenuItemModal({
           originalIndex,
           isRequired: getGroupRules(group).minimum > 0,
           isComboIt: /\bcombo\s*it!?\b/i.test(String(group.name || "").trim()),
+          receiptPrintOrder: Number(
+            (group as any)?.receiptPrintOrder ??
+              (group as any)?.receipt_print_order ??
+              999,
+          ),
         }))
         .filter(
           (row) => !Boolean((row.group as any)?.isSubOptionOnly),
         )
         .sort((a, b) => {
+          // 화면 우선순위:
+          // 1) REQUIRED
+          // 2) Combo It!
+          // 3) 나머지는 영수증 출력 번호가 낮은 순서
           const rank = (row: {
             isRequired: boolean;
             isComboIt: boolean;
@@ -559,8 +568,22 @@ export default function MenuItemModal({
           };
 
           const rankDifference = rank(a) - rank(b);
-          return rankDifference !== 0
-            ? rankDifference
+          if (rankDifference !== 0) return rankDifference;
+
+          // REQUIRED 그룹끼리 / Combo It!끼리는 기존 화면 순서를 유지합니다.
+          if (a.isRequired || a.isComboIt) {
+            return a.originalIndex - b.originalIndex;
+          }
+
+          const aOrder = Number.isFinite(a.receiptPrintOrder)
+            ? a.receiptPrintOrder
+            : 999;
+          const bOrder = Number.isFinite(b.receiptPrintOrder)
+            ? b.receiptPrintOrder
+            : 999;
+
+          return aOrder !== bOrder
+            ? aOrder - bOrder
             : a.originalIndex - b.originalIndex;
         }),
     [groups],
