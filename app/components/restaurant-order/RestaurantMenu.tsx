@@ -1494,9 +1494,9 @@ export default function RestaurantMenu({
                       }
                     >
                       <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">
-                          {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
-                        </p>
+                        <p className="text-sm font-black uppercase tracking-[0.18em] text-red-600">
+						  {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
+						</p>
                         <h3 className="mt-1 text-xl font-black">Shopping Cart</h3>
                       </div>
                       <button
