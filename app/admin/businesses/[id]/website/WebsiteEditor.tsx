@@ -15947,25 +15947,41 @@ export function PublicWebsiteRenderer({
             )
           : null}
 
-        {device === "mobile" &&
-        (mobileHoursButtonEnabled || mobileActionButtonEnabled || Boolean(customerTrackingUrl)) &&
+        {((device === "mobile" &&
+          (mobileHoursButtonEnabled ||
+            mobileActionButtonEnabled ||
+            Boolean(customerTrackingUrl))) ||
+          (device === "desktop" && Boolean(customerTrackingUrl))) &&
         typeof document !== "undefined"
           ? createPortal(
               <nav
-                aria-label="Mobile quick actions"
-                className="fixed inset-x-0 bottom-0 z-[6000] border-t border-gray-200 bg-white/95 px-2 pt-1.5 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] backdrop-blur"
-                style={{
-                  position: "fixed",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  zIndex: 6000,
-                  paddingBottom:
-                    "max(6px, env(safe-area-inset-bottom, 0px))",
-                }}
+                aria-label={device === "mobile" ? "Mobile quick actions" : "Delivery tracking"}
+                className={
+                  device === "mobile"
+                    ? "fixed inset-x-0 bottom-0 z-[6000] border-t border-gray-200 bg-white/95 px-2 pt-1.5 shadow-[0_-6px_18px_rgba(15,23,42,0.08)] backdrop-blur"
+                    : "fixed bottom-5 right-5 z-[6000]"
+                }
+                style={
+                  device === "mobile"
+                    ? {
+                        position: "fixed",
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 6000,
+                        paddingBottom:
+                          "max(6px, env(safe-area-inset-bottom, 0px))",
+                      }
+                    : {
+                        position: "fixed",
+                        right: 20,
+                        bottom: 20,
+                        zIndex: 6000,
+                      }
+                }
               >
                 <div className="flex w-full items-center justify-between">
-                  {mobileHoursButtonEnabled ? (
+                  {device === "mobile" && mobileHoursButtonEnabled ? (
                     <button
                       type="button"
                       onClick={openMobileHoursTarget}
@@ -16011,7 +16027,7 @@ export function PublicWebsiteRenderer({
                     </button>
                   ) : null}
 
-                  {mobileActionButtonEnabled ? (
+                  {device === "mobile" && mobileActionButtonEnabled ? (
                     <button
                       type="button"
                       onClick={openMobileActionTarget}
