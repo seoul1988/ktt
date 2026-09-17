@@ -87,6 +87,25 @@ function shortDate(dateText: string) {
   return `${Number(month)}/${Number(day)}`;
 }
 
+async function fetchAllRows<T>(
+  makeQuery: (from: number, to: number) => any,
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+
+    const batch = (data || []) as T[];
+    rows.push(...batch);
+
+    if (batch.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 export default async function BusinessVisitorsPage({
   params,
   searchParams,
@@ -105,33 +124,36 @@ export default async function BusinessVisitorsPage({
   const sevenDaysAgo = addDays(today, -6);
   const thirtyDaysAgo = addDays(today, -29);
 
-  const [businessResult, visitsResult, menuClicksResult] = await Promise.all([
+  const [businessResult, visits, menuClicks] = await Promise.all([
     supabase.from("businesses").select("name").eq("id", businessId).maybeSingle(),
-    supabase
-      .from("business_website_visits")
-      .select("visit_date,source,referrer_domain")
-      .eq("business_id", businessId)
-      .gte("visit_date", thirtyDaysAgo)
-      .lte("visit_date", today)
-      .order("visit_date", { ascending: true }),
-    supabase
-      .from("business_menu_clicks")
-      .select(
-        "click_date,visitor_hash,menu_item_id,menu_item_name,category_name,service,click_count",
-      )
-      .eq("business_id", businessId)
-      .gte("click_date", thirtyDaysAgo)
-      .lte("click_date", today),
+    fetchAllRows<VisitRow>((from, to) =>
+      supabase
+        .from("business_website_visits")
+        .select("visit_date,source,referrer_domain")
+        .eq("business_id", businessId)
+        .gte("visit_date", thirtyDaysAgo)
+        .lte("visit_date", today)
+        .order("visit_date", { ascending: true })
+        .range(from, to),
+    ),
+    fetchAllRows<MenuClickRow>((from, to) =>
+      supabase
+        .from("business_menu_clicks")
+        .select(
+          "click_date,visitor_hash,menu_item_id,menu_item_name,category_name,service,click_count",
+        )
+        .eq("business_id", businessId)
+        .gte("click_date", thirtyDaysAgo)
+        .lte("click_date", today)
+        .order("click_date", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
   if (businessResult.error) throw new Error(businessResult.error.message);
   if (!businessResult.data) notFound();
-  if (visitsResult.error) throw new Error(visitsResult.error.message);
-  if (menuClicksResult.error) throw new Error(menuClicksResult.error.message);
 
   const businessName = businessResult.data.name?.trim() || `Business #${businessId}`;
-  const visits = (visitsResult.data || []) as VisitRow[];
-  const menuClicks = (menuClicksResult.data || []) as MenuClickRow[];
   const todayCount = visits.filter((visit) => visit.visit_date === today).length;
   const yesterdayCount = visits.filter((visit) => visit.visit_date === yesterday).length;
   const sevenDayCount = visits.filter((visit) => visit.visit_date >= sevenDaysAgo).length;
@@ -281,11 +303,6 @@ export default async function BusinessVisitorsPage({
             <p className="text-sm font-medium text-[#667085]">
               {businessName} · 미국 동부시간 기준 · 같은 브라우저는 하루 한 번만 집계
             </p>
-          </div>
-
-          {/* TEMP DEBUG: remove after visitor-count diagnosis */}
-          <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-bold text-red-800">
-            DEBUG businessId={businessId} · today={today} · rows={visits.length} · todayCount={todayCount}
           </div>
 
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
