@@ -404,8 +404,12 @@ export async function POST(
       delivery,
       smsQueued: !!sms && sms?.ok !== false,
       cancelExpiresAt: cancelExpiresAt.toISOString(),
-      trackingUrl,
-      trackingExpiresAt: trackingExpiresAt.toISOString(),
+      trackingUrl:
+        order.fulfillment_type === "delivery" ? trackingUrl : null,
+      trackingExpiresAt:
+        order.fulfillment_type === "delivery"
+          ? trackingExpiresAt.toISOString()
+          : null,
     });
 
     // 같은 브라우저에서 결제한 Delivery 고객에게만 1시간 동안 배송조회 버튼을 표시합니다.
