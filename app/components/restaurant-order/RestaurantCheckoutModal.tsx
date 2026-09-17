@@ -672,44 +672,12 @@ export default function RestaurantCheckoutModal({
         verificationToken = String(verification?.token || "");
       }
 
-      const attemptId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-      const response = await fetch(
-        `/api/businesses/${businessId}/orders/${squarePrepared.orderId}/square-pay`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sourceId: tokenResult.token,
-            verificationToken,
-            attemptId,
-
-            // 실제로 고객이 사용한 결제수단을 서버에 전달합니다.
-            // DB 저장은 Square가 COMPLETED를 반환한 뒤 서버에서만 수행합니다.
-            paymentMethodType:
-              method === "apple"
-                ? "apple_pay"
-                : method === "google"
-                  ? "google_pay"
-                  : "card",
-          }),
-        },
+      // TEMP DIAGNOSTIC MODE:
+      // Reaching this point means Square tokenize/verification succeeded.
+      // Do NOT call /square-pay, so no real Square charge is created.
+      alert(
+        `TEST ONLY: Square payment information was verified successfully. No payment was charged. Order #${squarePrepared.orderNumber}`,
       );
-
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.error || "Payment could not be completed.",
-        );
-      }
-
-      onOrderPlaced();
-      alert(`Order #${squarePrepared.orderNumber} paid and received.`);
-      onClose();
     } catch (e) {
       setError(
         e instanceof Error
