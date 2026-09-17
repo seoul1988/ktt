@@ -1539,7 +1539,7 @@ export async function POST(
                 location_id: squareLocationId,
                 reference_id: `KTOWN-${number}`,
                 source: {
-                  name: String(business?.name || "Restaurant").slice(0, 44),
+                  name: "KTown Triangle",
                 },
                 line_items: [
                   ...normalized.map((item) => {
