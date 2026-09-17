@@ -283,6 +283,11 @@ export default async function BusinessVisitorsPage({
             </p>
           </div>
 
+          {/* TEMP DEBUG: remove after visitor-count diagnosis */}
+          <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-bold text-red-800">
+            DEBUG businessId={businessId} · today={today} · rows={visits.length} · todayCount={todayCount}
+          </div>
+
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {rangeCards.map((card) => (
               <Link
