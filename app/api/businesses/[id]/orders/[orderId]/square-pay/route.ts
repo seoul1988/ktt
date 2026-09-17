@@ -204,7 +204,7 @@ export async function POST(
         body: JSON.stringify({
           source_id: sourceId,
           idempotency_key:
-            `ktown-${ktownOrderId}-${attemptId || randomUUID()}`,
+            `kt-${attemptId || randomUUID()}`.slice(0, 45),
           amount_money: {
             amount: amountCents,
             currency: "USD",
