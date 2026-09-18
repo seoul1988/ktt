@@ -1400,21 +1400,7 @@ export default function RestaurantMenu({
                             <h3 className="line-clamp-2 text-[15px] font-black leading-snug sm:text-base">
                               {item.name}
                             </h3>
-                            {promotions.some((promotion) => {
-                              if (!promotion.active) return false;
-                              if (activeService === "pickup" && !promotion.pickup) return false;
-                              if (activeService === "delivery" && !promotion.delivery) return false;
-
-                              const assignment = getPromotionAssignment(item.id, promotion.id);
-                              if (!assignment) return false;
-
-                              const role =
-                                typeof assignment === "string"
-                                  ? assignment
-                                  : assignment.role;
-
-                              return role === "trigger" || role === "both";
-                            }) ? (
+                            {getPromotionsForMenuItem(item.id).length > 0 ? (
                               <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black leading-4 text-white">
                                 🔥 DEAL
                               </span>
