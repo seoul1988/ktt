@@ -1369,6 +1369,18 @@ export default function RestaurantMenu({
                       item.image_url,
                   );
 
+                  if (item.id === 1598) {
+                    console.log("CEO DEAL DEBUG", {
+                      businessId,
+                      activeService,
+                      itemId: item.id,
+                      itemName: item.name,
+                      promotions,
+                      promotionAssignments,
+                      deals: getPromotionsForMenuItem(item.id),
+                    });
+                  }
+
                   return (
                     <button
                       key={item.id}
