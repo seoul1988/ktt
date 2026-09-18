@@ -427,12 +427,37 @@ export default function RestaurantMenu({
     0,
   );
 
+  function getPromotionAssignment(
+    menuItemId: number,
+    promotionId: string,
+  ): PromotionAssignment | string | undefined {
+    const assignmentsForItem =
+      promotionAssignments[menuItemId] ??
+      (promotionAssignments as Record<string, Record<string, PromotionAssignment>>)[
+        String(menuItemId)
+      ];
+
+    if (!assignmentsForItem) return undefined;
+
+    return (
+      assignmentsForItem[promotionId] ??
+      assignmentsForItem[String(promotionId)]
+    );
+  }
+
   function getPromotionsForMenuItem(menuItemId: number) {
     return promotions.filter((promotion) => {
       if (!promotion.active) return false;
       if (activeService === "pickup" && !promotion.pickup) return false;
       if (activeService === "delivery" && !promotion.delivery) return false;
-      return Boolean(promotionAssignments[menuItemId]?.[promotion.id]);
+
+      const assignment = getPromotionAssignment(menuItemId, promotion.id);
+      if (!assignment) return false;
+
+      const role =
+        typeof assignment === "string" ? assignment : assignment.role;
+
+      return role === "trigger" || role === "both";
     });
   }
 
@@ -448,7 +473,7 @@ export default function RestaurantMenu({
     if (promotion.type !== "buy_x_get_y") return false;
 
     return cartItems.some((cartItem) => {
-      const assignment = promotionAssignments[cartItem.menuItemId]?.[promotion.id];
+      const assignment = getPromotionAssignment(cartItem.menuItemId, promotion.id);
       if (!assignment) return false;
       const role = typeof assignment === "string" ? assignment : assignment.role;
       if (role !== "trigger" && role !== "both") return false;
@@ -488,7 +513,7 @@ export default function RestaurantMenu({
           : (selectedPromotionRewards[promotion.id] || []).slice(0, requiredCount);
 
       const trigger = cartItems.find((cartItem) =>
-        Boolean(promotionAssignments[cartItem.menuItemId]?.[promotion.id]),
+        Boolean(getPromotionAssignment(cartItem.menuItemId, promotion.id)),
       );
 
       return selectedChoices.map((choice) => {
@@ -1427,7 +1452,7 @@ export default function RestaurantMenu({
                               if (activeService === "pickup" && !promotion.pickup) return false;
                               if (activeService === "delivery" && !promotion.delivery) return false;
 
-                              const assignment = promotionAssignments[item.id]?.[promotion.id];
+                              const assignment = getPromotionAssignment(item.id, promotion.id);
                               if (!assignment) return false;
 
                               const role =
