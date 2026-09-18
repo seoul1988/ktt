@@ -465,28 +465,39 @@ export default function RestaurantMenu({
           ? promotion.rewardChoices
           : (selectedPromotionRewards[promotion.id] || []).slice(0, requiredCount);
 
-      const trigger = cartItems.find((cartItem) =>
-        Boolean(getPromotionAssignment(cartItem.menuItemId, promotion.id)),
-      );
-
-      return selectedChoices.map((choice) => {
-        const regularPrice = Math.max(0, Number(choice.price) || 0);
-        const discountPercent = Math.max(
-          0,
-          Math.min(100, Number(choice.discountPercent) || 0),
+      const triggers = cartItems.filter((cartItem) => {
+        const assignment = getPromotionAssignment(
+          cartItem.menuItemId,
+          promotion.id,
         );
-        const finalPrice = regularPrice * (1 - discountPercent / 100);
+        if (!assignment) return false;
 
-        return {
-          promotionId: promotion.id,
-          promotionName: promotion.name,
-          triggerMenuItemId: trigger?.menuItemId,
-          itemName: choice.name,
-          regularPrice,
-          discountPercent,
-          finalPrice,
-        };
+        const role =
+          typeof assignment === "string" ? assignment : assignment.role;
+
+        return role === "trigger" || role === "both";
       });
+
+      return triggers.flatMap((trigger) =>
+        selectedChoices.map((choice) => {
+          const regularPrice = Math.max(0, Number(choice.price) || 0);
+          const discountPercent = Math.max(
+            0,
+            Math.min(100, Number(choice.discountPercent) || 0),
+          );
+          const finalPrice = regularPrice * (1 - discountPercent / 100);
+
+          return {
+            promotionId: promotion.id,
+            promotionName: promotion.name,
+            triggerMenuItemId: trigger.menuItemId,
+            itemName: choice.name,
+            regularPrice,
+            discountPercent,
+            finalPrice,
+          };
+        }),
+      );
     });
 
   function recordMenuItemClick(
