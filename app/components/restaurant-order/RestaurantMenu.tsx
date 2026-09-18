@@ -1024,6 +1024,49 @@ export default function RestaurantMenu({
     persistCart([]);
   }
 
+  function switchOrderService(nextService: "pickup" | "delivery") {
+    if (nextService === "pickup" && !effectivePickupEnabled) return;
+    if (nextService === "delivery" && !effectiveDeliveryEnabled) return;
+    if (activeService === nextService) return;
+
+    const repricedCart = cartItems.map((cartItem) => {
+      const menuItem = data.items.find(
+        (item) => item.id === cartItem.menuItemId,
+      );
+
+      if (!menuItem) {
+        return {
+          ...cartItem,
+          fulfillmentType: nextService,
+        };
+      }
+
+      const nextBasePrice = Math.max(
+        0,
+        Number(getPriceForService(menuItem, nextService) || 0),
+      );
+
+      const optionExtra = Math.max(
+        0,
+        Number(cartItem.unitPrice || 0) - Number(cartItem.basePrice || 0),
+      );
+
+      const nextUnitPrice = nextBasePrice + optionExtra;
+      const quantity = Math.max(1, Number(cartItem.quantity) || 1);
+
+      return {
+        ...cartItem,
+        basePrice: nextBasePrice,
+        unitPrice: nextUnitPrice,
+        totalPrice: nextUnitPrice * quantity,
+        fulfillmentType: nextService,
+      };
+    });
+
+    setActiveService(nextService);
+    persistCart(repricedCart);
+  }
+
   function getSelectedOptionLabels(item: StoredCartItem) {
     const menuItem = data.items.find((menu) => menu.id === item.menuItemId);
     if (!menuItem) return [];
@@ -1369,23 +1412,6 @@ export default function RestaurantMenu({
                       item.image_url,
                   );
 
-                  if (item.id === 1598) {
-                    console.log("CEO DEAL DEBUG", {
-                      businessId,
-                      activeService,
-                      itemId: item.id,
-                      itemName: item.name,
-                      promotions,
-                      promotionAssignments,
-                      ceoAssignment: getPromotionAssignment(
-                        1598,
-                        promotions[0]?.id || "",
-                      ),
-                      ceoDeals: getPromotionsForMenuItem(1598),
-                      deals: getPromotionsForMenuItem(item.id),
-                    });
-                  }
-
                   return (
                     <button
                       key={item.id}
@@ -1546,10 +1572,43 @@ export default function RestaurantMenu({
                           : "flex items-center justify-between border-b border-gray-200 px-5 py-4"
                       }
                     >
-                      <div>
-                        <p className="text-sm font-black uppercase tracking-[0.18em] text-red-600">
-						  {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
-						</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-black uppercase tracking-[0.18em] text-red-600">
+                            {activeService === "delivery" ? "DELIVERY ORDER" : "PICKUP ORDER"}
+                          </p>
+
+                          <div className="flex items-center gap-1.5">
+                            {effectivePickupEnabled ? (
+                              <button
+                                type="button"
+                                onClick={() => switchOrderService("pickup")}
+                                className={`rounded-full border px-3 py-1.5 text-[10px] font-black transition ${
+                                  activeService === "pickup"
+                                    ? "border-gray-950 bg-gray-950 text-white"
+                                    : "border-gray-300 bg-white text-gray-700"
+                                }`}
+                              >
+                                PICKUP
+                              </button>
+                            ) : null}
+
+                            {effectiveDeliveryEnabled ? (
+                              <button
+                                type="button"
+                                onClick={() => switchOrderService("delivery")}
+                                className={`rounded-full border px-3 py-1.5 text-[10px] font-black transition ${
+                                  activeService === "delivery"
+                                    ? "border-blue-600 bg-blue-600 text-white"
+                                    : "border-blue-300 bg-blue-50 text-blue-800"
+                                }`}
+                              >
+                                DELIVERY
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+
                         <h3 className="mt-1 text-xl font-black">Shopping Cart</h3>
                       </div>
                       <button
