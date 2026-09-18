@@ -585,16 +585,16 @@ async function syncFullCategoryMap(
       continue;
     }
 
-    // 2-B) 다른 기존 카테고리에 같은 메뉴가 있으면 그 메뉴 정보를 복사해서 새 카테고리에 추가
+    // 2-B) 다른 기존 카테고리에 같은 메뉴가 있으면 새 row를 만들지 않고
+    // 기존 menu item ID를 그대로 유지한 채 category_id만 이동합니다.
+    // promotion/주문/기타 menu_item_id 참조가 끊어지지 않도록 ID를 보존합니다.
     const { data: sourceItems, error: sourceLookupError } = await supabase
       .from("business_menu_items")
-      .select(
-        "id,name,description,price,display_order,is_available",
-      )
+      .select("id,name")
       .eq("business_id", businessId)
       .ilike("name", menuName)
       .order("id", { ascending: true })
-      .limit(1);
+      .limit(2);
 
     if (sourceLookupError) {
       throw new Error(
@@ -602,45 +602,30 @@ async function syncFullCategoryMap(
       );
     }
 
-    const sourceItem = (sourceItems || [])[0] || null;
+    const sourceMatches = sourceItems || [];
 
-    // 기존 메뉴가 다른 카테고리에 있으면 그대로 복사합니다.
+    // 같은 이름이 여러 개면 잘못된 메뉴를 임의로 이동하지 않습니다.
+    if (sourceMatches.length > 1) {
+      unmatchedMenuNames.push(menuName);
+      continue;
+    }
+
+    const sourceItem = sourceMatches[0] || null;
+
     if (sourceItem) {
-      const { error: cloneError } = await supabase
+      const { error: moveError } = await supabase
         .from("business_menu_items")
-        .insert({
-          business_id: businessId,
-          category_id: targetCategoryId,
-          name: String(sourceItem.name || menuName),
-          description: String(sourceItem.description || ""),
-          price:
-            sourceItem.price == null
-              ? row.price
-              : finiteNumber(sourceItem.price, row.price ?? 0),
-          // 현재 business_menu_items 테이블에는 thumbnail_url 컬럼이 없으므로
-          // 기존 메뉴 복사 시 이름/설명/가격/순서/활성 상태만 복사합니다.
-          display_order: Math.max(
-            0,
-            Math.trunc(
-              finiteNumber(
-                sourceItem.display_order,
-                row.categoryDisplayOrder,
-              ),
-            ),
-          ),
-          is_available:
-            sourceItem.is_available == null
-              ? true
-              : Boolean(sourceItem.is_available),
-        });
+        .update({ category_id: targetCategoryId })
+        .eq("business_id", businessId)
+        .eq("id", sourceItem.id);
 
-      if (cloneError) {
+      if (moveError) {
         throw new Error(
-          `메뉴 복사 실패 (${menuName} → ${categoryName}): ${cloneError.message}`,
+          `메뉴 이동 실패 (${menuName} → ${categoryName}): ${moveError.message}`,
         );
       }
 
-      addedMenuCount += 1;
+      skippedExistingCount += 1;
       continue;
     }
 
