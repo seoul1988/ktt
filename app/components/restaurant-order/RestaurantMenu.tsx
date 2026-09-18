@@ -366,15 +366,6 @@ export default function RestaurantMenu({
   const [activeService, setActiveService] =
     useState<"menu" | "pickup" | "delivery">(getInitialService);
 
-  useEffect(() => {
-    console.log("RESTAURANT MENU DEBUG", {
-      businessId,
-      activeService,
-      promotions,
-      promotionAssignments,
-    });
-  }, [businessId, activeService, promotions, promotionAssignments]);
-
   const activeOrderEnabled =
     (activeService === "pickup" && effectivePickupEnabled) ||
     (activeService === "delivery" && effectiveDeliveryEnabled);
@@ -1386,6 +1377,11 @@ export default function RestaurantMenu({
                       itemName: item.name,
                       promotions,
                       promotionAssignments,
+                      ceoAssignment: getPromotionAssignment(
+                        1598,
+                        promotions[0]?.id || "",
+                      ),
+                      ceoDeals: getPromotionsForMenuItem(1598),
                       deals: getPromotionsForMenuItem(item.id),
                     });
                   }
