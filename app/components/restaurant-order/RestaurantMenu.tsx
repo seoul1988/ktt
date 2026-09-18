@@ -1509,10 +1509,6 @@ export default function RestaurantMenu({
                             className="h-full w-full rounded-xl object-cover"
                           />
 
-                          <div className="absolute left-1 top-1 z-20 rounded-md bg-black/90 px-2 py-1 text-[10px] font-black leading-none text-lime-300 shadow-lg">
-                            ID {item.id}
-                          </div>
-
                           {orderingAvailable ? (
                             <span
                               aria-hidden="true"
