@@ -1,4 +1,4 @@
-"use client";
+
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
@@ -794,9 +794,16 @@ export default function MenuItemModal({
             }
           >
             <div className="flex items-start justify-between gap-4">
-              <h2 className="text-lg font-black leading-tight sm:text-xl">
-                {item.name}
-              </h2>
+              <div className="flex min-w-0 items-center gap-2">
+                <h2 className="text-lg font-black leading-tight sm:text-xl">
+                  {item.name}
+                </h2>
+                {dealPromotions.length ? (
+                  <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black leading-4 text-white">
+                    🔥 DEAL
+                  </span>
+                ) : null}
+              </div>
 
               <button
                 type="button"
