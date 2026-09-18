@@ -93,24 +93,3 @@ self.addEventListener(
     );
   },
 );
-
-/*
- * 네트워크 요청을 처리하는 fetch 이벤트입니다.
- *
- * POST, PUT, DELETE 같은 요청은 건드리지 않고,
- * 일반적인 GET 요청만 네트워크로 전달합니다.
- */
-self.addEventListener("fetch", function (event) {
-  if (event.request.method !== "GET") {
-    return;
-  }
-
-  event.respondWith(
-    fetch(event.request).catch(function () {
-      return new Response("Network error", {
-        status: 503,
-        statusText: "Service Unavailable",
-      });
-    }),
-  );
-});
