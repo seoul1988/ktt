@@ -1244,47 +1244,50 @@ export async function POST(
       instructions: string;
     };
 
-    const freeDealItems: FreeDealItem[] = requestedPromotionRewards
-      .map((reward: any) => {
-        const triggerMenuItemId = Number(reward?.triggerMenuItemId);
-        const itemName = String(reward?.itemName || "").trim().slice(0, 160);
-        const promotionName = String(reward?.promotionName || "DEAL").trim().slice(0, 120);
-        const discountPercent = Math.max(
-          0,
-          Math.min(100, Number(reward?.discountPercent) || 0),
-        );
+    const freeDealItems: FreeDealItem[] = Array.from(
+      requestedPromotionRewards
+        .map((reward: any) => {
+          const triggerMenuItemId = Number(reward?.triggerMenuItemId);
+          const itemName = String(reward?.itemName || "").trim().slice(0, 160);
+          const promotionName = String(reward?.promotionName || "DEAL").trim().slice(0, 120);
+          const discountPercent = Math.max(
+            0,
+            Math.min(100, Number(reward?.discountPercent) || 0),
+          );
 
-        const triggerExists = normalized.some(
-          (item) => item.menuItemId === triggerMenuItemId,
-        );
+          const triggerQuantity = normalized
+            .filter((item) => item.menuItemId === triggerMenuItemId)
+            .reduce((sum, item) => sum + item.quantity, 0);
 
-        if (!triggerExists || !itemName || discountPercent < 100) {
-          return null;
-        }
+          if (triggerQuantity <= 0 || !itemName || discountPercent < 100) {
+            return null;
+          }
 
-        const triggerQuantity = normalized
-          .filter((item) => item.menuItemId === triggerMenuItemId)
-          .reduce((sum, item) => sum + item.quantity, 0);
+          return {
+            triggerMenuItemId,
+            itemName,
+            promotionName,
+            quantity: triggerQuantity,
+            unitPrice: 0,
+            lineTotal: 0,
+            instructions: `DEAL - FREE · ${promotionName}`.slice(0, 500),
+          } satisfies FreeDealItem;
+        })
+        .filter((item: FreeDealItem | null): item is FreeDealItem => Boolean(item))
+        .reduce((groups: Map<string, FreeDealItem>, item: FreeDealItem) => {
+          const key = `${item.promotionName.toLowerCase()}::${item.itemName.toLowerCase()}`;
+          const existing = groups.get(key);
 
-        return {
-          triggerMenuItemId,
-          itemName,
-          promotionName,
-          quantity: Math.max(1, triggerQuantity),
-          unitPrice: 0,
-          lineTotal: 0,
-          instructions: `DEAL - FREE · ${promotionName}`.slice(0, 500),
-        };
-      })
-      .filter((item: FreeDealItem | null): item is FreeDealItem => Boolean(item))
-      .filter(
-        (item: FreeDealItem, index: number, rows: FreeDealItem[]) =>
-          rows.findIndex(
-            (candidate: FreeDealItem) =>
-              candidate.triggerMenuItemId === item.triggerMenuItemId &&
-              candidate.itemName.toLowerCase() === item.itemName.toLowerCase(),
-          ) === index,
-      );
+          if (existing) {
+            existing.quantity += item.quantity;
+          } else {
+            groups.set(key, { ...item });
+          }
+
+          return groups;
+        }, new Map<string, FreeDealItem>())
+        .values(),
+    );
 
     const subtotal =
       normalized.reduce(
