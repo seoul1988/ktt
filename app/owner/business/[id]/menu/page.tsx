@@ -6672,7 +6672,7 @@ export default function OwnerBusinessMenuPage() {
 
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {tipPresetInputs.map((value, index) => (
-                  <div key={`tip-preset-${index}`} className="relative w-[72px]">
+                  <div key={`tip-preset-${index}`} className="relative w-[92px]">
                     <input
                       type="number"
                       inputMode="decimal"
@@ -6685,7 +6685,7 @@ export default function OwnerBusinessMenuPage() {
                         next[index] = event.target.value;
                         setTipPresetInputs(next);
                       }}
-                      className="w-full rounded-xl border-2 border-amber-300 bg-white px-3 py-3 pr-7 text-center text-base font-black text-[#172033] outline-none focus:border-amber-600"
+                      className="w-full rounded-xl border-2 border-amber-300 bg-white px-3 py-3 pr-8 text-left text-base font-black text-[#172033] outline-none focus:border-amber-600"
                     />
                     <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs font-black text-amber-700">
                       %
