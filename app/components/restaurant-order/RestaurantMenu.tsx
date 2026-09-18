@@ -1472,31 +1472,9 @@ export default function RestaurantMenu({
                             className="h-full w-full rounded-xl object-cover"
                           />
 
-                          {item.id === 1598 ? (
-                            <div className="absolute inset-x-1 top-1 z-20 rounded-md bg-black/90 px-1.5 py-1 text-[8px] font-black leading-tight text-lime-300 shadow-lg">
-                              <div>CEO DEBUG</div>
-                              <div>
-                                promos={promotions.length} · assignments=
-                                {Object.keys(promotionAssignments).length}
-                              </div>
-                              <div>
-                                role=
-                                {(() => {
-                                  const promotionId = promotions[0]?.id || "";
-                                  const assignment = promotionId
-                                    ? getPromotionAssignment(1598, promotionId)
-                                    : undefined;
-                                  return typeof assignment === "string"
-                                    ? assignment
-                                    : assignment?.role || "NONE";
-                                })()}
-                              </div>
-                              <div>
-                                deals={getPromotionsForMenuItem(1598).length} · service=
-                                {activeService}
-                              </div>
-                            </div>
-                          ) : null}
+                          <div className="absolute left-1 top-1 z-20 rounded-md bg-black/90 px-2 py-1 text-[10px] font-black leading-none text-lime-300 shadow-lg">
+                            ID {item.id}
+                          </div>
 
                           {orderingAvailable ? (
                             <span
