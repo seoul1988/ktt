@@ -58,23 +58,65 @@ function stringValue(...values: unknown[]) {
 }
 
 function businessAddress(business: any): DirectAddress {
-  const street1 = stringValue(
+  let street1 = stringValue(
     business?.address1,
     business?.street_address,
-    business?.address,
   );
   const street2 = stringValue(business?.address2);
-  const city = stringValue(business?.city);
-  const state = stringValue(business?.state);
-  const zip = stringValue(
+  let city = stringValue(business?.city);
+  let state = stringValue(business?.state);
+  let zip = stringValue(
     business?.zip,
     business?.zipcode,
     business?.postal_code,
   );
 
+  // Some KTown businesses store the complete US address in one `address`
+  // field, for example:
+  // "107 N Columbia St, Chapel Hill, NC 27514 미국"
+  //
+  // Uber Direct requires street/city/state/zip as separate fields.
+  const fullAddress = stringValue(business?.address)
+    .replace(/\s+(미국|USA|United States(?: of America)?)$/i, "")
+    .trim();
+
+  if (fullAddress && (!street1 || !city || !state || !zip)) {
+    const parts = fullAddress
+      .split(",")
+      .map((part: string) => part.trim())
+      .filter(Boolean);
+
+    if (parts.length >= 3) {
+      const stateZipPart = parts[parts.length - 1];
+      const stateZipMatch = stateZipPart.match(
+        /^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/,
+      );
+
+      if (stateZipMatch) {
+        if (!state) state = stateZipMatch[1].toUpperCase();
+        if (!zip) zip = stateZipMatch[2];
+        if (!city) city = parts[parts.length - 2];
+
+        if (!street1) {
+          street1 = parts.slice(0, parts.length - 2).join(", ");
+        }
+      }
+    }
+  }
+
+  // Preserve compatibility with businesses that already have separate
+  // city/state/zip columns but keep only the street in `address`.
+  if (!street1 && fullAddress && city && state && zip) {
+    street1 = fullAddress;
+  }
+
   if (!street1 || !city || !state || !zip) {
     throw new Error(
-      "Restaurant pickup address is incomplete. Please complete the business address first.",
+      `Restaurant pickup address is incomplete. ` +
+        `street=${street1 || "-"}, ` +
+        `city=${city || "-"}, ` +
+        `state=${state || "-"}, ` +
+        `zip=${zip || "-"}`,
     );
   }
 
