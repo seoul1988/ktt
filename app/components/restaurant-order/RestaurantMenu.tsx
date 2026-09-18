@@ -1869,4 +1869,4 @@ export default function RestaurantMenu({
       ) : null}
     </div>
   );
-}
+}  
