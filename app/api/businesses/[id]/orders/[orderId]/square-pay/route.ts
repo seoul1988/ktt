@@ -305,6 +305,12 @@ export async function POST(
       throw updateError;
     }
 
+    // PRODUCTION DELIVERY:
+    // After Square confirms payment, automatically create the real Uber Direct
+    // delivery for delivery orders. dispatchUberDirectOrder() itself safely
+    // skips pickup orders, unpaid orders, disabled Uber Direct, and duplicate
+    // deliveries. Restaurant full-address parsing is handled in
+    // lib/delivery/uber-direct.ts.
     let delivery: any = null;
 
     try {
