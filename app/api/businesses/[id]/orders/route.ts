@@ -1262,11 +1262,15 @@ export async function POST(
           return null;
         }
 
+        const triggerQuantity = normalized
+          .filter((item) => item.menuItemId === triggerMenuItemId)
+          .reduce((sum, item) => sum + item.quantity, 0);
+
         return {
           triggerMenuItemId,
           itemName,
           promotionName,
-          quantity: 1,
+          quantity: Math.max(1, triggerQuantity),
           unitPrice: 0,
           lineTotal: 0,
           instructions: `DEAL - FREE · ${promotionName}`.slice(0, 500),
