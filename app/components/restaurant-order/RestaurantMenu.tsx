@@ -282,6 +282,7 @@ export default function RestaurantMenu({
   const [selectedPromotionRewards, setSelectedPromotionRewards] = useState<Record<string, PromotionRewardChoice[]>>({});
   const [isIPhone, setIsIPhone] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [customerTrackingUrl, setCustomerTrackingUrl] = useState("");
 
   useEffect(() => {
     const ua = window.navigator.userAgent || "";
@@ -312,6 +313,53 @@ export default function RestaurantMenu({
       window.removeEventListener("orientationchange", updateMobileViewport);
     };
   }, []);
+
+  // 결제한 Delivery 고객의 브라우저에만 TRACKING 버튼을 최대 1시간 표시합니다.
+  // square-pay/route.ts가 만드는 ktown_delivery_tracking_{businessId} 쿠키를 읽습니다.
+  useEffect(() => {
+    const cookieName = `ktown_delivery_tracking_${businessId}=`;
+
+    const readTrackingCookie = () => {
+      try {
+        const rawCookie = document.cookie
+          .split("; ")
+          .find((item) => item.startsWith(cookieName));
+
+        if (!rawCookie) {
+          setCustomerTrackingUrl("");
+          return;
+        }
+
+        const payload = JSON.parse(
+          decodeURIComponent(rawCookie.slice(cookieName.length)),
+        ) as { url?: string; expiresAt?: string };
+
+        const url = String(payload.url || "").trim();
+        const expiresAt = new Date(String(payload.expiresAt || "")).getTime();
+
+        if (!url || !Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
+          setCustomerTrackingUrl("");
+          return;
+        }
+
+        setCustomerTrackingUrl(url);
+      } catch {
+        setCustomerTrackingUrl("");
+      }
+    };
+
+    readTrackingCookie();
+
+    const timer = window.setInterval(readTrackingCookie, 2000);
+    window.addEventListener("focus", readTrackingCookie);
+    document.addEventListener("visibilitychange", readTrackingCookie);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", readTrackingCookie);
+      document.removeEventListener("visibilitychange", readTrackingCookie);
+    };
+  }, [businessId]);
 
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [scrollTopButtonStyle, setScrollTopButtonStyle] =
@@ -1171,6 +1219,22 @@ export default function RestaurantMenu({
               >
                 DELIVERY
               </button>
+            ) : null}
+
+            {customerTrackingUrl ? (
+              <a
+                href={customerTrackingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`shrink-0 rounded-full border-2 px-4 py-2 text-[11px] font-black shadow-sm transition-all ${
+                  isBunsMenu
+                    ? "border-green-400/70 bg-green-400/10 text-green-300 hover:bg-green-400/20"
+                    : "border-green-600 bg-green-50 text-green-800 hover:bg-green-100"
+                }`}
+                aria-label="Track delivery"
+              >
+                TRACKING
+              </a>
             ) : null}
           </div>
         </div>
