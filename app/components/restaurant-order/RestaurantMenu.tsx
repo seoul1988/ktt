@@ -366,6 +366,15 @@ export default function RestaurantMenu({
   const [activeService, setActiveService] =
     useState<"menu" | "pickup" | "delivery">(getInitialService);
 
+  useEffect(() => {
+    console.log("RESTAURANT MENU DEBUG", {
+      businessId,
+      activeService,
+      promotions,
+      promotionAssignments,
+    });
+  }, [businessId, activeService, promotions, promotionAssignments]);
+
   const activeOrderEnabled =
     (activeService === "pickup" && effectivePickupEnabled) ||
     (activeService === "delivery" && effectiveDeliveryEnabled);
@@ -1869,4 +1878,4 @@ export default function RestaurantMenu({
       ) : null}
     </div>
   );
-}  
+}
