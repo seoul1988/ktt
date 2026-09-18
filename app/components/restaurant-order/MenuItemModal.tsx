@@ -798,11 +798,6 @@ export default function MenuItemModal({
                 <h2 className="text-lg font-black leading-tight sm:text-xl">
                   {item.name}
                 </h2>
-                {dealPromotions.length ? (
-                  <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black leading-4 text-white">
-                    🔥 DEAL
-                  </span>
-                ) : null}
               </div>
 
               <button
@@ -841,112 +836,6 @@ export default function MenuItemModal({
                 }>
                 {item.description}
               </p>
-            ) : null}
-
-            {dealPromotions.length ? (
-              <div className={isIPhone ? "mt-3 space-y-2" : "mt-4 space-y-3"}>
-                {dealPromotions.map((promotion) => (
-                  <div
-                    key={promotion.id}
-                    className="rounded-2xl border border-orange-300 bg-orange-50 p-3 text-gray-950"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
-                        🔥 DEAL
-                      </span>
-                      <p className="text-sm font-black text-orange-900">
-                        {promotion.name}
-                      </p>
-                    </div>
-
-                    {promotion.type === "buy_x_get_y" && promotion.rewardChoices.length ? (
-                      <>
-                        {(() => {
-                          const selectCount = Math.min(
-                            promotion.rewardChoices.length,
-                            Math.max(1, Math.floor(Number(promotion.rewardSelectCount) || 1)),
-                          );
-                          const autoApply =
-                            promotion.rewardChoices.length === 1 ||
-                            selectCount >= promotion.rewardChoices.length;
-                          const selected = selectedPromotionRewards[promotion.id] || [];
-
-                          return (
-                            <>
-                              <p className="mt-2 text-[11px] font-bold text-orange-800">
-                                {autoApply
-                                  ? promotion.rewardChoices.length === 1
-                                    ? "This deal item will be automatically applied in your cart:"
-                                    : "All deal items will be automatically applied in your cart:"
-                                  : `Choose ${selectCount} deal item${selectCount > 1 ? "s" : ""} now:`}
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {promotion.rewardChoices.map((choice, choiceIndex) => {
-                                  const percent = Math.max(0, Math.min(100, Number(choice.discountPercent) || 0));
-                                  const finalPrice = Math.max(0, Number(choice.price || 0) * (1 - percent / 100));
-                                  const isSelected = selected.some((row) => row.name === choice.name);
-
-                                  if (autoApply) {
-                                    return (
-                                      <span
-                                        key={`${promotion.id}-${choice.name}-${choiceIndex}`}
-                                        className="rounded-xl border border-green-200 bg-green-50 px-2.5 py-2 text-[11px] font-black"
-                                      >
-                                        ✓ {choice.name}
-                                        <span className="ml-1 text-green-700">
-                                          {percent >= 100
-                                            ? "FREE · AUTO"
-                                            : `${percent}% OFF · AUTO · $${finalPrice.toFixed(2)}`}
-                                        </span>
-                                      </span>
-                                    );
-                                  }
-
-                                  return (
-                                    <button
-                                      key={`${promotion.id}-${choice.name}-${choiceIndex}`}
-                                      type="button"
-                                      onClick={() => {
-                                        const current = selectedPromotionRewards[promotion.id] || [];
-                                        const alreadySelected = current.some((row) => row.name === choice.name);
-                                        const next = alreadySelected
-                                          ? current.filter((row) => row.name !== choice.name)
-                                          : current.length < selectCount
-                                            ? [...current, choice]
-                                            : selectCount === 1
-                                              ? [choice]
-                                              : current;
-                                        onPromotionRewardChange?.(promotion.id, next);
-                                      }}
-                                      className={`rounded-xl border px-2.5 py-2 text-[11px] font-black transition ${
-                                        isSelected
-                                          ? "border-orange-500 bg-orange-100 ring-2 ring-orange-200"
-                                          : "border-orange-200 bg-white hover:bg-orange-50"
-                                      }`}
-                                    >
-                                      {isSelected ? "✓ " : "○ "}{choice.name}
-                                      <span className="ml-1 text-green-700">
-                                        {percent >= 100
-                                          ? "FREE"
-                                          : `${percent}% OFF · $${finalPrice.toFixed(2)}`}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                              {!autoApply && selected.length < selectCount ? (
-                                <p className="mt-2 text-[10px] font-black text-red-600">
-                                  Select {selectCount - selected.length} more deal item{selectCount - selected.length > 1 ? "s" : ""}.
-                                </p>
-                              ) : null}
-                            </>
-                          );
-                        })()}
-                      </>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
             ) : null}
 
             {groups.length ? (
