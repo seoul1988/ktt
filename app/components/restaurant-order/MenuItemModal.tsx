@@ -768,12 +768,17 @@ export default function MenuItemModal({
                     ) : null}
 
                     {promotion.type === "buy_x_get_y" && promotion.rewardChoices.length ? (
-                      <p className="mt-0.5 text-[11px] font-bold leading-4 text-orange-800">
-                        GET: {promotion.rewardChoices.map((choice) => {
-                          const percent = Math.max(0, Math.min(100, Number(choice.discountPercent) || 0));
-                          return `${choice.name} (${percent >= 100 ? "FREE" : `${percent}% OFF`})`;
-                        }).join(" / ")}
-                      </p>
+                      <div className="mt-1">
+                        <p className="text-[12px] font-black leading-4 text-green-700">
+                          GET: {promotion.rewardChoices.map((choice) => {
+                            const percent = Math.max(0, Math.min(100, Number(choice.discountPercent) || 0));
+                            return `${choice.name} ${percent >= 100 ? "FREE" : `${percent}% OFF`}`;
+                          }).join(" / ")}
+                        </p>
+                        <p className="mt-0.5 text-[10px] font-bold text-orange-700">
+                          Automatically added to your order when this deal qualifies.
+                        </p>
+                      </div>
                     ) : null}
                   </div>
                 </div>

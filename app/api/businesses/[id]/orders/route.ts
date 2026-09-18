@@ -501,6 +501,14 @@ export async function POST(
       ? body.items
       : [];
 
+    // Buy X Get Y rewards calculated by RestaurantMenu/Checkout.
+    // Only 100%-off rewards are materialized here as FREE kitchen items.
+    // The trigger item must exist in this order, preventing an unrelated
+    // reward from being printed by itself.
+    const requestedPromotionRewards = Array.isArray(body?.promotionRewards)
+      ? body.promotionRewards
+      : [];
+
     if (!customerName || !customerPhone) {
       return NextResponse.json(
         {
@@ -1226,6 +1234,54 @@ export async function POST(
       },
     );
 
+    const freeDealItems = requestedPromotionRewards
+      .map((reward: any) => {
+        const triggerMenuItemId = Number(reward?.triggerMenuItemId);
+        const itemName = String(reward?.itemName || "").trim().slice(0, 160);
+        const promotionName = String(reward?.promotionName || "DEAL").trim().slice(0, 120);
+        const discountPercent = Math.max(
+          0,
+          Math.min(100, Number(reward?.discountPercent) || 0),
+        );
+
+        const triggerExists = normalized.some(
+          (item) => item.menuItemId === triggerMenuItemId,
+        );
+
+        if (!triggerExists || !itemName || discountPercent < 100) {
+          return null;
+        }
+
+        return {
+          triggerMenuItemId,
+          itemName,
+          promotionName,
+          quantity: 1,
+          unitPrice: 0,
+          lineTotal: 0,
+          instructions: `DEAL - FREE · ${promotionName}`.slice(0, 500),
+        };
+      })
+      .filter(
+        (item: any): item is {
+          triggerMenuItemId: number;
+          itemName: string;
+          promotionName: string;
+          quantity: number;
+          unitPrice: number;
+          lineTotal: number;
+          instructions: string;
+        } => Boolean(item),
+      )
+      .filter(
+        (item, index, rows) =>
+          rows.findIndex(
+            (candidate) =>
+              candidate.triggerMenuItemId === item.triggerMenuItemId &&
+              candidate.itemName.toLowerCase() === item.itemName.toLowerCase(),
+          ) === index,
+      );
+
     const subtotal =
       normalized.reduce(
         (sum, item) =>
@@ -1478,28 +1534,41 @@ export async function POST(
         "restaurant_order_items",
       )
       .insert(
-        normalized.map(
-          (item) => ({
-            order_id:
-              orderId,
-            business_id:
-              businessId,
-            menu_item_id:
-              item.menuItemId,
-            item_name:
-              item.name,
-            quantity:
-              item.quantity,
-            unit_price:
-              item.unitPrice,
-            line_total:
-              item.lineTotal,
-            instructions:
-              item.instructions,
-            selections:
-              item.selections,
-          }),
-        ),
+        [
+          ...normalized.map(
+            (item) => ({
+              order_id:
+                orderId,
+              business_id:
+                businessId,
+              menu_item_id:
+                item.menuItemId,
+              item_name:
+                item.name,
+              quantity:
+                item.quantity,
+              unit_price:
+                item.unitPrice,
+              line_total:
+                item.lineTotal,
+              instructions:
+                item.instructions,
+              selections:
+                item.selections,
+            }),
+          ),
+          ...freeDealItems.map((dealItem) => ({
+            order_id: orderId,
+            business_id: businessId,
+            menu_item_id: null,
+            item_name: dealItem.itemName,
+            quantity: dealItem.quantity,
+            unit_price: 0,
+            line_total: 0,
+            instructions: dealItem.instructions,
+            selections: null,
+          })),
+        ],
       );
 
     if (itemsError) {
@@ -1588,6 +1657,15 @@ export async function POST(
                         : {}),
                     };
                   }),
+                  ...freeDealItems.map((dealItem) => ({
+                    name: dealItem.itemName,
+                    quantity: String(dealItem.quantity),
+                    base_price_money: {
+                      amount: 0,
+                      currency: "USD",
+                    },
+                    note: `DEAL - FREE · ${dealItem.promotionName}`.slice(0, 500),
+                  })),
                   ...(tip > 0
                     ? [
                         {
