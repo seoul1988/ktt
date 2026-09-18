@@ -122,53 +122,6 @@ export type AppliedPromotionReward = {
   finalPrice: number;
 };
 
-function readPromotions(businessId: number): MenuPromotion[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(`ktown-menu-promotions:${businessId}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((row: any) => ({
-        id: String(row?.id || ""),
-        name: String(row?.name || "Deal"),
-        type: row?.type || "buy_x_get_y",
-        buyQty: Math.max(1, Number(row?.buyQty) || 1),
-        getQty: Math.max(1, Number(row?.getQty) || 1),
-        minSpend: Math.max(0, Number(row?.minSpend) || 0),
-        discountValue: Math.max(0, Number(row?.discountValue) || 0),
-        rewardChoices: Array.isArray(row?.rewardChoices)
-          ? row.rewardChoices
-              .map((choice: any) => ({
-                name: String(choice?.name || "").trim(),
-                price: Math.max(0, Number(choice?.price) || 0),
-                discountPercent: Math.max(0, Math.min(100, Number(choice?.discountPercent ?? 100) || 0)),
-              }))
-              .filter((choice: PromotionRewardChoice) => choice.name)
-          : [],
-        rewardSelectCount: Math.max(1, Math.floor(Number(row?.rewardSelectCount) || 1)),
-        maxPerOrder: Math.max(1, Number(row?.maxPerOrder) || 1),
-        pickup: row?.pickup !== false,
-        delivery: row?.delivery !== false,
-        active: row?.active !== false,
-      }))
-      .filter((row: MenuPromotion) => row.id && row.active);
-  } catch {
-    return [];
-  }
-}
-
-function readPromotionAssignments(businessId: number): PromotionAssignments {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(`ktown-menu-promotion-assignments:${businessId}`);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 type StoredCartItem = {
   cartItemId: string;
   businessId: number;
