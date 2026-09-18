@@ -1274,7 +1274,27 @@ export async function POST(
         } => Boolean(item),
       )
       .filter(
-        (item, index, rows) =>
+        (
+          item: {
+            triggerMenuItemId: number;
+            itemName: string;
+            promotionName: string;
+            quantity: number;
+            unitPrice: number;
+            lineTotal: number;
+            instructions: string;
+          },
+          index: number,
+          rows: {
+            triggerMenuItemId: number;
+            itemName: string;
+            promotionName: string;
+            quantity: number;
+            unitPrice: number;
+            lineTotal: number;
+            instructions: string;
+          }[],
+        ) =>
           rows.findIndex(
             (candidate) =>
               candidate.triggerMenuItemId === item.triggerMenuItemId &&
