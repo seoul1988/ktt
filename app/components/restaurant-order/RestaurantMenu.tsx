@@ -1418,9 +1418,16 @@ export default function RestaurantMenu({
                     >
                       <div className="min-w-0 flex-1 p-4">
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="line-clamp-2 text-[15px] font-black leading-snug sm:text-base">
-                            {item.name}
-                          </h3>
+                          <div className="flex min-w-0 items-center gap-2">
+                            <h3 className="line-clamp-2 text-[15px] font-black leading-snug sm:text-base">
+                              {item.name}
+                            </h3>
+                            {getPromotionsForMenuItem(item.id).length ? (
+                              <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black leading-4 text-white">
+                                🔥 DEAL
+                              </span>
+                            ) : null}
+                          </div>
 
                           {getPriceForService(item, activeService) != null ? (
                             <span
@@ -1450,23 +1457,6 @@ export default function RestaurantMenu({
                             </span>
                           ) : null}
                         </div>
-
-                        {(() => {
-                          const itemPromos = getPromotionsForMenuItem(item.id);
-                          if (!itemPromos.length) return null;
-                          return (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {itemPromos.map((promotion) => (
-                                <span
-                                  key={promotion.id}
-                                  className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white"
-                                >
-                                  🔥 {promotion.name}
-                                </span>
-                              ))}
-                            </div>
-                          );
-                        })()}
 
                         {item.description ? (
                           <p className="mt-2 line-clamp-3 text-xs font-medium leading-5 opacity-65 sm:text-sm">
