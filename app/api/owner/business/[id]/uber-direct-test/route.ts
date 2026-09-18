@@ -1,9 +1,42 @@
 import { NextResponse } from "next/server";
 import { getOrderAdmin } from "@/lib/restaurant-order/server";
-import { dispatchUberDirectOrder } from "@/lib/delivery/uber-direct";
+import {
+  createUberDirectQuote,
+  dispatchUberDirectOrder,
+  isUberDirectEnabled,
+} from "@/lib/delivery/uber-direct";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function pickupAddressForDisplay(business: any) {
+  const full = String(business?.address || "").trim();
+  if (full) return full;
+
+  return [
+    business?.address1 || business?.street_address,
+    business?.address2,
+    business?.city,
+    [business?.state, business?.zip || business?.zipcode || business?.postal_code]
+      .filter(Boolean)
+      .join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function dropoffAddressForDisplay(address: any) {
+  if (!address) return "";
+
+  return [
+    address?.address1,
+    address?.address2,
+    address?.city,
+    [address?.state, address?.postalCode].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
 
 export async function POST(
   request: Request,
@@ -24,6 +57,7 @@ export async function POST(
 
     const body = await request.json().catch(() => ({}));
     const orderId = Number(body?.orderId);
+    const action = String(body?.action || "quote");
 
     if (!Number.isInteger(orderId) || orderId <= 0) {
       return NextResponse.json(
@@ -32,29 +66,66 @@ export async function POST(
       );
     }
 
+    if (action !== "quote" && action !== "dispatch") {
+      return NextResponse.json(
+        { ok: false, error: "Invalid test action." },
+        { status: 400 },
+      );
+    }
+
     const db = getOrderAdmin();
 
-    // 주문이 실제로 이 식당의 주문인지 먼저 확인
-    const { data: order, error: orderError } = await db
-      .from("restaurant_orders")
-      .select(
-        `
-        id,
-        business_id,
-        order_number,
-        fulfillment_type,
-        payment_status,
-        delivery_provider,
-        delivery_quote_id,
-        delivery_external_id,
-        delivery_status,
-        delivery_tracking_url,
-        delivery_last_error
-        `,
-      )
-      .eq("id", orderId)
-      .eq("business_id", businessId)
-      .single();
+    const [
+      { data: order, error: orderError },
+      { data: business, error: businessError },
+      { data: privateSettings, error: privateError },
+    ] = await Promise.all([
+      db
+        .from("restaurant_orders")
+        .select(
+          `
+          id,
+          business_id,
+          order_number,
+          fulfillment_type,
+          customer_name,
+          customer_phone,
+          delivery_address,
+          payment_status,
+          delivery_provider,
+          delivery_quote_id,
+          delivery_quote_expires_at,
+          delivery_external_id,
+          delivery_status,
+          delivery_tracking_url,
+          delivery_last_error
+          `,
+        )
+        .eq("id", orderId)
+        .eq("business_id", businessId)
+        .single(),
+
+      db
+        .from("businesses")
+        .select("*")
+        .eq("id", businessId)
+        .single(),
+
+      db
+        .from("restaurant_order_private_settings")
+        .select(
+          `
+          delivery_provider,
+          uber_direct_enabled,
+          uber_direct_client_id,
+          uber_direct_client_secret,
+          uber_direct_customer_id,
+          delivery_fee_markup_cents
+          `,
+        )
+        .eq("business_id", businessId)
+        .maybeSingle(),
+    ]);
 
     if (orderError || !order) {
       return NextResponse.json(
@@ -64,6 +135,27 @@ export async function POST(
           detail: orderError?.message || null,
         },
         { status: 404 },
+      );
+    }
+
+    if (businessError || !business) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Business not found.",
+          detail: businessError?.message || null,
+        },
+        { status: 404 },
+      );
+    }
+
+    if (privateError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: privateError.message,
+        },
+        { status: 500 },
       );
     }
 
@@ -82,44 +174,125 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
-          error:
-            "For safety, Uber TEST only accepts an existing PAID order.",
+          error: "For safety, Uber TEST only accepts an existing PAID order.",
           order,
         },
         { status: 400 },
       );
     }
 
-    // 이미 Uber Delivery가 만들어졌으면 중복 호출 금지
+    if (!isUberDirectEnabled(privateSettings)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Uber Direct is not enabled for this restaurant.",
+          order,
+        },
+        { status: 400 },
+      );
+    }
+
+    const pickupAddress = pickupAddressForDisplay(business);
+    const dropoffAddress = dropoffAddressForDisplay(order.delivery_address);
+
+    // STEP 1: Quote only. This does NOT create an Uber delivery.
+    if (action === "quote") {
+      if (order.delivery_external_id) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Uber Direct delivery already exists for this order.",
+            order,
+            pickupAddress,
+            dropoffAddress,
+          },
+          { status: 409 },
+        );
+      }
+
+      console.log("========== UBER DIRECT QUOTE TEST START ==========");
+      console.log("Business ID:", businessId);
+      console.log("Order ID:", orderId);
+      console.log("Order Number:", order.order_number);
+
+      const quote = await createUberDirectQuote({
+        business,
+        privateSettings,
+        dropoffAddress: order.delivery_address,
+      });
+
+      const { error: quoteSaveError } = await db
+        .from("restaurant_orders")
+        .update({
+          delivery_provider: "uber_direct",
+          delivery_quote_id: quote.id,
+          delivery_quote_expires_at: quote.expires || null,
+          delivery_status: "quote_ready",
+          delivery_last_error: null,
+        })
+        .eq("id", orderId)
+        .eq("business_id", businessId);
+
+      if (quoteSaveError) throw quoteSaveError;
+
+      console.log("UBER DIRECT QUOTE:", quote);
+      console.log("========== UBER DIRECT QUOTE TEST END ==========");
+
+      return NextResponse.json({
+        ok: true,
+        stage: "quote",
+        message:
+          "Uber Direct quote created. No courier has been dispatched.",
+        pickupAddress,
+        dropoffAddress,
+        quote: {
+          id: quote.id,
+          uberFeeCents: quote.uberFeeCents,
+          markupCents: quote.markupCents,
+          customerFeeCents: quote.customerFeeCents,
+          currency: quote.currency || quote.currency_type || "USD",
+          expires: quote.expires || null,
+          duration: quote.duration || 0,
+          pickupDuration: quote.pickup_duration || 0,
+          dropoffEta: quote.dropoff_eta || null,
+          dropoffDeadline: quote.dropoff_deadline || null,
+        },
+        order: {
+          ...order,
+          delivery_quote_id: quote.id,
+          delivery_quote_expires_at: quote.expires || null,
+          delivery_status: "quote_ready",
+        },
+      });
+    }
+
+    // STEP 2: Actual Uber delivery creation.
     if (order.delivery_external_id) {
       return NextResponse.json({
         ok: true,
+        stage: "dispatch",
         alreadyDispatched: true,
         message: "Uber Direct delivery already exists.",
+        pickupAddress,
+        dropoffAddress,
         order,
       });
     }
 
-    console.log("========== UBER DIRECT TEST START ==========");
+    console.log("========== UBER DIRECT DISPATCH TEST START ==========");
     console.log("Business ID:", businessId);
     console.log("Order ID:", orderId);
     console.log("Order Number:", order.order_number);
-    console.log("Payment Status:", order.payment_status);
-    console.log("Existing Quote:", order.delivery_quote_id);
-    console.log("Existing Delivery Status:", order.delivery_status);
+    console.log("Quote ID:", order.delivery_quote_id);
 
     try {
-      // Square / Receipt / SMS 호출 없음
-      // Uber Direct만 직접 실행
+      // Square / Receipt / SMS calls are intentionally not used here.
       const result = await dispatchUberDirectOrder({
         db,
         businessId,
         orderId,
         prepMinutes: 15,
       });
-
-      console.log("UBER DIRECT TEST RESULT:", result);
-      console.log("========== UBER DIRECT TEST END ==========");
 
       const { data: updatedOrder } = await db
         .from("restaurant_orders")
@@ -130,6 +303,7 @@ export async function POST(
           payment_status,
           delivery_provider,
           delivery_quote_id,
+          delivery_quote_expires_at,
           delivery_external_id,
           delivery_status,
           delivery_tracking_url,
@@ -140,19 +314,23 @@ export async function POST(
         .eq("business_id", businessId)
         .single();
 
+      console.log("UBER DIRECT DISPATCH RESULT:", result);
+      console.log("========== UBER DIRECT DISPATCH TEST END ==========");
+
       return NextResponse.json({
         ok: true,
-        message: "Uber Direct test completed.",
+        stage: "dispatch",
+        message: "Uber Direct delivery creation completed.",
+        pickupAddress,
+        dropoffAddress,
         uberResult: result,
         order: updatedOrder || order,
       });
     } catch (uberError) {
       const message =
-        uberError instanceof Error
-          ? uberError.message
-          : String(uberError);
+        uberError instanceof Error ? uberError.message : String(uberError);
 
-      console.error("========== UBER DIRECT TEST FAILED ==========");
+      console.error("========== UBER DIRECT DISPATCH TEST FAILED ==========");
       console.error("Business ID:", businessId);
       console.error("Order ID:", orderId);
       console.error("ERROR:", message);
@@ -166,6 +344,7 @@ export async function POST(
           payment_status,
           delivery_provider,
           delivery_quote_id,
+          delivery_quote_expires_at,
           delivery_external_id,
           delivery_status,
           delivery_tracking_url,
@@ -179,7 +358,10 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
+          stage: "dispatch",
           error: message,
+          pickupAddress,
+          dropoffAddress,
           order: failedOrder || order,
         },
         { status: 500 },
@@ -192,9 +374,7 @@ export async function POST(
       {
         ok: false,
         error:
-          error instanceof Error
-            ? error.message
-            : "Uber Direct test failed.",
+          error instanceof Error ? error.message : "Uber Direct test failed.",
       },
       { status: 500 },
     );
