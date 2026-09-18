@@ -641,6 +641,8 @@ export default function OwnerBusinessMenuPage() {
   // Example: 7.25% is saved as 0.0725.
   const [taxRateInput, setTaxRateInput] = useState("0");
   const [savingTaxRate, setSavingTaxRate] = useState(false);
+  const [tipPresetInputs, setTipPresetInputs] = useState<[string, string, string]>(["15", "18", "20"]);
+  const [savingTipPresets, setSavingTipPresets] = useState(false);
 
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [savingSmsEnabled, setSavingSmsEnabled] = useState(false);
@@ -888,6 +890,14 @@ export default function OwnerBusinessMenuPage() {
         const loadedTaxRate = Math.max(0, Number(data?.taxRate || 0));
         setTaxRateInput(
           Number((loadedTaxRate * 100).toFixed(4)).toString(),
+        );
+
+        const loadedTipPresets =
+          Array.isArray(data?.tipPresets) && data.tipPresets.length === 3
+            ? data.tipPresets.map((value: unknown) => Number(value))
+            : [15, 18, 20];
+        setTipPresetInputs(
+          loadedTipPresets.map((value: number) => String(value)) as [string, string, string],
         );
 
         setPaymentProvider(
@@ -1702,6 +1712,60 @@ export default function OwnerBusinessMenuPage() {
       setMessage(msg);
     } finally {
       setSavingTaxRate(false);
+    }
+  }
+
+  async function saveTipPresets() {
+    if (savingTipPresets) return;
+
+    const values = tipPresetInputs.map((value) => Number(value));
+
+    if (values.some((value) => !Number.isFinite(value) || value <= 0 || value > 100)) {
+      setMessage("Tip은 0보다 크고 100% 이하로 입력하세요.");
+      return;
+    }
+
+    setSavingTipPresets(true);
+    setOrderSettingsMessage("Tip 저장 중...");
+    setMessage("Tip 저장 중...");
+
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/owner/business/${businessId}/order-settings`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tipPresets: values }),
+        },
+      );
+
+      const data = await readApiJson(response);
+      if (!response.ok) {
+        throw new Error(data?.error || "Tip 저장에 실패했습니다.");
+      }
+
+      const saved =
+        Array.isArray(data?.tipPresets) && data.tipPresets.length === 3
+          ? data.tipPresets.map((value: unknown) => Number(value))
+          : values;
+      setTipPresetInputs(
+        saved.map((value: number) => String(value)) as [string, string, string],
+      );
+      const ok = `✓ Tip ${saved.map((value: number) => `${value}%`).join(" / ")} 저장 완료`;
+      setOrderSettingsMessage(ok);
+      setMessage(ok);
+    } catch (error) {
+      const msg = error instanceof Error
+        ? `Tip 저장 실패: ${error.message}`
+        : "Tip 저장에 실패했습니다.";
+      setOrderSettingsMessage(msg);
+      setMessage(msg);
+    } finally {
+      setSavingTipPresets(false);
     }
   }
 
@@ -6555,7 +6619,8 @@ export default function OwnerBusinessMenuPage() {
             ) : null}
           </div>
 
-          <div className="mt-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
             <div className="flex flex-wrap items-end gap-3">
               <label className="min-w-[220px] flex-1">
                 <span className="block text-xs font-black uppercase tracking-wider text-emerald-700">
@@ -6595,6 +6660,51 @@ export default function OwnerBusinessMenuPage() {
               </label>
             </div>
           </div>
+
+          <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4">
+            <div>
+              <span className="block text-xs font-black uppercase tracking-wider text-amber-700">
+                Tip
+              </span>
+              <span className="mt-1 block text-[11px] font-semibold leading-5 text-gray-600">
+                Checkout의 Tip 선택값 3개를 설정합니다. No tip / Custom은 그대로 유지됩니다.
+              </span>
+
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {tipPresetInputs.map((value, index) => (
+                  <div key={`tip-preset-${index}`} className="relative w-[72px]">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="1"
+                      max="100"
+                      step="1"
+                      value={value}
+                      onChange={(event) => {
+                        const next = [...tipPresetInputs] as [string, string, string];
+                        next[index] = event.target.value;
+                        setTipPresetInputs(next);
+                      }}
+                      className="w-full rounded-xl border-2 border-amber-300 bg-white px-3 py-3 pr-7 text-center text-base font-black text-[#172033] outline-none focus:border-amber-600"
+                    />
+                    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs font-black text-amber-700">
+                      %
+                    </span>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() => void saveTipPresets()}
+                  disabled={savingTipPresets}
+                  className="rounded-xl bg-amber-600 px-4 py-3 text-xs font-black text-white disabled:cursor-wait disabled:opacity-60"
+                >
+                  {savingTipPresets ? "저장 중..." : "TIP 저장"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
           <div className="mt-3 rounded-2xl border border-orange-100 bg-[#FFF8F0] px-3 py-2.5 text-[11px] font-bold leading-5 text-gray-700">
             {menuModeEnabled && !pickupModeEnabled && !deliveryModeEnabled

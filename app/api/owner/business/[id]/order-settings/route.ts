@@ -293,7 +293,7 @@ export async function GET(
     } = await access.supabase
       .from("restaurant_order_settings")
       .select(
-        "tax_rate,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,sms_enabled",
+        "tax_rate,tip_presets,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,sms_enabled",
       )
       .eq("business_id", businessId)
       .maybeSingle();
@@ -321,6 +321,10 @@ export async function GET(
             Number(settings?.tax_rate || 0),
           ),
         ),
+        tipPresets:
+          Array.isArray(settings?.tip_presets) && settings.tip_presets.length === 3
+            ? settings.tip_presets.map((value: unknown) => Number(value))
+            : [15, 18, 20],
         paymentProvider:
           privateSettings?.payment_provider ===
           "square"
@@ -405,6 +409,12 @@ export async function PUT(
         "taxRate",
       );
 
+    const hasTipPresets =
+      Object.prototype.hasOwnProperty.call(
+        body || {},
+        "tipPresets",
+      );
+
     const hasProvider =
       Object.prototype.hasOwnProperty.call(
         body || {},
@@ -438,6 +448,7 @@ export async function PUT(
     if (
       !hasModes &&
       !hasTax &&
+      !hasTipPresets &&
       !hasProvider &&
       !hasDeliveryFeePolicyMode &&
       !hasDeliveryFeeShareRules &&
@@ -459,6 +470,8 @@ export async function PUT(
       | undefined;
 
     let taxRate: number | undefined;
+
+    let tipPresets: number[] | undefined;
 
     let paymentProvider:
       | "stripe"
@@ -648,6 +661,49 @@ export async function PUT(
       taxRate = Number(
         savedTax?.tax_rate || 0,
       );
+    }
+
+    if (hasTipPresets) {
+      const rawPresets = body.tipPresets;
+
+      if (!Array.isArray(rawPresets) || rawPresets.length !== 3) {
+        return NextResponse.json(
+          { error: "Tip은 3개의 퍼센트 값을 입력해야 합니다." },
+          { status: 400 },
+        );
+      }
+
+      const normalizedPresets = rawPresets.map((value: unknown) => Number(value));
+
+      if (
+        normalizedPresets.some(
+          (value: number) => !Number.isFinite(value) || value <= 0 || value > 100,
+        )
+      ) {
+        return NextResponse.json(
+          { error: "Tip은 0보다 크고 100 이하의 값이어야 합니다." },
+          { status: 400 },
+        );
+      }
+
+      const { data: savedTips, error: tipError } = await access.supabase
+        .from("restaurant_order_settings")
+        .upsert(
+          {
+            business_id: businessId,
+            tip_presets: normalizedPresets,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "business_id" },
+        )
+        .select("tip_presets")
+        .single();
+
+      if (tipError) throw tipError;
+
+      tipPresets = Array.isArray(savedTips?.tip_presets)
+        ? savedTips.tip_presets.map((value: unknown) => Number(value))
+        : normalizedPresets;
     }
 
     if (hasDeliveryFeeShareRules) {
@@ -889,6 +945,9 @@ export async function PUT(
           : {}),
         ...(taxRate !== undefined
           ? { taxRate }
+          : {}),
+        ...(tipPresets !== undefined
+          ? { tipPresets }
           : {}),
         ...(paymentProvider
           ? { paymentProvider }
