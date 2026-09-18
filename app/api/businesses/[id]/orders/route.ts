@@ -1234,7 +1234,17 @@ export async function POST(
       },
     );
 
-    const freeDealItems = requestedPromotionRewards
+    type FreeDealItem = {
+      triggerMenuItemId: number;
+      itemName: string;
+      promotionName: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      instructions: string;
+    };
+
+    const freeDealItems: FreeDealItem[] = requestedPromotionRewards
       .map((reward: any) => {
         const triggerMenuItemId = Number(reward?.triggerMenuItemId);
         const itemName = String(reward?.itemName || "").trim().slice(0, 160);
@@ -1262,41 +1272,11 @@ export async function POST(
           instructions: `DEAL - FREE · ${promotionName}`.slice(0, 500),
         };
       })
+      .filter((item: FreeDealItem | null): item is FreeDealItem => Boolean(item))
       .filter(
-        (item: any): item is {
-          triggerMenuItemId: number;
-          itemName: string;
-          promotionName: string;
-          quantity: number;
-          unitPrice: number;
-          lineTotal: number;
-          instructions: string;
-        } => Boolean(item),
-      )
-      .filter(
-        (
-          item: {
-            triggerMenuItemId: number;
-            itemName: string;
-            promotionName: string;
-            quantity: number;
-            unitPrice: number;
-            lineTotal: number;
-            instructions: string;
-          },
-          index: number,
-          rows: {
-            triggerMenuItemId: number;
-            itemName: string;
-            promotionName: string;
-            quantity: number;
-            unitPrice: number;
-            lineTotal: number;
-            instructions: string;
-          }[],
-        ) =>
+        (item: FreeDealItem, index: number, rows: FreeDealItem[]) =>
           rows.findIndex(
-            (candidate) =>
+            (candidate: FreeDealItem) =>
               candidate.triggerMenuItemId === item.triggerMenuItemId &&
               candidate.itemName.toLowerCase() === item.itemName.toLowerCase(),
           ) === index,
