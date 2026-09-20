@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import RestaurantMenu from "@/app/components/restaurant-order/RestaurantMenu";
+import InstallBusinessApp from "@/app/components/InstallBusinessApp";
 import { CATERING_CATEGORY_PRESETS } from "@/app/lib/cateringCategories";
 
 // KTT_MEDIA_BLOCK_NOTE: 이미지/비디오는 렌더러에서 block 요소로 유지해
@@ -15565,6 +15566,7 @@ export function PublicWebsiteRenderer({
 
   return (
     <>
+      <InstallBusinessApp businessName={business.name || "Business"} />
       <style>{`
         html,
         body {
