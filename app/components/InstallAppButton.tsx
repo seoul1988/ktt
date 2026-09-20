@@ -485,7 +485,7 @@ export default function InstallAppButton({
      * iPhone Safari∞ùÉ∞ä£δèö beforeinstallpromptΩ░Ç ∞ùå∞£╝δ»Çδí£
      * 24∞ï£Ω░ä ∞á£φò£∞¥┤ ∞ùå∞¥ä δòî ∞äñ∞╣ÿ ∞òêδé┤ δ░░δäêδÑ╝ φæ£∞ï£φò⌐δïêδïñ.
      */
-    if (ios) {
+    if (ios || businessName?.trim()) {
       showThenAutoHide();
     }
 
@@ -802,7 +802,7 @@ export default function InstallAppButton({
           </button>
         </div>
       ) : (
-        (isIOS || installPrompt !== null) ? (
+        (Boolean(businessName?.trim()) || isIOS || installPrompt !== null) ? (
           <button
             type="button"
             onClick={openBanner}
