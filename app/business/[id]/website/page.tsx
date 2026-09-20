@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
 import { unstable_noStore as noStore } from "next/cache";
 import { notFound } from "next/navigation";
@@ -272,15 +273,45 @@ export async function generateMetadata({
 
   const faviconUrl = addVersionToUrl(rawIconUrl, iconVersion);
   const websitePath = `/business/${businessId}/website`;
-  const pageUrl = `${SITE_URL}${websitePath}`;
-  const manifestUrl =
-    `${websitePath}/manifest.webmanifest?v=${iconVersion}`;
+
+  const headerStore = await headers();
+  const rawHost =
+    headerStore.get("x-forwarded-host") ||
+    headerStore.get("host") ||
+    "";
+
+  const currentHost = rawHost
+    .trim()
+    .toLowerCase()
+    .split(":")[0]
+    .replace(/\.$/, "");
+
+  const normalizedHost = currentHost.replace(/^www\./, "");
+
+  const isCustomDomain =
+    normalizedHost !== "ktowntriangle.com" &&
+    !normalizedHost.endsWith(".vercel.app") &&
+    normalizedHost !== "localhost";
+
+  const currentOrigin =
+    isCustomDomain && currentHost
+      ? `https://${currentHost}`
+      : SITE_URL;
+
+  const pageUrl = isCustomDomain
+    ? `${currentOrigin}/`
+    : `${SITE_URL}${websitePath}`;
+
+  const manifestUrl = isCustomDomain
+    ? `/manifest.webmanifest?v=${iconVersion}`
+    : `${websitePath}/manifest.webmanifest?v=${iconVersion}`;
+
   const icon32 = `${websitePath}/icon/32?v=${iconVersion}`;
   const icon192 = `${websitePath}/icon/192?v=${iconVersion}`;
   const icon512 = `${websitePath}/icon/512?v=${iconVersion}`;
 
   return {
-    metadataBase: new URL(SITE_URL),
+    metadataBase: new URL(currentOrigin),
     title: businessName,
     description: `${businessName} official website`,
     applicationName: businessName,
