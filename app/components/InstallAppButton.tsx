@@ -190,6 +190,33 @@ export default function InstallAppButton({
     };
   }, [businessName, isInstallOwner]);
 
+  function isKtownHostedBusinessPage() {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    const normalizedHost = window.location.hostname
+      .trim()
+      .toLowerCase()
+      .replace(/^www\./, "");
+
+    const isKtownHost =
+      normalizedHost === "ktowntriangle.com" ||
+      normalizedHost.endsWith(".vercel.app") ||
+      normalizedHost === "localhost";
+
+    const isBusinessWebsitePath =
+      /^\/business(?:es)?\/\d+\/website(?:\/|$)/.test(
+        window.location.pathname,
+      );
+
+    return (
+      Boolean(businessName?.trim()) &&
+      isKtownHost &&
+      isBusinessWebsitePath
+    );
+  }
+
   function getBusinessIdFromPath() {
     if (typeof window === "undefined") {
       return null;
@@ -485,7 +512,10 @@ export default function InstallAppButton({
      * iPhone Safari∞ùÉ∞ä£δèö beforeinstallpromptΩ░Ç ∞ùå∞£╝δ»Çδí£
      * 24∞ï£Ω░ä ∞á£φò£∞¥┤ ∞ùå∞¥ä δòî ∞äñ∞╣ÿ ∞òêδé┤ δ░░δäêδÑ╝ φæ£∞ï£φò⌐δïêδïñ.
      */
-    if (ios || businessName?.trim()) {
+    if (
+      ios ||
+      (businessName?.trim() && !isKtownHostedBusinessPage())
+    ) {
       showThenAutoHide();
     }
 
@@ -802,7 +832,14 @@ export default function InstallAppButton({
           </button>
         </div>
       ) : (
-        (Boolean(businessName?.trim()) || isIOS || installPrompt !== null) ? (
+        (
+          (
+            Boolean(businessName?.trim()) &&
+            !isKtownHostedBusinessPage()
+          ) ||
+          isIOS ||
+          installPrompt !== null
+        ) ? (
           <button
             type="button"
             onClick={openBanner}
