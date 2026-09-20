@@ -614,7 +614,7 @@ export default function InstallAppButton({
        * ∞é¼∞Ü⌐∞₧ÉΩ░Ç ∞òäδ¼┤ δ░ÿ∞¥æ∞¥┤ ∞ùåδïñΩ│á δèÉδü╝∞ºÇ ∞òèδÅäδí¥ ∞¥┤∞£áδÑ╝ φæ£∞ï£φò⌐δïêδïñ.
        */
       setInstallMessage(
-        "The browser installation window is not available yet. Open the Chrome or Edge menu Γï« and choose Install app, or reload this page and try again.",
+        "The browser installation window is not available yet. Open the Chrome or Edge menu (⋮) and choose Install app, or reload this page and try again.",
       );
       setShowBanner(true);
       setIsClosing(false);
@@ -658,7 +658,7 @@ export default function InstallAppButton({
 
       /*
        * ∞é¼∞Ü⌐∞₧ÉΩ░Ç ∞╖¿∞åîφò£ Ω▓╜∞Ü░ ∞äñ∞╣ÿ ∞Öäδúîδí£ ∞áÇ∞₧Ñφòÿ∞ºÇ ∞òè∞è╡δïêδïñ.
-       * ∞ÿñδÑ╕∞¬╜ Γëí δ▓äφè╝∞£╝δí£ δïñ∞ï£ ∞ù┤ ∞êÿ ∞₧êδÅäδí¥ δ░░δäêδºî δï½∞è╡δïêδïñ.
+       * ∞ÿñδÑ╕∞¬╜ › δ▓äφè╝∞£╝δí£ δïñ∞ï£ ∞ù┤ ∞êÿ ∞₧êδÅäδí¥ δ░░δäêδºî δï½∞è╡δïêδïñ.
        */
       saveInstalledState(false);
       hideFor24Hours();
@@ -696,16 +696,14 @@ export default function InstallAppButton({
    * δïñδÑ╕ δ¬¿δôá Ω▓╜δí£∞ùÉ∞ä£δèö businessName ∞áäδï¼ ∞ù¼δ╢Ç∞ÖÇ Ω┤ÇΩ│ä∞ùå∞¥┤
    * ∞äñ∞╣ÿ δ▓äφè╝, ∞äñ∞╣ÿ δ░░δäê, iOS ∞äñ∞╣ÿ ∞òêδé┤δÑ╝ ∞áäδ╢Ç δáîδìöδºüφòÿ∞ºÇ ∞òè∞è╡δïêδïñ.
    */
-  const isAllowedInstallPage =
+  const isMainHomePage =
     typeof window !== "undefined" &&
-    (
-      window.location.pathname === "/" ||
-      /^\/business(?:es)?\/\d+\/website(?:\/|$)/.test(
-        window.location.pathname,
-      )
-    );
+    window.location.pathname === "/";
 
-  if (!isAllowedInstallPage) {
+  // KTown global install button is limited to /.
+  // A business-specific instance (businessName provided) is allowed on
+  // /business/[id]/website so every business can show its own install UI.
+  if (!businessName?.trim() && !isMainHomePage) {
     return null;
   }
 
@@ -723,7 +721,7 @@ export default function InstallAppButton({
 
   /*
    * ∞äñ∞╣ÿδÉ£ PWA δÿÉδèö iPhone φÖê φÖöδ⌐┤ ∞ò▒∞ùÉ∞ä£δèö
-   * δ░░δäê∞ÖÇ ∞ÿñδÑ╕∞¬╜ Γëí δ▓äφè╝∞¥ä δ¬¿δæÉ ∞ê¿Ω╣üδïêδïñ.
+   * δ░░δäê∞ÖÇ ∞ÿñδÑ╕∞¬╜ › δ▓äφè╝∞¥ä δ¬¿δæÉ ∞ê¿Ω╣üδïêδïñ.
    */
   if (isInstalled) {
     return showInstalledNotice ? (
@@ -733,7 +731,7 @@ export default function InstallAppButton({
         aria-live="polite"
       >
         <p className="text-sm font-black">
-          Γ£ô {displayName} has been installed.
+          ✓ {displayName} has been installed.
         </p>
         <p className="mt-1 text-xs font-semibold text-white/75">
           You can now open it from your apps or Home Screen.
@@ -768,7 +766,7 @@ export default function InstallAppButton({
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <p className="text-sm font-black">
-                ≡ƒô▒ Install {displayName}
+                📲 Install {displayName}
               </p>
 
               <p className="mt-1 text-xs font-semibold text-white/75">
@@ -791,7 +789,7 @@ export default function InstallAppButton({
               className="rounded-full bg-white/15 px-3 py-1 text-xs font-black"
               aria-label="Close install banner"
             >
-              Γ£ò
+              ×
             </button>
           </div>
 
@@ -818,7 +816,7 @@ export default function InstallAppButton({
             aria-label="Open install panel"
           >
             <span className="block text-center text-[14px] font-black text-white">
-              Γëí
+              ›
             </span>
           </button>
         ) : null
@@ -857,7 +855,7 @@ export default function InstallAppButton({
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-600"
                 aria-label="Close installation guide"
               >
-                Γ£ò
+                ×
               </button>
             </div>
 
