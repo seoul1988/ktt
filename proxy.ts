@@ -27,8 +27,7 @@ function shouldIgnorePath(pathname: string) {
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml" ||
-    pathname === "/manifest.webmanifest" ||
-    /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|woff|woff2|ttf|otf)$/i.test(
+    /\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|map|txt|xml|woff|woff2|ttf|otf)$/i.test(
       pathname,
     )
   );
@@ -82,13 +81,24 @@ export async function proxy(request: NextRequest) {
   const host = normalizeHost(rawHost);
   const pathname = request.nextUrl.pathname;
 
+  /*
+   * KTown 기본 도메인과 Vercel/localhost는
+   * 기존 라우팅을 그대로 사용합니다.
+   */
   if (
     !host ||
     PRIMARY_HOSTS.has(host) ||
     host.endsWith(".vercel.app") ||
-    host === "localhost" ||
-    shouldIgnorePath(pathname)
+    host === "localhost"
   ) {
+    return NextResponse.next();
+  }
+
+  /*
+   * API, 관리자, 주문추적 등의 경로는
+   * 커스텀 비즈니스 사이트로 rewrite하지 않습니다.
+   */
+  if (shouldIgnorePath(pathname)) {
     return NextResponse.next();
   }
 
@@ -100,19 +110,57 @@ export async function proxy(request: NextRequest) {
 
   const url = request.nextUrl.clone();
 
-  if (pathname === "/") {
-    url.pathname = `/business/${businessId}/website`;
-  } else {
-    const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
+  /*
+   * 커스텀 도메인의 PWA manifest
+   *
+   * bunsofchapelhill.com/manifest.webmanifest
+   * ->
+   * /business/90/website/manifest.webmanifest
+   */
+  if (pathname === "/manifest.webmanifest") {
+    url.pathname =
+      `/business/${businessId}/website/manifest.webmanifest`;
 
-    url.pathname = `/business/${businessId}/website/${cleanPath}`;
+    return NextResponse.rewrite(url);
   }
+
+  /*
+   * 커스텀 도메인의 Service Worker
+   *
+   * bunsofchapelhill.com/sw.js
+   * ->
+   * /business/90/website/sw.js
+   */
+  if (pathname === "/sw.js") {
+    url.pathname =
+      `/business/${businessId}/website/sw.js`;
+
+    return NextResponse.rewrite(url);
+  }
+
+  /*
+   * 커스텀 도메인의 홈페이지
+   */
+  if (pathname === "/") {
+    url.pathname =
+      `/business/${businessId}/website`;
+
+    return NextResponse.rewrite(url);
+  }
+
+  /*
+   * 나머지 비즈니스 웹사이트 페이지
+   */
+  const cleanPath = pathname.replace(/^\/+|\/+$/g, "");
+
+  url.pathname =
+    `/business/${businessId}/website/${cleanPath}`;
 
   return NextResponse.rewrite(url);
 }
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.webmanifest).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };

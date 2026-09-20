@@ -6,6 +6,20 @@ type Props = {
   businessId: string;
 };
 
+const PRIMARY_HOSTS = new Set([
+  "ktowntriangle.com",
+  "www.ktowntriangle.com",
+]);
+
+function normalizeHost(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(":")[0]
+    .replace(/^www\./, "")
+    .replace(/\.$/, "");
+}
+
 export default function BusinessServiceWorker({
   businessId,
 }: Props) {
@@ -17,11 +31,34 @@ export default function BusinessServiceWorker({
       return;
     }
 
-    const workerPath =
-      `/business/${businessId}/website/sw.js`;
+    const host = normalizeHost(window.location.host);
 
-    const scopePath =
-      `/business/${businessId}/`;
+    const isCustomDomain =
+      !PRIMARY_HOSTS.has(host) &&
+      !host.endsWith(".vercel.app") &&
+      host !== "localhost";
+
+    /*
+     * KTown 기본 주소:
+     * /business/90/website/sw.js
+     *
+     * 커스텀 도메인:
+     * /sw.js
+     */
+    const workerPath = isCustomDomain
+      ? "/sw.js"
+      : `/business/${businessId}/website/sw.js`;
+
+    /*
+     * KTown 기본 주소:
+     * /business/90/
+     *
+     * 커스텀 도메인:
+     * /
+     */
+    const scopePath = isCustomDomain
+      ? "/"
+      : `/business/${businessId}/`;
 
     const expectedWorkerUrl = new URL(
       workerPath,
@@ -34,7 +71,7 @@ export default function BusinessServiceWorker({
     ).href;
 
     const reloadKey =
-      `business-sw-reload-v3-${businessId}`;
+      `business-sw-reload-v4-${businessId}`;
 
     let cancelled = false;
 
@@ -63,8 +100,8 @@ export default function BusinessServiceWorker({
           await navigator.serviceWorker.getRegistrations();
 
         /*
-         * 이 비즈니스의 이전 잘못된 scope 등록만 삭제합니다.
-         * 루트 /sw.js는 삭제하지 않습니다.
+         * 현재 사용할 서비스워커와 같은 script인데
+         * scope가 잘못된 경우만 삭제합니다.
          */
         for (const existing of registrations) {
           const scriptUrl =
@@ -99,6 +136,7 @@ export default function BusinessServiceWorker({
           {
             workerPath,
             scopePath,
+            isCustomDomain,
           },
         );
 
@@ -154,8 +192,7 @@ export default function BusinessServiceWorker({
         if (cancelled) return;
 
         const currentControllerUrl =
-          navigator.serviceWorker.controller?.scriptURL ||
-          "";
+          navigator.serviceWorker.controller?.scriptURL || "";
 
         console.log(
           "Current service worker controller:",
@@ -163,7 +200,8 @@ export default function BusinessServiceWorker({
         );
 
         /*
-         * 이미 비즈니스 서비스워커가 현재 페이지를 제어 중입니다.
+         * 이미 올바른 서비스워커가 현재 페이지를
+         * 제어하고 있으면 끝냅니다.
          */
         if (
           currentControllerUrl === expectedWorkerUrl
@@ -178,8 +216,8 @@ export default function BusinessServiceWorker({
         }
 
         /*
-         * 새로 등록된 서비스워커가 다음 페이지 로드부터
-         * 현재 페이지를 제어할 수 있도록 한 번만 새로고침합니다.
+         * 새 서비스워커가 다음 로드부터 페이지를
+         * 제어할 수 있도록 한 번만 새로고침합니다.
          */
         if (
           sessionStorage.getItem(reloadKey) !== "1"
