@@ -715,8 +715,8 @@ export default function MenuItemModal({
               : "flex max-h-[86vh] w-full flex-col overflow-hidden rounded-t-3xl shadow-2xl sm:w-[400px] sm:max-w-[400px] sm:rounded-3xl"
           }
           style={{
-            backgroundColor,
-            color: textColor,
+            backgroundColor: "#ffffff",
+            color: "#111827",
             transform: isIPhone ? undefined : "translateY(18px)",
           }}
           onClick={(event) => event.stopPropagation()}
@@ -1013,7 +1013,7 @@ export default function MenuItemModal({
                 ? "z-30 flex min-h-11 shrink-0 items-stretch border-t border-black/10 bg-white pb-[max(0.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.14)]"
                 : "z-20 flex min-h-14 shrink-0 items-stretch border-t border-black/10 shadow-[0_-8px_24px_rgba(0,0,0,0.10)]"
             }
-            style={{ backgroundColor }}
+            style={{ backgroundColor: "#ffffff", color: "#111827" }}
           >
             <div className="flex shrink-0 items-center border-r border-black/10">
               <button
