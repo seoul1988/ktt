@@ -14812,6 +14812,7 @@ export function PublicWebsiteRenderer({
   const [mobileHeaderSpacerHeight, setMobileHeaderSpacerHeight] =
     useState(0);
   const [mobileCartCount, setMobileCartCount] = useState(0);
+  const [hasRestaurantMenu, setHasRestaurantMenu] = useState(false);
   const [customerTrackingUrl, setCustomerTrackingUrl] = useState("");
 
   /*
@@ -14904,6 +14905,40 @@ export function PublicWebsiteRenderer({
     );
 
     return () => window.clearTimeout(timeout);
+  }, [business.id]);
+
+  // Restaurant Menu 데이터가 실제로 있는 업체는 모바일 하단 주문바를 자동 표시합니다.
+  // 식당별 Website Settings를 따로 켜지 않아도 메뉴만 등록되면 동일한 UI를 사용합니다.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkRestaurantMenu() {
+      try {
+        const response = await fetch(`/api/businesses/${business.id}/menu`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          if (!cancelled) setHasRestaurantMenu(false);
+          return;
+        }
+
+        const payload = (await response.json()) as Partial<RestaurantMenuPayload>;
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+
+        if (!cancelled) {
+          setHasRestaurantMenu(items.length > 0);
+        }
+      } catch {
+        if (!cancelled) setHasRestaurantMenu(false);
+      }
+    }
+
+    void checkRestaurantMenu();
+
+    return () => {
+      cancelled = true;
+    };
   }, [business.id]);
 
   // RestaurantMenu 장바구니 상태를 모바일 하단 버튼과 동기화합니다.
@@ -15322,15 +15357,35 @@ export function PublicWebsiteRenderer({
    * 클릭 대상은 Website Settings에 저장한 레이어/페이지 주소를 사용합니다.
    */
   const mobileHoursTargetUrl = String(
-    websiteSettings.mobile_hours_target_url || "",
+    websiteSettings.mobile_hours_target_url ||
+      (hasRestaurantMenu ? "#business-hours" : ""),
   ).trim();
 
   const mobileHoursButtonEnabled =
-    websiteSettings.mobile_hours_button_enabled === true &&
-    Boolean(mobileHoursTargetUrl);
+    hasRestaurantMenu ||
+    (websiteSettings.mobile_hours_button_enabled === true &&
+      Boolean(mobileHoursTargetUrl));
+
+  const restaurantMenuSection = sections.find(
+    (section) =>
+      section.is_visible !== false &&
+      section.content?.page_type === "link-page" &&
+      section.content?.link_page_kind === "restaurant-menu",
+  );
+
+  const restaurantMenuTargetUrl = restaurantMenuSection
+    ? `/${slugifyMenuValue(
+        String(
+          restaurantMenuSection.content?.page_slug ||
+            restaurantMenuSection.title ||
+            "menu",
+        ),
+      ) || "menu"}`
+    : "/menu";
 
   const mobileActionTargetUrl = String(
-    websiteSettings.mobile_action_target_url || "",
+    websiteSettings.mobile_action_target_url ||
+      (hasRestaurantMenu ? restaurantMenuTargetUrl : ""),
   ).trim();
 
   const mobileActionButtonLabel =
@@ -15344,8 +15399,9 @@ export function PublicWebsiteRenderer({
       : mobileActionButtonLabel;
 
   const mobileActionButtonEnabled =
-    websiteSettings.mobile_action_button_enabled === true &&
-    Boolean(mobileActionTargetUrl);
+    hasRestaurantMenu ||
+    (websiteSettings.mobile_action_button_enabled === true &&
+      Boolean(mobileActionTargetUrl));
 
   const mobileBusinessHours = parseBusinessTableHours(
     business.hours,
