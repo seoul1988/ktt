@@ -1,5 +1,5 @@
-
-import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,17 +10,6 @@ type Props = {
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeHost(value: string | null) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .split(",")[0]
-    .trim()
-    .split(":")[0]
-    .replace(/^www\./, "")
-    .replace(/\.$/, "");
 }
 
 function getServerSupabase() {
@@ -47,7 +36,7 @@ function getServerSupabase() {
 }
 
 export async function GET(
-  request: NextRequest,
+  _request: Request,
   { params }: Props,
 ) {
   const { id } = await params;
@@ -66,7 +55,7 @@ export async function GET(
   const { data: business, error } =
     await getServerSupabase()
       .from("businesses")
-      .select("id, name, custom_domain")
+      .select("id, name")
       .eq("id", businessId)
       .maybeSingle();
 
@@ -90,34 +79,15 @@ export async function GET(
   const websitePath =
     `/business/${businessId}/website`;
 
-  const requestHost = normalizeHost(
-    request.headers.get("x-forwarded-host") ||
-      request.headers.get("host"),
-  );
-
-  const customDomain = normalizeHost(
-    business.custom_domain,
-  );
-
-  const isCustomDomain =
-    Boolean(customDomain) &&
-    requestHost === customDomain;
-
   /*
-   * 커스텀 도메인에서는 사이트 루트 자체를 PWA 범위로 사용합니다.
-   * KTown 기본 도메인에서는 기존 비즈니스별 경로를 그대로 유지합니다.
+   * 메인 KTownTriangle 앱과 다른 앱으로 인식되도록
+   * 비즈니스별 고유한 앱 ID를 사용합니다.
    */
-  const appId = isCustomDomain
-    ? "/"
-    : `${websitePath}?pwa=business-${businessId}`;
+  const appId =
+    `${websitePath}?pwa=business-${businessId}`;
 
-  const startUrl = isCustomDomain
-    ? "/?source=pwa"
-    : `${websitePath}?source=pwa&business=${businessId}`;
-
-  const scope = isCustomDomain
-    ? "/"
-    : websitePath;
+  const startUrl =
+    `${websitePath}?source=pwa&business=${businessId}`;
 
   return NextResponse.json(
     {
@@ -135,7 +105,11 @@ export async function GET(
 
       start_url: startUrl,
 
-      scope,
+      /*
+       * /website와 /website/menu 같은 모든 하위 페이지를
+       * 비즈니스 앱 범위에 포함합니다.
+       */
+      scope: websitePath,
 
       display: "standalone",
 
@@ -181,6 +155,9 @@ export async function GET(
         "Content-Type":
           "application/manifest+json; charset=utf-8",
 
+        /*
+         * Chrome이 이전 비즈니스 manifest를 재사용하지 않게 합니다.
+         */
         "Cache-Control":
           "no-store, no-cache, must-revalidate, max-age=0",
 
