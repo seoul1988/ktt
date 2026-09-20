@@ -49,16 +49,16 @@ export default function InstallAppButton({
     useState<BeforeInstallPromptEvent | null>(null);
 
   /*
-   * beforeinstallprompt 객체는 한 번만 사용할 수 있습니다.
-   * state와 ref에 함께 보관하여 버튼 클릭 시 최신 객체를 확실히 사용합니다.
+   * beforeinstallprompt Ω░¥∞▓┤δèö φò£ δ▓êδºî ∞é¼∞Ü⌐φòá ∞êÿ ∞₧ê∞è╡δïêδïñ.
+   * state∞ÖÇ ref∞ùÉ φò¿Ω╗ÿ δ│┤Ω┤Çφòÿ∞ù¼ δ▓äφè╝ φü┤δª¡ ∞ï£ ∞╡£∞ïá Ω░¥∞▓┤δÑ╝ φÖò∞ïñφ₧ê ∞é¼∞Ü⌐φò⌐δïêδïñ.
    */
   const installPromptRef =
     useRef<BeforeInstallPromptEvent | null>(null);
 
   /*
-   * Android Chrome에서는 userChoice의 accepted 처리 직후
-   * appinstalled 이벤트도 이어서 발생할 수 있습니다.
-   * 설치 완료 안내가 중복 표시되지 않도록 한 번만 허용합니다.
+   * Android Chrome∞ùÉ∞ä£δèö userChoice∞¥ÿ accepted ∞▓ÿδª¼ ∞ºüφ¢ä
+   * appinstalled ∞¥┤δ▓ñφè╕δÅä ∞¥┤∞û┤∞ä£ δ░£∞â¥φòá ∞êÿ ∞₧ê∞è╡δïêδïñ.
+   * ∞äñ∞╣ÿ ∞Öäδúî ∞òêδé┤Ω░Ç ∞ñæδ│╡ φæ£∞ï£δÉÿ∞ºÇ ∞òèδÅäδí¥ φò£ δ▓êδºî φùê∞Ü⌐φò⌐δïêδïñ.
    */
   const installedNoticeShownRef = useRef(false);
   const installedNoticeTimerRef = useRef<number | null>(null);
@@ -147,9 +147,9 @@ export default function InstallAppButton({
       }
 
       /*
-       * 비즈니스 페이지 metadata가
-       * "Business Name | KTown Triangle" 형식이면
-       * 앞부분을 설치 앱 이름으로 사용합니다.
+       * δ╣ä∞ªêδïê∞èñ φÄÿ∞¥┤∞ºÇ metadataΩ░Ç
+       * "Business Name | KTown Triangle" φÿò∞ï¥∞¥┤δ⌐┤
+       * ∞ò₧δ╢Çδ╢ä∞¥ä ∞äñ∞╣ÿ ∞ò▒ ∞¥┤δªä∞£╝δí£ ∞é¼∞Ü⌐φò⌐δïêδïñ.
        */
       const pageTitle = document.title
         .split("|")[0]
@@ -168,8 +168,8 @@ export default function InstallAppButton({
     updateDisplayName();
 
     /*
-     * Next.js 클라이언트 페이지 이동으로 document.title이
-     * 나중에 변경되는 경우에도 새 비즈니스 이름을 반영합니다.
+     * Next.js φü┤δ¥╝∞¥┤∞û╕φè╕ φÄÿ∞¥┤∞ºÇ ∞¥┤δÅÖ∞£╝δí£ document.title∞¥┤
+     * δéÿ∞ñæ∞ùÉ δ│ÇΩ▓╜δÉÿδèö Ω▓╜∞Ü░∞ùÉδÅä ∞âê δ╣ä∞ªêδïê∞èñ ∞¥┤δªä∞¥ä δ░ÿ∞ÿüφò⌐δïêδïñ.
      */
     const titleElement = document.querySelector("title");
 
@@ -234,7 +234,7 @@ export default function InstallAppButton({
         localStorage.removeItem(getInstalledStorageKey());
       }
     } catch {
-      // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
+      // localStorageδÑ╝ ∞é¼∞Ü⌐φòá ∞êÿ ∞ùåδèö δ╕îδ¥╝∞Ü░∞áÇ∞ùÉ∞ä£δèö δ¼┤∞ï£φò⌐δïêδïñ.
     }
   }
 
@@ -259,7 +259,7 @@ export default function InstallAppButton({
           "ktt_pwa_installed=; Max-Age=0; Path=/; SameSite=Lax";
       }
     } catch {
-      // cookie를 사용할 수 없는 브라우저에서는 무시합니다.
+      // cookieδÑ╝ ∞é¼∞Ü⌐φòá ∞êÿ ∞ùåδèö δ╕îδ¥╝∞Ü░∞áÇ∞ùÉ∞ä£δèö δ¼┤∞ï£φò⌐δïêδïñ.
     }
   }
 
@@ -295,9 +295,9 @@ export default function InstallAppButton({
 
   function getInstalledState() {
     /*
-     * 실제 실행 모드만 설치 상태로 판단합니다.
-     * localStorage/cookie 기록은 앱 삭제 후에도 남기 때문에
-     * 설치 여부 판단에는 사용하지 않습니다.
+     * ∞ïñ∞á£ ∞ïñφûë δ¬¿δô£δºî ∞äñ∞╣ÿ ∞âüφâ£δí£ φîÉδï¿φò⌐δïêδïñ.
+     * localStorage/cookie Ω╕░δí¥∞¥Ç ∞ò▒ ∞é¡∞á£ φ¢ä∞ùÉδÅä δé¿Ω╕░ δòîδ¼╕∞ùÉ
+     * ∞äñ∞╣ÿ ∞ù¼δ╢Ç φîÉδï¿∞ùÉδèö ∞é¼∞Ü⌐φòÿ∞ºÇ ∞òè∞è╡δïêδïñ.
      */
     return getStandaloneState();
   }
@@ -327,7 +327,7 @@ export default function InstallAppButton({
         String(Date.now() + HIDE_TIME),
       );
     } catch {
-      // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
+      // localStorageδÑ╝ ∞é¼∞Ü⌐φòá ∞êÿ ∞ùåδèö δ╕îδ¥╝∞Ü░∞áÇ∞ùÉ∞ä£δèö δ¼┤∞ï£φò⌐δïêδïñ.
     }
   }
 
@@ -368,9 +368,9 @@ export default function InstallAppButton({
     if (!isInstallOwner) return;
 
     /*
-     * 설치 상태가 저장되어 있어도 이벤트 리스너는 계속 등록합니다.
-     * 사용자가 앱을 삭제하면 beforeinstallprompt가 다시 발생할 수 있고,
-     * 그때 남아 있는 설치 상태를 자동으로 초기화해야 하기 때문입니다.
+     * ∞äñ∞╣ÿ ∞âüφâ£Ω░Ç ∞áÇ∞₧ÑδÉÿ∞û┤ ∞₧ê∞û┤δÅä ∞¥┤δ▓ñφè╕ δª¼∞èñδäêδèö Ω│ä∞åì δô▒δí¥φò⌐δïêδïñ.
+     * ∞é¼∞Ü⌐∞₧ÉΩ░Ç ∞ò▒∞¥ä ∞é¡∞á£φòÿδ⌐┤ beforeinstallpromptΩ░Ç δïñ∞ï£ δ░£∞â¥φòá ∞êÿ ∞₧êΩ│á,
+     * Ω╖╕δòî δé¿∞òä ∞₧êδèö ∞äñ∞╣ÿ ∞âüφâ£δÑ╝ ∞₧ÉδÅÖ∞£╝δí£ ∞┤êΩ╕░φÖöφò┤∞ò╝ φòÿΩ╕░ δòîδ¼╕∞₧àδïêδïñ.
      */
     checkInstalledState();
 
@@ -425,21 +425,21 @@ export default function InstallAppButton({
         event as BeforeInstallPromptEvent;
 
       console.log(
-        "✅ beforeinstallprompt fired:",
+        "Γ£à beforeinstallprompt fired:",
         promptEvent,
       );
 
       /*
-       * state만 사용하면 렌더링 타이밍에 따라 버튼 클릭 시
-       * 이전 null 값이 보일 수 있으므로 ref에도 함께 저장합니다.
+       * stateδºî ∞é¼∞Ü⌐φòÿδ⌐┤ δáîδìöδºü φâÇ∞¥┤δ░ì∞ùÉ δö░δ¥╝ δ▓äφè╝ φü┤δª¡ ∞ï£
+       * ∞¥┤∞áä null Ω░Æ∞¥┤ δ│┤∞¥╝ ∞êÿ ∞₧ê∞£╝δ»Çδí£ ref∞ùÉδÅä φò¿Ω╗ÿ ∞áÇ∞₧Ñφò⌐δïêδïñ.
        */
       installPromptRef.current = promptEvent;
       setInstallPrompt(promptEvent);
       setInstallMessage("");
 
       /*
-       * 이 이벤트가 발생했다는 것은 Chrome이 현재 설치 가능 상태로
-       * 판단했다는 뜻이므로 즉시 미설치 상태로 전환합니다.
+       * ∞¥┤ ∞¥┤δ▓ñφè╕Ω░Ç δ░£∞â¥φûêδïñδèö Ω▓â∞¥Ç Chrome∞¥┤ φÿä∞₧¼ ∞äñ∞╣ÿ Ω░ÇδèÑ ∞âüφâ£δí£
+       * φîÉδï¿φûêδïñδèö δ£╗∞¥┤δ»Çδí£ ∞ªë∞ï£ δ»╕∞äñ∞╣ÿ ∞âüφâ£δí£ ∞áäφÖÿφò⌐δïêδïñ.
        */
       setIsInstalled(false);
       setHasCheckedInstallState(true);
@@ -449,12 +449,12 @@ export default function InstallAppButton({
       try {
         localStorage.removeItem(getHideStorageKey());
       } catch {
-        // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
+        // localStorageδÑ╝ ∞é¼∞Ü⌐φòá ∞êÿ ∞ùåδèö δ╕îδ¥╝∞Ü░∞áÇ∞ùÉ∞ä£δèö δ¼┤∞ï£φò⌐δïêδïñ.
       }
 
       /*
-       * 설치 이벤트를 받은 뒤에는 5초 후 자동으로 닫지 않습니다.
-       * 사용자가 Install App 버튼을 직접 누를 때까지 유지합니다.
+       * ∞äñ∞╣ÿ ∞¥┤δ▓ñφè╕δÑ╝ δ░¢∞¥Ç δÆñ∞ùÉδèö 5∞┤ê φ¢ä ∞₧ÉδÅÖ∞£╝δí£ δï½∞ºÇ ∞òè∞è╡δïêδïñ.
+       * ∞é¼∞Ü⌐∞₧ÉΩ░Ç Install App δ▓äφè╝∞¥ä ∞ºü∞áæ δêäδÑ╝ δòîΩ╣î∞ºÇ ∞£á∞ºÇφò⌐δïêδïñ.
        */
       clearAutoTimer();
       setShowBanner(true);
@@ -462,7 +462,7 @@ export default function InstallAppButton({
     }
 
     function handleAppInstalled() {
-      console.log("✅ appinstalled fired");
+      console.log("Γ£à appinstalled fired");
 
       installPromptRef.current = null;
       setIsInstalled(true);
@@ -477,13 +477,13 @@ export default function InstallAppButton({
       try {
         localStorage.removeItem(getHideStorageKey());
       } catch {
-        // localStorage를 사용할 수 없는 브라우저에서는 무시합니다.
+        // localStorageδÑ╝ ∞é¼∞Ü⌐φòá ∞êÿ ∞ùåδèö δ╕îδ¥╝∞Ü░∞áÇ∞ùÉ∞ä£δèö δ¼┤∞ï£φò⌐δïêδïñ.
       }
     }
 
     /*
-     * iPhone Safari에서는 beforeinstallprompt가 없으므로
-     * 24시간 제한이 없을 때 설치 안내 배너를 표시합니다.
+     * iPhone Safari∞ùÉ∞ä£δèö beforeinstallpromptΩ░Ç ∞ùå∞£╝δ»Çδí£
+     * 24∞ï£Ω░ä ∞á£φò£∞¥┤ ∞ùå∞¥ä δòî ∞äñ∞╣ÿ ∞òêδé┤ δ░░δäêδÑ╝ φæ£∞ï£φò⌐δïêδïñ.
      */
     if (ios) {
       showThenAutoHide();
@@ -587,8 +587,8 @@ export default function InstallAppButton({
     }
 
     /*
-     * iPhone/iPad에서는 beforeinstallprompt가 없으므로
-     * 홈 화면 추가 안내를 표시합니다.
+     * iPhone/iPad∞ùÉ∞ä£δèö beforeinstallpromptΩ░Ç ∞ùå∞£╝δ»Çδí£
+     * φÖê φÖöδ⌐┤ ∞╢öΩ░Ç ∞òêδé┤δÑ╝ φæ£∞ï£φò⌐δïêδïñ.
      */
     if (isIOS) {
       hideFor24Hours();
@@ -600,8 +600,8 @@ export default function InstallAppButton({
     }
 
     /*
-     * 가장 최근 beforeinstallprompt 객체를 사용합니다.
-     * ref를 먼저 확인하여 React state 갱신 타이밍 문제를 방지합니다.
+     * Ω░Ç∞₧Ñ ∞╡£Ω╖╝ beforeinstallprompt Ω░¥∞▓┤δÑ╝ ∞é¼∞Ü⌐φò⌐δïêδïñ.
+     * refδÑ╝ δ¿╝∞áÇ φÖò∞¥╕φòÿ∞ù¼ React state Ω░▒∞ïá φâÇ∞¥┤δ░ì δ¼╕∞á£δÑ╝ δ░⌐∞ºÇφò⌐δïêδïñ.
      */
     const promptEvent =
       installPromptRef.current || installPrompt;
@@ -610,11 +610,11 @@ export default function InstallAppButton({
 
     if (!promptEvent) {
       /*
-       * 이벤트가 아직 준비되지 않은 경우 배너를 없애지 않습니다.
-       * 사용자가 아무 반응이 없다고 느끼지 않도록 이유를 표시합니다.
+       * ∞¥┤δ▓ñφè╕Ω░Ç ∞òä∞ºü ∞ñÇδ╣äδÉÿ∞ºÇ ∞òè∞¥Ç Ω▓╜∞Ü░ δ░░δäêδÑ╝ ∞ùå∞òá∞ºÇ ∞òè∞è╡δïêδïñ.
+       * ∞é¼∞Ü⌐∞₧ÉΩ░Ç ∞òäδ¼┤ δ░ÿ∞¥æ∞¥┤ ∞ùåδïñΩ│á δèÉδü╝∞ºÇ ∞òèδÅäδí¥ ∞¥┤∞£áδÑ╝ φæ£∞ï£φò⌐δïêδïñ.
        */
       setInstallMessage(
-        "The browser installation window is not available yet. Open the Chrome or Edge menu ⋮ and choose Install app, or reload this page and try again.",
+        "The browser installation window is not available yet. Open the Chrome or Edge menu Γï« and choose Install app, or reload this page and try again.",
       );
       setShowBanner(true);
       setIsClosing(false);
@@ -625,7 +625,7 @@ export default function InstallAppButton({
       setInstallMessage("");
 
       /*
-       * prompt()는 반드시 사용자의 클릭 동작 안에서 호출해야 합니다.
+       * prompt()δèö δ░ÿδô£∞ï£ ∞é¼∞Ü⌐∞₧É∞¥ÿ φü┤δª¡ δÅÖ∞₧æ ∞òê∞ùÉ∞ä£ φÿ╕∞╢£φò┤∞ò╝ φò⌐δïêδïñ.
        */
       await promptEvent.prompt();
 
@@ -639,15 +639,15 @@ export default function InstallAppButton({
       );
 
       /*
-       * 이 객체는 한 번만 사용할 수 있으므로 즉시 제거합니다.
+       * ∞¥┤ Ω░¥∞▓┤δèö φò£ δ▓êδºî ∞é¼∞Ü⌐φòá ∞êÿ ∞₧ê∞£╝δ»Çδí£ ∞ªë∞ï£ ∞á£Ω▒░φò⌐δïêδïñ.
        */
       installPromptRef.current = null;
       setInstallPrompt(null);
 
       if (choice.outcome === "accepted") {
         /*
-         * 여기서는 설치창만 닫습니다.
-         * 설치 완료 안내는 실제 appinstalled 이벤트에서 한 번만 표시합니다.
+         * ∞ù¼Ω╕░∞ä£δèö ∞äñ∞╣ÿ∞░╜δºî δï½∞è╡δïêδïñ.
+         * ∞äñ∞╣ÿ ∞Öäδúî ∞òêδé┤δèö ∞ïñ∞á£ appinstalled ∞¥┤δ▓ñφè╕∞ùÉ∞ä£ φò£ δ▓êδºî φæ£∞ï£φò⌐δïêδïñ.
          */
         setIsInstalled(true);
         setInstallMessage("");
@@ -657,8 +657,8 @@ export default function InstallAppButton({
       }
 
       /*
-       * 사용자가 취소한 경우 설치 완료로 저장하지 않습니다.
-       * 오른쪽 ≡ 버튼으로 다시 열 수 있도록 배너만 닫습니다.
+       * ∞é¼∞Ü⌐∞₧ÉΩ░Ç ∞╖¿∞åîφò£ Ω▓╜∞Ü░ ∞äñ∞╣ÿ ∞Öäδúîδí£ ∞áÇ∞₧Ñφòÿ∞ºÇ ∞òè∞è╡δïêδïñ.
+       * ∞ÿñδÑ╕∞¬╜ Γëí δ▓äφè╝∞£╝δí£ δïñ∞ï£ ∞ù┤ ∞êÿ ∞₧êδÅäδí¥ δ░░δäêδºî δï½∞è╡δïêδïñ.
        */
       saveInstalledState(false);
       hideFor24Hours();
@@ -692,15 +692,20 @@ export default function InstallAppButton({
   }
 
   /*
-   * 설치 버튼은 KTown 메인 홈(/)에서만 표시합니다.
-   * 다른 모든 경로에서는 businessName 전달 여부와 관계없이
-   * 설치 버튼, 설치 배너, iOS 설치 안내를 전부 렌더링하지 않습니다.
+   * ∞äñ∞╣ÿ δ▓äφè╝∞¥Ç KTown δ⌐ö∞¥╕ φÖê(/)∞ùÉ∞ä£δºî φæ£∞ï£φò⌐δïêδïñ.
+   * δïñδÑ╕ δ¬¿δôá Ω▓╜δí£∞ùÉ∞ä£δèö businessName ∞áäδï¼ ∞ù¼δ╢Ç∞ÖÇ Ω┤ÇΩ│ä∞ùå∞¥┤
+   * ∞äñ∞╣ÿ δ▓äφè╝, ∞äñ∞╣ÿ δ░░δäê, iOS ∞äñ∞╣ÿ ∞òêδé┤δÑ╝ ∞áäδ╢Ç δáîδìöδºüφòÿ∞ºÇ ∞òè∞è╡δïêδïñ.
    */
-  const isMainHomePage =
+  const isAllowedInstallPage =
     typeof window !== "undefined" &&
-    window.location.pathname === "/";
+    (
+      window.location.pathname === "/" ||
+      /^\/business(?:es)?\/\d+\/website(?:\/|$)/.test(
+        window.location.pathname,
+      )
+    );
 
-  if (!isMainHomePage) {
+  if (!isAllowedInstallPage) {
     return null;
   }
 
@@ -717,8 +722,8 @@ export default function InstallAppButton({
   }
 
   /*
-   * 설치된 PWA 또는 iPhone 홈 화면 앱에서는
-   * 배너와 오른쪽 ≡ 버튼을 모두 숨깁니다.
+   * ∞äñ∞╣ÿδÉ£ PWA δÿÉδèö iPhone φÖê φÖöδ⌐┤ ∞ò▒∞ùÉ∞ä£δèö
+   * δ░░δäê∞ÖÇ ∞ÿñδÑ╕∞¬╜ Γëí δ▓äφè╝∞¥ä δ¬¿δæÉ ∞ê¿Ω╣üδïêδïñ.
    */
   if (isInstalled) {
     return showInstalledNotice ? (
@@ -728,7 +733,7 @@ export default function InstallAppButton({
         aria-live="polite"
       >
         <p className="text-sm font-black">
-          ✓ {displayName} has been installed.
+          Γ£ô {displayName} has been installed.
         </p>
         <p className="mt-1 text-xs font-semibold text-white/75">
           You can now open it from your apps or Home Screen.
@@ -763,7 +768,7 @@ export default function InstallAppButton({
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
               <p className="text-sm font-black">
-                📱 Install {displayName}
+                ≡ƒô▒ Install {displayName}
               </p>
 
               <p className="mt-1 text-xs font-semibold text-white/75">
@@ -786,7 +791,7 @@ export default function InstallAppButton({
               className="rounded-full bg-white/15 px-3 py-1 text-xs font-black"
               aria-label="Close install banner"
             >
-              ✕
+              Γ£ò
             </button>
           </div>
 
@@ -813,7 +818,7 @@ export default function InstallAppButton({
             aria-label="Open install panel"
           >
             <span className="block text-center text-[14px] font-black text-white">
-              ≡
+              Γëí
             </span>
           </button>
         ) : null
@@ -852,7 +857,7 @@ export default function InstallAppButton({
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-black text-gray-600"
                 aria-label="Close installation guide"
               >
-                ✕
+                Γ£ò
               </button>
             </div>
 
