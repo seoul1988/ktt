@@ -943,10 +943,14 @@ export default function RestaurantMenu({
   );
 
   useEffect(() => {
-    if (!isBunsMenu || !visibleCategories.length) {
+    if (!visibleCategories.length) {
       setCategoryBarFixed(false);
       return;
     }
+
+    // WebsiteRenderer 안에서는 window가 아니라 상위 overflow 컨테이너가
+    // 실제 스크롤을 담당할 수 있으므로 둘 다 감시합니다.
+    const scrollContainer = getMenuScrollContainer();
 
     const updateCategoryBarPosition = () => {
       const sentinel = categoryBarSentinelRef.current;
@@ -955,7 +959,11 @@ export default function RestaurantMenu({
 
       if (!sentinel || !root) return;
 
-      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      const isMobile =
+        window.innerWidth < 768 ||
+        (window.matchMedia("(pointer: coarse)").matches &&
+          Math.min(window.screen.width, window.screen.height) < 800);
+
       if (!isMobile) {
         setCategoryBarFixed(false);
         return;
@@ -970,8 +978,8 @@ export default function RestaurantMenu({
       const sentinelTop = sentinel.getBoundingClientRect().top;
       const rootBottom = root.getBoundingClientRect().bottom;
 
-      // 카테고리 바의 원래 위치를 지나면 화면 위에 고정하고,
-      // 메뉴 영역의 끝에 도달하면 다시 해제합니다.
+      // 실제 화면 상단을 지나면 고정합니다.
+      // nested scroll / window scroll 어느 쪽이든 getBoundingClientRect가 갱신됩니다.
       setCategoryBarFixed(
         sentinelTop <= 0 && rootBottom > measuredHeight + 8,
       );
@@ -983,12 +991,24 @@ export default function RestaurantMenu({
       passive: true,
     });
     window.addEventListener("resize", updateCategoryBarPosition);
+    window.addEventListener("orientationchange", updateCategoryBarPosition);
+
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", updateCategoryBarPosition, {
+        passive: true,
+      });
+    }
 
     return () => {
       window.removeEventListener("scroll", updateCategoryBarPosition);
       window.removeEventListener("resize", updateCategoryBarPosition);
+      window.removeEventListener("orientationchange", updateCategoryBarPosition);
+
+      if (scrollContainer) {
+        scrollContainer.removeEventListener("scroll", updateCategoryBarPosition);
+      }
     };
-  }, [isBunsMenu, visibleCategories.length]);
+  }, [visibleCategories.length]);
 
   function scrollToCategory(categoryId: number) {
     setActiveCategoryId(categoryId);
@@ -1276,7 +1296,7 @@ export default function RestaurantMenu({
         <>
           <div ref={categoryBarSentinelRef} className="h-px w-full" />
 
-          {categoryBarFixed && isBunsMenu ? (
+          {categoryBarFixed ? (
             <div
               aria-hidden="true"
               style={{ height: categoryBarHeight }}
@@ -1286,7 +1306,7 @@ export default function RestaurantMenu({
           <div
             ref={categoryBarMeasureRef}
             className={`${
-              categoryBarFixed && isBunsMenu
+              categoryBarFixed
                 ? "fixed inset-x-0 top-0 z-[12500]"
                 : "sticky top-0 z-[70]"
             } border-b px-3 py-2.5 shadow-sm backdrop-blur-md ${
@@ -1298,7 +1318,7 @@ export default function RestaurantMenu({
               backgroundColor: isBunsMenu
                 ? "rgba(11,11,11,0.96)"
                 : backgroundColor,
-              ...(categoryBarFixed && isBunsMenu
+              ...(categoryBarFixed
                 ? {
                     paddingTop:
                       "max(10px, env(safe-area-inset-top, 0px))",
