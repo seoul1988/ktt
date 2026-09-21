@@ -5209,15 +5209,16 @@ function LinkPageContent({
     const menuTextColor = String(
       section.content?.restaurant_menu_text_color || "#111827",
     );
-    const scrollTopEnabled = section.content?.restaurant_menu_scroll_top_enabled !== false;
+    // 모든 레스토랑 메뉴에 공통 적용: 레이어의 과거 저장값이 false여도
+    // 스크롤 위로가기 버튼은 항상 표시합니다.
+    const scrollTopEnabled = true;
     const scrollTopButtonColor = String(
       section.content?.restaurant_menu_scroll_top_button_color || "#111827",
     );
     const scrollTopIconColor = String(
       section.content?.restaurant_menu_scroll_top_icon_color || "#ffffff",
     );
-    const scrollTopPosition =
-      section.content?.restaurant_menu_scroll_top_position === "left" ? "left" : "right";
+    const scrollTopPosition = "right" as const;
     const widthMode = String(
       section.content?.link_page_width || "normal",
     ) as "normal" | "wide" | "full";
@@ -20997,6 +20998,10 @@ function CellPreview({
           <RestaurantMenu
             businessId={business.id}
             compact={previewDevice === "mobile"}
+            scrollTopEnabled={true}
+            scrollTopButtonColor="#111827"
+            scrollTopIconColor="#ffffff"
+            scrollTopPosition="right"
             externalCartButton={previewDevice === "mobile"}
           />
         </div>
@@ -24017,17 +24022,15 @@ function LinkPageEditor({
             <label className="flex items-center gap-2.5 text-xs font-black text-gray-800">
               <input
                 type="checkbox"
-                checked={section.content?.restaurant_menu_scroll_top_enabled !== false}
-                onChange={(event) =>
-                  onUpdate({ restaurant_menu_scroll_top_enabled: event.target.checked })
-                }
-                className="h-4 w-4"
+                checked={true}
+                disabled
+                readOnly
+                className="h-4 w-4 cursor-not-allowed opacity-70"
               />
-              위로가기 버튼 사용
+              위로가기 버튼 사용 · 모든 레스토랑 공통
             </label>
 
-            {section.content?.restaurant_menu_scroll_top_enabled !== false ? (
-              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+            <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
                 <div className="grid grid-cols-2 gap-2">
                   <label className="text-[11px] font-black text-gray-700">
                     버튼 색상
@@ -24088,8 +24091,7 @@ function LinkPageEditor({
                 <p className="text-[10px] font-semibold leading-4 text-gray-500">
                   페이지를 1,500px 이상 내리면 선택한 위치에 버튼이 나타납니다. 모바일에서는 하단 안전 영역 위에 표시됩니다.
                 </p>
-              </div>
-            ) : null}
+            </div>
           </div>
 
           <button
