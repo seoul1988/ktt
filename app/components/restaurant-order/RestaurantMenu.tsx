@@ -1175,6 +1175,83 @@ export default function RestaurantMenu({
     setSelectedItem(null);
   }
 
+  function renderCategoryBar(fixed: boolean) {
+    return (
+      <div
+        ref={categoryBarMeasureRef}
+        className={`${
+          fixed
+            ? "fixed inset-x-0 top-0"
+            : "sticky top-0"
+        } border-b px-3 py-2.5 shadow-sm backdrop-blur-md ${
+          isBunsMenu
+            ? "border-white/10 bg-[#0b0b0b]/95"
+            : "border-black/10"
+        }`}
+        style={{
+          backgroundColor: isBunsMenu
+            ? "rgba(11,11,11,0.96)"
+            : backgroundColor,
+          zIndex: fixed ? 2147483000 : 70,
+          ...(fixed
+            ? {
+                paddingTop:
+                  "max(10px, env(safe-area-inset-top, 0px))",
+              }
+            : {}),
+        }}
+      >
+        <div className="mx-auto flex max-w-[760px] gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {visibleCategories.map((category, categoryIndex) => {
+            const accent =
+              bunsCategoryAccents[
+                categoryIndex % bunsCategoryAccents.length
+              ];
+            const isActive =
+              activeCategoryId === category.id ||
+              (activeCategoryId == null && categoryIndex === 0);
+
+            return (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => scrollToCategory(category.id)}
+                className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.02em] transition ${
+                  isBunsMenu
+                    ? "shadow-[0_2px_8px_rgba(0,0,0,0.24)]"
+                    : ""
+                }`}
+                style={
+                  isBunsMenu
+                    ? {
+                        borderColor: isActive
+                          ? accent
+                          : `${accent}66`,
+                        backgroundColor: isActive
+                          ? accent
+                          : "rgba(255,255,255,0.05)",
+                        color: isActive ? "#111827" : accent,
+                      }
+                    : {
+                        backgroundColor: isActive
+                          ? "#111827"
+                          : "#ffffff",
+                        color: isActive ? "#ffffff" : "#111827",
+                        borderColor: isActive
+                          ? "#111827"
+                          : "rgba(17,24,39,0.16)",
+                      }
+                }
+              >
+                {category.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[260px] items-center justify-center text-sm font-black">
@@ -1294,77 +1371,9 @@ export default function RestaurantMenu({
             />
           ) : null}
 
-          <div
-            ref={categoryBarMeasureRef}
-            className={`${
-              categoryBarFixed
-                ? "fixed inset-x-0 top-0 z-[12500]"
-                : "sticky top-0 z-[70]"
-            } border-b px-3 py-2.5 shadow-sm backdrop-blur-md ${
-              isBunsMenu
-                ? "border-white/10 bg-[#0b0b0b]/95"
-                : "border-black/10"
-            }`}
-            style={{
-              backgroundColor: isBunsMenu
-                ? "rgba(11,11,11,0.96)"
-                : backgroundColor,
-              ...(categoryBarFixed
-                ? {
-                    paddingTop:
-                      "max(10px, env(safe-area-inset-top, 0px))",
-                  }
-                : {}),
-            }}
-          >
-            <div className="mx-auto flex max-w-[760px] gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {visibleCategories.map((category, categoryIndex) => {
-                const accent =
-                  bunsCategoryAccents[
-                    categoryIndex % bunsCategoryAccents.length
-                  ];
-                const isActive =
-                  activeCategoryId === category.id ||
-                  (activeCategoryId == null && categoryIndex === 0);
-
-                return (
-                  <button
-                    key={category.id}
-                    type="button"
-                    onClick={() => scrollToCategory(category.id)}
-                    className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-black uppercase tracking-[0.02em] transition ${
-                      isBunsMenu
-                        ? "shadow-[0_2px_8px_rgba(0,0,0,0.24)]"
-                        : ""
-                    }`}
-                    style={
-                      isBunsMenu
-                        ? {
-                            borderColor: isActive
-                              ? accent
-                              : `${accent}66`,
-                            backgroundColor: isActive
-                              ? accent
-                              : "rgba(255,255,255,0.05)",
-                            color: isActive ? "#111827" : accent,
-                          }
-                        : {
-                            backgroundColor: isActive
-                              ? "#111827"
-                              : "#ffffff",
-                            color: isActive ? "#ffffff" : "#111827",
-                            borderColor: isActive
-                              ? "#111827"
-                              : "rgba(17,24,39,0.16)",
-                          }
-                    }
-                  >
-                    {category.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {categoryBarFixed && typeof document !== "undefined"
+            ? createPortal(renderCategoryBar(true), document.body)
+            : renderCategoryBar(false)}
         </>
       ) : null}
 
