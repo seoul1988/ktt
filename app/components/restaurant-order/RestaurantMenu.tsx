@@ -959,16 +959,6 @@ export default function RestaurantMenu({
 
       if (!sentinel || !root) return;
 
-      const isMobile =
-        window.innerWidth < 768 ||
-        (window.matchMedia("(pointer: coarse)").matches &&
-          Math.min(window.screen.width, window.screen.height) < 800);
-
-      if (!isMobile) {
-        setCategoryBarFixed(false);
-        return;
-      }
-
       const measuredHeight = Math.max(
         48,
         Math.round(measure?.getBoundingClientRect().height || 0),
@@ -978,7 +968,8 @@ export default function RestaurantMenu({
       const sentinelTop = sentinel.getBoundingClientRect().top;
       const rootBottom = root.getBoundingClientRect().bottom;
 
-      // 실제 화면 상단을 지나면 고정합니다.
+      // 화면 크기와 관계없이 카테고리 바가 실제 화면 상단을 지나면 고정합니다.
+      // 모든 레스토랑의 모바일/태블릿/데스크톱 메뉴에 공통 적용됩니다.
       // nested scroll / window scroll 어느 쪽이든 getBoundingClientRect가 갱신됩니다.
       setCategoryBarFixed(
         sentinelTop <= 0 && rootBottom > measuredHeight + 8,
