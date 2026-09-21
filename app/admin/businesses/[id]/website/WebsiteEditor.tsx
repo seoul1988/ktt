@@ -23541,10 +23541,15 @@ function LinkPageEditor({
   const [uploadError, setUploadError] = useState("");
   const [htmlOpen, setHtmlOpen] = useState(true);
   const [htmlModalOpen, setHtmlModalOpen] = useState(false);
+  const normalizedLinkPageSlug = slugifyMenuValue(
+    String(section.content?.page_slug || section.title || ""),
+  );
   const pageKind =
     section.content?.link_page_kind === "restaurant-menu"
       ? "restaurant-menu"
-      : section.content?.link_page_kind === "pdf-menu"
+      : section.content?.link_page_kind === "pdf-menu" ||
+          normalizedLinkPageSlug === "pdf-menu" ||
+          normalizedLinkPageSlug === "pdfmenu"
         ? "pdf-menu"
         : "blank";
   const html = String(section.content?.link_page_html || "");
@@ -27583,10 +27588,21 @@ function RightPanel(props: {
     setTextEditorOpen(false);
   }
 
+  const selectedLinkPageSlug = selectedSection
+    ? slugifyMenuValue(
+        String(selectedSection.content?.page_slug || selectedSection.title || ""),
+      )
+    : "";
+  const isPdfMenuLinkPage =
+    selectedSection?.content?.page_type === "link-page" &&
+    (selectedSection.content?.link_page_kind === "pdf-menu" ||
+      selectedLinkPageSlug === "pdf-menu" ||
+      selectedLinkPageSlug === "pdfmenu");
+
   if (
     selectedSection?.content?.page_type === "link-page" &&
     (selectedSection.content?.link_page_kind === "restaurant-menu" ||
-      selectedSection.content?.link_page_kind === "pdf-menu")
+      isPdfMenuLinkPage)
   ) {
     return (
       <LinkPageEditor
