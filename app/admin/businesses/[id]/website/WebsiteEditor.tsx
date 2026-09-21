@@ -11885,11 +11885,27 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     type="button"
                     onClick={() => {
                       const firstLayout = normalizeHeroLayouts(section.content)[0];
+                      const normalizedPageSlug = slugifyMenuValue(
+                        String(section.content?.page_slug || section.title || ""),
+                      );
+                      const opensDedicatedLinkPageEditor =
+                        section.content?.link_page_kind === "restaurant-menu" ||
+                        section.content?.link_page_kind === "pdf-menu" ||
+                        normalizedPageSlug === "pdf-menu" ||
+                        normalizedPageSlug === "pdfmenu";
+
+                      // Restaurant/PDF Menu는 셀 편집기가 아니라 LinkPageEditor를 엽니다.
+                      // 첫 셀을 함께 선택하면 전역 Cell Editor 포털이 LinkPageEditor 위를 덮기 때문에
+                      // 전용 페이지에서는 cellId를 선택하지 않습니다.
+                      setCellEditModalOpen(false);
+                      setCellEditPanelCollapsed(false);
                       setSelection({
                         area: "hero",
                         sectionId: section.id,
                         layoutId: firstLayout?.id,
-                        cellId: firstLayout?.cells[0]?.id,
+                        ...(opensDedicatedLinkPageEditor
+                          ? {}
+                          : { cellId: firstLayout?.cells[0]?.id }),
                       });
                     }}
                     className="w-full px-3 pb-2 pt-3 text-left"
