@@ -14698,7 +14698,7 @@ function CurrentWebsitePreview({
                 return (
                   <Fragment key={section.id}>
                     <div
-                      id={isCollapsible ? `${sectionSlug}-wrapper` : undefined}
+                      id={isCollapsible ? `${sectionSlug}-wrapper` : sectionSlug}
                       className={getSectionWidthClass(section)}
                       style={{
                         ...getSectionWidthStyle(section),
@@ -15884,7 +15884,7 @@ export function PublicWebsiteRenderer({
           return (
             <div
               key={section.id}
-              id={isCollapsible ? `${sectionSlug}-wrapper` : undefined}
+              id={isCollapsible ? `${sectionSlug}-wrapper` : sectionSlug}
               data-full-width-layer={
                 getSectionWidthMode(section) === "full" ? "true" : undefined
               }
