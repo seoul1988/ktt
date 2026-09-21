@@ -27585,7 +27585,8 @@ function RightPanel(props: {
 
   if (
     selectedSection?.content?.page_type === "link-page" &&
-    selectedSection.content?.link_page_kind === "restaurant-menu"
+    (selectedSection.content?.link_page_kind === "restaurant-menu" ||
+      selectedSection.content?.link_page_kind === "pdf-menu")
   ) {
     return (
       <LinkPageEditor
