@@ -15476,24 +15476,13 @@ export function PublicWebsiteRenderer({
         );
       });
 
-      if (matchingSection?.content?.popup_only === true) {
+      /*
+       * 왼쪽 영업시간 버튼의 hash 링크는 레이어의 표시 방식과 관계없이
+       * 항상 팝업으로 엽니다. 따라서 본문에 노출된 Business Hours도
+       * 숨김(팝업식) 레이어와 동일하게 버튼 클릭 시 모달로 표시됩니다.
+       */
+      if (matchingSection) {
         setPopupLayerId(matchingSection.id);
-        return;
-      }
-
-      if (matchingSection?.content?.collapsible === true) {
-        setOpenedLayerIds([matchingSection.id]);
-
-        window.setTimeout(() => {
-          const targetElement =
-            document.getElementById(layerSlug) ||
-            document.getElementById(`${layerSlug}-wrapper`);
-
-          targetElement?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 80);
         return;
       }
 
@@ -15575,8 +15564,8 @@ export function PublicWebsiteRenderer({
   }
 
   /*
-   * 팝업식 레이어는 현재 보고 있는 pageSections 안에서만 찾으면 안 됩니다.
-   * Catering/Menu 같은 별도 link-page를 보고 있을 때도 Home에 만든 팝업식
+   * 왼쪽 영업시간 버튼은 숨김 여부와 관계없이 레이어를 모달로 엽니다.
+   * Catering/Menu 같은 별도 link-page를 보고 있을 때도 Home에 만든
    * Business Hours 레이어를 열 수 있도록 전체 sections에서 찾습니다.
    */
   const popupLayerSection =
@@ -15586,8 +15575,7 @@ export function PublicWebsiteRenderer({
           (section) =>
             section.id === popupLayerId &&
             section.is_visible !== false &&
-            section.content?.page_type !== "link-page" &&
-            section.content?.popup_only === true,
+            section.content?.page_type !== "link-page",
         ) ?? null;
 
   const headerGrid = normalizeGrid(
