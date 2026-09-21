@@ -466,7 +466,7 @@ type SectionContent = {
   layouts?: GridData[];
   page_type?: "home-section" | "link-page";
   page_slug?: string;
-  link_page_kind?: "blank" | "restaurant-menu";
+  link_page_kind?: "blank" | "restaurant-menu" | "pdf-menu";
   restaurant_menu_background_color?: string;
   restaurant_menu_text_color?: string;
 
@@ -7147,7 +7147,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
   >("container");
   const [linkPageOpen, setLinkPageOpen] = useState(false);
   const [newLinkPageName, setNewLinkPageName] = useState("");
-  const [newLinkPageKind, setNewLinkPageKind] = useState<"blank" | "restaurant-menu">("blank");
+  const [newLinkPageKind, setNewLinkPageKind] = useState<"blank" | "restaurant-menu" | "pdf-menu">("blank");
   const draftReadyRef = useRef(false);
   const suppressNextAutoSaveRef = useRef(false);
 
@@ -13132,7 +13132,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   새 페이지 만들기
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-gray-500">
-                  일반 페이지는 공용 헤더와 메뉴를 유지하고 본문만 기존 레이어 에디터로 작성합니다. Restaurant Menu는 DB 메뉴를 자동 표시합니다.
+                  일반 페이지는 자유 편집, PDF Menu는 PDF 업로드·플립북 표시, Restaurant Menu는 DB 메뉴를 자동 표시합니다.
                 </p>
               </div>
               <button
@@ -13146,7 +13146,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
 
             <div className="mt-6">
               <p className="text-sm font-black text-gray-800">페이지 종류</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setNewLinkPageKind("blank")}
@@ -13159,6 +13159,22 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   <span className="block text-lg">📄</span>
                   <span className="mt-1 block text-sm font-black text-gray-950">일반 페이지</span>
                   <span className="mt-1 block text-[11px] leading-4 text-gray-500">공용 헤더·메뉴 아래 본문을 레이어 에디터로 작성</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewLinkPageKind("pdf-menu");
+                    if (!newLinkPageName.trim()) setNewLinkPageName("PDF Menu");
+                  }}
+                  className={`rounded-2xl border px-3 py-4 text-left transition ${
+                    newLinkPageKind === "pdf-menu"
+                      ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
+                      : "border-gray-200 bg-white hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="block text-lg">📕</span>
+                  <span className="mt-1 block text-sm font-black text-gray-950">PDF Menu</span>
+                  <span className="mt-1 block text-[11px] leading-4 text-gray-500">PDF 최대 2개 · 플립북/스크롤 · 설명 추가</span>
                 </button>
                 <button
                   type="button"
@@ -13203,7 +13219,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               onClick={addLinkPage}
               className="mt-5 w-full rounded-2xl bg-violet-600 px-5 py-3 font-black text-white disabled:opacity-40"
             >
-              {newLinkPageKind === "restaurant-menu" ? "메뉴 페이지 만들기" : "일반 페이지 만들기"}
+              {newLinkPageKind === "restaurant-menu" ? "메뉴 페이지 만들기" : newLinkPageKind === "pdf-menu" ? "PDF 메뉴 페이지 만들기" : "일반 페이지 만들기"}
             </button>
           </div>
         </div>
@@ -23525,7 +23541,12 @@ function LinkPageEditor({
   const [uploadError, setUploadError] = useState("");
   const [htmlOpen, setHtmlOpen] = useState(true);
   const [htmlModalOpen, setHtmlModalOpen] = useState(false);
-  const pageKind = section.content?.link_page_kind === "restaurant-menu" ? "restaurant-menu" : "blank";
+  const pageKind =
+    section.content?.link_page_kind === "restaurant-menu"
+      ? "restaurant-menu"
+      : section.content?.link_page_kind === "pdf-menu"
+        ? "pdf-menu"
+        : "blank";
   const html = String(section.content?.link_page_html || "");
   const images = Array.isArray(section.content?.link_page_images)
     ? section.content.link_page_images.filter((item) => item && item.url).slice(0, 8)
@@ -23762,13 +23783,15 @@ function LinkPageEditor({
     onUpdate({ link_page_images: next });
   }
 
-  function changePageKind(nextKind: "blank" | "restaurant-menu") {
+  function changePageKind(nextKind: "blank" | "restaurant-menu" | "pdf-menu") {
     if (nextKind === pageKind) return;
 
     const message =
       nextKind === "restaurant-menu"
         ? "이 페이지에 Restaurant Menu를 표시할까요?\n\n기존 HTML, 사진, PDF 데이터는 삭제하지 않고 보관됩니다."
-        : "Restaurant Menu를 이 페이지에서 제거하고 일반 페이지 편집으로 바꿀까요?\n\n가져온 메뉴 DB 데이터는 삭제되지 않습니다.";
+        : nextKind === "pdf-menu"
+          ? "이 페이지를 PDF Menu 페이지로 사용할까요?\n\n기존 HTML, 사진, Restaurant Menu 데이터는 삭제하지 않고 보관됩니다."
+          : "이 페이지를 일반 페이지 편집으로 바꿀까요?\n\n기존 PDF와 메뉴 DB 데이터는 삭제되지 않습니다.";
 
     if (!window.confirm(message)) return;
 
@@ -23794,7 +23817,7 @@ function LinkPageEditor({
       <p className="mt-1 text-xs font-semibold leading-5 text-gray-600">
         페이지를 만든 뒤에도 언제든 추가하거나 제거하고 다른 형식으로 바꿀 수 있습니다.
       </p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => changePageKind("blank")}
@@ -23808,6 +23831,21 @@ function LinkPageEditor({
           <span className="mt-1 block text-xs font-black">일반 페이지</span>
           <span className={`mt-1 block text-[10px] font-semibold leading-4 ${pageKind === "blank" ? "text-white/75" : "text-gray-500"}`}>
             HTML · 사진 · PDF
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => changePageKind("pdf-menu")}
+          className={`rounded-xl border px-3 py-3 text-left transition ${
+            pageKind === "pdf-menu"
+              ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+              : "border-gray-200 bg-white text-gray-900 hover:border-blue-300"
+          }`}
+        >
+          <span className="block text-lg">📕</span>
+          <span className="mt-1 block text-xs font-black">PDF Menu</span>
+          <span className={`mt-1 block text-[10px] font-semibold leading-4 ${pageKind === "pdf-menu" ? "text-white/80" : "text-gray-500"}`}>
+            PDF 업로드 · 플립북 · 원본 열기
           </span>
         </button>
         <button
@@ -24067,6 +24105,15 @@ function LinkPageEditor({
       <p className="mt-2 text-xs leading-5 text-gray-500">HTML 모달에서 바탕색, 셀 나누기, 이미지 삽입을 사용할 수 있습니다. 사진과 PDF 기능도 그대로 유지됩니다.</p>
 
       {pageTypeSelector}
+
+        {pageKind === "pdf-menu" ? (
+          <div className="mt-4 rounded-2xl border-2 border-blue-300 bg-blue-50 p-4">
+            <p className="text-sm font-black text-blue-950">📕 PDF MENU</p>
+            <p className="mt-1 text-xs font-semibold leading-5 text-blue-800">
+              아래 PDF 추가에서 메뉴 PDF를 올리세요. 기존 PDF 기능을 그대로 사용하며 새 DB 테이블은 만들지 않습니다.
+            </p>
+          </div>
+        ) : null}
 
       <div className="mt-5 rounded-2xl border border-gray-200 p-4">
         <button type="button" onClick={() => setHtmlOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 text-left">
