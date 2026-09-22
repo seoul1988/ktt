@@ -201,10 +201,6 @@ export default function RestaurantMenu({
   compact = false,
   backgroundColor = "#ffffff",
   textColor = "#111827",
-  scrollTopEnabled = true,
-  scrollTopButtonColor = "#111827",
-  scrollTopIconColor = "#ffffff",
-  scrollTopPosition = "right",
   orderEnabled = false,
   menuEnabled = true,
   pickupEnabled = false,
@@ -907,8 +903,14 @@ export default function RestaurantMenu({
       setShowScrollTop(currentScroll >= 1500);
 
       setScrollTopButtonStyle({
-        bottom: compact ? 82 : 28,
-        [scrollTopPosition]: compact ? 14 : 28,
+        // 모바일 하단 ORDER/CART 영역과 충분히 떨어뜨립니다.
+        // 데스크톱 자체 Cart 버튼이 있으면 그 위에 표시합니다.
+        bottom: compact
+          ? 148
+          : orderingAvailable && !externalCartButton
+            ? 100
+            : 28,
+        right: compact ? 16 : 28,
       });
     }
 
@@ -934,7 +936,7 @@ export default function RestaurantMenu({
       window.removeEventListener("resize", update);
       observer?.disconnect();
     };
-  }, [compact, scrollTopPosition, data.items.length]);
+  }, [compact, orderingAvailable, externalCartButton, data.items.length]);
 
   const visibleCategories = data.categories.filter((category) =>
     data.items.some(
@@ -1928,10 +1930,10 @@ export default function RestaurantMenu({
               }`}
               style={{
                 ...scrollTopButtonStyle,
-                backgroundColor:
-                  scrollTopButtonColor,
-                borderColor: `${scrollTopIconColor}55`,
-                color: scrollTopIconColor,
+                // 모든 레스토랑 메뉴에서 같은 빨간색 버튼을 사용합니다.
+                backgroundColor: "#dc2626",
+                borderColor: "#ffffff55",
+                color: "#ffffff",
               }}
             >
               ↑
