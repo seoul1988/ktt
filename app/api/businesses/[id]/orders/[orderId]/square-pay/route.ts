@@ -239,12 +239,28 @@ export async function POST(
     }
 
     if (!squareResponse.ok) {
+      const errorDetail = squareErrorDetail(
+        squarePayload,
+        `Square payment failed (HTTP ${squareResponse.status}).`,
+      );
+
+      const { error: failedSaveError } = await db
+        .from("restaurant_orders")
+        .update({
+          payment_status: "failed",
+        })
+        .eq("id", ktownOrderId)
+        .eq("business_id", businessId)
+        .eq("payment_status", "pending");
+
+      if (failedSaveError) {
+        console.error("SQUARE PAYMENT FAILED STATUS SAVE ERROR", failedSaveError);
+      }
+
       return NextResponse.json(
         {
-          error: squareErrorDetail(
-            squarePayload,
-            `Square payment failed (HTTP ${squareResponse.status}).`,
-          ),
+          error: errorDetail,
+          paymentStatus: "failed",
         },
         { status: 400 },
       );
@@ -265,10 +281,37 @@ export async function POST(
     }
 
     if (status !== "COMPLETED") {
+      const normalizedStatus = status.toUpperCase();
+      const ktownPaymentStatus =
+        normalizedStatus === "CANCELED"
+          ? "cancelled"
+          : normalizedStatus === "FAILED"
+            ? "failed"
+            : normalizedStatus === "APPROVED"
+              ? "approved"
+              : normalizedStatus === "PENDING"
+                ? "pending"
+                : "pending";
+
+      const { error: statusSaveError } = await db
+        .from("restaurant_orders")
+        .update({
+          payment_status: ktownPaymentStatus,
+          square_payment_id: paymentId,
+        })
+        .eq("id", ktownOrderId)
+        .eq("business_id", businessId);
+
+      if (statusSaveError) {
+        console.error("SQUARE NON-COMPLETED STATUS SAVE ERROR", statusSaveError);
+      }
+
       return NextResponse.json(
         {
           error: `Payment is ${status || "not completed"}.`,
-          paymentStatus: status,
+          paymentStatus: ktownPaymentStatus,
+          squarePaymentStatus: status || "UNKNOWN",
+          paymentId,
         },
         { status: 400 },
       );

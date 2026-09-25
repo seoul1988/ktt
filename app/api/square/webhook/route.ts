@@ -100,19 +100,13 @@ export async function POST(request: Request) {
     });
   }
 
-  if (payment.status !== "COMPLETED") {
-    return NextResponse.json({
-      ok: true,
-      ignored: true,
-      paymentStatus: payment.status || "UNKNOWN",
-    });
-  }
+  const squareStatus = String(payment.status || "").toUpperCase();
 
   const db = getOrderAdmin();
 
   const { data: matchedOrder, error: findError } = await db
     .from("restaurant_orders")
-    .select("id,business_id,order_number,payment_status")
+    .select("id,business_id,order_number,payment_status,square_payment_id")
     .eq("square_order_id", String(payment.order_id))
     .maybeSingle();
 
@@ -132,41 +126,128 @@ export async function POST(request: Request) {
     });
   }
 
-  if (matchedOrder.payment_status === "paid") {
+  // A real completed Square payment is the only webhook state that marks
+  // the KTown order as paid.
+  if (squareStatus === "COMPLETED") {
+    if (
+      matchedOrder.payment_status === "paid" &&
+      matchedOrder.square_payment_id === String(payment.id)
+    ) {
+      return NextResponse.json({
+        ok: true,
+        alreadyPaid: true,
+        orderId: matchedOrder.id,
+      });
+    }
+
+    const { error: updateError } = await db
+      .from("restaurant_orders")
+      .update({
+        payment_status: "paid",
+        square_payment_id: String(payment.id),
+      })
+      .eq("id", matchedOrder.id);
+
+    if (updateError) {
+      console.error("SQUARE WEBHOOK UPDATE ERROR", updateError);
+      return NextResponse.json(
+        { error: updateError.message },
+        { status: 500 },
+      );
+    }
+
+    console.log(
+      "SQUARE PAYMENT COMPLETED",
+      matchedOrder.id,
+      matchedOrder.order_number,
+      payment.id,
+    );
+
     return NextResponse.json({
       ok: true,
-      alreadyPaid: true,
+      paid: true,
       orderId: matchedOrder.id,
+      orderNumber: matchedOrder.order_number,
     });
   }
 
-  const { error: updateError } = await db
+  // Do not call any of these states "refunded".
+  // A refund is handled separately by Square's Refunds API.
+  const ktownPaymentStatus =
+    squareStatus === "CANCELED"
+      ? "cancelled"
+      : squareStatus === "FAILED"
+        ? "failed"
+        : squareStatus === "APPROVED"
+          ? "approved"
+          : squareStatus === "PENDING"
+            ? "pending"
+            : null;
+
+  if (!ktownPaymentStatus) {
+    console.log(
+      "SQUARE WEBHOOK UNKNOWN PAYMENT STATUS",
+      matchedOrder.id,
+      matchedOrder.order_number,
+      squareStatus || "UNKNOWN",
+      payment.id,
+    );
+
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      paymentStatus: squareStatus || "UNKNOWN",
+    });
+  }
+
+  // Never overwrite a completed/refunded KTown payment with a later
+  // non-completed event.
+  if (
+    matchedOrder.payment_status === "paid" ||
+    matchedOrder.payment_status === "refunded" ||
+    matchedOrder.payment_status === "refund_pending"
+  ) {
+    return NextResponse.json({
+      ok: true,
+      ignored: true,
+      reason: "KTown order already has a completed/refund payment state.",
+      paymentStatus: matchedOrder.payment_status,
+    });
+  }
+
+  const { error: statusUpdateError } = await db
     .from("restaurant_orders")
     .update({
-      payment_status: "paid",
+      payment_status: ktownPaymentStatus,
       square_payment_id: String(payment.id),
     })
     .eq("id", matchedOrder.id);
 
-  if (updateError) {
-    console.error("SQUARE WEBHOOK UPDATE ERROR", updateError);
+  if (statusUpdateError) {
+    console.error(
+      "SQUARE WEBHOOK NON-COMPLETED STATUS UPDATE ERROR",
+      statusUpdateError,
+    );
     return NextResponse.json(
-      { error: updateError.message },
+      { error: statusUpdateError.message },
       { status: 500 },
     );
   }
 
   console.log(
-    "SQUARE PAYMENT COMPLETED",
+    "SQUARE PAYMENT STATUS",
     matchedOrder.id,
     matchedOrder.order_number,
+    squareStatus,
     payment.id,
   );
 
   return NextResponse.json({
     ok: true,
-    paid: true,
+    paid: false,
     orderId: matchedOrder.id,
     orderNumber: matchedOrder.order_number,
+    paymentStatus: ktownPaymentStatus,
+    squarePaymentStatus: squareStatus,
   });
 }
