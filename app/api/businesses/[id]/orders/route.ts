@@ -509,11 +509,21 @@ export async function POST(
       ? body.promotionRewards
       : [];
 
-    if (!customerName || !customerPhone) {
+    // Pickup: name is required, phone is optional.
+    // Delivery: both name and phone are required.
+    if (!customerName) {
       return NextResponse.json(
         {
-          error:
-            "Name and phone number are required.",
+          error: "Name is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (fulfillmentType === "delivery" && !customerPhone) {
+      return NextResponse.json(
+        {
+          error: "Phone number is required for delivery.",
         },
         { status: 400 },
       );
@@ -638,10 +648,10 @@ export async function POST(
       privateSettings?.stripe_secret_key || "";
 
     const squareAccessToken =
-      privateSettings?.square_access_token || "";
+      String(privateSettings?.square_access_token || "").trim();
 
     const squareLocationId =
-      privateSettings?.square_location_id || "";
+      String(privateSettings?.square_location_id || "").trim();
 
     if (paymentMethod === "online") {
       if (
@@ -1744,7 +1754,9 @@ export async function POST(
                       )}M`,
                       recipient: {
                         display_name: customerName,
-                        phone_number: customerPhone,
+                        ...(customerPhone
+                          ? { phone_number: customerPhone }
+                          : {}),
                         ...(customerEmail
                           ? { email_address: customerEmail }
                           : {}),
@@ -1803,21 +1815,41 @@ export async function POST(
         }
 
         if (!squareOrderResponse.ok) {
-          const detail =
-            Array.isArray(squareOrderPayload?.errors) &&
-            squareOrderPayload.errors.length
-              ? squareOrderPayload.errors
-                  .map(
-                    (item: any) =>
-                      item?.detail ||
-                      item?.code ||
-                      "Square order error",
-                  )
-                  .join(" / ")
-              : `HTTP ${squareOrderResponse.status}`;
+          const squareErrors = Array.isArray(squareOrderPayload?.errors)
+            ? squareOrderPayload.errors
+            : [];
+
+          const detail = squareErrors.length
+            ? squareErrors
+                .map((item: any) => {
+                  const parts = [
+                    item?.detail,
+                    item?.code ? `code=${item.code}` : "",
+                    item?.category ? `category=${item.category}` : "",
+                  ].filter(Boolean);
+
+                  return parts.join(" · ") || "Square order error";
+                })
+                .join(" / ")
+            : "Square order error";
+
+          // Never log the access token. Status/code/category are enough to
+          // distinguish an invalid/expired token from a request-body problem.
+          console.error("SQUARE CREATE ORDER ERROR", {
+            httpStatus: squareOrderResponse.status,
+            businessId,
+            locationId: squareLocationId,
+            errors: squareErrors,
+          });
+
+          const authHint =
+            squareOrderResponse.status === 401 ||
+            squareOrderResponse.status === 403
+              ? " Square authorization failed. Verify that this restaurant's saved Square access token is an active PRODUCTION token and belongs to the same Square account/location."
+              : "";
 
           throw new Error(
-            `Square order could not be created: ${detail}`,
+            `Square order could not be created (HTTP ${squareOrderResponse.status}): ${detail}.${authHint}`,
           );
         }
 
