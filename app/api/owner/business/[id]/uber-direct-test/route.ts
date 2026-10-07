@@ -170,7 +170,7 @@ export async function POST(
       );
     }
 
-    if (order.payment_status !== "paid") {
+   if (action === "dispatch" && order.payment_status !== "paid") {
       return NextResponse.json(
         {
           ok: false,
