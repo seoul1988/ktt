@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import {
   getOrderAdmin,
@@ -85,12 +85,6 @@ export async function POST(
     const verificationToken = String(
       body?.verificationToken || "",
     ).trim();
-    const attemptId = String(
-      body?.attemptId || randomUUID(),
-    )
-      .replace(/[^a-zA-Z0-9_-]/g, "")
-      .slice(0, 80);
-
     if (!sourceId) {
       return NextResponse.json(
         { error: "Payment token is required." },
@@ -203,8 +197,10 @@ export async function POST(
         },
         body: JSON.stringify({
           source_id: sourceId,
-          idempotency_key:
-            `kt-${attemptId || randomUUID()}`.slice(0, 45),
+          // One KTown order must map to exactly one Square payment intent.
+          // Never accept a browser-generated random key here: two nearly
+          // simultaneous requests would otherwise look like two payments.
+          idempotency_key: `kt-pay-${businessId}-${ktownOrderId}`.slice(0, 45),
           amount_money: {
             amount: amountCents,
             currency: "USD",
@@ -328,11 +324,13 @@ export async function POST(
     const rawTrackingToken = randomBytes(32).toString("base64url");
     const trackingTokenHash = tokenHash(rawTrackingToken);
 
-    const { error: updateError } = await db
+    const { data: paidClaim, error: updateError } = await db
       .from("restaurant_orders")
       .update({
         payment_status: "paid",
-        payment_method: "online",
+        // Store the actual tender type in both fields. Do not persist the
+        // generic value "online" for new Square payments.
+        payment_method: paymentMethodType,
         payment_method_type: paymentMethodType,
         square_payment_id: paymentId,
         paid_at: paidAt.toISOString(),
@@ -342,10 +340,47 @@ export async function POST(
         tracking_expires_at: trackingExpiresAt.toISOString(),
       })
       .eq("id", ktownOrderId)
-      .eq("business_id", businessId);
+      .eq("business_id", businessId)
+      .neq("payment_status", "paid")
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       throw updateError;
+    }
+
+    // A concurrent retry can receive the same COMPLETED Square payment because
+    // the idempotency key is fixed. Only the request that first changes the DB
+    // row to paid may create tracking/cancel tokens, dispatch delivery, or SMS.
+    if (!paidClaim) {
+      const { data: latestOrder, error: latestOrderError } = await db
+        .from("restaurant_orders")
+        .select("payment_status,square_payment_id,order_number")
+        .eq("id", ktownOrderId)
+        .eq("business_id", businessId)
+        .single();
+
+      if (latestOrderError) {
+        throw latestOrderError;
+      }
+
+      if (
+        latestOrder?.payment_status === "paid" &&
+        latestOrder?.square_payment_id
+      ) {
+        return NextResponse.json({
+          ok: true,
+          alreadyPaid: true,
+          paymentStatus: "paid",
+          paymentId: latestOrder.square_payment_id,
+          orderNumber: latestOrder.order_number,
+        });
+      }
+
+      return NextResponse.json(
+        { error: "Payment state changed. Please refresh the order before retrying." },
+        { status: 409 },
+      );
     }
 
     // PRODUCTION DELIVERY:

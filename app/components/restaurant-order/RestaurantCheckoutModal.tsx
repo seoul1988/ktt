@@ -286,6 +286,11 @@ export default function RestaurantCheckoutModal({
   const squareGoogleRef = useRef<any>(null);
   const squareAppleRef = useRef<any>(null);
 
+  // Synchronous locks: React state updates are asynchronous, so these refs
+  // close the tiny window where a rapid second click could enter again.
+  const orderSubmitLockRef = useRef(false);
+  const squarePaymentLockRef = useRef(false);
+
   const address1Ref = useRef<HTMLInputElement>(null);
   const address2Ref = useRef<HTMLInputElement>(null);
   const cityRef = useRef<HTMLInputElement>(null);
@@ -608,8 +613,10 @@ export default function RestaurantCheckoutModal({
   async function finishSquarePayment(
     method: "card" | "google" | "apple",
   ) {
-    if (!squarePrepared || squarePaying) return;
+    if (!squarePrepared || squarePaying || squarePaymentLockRef.current) return;
 
+    // Lock immediately, before React has a chance to re-render.
+    squarePaymentLockRef.current = true;
     setSquarePaying(true);
     setError("");
 
@@ -672,11 +679,6 @@ export default function RestaurantCheckoutModal({
         verificationToken = String(verification?.token || "");
       }
 
-      const attemptId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
       const response = await fetch(
         `/api/businesses/${businessId}/orders/${squarePrepared.orderId}/square-pay`,
         {
@@ -685,8 +687,9 @@ export default function RestaurantCheckoutModal({
           body: JSON.stringify({
             sourceId: tokenResult.token,
             verificationToken,
-            attemptId,
 
+            // The server owns the Square idempotency key. The browser never
+            // creates a new payment key for the same KTown order.
             // 실제로 고객이 사용한 결제수단을 서버에 전달합니다.
             // DB 저장은 Square가 COMPLETED를 반환한 뒤 서버에서만 수행합니다.
             paymentMethodType:
@@ -723,6 +726,7 @@ export default function RestaurantCheckoutModal({
           : "Payment could not be completed.",
       );
     } finally {
+      squarePaymentLockRef.current = false;
       setSquarePaying(false);
     }
   }
@@ -877,9 +881,12 @@ export default function RestaurantCheckoutModal({
   }
 
   async function submitOrder() {
+    if (submitting || orderSubmitLockRef.current) return;
+
+    orderSubmitLockRef.current = true;
     setError("");
-    if (!name.trim()) return setError("Please enter your name.");
-    if (!phone.trim()) return setError("Please enter your phone number.");
+    if (!name.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your name."); }
+    if (!phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number."); }
     const submitAddress1 =
       (address1Ref.current?.value || address1 || "").trim();
     const submitAddress2 =
@@ -900,6 +907,7 @@ export default function RestaurantCheckoutModal({
       ].filter(Boolean);
 
       if (missingSubmitFields.length) {
+        orderSubmitLockRef.current = false;
         return setError(
           `Missing delivery address field(s): ${missingSubmitFields.join(", ")}.`,
         );
@@ -918,10 +926,14 @@ export default function RestaurantCheckoutModal({
         settings?.deliveryDispatchEnabled &&
         !deliveryQuoteId
       ) {
+        orderSubmitLockRef.current = false;
         return setError("Please calculate the delivery fee before paying.");
       }
     }
-    if (pickupTime === "custom" && !customDate) return setError("Please select a date.");
+    if (pickupTime === "custom" && !customDate) {
+      orderSubmitLockRef.current = false;
+      return setError("Please select a date.");
+    }
     if (pickupTime === "custom") {
       let hour = Number(customHour);
       if (customPeriod === "AM" && hour === 12) hour = 0;
@@ -1012,6 +1024,7 @@ export default function RestaurantCheckoutModal({
     } catch (e) {
       setError(e instanceof Error ? e.message : "주문을 완료하지 못했습니다.");
     } finally {
+      orderSubmitLockRef.current = false;
       setSubmitting(false);
     }
   }
@@ -1021,7 +1034,9 @@ export default function RestaurantCheckoutModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
-      onClick={onClose}
+      onClick={() => {
+        if (!submitting && !squarePaying) onClose();
+      }}
     >
       <div
         className="max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl"
@@ -1029,7 +1044,16 @@ export default function RestaurantCheckoutModal({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
-          <button type="button" onClick={onClose} className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black">×</button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!submitting && !squarePaying) onClose();
+            }}
+            disabled={submitting || squarePaying}
+            className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ×
+          </button>
         </div>
 
         <div className="space-y-5 p-5">
@@ -1212,6 +1236,12 @@ export default function RestaurantCheckoutModal({
                   <p className="mt-3 text-[10px] text-gray-500">
                     Payment is securely processed by Square. KTown does not store card numbers.
                   </p>
+
+                  {squarePaying ? (
+                    <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-center text-xs font-black text-amber-800">
+                      PROCESSING PAYMENT… PLEASE DO NOT CLOSE OR TAP AGAIN.
+                    </div>
+                  ) : null}
                 </section>
               </>
             ) : (
