@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getValidSquareAccessToken } from "@/lib/square/oauth";
 import {
   getOrderAdmin,
   cleanPhone,
@@ -582,7 +583,7 @@ export async function POST(
           "restaurant_order_private_settings",
         )
         .select(
-          "payment_provider,stripe_secret_key,square_access_token,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number,delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,delivery_fee_markup_cents,pickup_phone_override",
+          "payment_provider,stripe_secret_key,square_access_token,square_refresh_token,square_token_expires_at,square_location_id,twilio_account_sid,twilio_auth_token,twilio_phone_number,delivery_provider,uber_direct_enabled,uber_direct_client_id,uber_direct_client_secret,uber_direct_customer_id,delivery_fee_markup_cents,pickup_phone_override",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -647,8 +648,24 @@ export async function POST(
     const stripeSecretKey =
       privateSettings?.stripe_secret_key || "";
 
-    const squareAccessToken =
-      String(privateSettings?.square_access_token || "").trim();
+    let squareAccessToken =
+      String(
+        privateSettings?.square_access_token || "",
+      ).trim();
+
+    if (
+      paymentProvider === "square" &&
+      privateSettings
+    ) {
+      squareAccessToken =
+        await getValidSquareAccessToken({
+          db,
+          businessId,
+          settings: privateSettings,
+        });
+    }
+
+
 
     const squareLocationId =
       String(privateSettings?.square_location_id || "").trim();

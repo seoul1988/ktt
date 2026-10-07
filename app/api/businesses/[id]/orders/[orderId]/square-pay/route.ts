@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+import { getValidSquareAccessToken } from "@/lib/square/oauth";
 import {
   getOrderAdmin,
   moneyCents,
@@ -111,7 +112,7 @@ export async function POST(
       db
         .from("restaurant_order_private_settings")
         .select(
-          "payment_provider,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id",
+          "payment_provider,square_access_token,square_refresh_token,square_token_expires_at,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -175,6 +176,15 @@ export async function POST(
       });
     }
 
+    const squareAccessToken =
+      await getValidSquareAccessToken({
+        db,
+        businessId,
+        settings: privateSettings,
+      });
+
+
+
     const amountCents = moneyCents(
       Number(order.total || 0),
     );
@@ -191,7 +201,7 @@ export async function POST(
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${privateSettings.square_access_token}`,
+          Authorization: `Bearer ${squareAccessToken}`,
           "Content-Type": "application/json",
           "Square-Version": "2026-08-19",
         },
