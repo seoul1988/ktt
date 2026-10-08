@@ -46,7 +46,16 @@ function paymentLabel(order: any) {
   if (type === "pay_at_store") return "Pay at Store";
 
   const method = String(order.payment_method || "").toLowerCase();
-  if (method === "online") return "Payment Pending";
+  if (method === "online") {
+  if (
+    String(order.payment_status || "").toLowerCase() === "paid" &&
+    String(order.square_payment_id || "").trim()
+  ) {
+    return "Paid";
+  }
+
+  return "Payment Pending";
+}
   if (method === "card") return "Card";
   if (method === "cash") return "Cash";
 

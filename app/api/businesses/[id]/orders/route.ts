@@ -509,11 +509,19 @@ export async function POST(
       ? body.promotionRewards
       : [];
 
-    if (!customerName || !customerPhone) {
+    if (!customerName) {
       return NextResponse.json(
         {
-          error:
-            "Name and phone number are required.",
+          error: "Name is required.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (fulfillmentType === "delivery" && !customerPhone) {
+      return NextResponse.json(
+        {
+          error: "Phone number is required for delivery.",
         },
         { status: 400 },
       );

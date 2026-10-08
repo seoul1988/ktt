@@ -285,6 +285,7 @@ export default function RestaurantCheckoutModal({
   const squareCardRef = useRef<any>(null);
   const squareGoogleRef = useRef<any>(null);
   const squareAppleRef = useRef<any>(null);
+  const orderSubmitLockRef = useRef(false);
 
   const address1Ref = useRef<HTMLInputElement>(null);
   const address2Ref = useRef<HTMLInputElement>(null);
@@ -672,11 +673,6 @@ export default function RestaurantCheckoutModal({
         verificationToken = String(verification?.token || "");
       }
 
-      const attemptId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
       const response = await fetch(
         `/api/businesses/${businessId}/orders/${squarePrepared.orderId}/square-pay`,
         {
@@ -685,7 +681,6 @@ export default function RestaurantCheckoutModal({
           body: JSON.stringify({
             sourceId: tokenResult.token,
             verificationToken,
-            attemptId,
 
             // 실제로 고객이 사용한 결제수단을 서버에 전달합니다.
             // DB 저장은 Square가 COMPLETED를 반환한 뒤 서버에서만 수행합니다.
@@ -879,7 +874,9 @@ export default function RestaurantCheckoutModal({
   async function submitOrder() {
     setError("");
     if (!name.trim()) return setError("Please enter your name.");
-    if (!phone.trim()) return setError("Please enter your phone number.");
+    if (fulfillmentType === "delivery" && !phone.trim()) {
+      return setError("Please enter your phone number for delivery.");
+    }
     const submitAddress1 =
       (address1Ref.current?.value || address1 || "").trim();
     const submitAddress2 =
@@ -930,7 +927,10 @@ export default function RestaurantCheckoutModal({
       setCustomTime(nextCustomTime);
     }
 
+    if (orderSubmitLockRef.current) return;
+    orderSubmitLockRef.current = true;
     setSubmitting(true);
+
     try {
       window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim() }));
       const response = await fetch(`/api/businesses/${businessId}/orders`, {
@@ -1012,6 +1012,7 @@ export default function RestaurantCheckoutModal({
     } catch (e) {
       setError(e instanceof Error ? e.message : "주문을 완료하지 못했습니다.");
     } finally {
+      orderSubmitLockRef.current = false;
       setSubmitting(false);
     }
   }
@@ -1220,7 +1221,7 @@ export default function RestaurantCheckoutModal({
               <h3 className="font-black">Customer Information</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone *" inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={fulfillmentType === "delivery" ? "Phone *" : "Phone (optional)"} inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
 
               {settings.smsEnabled ? (
