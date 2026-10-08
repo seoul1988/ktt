@@ -217,6 +217,10 @@ function hidePaymentBlockingScreenNow() {
   document.getElementById("ktown-payment-processing-overlay")?.remove();
 }
 
+function primePaymentBlockingScreen() {
+  showPaymentBlockingScreenNow();
+}
+
 function deliveryPolicyRangeLabel(
   rules: DeliveryFeeShareRule[],
   index: number,
@@ -1180,6 +1184,11 @@ export default function RestaurantCheckoutModal({
                           id="ktown-apple-pay-button"
                           type="button"
                           aria-label="Pay with Apple Pay"
+                          onPointerDown={() => {
+                            if (squareAppleReady && !squarePaying) {
+                              primePaymentBlockingScreen();
+                            }
+                          }}
                           onClick={() => finishSquarePayment("apple")}
                           disabled={!squareAppleReady || squarePaying}
                           className={`h-12 w-full overflow-hidden rounded-xl ${
@@ -1205,6 +1214,11 @@ export default function RestaurantCheckoutModal({
                     >
                       <div
                         id="ktown-square-google-pay"
+                        onPointerDown={() => {
+                          if (squareGoogleReady && !squarePaying) {
+                            primePaymentBlockingScreen();
+                          }
+                        }}
                         onClick={() => {
                           if (squareGoogleReady && !squarePaying) {
                             finishSquarePayment("google");
@@ -1293,6 +1307,11 @@ export default function RestaurantCheckoutModal({
 
                           <button
                             type="button"
+                            onPointerDown={() => {
+                              if (squareCardReady && !squarePaying) {
+                                primePaymentBlockingScreen();
+                              }
+                            }}
                             onClick={() => finishSquarePayment("card")}
                             disabled={!squareCardReady || squarePaying}
                             className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
