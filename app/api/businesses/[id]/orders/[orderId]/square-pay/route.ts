@@ -268,26 +268,6 @@ export async function POST(
     let finalStatus = status.toUpperCase();
 
     if (finalStatus === "APPROVED") {
-      // Square has authorized the payment. Save the tender immediately so an
-      // authorized payment never leaves payment_method fields NULL.
-      const { error: approvedMethodSaveError } = await db
-        .from("restaurant_orders")
-        .update({
-          payment_status: "approved",
-          payment_method: paymentMethodType,
-          payment_method_type: paymentMethodType,
-          square_payment_id: paymentId,
-        })
-        .eq("id", ktownOrderId)
-        .eq("business_id", businessId);
-
-      if (approvedMethodSaveError) {
-        console.error(
-          "SQUARE APPROVED PAYMENT METHOD SAVE ERROR",
-          approvedMethodSaveError,
-        );
-      }
-
       const completeResponse = await fetch(
         `https://connect.squareup.com/v2/payments/${encodeURIComponent(paymentId)}/complete`,
         {
@@ -324,8 +304,6 @@ export async function POST(
           .from("restaurant_orders")
           .update({
             payment_status: "approved",
-            payment_method: paymentMethodType,
-            payment_method_type: paymentMethodType,
             square_payment_id: paymentId,
           })
           .eq("id", ktownOrderId)
@@ -364,19 +342,12 @@ export async function POST(
                 ? "pending"
                 : "pending";
 
-      const nonCompletedUpdate: Record<string, string> = {
-        payment_status: ktownPaymentStatus,
-        square_payment_id: paymentId,
-      };
-
-      if (ktownPaymentStatus === "approved") {
-        nonCompletedUpdate.payment_method = paymentMethodType;
-        nonCompletedUpdate.payment_method_type = paymentMethodType;
-      }
-
       const { error: statusSaveError } = await db
         .from("restaurant_orders")
-        .update(nonCompletedUpdate)
+        .update({
+          payment_status: ktownPaymentStatus,
+          square_payment_id: paymentId,
+        })
         .eq("id", ktownOrderId)
         .eq("business_id", businessId);
 

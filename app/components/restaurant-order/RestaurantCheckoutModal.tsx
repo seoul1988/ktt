@@ -290,37 +290,6 @@ export default function RestaurantCheckoutModal({
   const orderSubmitLockRef = useRef(false);
   const squarePaymentLockRef = useRef(false);
 
-  function showPaymentBlockingScreenNow() {
-    if (typeof document === "undefined") return;
-
-    let overlay = document.getElementById("ktown-payment-processing-overlay");
-    if (overlay) return;
-
-    overlay = document.createElement("div");
-    overlay.id = "ktown-payment-processing-overlay";
-    overlay.setAttribute("role", "alert");
-    overlay.setAttribute("aria-live", "assertive");
-    overlay.setAttribute("aria-busy", "true");
-    overlay.style.cssText =
-      "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:20px;";
-
-    const box = document.createElement("div");
-    box.style.cssText =
-      "width:100%;max-width:390px;border-radius:24px;background:#fff;color:#111;padding:28px;text-align:center;box-shadow:0 25px 60px rgba(0,0,0,.35);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;";
-    box.innerHTML =
-      '<div style="font-size:22px;font-weight:900;margin-bottom:12px;">Processing payment...</div>' +
-      '<div style="font-size:15px;font-weight:800;line-height:1.55;">Please do not go back, refresh, close this page, or tap the payment button again.</div>' +
-      '<div style="font-size:13px;line-height:1.5;color:#666;margin-top:10px;">Please wait for payment confirmation.</div>';
-
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-  }
-
-  function hidePaymentBlockingScreenNow() {
-    if (typeof document === "undefined") return;
-    document.getElementById("ktown-payment-processing-overlay")?.remove();
-  }
-
   useEffect(() => {
     if (!squarePaying) return;
 
@@ -661,7 +630,6 @@ export default function RestaurantCheckoutModal({
 
     // Lock immediately, before React has a chance to re-render.
     squarePaymentLockRef.current = true;
-    showPaymentBlockingScreenNow();
     setSquarePaying(true);
     setError("");
 
@@ -781,7 +749,6 @@ export default function RestaurantCheckoutModal({
     } finally {
       squarePaymentLockRef.current = false;
       setSquarePaying(false);
-      hidePaymentBlockingScreenNow();
     }
   }
 

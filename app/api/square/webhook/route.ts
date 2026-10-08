@@ -122,7 +122,6 @@ export async function POST(request: Request) {
   }
 
   const squareStatus = String(payment.status || "").toUpperCase();
-  const squarePaymentMethod = getSquarePaymentMethod(payment);
 
   const db = getOrderAdmin();
 
@@ -148,7 +147,11 @@ export async function POST(request: Request) {
     });
   }
 
+  // COMPLETED is idempotent: write the same payment facts whether the webhook
+  // arrives before or after square-pay. Never clear an existing tender.
   if (squareStatus === "COMPLETED") {
+    const squarePaymentMethod = getSquarePaymentMethod(payment);
+
     const completedUpdate: Record<string, string> = {
       payment_status: "paid",
       square_payment_id: String(payment.id),
@@ -181,7 +184,6 @@ export async function POST(request: Request) {
       matchedOrder.id,
       matchedOrder.order_number,
       payment.id,
-      squarePaymentMethod || "method-unavailable",
     );
 
     return NextResponse.json({
@@ -189,10 +191,11 @@ export async function POST(request: Request) {
       paid: true,
       orderId: matchedOrder.id,
       orderNumber: matchedOrder.order_number,
-      paymentMethod: squarePaymentMethod,
     });
   }
 
+  // Do not call any of these states "refunded".
+  // A refund is handled separately by Square's Refunds API.
   const ktownPaymentStatus =
     squareStatus === "CANCELED"
       ? "cancelled"
@@ -220,6 +223,8 @@ export async function POST(request: Request) {
     });
   }
 
+  // Never overwrite a completed/refunded KTown payment with a later
+  // non-completed event.
   if (
     matchedOrder.payment_status === "paid" ||
     matchedOrder.payment_status === "refunded" ||
@@ -233,22 +238,12 @@ export async function POST(request: Request) {
     });
   }
 
-  // IMPORTANT: APPROVED is already an authorized Square payment. Save the
-  // actual Square tender here too, so a webhook arriving before square-pay
-  // cannot leave payment_method/payment_method_type NULL.
-  const statusUpdate: Record<string, string> = {
-    payment_status: ktownPaymentStatus,
-    square_payment_id: String(payment.id),
-  };
-
-  if (squareStatus === "APPROVED" && squarePaymentMethod) {
-    statusUpdate.payment_method = squarePaymentMethod;
-    statusUpdate.payment_method_type = squarePaymentMethod;
-  }
-
   const { error: statusUpdateError } = await db
     .from("restaurant_orders")
-    .update(statusUpdate)
+    .update({
+      payment_status: ktownPaymentStatus,
+      square_payment_id: String(payment.id),
+    })
     .eq("id", matchedOrder.id);
 
   if (statusUpdateError) {
@@ -268,7 +263,6 @@ export async function POST(request: Request) {
     matchedOrder.order_number,
     squareStatus,
     payment.id,
-    squarePaymentMethod || "method-unavailable",
   );
 
   return NextResponse.json({
@@ -278,6 +272,5 @@ export async function POST(request: Request) {
     orderNumber: matchedOrder.order_number,
     paymentStatus: ktownPaymentStatus,
     squarePaymentStatus: squareStatus,
-    paymentMethod: squarePaymentMethod,
   });
 }
