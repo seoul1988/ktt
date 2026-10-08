@@ -284,7 +284,25 @@ export default function RestaurantCheckoutModal({
   const squareCardRef = useRef<any>(null);
   const squareGoogleRef = useRef<any>(null);
   const squareAppleRef = useRef<any>(null);
+
+  // Synchronous locks: React state updates are asynchronous, so these refs
+  // close the tiny window where a rapid second click could enter again.
   const orderSubmitLockRef = useRef(false);
+  const squarePaymentLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!squarePaying) return;
+
+    const blockRefreshOrLeave = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", blockRefreshOrLeave);
+    return () => {
+      window.removeEventListener("beforeunload", blockRefreshOrLeave);
+    };
+  }, [squarePaying]);
 
   const address1Ref = useRef<HTMLInputElement>(null);
   const address2Ref = useRef<HTMLInputElement>(null);
@@ -608,8 +626,10 @@ export default function RestaurantCheckoutModal({
   async function finishSquarePayment(
     method: "card" | "google" | "apple",
   ) {
-    if (!squarePrepared || squarePaying) return;
+    if (!squarePrepared || squarePaying || squarePaymentLockRef.current) return;
 
+    // Lock immediately, before React has a chance to re-render.
+    squarePaymentLockRef.current = true;
     setSquarePaying(true);
     setError("");
 
@@ -681,6 +701,8 @@ export default function RestaurantCheckoutModal({
             sourceId: tokenResult.token,
             verificationToken,
 
+            // The server owns the Square idempotency key. The browser never
+            // creates a new payment key for the same KTown order.
             // 실제로 고객이 사용한 결제수단을 서버에 전달합니다.
             // DB 저장은 Square가 COMPLETED를 반환한 뒤 서버에서만 수행합니다.
             paymentMethodType:
@@ -717,6 +739,7 @@ export default function RestaurantCheckoutModal({
           : "Payment could not be completed.",
       );
     } finally {
+      squarePaymentLockRef.current = false;
       setSquarePaying(false);
     }
   }
@@ -871,11 +894,12 @@ export default function RestaurantCheckoutModal({
   }
 
   async function submitOrder() {
+    if (submitting || orderSubmitLockRef.current) return;
+
+    orderSubmitLockRef.current = true;
     setError("");
-    if (!name.trim()) return setError("Please enter your name.");
-    if (fulfillmentType === "delivery" && !phone.trim()) {
-      return setError("Please enter your phone number for delivery.");
-    }
+    if (!name.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your name."); }
+    if (fulfillmentType === "delivery" && !phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number for delivery."); }
     const submitAddress1 =
       (address1Ref.current?.value || address1 || "").trim();
     const submitAddress2 =
@@ -896,6 +920,7 @@ export default function RestaurantCheckoutModal({
       ].filter(Boolean);
 
       if (missingSubmitFields.length) {
+        orderSubmitLockRef.current = false;
         return setError(
           `Missing delivery address field(s): ${missingSubmitFields.join(", ")}.`,
         );
@@ -914,10 +939,14 @@ export default function RestaurantCheckoutModal({
         settings?.deliveryDispatchEnabled &&
         !deliveryQuoteId
       ) {
+        orderSubmitLockRef.current = false;
         return setError("Please calculate the delivery fee before paying.");
       }
     }
-    if (pickupTime === "custom" && !customDate) return setError("Please select a date.");
+    if (pickupTime === "custom" && !customDate) {
+      orderSubmitLockRef.current = false;
+      return setError("Please select a date.");
+    }
     if (pickupTime === "custom") {
       let hour = Number(customHour);
       if (customPeriod === "AM" && hour === 12) hour = 0;
@@ -926,10 +955,7 @@ export default function RestaurantCheckoutModal({
       setCustomTime(nextCustomTime);
     }
 
-    if (orderSubmitLockRef.current) return;
-    orderSubmitLockRef.current = true;
     setSubmitting(true);
-
     try {
       window.localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: name.trim(), phone: phone.trim() }));
       const response = await fetch(`/api/businesses/${businessId}/orders`, {
@@ -1020,7 +1046,9 @@ export default function RestaurantCheckoutModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
-      onClick={onClose}
+      onClick={() => {
+        if (!submitting && !squarePaying) onClose();
+      }}
     >
       <div
         className="max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl"
@@ -1028,7 +1056,16 @@ export default function RestaurantCheckoutModal({
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
           <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
-          <button type="button" onClick={onClose} className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black">×</button>
+          <button
+            type="button"
+            onClick={() => {
+              if (!submitting && !squarePaying) onClose();
+            }}
+            disabled={submitting || squarePaying}
+            className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ×
+          </button>
         </div>
 
         <div className="space-y-5 p-5">
@@ -1211,6 +1248,12 @@ export default function RestaurantCheckoutModal({
                   <p className="mt-3 text-[10px] text-gray-500">
                     Payment is securely processed by Square. KTown does not store card numbers.
                   </p>
+
+                  {squarePaying ? (
+                    <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-center text-xs font-black text-amber-800">
+                      PROCESSING PAYMENT… PLEASE DO NOT CLOSE OR TAP AGAIN.
+                    </div>
+                  ) : null}
                 </section>
               </>
             ) : (
@@ -1593,12 +1636,37 @@ export default function RestaurantCheckoutModal({
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : "PAY NOW"}</button>
+            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PREPARING PAYMENT…" : "CONTINUE TO PAYMENT"}</button>
               </>
             )}
           </> : null}
         </div>
       </div>
+
+      {squarePaying ? (
+        <div
+          className="fixed inset-0 z-[16000] flex items-center justify-center bg-black/70 p-5"
+          role="alert"
+          aria-live="assertive"
+          aria-busy="true"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center text-gray-950 shadow-2xl">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-gray-950" />
+            <h3 className="mt-5 text-xl font-black">
+              Processing payment...
+            </h3>
+            <p className="mt-3 text-sm font-bold leading-6 text-gray-700">
+              Please do not refresh, close this page, tap the payment button again,
+              or place another order.
+            </p>
+            <p className="mt-3 text-xs leading-5 text-gray-500">
+              Please wait for the payment confirmation. This may take a few moments.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {deliveryPolicyOpen && deliveryQuoteBreakdown ? (
         <div
