@@ -102,7 +102,7 @@ export async function POST(
       db
         .from("restaurant_orders")
         .select(
-          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
+          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,payment_method,payment_method_type,paid_at,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
         )
         .eq("id", ktownOrderId)
         .eq("business_id", businessId)
@@ -166,10 +166,35 @@ export async function POST(
       order.payment_status === "paid" &&
       order.square_payment_id
     ) {
+      // A previous request may have charged successfully but failed while saving
+      // the remaining payment metadata. Repair that partial row on retry without
+      // creating another Square payment.
+      const paidMetadataMissing =
+        !String(order.payment_method || "").trim() ||
+        !String(order.payment_method_type || "").trim() ||
+        !order.paid_at;
+
+      if (paidMetadataMissing) {
+        const { error: repairError } = await db
+          .from("restaurant_orders")
+          .update({
+            payment_method: paymentMethodType,
+            payment_method_type: paymentMethodType,
+            paid_at: order.paid_at || new Date().toISOString(),
+          })
+          .eq("id", ktownOrderId)
+          .eq("business_id", businessId);
+
+        if (repairError) {
+          console.error("SQUARE PAID METADATA REPAIR ERROR", repairError);
+        }
+      }
+
       return NextResponse.json({
         ok: true,
         alreadyPaid: true,
         paymentStatus: "paid",
+        paymentMethodType,
         paymentId: order.square_payment_id,
         orderNumber: order.order_number,
       });
@@ -322,7 +347,11 @@ export async function POST(
     const rawTrackingToken = randomBytes(32).toString("base64url");
     const trackingTokenHash = tokenHash(rawTrackingToken);
 
-    const { error: updateError } = await db
+    // Save the critical payment facts first. Do not mix optional
+    // cancellation/tracking metadata into this write: a constraint on an
+    // optional field must never turn a completed Square charge into a
+    // customer-visible payment failure.
+    const { error: paymentSaveError } = await db
       .from("restaurant_orders")
       .update({
         payment_status: "paid",
@@ -330,6 +359,34 @@ export async function POST(
         payment_method_type: paymentMethodType,
         square_payment_id: paymentId,
         paid_at: paidAt.toISOString(),
+      })
+      .eq("id", ktownOrderId)
+      .eq("business_id", businessId);
+
+    if (paymentSaveError) {
+      // Square has already returned COMPLETED. Preserve at least the paid state
+      // and Square payment ID, then return success so the customer is never
+      // encouraged to pay again.
+      console.error("SQUARE COMPLETED PAYMENT METADATA SAVE ERROR", paymentSaveError);
+
+      const { error: fallbackSaveError } = await db
+        .from("restaurant_orders")
+        .update({
+          payment_status: "paid",
+          square_payment_id: paymentId,
+        })
+        .eq("id", ktownOrderId)
+        .eq("business_id", businessId);
+
+      if (fallbackSaveError) {
+        console.error("SQUARE COMPLETED FALLBACK SAVE ERROR", fallbackSaveError);
+      }
+    }
+
+    // Optional post-payment metadata is best-effort only.
+    const { error: postPaymentMetadataError } = await db
+      .from("restaurant_orders")
+      .update({
         cancel_token_hash: cancelTokenHash,
         cancel_expires_at: cancelExpiresAt.toISOString(),
         tracking_token_hash: trackingTokenHash,
@@ -338,8 +395,11 @@ export async function POST(
       .eq("id", ktownOrderId)
       .eq("business_id", businessId);
 
-    if (updateError) {
-      throw updateError;
+    if (postPaymentMetadataError) {
+      console.error(
+        "SQUARE POST-PAYMENT METADATA SAVE ERROR",
+        postPaymentMetadataError,
+      );
     }
 
     // PRODUCTION DELIVERY:
@@ -442,6 +502,7 @@ export async function POST(
     const response = NextResponse.json({
       ok: true,
       paymentStatus: "paid",
+      paymentMethodType,
       paymentId,
       orderNumber: order.order_number,
       delivery,
