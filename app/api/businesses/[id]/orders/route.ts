@@ -459,8 +459,6 @@ export async function POST(
       );
     }
 
-    const paymentMethod = "online";
-
     const customerName = String(
       body?.customer?.name || "",
     )
@@ -651,32 +649,30 @@ export async function POST(
     const squareLocationId =
       privateSettings?.square_location_id || "";
 
-    if (paymentMethod === "online") {
-      if (
-        paymentProvider === "square" &&
-        (!squareAccessToken || !squareLocationId)
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Square is selected, but this restaurant has not connected its Square account yet.",
-          },
-          { status: 400 },
-        );
-      }
+    if (
+      paymentProvider === "square" &&
+      (!squareAccessToken || !squareLocationId)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Square is selected, but this restaurant has not connected its Square account yet.",
+        },
+        { status: 400 },
+      );
+    }
 
-      if (
-        paymentProvider === "stripe" &&
-        !stripeSecretKey
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Stripe is selected, but Stripe payment has not been configured yet.",
-          },
-          { status: 400 },
-        );
-      }
+    if (
+      paymentProvider === "stripe" &&
+      !stripeSecretKey
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Stripe is selected, but Stripe payment has not been configured yet.",
+        },
+        { status: 400 },
+      );
     }
 
     const ids = [
@@ -1505,8 +1501,7 @@ export async function POST(
             .filter(Boolean)
             .join(" · ")
             .slice(0, 500) || null,
-        payment_method:
-          paymentMethod,
+        payment_method: null,
         payment_status: "pending",
         order_status:
           "new",

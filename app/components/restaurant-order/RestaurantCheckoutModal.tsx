@@ -235,7 +235,6 @@ export default function RestaurantCheckoutModal({
   const [customHour, setCustomHour] = useState("12");
   const [customMinute, setCustomMinute] = useState("00");
   const [customPeriod, setCustomPeriod] = useState<"AM" | "PM">("PM");
-  const paymentMethod = "online" as const;
   const [tipPercent, setTipPercent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -955,7 +954,6 @@ export default function RestaurantCheckoutModal({
                 return `${customDate}T${String(hour).padStart(2, "0")}:${customMinute}`;
               })()
             : pickupTime,
-          paymentMethod,
           tipPercent,
           promoCode: promoCodeApplied ? appliedPromoCode : null,
           deliveryQuoteId:
