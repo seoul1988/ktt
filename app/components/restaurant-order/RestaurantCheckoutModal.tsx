@@ -322,6 +322,52 @@ export default function RestaurantCheckoutModal({
   // close the tiny window where a rapid second click could enter again.
   const orderSubmitLockRef = useRef(false);
   const squarePaymentLockRef = useRef(false);
+  const walletPaymentPendingRef = useRef(false);
+  const walletLeftPageRef = useRef(false);
+
+  useEffect(() => {
+    const showWalletProcessingOnReturn = () => {
+      if (
+        walletPaymentPendingRef.current &&
+        walletLeftPageRef.current &&
+        document.visibilityState === "visible"
+      ) {
+        showPaymentBlockingScreenNow();
+        setSquarePaying(true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (!walletPaymentPendingRef.current) return;
+
+      if (document.visibilityState === "hidden") {
+        walletLeftPageRef.current = true;
+        return;
+      }
+
+      showWalletProcessingOnReturn();
+    };
+
+    const handleWindowBlur = () => {
+      if (walletPaymentPendingRef.current) {
+        walletLeftPageRef.current = true;
+      }
+    };
+
+    const handleWindowFocus = () => {
+      showWalletProcessingOnReturn();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, []);
 
   useEffect(() => {
     if (!squarePaying) return;
@@ -691,11 +737,15 @@ export default function RestaurantCheckoutModal({
         if (!squareGoogleRef.current) {
           throw new Error("Google Pay is not available.");
         }
+        walletPaymentPendingRef.current = true;
+        walletLeftPageRef.current = false;
         tokenResult = await squareGoogleRef.current.tokenize();
       } else {
         if (!squareAppleRef.current) {
           throw new Error("Apple Pay is not available.");
         }
+        walletPaymentPendingRef.current = true;
+        walletLeftPageRef.current = false;
         tokenResult = await squareAppleRef.current.tokenize();
       }
 
@@ -709,10 +759,13 @@ export default function RestaurantCheckoutModal({
         throw new Error(detail || "Payment information could not be verified.");
       }
 
-      // Payment method selection/confirmation is finished.
-      // Show the blocking screen only now, before KTown finalizes the charge.
+      // Card: show immediately after the customer pressed PAY and tokenization succeeded.
+      // Wallets: focus/visibility normally shows this as soon as the native wallet closes;
+      // this remains as a fallback before KTown finalizes the charge.
       showPaymentBlockingScreenNow();
       setSquarePaying(true);
+      walletPaymentPendingRef.current = false;
+      walletLeftPageRef.current = false;
 
       if (
         method !== "card" &&
@@ -778,6 +831,8 @@ export default function RestaurantCheckoutModal({
       );
     } finally {
       squarePaymentLockRef.current = false;
+      walletPaymentPendingRef.current = false;
+      walletLeftPageRef.current = false;
       hidePaymentBlockingScreenNow();
       setSquarePaying(false);
     }
@@ -1296,6 +1351,11 @@ export default function RestaurantCheckoutModal({
 
                           <button
                             type="button"
+                            onPointerDown={() => {
+                              if (squareCardReady && !squarePaying) {
+                                showPaymentBlockingScreenNow();
+                              }
+                            }}
                             onClick={() => finishSquarePayment("card")}
                             disabled={!squareCardReady || squarePaying}
                             className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
