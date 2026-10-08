@@ -21,10 +21,7 @@ function verifySquareSignature(
   const expectedBuffer = Buffer.from(expected, "utf8");
   const receivedBuffer = Buffer.from(signatureHeader || "", "utf8");
 
-  if (expectedBuffer.length !== receivedBuffer.length) {
-    return false;
-  }
-
+  if (expectedBuffer.length !== receivedBuffer.length) return false;
   return timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
@@ -42,27 +39,40 @@ function getSquarePaymentMethod(payment: any) {
     .trim()
     .toUpperCase();
 
-  if (sourceType === "CARD" || payment?.card_details) {
-    return "card";
-  }
-
+  if (sourceType === "CARD" || payment?.card_details) return "card";
   return null;
 }
 
+function choosePaymentMethod(
+  existingMethod: unknown,
+  existingMethodType: unknown,
+  detectedMethod: string | null,
+) {
+  const existing = String(existingMethodType || existingMethod || "")
+    .trim()
+    .toLowerCase();
+
+  // Square can send a later webhook with generic CARD details even when the
+  // browser originally used Google Pay / Apple Pay. Never downgrade a known
+  // wallet tender to generic card.
+  if (
+    (existing === "google_pay" || existing === "apple_pay") &&
+    detectedMethod === "card"
+  ) {
+    return existing;
+  }
+
+  return detectedMethod || existing || null;
+}
+
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    endpoint: "square-webhook",
-  });
+  return NextResponse.json({ ok: true, endpoint: "square-webhook" });
 }
 
 export async function POST(request: Request) {
-  const signatureKey =
-    process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || "";
-
+  const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || "";
   const notificationUrl =
-    process.env.SQUARE_WEBHOOK_URL ||
-    DEFAULT_WEBHOOK_URL;
+    process.env.SQUARE_WEBHOOK_URL || DEFAULT_WEBHOOK_URL;
 
   if (!signatureKey) {
     console.error(
@@ -78,14 +88,9 @@ export async function POST(request: Request) {
   const signature =
     request.headers.get("x-square-hmacsha256-signature") || "";
 
-  const valid = verifySquareSignature(
-    rawBody,
-    signature,
-    signatureKey,
-    notificationUrl,
-  );
-
-  if (!valid) {
+  if (
+    !verifySquareSignature(rawBody, signature, signatureKey, notificationUrl)
+  ) {
     console.error("SQUARE WEBHOOK ERROR: invalid signature");
     return NextResponse.json(
       { error: "Invalid Square webhook signature." },
@@ -94,14 +99,10 @@ export async function POST(request: Request) {
   }
 
   let event: any;
-
   try {
     event = JSON.parse(rawBody);
   } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
   if (
@@ -112,7 +113,6 @@ export async function POST(request: Request) {
   }
 
   const payment = event?.data?.object?.payment;
-
   if (!payment?.id || !payment?.order_id) {
     return NextResponse.json({
       ok: true,
@@ -122,12 +122,13 @@ export async function POST(request: Request) {
   }
 
   const squareStatus = String(payment.status || "").toUpperCase();
-
   const db = getOrderAdmin();
 
   const { data: matchedOrder, error: findError } = await db
     .from("restaurant_orders")
-    .select("id,business_id,order_number,payment_status,square_payment_id")
+    .select(
+      "id,business_id,order_number,payment_status,square_payment_id,payment_method,payment_method_type",
+    )
     .eq("square_order_id", String(payment.order_id))
     .maybeSingle();
 
@@ -147,11 +148,14 @@ export async function POST(request: Request) {
     });
   }
 
-  // COMPLETED is idempotent: write the same payment facts whether the webhook
-  // arrives before or after square-pay. Never clear an existing tender.
-  if (squareStatus === "COMPLETED") {
-    const squarePaymentMethod = getSquarePaymentMethod(payment);
+  const detectedPaymentMethod = getSquarePaymentMethod(payment);
+  const squarePaymentMethod = choosePaymentMethod(
+    matchedOrder.payment_method,
+    matchedOrder.payment_method_type,
+    detectedPaymentMethod,
+  );
 
+  if (squareStatus === "COMPLETED") {
     const completedUpdate: Record<string, string> = {
       payment_status: "paid",
       square_payment_id: String(payment.id),
@@ -184,6 +188,7 @@ export async function POST(request: Request) {
       matchedOrder.id,
       matchedOrder.order_number,
       payment.id,
+      squarePaymentMethod || "unknown",
     );
 
     return NextResponse.json({
@@ -191,11 +196,10 @@ export async function POST(request: Request) {
       paid: true,
       orderId: matchedOrder.id,
       orderNumber: matchedOrder.order_number,
+      paymentMethod: squarePaymentMethod,
     });
   }
 
-  // Do not call any of these states "refunded".
-  // A refund is handled separately by Square's Refunds API.
   const ktownPaymentStatus =
     squareStatus === "CANCELED"
       ? "cancelled"
@@ -215,7 +219,6 @@ export async function POST(request: Request) {
       squareStatus || "UNKNOWN",
       payment.id,
     );
-
     return NextResponse.json({
       ok: true,
       ignored: true,
@@ -223,8 +226,6 @@ export async function POST(request: Request) {
     });
   }
 
-  // Never overwrite a completed/refunded KTown payment with a later
-  // non-completed event.
   if (
     matchedOrder.payment_status === "paid" ||
     matchedOrder.payment_status === "refunded" ||
@@ -238,12 +239,21 @@ export async function POST(request: Request) {
     });
   }
 
+  const statusUpdate: Record<string, string> = {
+    payment_status: ktownPaymentStatus,
+    square_payment_id: String(payment.id),
+  };
+
+  // Save the tender as soon as Square knows it. Preserve an already-known
+  // Google Pay / Apple Pay value instead of downgrading it to generic card.
+  if (squarePaymentMethod) {
+    statusUpdate.payment_method = squarePaymentMethod;
+    statusUpdate.payment_method_type = squarePaymentMethod;
+  }
+
   const { error: statusUpdateError } = await db
     .from("restaurant_orders")
-    .update({
-      payment_status: ktownPaymentStatus,
-      square_payment_id: String(payment.id),
-    })
+    .update(statusUpdate)
     .eq("id", matchedOrder.id);
 
   if (statusUpdateError) {
@@ -263,6 +273,7 @@ export async function POST(request: Request) {
     matchedOrder.order_number,
     squareStatus,
     payment.id,
+    squarePaymentMethod || "unknown",
   );
 
   return NextResponse.json({
@@ -272,5 +283,6 @@ export async function POST(request: Request) {
     orderNumber: matchedOrder.order_number,
     paymentStatus: ktownPaymentStatus,
     squarePaymentStatus: squareStatus,
+    paymentMethod: squarePaymentMethod,
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 
 export type CheckoutCartItem = {
   cartItemId: string;
@@ -182,6 +182,39 @@ function loadSquareSdk() {
 
 function money(value: number) {
   return `$${Math.max(0, value).toFixed(2)}`;
+}
+
+function showPaymentBlockingScreenNow() {
+  if (typeof document === "undefined") return;
+
+  if (document.getElementById("ktown-payment-processing-overlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.id = "ktown-payment-processing-overlay";
+  overlay.setAttribute("role", "alert");
+  overlay.setAttribute("aria-live", "assertive");
+  overlay.setAttribute("aria-busy", "true");
+  overlay.style.cssText =
+    "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:20px;";
+
+  overlay.innerHTML = `
+    <div style="width:100%;max-width:384px;border-radius:24px;background:#fff;padding:24px;text-align:center;color:#111827;box-shadow:0 25px 50px rgba(0,0,0,.35)">
+      <div style="font-size:22px;font-weight:900">Processing payment...</div>
+      <div style="margin-top:12px;font-size:14px;font-weight:700;line-height:1.6">
+        Please do not refresh, close this page, tap the payment button again, or place another order.
+      </div>
+      <div style="margin-top:12px;font-size:12px;line-height:1.5;color:#6b7280">
+        Please wait for the payment confirmation. This may take a few moments.
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function hidePaymentBlockingScreenNow() {
+  if (typeof document === "undefined") return;
+  document.getElementById("ktown-payment-processing-overlay")?.remove();
 }
 
 function deliveryPolicyRangeLabel(
@@ -628,13 +661,11 @@ export default function RestaurantCheckoutModal({
   ) {
     if (!squarePrepared || squarePaying || squarePaymentLockRef.current) return;
 
-    // Lock immediately and commit the blocking screen synchronously.
-    // Do not yield before Apple Pay / Google Pay tokenization because wallet
-    // APIs need to remain inside the original user click activation.
+    // Lock immediately and put the blocking screen in the DOM before Square starts.
+    // Do not yield before Apple Pay / Google Pay tokenization.
     squarePaymentLockRef.current = true;
-    flushSync(() => {
-      setSquarePaying(true);
-    });
+    showPaymentBlockingScreenNow();
+    setSquarePaying(true);
     setError("");
 
     try {
@@ -744,6 +775,7 @@ export default function RestaurantCheckoutModal({
       );
     } finally {
       squarePaymentLockRef.current = false;
+      hidePaymentBlockingScreenNow();
       setSquarePaying(false);
     }
   }
