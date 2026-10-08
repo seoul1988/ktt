@@ -126,25 +126,19 @@ export async function POST(request: Request) {
     });
   }
 
-  // A real completed Square payment is the only webhook state that marks
-  // the KTown order as paid.
+  // The webhook is the backup source of truth for Square payment status.
+  // The checkout square-pay route records the customer-selected tender
+  // (card / google_pay / apple_pay). Do not overwrite that tender here.
   if (squareStatus === "COMPLETED") {
-    if (
-      matchedOrder.payment_status === "paid" &&
-      matchedOrder.square_payment_id === String(payment.id)
-    ) {
-      return NextResponse.json({
-        ok: true,
-        alreadyPaid: true,
-        orderId: matchedOrder.id,
-      });
-    }
-
     const { error: updateError } = await db
       .from("restaurant_orders")
       .update({
         payment_status: "paid",
         square_payment_id: String(payment.id),
+        paid_at:
+          payment.updated_at ||
+          payment.created_at ||
+          new Date().toISOString(),
       })
       .eq("id", matchedOrder.id);
 
