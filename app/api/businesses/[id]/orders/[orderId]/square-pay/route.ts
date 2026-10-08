@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
-import { getValidSquareAccessToken } from "@/lib/square/oauth";
 import {
   getOrderAdmin,
   moneyCents,
@@ -77,20 +76,12 @@ export async function POST(
     const requestedPaymentMethod = String(body?.paymentMethodType || "")
       .trim()
       .toLowerCase();
-    const allowedPaymentMethods = new Set([
-      "apple_pay",
-      "google_pay",
-      "card",
-    ]);
-
-    if (!allowedPaymentMethods.has(requestedPaymentMethod)) {
-      return NextResponse.json(
-        { error: "A valid payment method is required before payment can be completed." },
-        { status: 400 },
-      );
-    }
-
-    const paymentMethodType = requestedPaymentMethod;
+    const paymentMethodType =
+      requestedPaymentMethod === "apple_pay" ||
+      requestedPaymentMethod === "google_pay" ||
+      requestedPaymentMethod === "card"
+        ? requestedPaymentMethod
+        : "card";
     const verificationToken = String(
       body?.verificationToken || "",
     ).trim();
@@ -111,7 +102,7 @@ export async function POST(
       db
         .from("restaurant_orders")
         .select(
-          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,payment_method,payment_method_type,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
+          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
         )
         .eq("id", ktownOrderId)
         .eq("business_id", businessId)
@@ -120,7 +111,7 @@ export async function POST(
       db
         .from("restaurant_order_private_settings")
         .select(
-          "payment_provider,square_access_token,square_refresh_token,square_token_expires_at,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id",
+          "payment_provider,square_access_token,square_location_id,delivery_provider,uber_direct_enabled,uber_direct_customer_id",
         )
         .eq("business_id", businessId)
         .maybeSingle(),
@@ -175,38 +166,14 @@ export async function POST(
       order.payment_status === "paid" &&
       order.square_payment_id
     ) {
-      const existingPaymentMethod = String(
-        order.payment_method_type || "",
-      ).toLowerCase();
-
-      if (!allowedPaymentMethods.has(existingPaymentMethod)) {
-        return NextResponse.json(
-          {
-            error:
-              "This order is marked paid but has no valid payment method. It requires review.",
-          },
-          { status: 409 },
-        );
-      }
-
       return NextResponse.json({
         ok: true,
         alreadyPaid: true,
         paymentStatus: "paid",
-        paymentMethodType: existingPaymentMethod,
         paymentId: order.square_payment_id,
         orderNumber: order.order_number,
       });
     }
-
-    const squareAccessToken =
-      await getValidSquareAccessToken({
-        db,
-        businessId,
-        settings: privateSettings,
-      });
-
-
 
     const amountCents = moneyCents(
       Number(order.total || 0),
@@ -224,15 +191,13 @@ export async function POST(
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${squareAccessToken}`,
+          Authorization: `Bearer ${privateSettings.square_access_token}`,
           "Content-Type": "application/json",
           "Square-Version": "2026-08-19",
         },
         body: JSON.stringify({
           source_id: sourceId,
-          // One KTown order must map to exactly one Square payment intent.
-          // Never accept a browser-generated random key here: two nearly
-          // simultaneous requests would otherwise look like two payments.
+          // One KTown order always maps to one Square payment request.
           idempotency_key: `kt-pay-${businessId}-${ktownOrderId}`.slice(0, 45),
           amount_money: {
             amount: amountCents,
@@ -357,12 +322,10 @@ export async function POST(
     const rawTrackingToken = randomBytes(32).toString("base64url");
     const trackingTokenHash = tokenHash(rawTrackingToken);
 
-    const { data: paidClaim, error: updateError } = await db
+    const { error: updateError } = await db
       .from("restaurant_orders")
       .update({
         payment_status: "paid",
-        // Store the actual tender type in both fields. Do not persist the
-        // generic value "online" for new Square payments.
         payment_method: paymentMethodType,
         payment_method_type: paymentMethodType,
         square_payment_id: paymentId,
@@ -373,65 +336,10 @@ export async function POST(
         tracking_expires_at: trackingExpiresAt.toISOString(),
       })
       .eq("id", ktownOrderId)
-      .eq("business_id", businessId)
-      .neq("payment_status", "paid")
-      .select("id,payment_status,payment_method,payment_method_type,square_payment_id")
-      .maybeSingle();
+      .eq("business_id", businessId);
 
     if (updateError) {
       throw updateError;
-    }
-
-    if (
-      paidClaim &&
-      (
-        paidClaim.payment_status !== "paid" ||
-        paidClaim.payment_method_type !== paymentMethodType ||
-        paidClaim.payment_method !== paymentMethodType ||
-        !paidClaim.square_payment_id
-      )
-    ) {
-      throw new Error(
-        "Payment completed at Square, but KTown could not verify the final payment method.",
-      );
-    }
-
-    // A concurrent retry can receive the same COMPLETED Square payment because
-    // the idempotency key is fixed. Only the request that first changes the DB
-    // row to paid may create tracking/cancel tokens, dispatch delivery, or SMS.
-    if (!paidClaim) {
-      const { data: latestOrder, error: latestOrderError } = await db
-        .from("restaurant_orders")
-        .select("payment_status,payment_method_type,square_payment_id,order_number")
-        .eq("id", ktownOrderId)
-        .eq("business_id", businessId)
-        .single();
-
-      if (latestOrderError) {
-        throw latestOrderError;
-      }
-
-      if (
-        latestOrder?.payment_status === "paid" &&
-        latestOrder?.square_payment_id &&
-        allowedPaymentMethods.has(
-          String(latestOrder?.payment_method_type || "").toLowerCase(),
-        )
-      ) {
-        return NextResponse.json({
-          ok: true,
-          alreadyPaid: true,
-          paymentStatus: "paid",
-          paymentMethodType: String(latestOrder.payment_method_type).toLowerCase(),
-          paymentId: latestOrder.square_payment_id,
-          orderNumber: latestOrder.order_number,
-        });
-      }
-
-      return NextResponse.json(
-        { error: "Payment state changed. Please refresh the order before retrying." },
-        { status: 409 },
-      );
     }
 
     // PRODUCTION DELIVERY:
@@ -534,7 +442,6 @@ export async function POST(
     const response = NextResponse.json({
       ok: true,
       paymentStatus: "paid",
-      paymentMethodType,
       paymentId,
       orderNumber: order.order_number,
       delivery,
