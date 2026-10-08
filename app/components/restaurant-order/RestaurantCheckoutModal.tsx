@@ -633,6 +633,14 @@ export default function RestaurantCheckoutModal({
     setSquarePaying(true);
     setError("");
 
+    // Force the blocking payment screen to be committed and painted before
+    // Square tokenization / wallet verification / payment requests begin.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
     try {
       const amount = squarePrepared.amount;
       const currencyCode =
@@ -1050,6 +1058,31 @@ export default function RestaurantCheckoutModal({
         if (!submitting && !squarePaying) onClose();
       }}
     >
+      {squarePaying ? (
+        <div
+          className="fixed inset-0 z-[16000] flex items-center justify-center bg-black/70 p-5"
+          role="alert"
+          aria-live="assertive"
+          aria-busy="true"
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center text-gray-950 shadow-2xl">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-gray-950" />
+            <h3 className="mt-5 text-xl font-black">
+              Processing payment...
+            </h3>
+            <p className="mt-3 text-sm font-bold leading-6 text-gray-700">
+              Please do not refresh, close this page, tap the payment button again,
+              or place another order.
+            </p>
+            <p className="mt-3 text-xs leading-5 text-gray-500">
+              Please wait for the payment confirmation. This may take a few moments.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div
         className="max-h-[92vh] w-full overflow-y-auto rounded-3xl bg-white text-gray-950 shadow-2xl sm:max-w-2xl"
         onClick={(e) => e.stopPropagation()}

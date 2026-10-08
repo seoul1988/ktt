@@ -261,16 +261,84 @@ export async function POST(
       );
     }
 
-    if (status !== "COMPLETED") {
-      const normalizedStatus = status.toUpperCase();
+    // Square can occasionally return APPROVED even with autocomplete=true.
+    // In that case, explicitly complete the already-authorized payment and use
+    // the final Square payment object before deciding what to save locally.
+    let finalPayment = payment;
+    let finalStatus = status.toUpperCase();
+
+    if (finalStatus === "APPROVED") {
+      const completeResponse = await fetch(
+        `https://connect.squareup.com/v2/payments/${encodeURIComponent(paymentId)}/complete`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${privateSettings.square_access_token}`,
+            "Content-Type": "application/json",
+            "Square-Version": "2026-08-19",
+          },
+          cache: "no-store",
+        },
+      );
+
+      const completeText = await completeResponse.text();
+      let completePayload: any = {};
+
+      try {
+        completePayload = completeText ? JSON.parse(completeText) : {};
+      } catch {
+        throw new Error(
+          `Square returned an invalid complete-payment response (HTTP ${completeResponse.status}).`,
+        );
+      }
+
+      if (!completeResponse.ok) {
+        const completeError = squareErrorDetail(
+          completePayload,
+          `Square could not complete the approved payment (HTTP ${completeResponse.status}).`,
+        );
+
+        // Do not mark an authorized payment as failed and do not encourage
+        // another charge attempt. Keep its real Square state and payment ID.
+        const { error: approvedSaveError } = await db
+          .from("restaurant_orders")
+          .update({
+            payment_status: "approved",
+            square_payment_id: paymentId,
+          })
+          .eq("id", ktownOrderId)
+          .eq("business_id", businessId);
+
+        if (approvedSaveError) {
+          console.error("SQUARE APPROVED STATUS SAVE ERROR", approvedSaveError);
+        }
+
+        return NextResponse.json(
+          {
+            ok: false,
+            error: completeError,
+            paymentStatus: "approved",
+            squarePaymentStatus: "APPROVED",
+            paymentId,
+            retryPayment: false,
+          },
+          { status: 409 },
+        );
+      }
+
+      finalPayment = completePayload?.payment || payment;
+      finalStatus = String(finalPayment?.status || "").toUpperCase();
+    }
+
+    if (finalStatus !== "COMPLETED") {
       const ktownPaymentStatus =
-        normalizedStatus === "CANCELED"
+        finalStatus === "CANCELED"
           ? "cancelled"
-          : normalizedStatus === "FAILED"
+          : finalStatus === "FAILED"
             ? "failed"
-            : normalizedStatus === "APPROVED"
+            : finalStatus === "APPROVED"
               ? "approved"
-              : normalizedStatus === "PENDING"
+              : finalStatus === "PENDING"
                 ? "pending"
                 : "pending";
 
@@ -289,9 +357,9 @@ export async function POST(
 
       return NextResponse.json(
         {
-          error: `Payment is ${status || "not completed"}.`,
+          error: `Payment is ${finalStatus || "not completed"}.`,
           paymentStatus: ktownPaymentStatus,
-          squarePaymentStatus: status || "UNKNOWN",
+          squarePaymentStatus: finalStatus || "UNKNOWN",
           paymentId,
         },
         { status: 400 },
