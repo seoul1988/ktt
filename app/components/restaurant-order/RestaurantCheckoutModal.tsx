@@ -235,7 +235,6 @@ export default function RestaurantCheckoutModal({
   const [customHour, setCustomHour] = useState("12");
   const [customMinute, setCustomMinute] = useState("00");
   const [customPeriod, setCustomPeriod] = useState<"AM" | "PM">("PM");
-  const paymentMethod = "online" as const;
   const [tipPercent, setTipPercent] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -886,7 +885,7 @@ export default function RestaurantCheckoutModal({
     orderSubmitLockRef.current = true;
     setError("");
     if (!name.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your name."); }
-    if (!phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number."); }
+    if (fulfillmentType === "delivery" && !phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number for delivery."); }
     const submitAddress1 =
       (address1Ref.current?.value || address1 || "").trim();
     const submitAddress2 =
@@ -967,7 +966,6 @@ export default function RestaurantCheckoutModal({
                 return `${customDate}T${String(hour).padStart(2, "0")}:${customMinute}`;
               })()
             : pickupTime,
-          paymentMethod,
           tipPercent,
           promoCode: promoCodeApplied ? appliedPromoCode : null,
           deliveryQuoteId:
@@ -1250,7 +1248,7 @@ export default function RestaurantCheckoutModal({
               <h3 className="font-black">Customer Information</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone *" inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={fulfillmentType === "delivery" ? "Phone *" : "Phone (optional)"} inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
               </div>
 
               {settings.smsEnabled ? (
@@ -1624,7 +1622,7 @@ export default function RestaurantCheckoutModal({
               <p className="mt-2 text-[10px] text-gray-500">Final total is recalculated securely on the server from the current menu prices.</p>
             </section>
 
-            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PROCESSING…" : "PAY NOW"}</button>
+            <button type="button" disabled={submitting || !cartItems.length} onClick={submitOrder} className="w-full rounded-2xl bg-gray-950 px-4 py-4 text-sm font-black text-white disabled:opacity-50">{submitting ? "PREPARING PAYMENT…" : "CONTINUE TO PAYMENT"}</button>
               </>
             )}
           </> : null}
@@ -1700,5 +1698,3 @@ export default function RestaurantCheckoutModal({
     document.body,
   );
 }
-
-

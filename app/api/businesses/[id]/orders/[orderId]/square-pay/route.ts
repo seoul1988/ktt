@@ -77,12 +77,20 @@ export async function POST(
     const requestedPaymentMethod = String(body?.paymentMethodType || "")
       .trim()
       .toLowerCase();
-    const paymentMethodType =
-      requestedPaymentMethod === "apple_pay" ||
-      requestedPaymentMethod === "google_pay" ||
-      requestedPaymentMethod === "card"
-        ? requestedPaymentMethod
-        : "card";
+    const allowedPaymentMethods = new Set([
+      "apple_pay",
+      "google_pay",
+      "card",
+    ]);
+
+    if (!allowedPaymentMethods.has(requestedPaymentMethod)) {
+      return NextResponse.json(
+        { error: "A valid payment method is required before payment can be completed." },
+        { status: 400 },
+      );
+    }
+
+    const paymentMethodType = requestedPaymentMethod;
     const verificationToken = String(
       body?.verificationToken || "",
     ).trim();
@@ -103,7 +111,7 @@ export async function POST(
       db
         .from("restaurant_orders")
         .select(
-          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
+          "id,business_id,order_number,total,fulfillment_type,customer_phone,payment_status,payment_method,payment_method_type,square_order_id,square_payment_id,sms_consent,sms_sent_at,cancel_expires_at",
         )
         .eq("id", ktownOrderId)
         .eq("business_id", businessId)
@@ -167,10 +175,25 @@ export async function POST(
       order.payment_status === "paid" &&
       order.square_payment_id
     ) {
+      const existingPaymentMethod = String(
+        order.payment_method_type || "",
+      ).toLowerCase();
+
+      if (!allowedPaymentMethods.has(existingPaymentMethod)) {
+        return NextResponse.json(
+          {
+            error:
+              "This order is marked paid but has no valid payment method. It requires review.",
+          },
+          { status: 409 },
+        );
+      }
+
       return NextResponse.json({
         ok: true,
         alreadyPaid: true,
         paymentStatus: "paid",
+        paymentMethodType: existingPaymentMethod,
         paymentId: order.square_payment_id,
         orderNumber: order.order_number,
       });
@@ -352,11 +375,25 @@ export async function POST(
       .eq("id", ktownOrderId)
       .eq("business_id", businessId)
       .neq("payment_status", "paid")
-      .select("id")
+      .select("id,payment_status,payment_method,payment_method_type,square_payment_id")
       .maybeSingle();
 
     if (updateError) {
       throw updateError;
+    }
+
+    if (
+      paidClaim &&
+      (
+        paidClaim.payment_status !== "paid" ||
+        paidClaim.payment_method_type !== paymentMethodType ||
+        paidClaim.payment_method !== paymentMethodType ||
+        !paidClaim.square_payment_id
+      )
+    ) {
+      throw new Error(
+        "Payment completed at Square, but KTown could not verify the final payment method.",
+      );
     }
 
     // A concurrent retry can receive the same COMPLETED Square payment because
@@ -365,7 +402,7 @@ export async function POST(
     if (!paidClaim) {
       const { data: latestOrder, error: latestOrderError } = await db
         .from("restaurant_orders")
-        .select("payment_status,square_payment_id,order_number")
+        .select("payment_status,payment_method_type,square_payment_id,order_number")
         .eq("id", ktownOrderId)
         .eq("business_id", businessId)
         .single();
@@ -376,12 +413,16 @@ export async function POST(
 
       if (
         latestOrder?.payment_status === "paid" &&
-        latestOrder?.square_payment_id
+        latestOrder?.square_payment_id &&
+        allowedPaymentMethods.has(
+          String(latestOrder?.payment_method_type || "").toLowerCase(),
+        )
       ) {
         return NextResponse.json({
           ok: true,
           alreadyPaid: true,
           paymentStatus: "paid",
+          paymentMethodType: String(latestOrder.payment_method_type).toLowerCase(),
           paymentId: latestOrder.square_payment_id,
           orderNumber: latestOrder.order_number,
         });
@@ -493,6 +534,7 @@ export async function POST(
     const response = NextResponse.json({
       ok: true,
       paymentStatus: "paid",
+      paymentMethodType,
       paymentId,
       orderNumber: order.order_number,
       delivery,

@@ -35,6 +35,8 @@ export async function GET(
       .eq("business_id", businessId)
       .not("square_payment_id", "is", null)
       .neq("square_payment_id", "")
+      .eq("payment_status", "paid")
+      .in("payment_method_type", ["card", "google_pay", "apple_pay"])
       .order("created_at", { ascending: false })
       .limit(100);
 

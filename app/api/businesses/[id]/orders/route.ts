@@ -460,6 +460,9 @@ export async function POST(
       );
     }
 
+    // This is only the pre-payment channel marker. It is NOT a completed
+    // tender type. payment_method_type stays NULL until Square confirms
+    // COMPLETED in square-pay/route.ts.
     const paymentMethod = "online";
 
     const customerName = String(
@@ -1526,6 +1529,8 @@ export async function POST(
             .slice(0, 500) || null,
         payment_method:
           paymentMethod,
+        // Never claim Card / Google Pay / Apple Pay before Square confirms it.
+        payment_method_type: null,
         payment_status: "pending",
         order_status:
           "new",
