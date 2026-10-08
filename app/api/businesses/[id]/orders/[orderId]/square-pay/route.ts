@@ -162,19 +162,6 @@ export async function POST(
       );
     }
 
-    if (
-      order.payment_status === "paid" &&
-      order.square_payment_id
-    ) {
-      return NextResponse.json({
-        ok: true,
-        alreadyPaid: true,
-        paymentStatus: "paid",
-        paymentId: order.square_payment_id,
-        orderNumber: order.order_number,
-      });
-    }
-
     const amountCents = moneyCents(
       Number(order.total || 0),
     );
@@ -322,8 +309,9 @@ export async function POST(
     const rawTrackingToken = randomBytes(32).toString("base64url");
     const trackingTokenHash = tokenHash(rawTrackingToken);
 
-    // Square COMPLETED -> save the payment result in ONE update.
-    // Do not mix delivery/SMS/tracking state into the payment decision.
+    // Square COMPLETED -> update the payment facts in one write.
+    // Even if the webhook already marked this order paid, write again so the
+    // actual checkout tender and paid_at are always completed.
     const { error: updateError } = await db
       .from("restaurant_orders")
       .update({
@@ -339,8 +327,8 @@ export async function POST(
     if (updateError) {
       console.error("SQUARE COMPLETED PAYMENT SAVE ERROR", updateError);
 
-      // Square already charged the customer. Never tell the customer that the
-      // payment itself failed after Square returned COMPLETED.
+      // Square already returned COMPLETED. Do not tell the customer that the
+      // payment itself failed and encourage another payment attempt.
       return NextResponse.json({
         ok: true,
         paymentStatus: "paid",
@@ -349,6 +337,24 @@ export async function POST(
         orderNumber: order.order_number,
         paymentRecorded: false,
       });
+    }
+
+    // Payment is already safely recorded. Save cancellation/tracking tokens
+    // separately so an optional token-write problem can never turn a successful
+    // Square payment into a payment failure.
+    const { error: tokenUpdateError } = await db
+      .from("restaurant_orders")
+      .update({
+        cancel_token_hash: cancelTokenHash,
+        cancel_expires_at: cancelExpiresAt.toISOString(),
+        tracking_token_hash: trackingTokenHash,
+        tracking_expires_at: trackingExpiresAt.toISOString(),
+      })
+      .eq("id", ktownOrderId)
+      .eq("business_id", businessId);
+
+    if (tokenUpdateError) {
+      console.error("ORDER TOKEN SAVE ERROR", tokenUpdateError);
     }
 
     // PRODUCTION DELIVERY:

@@ -28,6 +28,27 @@ function verifySquareSignature(
   return timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
+function getSquarePaymentMethod(payment: any) {
+  const walletType = String(
+    payment?.card_details?.card?.digital_wallet_type || "",
+  )
+    .trim()
+    .toUpperCase();
+
+  if (walletType === "APPLE_PAY") return "apple_pay";
+  if (walletType === "GOOGLE_PAY") return "google_pay";
+
+  const sourceType = String(payment?.source_type || "")
+    .trim()
+    .toUpperCase();
+
+  if (sourceType === "CARD" || payment?.card_details) {
+    return "card";
+  }
+
+  return null;
+}
+
 export async function GET() {
   return NextResponse.json({
     ok: true,
@@ -126,20 +147,28 @@ export async function POST(request: Request) {
     });
   }
 
-  // The webhook is the backup source of truth for Square payment status.
-  // The checkout square-pay route records the customer-selected tender
-  // (card / google_pay / apple_pay). Do not overwrite that tender here.
+  // COMPLETED is idempotent: write the same payment facts whether the webhook
+  // arrives before or after square-pay. Never clear an existing tender.
   if (squareStatus === "COMPLETED") {
+    const squarePaymentMethod = getSquarePaymentMethod(payment);
+
+    const completedUpdate: Record<string, string> = {
+      payment_status: "paid",
+      square_payment_id: String(payment.id),
+      paid_at:
+        payment.updated_at ||
+        payment.created_at ||
+        new Date().toISOString(),
+    };
+
+    if (squarePaymentMethod) {
+      completedUpdate.payment_method = squarePaymentMethod;
+      completedUpdate.payment_method_type = squarePaymentMethod;
+    }
+
     const { error: updateError } = await db
       .from("restaurant_orders")
-      .update({
-        payment_status: "paid",
-        square_payment_id: String(payment.id),
-        paid_at:
-          payment.updated_at ||
-          payment.created_at ||
-          new Date().toISOString(),
-      })
+      .update(completedUpdate)
       .eq("id", matchedOrder.id);
 
     if (updateError) {
