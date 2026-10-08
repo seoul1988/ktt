@@ -1414,12 +1414,20 @@ export async function POST(
         ? body.deliveryAddress
         : null;
 
+    // Only Uber Direct is supported by this order checkout route.
+    // Do not accept an order quoted by a different provider.
+    if (fulfillmentType === "delivery" &&
+        privateSettings?.delivery_provider !== "uber_direct") {
+      throw new Error("Delivery checkout is unavailable for the selected provider.");
+    }
+
     let deliveryFee = 0;
     let deliveryQuoteId: string | null = null;
     let deliveryQuoteExpiresAt: string | null = null;
 
     if (
       fulfillmentType === "delivery" &&
+      privateSettings?.delivery_provider === "uber_direct" &&
       isUberDirectEnabled(privateSettings)
     ) {
       const directQuote = await createUberDirectQuote({
@@ -1457,6 +1465,10 @@ export async function POST(
 
       deliveryQuoteId = directQuote.id;
       deliveryQuoteExpiresAt = directQuote.expires || null;
+    }
+
+    if (fulfillmentType === "delivery" && !deliveryQuoteId) {
+      throw new Error("Uber Direct delivery quote is unavailable. Please try again later.");
     }
 
     const total =
@@ -1510,8 +1522,7 @@ export async function POST(
         tip,
         delivery_fee: deliveryFee,
         delivery_provider:
-          fulfillmentType === "delivery" &&
-          isUberDirectEnabled(privateSettings)
+          fulfillmentType === "delivery"
             ? "uber_direct"
             : privateSettings?.delivery_provider || "manual",
         delivery_quote_id: deliveryQuoteId,
