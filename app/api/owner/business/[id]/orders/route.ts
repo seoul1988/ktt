@@ -33,10 +33,7 @@ export async function GET(
         "id,order_number,fulfillment_type,customer_name,customer_phone,requested_time,payment_method,payment_method_type,payment_status,order_status,subtotal,tax,tip,total,delivery_address,square_payment_id,created_at,restaurant_order_items(id,item_name,quantity,unit_price,line_total,instructions)",
       )
       .eq("business_id", businessId)
-      .not("square_payment_id", "is", null)
-      .neq("square_payment_id", "")
-      .eq("payment_status", "paid")
-      .in("payment_method_type", ["card", "google_pay", "apple_pay"])
+      .neq("payment_status", "pending")
       .order("created_at", { ascending: false })
       .limit(100);
 

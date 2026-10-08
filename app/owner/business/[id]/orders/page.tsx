@@ -206,12 +206,7 @@ export default function OwnerOrdersPage() {
 
   const visibleOrders = useMemo(() => {
     return orders.filter((o) => {
-      // Square에서 실제 결제 ID가 생성된 주문만 표시합니다.
-      if (!String(o.square_payment_id || "").trim()) {
-        return false;
-      }
-
-      // payment pending 주문은 조회 목록에서 제외합니다.
+      // payment pending 주문만 조회 목록에서 제외합니다.
       if (
         String(o.payment_status || "")
           .trim()
