@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 export type CheckoutCartItem = {
   cartItemId: string;
@@ -628,18 +628,14 @@ export default function RestaurantCheckoutModal({
   ) {
     if (!squarePrepared || squarePaying || squarePaymentLockRef.current) return;
 
-    // Lock immediately, before React has a chance to re-render.
+    // Lock immediately and commit the blocking screen synchronously.
+    // Do not yield before Apple Pay / Google Pay tokenization because wallet
+    // APIs need to remain inside the original user click activation.
     squarePaymentLockRef.current = true;
-    setSquarePaying(true);
-    setError("");
-
-    // Force the blocking payment screen to be committed and painted before
-    // Square tokenization / wallet verification / payment requests begin.
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve());
-      });
+    flushSync(() => {
+      setSquarePaying(true);
     });
+    setError("");
 
     try {
       const amount = squarePrepared.amount;

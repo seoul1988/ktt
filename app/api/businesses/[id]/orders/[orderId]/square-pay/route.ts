@@ -395,16 +395,40 @@ export async function POST(
     if (updateError) {
       console.error("SQUARE COMPLETED PAYMENT SAVE ERROR", updateError);
 
-      // Square already returned COMPLETED. Do not tell the customer that the
-      // payment itself failed and encourage another payment attempt.
-      return NextResponse.json({
-        ok: true,
-        paymentStatus: "paid",
-        paymentMethodType,
-        paymentId,
-        orderNumber: order.order_number,
-        paymentRecorded: false,
-      });
+      // Square is already COMPLETED, so never encourage another charge.
+      // Retry the essential payment facts once. This also protects against a
+      // transient DB write failure after Square has captured the payment.
+      const { error: retryUpdateError } = await db
+        .from("restaurant_orders")
+        .update({
+          payment_status: "paid",
+          payment_method: paymentMethodType,
+          payment_method_type: paymentMethodType,
+          square_payment_id: paymentId,
+          paid_at: paidAt.toISOString(),
+        })
+        .eq("id", ktownOrderId)
+        .eq("business_id", businessId);
+
+      if (retryUpdateError) {
+        console.error(
+          "SQUARE COMPLETED PAYMENT SAVE RETRY ERROR",
+          retryUpdateError,
+        );
+
+        // The charge is completed at Square, but KTown could not persist it.
+        // Return success for the payment itself, while explicitly flagging the
+        // synchronization failure so the client does not create another charge.
+        return NextResponse.json({
+          ok: true,
+          paymentStatus: "paid",
+          paymentMethodType,
+          paymentId,
+          orderNumber: order.order_number,
+          paymentRecorded: false,
+          syncRequired: true,
+        });
+      }
     }
 
     // Payment is already safely recorded. Save cancellation/tracking tokens
