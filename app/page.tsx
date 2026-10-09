@@ -796,14 +796,18 @@ const kdramaNews = (todaysKoreaPosts || [])
     mainGrandOpening?.image_url ||
     "/event.png";
 
-  // Coming Soon:
-  // 특정 Business ID를 고정하지 않고,
-  // Coming Soon으로 등록된 비즈니스 중 하나를 랜덤으로 표시합니다.
-  // Check the actual business-to-category assignments as well as legacy fields.
+  // Coming Soon: show a business for 20 days from the date its
+  // COMING SOON category assignment was created.
+  // Fetch the assigned businesses directly so the general business-list
+  // row limit cannot hide newer entries.
+  const comingSoonCutoff = new Date(
+    nowDate.getTime() - 20 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
   const { data: comingSoonCategoryRows, error: comingSoonCategoryError } =
     await supabase
       .from("categories")
-      .select("id, name")
+      .select("id")
       .ilike("name", "%coming soon%");
 
   if (comingSoonCategoryError) {
@@ -814,41 +818,40 @@ const kdramaNews = (todaysKoreaPosts || [])
     (category: any) => category.id,
   );
 
-  let comingSoonBusinessIds = new Set<string>();
+  let comingSoonBusinessIds: string[] = [];
   if (comingSoonCategoryIds.length > 0) {
     const { data: comingSoonAssignments, error: comingSoonAssignmentError } =
       await supabase
         .from("business_categories")
-        .select("business_id")
-        .in("category_id", comingSoonCategoryIds);
+        .select("business_id, created_at")
+        .in("category_id", comingSoonCategoryIds)
+        .gte("created_at", comingSoonCutoff);
 
     if (comingSoonAssignmentError) {
       console.error("Coming Soon assignments load error:", comingSoonAssignmentError);
     } else {
-      comingSoonBusinessIds = new Set(
-        (comingSoonAssignments || []).map((row: any) => String(row.business_id)),
+      comingSoonBusinessIds = Array.from(
+        new Set(
+          (comingSoonAssignments || []).map((row: any) => String(row.business_id)),
+        ),
       );
     }
   }
 
-  const comingSoonBusinesses = (allSpots || []).filter((business: any) => {
-    const categories = [
-      ...splitCategories(business?.category),
-      ...splitCategories(business?.category_name),
-      ...splitCategories(business?.categories),
-    ].map((value) => normalizeCategory(value));
+  let comingSoonBusinesses: any[] = [];
+  if (comingSoonBusinessIds.length > 0) {
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("*")
+      .in("id", comingSoonBusinessIds)
+      .eq("hidden", false);
 
-    return (
-      comingSoonBusinessIds.has(String(business.id)) ||
-      categories.some(
-        (category) =>
-          category === "coming soon" ||
-          category.includes("coming soon"),
-      ) ||
-      business?.coming_soon === true ||
-      business?.is_coming_soon === true
-    );
-  });
+    if (error) {
+      console.error("Coming Soon business load error:", error);
+    } else {
+      comingSoonBusinesses = data || [];
+    }
+  }
 
   const comingSoonBusiness =
     comingSoonBusinesses.length > 0
