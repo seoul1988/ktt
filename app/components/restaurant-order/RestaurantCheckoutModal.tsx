@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 export type CheckoutCartItem = {
   cartItemId: string;
@@ -814,6 +814,10 @@ export default function RestaurantCheckoutModal({
         );
       }
 
+      // Remove both the imperative and React processing overlays before
+      // showing payment confirmation or navigating to tracking.
+      hidePaymentBlockingScreenNow();
+      flushSync(() => setSquarePaying(false));
       onOrderPlaced();
 
       if (payload?.trackingUrl) {
