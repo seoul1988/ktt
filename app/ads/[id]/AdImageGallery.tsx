@@ -81,11 +81,10 @@ export default function AdImageGallery({
   }
 
 function openImage() {
-  const imageUrl = images[currentIndex];
+  if (!images[currentIndex]) return;
 
-  if (!imageUrl) return;
-
-  window.location.href = imageUrl;
+  resetZoom();
+  setIsOpen(true);
 }
 
   function closeImage() {
