@@ -7,6 +7,8 @@ import ProfileButton from "@/app/components/ProfileButton";
 import BackButton from "@/app/components/BackButton";
 import CommunityBottomNav from "@/app/components/CommunityBottomNav";
 
+declare global { interface Window { google: any; } }
+
 type AdItem = {
   id: number;
   user_id: string | null;
@@ -208,6 +210,7 @@ async function fetchImageBlob(imageUrl: string): Promise<Blob> {
 
 export default function EditAdPage() {
   const newImageInputRef = useRef<HTMLInputElement | null>(null);
+  const addressRef = useRef<HTMLInputElement | null>(null);
   const previewUrlsRef = useRef<string[]>([]);
   const params = useParams();
   const router = useRouter();
@@ -243,6 +246,7 @@ export default function EditAdPage() {
 
   useEffect(() => {
     loadAd();
+    loadGooglePlaces();
   }, []);
 
   useEffect(() => {
@@ -288,32 +292,37 @@ export default function EditAdPage() {
     setLoading(false);
   }
 
-  async function geocodeAddress() {
-    if (!location.trim()) {
-      alert("Please enter an address first.");
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          location,
-        )}&limit=1`,
-      );
-
-      const data = await res.json();
-
-      if (!Array.isArray(data) || data.length === 0) {
-        alert("Address not found.");
-        return;
-      }
-
-      setLat(data[0].lat);
-      setLng(data[0].lon);
-      alert("Latitude and longitude added.");
-    } catch {
-      alert("Failed to get latitude and longitude.");
-    }
+  function loadGooglePlaces() {
+    const initialize = () => {
+      if (!addressRef.current || !window.google?.maps?.places) return;
+      const autocomplete = new window.google.maps.places.Autocomplete(addressRef.current, {
+        fields: ["formatted_address", "geometry", "name"],
+        componentRestrictions: { country: "us" },
+      });
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        const selectedAddress = place.formatted_address || place.name || addressRef.current?.value || "";
+        setLocation(selectedAddress);
+        if (place.geometry?.location) {
+          setLat(String(place.geometry.location.lat()));
+          setLng(String(place.geometry.location.lng()));
+        } else {
+          setLat("");
+          setLng("");
+        }
+      });
+    };
+    if (window.google?.maps?.places) { initialize(); return; }
+    const existing = document.getElementById("google-maps-script");
+    if (existing) { existing.addEventListener("load", initialize, { once: true }); return; }
+    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!key) return;
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
+    script.async = true;
+    script.onload = initialize;
+    document.body.appendChild(script);
   }
 
   function getUploadFolder() {
@@ -353,6 +362,10 @@ export default function EditAdPage() {
     );
 
     if (selectedFiles.length === 0) return;
+    if (images.length + newImages.length + selectedFiles.length > 6) {
+      alert("이미지는 기존 사진 포함 최대 6장까지 등록할 수 있습니다.");
+      return;
+    }
 
     setOptimizingImages(true);
 
@@ -534,6 +547,11 @@ export default function EditAdPage() {
       return;
     }
 
+    if (images.length + newImages.length > 6) {
+      alert("이미지는 최대 6장까지 등록할 수 있습니다.");
+      return;
+    }
+
     if (optimizingImages) {
       alert("이미지 축소 작업이 끝날 때까지 기다려 주세요.");
       return;
@@ -661,47 +679,16 @@ export default function EditAdPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-black text-gray-500">
-              Address
-            </label>
-            <div className="flex gap-2">
-              <input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="flex-1 rounded-xl border px-4 py-3 text-sm font-bold"
-              />
-              <button
-                type="button"
-                onClick={geocodeAddress}
-                className="rounded-xl bg-[#172033] px-3 text-xs font-black text-white"
-              >
-                Get GPS
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-1 block text-xs font-black text-gray-500">
-                Latitude
-              </label>
-              <input
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-                className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-black text-gray-500">
-                Longitude
-              </label>
-              <input
-                value={lng}
-                onChange={(e) => setLng(e.target.value)}
-                className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
-              />
-            </div>
+            <label className="mb-1 block text-xs font-black text-gray-500">Address</label>
+            <input
+              ref={addressRef}
+              value={location}
+              onChange={(e) => { setLocation(e.target.value); setLat(""); setLng(""); }}
+              placeholder="주소를 입력하고 아래 추천 주소를 선택하세요"
+              autoComplete="off"
+              className="w-full rounded-xl border px-4 py-3 text-sm font-bold"
+            />
+            <p className="mt-1 text-[11px] text-gray-500">추천 주소를 선택하면 위치 정보가 자동 저장됩니다.</p>
           </div>
 
           <div>
@@ -762,7 +749,7 @@ export default function EditAdPage() {
 
           <div>
             <label className="mb-1 block text-xs font-black text-gray-500">
-              Add Images
+              Add Images (최대 6장, 현재 {images.length + newImages.length}/6)
             </label>
 
             <input

@@ -194,6 +194,7 @@ export default function NewAdPage() {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
 
   const [saving, setSaving] = useState(false);
+  const [optimizingImages, setOptimizingImages] = useState(false);
 
   useEffect(() => {
     loadGooglePlaces();
@@ -211,9 +212,11 @@ export default function NewAdPage() {
       return;
     }
 
+    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!key) return;
     const script = document.createElement("script");
     script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
     script.async = true;
     script.onload = initAutocomplete;
     document.body.appendChild(script);
@@ -248,13 +251,13 @@ export default function NewAdPage() {
   }
 
   async function handleImageChange(files: FileList | null) {
-    imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
-
-    if (!files || files.length === 0) {
-      setImageFiles([]);
-      setImagePreviews([]);
+    if (!files || files.length === 0) return;
+    const selected = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length + selected.length > 6) {
+      alert("이미지는 최대 6장까지 등록할 수 있습니다.");
       return;
     }
+    setOptimizingImages(true);
 
     try {
       const selectedFiles = Array.from(files).filter((file) =>
@@ -267,15 +270,13 @@ export default function NewAdPage() {
         selectedFiles.map((file) => optimizeImage(file, 1600, 1600, 0.78)),
       );
 
-      setImageFiles(optimizedFiles);
-      setImagePreviews(
-        optimizedFiles.map((file) => URL.createObjectURL(file)),
-      );
+      setImageFiles((prev) => [...prev, ...optimizedFiles]);
+      setImagePreviews((prev) => [...prev, ...optimizedFiles.map((file) => URL.createObjectURL(file))]);
     } catch (error) {
       console.error("Image optimization error:", error);
       alert("이미지 크기 조정 중 오류가 발생했습니다.");
-      setImageFiles([]);
-      setImagePreviews([]);
+    } finally {
+      setOptimizingImages(false);
     }
   }
 
@@ -361,6 +362,8 @@ export default function NewAdPage() {
       return;
     }
 
+    if (optimizingImages) { alert("이미지 처리 중입니다."); return; }
+    if (imageFiles.length > 6) { alert("이미지는 최대 6장까지 등록할 수 있습니다."); return; }
     setSaving(true);
 
     try {
@@ -471,11 +474,7 @@ export default function NewAdPage() {
             className="w-full rounded-2xl border p-3 text-sm"
           />
 
-          {lat !== null && lng !== null && (
-            <div className="rounded-2xl bg-green-50 p-3 text-xs font-bold text-green-700">
-              GPS saved: {lat}, {lng}
-            </div>
-          )}
+
 
           <input
             value={phone}
@@ -494,7 +493,7 @@ export default function NewAdPage() {
           />
 
           <div>
-            <p className="mb-2 text-sm font-black">이미지</p>
+            <p className="mb-2 text-sm font-black">이미지 (최대 6장, 현재 {imageFiles.length}/6)</p>
 
             <label className="flex cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-5 text-sm font-black text-gray-600">
               🖼 이미지 선택
@@ -502,7 +501,7 @@ export default function NewAdPage() {
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(e) => handleImageChange(e.target.files)}
+                onChange={(e) => { void handleImageChange(e.target.files); e.currentTarget.value = ""; }}
                 className="hidden"
               />
             </label>
@@ -516,12 +515,14 @@ export default function NewAdPage() {
             {imagePreviews.length > 0 && (
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {imagePreviews.map((src, index) => (
-                  <img
-                    key={index}
-                    src={src}
-                    alt={`preview-${index}`}
-                    className="h-24 w-full rounded-xl border object-cover"
-                  />
+                  <div key={src} className="relative">
+                    <img src={src} alt={`preview-${index}`} className="h-24 w-full rounded-xl border object-cover" />
+                    <button type="button" onClick={() => {
+                      URL.revokeObjectURL(src);
+                      setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+                      setImageFiles((prev) => prev.filter((_, i) => i !== index));
+                    }} className="absolute right-1 top-1 rounded-full bg-red-600 px-2 py-1 text-xs font-bold text-white">X</button>
+                  </div>
                 ))}
               </div>
             )}
@@ -557,10 +558,10 @@ export default function NewAdPage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || optimizingImages}
             className="w-full rounded-2xl bg-[#172033] py-3 text-sm font-black text-white disabled:opacity-50"
           >
-            {saving ? "등록 중..." : "광고 등록"}
+            {optimizingImages ? "이미지 처리 중..." : saving ? "등록 중..." : "광고 등록"}
           </button>
         </form>
       </div>
