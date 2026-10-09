@@ -1351,11 +1351,6 @@ export default function RestaurantCheckoutModal({
 
                           <button
                             type="button"
-                            onPointerDown={() => {
-                              if (squareCardReady && !squarePaying) {
-                                showPaymentBlockingScreenNow();
-                              }
-                            }}
                             onClick={() => finishSquarePayment("card")}
                             disabled={!squareCardReady || squarePaying}
                             className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
