@@ -878,4 +878,4 @@ export default function EditAdPage() {
       <CommunityBottomNav activeNav="admin" />
     </main>
   );
-}
+}   

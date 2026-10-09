@@ -569,4 +569,4 @@ export default function NewAdPage() {
       <CommunityBottomNav activeNav="ads" />
     </main>
   );
-}
+}   
