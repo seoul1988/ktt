@@ -799,6 +799,38 @@ const kdramaNews = (todaysKoreaPosts || [])
   // Coming Soon:
   // 특정 Business ID를 고정하지 않고,
   // Coming Soon으로 등록된 비즈니스 중 하나를 랜덤으로 표시합니다.
+  // Check the actual business-to-category assignments as well as legacy fields.
+  const { data: comingSoonCategoryRows, error: comingSoonCategoryError } =
+    await supabase
+      .from("categories")
+      .select("id, name")
+      .ilike("name", "%coming soon%");
+
+  if (comingSoonCategoryError) {
+    console.error("Coming Soon category load error:", comingSoonCategoryError);
+  }
+
+  const comingSoonCategoryIds = (comingSoonCategoryRows || []).map(
+    (category: any) => category.id,
+  );
+
+  let comingSoonBusinessIds = new Set<string>();
+  if (comingSoonCategoryIds.length > 0) {
+    const { data: comingSoonAssignments, error: comingSoonAssignmentError } =
+      await supabase
+        .from("business_categories")
+        .select("business_id")
+        .in("category_id", comingSoonCategoryIds);
+
+    if (comingSoonAssignmentError) {
+      console.error("Coming Soon assignments load error:", comingSoonAssignmentError);
+    } else {
+      comingSoonBusinessIds = new Set(
+        (comingSoonAssignments || []).map((row: any) => String(row.business_id)),
+      );
+    }
+  }
+
   const comingSoonBusinesses = (allSpots || []).filter((business: any) => {
     const categories = [
       ...splitCategories(business?.category),
@@ -807,6 +839,7 @@ const kdramaNews = (todaysKoreaPosts || [])
     ].map((value) => normalizeCategory(value));
 
     return (
+      comingSoonBusinessIds.has(String(business.id)) ||
       categories.some(
         (category) =>
           category === "coming soon" ||
