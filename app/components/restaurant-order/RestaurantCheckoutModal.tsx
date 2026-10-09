@@ -280,6 +280,8 @@ export default function RestaurantCheckoutModal({
   const [squareGoogleReady, setSquareGoogleReady] = useState(false);
   const [squareAppleReady, setSquareAppleReady] = useState(false);
   const [squarePaying, setSquarePaying] = useState(false);
+  const [paymentDelayed, setPaymentDelayed] = useState(false);
+  const [paymentUncertain, setPaymentUncertain] = useState(false);
 
   // Promo Code
   const [promoCodeSettings, setPromoCodeSettings] =
@@ -322,6 +324,38 @@ export default function RestaurantCheckoutModal({
   // close the tiny window where a rapid second click could enter again.
   const orderSubmitLockRef = useRef(false);
   const squarePaymentLockRef = useRef(false);
+  const paymentDelayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paymentOverlayStartedRef = useRef(false);
+
+  function startPaymentProcessing() {
+    if (paymentOverlayStartedRef.current) return;
+    paymentOverlayStartedRef.current = true;
+    showPaymentBlockingScreenNow();
+    setSquarePaying(true);
+    setPaymentDelayed(false);
+    paymentDelayTimerRef.current = setTimeout(() => {
+      hidePaymentBlockingScreenNow();
+      setPaymentDelayed(true);
+      setPaymentUncertain(true);
+    }, 10000);
+  }
+
+  function clearPaymentProcessing() {
+    if (paymentDelayTimerRef.current) clearTimeout(paymentDelayTimerRef.current);
+    paymentDelayTimerRef.current = null;
+    paymentOverlayStartedRef.current = false;
+    setPaymentDelayed(false);
+    hidePaymentBlockingScreenNow();
+    setSquarePaying(false);
+  }
+
+  function dismissDelayedPaymentOverlay() {
+    // This only dismisses the UI. It does not cancel Square or unlock PAY.
+    hidePaymentBlockingScreenNow();
+    setSquarePaying(false);
+    setPaymentUncertain(true);
+  }
+  useEffect(() => () => { if (paymentDelayTimerRef.current) clearTimeout(paymentDelayTimerRef.current); hidePaymentBlockingScreenNow(); }, []);
   const walletPaymentPendingRef = useRef(false);
   const walletLeftPageRef = useRef(false);
 
@@ -332,8 +366,7 @@ export default function RestaurantCheckoutModal({
         walletLeftPageRef.current &&
         document.visibilityState === "visible"
       ) {
-        showPaymentBlockingScreenNow();
-        setSquarePaying(true);
+        startPaymentProcessing();
       }
     };
 
@@ -705,7 +738,7 @@ export default function RestaurantCheckoutModal({
   async function finishSquarePayment(
     method: "card" | "google" | "apple",
   ) {
-    if (!squarePrepared || squarePaying || squarePaymentLockRef.current) return;
+    if (!squarePrepared || squarePaying || paymentUncertain || squarePaymentLockRef.current) return;
 
     // Lock immediately, but do not show the blocking screen yet.
     // Apple Pay / Google Pay first lets the customer confirm inside the wallet UI.
@@ -762,8 +795,7 @@ export default function RestaurantCheckoutModal({
       // Card: show immediately after the customer pressed PAY and tokenization succeeded.
       // Wallets: focus/visibility normally shows this as soon as the native wallet closes;
       // this remains as a fallback before KTown finalizes the charge.
-      showPaymentBlockingScreenNow();
-      setSquarePaying(true);
+      startPaymentProcessing();
       walletPaymentPendingRef.current = false;
       walletLeftPageRef.current = false;
 
@@ -816,7 +848,8 @@ export default function RestaurantCheckoutModal({
 
       // Remove both the imperative and React processing overlays before
       // showing payment confirmation or navigating to tracking.
-      hidePaymentBlockingScreenNow();
+      clearPaymentProcessing();
+      setPaymentUncertain(false);
       flushSync(() => setSquarePaying(false));
       onOrderPlaced();
 
@@ -834,7 +867,9 @@ export default function RestaurantCheckoutModal({
           : "Payment could not be completed.",
       );
     } finally {
+      clearPaymentProcessing();
       squarePaymentLockRef.current = false;
+      setPaymentUncertain(false);
       walletPaymentPendingRef.current = false;
       walletLeftPageRef.current = false;
       hidePaymentBlockingScreenNow();
@@ -1145,7 +1180,7 @@ export default function RestaurantCheckoutModal({
     <div
       className="fixed inset-0 z-[13000] flex items-end justify-center bg-black/60 px-2 pb-[max(2.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4"
       onClick={() => {
-        if (!submitting && !squarePaying) onClose();
+        if (!submitting && !squarePaying && !paymentUncertain) onClose();
       }}
     >
       {squarePaying ? (
@@ -1167,8 +1202,15 @@ export default function RestaurantCheckoutModal({
               or place another order.
             </p>
             <p className="mt-3 text-xs leading-5 text-gray-500">
-              Please wait for the payment confirmation. This may take a few moments.
+              {paymentDelayed
+                ? "Payment confirmation is taking longer than expected. Your payment may still complete. Do not pay again until the order status is checked."
+                : "Please wait for the payment confirmation. This may take a few moments."}
             </p>
+            {paymentDelayed ? (
+              <button type="button" onClick={(event) => { event.stopPropagation(); dismissDelayedPaymentOverlay(); }} className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white">
+                Close (payment status unknown)
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1182,9 +1224,9 @@ export default function RestaurantCheckoutModal({
           <button
             type="button"
             onClick={() => {
-              if (!submitting && !squarePaying) onClose();
+              if (!submitting && !squarePaying && !paymentUncertain) onClose();
             }}
-            disabled={submitting || squarePaying}
+            disabled={submitting || squarePaying || paymentUncertain}
             className="h-9 w-9 rounded-full bg-gray-100 text-lg font-black disabled:cursor-not-allowed disabled:opacity-40"
           >
             ×
@@ -1243,7 +1285,7 @@ export default function RestaurantCheckoutModal({
                           type="button"
                           aria-label="Pay with Apple Pay"
                           onClick={() => finishSquarePayment("apple")}
-                          disabled={!squareAppleReady || squarePaying}
+                          disabled={!squareAppleReady || squarePaying || paymentUncertain}
                           className={`h-12 w-full overflow-hidden rounded-xl ${
                             squareAppleReady ? "block" : "hidden"
                           }`}
@@ -1268,7 +1310,7 @@ export default function RestaurantCheckoutModal({
                       <div
                         id="ktown-square-google-pay"
                         onClick={() => {
-                          if (squareGoogleReady && !squarePaying) {
+                          if (squareGoogleReady && !squarePaying && !paymentUncertain) {
                             finishSquarePayment("google");
                           }
                         }}
@@ -1313,7 +1355,7 @@ export default function RestaurantCheckoutModal({
                           squareCardReady &&
                           setCardPaymentOpen((current) => !current)
                         }
-                        disabled={!squareCardReady || squarePaying}
+                        disabled={!squareCardReady || squarePaying || paymentUncertain}
                         aria-expanded={cardPaymentOpen}
                         className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
@@ -1356,7 +1398,7 @@ export default function RestaurantCheckoutModal({
                           <button
                             type="button"
                             onClick={() => finishSquarePayment("card")}
-                            disabled={!squareCardReady || squarePaying}
+                            disabled={!squareCardReady || squarePaying || paymentUncertain}
                             className="mt-3 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
                           >
                             {squarePaying
@@ -1372,6 +1414,9 @@ export default function RestaurantCheckoutModal({
                     Payment is securely processed by Square. KTown does not store card numbers.
                   </p>
 
+                  {paymentUncertain && !squarePaying ? (
+                    <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-center text-xs font-black text-amber-800">Payment status is not yet confirmed. Do not pay again. Check this order in KTown or Square before retrying.</div>
+                  ) : null}
                   {squarePaying ? (
                     <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-center text-xs font-black text-amber-800">
                       PROCESSING PAYMENT… PLEASE DO NOT CLOSE OR TAP AGAIN.
@@ -1785,8 +1830,15 @@ export default function RestaurantCheckoutModal({
               or place another order.
             </p>
             <p className="mt-3 text-xs leading-5 text-gray-500">
-              Please wait for the payment confirmation. This may take a few moments.
+              {paymentDelayed
+                ? "Payment confirmation is taking longer than expected. Your payment may still complete. Do not pay again until the order status is checked."
+                : "Please wait for the payment confirmation. This may take a few moments."}
             </p>
+            {paymentDelayed ? (
+              <button type="button" onClick={(event) => { event.stopPropagation(); dismissDelayedPaymentOverlay(); }} className="mt-4 w-full rounded-xl bg-gray-950 px-4 py-3 text-sm font-bold text-white">
+                Close (payment status unknown)
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
