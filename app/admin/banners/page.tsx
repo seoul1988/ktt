@@ -842,6 +842,11 @@ export default function BannerManagementPage() {
       return;
     }
 
+    if (linkUrl.trim() && !(/^\/(?!\/)/.test(linkUrl.trim()) || /^https?:\/\//i.test(linkUrl.trim()))) {
+      alert("Enter a valid internal path (/...) or https:// URL.");
+      return;
+    }
+
     setSaving(true);
     setMessage("");
 
@@ -1620,6 +1625,20 @@ export default function BannerManagementPage() {
                   />
                 </label>
 
+                <label className="block rounded-xl border border-[#D9CFC2] bg-[#FCFAF7] p-3">
+                  <span className="mb-1 block text-xs font-black text-[#172033]">
+                    Banner Click URL (이미지 클릭 시 이동할 주소)
+                  </span>
+                  <input
+                    type="text"
+                    value={linkUrl}
+                    onChange={(event) => setLinkUrl(event.target.value)}
+                    placeholder="https://ktowntriangle.com/your-page"
+                    className="w-full rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-600"
+                  />
+                  <p className="mt-1 text-xs text-[#667085]">이미지 전체 클릭 시 이동할 주소입니다. 버튼에도 같은 주소를 사용합니다. 내부 경로(/...)도 입력할 수 있습니다.</p>
+                </label>
+
                 {buttonEnabled && (
                   <div className="mt-4 grid gap-4">
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1635,17 +1654,7 @@ export default function BannerManagementPage() {
                         />
                       </label>
 
-                      <label>
-                        <span className="mb-1 block text-xs font-black text-[#667085]">
-                          Button Link URL
-                        </span>
-                        <input
-                          value={linkUrl}
-                          onChange={(event) => setLinkUrl(event.target.value)}
-                          placeholder="/events or https://..."
-                          className="w-full rounded-xl border border-[#D9CFC2] bg-white px-4 py-3 text-sm font-bold outline-none focus:border-emerald-600"
-                        />
-                      </label>
+
                     </div>
 
                     <div>
