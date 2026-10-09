@@ -959,6 +959,16 @@ export default function KTownPopupBanner() {
             />
           )}
 
+          {link && (
+            <a
+              href={link}
+              target={/^https?:\/\//i.test(link) ? "_blank" : undefined}
+              rel={/^https?:\/\//i.test(link) ? "noopener noreferrer" : undefined}
+              aria-label="Open banner link"
+              className="pointer-events-auto absolute inset-0 z-10 cursor-pointer"
+            />
+          )}
+
           <button
             type="button"
             onClick={closePopup}
@@ -970,7 +980,7 @@ export default function KTownPopupBanner() {
 
           {!!banner.title && (
             <div
-              className="absolute z-20 whitespace-pre-wrap break-words"
+              className="pointer-events-none absolute z-20 whitespace-pre-wrap break-words"
               style={{
                 left: `${titleX}%`,
                 top: `${titleY}%`,
@@ -988,7 +998,7 @@ export default function KTownPopupBanner() {
 
           {!!banner.subtitle && (
             <div
-              className="absolute z-20 whitespace-pre-wrap break-words"
+              className="pointer-events-none absolute z-20 whitespace-pre-wrap break-words"
               style={{
                 left: `${subtitleX}%`,
                 top: `${subtitleY}%`,
@@ -1180,6 +1190,17 @@ export default function KTownPopupBanner() {
             </div>
           )}
 
+        {/* Entire popup artwork is clickable; controls remain above this link. */}
+        {link && (
+          <a
+            href={link}
+            target={/^https?:\/\//i.test(link) ? "_blank" : undefined}
+            rel={/^https?:\/\//i.test(link) ? "noopener noreferrer" : undefined}
+            aria-label="Open banner link"
+            className="absolute inset-0 z-10 cursor-pointer"
+          />
+        )}
+
         {/* Close */}
         <button
           type="button"
@@ -1195,7 +1216,7 @@ export default function KTownPopupBanner() {
         {/* Title */}
         {!!banner.title && (
           <div
-            className="absolute z-20 whitespace-pre-wrap break-words"
+            className="pointer-events-none absolute z-20 whitespace-pre-wrap break-words"
             style={{
               left:
                 `${titleX}%`,
@@ -1237,7 +1258,7 @@ export default function KTownPopupBanner() {
         {/* Description */}
         {!!banner.subtitle && (
           <div
-            className="absolute z-20 whitespace-pre-wrap break-words"
+            className="pointer-events-none absolute z-20 whitespace-pre-wrap break-words"
             style={{
               left:
                 `${subtitleX}%`,
