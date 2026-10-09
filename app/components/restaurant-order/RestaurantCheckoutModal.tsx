@@ -337,7 +337,7 @@ export default function RestaurantCheckoutModal({
       hidePaymentBlockingScreenNow();
       setPaymentDelayed(true);
       setPaymentUncertain(true);
-    }, 10000);
+    }, 12000);
   }
 
   function clearPaymentProcessing() {
