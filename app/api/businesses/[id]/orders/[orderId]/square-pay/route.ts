@@ -331,6 +331,29 @@ export async function POST(
     }
 
     if (finalStatus !== "COMPLETED") {
+      // Diagnostic logging for Square payments that did not complete.
+      // Do not log access tokens, source tokens, full card numbers, or CVV values.
+      console.error("SQUARE NON-COMPLETED PAYMENT", {
+        businessId,
+        ktownOrderId,
+        orderNumber: order.order_number,
+        requestedPaymentMethod: paymentMethodType,
+        paymentId,
+        status: finalStatus,
+        sourceType: finalPayment?.source_type || null,
+        cardStatus: finalPayment?.card_details?.status || null,
+        cardBrand: finalPayment?.card_details?.card?.card_brand || null,
+        last4: finalPayment?.card_details?.card?.last_4 || null,
+        entryMethod: finalPayment?.card_details?.entry_method || null,
+        cvvStatus: finalPayment?.card_details?.cvv_status || null,
+        avsStatus: finalPayment?.card_details?.avs_status || null,
+        digitalWalletType:
+          finalPayment?.card_details?.card?.digital_wallet_type || null,
+        receiptNumber: finalPayment?.receipt_number || null,
+        createdAt: finalPayment?.created_at || null,
+        updatedAt: finalPayment?.updated_at || null,
+      });
+
       const ktownPaymentStatus =
         finalStatus === "CANCELED"
           ? "cancelled"
