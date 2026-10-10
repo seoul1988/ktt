@@ -1844,11 +1844,25 @@ export async function POST(
           );
         }
 
+        // Square is authoritative for the amount payable on its order.
+        // Its per-line tax/discount rounding may differ from KTown's math.
+        const squareTotalCents = Number(squareOrderPayload?.order?.total_money?.amount);
+        if (!Number.isSafeInteger(squareTotalCents) || squareTotalCents <= 0) {
+          throw new Error("Square order did not return a valid total.");
+        }
+        const squareTotal = squareTotalCents / 100;
+        if (squareTotalCents !== moneyCents(total)) {
+          console.warn("SQUARE ORDER TOTAL RECONCILED", {
+            orderId, ktownCents: moneyCents(total), squareTotalCents,
+          });
+        }
+
         const { error: squareOrderSaveError } = await db
           .from("restaurant_orders")
           .update({
             square_order_id: squareOrderId,
             square_payment_link_id: null,
+            total: squareTotal,
           })
           .eq("id", orderId);
 
@@ -1921,8 +1935,8 @@ export async function POST(
           squarePayment: {
             applicationId: squareApplicationId,
             locationId: squareLocationId,
-            amount: total.toFixed(2),
-            amountCents: moneyCents(total),
+            amount: squareTotal.toFixed(2),
+            amountCents: squareTotalCents,
             currencyCode: "USD",
           },
         });

@@ -162,6 +162,15 @@ export async function POST(
       );
     }
 
+    // Never submit a second charge for an already captured/authorized order.
+    if (order.payment_status === "paid" || order.payment_status === "approved" || order.square_payment_id) {
+      return NextResponse.json({
+        error: "This order already has a Square payment. Check its status before retrying.",
+        paymentStatus: order.payment_status,
+        retryPayment: false,
+      }, { status: 409 });
+    }
+
     const amountCents = moneyCents(
       Number(order.total || 0),
     );
@@ -185,7 +194,8 @@ export async function POST(
         body: JSON.stringify({
           source_id: sourceId,
           // One KTown order always maps to one Square payment request.
-          idempotency_key: `kt-pay-${businessId}-${ktownOrderId}`.slice(0, 45),
+          // Stable for the same token, different for a newly tokenized card attempt.
+          idempotency_key: `kt-${businessId}-${ktownOrderId}-${tokenHash(sourceId).slice(0, 18)}`.slice(0, 45),
           amount_money: {
             amount: amountCents,
             currency: "USD",
