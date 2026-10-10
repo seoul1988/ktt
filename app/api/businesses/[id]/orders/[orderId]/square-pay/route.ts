@@ -394,6 +394,45 @@ export async function POST(
                 ? "pending"
                 : "pending";
 
+      // Diagnostics only: Square may return HTTP 200 with CANCELED/FAILED.
+      // Store only safe payment-state fields, not raw Square payload/card data.
+      if (finalStatus === "CANCELED" || finalStatus === "FAILED") {
+        try {
+          const cardDetails = finalPayment?.card_details;
+          const diagnosticDetail = [
+            `Square payment status: ${finalStatus}`,
+            `Card status: ${String(cardDetails?.status || "UNKNOWN")}`,
+            `Source: ${String(finalPayment?.source_type || "UNKNOWN")}`,
+            `Entry method: ${String(cardDetails?.entry_method || "UNKNOWN")}`,
+            `CVV result: ${String(cardDetails?.cvv_status || "UNKNOWN")}`,
+            `AVS result: ${String(cardDetails?.avs_status || "UNKNOWN")}`,
+            `Payment ID: ${paymentId}`,
+          ].join("; ").slice(0, 2000);
+
+          const { error: diagnosticError } = await db
+            .from("restaurant_square_api_errors")
+            .insert({
+              business_id: businessId,
+              order_id: ktownOrderId,
+              order_number: String(order.order_number || ""),
+              http_status: squareResponse.status,
+              error_code: `PAYMENT_${finalStatus}`,
+              error_detail: diagnosticDetail,
+              square_errors: [{
+                code: `PAYMENT_${finalStatus}`,
+                category: "PAYMENT_STATUS",
+                detail: diagnosticDetail,
+                field: "payment.status",
+              }],
+            });
+          if (diagnosticError) {
+            console.error("SQUARE STATUS DIAGNOSTIC SAVE ERROR", diagnosticError);
+          }
+        } catch (diagnosticError) {
+          console.error("SQUARE STATUS DIAGNOSTIC SAVE EXCEPTION", diagnosticError);
+        }
+      }
+
       const { error: statusSaveError } = await db
         .from("restaurant_orders")
         .update({
