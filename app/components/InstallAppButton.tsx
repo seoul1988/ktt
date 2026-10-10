@@ -326,11 +326,13 @@ export default function InstallAppButton({
      * localStorage/cookie Ω╕░δí¥∞¥Ç ∞ò▒ ∞é¡∞á£ φ¢ä∞ùÉδÅä δé¿Ω╕░ δòîδ¼╕∞ùÉ
      * ∞äñ∞╣ÿ ∞ù¼δ╢Ç φîÉδï¿∞ùÉδèö ∞é¼∞Ü⌐φòÿ∞ºÇ ∞òè∞è╡δïêδïñ.
      */
-    return getStandaloneState();
+    // A remembered installation is a UI preference, not OS-level proof.
+    // This allows the same Chrome profile to avoid repeat install prompts.
+    return getStandaloneState() || getSavedInstalledState();
   }
 
   function checkInstalledState() {
-    const installed = getStandaloneState();
+    const installed = getInstalledState();
 
     setIsInstalled(installed);
     setHasCheckedInstallState(true);
@@ -345,6 +347,18 @@ export default function InstallAppButton({
     }
 
     return installed;
+  }
+
+  function markAlreadyInstalled() {
+    // Existing Android installs cannot always be queried from a web page.
+    // Let the user confirm an existing install and suppress future prompts.
+    saveInstalledState(true);
+    installPromptRef.current = null;
+    setInstallPrompt(null);
+    setIsInstalled(true);
+    setHasCheckedInstallState(true);
+    setShowBanner(false);
+    setInstallMessage("");
   }
 
   function hideFor24Hours() {
@@ -447,6 +461,7 @@ export default function InstallAppButton({
 
     function handleBeforeInstallPrompt(event: Event) {
       event.preventDefault();
+      if (getInstalledState()) return;
 
       const promptEvent =
         event as BeforeInstallPromptEvent;
@@ -490,6 +505,7 @@ export default function InstallAppButton({
 
     function handleAppInstalled() {
       console.log("Γ£à appinstalled fired");
+      saveInstalledState(true);
 
       installPromptRef.current = null;
       setIsInstalled(true);
@@ -675,6 +691,8 @@ export default function InstallAppButton({
       setInstallPrompt(null);
 
       if (choice.outcome === "accepted") {
+        // Remember the accepted installation for subsequent browser visits.
+        saveInstalledState(true);
         /*
          * ∞ù¼Ω╕░∞ä£δèö ∞äñ∞╣ÿ∞░╜δºî δï½∞è╡δïêδïñ.
          * ∞äñ∞╣ÿ ∞Öäδúî ∞òêδé┤δèö ∞ïñ∞á£ appinstalled ∞¥┤δ▓ñφè╕∞ùÉ∞ä£ φò£ δ▓êδºî φæ£∞ï£φò⌐δïêδïñ.
@@ -829,6 +847,13 @@ export default function InstallAppButton({
             className="mt-4 w-full rounded-2xl bg-[#F7B955] py-3 text-sm font-black text-[#172033] transition active:scale-[0.98]"
           >
             Install App
+          </button>
+          <button
+            type="button"
+            onClick={markAlreadyInstalled}
+            className="mt-3 w-full py-2 text-xs font-semibold text-white/80 underline underline-offset-2"
+          >
+            Already installed? Don't show this again
           </button>
         </div>
       ) : (
