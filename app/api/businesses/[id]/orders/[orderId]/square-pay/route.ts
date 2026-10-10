@@ -225,6 +225,35 @@ export async function POST(
         `Square payment failed (HTTP ${squareResponse.status}).`,
       );
 
+      // Diagnostics only: persist Square API errors for later SQL inspection.
+      // Never store payment source tokens, access tokens, or the raw response.
+      try {
+        const squareErrors = Array.isArray(squarePayload?.errors)
+          ? squarePayload.errors
+          : [];
+        const { error: diagnosticError } = await db
+          .from("restaurant_square_api_errors")
+          .insert({
+            business_id: businessId,
+            order_id: ktownOrderId,
+            order_number: String(order.order_number || ""),
+            http_status: squareResponse.status,
+            error_code: String(squareErrors[0]?.code || "UNKNOWN").slice(0, 120),
+            error_detail: errorDetail.slice(0, 2000),
+            square_errors: squareErrors.map((item: any) => ({
+              code: String(item?.code || "").slice(0, 120),
+              category: String(item?.category || "").slice(0, 120),
+              detail: String(item?.detail || "").slice(0, 2000),
+              field: String(item?.field || "").slice(0, 200),
+            })),
+          });
+        if (diagnosticError) {
+          console.error("SQUARE ERROR DIAGNOSTIC SAVE ERROR", diagnosticError);
+        }
+      } catch (diagnosticError) {
+        console.error("SQUARE ERROR DIAGNOSTIC SAVE EXCEPTION", diagnosticError);
+      }
+
       const { error: failedSaveError } = await db
         .from("restaurant_orders")
         .update({
