@@ -796,13 +796,8 @@ const kdramaNews = (todaysKoreaPosts || [])
     mainGrandOpening?.image_url ||
     "/event.png";
 
-  // Coming Soon: show a business for 20 days from the date its
-  // COMING SOON category assignment was created.
-  // Fetch the assigned businesses directly so the general business-list
-  // row limit cannot hide newer entries.
-  const comingSoonCutoff = new Date(
-    nowDate.getTime() - 20 * 24 * 60 * 60 * 1000,
-  ).toISOString();
+  // Coming Soon: no time limit. Show businesses while assigned to
+  // the COMING SOON category (direct field or category link).
 
   const { data: comingSoonCategoryRows, error: comingSoonCategoryError } =
     await supabase
@@ -820,45 +815,41 @@ const kdramaNews = (todaysKoreaPosts || [])
 
   let comingSoonBusinessIds: string[] = [];
   if (comingSoonCategoryIds.length > 0) {
-    const { data: comingSoonAssignments, error: comingSoonAssignmentError } =
-      await supabase
-        .from("business_categories")
-        .select("business_id, created_at")
-        .in("category_id", comingSoonCategoryIds)
-        .gte("created_at", comingSoonCutoff);
+    const { data: assignments, error: assignmentError } = await supabase
+      .from("business_categories")
+      .select("business_id")
+      .in("category_id", comingSoonCategoryIds);
 
-    if (comingSoonAssignmentError) {
-      console.error("Coming Soon assignments load error:", comingSoonAssignmentError);
+    if (assignmentError) {
+      console.error("Coming Soon assignments load error:", assignmentError);
     } else {
       comingSoonBusinessIds = Array.from(
-        new Set(
-          (comingSoonAssignments || []).map((row: any) => String(row.business_id)),
-        ),
+        new Set((assignments || []).map((row: any) => String(row.business_id))),
       );
     }
   }
 
-  let comingSoonBusinesses: any[] = [];
-  if (comingSoonBusinessIds.length > 0) {
-    const { data, error } = await supabase
-      .from("businesses")
-      .select("*")
-      .in("id", comingSoonBusinessIds)
-      .eq("hidden", false);
+  // A business may have COMING SOON in businesses.category without
+  // an entry in business_categories.
+  const { data: candidateBusinesses, error: candidateBusinessError } = await supabase
+    .from("businesses")
+    .select("*")
+    .eq("hidden", false)
+    .order("created_at", { ascending: false });
 
-    if (error) {
-      console.error("Coming Soon business load error:", error);
-    } else {
-      comingSoonBusinesses = data || [];
-    }
+  if (candidateBusinessError) {
+    console.error("Coming Soon business load error:", candidateBusinessError);
   }
 
-  const comingSoonBusiness =
-    comingSoonBusinesses.length > 0
-      ? comingSoonBusinesses[
-          Math.floor(Math.random() * comingSoonBusinesses.length)
-        ]
-      : null;
+  const comingSoonBusinessIdSet = new Set(comingSoonBusinessIds);
+  const comingSoonBusinesses = (candidateBusinesses || []).filter((business: any) =>
+    comingSoonBusinessIdSet.has(String(business.id)) ||
+    splitCategories(business.category).some((name) =>
+      normalizeCategory(name).includes("coming soon"),
+    ),
+  );
+
+  const comingSoonBusiness = comingSoonBusinesses[0] || null;
 
   const comingSoonImage =
     comingSoonBusiness?.thumbnail_url ||
