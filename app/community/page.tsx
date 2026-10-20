@@ -6,7 +6,6 @@ import ProfileButton from "../components/ProfileButton";
 import CommunityFeaturedBusinessSlider from "../components/CommunityFeaturedBusinessSlider";
 import CommunityNewsCarousel from "../components/CommunityNewsCarousel";
 import CommunityAdsSlider from "../components/CommunityAdsSlider";
-import CommunityLiveStocks from "./components/CommunityLiveStocks";
 
 
 export const dynamic = "force-dynamic";
@@ -308,8 +307,6 @@ export default async function CommunityPage() {
           usNews={usNews as any[]}
         />
 
-        {/* Compact live NVDA / TSLA / AAPL */}
-        <CommunityLiveStocks />
 
         {/* KTown Coupon Book */}
         <section className="mb-5">
