@@ -348,6 +348,7 @@ type WebsiteSettings = {
    */
   logo_url?: string;
   app_icon_url?: string;
+  order_only_mode?: boolean;
   primary_color?: string;
   secondary_color?: string;
   accent_color?: string;
@@ -10739,6 +10740,35 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             </button>
             <button
               type="button"
+              aria-pressed={websiteSettings.order_only_mode === true}
+              onClick={() => {
+                if (!business) return;
+                const nextMode = websiteSettings.order_only_mode !== true;
+                setBusiness((current) => current ? {
+                  ...current,
+                  website_settings: {
+                    ...normalizeSettings(current.website_settings, current.name || ""),
+                    order_only_mode: nextMode,
+                  },
+                } : current);
+                if (nextMode && !sections.some((section) => section.section_type === "footer")) {
+                  addLayer("footer");
+                }
+                setMessage(nextMode
+                  ? "주문 전용 모드가 켜졌습니다. 메뉴 레이어와 Footer만 공개됩니다. 서버 저장을 눌러주세요."
+                  : "일반 홈페이지 모드로 전환했습니다. 서버 저장을 눌러주세요.");
+              }}
+              className={`rounded-full border px-4 py-2 text-sm font-black ${
+                websiteSettings.order_only_mode === true
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-emerald-300 bg-white text-emerald-800"
+              }`}
+              title="기존 홈페이지 기능을 삭제하지 않고 공개 화면을 Header + Menu + Footer로 전환합니다."
+            >
+              {websiteSettings.order_only_mode === true ? "✓ 주문 전용 ON" : "주문 전용 OFF"}
+            </button>
+            <button
+              type="button"
               onClick={() => setMenuImportOpen(true)}
               className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800 hover:bg-orange-100"
             >
@@ -15464,9 +15494,18 @@ export function PublicWebsiteRenderer({
       return Number(a.id || 0) - Number(b.id || 0);
     });
 
+  const orderOnlyMode = websiteSettings.order_only_mode === true;
+  const orderOnlySections = orderOnlyMode
+    ? visibleSections.filter((section) => {
+        if (section.content?.page_type === "link-page") return false;
+        const sectionName = slugifyMenuValue(String(section.title || section.section_type || ""));
+        return section.section_type === "footer" || sectionName === "menu";
+      })
+    : visibleSections;
+
   const pageSections =
     normalizedSlug === "home"
-      ? visibleSections.filter(
+      ? orderOnlySections.filter(
           (section) => section.content?.page_type !== "link-page",
         )
       : visibleSections.filter(
@@ -15549,10 +15588,12 @@ export function PublicWebsiteRenderer({
       ) || "menu"}`
     : "/menu";
 
-  const mobileActionTargetUrl = String(
-    websiteSettings.mobile_action_target_url ||
-      (hasRestaurantMenu ? restaurantMenuTargetUrl : ""),
-  ).trim();
+  const mobileActionTargetUrl = orderOnlyMode
+    ? `#menu`
+    : String(
+        websiteSettings.mobile_action_target_url ||
+          (hasRestaurantMenu ? restaurantMenuTargetUrl : ""),
+      ).trim();
 
   const mobileActionButtonLabel =
     String(
