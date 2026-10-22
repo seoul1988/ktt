@@ -3041,7 +3041,7 @@ function getSectionWidthMode(
   section: BusinessSection | null | undefined,
 ): "full" | "container" {
   const savedWidth =
-    section?.content?.layer_width ||
+    section?.content?.layer_width ??
     section?.settings?.layer_width;
 
   return savedWidth === "full" ? "full" : "container";
@@ -10331,9 +10331,11 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
          */
         const savedLayerWidth =
           section.content?.layer_width === "full" ||
-          section.settings?.layer_width === "full"
-            ? "full"
-            : "container";
+          section.content?.layer_width === "container"
+            ? section.content.layer_width
+            : section.settings?.layer_width === "full"
+              ? "full"
+              : "container";
 
         const sectionWithWidth = {
           ...section,
@@ -10547,10 +10549,12 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               ...(returnedSection.settings ?? {}),
               ...(matchingLocalSection.settings ?? {}),
               layer_width:
-                matchingLocalSection.settings?.layer_width === "full" ||
-                matchingLocalSection.content?.layer_width === "full"
-                  ? "full"
-                  : "container",
+                matchingLocalSection.content?.layer_width === "full" ||
+                matchingLocalSection.content?.layer_width === "container"
+                  ? matchingLocalSection.content.layer_width
+                  : matchingLocalSection.settings?.layer_width === "full"
+                    ? "full"
+                    : "container",
             },
           };
         },
