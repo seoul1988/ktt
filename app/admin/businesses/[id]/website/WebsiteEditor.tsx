@@ -15503,7 +15503,7 @@ export function PublicWebsiteRenderer({
     ? visibleSections.filter((section) => {
         if (section.content?.page_type === "link-page") return false;
         const sectionName = slugifyMenuValue(String(section.title || section.section_type || ""));
-        return section.section_type === "footer" || sectionName === "menu";
+        return section.section_type === "footer" || sectionName === "menu" || isHomeLikeSection(section);
       })
     : visibleSections;
 
