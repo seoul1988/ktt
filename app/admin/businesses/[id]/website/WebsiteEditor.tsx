@@ -6440,6 +6440,95 @@ function MenuImportModal({
     setImportError("");
   }
 
+  async function startImagesOnly() {
+    if (!csvFile || imageFiles.length === 0) {
+      setImportError("메뉴 CSV와 실제 이미지가 들어 있는 폴더를 모두 선택하세요.");
+      return;
+    }
+    if (optionsCsvFile) {
+      setImportError("이미지 전용 업데이트에서는 옵션 CSV를 선택하지 마세요.");
+      return;
+    }
+    setImporting(true);
+    setImportError("");
+    setResult("");
+    try {
+      const rows = parseMenuCsv(await csvFile.text(), platform);
+      if (!rows.length) throw new Error("메뉴 CSV에서 메뉴를 찾지 못했습니다.");
+      const fileMap = new Map<string, File>();
+      for (const file of imageFiles) {
+        const relative = String((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name)
+          .replace(/\\/g, "/").toLowerCase();
+        fileMap.set(relative, file);
+        fileMap.set(file.name.toLowerCase(), file);
+        fileMap.set(normalizeMenuFileKey(file.name), file);
+      }
+      const matches = rows.map((row) => {
+        const requested = row.imageFileName.toLowerCase();
+        const base = requested.split("/").pop() || requested;
+        return {
+          row,
+          file: fileMap.get(requested) ||
+            fileMap.get(base) ||
+            fileMap.get(normalizeMenuFileKey(base)) ||
+            fileMap.get(normalizeMenuFileKey(row.name)),
+        };
+      });
+      const matched = matches.filter((entry) => Boolean(entry.file));
+      if (!matched.length) {
+        throw new Error("CSV와 일치하는 이미지 파일이 0개입니다. 파일명(product_id.jpg)과 폴더를 확인하세요.");
+      }
+      const missing = matches.length - matched.length;
+      if (!window.confirm(
+        `기존 메뉴 이미지 전용 업데이트\\n업체 ID: ${businessId}\\n메뉴 CSV: ${rows.length}개\\n이미지 연결 가능: ${matched.length}개\\n이미지 없는 메뉴: ${missing}개\\n\\n메뉴·가격·옵션은 변경하지 않습니다. 계속할까요?`
+      )) return;
+
+      setProgress({ current: 0, total: matched.length });
+      let uploaded = 0;
+      const failures: string[] = [];
+      for (const entry of matched) {
+        const row = entry.row;
+        const imageFile = entry.file!;
+        try {
+          const thumbnail = await imageFileToWebp(imageFile, {
+            width: 96, height: 96, quality: 0.74, crop: true,
+          });
+          const display = await imageFileToWebp(imageFile, {
+            width: 800, height: 800, quality: 0.82, crop: false,
+          });
+          const formData = new FormData();
+          formData.append("imagesOnly", "true");
+          formData.append("platform", platform);
+          formData.append("sourcePlatform", platform);
+          formData.append("name", row.name);
+          const safeName = normalizeMenuFileKey(row.name) || "menu-image";
+          formData.append("thumbnail", thumbnail, `${safeName}.webp`);
+          formData.append("displayImage", display, `${safeName}.webp`);
+          const response = await fetch(
+            `/api/admin/businesses/${encodeURIComponent(businessId)}/menu/import`,
+            { method: "POST", credentials: "include", body: formData },
+          );
+          const payload = await readApiResponse(response);
+          if (!response.ok) {
+            throw new Error(String(payload.error || payload.message || `HTTP ${response.status}`));
+          }
+          uploaded++;
+        } catch (error) {
+          failures.push(`${row.name}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        setProgress({ current: uploaded + failures.length, total: matched.length });
+      }
+      setResult(
+        `이미지 전용 업데이트 완료: 성공 ${uploaded}개 / 실패 ${failures.length}개 / CSV 이미지 없음 ${missing}개. 메뉴·옵션·가격 변경 없음.` +
+        (failures.length ? `\\n실패 항목:\\n${failures.slice(0, 30).join("\\n")}` : "")
+      );
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "이미지 업데이트 실패");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function startImport() {
     const optionsOnly = !csvFile && Boolean(optionsCsvFile);
 
@@ -6964,6 +7053,22 @@ function MenuImportModal({
             />
             {imageFiles.length ? <span className="mt-1.5 block text-xs font-bold text-emerald-700">이미지 {imageFiles.length}개 선택됨</span> : null}
           </label>
+
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+            <p className="text-sm font-black text-gray-950">기존 메뉴 이미지만 업데이트</p>
+            <p className="mt-1 text-xs text-gray-700">
+              위에서 메뉴 CSV와 실제 이미지 폴더만 선택하세요. 옵션 CSV는 비워두세요.
+              기존 메뉴·가격·옵션은 유지하고 비어 있는 이미지 경로만 등록합니다.
+            </p>
+            <button
+              type="button"
+              disabled={importing || !csvFile || imageFiles.length === 0 || Boolean(optionsCsvFile)}
+              onClick={() => void startImagesOnly()}
+              className="mt-3 w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {importing ? "처리 중..." : "기존 메뉴 이미지만 업데이트"}
+            </button>
+          </div>
 
           <div className="rounded-xl bg-violet-50 px-3 py-2 text-xs font-semibold leading-5 text-violet-950">
             공통 옵션 구조: 옵션그룹 이름 · Required · 최소/최대 선택 수 · 옵션명 · 추가금 · Sold Out · 표시순서
