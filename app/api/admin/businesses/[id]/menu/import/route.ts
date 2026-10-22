@@ -954,7 +954,8 @@ export async function POST(
       }
       const matched = matches[0];
       // Do not overwrite existing paths without a deliberate separate operation.
-      if ((thumbnail && matched.thumbnail_path) || (displayImage && matched.image_path)) {
+      const overwriteImages = String(formData.get("overwriteImages") || "false") === "true";
+      if (!overwriteImages && ((thumbnail && matched.thumbnail_path) || (displayImage && matched.image_path))) {
         return NextResponse.json(
           { error: "이미 이미지가 연결된 메뉴입니다. 덮어쓰지 않았습니다.", name },
           { status: 409 },

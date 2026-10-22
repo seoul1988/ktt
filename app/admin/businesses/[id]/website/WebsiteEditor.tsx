@@ -6011,7 +6011,12 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
   const nameIndex = findCsvIndex(headers, ...aliases.name);
   const descriptionIndex = findCsvIndex(headers, ...aliases.description);
   const priceIndex = findCsvIndex(headers, ...aliases.price);
-  const imageIndex = findCsvIndex(headers, ...aliases.image);
+  // Prefer an explicit local image filename over a remote image URL.
+  const imageIndex = [
+    "image_filename", "imageFileName", "saved_image", "savedImage",
+    "image_file", "imageFile", "local_image", "filename",
+  ].map((key) => findCsvIndex(headers, key)).find((index) => index >= 0)
+    ?? findCsvIndex(headers, ...aliases.image);
   const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
   const productIdIndex = findCsvIndex(headers, "product_id", "productid");
 
@@ -6477,7 +6482,7 @@ function MenuImportModal({
       });
       const matched = matches.filter((entry) => Boolean(entry.file));
       if (!matched.length) {
-        throw new Error("CSV와 일치하는 이미지 파일이 0개입니다. 파일명(product_id.jpg)과 폴더를 확인하세요.");
+        throw new Error("일치하는 이미지가 없습니다. menu.csv의 image_filename 또는 saved_image와 이미지 폴더 파일명을 확인하세요.");
       }
       const missing = matches.length - matched.length;
       if (!window.confirm(
@@ -6499,6 +6504,7 @@ function MenuImportModal({
           });
           const formData = new FormData();
           formData.append("imagesOnly", "true");
+          formData.append("overwriteImages", "true");
           formData.append("platform", platform);
           formData.append("sourcePlatform", platform);
           formData.append("name", row.name);
