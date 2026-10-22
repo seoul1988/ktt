@@ -5866,12 +5866,31 @@ function csvNumber(value: unknown, fallback: number | null = null) {
 }
 
 function parseCsvTable(text: string) {
-  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return { headers: [] as string[], rows: [] as string[][] };
-  return {
-    headers: parseCsvLine(lines[0]).map(normalizeCsvHeader),
-    rows: lines.slice(1).map(parseCsvLine),
-  };
+  // RFC 4180: quoted CSV fields may contain embedded newlines and commas.
+  const source = text.replace(/^\uFEFF/, "");
+  const records: string[][] = [];
+  let fields: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === '"') {
+      if (quoted && source[i + 1] === '"') { field += '"'; i += 1; }
+      else quoted = !quoted;
+    } else if (ch === "," && !quoted) {
+      fields.push(field.trim()); field = "";
+    } else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (ch === "\r" && source[i + 1] === "\n") i += 1;
+      fields.push(field.trim()); field = "";
+      if (fields.some((value) => value !== "")) records.push(fields);
+      fields = [];
+    } else { field += ch; }
+  }
+  if (quoted) throw new Error("CSV 따옴표가 닫히지 않았습니다.");
+  fields.push(field.trim());
+  if (fields.some((value) => value !== "")) records.push(fields);
+  if (records.length < 2) return { headers: [] as string[], rows: [] as string[][] };
+  return { headers: records[0].map(normalizeCsvHeader), rows: records.slice(1) };
 }
 
 function findCsvIndex(headers: string[], ...names: string[]) {
@@ -5957,7 +5976,7 @@ function getMenuCsvAliases(platform: MenuImportPlatform) {
     price: ["price", "itemprice", "baseprice", "price_display", "pricedisplay", "displayprice", "가격"],
     image: [
       "imagefile", "imagefilename", "localimage", "localimagepath", "imagepath",
-      "downloadedfile", "savedimage", "saved_image", "filename", "이미지",
+      "downloadedfile", "savedimage", "saved_image", "filename", "이미지", "image_url", "imageurl",
     ],
     soldOut: ["soldout", "issoldout", "unavailable", "isavailable", "품절"],
   };
@@ -5993,6 +6012,7 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
   const priceIndex = findCsvIndex(headers, ...aliases.price);
   const imageIndex = findCsvIndex(headers, ...aliases.image);
   const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
+  const productIdIndex = findCsvIndex(headers, "product_id", "productid");
 
   if (nameIndex < 0) {
     throw new Error(`${platform.toUpperCase()} CSV에서 메뉴 이름 컬럼을 찾지 못했습니다.`);
@@ -6011,7 +6031,11 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
       name: readCsvCell(columns, nameIndex),
       description: readCsvCell(columns, descriptionIndex),
       price: numericPrice,
-      imageFileName: readCsvCell(columns, imageIndex).replace(/\\/g, "/"),
+      // Snackpass images folder uses <product_id>.jpg filenames.
+      // For other platforms retain the supplied filename / image URL.
+      imageFileName: productIdIndex >= 0 && readCsvCell(columns, productIdIndex)
+        ? `${readCsvCell(columns, productIdIndex)}.jpg`
+        : readCsvCell(columns, imageIndex).replace(/\\/g, "/"),
       displayOrder: index,
       soldOut,
       optionGroups: [],
@@ -6397,7 +6421,7 @@ function MenuImportModal({
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [optionsCsvFile, setOptionsCsvFile] = useState<File | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [replaceExisting, setReplaceExisting] = useState(true);
+  const [replaceExisting, setReplaceExisting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [result, setResult] = useState("");
@@ -6476,6 +6500,9 @@ function MenuImportModal({
           );
           parsedOptionRows = optionRows;
           optionAttachResult = attachUnifiedOptions(rows, optionRows);
+          if (optionAttachResult.unmatched > 0) {
+            throw new Error(`옵션 ${optionAttachResult.unmatched}개가 메뉴와 연결되지 않았습니다. CSV의 category/menu_name을 확인하세요.`);
+          }
         }
       }
 
@@ -6894,7 +6921,7 @@ function MenuImportModal({
               })}
             </div>
             <p className="mt-2 text-[11px] font-semibold leading-5 text-gray-500">
-              원본 CSV 형식은 플랫폼마다 달라도 KTown에 저장되는 옵션 구조는 모두 동일합니다.
+              플랫폼 버튼과 관계없이 공통 CSV 컬럼을 자동 인식합니다. Snackpass CSV도 DoorDash를 선택해 업로드할 수 있습니다.
             </p>
           </div>
 
