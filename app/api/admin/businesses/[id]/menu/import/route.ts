@@ -915,6 +915,82 @@ export async function POST(
 
     const supabase = getSupabaseAdmin();
 
+    // Existing-menu image-only update. Never creates or deletes menu/options.
+    const imagesOnly = String(formData.get("imagesOnly") || "false") === "true";
+    if (imagesOnly) {
+      if (!name) {
+        return NextResponse.json({ error: "Image update requires menu name" }, { status: 400 });
+      }
+      if (!thumbnail && !displayImage) {
+        return NextResponse.json({ error: "이미지 파일이 전달되지 않았습니다 (thumbnail/displayImage)." }, { status: 400 });
+      }
+      // The existing uploadWebp function stores bytes as image/webp without conversion.
+      // Reject JPG/PNG here rather than saving incorrectly labeled files.
+      for (const file of [thumbnail, displayImage]) {
+        if (!file) continue;
+        const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+        const ascii = (start: number, end: number) =>
+          String.fromCharCode(...header.slice(start, end));
+        if (header.length < 12 || ascii(0, 4) !== "RIFF" || ascii(8, 12) !== "WEBP") {
+          return NextResponse.json(
+            { error: `이미지 ${file.name}은 WebP가 아닙니다. 브라우저에서 WebP로 변환한 파일을 보내세요.` },
+            { status: 400 },
+          );
+        }
+      }
+      const { data: rows, error: lookupError } = await supabase
+        .from("business_menu_items")
+        .select("id,name,thumbnail_path,image_path")
+        .eq("business_id", businessId);
+      if (lookupError) throw new Error(`메뉴 조회 실패: ${lookupError.message}`);
+      const matches = (rows || []).filter(
+        (row) => normalizeMenuMatchName(row.name) === normalizeMenuMatchName(name),
+      );
+      if (matches.length !== 1) {
+        return NextResponse.json(
+          { error: matches.length ? "같은 이름의 메뉴가 여러 개라 이미지 연결을 중단했습니다." : "일치하는 기존 메뉴를 찾지 못했습니다.", name, matchedCount: matches.length },
+          { status: 409 },
+        );
+      }
+      const matched = matches[0];
+      // Do not overwrite existing paths without a deliberate separate operation.
+      if ((thumbnail && matched.thumbnail_path) || (displayImage && matched.image_path)) {
+        return NextResponse.json(
+          { error: "이미 이미지가 연결된 메뉴입니다. 덮어쓰지 않았습니다.", name },
+          { status: 409 },
+        );
+      }
+      const stem = safeFileStem(name);
+      let newThumbnail: string | null = null;
+      let newDisplay: string | null = null;
+      try {
+        newThumbnail = await uploadWebp(supabase, businessId, "thumbnails", thumbnail, stem);
+        newDisplay = await uploadWebp(supabase, businessId, "display", displayImage, stem);
+        const patch: { thumbnail_path?: string; image_path?: string } = {};
+        if (newThumbnail) patch.thumbnail_path = newThumbnail;
+        if (newDisplay) patch.image_path = newDisplay;
+        const { data: updated, error: updateError } = await supabase
+          .from("business_menu_items")
+          .update(patch)
+          .eq("business_id", businessId)
+          .eq("id", matched.id)
+          .select("id")
+          .single();
+        if (updateError || !updated) throw new Error(updateError?.message || "이미지 경로 저장 실패");
+      } catch (error) {
+        const cleanup = [newThumbnail, newDisplay].filter((path): path is string => Boolean(path));
+        if (cleanup.length) await supabase.storage.from("menu-images").remove(cleanup);
+        throw error;
+      }
+      return NextResponse.json({
+        ok: true, imagesOnly: true, itemId: matched.id,
+        thumbnailPath: newThumbnail || matched.thumbnail_path,
+        imagePath: newDisplay || matched.image_path,
+        menuPreserved: true,
+      });
+    }
+
+
     // 카테고리 전체 동기화는 옵션 저장과 완전히 분리해서 한 번만 수행합니다.
     // CSV의 모든 카테고리를 먼저 만들고 기존 메뉴를 category_id 기준으로 이동한 뒤,
     // 이동 완료 후 비어 있는 예전 카테고리만 정리합니다.
