@@ -5796,6 +5796,7 @@ async function readApiResponse(
 
 
 type MenuImportRow = {
+  itemKey?: string;
   category: string;
   name: string;
   description: string;
@@ -5807,6 +5808,7 @@ type MenuImportRow = {
 };
 
 type RawOptionCsvRow = {
+  itemKey?: string;
   category: string;
   menuName: string;
   groupName: string;
@@ -6019,6 +6021,7 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
     ?? findCsvIndex(headers, ...aliases.image);
   const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
   const productIdIndex = findCsvIndex(headers, "product_id", "productid");
+  const itemKeyIndex = findCsvIndex(headers, "item_key", "itemkey");
 
   if (nameIndex < 0) {
     throw new Error(`${platform.toUpperCase()} CSV에서 메뉴 이름 컬럼을 찾지 못했습니다.`);
@@ -6033,6 +6036,7 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
       : csvBoolean(soldOutRaw);
 
     return {
+      itemKey: readCsvCell(columns, itemKeyIndex),
       category: readCsvCell(columns, categoryIndex) || "Menu",
       name: readCsvCell(columns, nameIndex),
       description: readCsvCell(columns, descriptionIndex),
@@ -6095,6 +6099,7 @@ function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionC
   if (!headers.length) return [];
   const aliases = getOptionCsvAliases(platform);
   const categoryIndex = findCsvIndex(headers, ...aliases.category);
+  const itemKeyIndex = findCsvIndex(headers, "item_key", "itemkey");
   const menuNameIndex = findCsvIndex(headers, ...aliases.menuName);
   const groupNameIndex = findCsvIndex(headers, ...aliases.groupName);
   const ruleTextIndex = findCsvIndex(headers, ...aliases.ruleText);
@@ -6137,7 +6142,7 @@ function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionC
   const groupOrderIndex = findCsvIndex(headers, ...aliases.groupOrder);
   const optionOrderIndex = findCsvIndex(headers, ...aliases.optionOrder);
 
-  if (menuNameIndex < 0 || groupNameIndex < 0 || optionNameIndex < 0) {
+  if ((menuNameIndex < 0 && itemKeyIndex < 0) || groupNameIndex < 0 || optionNameIndex < 0) {
     throw new Error(
       `${platform.toUpperCase()} 옵션 CSV에서 메뉴명 / 옵션그룹 / 옵션명 컬럼을 찾지 못했습니다.`,
     );
@@ -6166,6 +6171,7 @@ function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionC
         };
 
     return {
+      itemKey: readCsvCell(columns, itemKeyIndex),
       category: readCsvCell(columns, categoryIndex),
       menuName: readCsvCell(columns, menuNameIndex),
       groupName: meta.groupName,
@@ -6181,7 +6187,7 @@ function parseOptionsCsv(text: string, platform: MenuImportPlatform): RawOptionC
       groupOrder: Number(csvNumber(readCsvCell(columns, groupOrderIndex), index) ?? index),
       optionOrder: Number(csvNumber(readCsvCell(columns, optionOrderIndex), index) ?? index),
     };
-  }).filter((row) => row.menuName && row.optionName);
+  }).filter((row) => (row.menuName || row.itemKey) && row.optionName);
 }
 
 
@@ -6273,8 +6279,10 @@ function buildMenuRowsFromOptions(optionRows: RawOptionCsvRow[]): MenuImportRow[
 
 function attachUnifiedOptions(menuRows: MenuImportRow[], optionRows: RawOptionCsvRow[]) {
   const exactMap = new Map<string, MenuImportRow>();
+  const keyMap = new Map<string, MenuImportRow[]>();
   const nameMap = new Map<string, MenuImportRow[]>();
   for (const row of menuRows) {
+    if (row.itemKey) keyMap.set(row.itemKey, [...(keyMap.get(row.itemKey) || []), row]);
     exactMap.set(normalizeMenuMatchKey(row.category, row.name), row);
     const nameKey = normalizeMenuNameOnlyKey(row.name);
     const list = nameMap.get(nameKey) || [];
@@ -6289,7 +6297,10 @@ function attachUnifiedOptions(menuRows: MenuImportRow[], optionRows: RawOptionCs
       ? exactMap.get(normalizeMenuMatchKey(optionRow.category, optionRow.menuName))
       : undefined;
     const byName = nameMap.get(normalizeMenuNameOnlyKey(optionRow.menuName)) || [];
-    const menu = exact || (byName.length === 1 ? byName[0] : undefined);
+    const keyed = optionRow.itemKey ? keyMap.get(optionRow.itemKey) || [] : [];
+    const menu = optionRow.itemKey
+      ? (keyed.length === 1 ? keyed[0] : undefined)
+      : exact || (byName.length === 1 ? byName[0] : undefined);
     if (!menu) {
       unmatched += 1;
       continue;
