@@ -186,6 +186,10 @@ type GridCell = {
   restaurant_menu_name_color?: string;
   restaurant_menu_description_color?: string;
   restaurant_menu_price_color?: string;
+  restaurant_menu_category_pill_background_color?: string;
+  restaurant_menu_category_pill_text_color?: string;
+  restaurant_menu_category_heading_color?: string;
+  restaurant_menu_area_background_color?: string;
 
 
   /** Catering Request Form 전용 배경색 */
@@ -21187,6 +21191,10 @@ function CellPreview({
             nameColor={cell.restaurant_menu_name_color}
             descriptionColor={cell.restaurant_menu_description_color}
             priceColor={cell.restaurant_menu_price_color}
+            categoryPillBackgroundColor={cell.restaurant_menu_category_pill_background_color}
+            categoryPillTextColor={cell.restaurant_menu_category_pill_text_color}
+            categoryHeadingColor={cell.restaurant_menu_category_heading_color}
+            menuAreaBackgroundColor={cell.restaurant_menu_area_background_color}
             scrollTopEnabled={true}
             scrollTopButtonColor="#111827"
             scrollTopIconColor="#ffffff"
@@ -37042,6 +37050,10 @@ function TitleCellEditor({
               ["restaurant_menu_name_color", "메뉴 이름", "#111827"],
               ["restaurant_menu_description_color", "메뉴 설명", "#6b7280"],
               ["restaurant_menu_price_color", "메뉴 가격", "#111827"],
+              ["restaurant_menu_category_pill_background_color", "상단 카테고리 라운드 배경", "#111827"],
+              ["restaurant_menu_category_pill_text_color", "상단 카테고리 글자", "#ffffff"],
+              ["restaurant_menu_category_heading_color", "아래 카테고리 제목", "#111827"],
+              ["restaurant_menu_area_background_color", "메뉴 전체 셀 배경", "#ffffff"],
             ] as const).map(([key, label, fallback]) => (
               <label key={key} className="mb-2 flex items-center gap-2 text-xs font-bold text-gray-800">
                 <span className="min-w-[86px]">{label}</span>

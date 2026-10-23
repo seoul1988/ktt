@@ -72,6 +72,10 @@ type Props = {
   nameColor?: string;
   descriptionColor?: string;
   priceColor?: string;
+  categoryPillBackgroundColor?: string;
+  categoryPillTextColor?: string;
+  categoryHeadingColor?: string;
+  menuAreaBackgroundColor?: string;
   scrollTopEnabled?: boolean;
   scrollTopButtonColor?: string;
   scrollTopIconColor?: string;
@@ -211,6 +215,10 @@ export default function RestaurantMenu({
   nameColor,
   descriptionColor,
   priceColor,
+  categoryPillBackgroundColor,
+  categoryPillTextColor,
+  categoryHeadingColor,
+  menuAreaBackgroundColor,
   orderEnabled = false,
   menuEnabled = true,
   pickupEnabled = false,
@@ -1234,7 +1242,13 @@ export default function RestaurantMenu({
                     : ""
                 }`}
                 style={
-                  isBunsMenu
+                  categoryPillBackgroundColor || categoryPillTextColor
+                    ? {
+                        backgroundColor: categoryPillBackgroundColor || (isBunsMenu ? (isActive ? accent : "rgba(255,255,255,0.05)") : (isActive ? "#111827" : "#ffffff")),
+                        color: categoryPillTextColor || (isBunsMenu ? (isActive ? "#111827" : accent) : (isActive ? "#ffffff" : "#111827")),
+                        borderColor: categoryPillBackgroundColor || (isBunsMenu ? accent : "#111827"),
+                      }
+                    : isBunsMenu
                     ? {
                         borderColor: isActive
                           ? accent
@@ -1395,7 +1409,7 @@ export default function RestaurantMenu({
             ? "px-3 py-4"
             : "px-4 py-5 sm:px-7 sm:py-7"
         }
-        style={{ backgroundColor: "transparent" }}
+        style={{ backgroundColor: menuAreaBackgroundColor || "transparent" }}
       >
         {visibleCategories.map((category) => {
           const items = data.items.filter(
@@ -1430,14 +1444,14 @@ export default function RestaurantMenu({
                       className="block h-10 w-1.5 shrink-0 rounded-full"
                       style={{ backgroundColor: accent }}
                     />
-                    <h2 className="text-[22px] font-black tracking-tight text-white sm:text-2xl">
+                    <h2 className="text-[22px] font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || undefined }}>
                       {category.name}
                     </h2>
                   </div>
                 ) : (
                   <h2
                     className="mb-4 inline-block rounded-lg px-2 py-1 text-xl font-black tracking-tight sm:text-2xl"
-                    style={{ backgroundColor }}
+                    style={{ backgroundColor, color: categoryHeadingColor || undefined }}
                   >
                     {category.name}
                   </h2>
