@@ -9556,6 +9556,122 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     };
   }
 
+  // 주문전용 기본 레이어: 기존 레이어는 보존하고 없는 레이어만 추가합니다.
+  function addOrderOnlyDefaultLayers() {
+    if (!business) return;
+    const imageUrl = String(
+      business.image_url || business.image_urls?.[0] ||
+      business.slider_image_urls?.[0] || "",
+    );
+    const address = getBusinessAddress(business);
+    setSections((current) => {
+      const hasLocation = current.some((section) =>
+        section.content?.order_only_default_location === true ||
+        (section.title === "Order Location" && section.content?.page_type !== "link-page"),
+      );
+      const hasHours = current.some((section) =>
+        section.content?.page_type !== "link-page" &&
+        (section.content?.order_only_default_hours === true ||
+          slugifyMenuValue(String(section.title || "")) === "business-hours"),
+      );
+      if (hasLocation && hasHours) return current;
+      const footerOrder = current.find((section) => section.section_type === "footer")?.sort_order;
+      const nextOrder = current.reduce((max, section) => Math.max(max, Number(section.sort_order) || 0), 0) + 1;
+      const locationOrder = footerOrder == null ? nextOrder : Number(footerOrder) - 0.2;
+      const hoursOrder = footerOrder == null ? nextOrder + 1 : Number(footerOrder) - 0.1;
+      const added: BusinessSection[] = [];
+      if (!hasLocation) {
+        const grid: GridData = {
+          id: createId("layout"),
+          height: "large",
+          height_px: 360,
+          layout_width_mode: "container",
+          cells: [
+            {
+              ...defaultCell("image", "", 2),
+              width_percent: 50,
+              image_url: imageUrl,
+              image_fit: "cover",
+              image_size_percent: 100,
+              background_color: "#f3f4f6",
+            },
+            {
+              ...defaultCell("map", "", 2),
+              width_percent: 50,
+              map_title: "LOCATION",
+              map_address: address,
+              background_color: "#ffffff",
+            },
+          ],
+        };
+        added.push({
+          id: -Date.now() - Math.floor(Math.random() * 100000),
+          business_id: business.id,
+          section_type: "custom",
+          title: "Order Location",
+          content: {
+            page_type: "home-section",
+            order_only_default_location: true,
+            background_type: "color",
+            background_color: "#ffffff",
+            grid,
+            layouts: [grid],
+          },
+          settings: {},
+          sort_order: locationOrder,
+          is_visible: true,
+        });
+      }
+      if (!hasHours) {
+        const grid: GridData = {
+          id: createId("layout"),
+          height: "medium",
+          height_px: 450,
+          layout_width_mode: "container",
+          cells: [{
+            ...defaultCell("hours", "", 4),
+            width_percent: 100,
+            display_mode: "business-hours",
+            business_hours_title: "Business Hours",
+            background_color: "#ffffff",
+          }],
+        };
+        added.push({
+          id: -Date.now() - 100000 - Math.floor(Math.random() * 100000),
+          business_id: business.id,
+          section_type: "hours",
+          title: "Business Hours",
+          content: {
+            page_type: "home-section",
+            order_only_default_hours: true,
+            popup_only: true,
+            initially_hidden: true,
+            close_button_enabled: true,
+            background_type: "color",
+            background_color: "#ffffff",
+            grid,
+            layouts: [grid],
+          },
+          settings: {},
+          sort_order: hoursOrder,
+          is_visible: true,
+        });
+      }
+      return [...current, ...added];
+    });
+    setBusiness((current) => current ? {
+      ...current,
+      website_settings: {
+        ...normalizeSettings(current.website_settings, current.name || ""),
+        mobile_hours_button_enabled: true,
+        mobile_hours_target_url: "#business-hours",
+        mobile_action_button_enabled: true,
+        mobile_action_button_label: "ORDER",
+      },
+    } : current);
+    setMessage("누락된 주문전용 기본 레이어를 추가했습니다. 서버 저장을 눌러주세요.");
+  }
+
   function addLayer(
     template:
       | "home"
@@ -10766,6 +10882,9 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                     order_only_mode: nextMode,
                   },
                 } : current);
+                if (nextMode) {
+                  addOrderOnlyDefaultLayers();
+                }
                 if (nextMode && !sections.some((section) => section.section_type === "footer")) {
                   addLayer("footer");
                 }
@@ -10782,6 +10901,16 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
             >
               {websiteSettings.order_only_mode === true ? "✓ 주문 전용 ON" : "주문 전용 OFF"}
             </button>
+            {websiteSettings.order_only_mode === true ? (
+              <button
+                type="button"
+                onClick={addOrderOnlyDefaultLayers}
+                className="rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-black text-blue-900 hover:bg-blue-100"
+                title="기존 식당에도 누락된 대표 이미지·지도·영업시간 레이어만 추가합니다."
+              >
+                ＋ 주문전용 기본 레이어 추가
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setMenuImportOpen(true)}
@@ -15514,7 +15643,10 @@ export function PublicWebsiteRenderer({
     ? visibleSections.filter((section) => {
         if (section.content?.page_type === "link-page") return false;
         const sectionName = slugifyMenuValue(String(section.title || section.section_type || ""));
-        return section.section_type === "footer" || sectionName === "menu" || isHomeLikeSection(section);
+        return section.section_type === "footer" || sectionName === "menu" ||
+          section.content?.order_only_default_location === true ||
+          section.content?.order_only_default_hours === true ||
+          sectionName === "business-hours" || isHomeLikeSection(section);
       })
     : visibleSections;
 
@@ -15578,11 +15710,11 @@ export function PublicWebsiteRenderer({
    */
   const mobileHoursTargetUrl = String(
     websiteSettings.mobile_hours_target_url ||
-      (hasRestaurantMenu ? "#business-hours" : ""),
+      (hasRestaurantMenu || orderOnlyMode ? "#business-hours" : ""),
   ).trim();
 
   const mobileHoursButtonEnabled =
-    hasRestaurantMenu ||
+    orderOnlyMode || hasRestaurantMenu ||
     (websiteSettings.mobile_hours_button_enabled === true &&
       Boolean(mobileHoursTargetUrl));
 
@@ -15604,7 +15736,7 @@ export function PublicWebsiteRenderer({
     : "/menu";
 
   const mobileActionTargetUrl = orderOnlyMode
-    ? `#menu`
+    ? restaurantMenuTargetUrl
     : String(
         websiteSettings.mobile_action_target_url ||
           (hasRestaurantMenu ? restaurantMenuTargetUrl : ""),
@@ -15621,7 +15753,7 @@ export function PublicWebsiteRenderer({
       : mobileActionButtonLabel;
 
   const mobileActionButtonEnabled =
-    hasRestaurantMenu ||
+    orderOnlyMode || hasRestaurantMenu ||
     (websiteSettings.mobile_action_button_enabled === true &&
       Boolean(mobileActionTargetUrl));
 
