@@ -67,6 +67,11 @@ type Props = {
   compact?: boolean;
   backgroundColor?: string;
   textColor?: string;
+  cardBackgroundColor?: string;
+  cardBorderColor?: string;
+  nameColor?: string;
+  descriptionColor?: string;
+  priceColor?: string;
   scrollTopEnabled?: boolean;
   scrollTopButtonColor?: string;
   scrollTopIconColor?: string;
@@ -201,6 +206,11 @@ export default function RestaurantMenu({
   compact = false,
   backgroundColor = "#ffffff",
   textColor = "#111827",
+  cardBackgroundColor,
+  cardBorderColor,
+  nameColor,
+  descriptionColor,
+  priceColor,
   orderEnabled = false,
   menuEnabled = true,
   pickupEnabled = false,
@@ -1461,19 +1471,19 @@ export default function RestaurantMenu({
                           : "shadow-sm hover:shadow-md"
                       }`}
                       style={{
-                        backgroundColor: isBunsMenu
+                        backgroundColor: cardBackgroundColor || (isBunsMenu
                           ? "rgba(255,255,255,0.055)"
-                          : backgroundColor,
-                        borderColor: isBunsMenu
+                          : backgroundColor),
+                        borderColor: cardBorderColor || (isBunsMenu
                           ? "rgba(255,255,255,0.12)"
-                          : `${textColor}22`,
+                          : `${textColor}22`),
                         color: isBunsMenu ? "#ffffff" : textColor,
                       }}
                     >
                       <div className="min-w-0 flex-1 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-2">
-                            <h3 className="line-clamp-2 text-[15px] font-black leading-snug sm:text-base">
+                            <h3 className="line-clamp-2 text-[15px] font-black leading-snug sm:text-base" style={{ color: nameColor || undefined }}>
                               {item.name}
                             </h3>
                             {getPromotionsForMenuItem(item.id).length > 0 ? (
@@ -1487,7 +1497,7 @@ export default function RestaurantMenu({
                             <span
                               className="shrink-0 text-sm font-black"
                               style={
-                                isBunsMenu
+                                priceColor ? { color: priceColor } : isBunsMenu
                                   ? {
                                       color:
                                         bunsCategoryAccents[
@@ -1513,7 +1523,7 @@ export default function RestaurantMenu({
                         </div>
 
                         {item.description ? (
-                          <p className="mt-2 line-clamp-3 text-xs font-medium leading-5 opacity-65 sm:text-sm">
+                          <p className="mt-2 line-clamp-3 text-xs font-medium leading-5 sm:text-sm" style={{ color: descriptionColor || undefined, opacity: descriptionColor ? 1 : 0.65 }}>
                             {item.description}
                           </p>
                         ) : null}
