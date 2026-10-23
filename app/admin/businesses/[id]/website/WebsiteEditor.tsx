@@ -186,7 +186,6 @@ type GridCell = {
   restaurant_menu_name_color?: string;
   restaurant_menu_description_color?: string;
   restaurant_menu_price_color?: string;
-  restaurant_menu_category_bar_background_color?: string;
   restaurant_menu_category_pill_background_color?: string;
   restaurant_menu_category_pill_text_color?: string;
   restaurant_menu_category_heading_color?: string;
@@ -21192,7 +21191,6 @@ function CellPreview({
             nameColor={cell.restaurant_menu_name_color}
             descriptionColor={cell.restaurant_menu_description_color}
             priceColor={cell.restaurant_menu_price_color}
-            categoryBarBackgroundColor={cell.restaurant_menu_category_bar_background_color}
             categoryPillBackgroundColor={cell.restaurant_menu_category_pill_background_color}
             categoryPillTextColor={cell.restaurant_menu_category_pill_text_color}
             categoryHeadingColor={cell.restaurant_menu_category_heading_color}
@@ -37052,7 +37050,6 @@ function TitleCellEditor({
               ["restaurant_menu_name_color", "메뉴 이름", "#111827"],
               ["restaurant_menu_description_color", "메뉴 설명", "#6b7280"],
               ["restaurant_menu_price_color", "메뉴 가격", "#111827"],
-              ["restaurant_menu_category_bar_background_color", "상단 카테고리 바 전체 배경", "#ffffff"],
               ["restaurant_menu_category_pill_background_color", "상단 카테고리 라운드 배경", "#111827"],
               ["restaurant_menu_category_pill_text_color", "상단 카테고리 글자", "#ffffff"],
               ["restaurant_menu_category_heading_color", "아래 카테고리 제목", "#111827"],
