@@ -1,4 +1,164 @@
-window.removeEventListener("appinstalled", onInstalled);
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+type InstallOwner = { id: string; priority: number };
+declare global {
+  interface Window { __KTT_INSTALL_OWNER__?: InstallOwner }
+}
+const OWNER_EVENT = "ktt-install-owner-change";
+const STATE_EVENT = "ktt-install-state-change";
+const DAY = 24 * 60 * 60 * 1000;
+
+function storageKey(suffix: string) {
+  const id = window.location.pathname.match(/^\/business(?:es)?\/(\d+)\/website(?:\/|$)/)?.[1];
+  return id ? `ktt_business_${id}_${suffix}` : `ktt_${suffix}`;
+}
+function readStorage(key: string) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function writeStorage(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch { /* Private browsing may disable storage. */ }
+}
+function standalone() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
+export default function InstallAppButton({ businessName }: { businessName?: string }) {
+  const id = useRef("");
+  const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const installedRef = useRef(false);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [owner, setOwner] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [installed, setInstalled] = useState(false);
+  const [available, setAvailable] = useState(false);
+  const [ios, setIos] = useState(false);
+  const [banner, setBanner] = useState(false);
+  const [guide, setGuide] = useState(false);
+  const [message, setMessage] = useState("");
+  const [notice, setNotice] = useState(false);
+  const [name, setName] = useState(businessName?.trim() || "KTown Triangle");
+  const touchX = useRef<number | null>(null);
+  const priority = businessName?.trim() ? 2 : 1;
+
+  useEffect(() => {
+    setReady(true);
+    id.current ||= `ktt-install-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    function sync() {
+      const current = window.__KTT_INSTALL_OWNER__;
+      if (!current || current.priority < priority) {
+        window.__KTT_INSTALL_OWNER__ = { id: id.current, priority };
+      }
+      setOwner(window.__KTT_INSTALL_OWNER__?.id === id.current);
+    }
+    window.addEventListener(OWNER_EVENT, sync);
+    sync();
+    window.dispatchEvent(new Event(OWNER_EVENT));
+    return () => {
+      window.removeEventListener(OWNER_EVENT, sync);
+      if (window.__KTT_INSTALL_OWNER__?.id === id.current) {
+        delete window.__KTT_INSTALL_OWNER__;
+        window.dispatchEvent(new Event(OWNER_EVENT));
+      }
+    };
+  }, [priority]);
+
+  useEffect(() => {
+    if (!owner) return;
+    function update() {
+      setName(businessName?.trim() || document.title.split("|")[0]?.trim() || "KTown Triangle");
+    }
+    update();
+    const title = document.querySelector("title");
+    const observer = new MutationObserver(update);
+    if (title) observer.observe(title, { childList: true, subtree: true, characterData: true });
+    return () => observer.disconnect();
+  }, [businessName, owner]);
+
+  useEffect(() => {
+    if (!owner) return;
+    const installedKey = storageKey("pwa_installed");
+    const hideKey = storageKey("install_banner_hide_until");
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    setIos(isIos);
+    function clearTimer() {
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = null;
+    }
+    function markInstalled() {
+      clearTimer();
+      installedRef.current = true;
+      writeStorage(installedKey, "true");
+      promptRef.current = null;
+      setInstalled(true);
+      setAvailable(false);
+      setBanner(false);
+      setGuide(false);
+      setMessage("");
+    }
+    function check() {
+      if (standalone() || readStorage(installedKey) === "true" || installedRef.current) {
+        markInstalled();
+        return true;
+      }
+      return false;
+    }
+    function onPrompt(event: Event) {
+      event.preventDefault();
+      if (standalone()) { markInstalled(); return; }
+      // A fresh browser installation event overrides an old installation record
+      // (for example after the user uninstalls the app).
+      clearTimer();
+      writeStorage(installedKey, null);
+      installedRef.current = false;
+      setInstalled(false);
+      promptRef.current = event as BeforeInstallPromptEvent;
+      setAvailable(true);
+      setMessage("");
+      if (Date.now() > Number(readStorage(hideKey) || 0)) setBanner(true);
+    }
+    function onInstalled() {
+      markInstalled();
+      window.dispatchEvent(new Event(STATE_EVENT));
+      setNotice(true);
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+      noticeTimer.current = setTimeout(() => setNotice(false), 4000);
+    }
+    function onVisible() { if (document.visibilityState === "visible") check(); }
+    function onStorage(event: StorageEvent) { if (event.key === installedKey) check(); }
+    const mode = window.matchMedia("(display-mode: standalone)");
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("pageshow", check);
+    window.addEventListener("focus", check);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(STATE_EVENT, check);
+    document.addEventListener("visibilitychange", onVisible);
+    mode.addEventListener?.("change", check);
+    if (!check() && isIos && Date.now() > Number(readStorage(hideKey) || 0)) {
+      setBanner(true);
+      timer.current = setTimeout(() => {
+        setBanner(false);
+        writeStorage(hideKey, String(Date.now() + DAY));
+      }, 5000);
+    }
+    return () => {
+      clearTimer();
+      if (noticeTimer.current !== null) clearTimeout(noticeTimer.current);
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
       window.removeEventListener("pageshow", check);
       window.removeEventListener("focus", check);
       window.removeEventListener("storage", onStorage);
