@@ -72,6 +72,7 @@ type Props = {
   nameColor?: string;
   descriptionColor?: string;
   priceColor?: string;
+  categoryBarBackgroundColor?: string;
   categoryPillBackgroundColor?: string;
   categoryPillTextColor?: string;
   categoryHeadingColor?: string;
@@ -215,6 +216,7 @@ export default function RestaurantMenu({
   nameColor,
   descriptionColor,
   priceColor,
+  categoryBarBackgroundColor,
   categoryPillBackgroundColor,
   categoryPillTextColor,
   categoryHeadingColor,
@@ -337,6 +339,9 @@ export default function RestaurantMenu({
   const rootRef = useRef<HTMLDivElement>(null);
   const categoryBarSentinelRef = useRef<HTMLDivElement>(null);
   const categoryBarMeasureRef = useRef<HTMLDivElement>(null);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
+  const [categoryCanScrollLeft, setCategoryCanScrollLeft] = useState(false);
+  const [categoryCanScrollRight, setCategoryCanScrollRight] = useState(false);
   const recentMenuClickRef = useRef<{ key: string; time: number } | null>(null);
 
   // MENU만 켜져 있으면 보기 전용입니다.
@@ -1021,6 +1026,37 @@ export default function RestaurantMenu({
     };
   }, [visibleCategories.length]);
 
+  function updateCategoryScrollArrows() {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    setCategoryCanScrollLeft(el.scrollLeft > 2);
+    setCategoryCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+  }
+
+  useEffect(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const update = () => updateCategoryScrollArrows();
+    const frame = window.requestAnimationFrame(update);
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    observer?.observe(el);
+    if (el.firstElementChild) observer?.observe(el.firstElementChild);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      observer?.disconnect();
+    };
+  }, [categoryBarFixed, data.categories, data.items]);
+
+  function moveCategoryBar(direction: -1 | 1) {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * Math.max(180, el.clientWidth * 0.7), behavior: "smooth" });
+  }
+
   function scrollToCategory(categoryId: number) {
     setActiveCategoryId(categoryId);
 
@@ -1209,9 +1245,9 @@ export default function RestaurantMenu({
             : "border-black/10"
         }`}
         style={{
-          backgroundColor: isBunsMenu
+          backgroundColor: categoryBarBackgroundColor || (isBunsMenu
             ? "rgba(11,11,11,0.96)"
-            : backgroundColor,
+            : backgroundColor),
           zIndex: fixed ? 2147483000 : 70,
           ...(fixed
             ? {
@@ -1221,7 +1257,13 @@ export default function RestaurantMenu({
             : {}),
         }}
       >
-        <div className="mx-auto flex max-w-[760px] gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative mx-auto max-w-[760px]">
+          {categoryCanScrollLeft && (
+            <button type="button" aria-label="Previous categories" onClick={() => moveCategoryBar(-1)}
+              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">‹</button>
+          )}
+          <div ref={categoryScrollRef} className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex w-max min-w-full gap-2">
           {visibleCategories.map((category, categoryIndex) => {
             const accent =
               bunsCategoryAccents[
@@ -1273,6 +1315,12 @@ export default function RestaurantMenu({
               </button>
             );
           })}
+            </div>
+          </div>
+          {categoryCanScrollRight && (
+            <button type="button" aria-label="Next categories" onClick={() => moveCategoryBar(1)}
+              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">›</button>
+          )}
         </div>
       </div>
     );
