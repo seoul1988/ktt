@@ -9556,120 +9556,88 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
     };
   }
 
-  // 주문전용 기본 레이어: 기존 레이어는 보존하고 없는 레이어만 추가합니다.
+  // 주문전용 위치 레이어: 왼쪽 연락처, 오른쪽 지도. 영업시간 레이어는 생성하지 않습니다.
   function addOrderOnlyDefaultLayers() {
     if (!business) return;
-    const imageUrl = String(
-      business.image_url || business.image_urls?.[0] ||
-      business.slider_image_urls?.[0] || "",
-    );
     const address = getBusinessAddress(business);
+    const phone = getBusinessContactValue(business, ["phone", "phone_number", "telephone"]);
+    const email = getBusinessContactValue(business, ["email", "business_email", "contact_email"]);
+    const contactText = [
+      address ? `Address: ${address}` : "",
+      phone ? `Phone: ${phone}` : "",
+      email ? `Email: ${email}` : "",
+    ].filter(Boolean).join("\n");
+
     setSections((current) => {
-      const hasLocation = current.some((section) =>
-        section.content?.order_only_default_location === true ||
-        (section.title === "Order Location" && section.content?.page_type !== "link-page"),
+      // 이 기능으로 예전에 자동 생성된 영업시간 레이어만 제거합니다.
+      // 사용자가 직접 만든 영업시간 레이어는 건드리지 않습니다.
+      const retained = current.filter(
+        (section) => section.content?.order_only_default_hours !== true,
       );
-      const hasHours = current.some((section) =>
-        section.content?.page_type !== "link-page" &&
-        (section.content?.order_only_default_hours === true ||
-          slugifyMenuValue(String(section.title || "")) === "business-hours"),
+      const existingLocation = retained.find(
+        (section) => section.content?.order_only_default_location === true ||
+          (section.title === "Order Location" && section.content?.page_type !== "link-page"),
       );
-      if (hasLocation && hasHours) return current;
-      const footerOrder = current.find((section) => section.section_type === "footer")?.sort_order;
-      const nextOrder = current.reduce((max, section) => Math.max(max, Number(section.sort_order) || 0), 0) + 1;
-      const locationOrder = footerOrder == null ? nextOrder : Number(footerOrder) - 0.2;
-      const hoursOrder = footerOrder == null ? nextOrder + 1 : Number(footerOrder) - 0.1;
-      const added: BusinessSection[] = [];
-      if (!hasLocation) {
-        const grid: GridData = {
-          id: createId("layout"),
-          height: "large",
-          height_px: 360,
-          layout_width_mode: "container",
-          cells: [
-            {
-              ...defaultCell("image", "", 2),
-              width_percent: 50,
-              image_url: imageUrl,
-              image_fit: "cover",
-              image_size_percent: 100,
-              background_color: "#f3f4f6",
-            },
-            {
-              ...defaultCell("map", "", 2),
-              width_percent: 50,
-              map_title: "LOCATION",
-              map_address: address,
-              background_color: "#ffffff",
-            },
-          ],
-        };
-        added.push({
-          id: -Date.now() - Math.floor(Math.random() * 100000),
-          business_id: business.id,
-          section_type: "custom",
-          title: "Order Location",
+      const grid: GridData = {
+        id: createId("layout"),
+        height: "large",
+        height_px: 360,
+        layout_width_mode: "container",
+        cells: [
+          {
+            ...defaultCell("text", contactText, 2),
+            width_percent: 50,
+            rich_text_html: "",
+            text_align: "left",
+            vertical_align: "center",
+            background_color: "#ffffff",
+            color: "#111827",
+            font_size: 16,
+          },
+          {
+            ...defaultCell("map", "", 2),
+            width_percent: 50,
+            map_title: "LOCATION",
+            map_address: address,
+            map_phone: phone,
+            map_email: email,
+            background_color: "#ffffff",
+          },
+        ],
+      };
+      if (existingLocation) {
+        // 이미 추가된 기본 레이어만 새 구성으로 교체합니다.
+        return retained.map((section) => section.id === existingLocation.id ? {
+          ...section,
           content: {
-            page_type: "home-section",
+            ...section.content,
             order_only_default_location: true,
-            background_type: "color",
-            background_color: "#ffffff",
             grid,
             layouts: [grid],
           },
-          settings: {},
-          sort_order: locationOrder,
-          is_visible: true,
-        });
+        } : section);
       }
-      if (!hasHours) {
-        const grid: GridData = {
-          id: createId("layout"),
-          height: "medium",
-          height_px: 450,
-          layout_width_mode: "container",
-          cells: [{
-            ...defaultCell("hours", "", 4),
-            width_percent: 100,
-            display_mode: "business-hours",
-            business_hours_title: "Business Hours",
-            background_color: "#ffffff",
-          }],
-        };
-        added.push({
-          id: -Date.now() - 100000 - Math.floor(Math.random() * 100000),
-          business_id: business.id,
-          section_type: "hours",
-          title: "Business Hours",
-          content: {
-            page_type: "home-section",
-            order_only_default_hours: true,
-            popup_only: true,
-            initially_hidden: true,
-            close_button_enabled: true,
-            background_type: "color",
-            background_color: "#ffffff",
-            grid,
-            layouts: [grid],
-          },
-          settings: {},
-          sort_order: hoursOrder,
-          is_visible: true,
-        });
-      }
-      return [...current, ...added];
+      const footerOrder = retained.find((section) => section.section_type === "footer")?.sort_order;
+      const nextOrder = retained.reduce((max, section) => Math.max(max, Number(section.sort_order) || 0), 0) + 1;
+      return [...retained, {
+        id: -Date.now() - Math.floor(Math.random() * 100000),
+        business_id: business.id,
+        section_type: "custom",
+        title: "Order Location",
+        content: {
+          page_type: "home-section",
+          order_only_default_location: true,
+          background_type: "color",
+          background_color: "#ffffff",
+          grid,
+          layouts: [grid],
+        },
+        settings: {},
+        sort_order: footerOrder == null ? nextOrder : Number(footerOrder) - 0.2,
+        is_visible: true,
+      }];
     });
-    setBusiness((current) => current ? {
-      ...current,
-      website_settings: {
-        ...normalizeSettings(current.website_settings, current.name || ""),
-        mobile_hours_button_enabled: true,
-        mobile_hours_target_url: "#business-hours",
-        mobile_action_button_enabled: true,
-        mobile_action_button_label: "ORDER",
-      },
-    } : current);
-    setMessage("누락된 주문전용 기본 레이어를 추가했습니다. 서버 저장을 눌러주세요.");
+    setMessage("주문전용 위치 레이어(왼쪽 연락처·오른쪽 지도)를 적용했습니다. 서버 저장을 눌러주세요.");
   }
 
   function addLayer(
@@ -10906,7 +10874,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 type="button"
                 onClick={addOrderOnlyDefaultLayers}
                 className="rounded-full border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-black text-blue-900 hover:bg-blue-100"
-                title="기존 식당에도 누락된 대표 이미지·지도·영업시간 레이어만 추가합니다."
+                title="왼쪽 주소·전화·이메일, 오른쪽 지도 레이어를 추가하거나 업데이트합니다. 영업시간 셀은 만들지 않습니다."
               >
                 ＋ 주문전용 기본 레이어 추가
               </button>
