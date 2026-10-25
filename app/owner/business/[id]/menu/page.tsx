@@ -631,8 +631,8 @@ function TwilioSettingsModal({ businessId, getToken, onClose, onSaved }: {
         if (response.status === 404 || response.status === 405) {
           throw new Error("SMS 설정 저장 기능이 아직 연결되지 않았습니다. 입력값은 저장되지 않습니다.");
         }
-        const data = await response.json();
-        if (!response.ok) throw new Error("SMS 설정을 불러오지 못했습니다.");
+        const data = await readSmsResponse(response);
+        if (!response.ok) throw new Error(data?.error || "SMS 설정을 불러오지 못했습니다.");
         const config = data?.twilioSettings;
         if (!config || typeof config.hasAuthToken !== "boolean") throw new Error("SMS 설정 저장 기능의 연결을 확인해야 합니다.");
         if (cancelled) return;
@@ -648,6 +648,15 @@ function TwilioSettingsModal({ businessId, getToken, onClose, onSaved }: {
     void load();
     return () => { cancelled = true; };
   }, [endpoint, getToken]);
+
+  async function readSmsResponse(response: Response) {
+    const type = response.headers.get("content-type") || "";
+    if (response.redirected || !type.toLowerCase().includes("application/json")) {
+      throw new Error("SMS 설정 API에 연결할 수 없습니다. 서버 배포와 로그인 상태를 확인하세요.");
+    }
+    try { return await response.json(); }
+    catch { throw new Error("SMS 설정 응답을 읽지 못했습니다. 잠시 후 다시 시도하세요."); }
+  }
 
   async function save() {
     if (busyRef.current || !apiReady) return;
@@ -667,8 +676,8 @@ function TwilioSettingsModal({ businessId, getToken, onClose, onSaved }: {
         body: JSON.stringify({ accountSid: sid, ...(secret ? { authToken: secret } : {}), fromNumber: phone, messagingServiceSid: service, smsEnabled: true }),
       });
       if (response.status === 404 || response.status === 405) throw new Error("SMS 설정 저장 기능이 아직 연결되지 않았습니다.");
-      const data = await response.json();
-      if (!response.ok || !data?.twilioSettings || typeof data?.smsEnabled !== "boolean") throw new Error("SMS 설정 저장을 확인하지 못했습니다.");
+      const data = await readSmsResponse(response);
+      if (!response.ok || !data?.twilioSettings || typeof data?.smsEnabled !== "boolean") throw new Error(data?.error || "SMS 설정 저장을 확인하지 못했습니다.");
       setAuthToken(""); onSaved(data.smsEnabled);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "SMS 설정 저장에 실패했습니다.");
@@ -5950,7 +5959,7 @@ export default function OwnerBusinessMenuPage() {
           <TwilioSettingsModal businessId={String(businessId)} getToken={getAccessToken} onClose={() => setSmsSettingsOpen(false)} onSaved={(enabled) => {
             setSmsEnabled(enabled);
             setSmsSettingsOpen(false);
-            setOrderSettingsMessage("✓ SMS 설정을 저장했습니다. 발송에는 유효한 Twilio 인증정보가 필요합니다.");
+            setOrderSettingsMessage(enabled ? "✓ SMS 설정을 저장했습니다. 실제 발송은 별도 테스트로 확인하세요." : "✓ SMS 설정을 저장했습니다. 인증정보가 미완성이므로 SMS 발송은 꺼져 있습니다. 나중에 입력할 수 있습니다.");
           }} />
         ) : null}
 
