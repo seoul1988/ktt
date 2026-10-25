@@ -833,6 +833,18 @@ export default function OwnerBusinessMenuPage() {
   >(new Set());
 
   const [optionTemplates, setOptionTemplates] = useState<MenuOptionTemplate[]>([]);
+  // Mount the full option checklist only for the item being edited.
+  const [optionPickerItemId, setOptionPickerItemId] = useState<number | null>(null);
+  const quickOptionTemplates = useMemo(
+    () => optionTemplates.filter((template) => !template.isSubOptionOnly),
+    [optionTemplates],
+  );
+  const quickOptionTemplateByName = useMemo(
+    () => new Map(quickOptionTemplates.map((template) => [template.name.trim().toLowerCase(), template])),
+    [quickOptionTemplates],
+  );
+  useEffect(() => { setOptionPickerItemId(null); }, [businessId]);
+
   const [optionLibraryOpen, setOptionLibraryOpen] = useState(false);
   const [optionTemplateOpen, setOptionTemplateOpen] = useState(false);
   const [subOptionRegistrationMode, setSubOptionRegistrationMode] = useState(false);
@@ -8725,6 +8737,16 @@ export default function OwnerBusinessMenuPage() {
             ) : (
               filteredItems.map((item) => {
                 const imageUrl = item.thumbnail_url || item.image_url;
+                const appliedQuickGroups = normalizeOptionGroups(item).filter((group) => !group.isSubOptionOnly);
+                const appliedQuickGroupByName = new Map(appliedQuickGroups.map((group) => [group.name.trim().toLowerCase(), group]));
+                const optionPickerOpen = optionPickerItemId === item.id;
+                const displayedQuickTemplates = optionPickerOpen
+                  ? quickOptionTemplates
+                  : appliedQuickGroups.flatMap((group) => {
+                      const template = quickOptionTemplateByName.get(group.name.trim().toLowerCase());
+                      return template ? [template] : [];
+                    });
+
 
                 return (
                   <article
@@ -9028,28 +9050,30 @@ export default function OwnerBusinessMenuPage() {
                         <div>
                           <p className="text-xs font-black text-blue-900">옵션 선택</p>
                           <p className="mt-0.5 text-[10px] font-semibold text-blue-900/60">
-                            필요한 종류만 체크하세요. 체크하면 자동 저장됩니다.
+                            {optionPickerOpen ? "추가할 옵션을 체크하세요. 변경하면 자동 저장됩니다." : "선택된 옵션만 표시합니다. 다른 옵션은 옵션 추가에서 선택하세요."}
                           </p>
                         </div>
-                        <span className="text-[10px] font-black text-blue-700">
-                          {normalizeOptionGroups(item).filter((group) => !group.isSubOptionOnly).length}개 적용 중
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-blue-700">{appliedQuickGroups.length}개 적용 중</span>
+                          <button
+                            type="button"
+                            aria-expanded={optionPickerOpen}
+                            onClick={() => setOptionPickerItemId((current) => current === item.id ? null : item.id)}
+                            className="rounded-xl border border-blue-300 bg-white px-3 py-2 text-xs font-black text-blue-800 hover:bg-blue-100"
+                          >{optionPickerOpen ? "선택 완료 · 닫기" : "+ 옵션 추가"}</button>
+                        </div>
                       </div>
 
-                      {optionTemplates.filter((template) => !template.isSubOptionOnly).length === 0 ? (
+                      {quickOptionTemplates.length === 0 ? (
                         <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-bold text-gray-500">
                           등록된 옵션이 없습니다. 위의 옵션 목록에서 먼저 옵션을 등록하세요.
                         </p>
+                      ) : displayedQuickTemplates.length === 0 && !optionPickerOpen ? (
+                        <p className="mt-2 text-[11px] font-semibold text-blue-800/70">선택된 옵션이 없습니다.</p>
                       ) : (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {optionTemplates
-                            .filter((template) => !template.isSubOptionOnly)
-                            .map((template) => {
-                            const appliedGroup = normalizeOptionGroups(item).find(
-                              (group) =>
-                                group.name.trim().toLowerCase() ===
-                                template.name.trim().toLowerCase(),
-                            );
+                        <div id={`item-option-picker-${item.id}`} className={`mt-2 flex flex-wrap gap-2 ${optionPickerOpen ? "max-h-80 overflow-y-auto rounded-xl border border-blue-200 bg-white/50 p-2" : ""}`}>
+                          {displayedQuickTemplates.map((template) => {
+                            const appliedGroup = appliedQuickGroupByName.get(template.name.trim().toLowerCase());
                             const applied = Boolean(appliedGroup);
 
                             return (
