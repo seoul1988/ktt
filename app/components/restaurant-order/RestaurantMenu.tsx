@@ -245,6 +245,9 @@ export default function RestaurantMenu({
   const [resolvedPickupEnabled, setResolvedPickupEnabled] = useState(pickupEnabled);
   const [resolvedDeliveryEnabled, setResolvedDeliveryEnabled] = useState(deliveryEnabled);
 
+  const [orderingClosed, setOrderingClosed] = useState(false);
+  const [orderingClosedReason, setOrderingClosedReason] = useState("");
+
   const [cartItems, setCartItems] = useState<StoredCartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -583,6 +586,11 @@ export default function RestaurantMenu({
 
         if (cancelled) return;
 
+        setOrderingClosed(
+          payload?.orderingHoursEnforced === true && payload?.orderingOpen === false,
+        );
+        setOrderingClosedReason(String(payload?.orderingClosedReason || ""));
+
         const modes = payload?.orderModes || {};
 
         setResolvedMenuEnabled(modes.menu !== false);
@@ -602,10 +610,16 @@ export default function RestaurantMenu({
       }
     }
 
+    setOrderingClosed(false);
+    setOrderingClosedReason("");
     void loadOrderSettings();
+    const timer = window.setInterval(loadOrderSettings, 30_000);
+    window.addEventListener("focus", loadOrderSettings);
 
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", loadOrderSettings);
     };
   }, [businessId, menuEnabled, pickupEnabled, deliveryEnabled]);
 
@@ -1415,6 +1429,16 @@ export default function RestaurantMenu({
               >
                 DELIVERY
               </button>
+            ) : null}
+
+            {orderingClosed ? (
+              <span
+                role="status"
+                title={orderingClosedReason || "Online ordering is closed."}
+                className="inline-flex shrink-0 items-center rounded-full border border-red-300 bg-red-50 px-3 py-2 text-[11px] font-black text-red-700"
+              >
+                ORDER CLOSED
+              </span>
             ) : null}
 
             {customerTrackingUrl ? (
