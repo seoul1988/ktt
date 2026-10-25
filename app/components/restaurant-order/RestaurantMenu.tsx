@@ -983,6 +983,17 @@ export default function RestaurantMenu({
     ),
   );
 
+  // Buns manually selected popular items, in the owner's chosen order.
+  const featuredItems = isBunsMenu
+    ? ["build your own burger", "ceo burger", "medium fries"].flatMap((name) => {
+        const item = data.items.find((entry) => {
+          const normalized = entry.name.trim().toLowerCase().replace(/\s+/g, " ").replace(/^the /, "");
+          return normalized === name && visibleCategories.some((category) => category.id === entry.category_id);
+        });
+        return item ? [item] : [];
+      })
+    : [];
+
   useEffect(() => {
     if (!visibleCategories.length) {
       setCategoryBarFixed(false);
@@ -1485,6 +1496,57 @@ export default function RestaurantMenu({
         }
         style={{ backgroundColor: menuAreaBackgroundColor || "transparent" }}
       >
+        {featuredItems.length > 0 ? (
+          <section aria-label="Popular picks" className="mb-5 min-w-0 border-b border-white/10 pb-5">
+            <h2 className="mb-3 text-xl font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || undefined }}>
+              Popular Picks
+            </h2>
+            <div
+              role="region"
+              aria-label="Popular menu items — swipe to explore"
+              tabIndex={0}
+              className="grid grid-flow-col auto-cols-[62%] gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory pb-2 sm:auto-cols-[44%] lg:grid-flow-row lg:auto-cols-auto lg:grid-cols-3 lg:overflow-visible"
+            >
+              {featuredItems.map((item) => {
+                const category = visibleCategories.find((entry) => entry.id === item.category_id);
+                const imageUrl = item.thumbnail_url || item.image_url;
+                const price = getPriceForService(item, activeService);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      recordMenuItemClick(item, category?.name || "");
+                      setSelectedItem(withServicePrice(item, activeService));
+                    }}
+                    className="group flex min-w-0 snap-start flex-col overflow-hidden rounded-xl border text-left shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
+                    style={{
+                      backgroundColor: cardBackgroundColor || "rgba(255,255,255,0.055)",
+                      borderColor: cardBorderColor || "rgba(255,255,255,0.12)",
+                      color: nameColor || "#ffffff",
+                    }}
+                  >
+                    {imageUrl ? (
+                      <img src={imageUrl} alt="" loading="lazy" className="aspect-[2/1] w-full object-cover" />
+                    ) : null}
+                    <div className="flex flex-1 flex-col p-3 sm:p-4">
+                      <h3 className="line-clamp-2 text-sm font-black leading-snug sm:text-base">{item.name}</h3>
+                      <div className="mt-auto flex items-end justify-between gap-2 pt-3">
+                        <span className="text-sm font-black" style={{ color: priceColor || "#fbbf24" }}>
+                          {price != null ? `$${Number(price).toFixed(2)}` : ""}
+                        </span>
+                        {orderingAvailable ? (
+                          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-xl leading-none text-gray-950">+</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
         {visibleCategories.map((category) => {
           const items = data.items.filter(
             (item) =>
