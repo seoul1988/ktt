@@ -16,21 +16,15 @@ type KTownManifest = MetadataRoute.Manifest & {
 export default function manifest(): KTownManifest {
   return {
     id: "/",
-
     name: "KTown Triangle",
-
-    short_name: "KTT",
-
+    short_name: "KTown",
+    description: "Korean community map and marketplace app",
     start_url: "/",
-
     scope: "/",
-
     display: "standalone",
-
+    orientation: "portrait",
     background_color: "#F8F3EC",
-
     theme_color: "#172033",
-
     icons: [
       {
         src: "/icon-192.png",
@@ -43,7 +37,6 @@ export default function manifest(): KTownManifest {
         type: "image/png",
       },
     ],
-
     share_target: {
       action: "/share/news",
       method: "GET",
@@ -54,7 +47,6 @@ export default function manifest(): KTownManifest {
         url: "url",
       },
     },
-
     related_applications: [
       {
         platform: "webapp",

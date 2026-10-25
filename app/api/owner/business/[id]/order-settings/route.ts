@@ -293,7 +293,7 @@ export async function GET(
     } = await access.supabase
       .from("restaurant_order_settings")
       .select(
-        "tax_rate,tip_presets,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,sms_enabled",
+        "tax_rate,tip_presets,delivery_fee_policy_mode,delivery_fee_share_rules,enforce_business_hours,sms_enabled,popular_picks_enabled",
       )
       .eq("business_id", businessId)
       .maybeSingle();
@@ -342,6 +342,7 @@ export async function GET(
           settings?.enforce_business_hours !== false,
         smsEnabled:
           settings?.sms_enabled === true,
+        popularPicksEnabled: settings?.popular_picks_enabled !== false,
       },
       {
         headers: {
@@ -439,6 +440,8 @@ export async function PUT(
         "enforceBusinessHours",
       );
 
+    const hasPopularPicksEnabled = Object.prototype.hasOwnProperty.call(body || {}, "popularPicksEnabled");
+
     const hasSmsEnabled =
       Object.prototype.hasOwnProperty.call(
         body || {},
@@ -453,7 +456,8 @@ export async function PUT(
       !hasDeliveryFeePolicyMode &&
       !hasDeliveryFeeShareRules &&
       !hasEnforceBusinessHours &&
-      !hasSmsEnabled
+      !hasSmsEnabled &&
+      !hasPopularPicksEnabled
     ) {
       return NextResponse.json(
         { error: "저장할 설정이 없습니다." },
@@ -865,6 +869,24 @@ export async function PUT(
         savedHoursRule?.enforce_business_hours !== false;
     }
 
+    let popularPicksEnabled: boolean | undefined;
+    if (hasPopularPicksEnabled) {
+      if (typeof body.popularPicksEnabled !== "boolean") {
+        return NextResponse.json({ error: "Popular Picks 설정은 true 또는 false여야 합니다." }, { status: 400 });
+      }
+      const { data: saved, error } = await access.supabase
+        .from("restaurant_order_settings")
+        .upsert({
+          business_id: businessId,
+          popular_picks_enabled: body.popularPicksEnabled,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "business_id" })
+        .select("popular_picks_enabled")
+        .single();
+      if (error) throw error;
+      popularPicksEnabled = saved?.popular_picks_enabled === true;
+    }
+
     if (hasSmsEnabled) {
       const enabled = body.smsEnabled === true;
 
@@ -964,6 +986,7 @@ export async function PUT(
         ...(smsEnabled !== undefined
           ? { smsEnabled }
           : {}),
+        ...(popularPicksEnabled !== undefined ? { popularPicksEnabled } : {}),
       },
       {
         headers: {

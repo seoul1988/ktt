@@ -234,6 +234,7 @@ export default function RestaurantMenu({
     items: [],
   });
   const [loading, setLoading] = useState(true);
+  const [popularItemIds, setPopularItemIds] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] =
@@ -977,22 +978,58 @@ export default function RestaurantMenu({
     };
   }, [compact, orderingAvailable, externalCartButton, data.items.length]);
 
+  // The public endpoint is authoritative: disabled or ineligible means no picks.
+  // Refresh on focus and periodically so owner changes reach already-open menus.
+  useEffect(() => {
+    let cancelled = false;
+    let requestNumber = 0;
+    setPopularItemIds([]);
+
+    async function refreshPopularPicks() {
+      const currentRequest = ++requestNumber;
+      try {
+        const response = await fetch(
+          `/api/businesses/${encodeURIComponent(businessId)}/popular-items`,
+          { cache: "no-store", headers: { "Cache-Control": "no-cache" } },
+        );
+        if (!response.ok) throw new Error(`Popular Picks HTTP ${response.status}`);
+        const result = await response.json();
+        const nextIds =
+          result?.enabled === true && result?.eligible === true && Array.isArray(result?.itemIds)
+            ? result.itemIds.filter((id: unknown): id is number =>
+                typeof id === "number" && Number.isInteger(id) && id > 0,
+              )
+            : [];
+        if (!cancelled && currentRequest === requestNumber) setPopularItemIds(nextIds);
+      } catch (error) {
+        console.error("Popular Picks load failed:", error);
+        if (!cancelled && currentRequest === requestNumber) setPopularItemIds([]);
+      }
+    }
+
+    void refreshPopularPicks();
+    const interval = window.setInterval(() => void refreshPopularPicks(), 30_000);
+    window.addEventListener("focus", refreshPopularPicks);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshPopularPicks);
+    };
+  }, [businessId]);
+
   const visibleCategories = data.categories.filter((category) =>
     data.items.some(
       (item) => item.category_id === category.id,
     ),
   );
 
-  // Buns manually selected popular items, in the owner's chosen order.
-  const featuredItems = isBunsMenu
-    ? ["build your own burger", "ceo burger", "medium fries"].flatMap((name) => {
-        const item = data.items.find((entry) => {
-          const normalized = entry.name.trim().toLowerCase().replace(/\s+/g, " ").replace(/^the /, "");
-          return normalized === name && visibleCategories.some((category) => category.id === entry.category_id);
-        });
-        return item ? [item] : [];
-      })
-    : [];
+  // Popular Picks are based on paid orders in the last 30 days, not fixed restaurant IDs.
+  const featuredItems = popularItemIds
+    .map((id) => data.items.find((item) => Number(item.id) === id))
+    .filter((item): item is RestaurantMenuItem =>
+      Boolean(item && visibleCategories.some((category) => category.id === item.category_id)),
+    );
+  const hasConfiguredPopularPicks = featuredItems.length > 0;
 
   useEffect(() => {
     if (!visibleCategories.length) {
@@ -1496,7 +1533,7 @@ export default function RestaurantMenu({
         }
         style={{ backgroundColor: menuAreaBackgroundColor || "transparent" }}
       >
-        {featuredItems.length > 0 ? (
+        {hasConfiguredPopularPicks && featuredItems.length > 0 ? (
           <section aria-label="Popular picks" className="mb-5 min-w-0 border-b border-white/10 pb-5">
             <h2 className="mb-3 text-xl font-black tracking-tight text-white sm:text-2xl" style={{ color: categoryHeadingColor || undefined }}>
               Popular Picks

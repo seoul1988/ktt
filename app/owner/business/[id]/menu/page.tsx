@@ -735,6 +735,8 @@ export default function OwnerBusinessMenuPage() {
   >({});
   const [savingPriceDisplayKey, setSavingPriceDisplayKey] = useState("");
   const [deliveryPercentInput, setDeliveryPercentInput] = useState("15");
+  const [popularPicksEnabled, setPopularPicksEnabled] = useState(true);
+  const [savingPopularPicks, setSavingPopularPicks] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "all">(
     "all",
   );
@@ -1050,6 +1052,7 @@ export default function OwnerBusinessMenuPage() {
         );
 
         setSmsEnabled(data?.smsEnabled === true);
+        setPopularPicksEnabled(data?.popularPicksEnabled !== false);
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "온라인 주문 설정을 불러오지 못했습니다.");
@@ -1060,6 +1063,33 @@ export default function OwnerBusinessMenuPage() {
     void loadOrderModes();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  async function savePopularPicksEnabled(nextEnabled: boolean) {
+    if (savingPopularPicks) return;
+    const previous = popularPicksEnabled;
+    setPopularPicksEnabled(nextEnabled);
+    setSavingPopularPicks(true);
+    setOrderSettingsMessage("Popular Picks 설정 저장 중...");
+    try {
+      const token = await getAccessToken();
+      const response = await fetch(`/api/owner/business/${businessId}/order-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ popularPicksEnabled: nextEnabled }),
+      });
+      const result = await readApiJson(response);
+      if (!response.ok || typeof result?.popularPicksEnabled !== "boolean") {
+        throw new Error(result?.error || "Popular Picks 설정을 저장하지 못했습니다.");
+      }
+      setPopularPicksEnabled(result.popularPicksEnabled);
+      setOrderSettingsMessage(result.popularPicksEnabled ? "✓ Popular Picks 표시 사용" : "✓ Popular Picks 표시 안 함");
+    } catch (error) {
+      setPopularPicksEnabled(previous);
+      setOrderSettingsMessage(error instanceof Error ? `Popular Picks 저장 실패: ${error.message}` : "Popular Picks 저장 실패");
+    } finally {
+      setSavingPopularPicks(false);
+    }
+  }
 
   async function saveSmsEnabled(nextEnabled: boolean) {
     if (savingSmsEnabled) return;
@@ -1211,7 +1241,7 @@ export default function OwnerBusinessMenuPage() {
       try {
         const token = await getAccessToken();
         const response = await fetch(
-          `/api/owner/business/${businessId}/doordash/settings`,
+          `/api/owner/business/${businessId}/doordash`,
           {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
@@ -1254,7 +1284,7 @@ export default function OwnerBusinessMenuPage() {
     try {
       const token = await getAccessToken();
       const response = await fetch(
-        `/api/owner/business/${businessId}/doordash/settings`,
+        `/api/owner/business/${businessId}/doordash`,
         {
           method: "PUT",
           headers: {
@@ -8727,6 +8757,25 @@ export default function OwnerBusinessMenuPage() {
                 </button>
               </div>
             </div>
+          </div>
+
+          <div className="mt-3 rounded-2xl border border-[#E8DED1] bg-white px-4 py-3">
+            <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-[#172033]">
+              <input
+                type="checkbox"
+                checked={popularPicksEnabled}
+                disabled={savingPopularPicks}
+                onChange={(event) => void savePopularPicksEnabled(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-blue-700"
+              />
+              <span>
+                Popular Picks 표시
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  체크한 식당만 최근 30일 결제 완료 주문 20건 이상일 때 판매량 상위 3개 메뉴가 표시됩니다.
+                </span>
+              </span>
+            </label>
+            {savingPopularPicks ? <p className="mt-2 text-xs text-blue-700">저장 중...</p> : null}
           </div>
 
           <div className="mt-4 space-y-4">
