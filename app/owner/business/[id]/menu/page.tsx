@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import IntegrationSettings from "./IntegrationSettings";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import CommunityBottomNav from "@/app/components/CommunityBottomNav";
@@ -6276,6 +6277,8 @@ export default function OwnerBusinessMenuPage() {
             </div>
           ) : null}
 
+          <IntegrationSettings businessId={businessId} getToken={getAccessToken} />
+
           <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
             <button
               type="button"
@@ -6301,68 +6304,36 @@ export default function OwnerBusinessMenuPage() {
 
             {paymentProviderOpen ? (
               <>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void savePaymentProvider("stripe")}
+            <div className="mt-3">
+              <label htmlFor="restaurant-payment-provider" className="block text-xs font-black text-gray-700">
+                결제 시스템 선택
+              </label>
+              <select
+                id="restaurant-payment-provider"
+                value={paymentProvider}
                 disabled={savingPaymentProvider}
-                className={`rounded-2xl border-2 p-4 text-left transition ${
-                  paymentProvider === "stripe"
-                    ? "border-indigo-600 bg-indigo-100 ring-2 ring-indigo-200"
-                    : "border-gray-200 bg-white hover:border-indigo-300"
-                } disabled:cursor-wait disabled:opacity-60`}
+                onChange={(event) => {
+                  const provider = event.target.value;
+                  if (provider === "stripe" || provider === "square") {
+                    void savePaymentProvider(provider);
+                  }
+                }}
+                className="mt-2 w-full rounded-xl border-2 border-violet-300 bg-white px-4 py-3 text-sm font-bold text-gray-900 disabled:opacity-60"
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                      paymentProvider === "stripe"
-                        ? "border-indigo-600 bg-indigo-600"
-                        : "border-gray-300 bg-white"
-                    }`}
-                  >
-                    {paymentProvider === "stripe" ? (
-                      <span className="h-2 w-2 rounded-full bg-white" />
-                    ) : null}
-                  </span>
-                  <div>
-                    <p className="text-sm font-black text-[#172033]">Stripe</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      Pay Now → Stripe 결제
-                    </p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void savePaymentProvider("square")}
-                disabled={savingPaymentProvider}
-                className={`rounded-2xl border-2 p-4 text-left transition ${
-                  paymentProvider === "square"
-                    ? "border-emerald-600 bg-emerald-100 ring-2 ring-emerald-200"
-                    : "border-gray-200 bg-white hover:border-emerald-300"
-                } disabled:cursor-wait disabled:opacity-60`}
-              >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                      paymentProvider === "square"
-                        ? "border-emerald-600 bg-emerald-600"
-                        : "border-gray-300 bg-white"
-                    }`}
-                  >
-                    {paymentProvider === "square" ? (
-                      <span className="h-2 w-2 rounded-full bg-white" />
-                    ) : null}
-                  </span>
-                  <div>
-                    <p className="text-sm font-black text-[#172033]">Square</p>
-                    <p className="mt-1 text-[11px] font-semibold text-gray-600">
-                      Pay Now → Square 결제
-                    </p>
-                  </div>
-                </div>
-              </button>
+                <optgroup label="사용 가능한 결제 서비스">
+                  <option value="stripe">Stripe</option>
+                  <option value="square">Square</option>
+                </optgroup>
+                <optgroup label="추가 연동 필요 · 현재 선택 불가">
+                  <option value="clover" disabled>Clover — 연동 준비 전</option>
+                  <option value="toast" disabled>Toast — 연동 준비 전</option>
+                  <option value="paypal" disabled>PayPal — 연동 준비 전</option>
+                  <option value="authorize_net" disabled>Authorize.net — 연동 준비 전</option>
+                </optgroup>
+              </select>
+              <p className="mt-2 text-[11px] font-semibold text-gray-600">
+                선택하면 아래에 해당 서비스의 API 입력창이 표시됩니다. 선택한 결제 서비스는 식당별로 저장됩니다.
+              </p>
             </div>
 
             <div className="mt-3 rounded-xl bg-white px-3 py-2 text-[11px] font-black text-violet-900">
