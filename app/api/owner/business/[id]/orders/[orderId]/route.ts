@@ -1,35 +1,37 @@
 import { NextResponse } from "next/server";
 import { getOrderAdmin, requireOrderOwner } from "@/lib/restaurant-order/server";
-import { sendTwilioSms } from "@/lib/restaurant-order/twilio";
+import { sendOrderNotifications } from "@/lib/restaurant-order/order-notifications";
 
 const ALLOWED = new Set(["new", "preparing", "ready", "completed", "cancelled"]);
+type OrderStatus = "new" | "preparing" | "ready" | "completed" | "cancelled";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string; orderId: string }> }) {
   try {
     const { id, orderId } = await context.params;
     const businessId = Number(id);
     const orderNumericId = Number(orderId);
+    if (!Number.isInteger(businessId) || businessId <= 0 || !Number.isInteger(orderNumericId) || orderNumericId <= 0) return NextResponse.json({ error: "Invalid order ID." }, { status: 400 });
     const access = await requireOrderOwner(request, businessId);
     if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
     const body = await request.json();
     const status = String(body?.status || "");
-    if (!ALLOWED.has(status)) return NextResponse.json({ error: "Invalid order status" }, { status: 400 });
+    if (!ALLOWED.has(status)) return NextResponse.json({ error: "Invalid order status." }, { status: 400 });
     const db = getOrderAdmin();
-    const { data: order, error } = await db.from("restaurant_orders").update({ order_status: status, updated_at: new Date().toISOString() }).eq("id", orderNumericId).eq("business_id", businessId).select("id,order_number,customer_phone,fulfillment_type").single();
+    const { data: previous, error: readError } = await db.from("restaurant_orders")
+      .select("id,order_number,customer_phone,fulfillment_type,order_status")
+      .eq("id", orderNumericId).eq("business_id", businessId).single();
+    if (readError || !previous) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    if (previous.order_status === status) return NextResponse.json({ ok: true, order: previous, unchanged: true });
+    const { data: order, error } = await db.from("restaurant_orders")
+      .update({ order_status: status, updated_at: new Date().toISOString() })
+      .eq("id", orderNumericId).eq("business_id", businessId).eq("order_status", previous.order_status)
+      .select("id,order_number,customer_phone,fulfillment_type,order_status").maybeSingle();
     if (error) throw error;
-    if (status === "ready") {
-      const [{ data: business }, { data: s }, { data: p }] = await Promise.all([
-        db.from("businesses").select("name").eq("id", businessId).single(),
-        db.from("restaurant_order_settings").select("sms_enabled").eq("business_id", businessId).maybeSingle(),
-        db.from("restaurant_order_private_settings").select("twilio_account_sid,twilio_auth_token,twilio_phone_number").eq("business_id", businessId).maybeSingle(),
-      ]);
-      if (s?.sms_enabled && p?.twilio_account_sid && p?.twilio_auth_token && p?.twilio_phone_number && order.customer_phone) {
-        await sendTwilioSms({ accountSid: p.twilio_account_sid, authToken: p.twilio_auth_token, fromNumber: p.twilio_phone_number }, order.customer_phone, `${business?.name || "Restaurant"}: Order #${order.order_number} is READY${order.fulfillment_type === "pickup" ? " for pickup" : ""}.`);
-      }
-    }
-    return NextResponse.json({ ok: true, order });
-  } catch (e) {
-    console.error("OWNER ORDER PATCH ERROR", e);
-    return NextResponse.json({ error: "주문 상태 변경에 실패했습니다." }, { status: 500 });
+    if (!order) return NextResponse.json({ error: "Order changed. Refresh and try again." }, { status: 409 });
+    const notifications = await sendOrderNotifications({ db, businessId, orderId: orderNumericId, event: status as OrderStatus });
+    return NextResponse.json({ ok: true, order, notifications });
+  } catch (error) {
+    console.error("OWNER ORDER PATCH ERROR", error);
+    return NextResponse.json({ error: "Could not update the order status." }, { status: 500 });
   }
 }

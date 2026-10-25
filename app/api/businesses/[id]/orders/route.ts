@@ -471,6 +471,7 @@ export async function POST(
 
     // Consent is explicit, per order. The server rechecks restaurant SMS setup.
     const requestedSmsConsent = body?.smsConsent === true;
+    const emailConsent = body?.emailConsent === true;
 
     const customerEmail = String(
       body?.customer?.email || "",
@@ -480,8 +481,8 @@ export async function POST(
       .slice(0, 254);
 
     if (
-      customerEmail &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)
+      (emailConsent && !customerEmail) ||
+      (customerEmail && !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(customerEmail))
     ) {
       return NextResponse.json(
         { error: "Please enter a valid email address." },
@@ -512,10 +513,10 @@ export async function POST(
       );
     }
 
-    if (fulfillmentType === "delivery" && !customerPhone) {
+    if (!customerPhone) {
       return NextResponse.json(
         {
-          error: "Phone number is required for delivery.",
+          error: "Phone number is required.",
         },
         { status: 400 },
       );
@@ -1497,6 +1498,9 @@ export async function POST(
           customerName,
         customer_phone:
           smsConsent ? smsPhone : customerPhone,
+        customer_email: emailConsent ? customerEmail : null,
+        email_consent: emailConsent,
+        email_consent_at: emailConsent ? new Date().toISOString() : null,
         sms_consent:
           smsConsent,
         sms_consent_at:

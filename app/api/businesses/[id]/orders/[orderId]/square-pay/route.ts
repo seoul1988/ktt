@@ -5,11 +5,7 @@ import {
   moneyCents,
 } from "@/lib/restaurant-order/server";
 import { dispatchUberDirectOrder } from "@/lib/delivery/uber-direct";
-import {
-  centralTwilioConfig,
-  isKtownSmsEnabled,
-  sendTwilioSms,
-} from "@/lib/restaurant-order/twilio";
+import { sendOrderNotifications } from "@/lib/restaurant-order/order-notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -582,67 +578,13 @@ export async function POST(
       };
     }
 
-    let sms: any = null;
-
-    if (
-      isKtownSmsEnabled() &&
-      order.sms_consent === true &&
-      !order.sms_sent_at
-    ) {
-      const twilio = centralTwilioConfig();
-
-      if (twilio) {
-        const cancelUrl =
-          `${publicBaseUrl(request)}/c/${encodeURIComponent(rawCancelToken)}`;
-        const restaurantName = String(
-          business?.name || "Restaurant",
-        ).trim();
-        const fulfillmentLabel =
-          order.fulfillment_type === "delivery" ? "Delivery" : "Pickup";
-
-        const message = [
-          ` ${restaurantName}`,
-          `Order #${order.order_number} confirmed.`,
-          `${fulfillmentLabel} · Total $${Number(order.total || 0).toFixed(2)}`,
-          "",
-          "Cancel Order (within 3 minutes):",
-          cancelUrl,
-          "",
-          "Reply STOP to opt out or HELP for help.",
-        ].join("\n");
-
-        try {
-          sms = await sendTwilioSms(
-            twilio,
-            String(order.customer_phone || ""),
-            message,
-          );
-
-          const { error: smsSaveError } = await db
-            .from("restaurant_orders")
-            .update({
-              sms_sent_at: new Date().toISOString(),
-              sms_message_sid: sms.sid || null,
-            })
-            .eq("id", ktownOrderId)
-            .eq("business_id", businessId);
-
-          if (smsSaveError) {
-            console.error("ORDER SMS SAVE ERROR", smsSaveError);
-          }
-        } catch (smsError) {
-          console.error("ORDER SMS ERROR", smsError);
-          // Payment and delivery remain successful even if SMS fails.
-          sms = {
-            ok: false,
-            error:
-              smsError instanceof Error
-                ? smsError.message
-                : "SMS failed.",
-          };
-        }
-      }
-    }
+    const notifications = await sendOrderNotifications({
+      db, businessId, orderId: ktownOrderId, event: "confirmed",
+      cancelUrl: tokenUpdateError ? undefined : `${publicBaseUrl(request)}/c/${encodeURIComponent(rawCancelToken)}`,
+      trackingUrl: !tokenUpdateError && order.fulfillment_type === "delivery"
+        ? `${publicBaseUrl(request)}/orders/track/${encodeURIComponent(rawTrackingToken)}`
+        : undefined,
+    });
 
     const trackingUrl =
       `/orders/track/${encodeURIComponent(rawTrackingToken)}`;
@@ -654,7 +596,8 @@ export async function POST(
       paymentId,
       orderNumber: order.order_number,
       delivery,
-      smsQueued: !!sms && sms?.ok !== false,
+      smsQueued: notifications.sms.queued === true,
+      emailQueued: notifications.email.queued === true,
       cancelExpiresAt: cancelExpiresAt.toISOString(),
       trackingUrl:
         order.fulfillment_type === "delivery" ? trackingUrl : null,

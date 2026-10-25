@@ -255,6 +255,8 @@ export default function RestaurantCheckoutModal({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [smsConsent, setSmsConsent] = useState(false);
+  const [emailConsent, setEmailConsent] = useState(false);
+  const [email, setEmail] = useState("");
   const [address1, setAddress1] = useState("");
   const [address2, setAddress2] = useState("");
   const [city, setCity] = useState("");
@@ -1033,7 +1035,11 @@ export default function RestaurantCheckoutModal({
     orderSubmitLockRef.current = true;
     setError("");
     if (!name.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your name."); }
-    if (fulfillmentType === "delivery" && !phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number for delivery."); }
+    if (!phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number."); }
+    if (emailConsent && !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(email.trim())) {
+      orderSubmitLockRef.current = false;
+      return setError("Please enter a valid email address to receive order updates.");
+    }
     if (settings?.smsEnabled === true && smsConsent) {
       const digits = phone.replace(/\D/g, "");
       const validSmsPhone = phone.trim().startsWith("+")
@@ -1107,7 +1113,8 @@ export default function RestaurantCheckoutModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fulfillmentType,
-          customer: { name: name.trim(), phone: phone.trim() },
+          customer: { name: name.trim(), phone: phone.trim(), email: emailConsent ? email.trim() : "" },
+          emailConsent,
           deliveryAddress: fulfillmentType === "delivery" ? {
             address1: submitAddress1,
             address2: submitAddress2,
@@ -1440,26 +1447,26 @@ export default function RestaurantCheckoutModal({
             <section className="rounded-2xl border p-4">
               <h3 className="font-black">Customer Information</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
-                <div className="min-w-0">
-                  <input type="tel" autoComplete="tel" aria-label="Phone number" value={phone} onChange={(e) => { setPhone(e.target.value); setSmsConsent(false); }} placeholder={fulfillmentType === "delivery" || smsConsent ? "Phone *" : "Phone (optional)"} inputMode="tel" className="w-full rounded-xl border px-3 py-3 text-sm" />
-
+                <input required autoComplete="name" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
+                <input required type="tel" autoComplete="tel" aria-label="Phone number (required)" value={phone} onChange={(e) => { setPhone(e.target.value); setSmsConsent(false); }} placeholder="Phone *" inputMode="tel" className="w-full rounded-xl border px-3 py-3 text-sm" />
+              </div>
+              <h4 className="mt-5 text-sm font-black">How would you like to receive order updates?</h4>
+              <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
+                <input type="checkbox" checked={emailConsent} onChange={(e) => setEmailConsent(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-gray-950" />
+                <span className="text-xs font-bold">Email updates</span>
+              </label>
+              {emailConsent ? (
+                <input required type="email" autoComplete="email" aria-label="Email address for order updates" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="Email address *" className="mt-3 w-full rounded-xl border px-3 py-3 text-sm" />
+              ) : null}
               {settings.smsEnabled === true ? (
                 <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
-                  <input
-                    type="checkbox"
-                    checked={smsConsent}
-                    onChange={(e) => setSmsConsent(e.target.checked)}
-                    className="mt-1 h-4 w-4 shrink-0 accent-gray-950"
-                  />
+                  <input type="checkbox" checked={smsConsent} onChange={(e) => setSmsConsent(e.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-gray-950" />
                   <span className="text-[11px] leading-5 text-gray-600">
-                    <b className="block text-xs text-gray-950">Text me my order confirmation, receipt, and status updates</b>
-                    Receive transactional text messages from {settings.businessName || "this restaurant"} via KTown Triangle about this order, including confirmation, order details, and pickup/delivery status. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help.
+                    <b className="block text-xs text-gray-950">Text message updates (SMS)</b>
+                    By checking this box, I agree to receive transactional texts from {settings.businessName || "this restaurant"} about this order at the phone number entered above. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help.
                   </span>
                 </label>
               ) : null}
-                </div>
-              </div>
             </section>
 
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">
