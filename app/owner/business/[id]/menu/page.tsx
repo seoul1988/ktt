@@ -587,6 +587,128 @@ function emptyPromotion(): MenuPromotion {
   };
 }
 
+
+/** Server contract: GET/PUT /api/owner/business/:id/sms-settings.
+ * GET returns {twilioSettings:{accountSid,fromNumber,messagingServiceSid,hasAuthToken}}.
+ * PUT accepts those fields plus optional authToken and smsEnabled; returns the
+ * same sanitized metadata after durable storage. Never return the Auth Token.
+ * The route must authenticate the owner, encrypt secrets, and gate SMS sending
+ * on complete credentials. No secrets are persisted by this client.
+ */
+function TwilioSettingsModal({ businessId, getToken, onClose, onSaved }: {
+  businessId: string;
+  getToken: () => Promise<string>;
+  onClose: () => void;
+  onSaved: (enabled: boolean) => void;
+}) {
+  const [accountSid, setAccountSid] = useState("");
+  const [authToken, setAuthToken] = useState("");
+  const [fromNumber, setFromNumber] = useState("");
+  const [serviceSid, setServiceSid] = useState("");
+  const [hasAuthToken, setHasAuthToken] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [apiReady, setApiReady] = useState(false);
+  const [error, setError] = useState("");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const busyRef = useRef(false);
+  const endpoint = `/api/owner/business/${encodeURIComponent(businessId)}/sms-settings`;
+
+  useEffect(() => {
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
+    return () => { document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const token = await getToken();
+        const response = await fetch(endpoint, { cache: "no-store", headers: { Authorization: `Bearer ${token}` } });
+        if (response.status === 404 || response.status === 405) {
+          throw new Error("SMS 설정 저장 기능이 아직 연결되지 않았습니다. 입력값은 저장되지 않습니다.");
+        }
+        const data = await response.json();
+        if (!response.ok) throw new Error("SMS 설정을 불러오지 못했습니다.");
+        const config = data?.twilioSettings;
+        if (!config || typeof config.hasAuthToken !== "boolean") throw new Error("SMS 설정 저장 기능의 연결을 확인해야 합니다.");
+        if (cancelled) return;
+        setAccountSid(String(config.accountSid || ""));
+        setFromNumber(String(config.fromNumber || ""));
+        setServiceSid(String(config.messagingServiceSid || ""));
+        setHasAuthToken(config.hasAuthToken);
+        setApiReady(true);
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "SMS 설정을 불러오지 못했습니다.");
+      } finally { if (!cancelled) setLoading(false); }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [endpoint, getToken]);
+
+  async function save() {
+    if (busyRef.current || !apiReady) return;
+    const sid = accountSid.trim();
+    const secret = authToken.trim();
+    const phone = fromNumber.trim();
+    const service = serviceSid.trim();
+    if (sid && !/^AC[0-9a-f]{32}$/i.test(sid)) { setError("Account SID는 AC로 시작하는 34자리 값입니다."); return; }
+    if (secret && !/^[0-9a-f]{32}$/i.test(secret)) { setError("Auth Token 형식을 확인하세요."); return; }
+    if (phone && !/^\+[1-9]\d{7,14}$/.test(phone)) { setError("발신번호는 +1을 포함한 국제번호로 입력하세요."); return; }
+    if (service && !/^MG[0-9a-f]{32}$/i.test(service)) { setError("Messaging Service SID는 MG로 시작하는 34자리 값입니다."); return; }
+    busyRef.current = true; setSaving(true); setError("");
+    try {
+      const token = await getToken();
+      const response = await fetch(endpoint, {
+        method: "PUT", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ accountSid: sid, ...(secret ? { authToken: secret } : {}), fromNumber: phone, messagingServiceSid: service, smsEnabled: true }),
+      });
+      if (response.status === 404 || response.status === 405) throw new Error("SMS 설정 저장 기능이 아직 연결되지 않았습니다.");
+      const data = await response.json();
+      if (!response.ok || !data?.twilioSettings || typeof data?.smsEnabled !== "boolean") throw new Error("SMS 설정 저장을 확인하지 못했습니다.");
+      setAuthToken(""); onSaved(data.smsEnabled);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "SMS 설정 저장에 실패했습니다.");
+    } finally { busyRef.current = false; setSaving(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onClose(); }}>
+      <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="twilio-settings-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 text-gray-900 shadow-xl" onKeyDown={(event) => {
+        if (event.key === "Escape" && !saving) { event.stopPropagation(); onClose(); }
+        if (event.key !== "Tab") return;
+        const elements = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]');
+        if (!elements?.length) { event.preventDefault(); return; }
+        const first = elements[0], last = elements[elements.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panelRef.current)) { event.preventDefault(); first.focus(); }
+      }}>
+        <div className="flex items-center justify-between gap-3">
+          <h3 id="twilio-settings-title" className="text-lg font-black">SMS · Twilio 설정</h3>
+          <button type="button" disabled={saving} onClick={onClose} aria-label="SMS 설정 닫기" className="rounded-lg border px-3 py-1">닫기</button>
+        </div>
+        <p className="mt-2 text-sm text-gray-600">아직 발급받지 않았다면 비워 두세요. 나중에 SMS 설정 버튼에서 입력·수정할 수 있습니다.</p>
+        <p className="mt-2 text-xs font-bold text-blue-700">{loading ? "설정 확인 중..." : accountSid && (hasAuthToken || authToken) && (fromNumber || serviceSid) ? "인증정보 입력됨 · 발송 가능 여부는 별도 확인이 필요합니다." : "미설정 또는 일부 입력 · 인증정보가 준비되어야 문자를 보낼 수 있습니다."}</p>
+        <div className="mt-4 space-y-3">
+          <label className="block text-sm font-bold">Account SID<input autoComplete="off" spellCheck={false} disabled={loading || saving} value={accountSid} onChange={(e) => setAccountSid(e.target.value)} placeholder="AC... (나중에 입력 가능)" className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
+          <label className="block text-sm font-bold">Auth Token<input type="password" autoComplete="new-password" spellCheck={false} disabled={loading || saving} value={authToken} onChange={(e) => setAuthToken(e.target.value)} placeholder={hasAuthToken ? "저장됨 · 변경할 때만 새 Token 입력" : "나중에 입력 가능"} className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
+          <label className="block text-sm font-bold">Twilio 발신번호<input type="tel" autoComplete="off" disabled={loading || saving} value={fromNumber} onChange={(e) => setFromNumber(e.target.value)} placeholder="+19195551234" className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
+          <label className="block text-sm font-bold">Messaging Service SID (사용하는 경우)<input autoComplete="off" spellCheck={false} disabled={loading || saving} value={serviceSid} onChange={(e) => setServiceSid(e.target.value)} placeholder="MG..." className="mt-1 w-full rounded-lg border p-2 font-normal" /></label>
+          <p className="text-xs text-gray-500">발신번호 또는 Messaging Service SID 중 사용하는 값을 입력하세요. 저장된 Auth Token은 표시하지 않으며, 빈칸이면 기존 값을 유지합니다.</p>
+        </div>
+        {error ? <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" disabled={saving} onClick={onClose} className="rounded-lg border px-4 py-2 font-bold">나중에 입력 / 닫기</button>
+          <button type="button" disabled={loading || saving || !apiReady} onClick={() => void save()} className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40">{saving ? "저장 중..." : "설정 저장"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OwnerBusinessMenuPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -646,6 +768,7 @@ export default function OwnerBusinessMenuPage() {
 
   const [smsEnabled, setSmsEnabled] = useState(false);
   const [savingSmsEnabled, setSavingSmsEnabled] = useState(false);
+  const [smsSettingsOpen, setSmsSettingsOpen] = useState(false);
 
   const [paymentProvider, setPaymentProvider] = useState<"stripe" | "square">("stripe");
   const [savingPaymentProvider, setSavingPaymentProvider] = useState(false);
@@ -5823,6 +5946,14 @@ export default function OwnerBusinessMenuPage() {
           </div>
         )}
 
+        {smsSettingsOpen ? (
+          <TwilioSettingsModal businessId={String(businessId)} getToken={getAccessToken} onClose={() => setSmsSettingsOpen(false)} onSaved={(enabled) => {
+            setSmsEnabled(enabled);
+            setSmsSettingsOpen(false);
+            setOrderSettingsMessage("✓ SMS 설정을 저장했습니다. 발송에는 유효한 Twilio 인증정보가 필요합니다.");
+          }} />
+        ) : null}
+
         <section className="mb-5 rounded-3xl border-2 border-orange-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -5869,9 +6000,10 @@ export default function OwnerBusinessMenuPage() {
                 <input
                   type="checkbox"
                   checked={smsEnabled}
-                  onChange={(event) =>
-                    void saveSmsEnabled(event.target.checked)
-                  }
+                  onChange={(event) => {
+                    if (event.target.checked) setSmsSettingsOpen(true);
+                    else void saveSmsEnabled(false);
+                  }}
                   disabled={savingSmsEnabled}
                   className="h-5 w-5 accent-blue-600 disabled:cursor-wait disabled:opacity-60"
                 />
@@ -5879,6 +6011,7 @@ export default function OwnerBusinessMenuPage() {
                   SMS Order Updates 사용
                 </span>
               </label>
+              <button type="button" onClick={() => setSmsSettingsOpen(true)} disabled={savingSmsEnabled} className="rounded-xl border-2 border-blue-300 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 disabled:opacity-50">SMS 설정 · 입력/수정</button>
             </div>
           </div>
 
