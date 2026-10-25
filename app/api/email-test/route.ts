@@ -4,10 +4,10 @@
  * EMAIL_TEST_ENABLED=true
  * EMAIL_TEST_TOKEN=<a private random password of at least 24 characters>
  * RESEND_API_KEY=<your Resend API key>
- * EMAIL_TEST_TO=<optional; defaults to OWNER_REQUEST_ADMIN_EMAIL or ktowntriangle@gmail.com>
+ * Recipient is entered in the password-protected test form.
  * Uses the existing sender: K-Town Triangle <noreply@ktowntriangle.com>
  *
- * Open /api/email-test, enter EMAIL_TEST_TOKEN and click the send button.
+ * Open /api/email-test, enter recipient email and EMAIL_TEST_TOKEN, then send.
  * Disable after testing: EMAIL_TEST_ENABLED=false
  * No extra npm dependency. This test does not change orders or customer data.
  */
@@ -32,9 +32,12 @@ function page(message = "", status = 200) {
 <title>Ktown 이메일 테스트</title><style>
 body{font-family:system-ui,sans-serif;background:#f3f4f6;color:#111827;margin:0;padding:28px}main{max-width:480px;margin:40px auto;background:white;padding:28px;border-radius:20px}h1{font-size:24px}p{line-height:1.7;overflow-wrap:anywhere}label{display:block;font-weight:700;margin-top:24px}input,button{box-sizing:border-box;width:100%;padding:14px;border-radius:10px;margin-top:10px}input{border:1px solid #d1d5db}button{background:#111827;color:white;border:0;font-size:16px;cursor:pointer}.result{background:#eef2ff;padding:16px;border-radius:12px;white-space:pre-wrap}
 </style></head><body><main><h1>Ktown 이메일 발송 테스트</h1>
-<p>서버에 설정한 테스트 이메일 주소로 메일 한 통을 보냅니다. 주문이나 고객 정보는 변경하지 않습니다.</p>
+<p>아래에 입력한 이메일 주소로 테스트 메일 한 통을 보냅니다. 주문이나 고객 정보는 변경하지 않습니다.</p>
 ${message ? `<p class="result" role="status">${escapeHtml(message)}</p>` : ""}
-<form method="post" action="/api/email-test"><label for="token">테스트 비밀번호</label>
+<form method="post" action="/api/email-test">
+<label for="to">받는 사람 이메일 주소</label>
+<input id="to" name="to" type="email" required maxlength="254" placeholder="example@gmail.com" autocomplete="email">
+<label for="token">테스트 비밀번호</label>
 <input id="token" name="token" type="password" required minlength="24" maxlength="256" autocomplete="off">
 <button type="submit">테스트 이메일 보내기</button></form>
 <p>발송 접수 후 받은편지함과 스팸함에서 메일을 확인하세요.</p></main></body></html>`, {
@@ -65,7 +68,16 @@ export async function POST(request: Request) {
     return page("서버의 EMAIL_TEST_TOKEN을 24~256자로 설정하세요.", 503);
   }
   const origin = request.headers.get("origin");
-  if (!origin || origin !== new URL(request.url).origin) {
+  const allowedOrigins = new Set([
+    new URL(request.url).origin,
+    "https://www.ktowntriangle.com",
+    "https://ktowntriangle.com",
+  ]);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (siteUrl) {
+    try { allowedOrigins.add(new URL(siteUrl).origin); } catch { /* Invalid optional site URL. */ }
+  }
+  if (!origin || !allowedOrigins.has(origin)) {
     return page("테스트 페이지에서 다시 실행하세요.", 403);
   }
   if (!request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded")) {
@@ -73,17 +85,19 @@ export async function POST(request: Request) {
   }
   const raw = await request.text();
   if (raw.length > 2048) return page("요청이 너무 큽니다.", 413);
-  const token = new URLSearchParams(raw).get("token") || "";
+  const form = new URLSearchParams(raw);
+  const token = form.get("token") || "";
   const digest = (value: string) => createHash("sha256").update(value).digest();
   if (!timingSafeEqual(digest(token), digest(secret))) {
     return page("테스트 비밀번호가 올바르지 않습니다.", 401);
   }
   const apiKey = process.env.RESEND_API_KEY?.trim();
-  const to = process.env.EMAIL_TEST_TO?.trim() || process.env.OWNER_REQUEST_ADMIN_EMAIL?.trim() || "ktowntriangle@gmail.com";
+  const to = (form.get("to") || "").trim();
   const from = "K-Town Triangle <noreply@ktowntriangle.com>";
-  if (!apiKey || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(to)) {
-    return page("RESEND_API_KEY와 EMAIL_TEST_TO를 확인하세요.", 503);
+  if (to.length > 254 || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(to)) {
+    return page("받는 사람 이메일 주소를 정확히 입력하세요.", 400);
   }
+  if (!apiKey) return page("서버의 RESEND_API_KEY 설정을 확인하세요.", 503);
   try {
     const sent = await fetch("https://api.resend.com/emails", {
       method: "POST",
