@@ -5,11 +5,13 @@ type Field={key:string;label:string};
 type Service={id:string;kind:Kind;code:string;name:string;enabled:boolean;fields:Field[]};
 type Connection={kind:Kind;service_id:string;updated_at:string};
 type Draft={id?:string;kind:Kind;code:string;name:string;enabled:boolean;fieldsText:string};
-export default function IntegrationSettings({businessId,getToken}:{businessId:number;getToken:()=>Promise<string>}) {
+type LegacyPayment={provider:"stripe"|"square";configured:boolean;merchantName:string;merchantId:string;locationName:string;locationId:string;secretMasked:string};
+export default function IntegrationSettings({businessId,businessName,getToken,legacyPayment,onEditPayment,onDeletePayment}:{businessId:number;businessName:string;getToken:()=>Promise<string>;legacyPayment:LegacyPayment;onEditPayment:()=>void;onDeletePayment?:()=>void}) {
  const [services,setServices]=useState<Service[]>([]),[connections,setConnections]=useState<Connection[]>([]);
  const [admin,setAdmin]=useState(false),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[message,setMessage]=useState('');
  const [selected,setSelected]=useState<Record<Kind,string>>({payment:'',pos:''});
  const [values,setValues]=useState<Record<Kind,Record<string,string>>>({payment:{},pos:{}});
+ const [editing,setEditing]=useState<Record<Kind,boolean>>({payment:false,pos:false});
  const [draft,setDraft]=useState<Draft|null>(null);
  const endpoint=`/api/owner/business/${businessId}/integrations`;
  async function api(body?:unknown) {
@@ -19,12 +21,12 @@ export default function IntegrationSettings({businessId,getToken}:{businessId:nu
  }
  async function load() {const data=await api();setServices(data.services);setConnections(data.connections);setAdmin(data.isAdmin===true);setSelected({payment:data.connections.find((c:Connection)=>c.kind==='payment')?.service_id||'',pos:data.connections.find((c:Connection)=>c.kind==='pos')?.service_id||''});setLoaded(true);}
  useEffect(()=>{let live=true;setLoaded(false);setAdmin(false);setValues({payment:{},pos:{}});api().then(data=>{if(!live)return;setServices(data.services);setConnections(data.connections);setAdmin(data.isAdmin===true);setSelected({payment:data.connections.find((c:Connection)=>c.kind==='payment')?.service_id||'',pos:data.connections.find((c:Connection)=>c.kind==='pos')?.service_id||''});setLoaded(true);}).catch(e=>{if(live)setMessage(e.message);});return()=>{live=false;};},[businessId]); // Token is fetched for each request.
- async function mutate(body:unknown,ok:string) {if(busy)return;setBusy(true);setMessage('');try{await api(body);await load();setValues({payment:{},pos:{}});setDraft(null);setMessage(ok);}catch(e){setMessage(e instanceof Error?e.message:'저장 실패');}finally{setBusy(false);}}
+ async function mutate(body:unknown,ok:string) {if(busy)return;setBusy(true);setMessage('');try{await api(body);await load();setValues({payment:{},pos:{}});setEditing({payment:false,pos:false});setDraft(null);setMessage(ok);}catch(e){setMessage(e instanceof Error?e.message:'저장 실패');}finally{setBusy(false);}}
  function edit(s:Service){setDraft({id:s.id,kind:s.kind,code:s.code,name:s.name,enabled:s.enabled,fieldsText:s.fields.map(f=>`${f.key}|${f.label}`).join('\n')});}
  const button="rounded-lg border border-violet-300 bg-white px-3 py-2 text-xs font-bold disabled:opacity-50";
  const input="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900";
  return <section className="mt-4 space-y-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4 text-gray-900">
- <p className="text-sm font-black">결제 서비스 · 주문 수신 POS 등록 및 연결 정보</p>
+ <p className="text-sm font-black">{businessName} · 결제 및 POS 연결 정보</p>
  <p className="text-xs text-gray-600">여기서는 서비스와 계정 정보를 등록합니다. 현재 실제 결제는 아래 기존 Stripe / Square 설정을 사용합니다. 새 POS의 주문 전송은 별도 연동이 완료되어야 작동합니다.</p>
  {message&&<p role="status" className="rounded-lg bg-white p-3 text-sm">{message}</p>}
  {!loaded&&<p className="text-xs">설정을 불러오지 못하면 아래 오류와 DB 설치 여부를 확인하세요.</p>}
@@ -34,8 +36,16 @@ export default function IntegrationSettings({businessId,getToken}:{businessId:nu
  const isSaved=saved?.service_id===service?.id&&!!service;
  return <div key={kind} className="rounded-xl bg-white p-4">
  <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-black">{kind==='payment'?'결제 서비스':'주문 받을 POS'}</h3>
- {admin&&<div className="flex gap-2"><button type="button" disabled={busy} className={button} onClick={()=>setDraft({kind,code:'',name:'',enabled:true,fieldsText:'api_key|API Key\nlocation_id|매장 ID'})}>등록</button><button type="button" className={button} disabled={!service||busy} onClick={()=>service&&edit(service)}>수정</button><button type="button" className={button} disabled={!service||busy} onClick={()=>{if(service&&window.confirm(`${service.name} 서비스를 전체 식당 목록에서 삭제할까요?`))void mutate({action:'deleteService',id:service.id},'서비스 삭제 완료');}}>삭제</button></div>}
+ {admin&&<div className="flex gap-2"><button type="button" disabled={busy} className={button} onClick={()=>setDraft({kind,code:'',name:'',enabled:true,fieldsText:'api_key|API Key\nlocation_id|매장 ID'})}>서비스 등록</button><button type="button" className={button} disabled={!service||busy} onClick={()=>service&&edit(service)}>양식 수정</button><button type="button" className={button} disabled={!service||busy} onClick={()=>{if(service&&window.confirm(`${service.name} 서비스를 전체 식당 목록에서 삭제할까요?`))void mutate({action:'deleteService',id:service.id},'서비스 삭제 완료');}}>서비스 삭제</button></div>}
  </div>
+ {kind==='payment'&&legacyPayment.configured&&<div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+ <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{businessName} · {legacyPayment.provider==='square'?'Square':'Stripe'} 연결됨</strong><div className="flex gap-2"><button type="button" className={button} disabled={busy} onClick={onEditPayment}>수정</button>{onDeletePayment&&<button type="button" className={button} disabled={busy} onClick={onDeletePayment}>연결 삭제</button>}<button type="button" className={button} onClick={()=>setEditing(p=>({...p,payment:true}))}>추가</button></div></div>
+ {legacyPayment.provider==='square'?<dl className="mt-2 space-y-1 text-xs"><div>사업자: {legacyPayment.merchantName||'이름 미제공'}</div><div>Merchant ID: {legacyPayment.merchantId||'미제공'}</div><div>매장: {legacyPayment.locationName||'이름 미제공'}</div><div>Location ID: {legacyPayment.locationId||'미제공'}</div><div>Access Token: •••••••• (저장됨)</div></dl>:<p className="mt-2 text-xs">Secret Key: {legacyPayment.secretMasked||'•••••••• (저장됨)'}</p>}
+ <p className="mt-2 text-xs text-emerald-800">이 식당의 기존 결제 설정입니다. 추가 등록 정보와 별도로 현재 결제에 사용됩니다.</p>
+ </div>}
+ {saved&&<div className="mt-3 rounded-xl border p-3"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{businessName} · {services.find(s=>s.id===saved.service_id)?.name||'비활성 서비스'}</strong><div className="flex gap-2"><button type="button" className={button} onClick={()=>{setSelected(p=>({...p,[kind]:saved.service_id}));setEditing(p=>({...p,[kind]:true}));}}>수정</button><button type="button" className={button} disabled={busy} onClick={()=>{if(window.confirm(`${businessName}의 이 연결 정보를 삭제할까요?`))void mutate({action:'disconnect',kind},'식당 연결 정보 삭제 완료');}}>삭제</button><button type="button" className={button} onClick={()=>setEditing(p=>({...p,[kind]:true}))}>추가</button></div></div><p className="mt-2 text-xs">연결 정보 저장됨 · 값은 숨김 · 실제 동작 검증 전</p></div>}
+ {!saved&&!(kind==='payment'&&legacyPayment.configured)&&<div className="mt-3 flex items-center justify-between text-xs"><span>{businessName}의 등록된 {kind==='pos'?'POS':'추가 결제 서비스'} 정보가 없습니다.</span><button type="button" className={button} onClick={()=>setEditing(p=>({...p,[kind]:true}))}>추가</button></div>}
+ {editing[kind]&&<>
  <label className="mt-3 block text-xs">서비스 선택<select aria-label={kind==='payment'?'등록된 결제 서비스':'주문 받을 POS'} disabled={busy||!loaded} className={input} value={selected[kind]} onChange={e=>{setSelected(p=>({...p,[kind]:e.target.value}));setValues(p=>({...p,[kind]:{}}));}}><option value="">선택하세요</option>{services.filter(s=>s.kind===kind).map(s=><option key={s.id} value={s.id}>{s.name}{!s.enabled?' (사용 중지)':''}</option>)}</select></label>
  {saved&&<p className="mt-2 text-xs">저장된 서비스: {services.find(s=>s.id===saved.service_id)?.name||'비활성 서비스'} · 연결 정보 저장됨 (동작 검증 전)</p>}
  {service&&<div className="mt-3 space-y-3">
@@ -44,6 +54,7 @@ export default function IntegrationSettings({businessId,getToken}:{businessId:nu
  <button type="button" className={button} disabled={busy||!service.enabled} onClick={()=>void mutate({action:'connect',serviceId:service.id,values:values[kind]},'연결 정보 저장 완료. 실제 결제·POS 전송 테스트는 아직 수행되지 않았습니다.')}>{busy?'저장 중...':'연결 정보 저장'}</button>
  </div>}
  {saved&&<button type="button" disabled={busy} className={`${button} mt-3`} onClick={()=>{if(window.confirm('저장된 연결 정보를 삭제할까요?'))void mutate({action:'disconnect',kind},'연결 정보 삭제 완료');}}>연결 정보 삭제</button>}
+ <button type="button" className={`${button} mt-3`} onClick={()=>setEditing(p=>({...p,[kind]:false}))}>닫기</button></>}
  </div>;
  })}
  {admin&&draft&&<div role="region" aria-label="서비스 편집" className="space-y-3 rounded-xl border-2 border-violet-400 bg-white p-4">

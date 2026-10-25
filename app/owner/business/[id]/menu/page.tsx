@@ -6277,9 +6277,16 @@ export default function OwnerBusinessMenuPage() {
             </div>
           ) : null}
 
-          <IntegrationSettings businessId={businessId} getToken={getAccessToken} />
+          <IntegrationSettings
+            businessId={businessId}
+            businessName={businessName}
+            getToken={getAccessToken}
+            legacyPayment={{provider:paymentProvider,configured:paymentProvider === "square" ? squareConfigured : stripeConfigured,merchantName:squareMerchantName,merchantId:squareMerchantId,locationName:squareLocationName,locationId:squareLocationId,secretMasked:stripeSecretKeyMasked}}
+            onEditPayment={() => { setPaymentProviderOpen(true); setTimeout(() => document.getElementById("existing-payment-settings")?.scrollIntoView({behavior:"smooth",block:"start"}), 0); }}
+            onDeletePayment={paymentProvider === "square" && squareConfigured ? () => void disconnectSquare() : undefined}
+          />
 
-          <div className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
+          <div id="existing-payment-settings" className="mt-4 rounded-2xl border-2 border-violet-200 bg-violet-50 p-4">
             <button
               type="button"
               onClick={() => setPaymentProviderOpen((current) => !current)}
