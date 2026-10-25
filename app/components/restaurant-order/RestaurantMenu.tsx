@@ -72,6 +72,7 @@ type Props = {
   nameColor?: string;
   descriptionColor?: string;
   priceColor?: string;
+  serviceBarBackgroundColor?: string;
   categoryBarBackgroundColor?: string;
   categoryPillBackgroundColor?: string;
   categoryPillTextColor?: string;
@@ -216,6 +217,7 @@ export default function RestaurantMenu({
   nameColor,
   descriptionColor,
   priceColor,
+  serviceBarBackgroundColor,
   categoryBarBackgroundColor,
   categoryPillBackgroundColor,
   categoryPillTextColor,
@@ -1359,7 +1361,7 @@ export default function RestaurantMenu({
               : "border-black/10"
           }`}
           style={{
-            backgroundColor: isBunsMenu ? "#0b0b0b" : "transparent",
+            backgroundColor: serviceBarBackgroundColor || (isBunsMenu ? "#0b0b0b" : "transparent"),
           }}
         >
           <div className="flex gap-2 overflow-x-auto">
