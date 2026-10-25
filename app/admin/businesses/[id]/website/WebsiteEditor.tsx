@@ -368,6 +368,7 @@ type WebsiteSettings = {
   layout_width?: string;
   outer_background_color?: string;
   header_background_color?: string;
+  header_width_mode?: "full" | "container";
   header_grid?: GridData;
   header_submenu_enabled?: boolean;
   header_submenu_background_color?: string;
@@ -1412,6 +1413,7 @@ function normalizeSettings(
       typeof source.outer_background_color === "string"
         ? source.outer_background_color
         : "#e5e7eb",
+    header_width_mode: source.header_width_mode === "container" ? "container" : "full",
     header_background_color:
       typeof source.header_background_color === "string"
         ? source.header_background_color
@@ -11361,7 +11363,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                   {fullLayoutTarget === "home" ? (
                   <div
                     style={{
-                      backgroundColor: String(
+                      ...getHeaderLayerWidthStyle(websiteSettings),
+                  backgroundColor: String(
                         websiteSettings.header_background_color || "#ffffff",
                       ),
                     }}
@@ -12312,7 +12315,8 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                 selection.area === "header" ? "block" : "hidden"
               }`}
               style={{
-                backgroundColor: String(
+                ...getHeaderLayerWidthStyle(websiteSettings),
+                  backgroundColor: String(
                   websiteSettings.header_background_color || "#ffffff",
                 ),
               }}
@@ -14733,7 +14737,8 @@ function CurrentWebsitePreview({
                 : "relative z-[100] w-full overflow-visible"
             }
             style={{
-              backgroundColor: String(
+              ...getHeaderLayerWidthStyle(websiteSettings),
+                  backgroundColor: String(
                 websiteSettings.header_background_color || "#ffffff",
               ),
             }}
@@ -15967,7 +15972,8 @@ export function PublicWebsiteRenderer({
               : "relative z-[100] w-full overflow-visible"
           }
           style={{
-            backgroundColor: String(
+            ...getHeaderLayerWidthStyle(websiteSettings),
+                  backgroundColor: String(
               websiteSettings.header_background_color || "#ffffff",
             ),
           }}
@@ -21802,6 +21808,15 @@ function CellPreview({
 }
 
 
+function getHeaderLayerWidthStyle(settings: WebsiteSettings): CSSProperties {
+  return {
+    width: "100%",
+    maxWidth: settings.header_width_mode === "container" ? 1120 : "none",
+    marginLeft: "auto",
+    marginRight: "auto",
+  };
+}
+
 function HeaderSubmenuEditor({
   websiteSettings,
   sections,
@@ -22066,6 +22081,27 @@ function HeaderSubmenuEditor({
 
   return (
     <div className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="mb-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+        <p className="text-sm font-black text-violet-950">Header 레이어 너비</p>
+        <p className="mt-1 text-xs leading-5 text-violet-700">헤더 배경을 포함한 전체 너비를 선택합니다.</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(["full", "container"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={(websiteSettings.header_width_mode || "full") === mode}
+              onClick={() => onUpdate({ header_width_mode: mode })}
+              className={`rounded-xl border px-3 py-3 text-left text-xs font-black ${
+                (websiteSettings.header_width_mode || "full") === mode
+                  ? "border-blue-600 bg-white text-blue-900 ring-1 ring-blue-600"
+                  : "border-violet-200 bg-white text-gray-700"
+              }`}
+            >
+              {mode === "full" ? "전체 화면" : "기본 크기 (최대 1120px)"}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
         <button
           type="button"
