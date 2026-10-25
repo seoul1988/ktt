@@ -67,19 +67,8 @@ export async function POST(request: Request) {
   if (secret.length < 24 || secret.length > 256) {
     return page("서버의 EMAIL_TEST_TOKEN을 24~256자로 설정하세요.", 503);
   }
-  const origin = request.headers.get("origin");
-  const allowedOrigins = new Set([
-    new URL(request.url).origin,
-    "https://www.ktowntriangle.com",
-    "https://ktowntriangle.com",
-  ]);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (siteUrl) {
-    try { allowedOrigins.add(new URL(siteUrl).origin); } catch { /* Invalid optional site URL. */ }
-  }
-  if (!origin || !allowedOrigins.has(origin)) {
-    return page("테스트 페이지에서 다시 실행하세요.", 403);
-  }
+  // The private test token below authorizes sending. Do not compare Origin
+  // with request.url: proxies and browser privacy modes can rewrite/omit it.
   if (!request.headers.get("content-type")?.startsWith("application/x-www-form-urlencoded")) {
     return page("잘못된 요청입니다.", 415);
   }
