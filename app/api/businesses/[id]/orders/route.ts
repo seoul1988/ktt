@@ -5,7 +5,7 @@ import {
   moneyCents,
 } from "@/lib/restaurant-order/server";
 import { createStripeCheckoutSession } from "@/lib/restaurant-order/stripe";
-import { sendTwilioSms } from "@/lib/restaurant-order/twilio";
+import { getRestaurantSmsConfig, normalizeSmsPhone } from "@/lib/restaurant-order/sms-config";
 import {
   createUberDirectQuote,
   isUberDirectEnabled,
@@ -469,12 +469,8 @@ export async function POST(
       body?.customer?.phone,
     );
 
-    // SMS stays completely off until the Twilio toll-free number is approved.
-    // After approval, set NEXT_PUBLIC_TWILIO_SMS_ENABLED=true in Vercel and redeploy.
-    const smsProgramEnabled =
-      process.env.NEXT_PUBLIC_TWILIO_SMS_ENABLED === "true";
-    const requestedSmsConsent =
-      smsProgramEnabled && body?.smsConsent === true;
+    // Consent is explicit, per order. The server rechecks restaurant SMS setup.
+    const requestedSmsConsent = body?.smsConsent === true;
 
     const customerEmail = String(
       body?.customer?.email || "",
@@ -587,9 +583,17 @@ export async function POST(
     const enforceBusinessHours =
       settings?.enforce_business_hours !== false;
 
-    const smsConsent =
-      requestedSmsConsent &&
-      settings?.sms_enabled === true;
+    const smsConfig = requestedSmsConsent
+      ? await getRestaurantSmsConfig(db, businessId)
+      : null;
+    const smsConsent = requestedSmsConsent && settings?.sms_enabled === true && smsConfig !== null;
+    const smsPhone = normalizeSmsPhone(body?.customer?.phone);
+    if (smsConsent && !smsPhone) {
+      return NextResponse.json(
+        { error: "Please enter a valid mobile number to receive order texts." },
+        { status: 400 },
+      );
+    }
 
     const orderWindow = getOrderWindow(business?.hours, 15);
 
@@ -1492,7 +1496,7 @@ export async function POST(
         customer_name:
           customerName,
         customer_phone:
-          customerPhone,
+          smsConsent ? smsPhone : customerPhone,
         sms_consent:
           smsConsent,
         sms_consent_at:

@@ -487,6 +487,7 @@ export default function RestaurantCheckoutModal({
       }
     } catch {}
 
+    setSmsConsent(false);
     let cancelled = false;
     (async () => {
       try {
@@ -1033,6 +1034,16 @@ export default function RestaurantCheckoutModal({
     setError("");
     if (!name.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your name."); }
     if (fulfillmentType === "delivery" && !phone.trim()) { orderSubmitLockRef.current = false; return setError("Please enter your phone number for delivery."); }
+    if (settings?.smsEnabled === true && smsConsent) {
+      const digits = phone.replace(/\D/g, "");
+      const validSmsPhone = phone.trim().startsWith("+")
+        ? /^[1-9]\d{7,14}$/.test(digits)
+        : digits.length === 10 || (digits.length === 11 && digits.startsWith("1"));
+      if (!validSmsPhone) {
+        orderSubmitLockRef.current = false;
+        return setError("Please enter a valid mobile number to receive order texts. Include the country code for international numbers.");
+      }
+    }
     const submitAddress1 =
       (address1Ref.current?.value || address1 || "").trim();
     const submitAddress2 =
@@ -1120,7 +1131,7 @@ export default function RestaurantCheckoutModal({
               ? deliveryQuoteId
               : null,
           orderNote: orderNote.trim().slice(0, 500),
-          smsConsent: settings?.smsEnabled ? smsConsent : false,
+          smsConsent: settings?.smsEnabled === true && smsConsent === true,
           promotionRewards: promotionRewards.map((reward) => ({
             promotionId: reward.promotionId,
             promotionName: reward.promotionName,
@@ -1430,10 +1441,10 @@ export default function RestaurantCheckoutModal({
               <h3 className="font-black">Customer Information</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name *" className="rounded-xl border px-3 py-3 text-sm" />
-                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={fulfillmentType === "delivery" ? "Phone *" : "Phone (optional)"} inputMode="tel" className="rounded-xl border px-3 py-3 text-sm" />
-              </div>
+                <div className="min-w-0">
+                  <input type="tel" autoComplete="tel" aria-label="Phone number" value={phone} onChange={(e) => { setPhone(e.target.value); setSmsConsent(false); }} placeholder={fulfillmentType === "delivery" || smsConsent ? "Phone *" : "Phone (optional)"} inputMode="tel" className="w-full rounded-xl border px-3 py-3 text-sm" />
 
-              {settings.smsEnabled ? (
+              {settings.smsEnabled === true ? (
                 <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border bg-gray-50 p-3">
                   <input
                     type="checkbox"
@@ -1442,11 +1453,13 @@ export default function RestaurantCheckoutModal({
                     className="mt-1 h-4 w-4 shrink-0 accent-gray-950"
                   />
                   <span className="text-[11px] leading-5 text-gray-600">
-                    <b className="block text-xs text-gray-950">Send me order updates by text message</b>
-                    Receive transactional text messages from KTown Triangle about this order, including order confirmation, status, pickup/delivery, and cancellation updates. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help.
+                    <b className="block text-xs text-gray-950">Text me my order confirmation, receipt, and status updates</b>
+                    Receive transactional text messages from {settings.businessName || "this restaurant"} via KTown Triangle about this order, including confirmation, order details, and pickup/delivery status. Message frequency varies. Message and data rates may apply. Reply STOP to opt out or HELP for help.
                   </span>
                 </label>
               ) : null}
+                </div>
+              </div>
             </section>
 
             {fulfillmentType === "delivery" ? <section className="rounded-2xl border p-4">

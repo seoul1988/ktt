@@ -1,6 +1,8 @@
+import { getRestaurantSmsConfig } from "@/lib/restaurant-order/sms-config";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -216,6 +218,8 @@ export async function GET(
           )
         : Boolean(privateSettings?.stripe_secret_key);
 
+    const smsConfig = await getRestaurantSmsConfig(supabase, businessId);
+
     const orderWindow = getOrderWindow(business.hours, 15);
 
     const tipPresets = Array.isArray(settings?.tip_presets)
@@ -259,7 +263,7 @@ export async function GET(
         paymentProvider,
         onlinePaymentEnabled,
         payAtPickupEnabled: settings?.pay_at_pickup_enabled !== false,
-        smsEnabled: settings?.sms_enabled === true,
+        smsEnabled: settings?.sms_enabled === true && smsConfig !== null,
 
         pickupPrepMinutes: Math.max(
           0,
