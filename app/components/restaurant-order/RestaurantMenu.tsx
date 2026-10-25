@@ -235,7 +235,6 @@ export default function RestaurantMenu({
   });
   const [loading, setLoading] = useState(true);
   const [popularItemIds, setPopularItemIds] = useState<number[]>([]);
-  const [popularMainCategoryId, setPopularMainCategoryId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] =
@@ -985,7 +984,6 @@ export default function RestaurantMenu({
     let cancelled = false;
     let requestNumber = 0;
     setPopularItemIds([]);
-    setPopularMainCategoryId(null);
 
     async function refreshPopularPicks() {
       const currentRequest = ++requestNumber;
@@ -1004,14 +1002,12 @@ export default function RestaurantMenu({
             : [];
         if (!cancelled && currentRequest === requestNumber) {
           setPopularItemIds(nextIds);
-          setPopularMainCategoryId(Number.isInteger(result?.mainCategoryId) && result.mainCategoryId > 0 ? result.mainCategoryId : null);
         }
       } catch (error) {
         console.error("Popular Picks load failed:", error);
         if (!cancelled && currentRequest === requestNumber) {
           setPopularItemIds([]);
-          setPopularMainCategoryId(null);
-        }
+              }
       }
     }
 
@@ -1031,31 +1027,21 @@ export default function RestaurantMenu({
     ),
   );
 
-  // Popular Picks are based on paid orders in the last 30 days, not fixed restaurant IDs.
-  const rankedPopularItems = popularItemIds
+  // The API returns the top 10 menu items by clicks over the last 30 days.
+  // Exclude items below $8 based on their ORIGINAL menu price, then show up to 3.
+  // Do not refill with cheaper items or reorder by category.
+  const featuredItems = popularItemIds
     .map((id) => data.items.find((item) => Number(item.id) === id))
     .filter((item): item is RestaurantMenuItem =>
       Boolean(
         item &&
         visibleCategories.some((category) => category.id === item.category_id) &&
-        // Use the base menu price, not delivery/pickup adjustments or option charges.
         item.price != null &&
         Number.isFinite(Number(item.price)) &&
         Number(item.price) >= 8,
       ),
-    );
-  const featuredItems = (() => {
-    if (popularMainCategoryId == null) return rankedPopularItems.slice(0, 3);
-    const mains = rankedPopularItems.filter((item) => item.category_id === popularMainCategoryId).slice(0, 2);
-    const others = rankedPopularItems.filter((item) => item.category_id !== popularMainCategoryId).slice(0, 1);
-    // If a category has too few sold items, fill remaining slots with the next best sellers.
-    const selected = [...mains, ...others];
-    for (const item of rankedPopularItems) {
-      if (selected.length >= 3) break;
-      if (!selected.some((picked) => picked.id === item.id)) selected.push(item);
-    }
-    return selected;
-  })();
+    )
+    .slice(0, 3);
   const hasConfiguredPopularPicks = featuredItems.length > 0;
 
   useEffect(() => {
