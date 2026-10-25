@@ -15722,10 +15722,15 @@ export function PublicWebsiteRenderer({
       websiteSettings.mobile_action_button_label || "ORDER",
     ).trim() || "ORDER";
 
-  const mobileActionDisplayLabel =
-    mobileCartCount > 0
-      ? `CART · ${mobileCartCount}`
-      : mobileActionButtonLabel;
+  const mobileMenuCallNumber = String(
+    getBusinessContactValue(business, ["phone", "phone_number", "telephone"]) || "",
+  ).trim();
+  const mobileMenuCartActive = isMenuPage && mobileCartCount > 0;
+  const mobileMenuCallActive = isMenuPage && !mobileMenuCartActive;
+
+  const mobileActionDisplayLabel = isMenuPage
+    ? mobileMenuCartActive ? `VIEW CART · ${mobileCartCount}` : "CALL"
+    : mobileActionButtonLabel;
 
   const mobileActionButtonEnabled =
     orderOnlyMode || hasRestaurantMenu ||
@@ -15807,9 +15812,16 @@ export function PublicWebsiteRenderer({
   }
 
   function openMobileActionTarget() {
+    if (mobileMenuCallActive) {
+      if (mobileMenuCallNumber) {
+        window.location.href = normalizePhoneHref(mobileMenuCallNumber);
+      }
+      return;
+    }
+
     const target = mobileActionTargetUrl.trim();
 
-    if (mobileCartCount > 0) {
+    if (mobileMenuCartActive) {
       const detail = {
         businessId: business.id,
         handled: false,
@@ -16406,9 +16418,10 @@ export function PublicWebsiteRenderer({
                     <button
                       type="button"
                       onClick={openMobileActionTarget}
+                      disabled={mobileMenuCallActive && !mobileMenuCallNumber}
                       aria-label={mobileActionDisplayLabel}
                       className={`ml-auto flex min-h-[56px] shrink-0 items-center justify-end gap-2 rounded-xl px-4 py-2 transition active:scale-[0.98] ${
-                          mobileCartCount > 0
+                          mobileMenuCartActive
                             ? "bg-gray-950 text-white shadow-md active:bg-gray-800"
                             : "bg-gray-900 text-white shadow-md ring-1 ring-white/10 active:bg-gray-800"
                         }`}
@@ -16416,13 +16429,13 @@ export function PublicWebsiteRenderer({
                       <span
                         aria-hidden="true"
                         className={`relative flex shrink-0 items-center justify-center leading-none ${
-                          mobileCartCount > 0
+                          mobileMenuCartActive
                             ? "h-7 w-7 text-[19px]"
                             : "h-8 w-8 text-[22px]"
                         }`}
                       >
-                        {mobileCartCount > 0 ? "🛒" : "↗"}
-                        {mobileCartCount > 0 ? (
+                        {mobileMenuCartActive ? "🛒" : mobileMenuCallActive ? "☎" : "↗"}
+                        {mobileMenuCartActive ? (
                           <span className="absolute -right-2 -top-1.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-black leading-none text-white">
                             {mobileCartCount}
                           </span>
@@ -16431,22 +16444,24 @@ export function PublicWebsiteRenderer({
 
                       <span className="min-w-0 text-left leading-tight">
                         <span className={`block truncate font-black uppercase tracking-[0.04em] ${
-                            mobileCartCount > 0 ? "text-[10px]" : "text-[13px]"
+                            mobileMenuCartActive ? "text-[10px]" : "text-[13px]"
                           }`}>
-                          {mobileCartCount > 0
-                            ? "CART"
-                            : "ORDER ONLINE"}
+                          {mobileMenuCartActive
+                            ? "VIEW CART"
+                            : mobileMenuCallActive ? "CALL" : "ORDER ONLINE"}
                         </span>
                         <span className={`block truncate font-bold ${
-                            mobileCartCount > 0
+                            mobileMenuCartActive
                               ? "text-[9px] text-gray-300"
                               : "text-[9px] text-gray-300"
                           }`}>
-                          {mobileCartCount > 0
+                          {mobileMenuCartActive
                             ? `${mobileCartCount} item${
                                 mobileCartCount === 1 ? "" : "s"
                               }`
-                            : "TAP TO ORDER"}
+                            : mobileMenuCallActive
+                              ? (mobileMenuCallNumber ? "TAP TO CALL" : "NO PHONE NUMBER")
+                              : "TAP TO ORDER"}
                         </span>
                       </span>
                     </button>
