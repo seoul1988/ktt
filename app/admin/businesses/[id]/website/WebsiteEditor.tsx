@@ -5811,6 +5811,8 @@ async function readApiResponse(
 
 
 type MenuImportRow = {
+  productId?: string;
+  sourceItemId?: string;
   category: string;
   name: string;
   description: string;
@@ -6029,6 +6031,7 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
   const imageIndex = findCsvIndex(headers, ...aliases.image);
   const soldOutIndex = findCsvIndex(headers, ...aliases.soldOut);
   const productIdIndex = findCsvIndex(headers, "product_id", "productid");
+  const sourceItemIdIndex = findCsvIndex(headers, "source_item_id", "sourceitemid");
 
   if (nameIndex < 0) {
     throw new Error(`${platform.toUpperCase()} CSV에서 메뉴 이름 컬럼을 찾지 못했습니다.`);
@@ -6043,6 +6046,8 @@ function parseMenuCsv(text: string, platform: MenuImportPlatform): MenuImportRow
       : csvBoolean(soldOutRaw);
 
     return {
+      productId: readCsvCell(columns, productIdIndex),
+      sourceItemId: readCsvCell(columns, sourceItemIdIndex) || readCsvCell(columns, productIdIndex),
       category: readCsvCell(columns, categoryIndex) || "Menu",
       name: readCsvCell(columns, nameIndex),
       description: readCsvCell(columns, descriptionIndex),
@@ -6066,10 +6071,10 @@ function getOptionCsvAliases(platform: MenuImportPlatform) {
     groupName: ["groupname", "optiongroup", "optiongroupname", "modifiergroup", "modifiergroupname", "modifiername", "group", "옵션그룹"],
     ruleText: ["ruletext", "rule_text", "grouprule", "group_rule", "selectionrule", "selection_rule", "규칙"],
     required: ["required", "isrequired", "grouprequired", "필수"],
-    minSelect: ["minselect", "minimumselect", "minimum", "min", "minrequired", "최소"],
-    maxSelect: ["maxselect", "maximumselect", "maximum", "max", "최대"],
+    minSelect: ["minoptions", "min_options", "minselect", "minimumselect", "minimum", "min", "minrequired", "최소"],
+    maxSelect: ["maxoptions", "max_options", "maxselect", "maximumselect", "maximum", "max", "최대"],
     optionName: ["optionname", "choice", "choicename", "modifieritem", "modifieroption", "selection", "selectionname", "value", "옵션명"],
-    priceDelta: ["pricedelta", "optionprice", "modifierprice", "extraprice", "additionalprice", "addprice", "price", "추가금"],
+    priceDelta: ["choiceprice", "choice_price", "pricedelta", "optionprice", "modifierprice", "extraprice", "additionalprice", "addprice", "price", "추가금"],
     soldOut: ["soldout", "issoldout", "unavailable", "disabled", "품절"],
     groupOrder: ["grouporder", "groupdisplayorder", "groupsortorder"],
     optionOrder: ["optionorder", "displayorder", "sortorder", "order"],
@@ -6439,6 +6444,7 @@ function MenuImportModal({
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const importInFlightRef = useRef(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [result, setResult] = useState("");
   const [importError, setImportError] = useState("");
@@ -6546,6 +6552,7 @@ function MenuImportModal({
   }
 
   async function startImport() {
+    if (importInFlightRef.current || importing) return;
     const optionsOnly = !csvFile && Boolean(optionsCsvFile);
 
     // ChowNow에서 메뉴 CSV + 옵션 CSV를 같이 선택하면
@@ -6563,6 +6570,7 @@ function MenuImportModal({
       return;
     }
 
+    importInFlightRef.current = true;
     setImporting(true);
     setImportError("");
     setResult("");
@@ -6609,6 +6617,22 @@ function MenuImportModal({
             throw new Error(`옵션 ${optionAttachResult.unmatched}개가 메뉴와 연결되지 않았습니다. CSV의 category/menu_name을 확인하세요.`);
           }
         }
+      }
+
+      // Reject duplicate source rows before the first write request.
+      const sourceIds = new Set<string>();
+      const exactMenuKeys = new Set<string>();
+      for (const row of rows) {
+        const sourceId = String(row.productId || row.sourceItemId || "").trim();
+        if (sourceId && sourceIds.has(sourceId)) {
+          throw new Error(`CSV에 중복된 상품 ID가 있습니다: ${sourceId} (${row.name})`);
+        }
+        if (sourceId) sourceIds.add(sourceId);
+        const exactKey = JSON.stringify([normalizeMenuMatchKey(row.category, row.name), row.price, row.description]);
+        if (exactMenuKeys.has(exactKey)) {
+          throw new Error(`CSV에 중복된 메뉴가 있습니다: ${row.name}. 원본 파일을 확인하세요.`);
+        }
+        exactMenuKeys.add(exactKey);
       }
 
       const fileMap = new Map<string, File>();
@@ -6824,6 +6848,14 @@ function MenuImportModal({
         formData.append("platform", platform);
         formData.append("sourcePlatform", platform);
         formData.append("name", row.name);
+        if (row.productId) {
+          formData.append("productId", row.productId);
+          formData.append("product_id", row.productId);
+        }
+        if (row.sourceItemId) {
+          formData.append("sourceItemId", row.sourceItemId);
+          formData.append("source_item_id", row.sourceItemId);
+        }
 
         // 기존 메뉴 유지 모드:
         // - 옵션 CSV만 선택: 해당 옵션 CSV에 있는 메뉴의 카테고리 + 옵션 업데이트
@@ -6982,6 +7014,7 @@ function MenuImportModal({
           : "메뉴 가져오기에 실패했습니다.",
       );
     } finally {
+      importInFlightRef.current = false;
       setImporting(false);
     }
   }

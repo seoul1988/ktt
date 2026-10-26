@@ -157,10 +157,10 @@ function normalizeOptionGroups(raw: unknown): UnifiedOptionGroup[] {
 
       const rawMinSelect = Math.max(
         0,
-        Math.trunc(finiteNumber(group.minSelect ?? group.min_select, 0)),
+        Math.trunc(finiteNumber(group.minSelect ?? group.min_select ?? group.min_options, 0)),
       );
 
-      const rawMax = group.maxSelect ?? group.max_select;
+      const rawMax = group.maxSelect ?? group.max_select ?? group.max_options;
       const rawMaxSelect =
         rawMax === null || rawMax === undefined || rawMax === ""
           ? null
@@ -181,7 +181,7 @@ function normalizeOptionGroups(raw: unknown): UnifiedOptionGroup[] {
       const minSelect = groupMeta.minSelect;
       const maxSelect = groupMeta.maxSelect;
 
-      const rawOptions = Array.isArray(group.options) ? group.options : [];
+      const rawOptions = Array.isArray(group.options) ? group.options : Array.isArray(group.choices) ? group.choices : [];
       const options: UnifiedOptionItem[] = rawOptions
         .map((optionValue, optionIndex) => {
           if (!optionValue || typeof optionValue !== "object" || Array.isArray(optionValue)) {
@@ -832,6 +832,33 @@ async function ensureCsvCategoriesExist(
 }
 
 
+
+// Exact identity for ordinary imports. Do not use fuzzy matching here:
+// "Galbi" must not match "Galbi Tang", or another category's variant.
+function normalizeImportIdentity(value: unknown) {
+  return String(value ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+async function findAlreadyImportedMenu(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  businessId: number,
+  category: string,
+  name: string,
+) {
+  const { data: categories, error: categoryError } = await supabase
+    .from("business_menu_categories").select("id,name").eq("business_id", businessId);
+  if (categoryError) throw new Error(`중복 카테고리 확인 실패: ${categoryError.message}`);
+  const categoryIds = (categories || [])
+    .filter((row) => normalizeImportIdentity(row.name) === normalizeImportIdentity(category))
+    .map((row) => row.id);
+  if (!categoryIds.length) return [];
+  const { data: items, error: itemError } = await supabase
+    .from("business_menu_items").select("id,name,category_id")
+    .eq("business_id", businessId).in("category_id", categoryIds);
+  if (itemError) throw new Error(`중복 메뉴 확인 실패: ${itemError.message}`);
+  return (items || []).filter((row) => normalizeImportIdentity(row.name) === normalizeImportIdentity(name));
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -1439,6 +1466,27 @@ export async function POST(
         optionPricesPreserved: false,
         optionPricesImported: true,
       });
+    }
+
+    // Full replace remains an explicit operation. Normal re-imports preserve
+    // existing menu IDs, photos, option groups, and order references.
+    if (!replaceExisting) {
+      const existing = await findAlreadyImportedMenu(supabase, businessId, category, name);
+      if (existing.length > 0) {
+        return NextResponse.json({
+          ok: true,
+          skipped: true,
+          skipReason: "menu_already_exists",
+          itemId: existing[0].id,
+          existingItemIds: existing.map((item) => item.id),
+          existingDuplicateCount: Math.max(0, existing.length - 1),
+          matchedMenuName: existing[0].name,
+          sourcePlatform,
+          optionGroupCount: 0,
+          optionItemCount: 0,
+          menuPreserved: true,
+        });
+      }
     }
 
     if (replaceExisting) {
