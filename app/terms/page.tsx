@@ -6,7 +6,7 @@ export default function TermsPage() {
       eyebrow="Rules for using KTownTriangle"
       title="Terms of Service"
       description="These terms describe the rules, responsibilities, and limitations that apply when you access or use KTownTriangle."
-      updated="July 22, 2026"
+      updated="October 26, 2026"
     >
       <div className="notice">
         By creating an account or using KTownTriangle, you agree to these Terms
@@ -91,6 +91,32 @@ export default function TermsPage() {
         <a href="mailto:ktowntriangle@gmail.com">
           ktowntriangle@gmail.com
         </a>.
+      </p>
+
+      <h2>12. SMS Terms &amp; Conditions</h2>
+      <p>
+        KTownTriangle may send transactional text messages to customers who
+        expressly opt in through our website checkout form. These messages may
+        include order confirmations, food preparation updates, pickup readiness,
+        and delivery status notifications. SMS consent is optional and is not a
+        condition of purchase.
+      </p>
+      <ul>
+        <li>Message frequency varies based on your order activity.</li>
+        <li>Message and data rates may apply.</li>
+        <li>Reply STOP to unsubscribe from text messages at any time.</li>
+        <li>Reply HELP for assistance, or email ktowntriangle@gmail.com.</li>
+        <li>Mobile carriers are not liable for delayed or undelivered messages.</li>
+        <li>
+          See our <a href="/privacy">Privacy Policy</a> for information
+          about how personal information is handled.
+        </li>
+      </ul>
+      <p>
+        We do not share SMS opt-in consent or mobile phone numbers with third
+        parties or affiliates for their own marketing or promotional purposes.
+        Service providers may process information as needed to deliver requested
+        messaging services.
       </p>
     </LegalPageShell>
   );
