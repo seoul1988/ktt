@@ -117,13 +117,10 @@ export default function InstallAppButton({ businessName }: { businessName?: stri
     }
     function onPrompt(event: Event) {
       event.preventDefault();
-      if (standalone()) { markInstalled(); return; }
-      // A fresh browser installation event overrides an old installation record
-      // (for example after the user uninstalls the app).
+      // Installation eligibility is not proof that a previous installation
+      // or the user's explicit suppression should be forgotten.
+      if (check()) return;
       clearTimer();
-      writeStorage(installedKey, null);
-      installedRef.current = false;
-      setInstalled(false);
       promptRef.current = event as BeforeInstallPromptEvent;
       setAvailable(true);
       setMessage("");
