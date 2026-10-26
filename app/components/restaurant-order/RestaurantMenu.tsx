@@ -2117,6 +2117,9 @@ export default function RestaurantMenu({
               ? "delivery"
               : "pickup"
           }
+          onFulfillmentTypeChange={switchOrderService}
+          pickupEnabled={effectivePickupEnabled}
+          deliveryEnabled={effectiveDeliveryEnabled}
           cartItems={cartItems}
           promotionRewards={appliedPromotionRewards}
           onClose={() => setCheckoutOpen(false)}

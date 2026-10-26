@@ -129,6 +129,9 @@ type Props = {
   fulfillmentType: "pickup" | "delivery";
   cartItems: CheckoutCartItem[];
   promotionRewards?: AppliedPromotionReward[];
+  onFulfillmentTypeChange?: (type: "pickup" | "delivery") => void;
+  pickupEnabled?: boolean;
+  deliveryEnabled?: boolean;
   onClose: () => void;
   onOrderPlaced: () => void;
 };
@@ -248,6 +251,9 @@ export default function RestaurantCheckoutModal({
   fulfillmentType,
   cartItems,
   promotionRewards = [],
+  onFulfillmentTypeChange,
+  pickupEnabled = true,
+  deliveryEnabled = true,
   onClose,
   onOrderPlaced,
 }: Props) {
@@ -1238,7 +1244,44 @@ export default function RestaurantCheckoutModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-4">
-          <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p><h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2></div>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[.18em] text-gray-400">CHECKOUT</p>
+            <h2 className="text-xl font-black">{fulfillmentType === "delivery" ? "Delivery" : "Pickup"}</h2>
+            {onFulfillmentTypeChange && settings ? (
+              <div className="mt-2 flex gap-2" role="group" aria-label="Order type">
+                {(["pickup", "delivery"] as const).map((type) => {
+                  const enabled = type === "pickup"
+                    ? pickupEnabled && settings.pickupEnabled
+                    : deliveryEnabled && settings.deliveryEnabled;
+                  if (!enabled) return null;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={fulfillmentType === type}
+                      disabled={loading || submitting || squarePaying || paymentUncertain || Boolean(squarePrepared) || deliveryQuoteLoading}
+                      onClick={() => {
+                        if (type === fulfillmentType || submitting || squarePaying || paymentUncertain || squarePrepared || deliveryQuoteLoading || squarePaymentLockRef.current) return;
+                        setError("");
+                        setDeliveryQuoteId("");
+                        setDeliveryFeeCents(0);
+                        setDeliveryQuoteBreakdown(null);
+                        setDeliveryQuoteError("");
+                        setDeliveryPolicyOpen(false);
+                        setDriverPickupMinutes(null);
+                        setEstimatedDropoffAt(null);
+                        setDeliveryDurationMinutes(null);
+                        onFulfillmentTypeChange(type);
+                      }}
+                      className={`rounded-full border px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 ${fulfillmentType === type ? "border-gray-950 bg-gray-950 text-white" : "border-gray-300 bg-white text-gray-950"}`}
+                    >
+                      {type === "pickup" ? "Pickup" : "Delivery"}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={() => {
