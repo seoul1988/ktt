@@ -17943,6 +17943,11 @@ function MobileWebsiteHeader({
 
   const logoCell = findFirstCellByType(grid.cells, "logo");
   const titleCell = findFirstCellByType(grid.cells, "title");
+  // Hide long branding text only when the mobile header has a real logo.
+  const mobileHeaderTitle = String(titleCell?.text || business.name || "").trim();
+  const hideMobileHeaderTitle =
+    Boolean(String(logoCell?.image_url || "").trim()) &&
+    mobileHeaderTitle.length > 24;
   const menuCell = findFirstCellByType(grid.cells, "menu");
   const phoneCells = findAllCellsByType(grid.cells, "phone");
   const buttonCells = findAllCellsByType(grid.cells, "button").filter((cell) =>
@@ -18005,7 +18010,11 @@ function MobileWebsiteHeader({
       style={{ backgroundColor: headerBackgroundColor }}
     >
       <div
-        className="grid w-full grid-cols-[auto_minmax(0,1fr)_48px] items-center gap-2 px-3"
+        className={`grid w-full items-center gap-2 px-3 ${
+          hideMobileHeaderTitle
+            ? "grid-cols-[minmax(0,1fr)_48px]"
+            : "grid-cols-[auto_minmax(0,1fr)_48px]"
+        }`}
         style={{
           minHeight: `${mobileHeight}px`,
           backgroundColor: headerBackgroundColor,
@@ -18032,6 +18041,7 @@ function MobileWebsiteHeader({
           ) : null}
         </div>
 
+        {!hideMobileHeaderTitle ? (
         <div className="min-w-0 overflow-hidden px-1 text-center">
           {titleCell ? (
             <div className="flex min-h-[54px] min-w-0 items-center justify-center overflow-hidden">
@@ -18055,6 +18065,7 @@ function MobileWebsiteHeader({
             </span>
           )}
         </div>
+        ) : null}
 
         <button
           type="button"

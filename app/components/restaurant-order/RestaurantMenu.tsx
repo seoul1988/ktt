@@ -1334,12 +1334,12 @@ export default function RestaurantMenu({
             : {}),
         }}
       >
-        <div className="relative mx-auto max-w-[760px]">
-          {categoryCanScrollLeft && (
+        <div className="mx-auto grid max-w-[840px] grid-cols-[32px_minmax(0,1fr)_32px] items-center gap-2">
+          {categoryCanScrollLeft ? (
             <button type="button" aria-label="Previous categories" onClick={() => moveCategoryBar(-1)}
-              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">‹</button>
-          )}
-          <div ref={categoryScrollRef} className="overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">‹</button>
+          ) : <span aria-hidden="true" />}
+          <div ref={categoryScrollRef} className="min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="flex w-max min-w-full gap-2">
           {visibleCategories.map((category, categoryIndex) => {
             const accent =
@@ -1394,10 +1394,10 @@ export default function RestaurantMenu({
           })}
             </div>
           </div>
-          {categoryCanScrollRight && (
+          {categoryCanScrollRight ? (
             <button type="button" aria-label="Next categories" onClick={() => moveCategoryBar(1)}
-              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">›</button>
-          )}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-950 text-xl font-bold text-white shadow-lg">›</button>
+          ) : <span aria-hidden="true" />}
         </div>
       </div>
     );
