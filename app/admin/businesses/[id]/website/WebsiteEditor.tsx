@@ -225,6 +225,9 @@ type GridCell = {
   gallery_columns?: 2 | 4 | 6;
   /** 갤러리에서 각 이미지가 차지할 최소 가로 크기(px). 크기에 따라 열 수가 자동 결정됩니다. */
   gallery_item_min_width_px?: number;
+  contact_card_border?: boolean;
+  gallery_item_height_px?: number;
+  gallery_image_fit?: "contain" | "cover";
   /** 동영상 링크 목록: 개수 제한 없음 */
   video_items?: VideoCarouselItem[];
   /** 한 화면에 표시할 동영상 수: 1~6 */
@@ -1040,6 +1043,9 @@ function resolveCellForDevice(
     resolved.image_position_x = 0;
     resolved.image_position_y = 0;
   }
+  if (device === "mobile" && resolved.display_mode === "gallery") {
+    resolved.vertical_align = "top";
+  }
   if (device === "mobile" && resolved.display_mode === "auto-slider") {
     resolved.slider_auto_height = true;
   }
@@ -1293,6 +1299,13 @@ function normalizeGrid(value: unknown, fallback: GridData): GridData {
   while (used < 4) {
     cells.push(defaultCell("empty", "", 1));
     used += 1;
+  }
+
+  // Contact text beside a map gets a visible rounded boundary in every template.
+  if (cells.some((cell) => cell.type === "map" || cell.display_mode === "map-section")) {
+    cells.forEach((cell) => {
+      if (cell.type === "text") cell.contact_card_border = true;
+    });
   }
 
   const rawWidths = cells.map((cell) => Number(cell.width_percent));
@@ -11192,7 +11205,7 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
               </button>
             ) : null}
             <button type="button" onClick={() => setTemplatePickerOpen(true)} className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800">기본 템플릿 선택</button>
-            <button style={{ display: "none" }}
+            <button
               type="button"
               onClick={() => setMenuImportOpen(true)}
               className="rounded-full border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-black text-orange-800 hover:bg-orange-100"
@@ -13070,6 +13083,40 @@ export default function WebsiteEditor({ businessId }: { businessId: string }) {
                       </div>
 
 
+                      {selectedCell.display_mode === "gallery" ? (
+                        <div className="mt-4 space-y-3 rounded-xl border border-blue-200 bg-white p-3">
+                          <p className="text-sm font-black">갤러리 이미지 크기</p>
+                          {([
+                            ["gallery_item_min_width_px", "이미지 너비", 120, 640, 260],
+                            ["gallery_item_height_px", "이미지 높이", 120, 1200, 230],
+                          ] as const).map(([key, label, min, max, fallback]) => (
+                            <label key={key} className="block text-xs font-bold">
+                              {label} · {Number(selectedCell[key]) || fallback}px
+                              <div className="mt-2 flex items-center gap-3">
+                                <input type="range" min={min} max={max} step={10}
+                                  value={Number(selectedCell[key]) || fallback}
+                                  onChange={(event) => updateCell(selection.area as "header" | "hero", selectedCell.id,
+                                    { [key]: Number(event.target.value) }, selection.layoutId)} className="w-full" />
+                                <input type="number" min={min} max={max}
+                                  value={Number(selectedCell[key]) || fallback}
+                                  onChange={(event) => updateCell(selection.area as "header" | "hero", selectedCell.id,
+                                    { [key]: Math.max(min, Math.min(max, Number(event.target.value) || fallback)) }, selection.layoutId)}
+                                  className="w-20 rounded border px-2 py-1" />
+                              </div>
+                            </label>
+                          ))}
+                          <label className="block text-xs font-bold">이미지 표시
+                            <select value={selectedCell.gallery_image_fit || "contain"}
+                              onChange={(event) => updateCell(selection.area as "header" | "hero", selectedCell.id,
+                                { gallery_image_fit: event.target.value as "contain" | "cover" }, selection.layoutId)}
+                              className="mt-2 w-full rounded border px-2 py-2">
+                              <option value="contain">전체 보이기</option>
+                              <option value="cover">칸에 꽉 채우기</option>
+                            </select>
+                          </label>
+                        </div>
+                      ) : null}
+
                       {/* 본문 위에 얹힌 추가 글/버튼을 먼저 보여줍니다. */}
                       {String(selectedCell.overlay_text || "").trim() ? (
                         <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-3">
@@ -14847,6 +14894,34 @@ function contactLayoutKey(layout: GridData): string | null {
 }
 
 function uniqueContactSections(sections: BusinessSection[], preferredSectionId?: number, preferredLayoutId?: string) {
+  // Legacy designs may have both LOCATION and Contact rows. Match their
+  // contact text even when one row has no map or uses nested cells.
+  const contactCopies = new Map<string, { id: number; hasMap: boolean }>();
+  const sectionKeys = new Map<number, string>();
+  const flatten = (cells: GridCell[]): GridCell[] => cells.flatMap((cell) =>
+    cell.child_cells?.length ? flatten(cell.child_cells) : [cell]);
+  sections.forEach((section) => {
+    if (!/^(contact|contacts|contact-us|location|order-location)$/.test(slugifyMenuValue(String(section.title || ""))) &&
+        section.section_type !== "contact") return;
+    if (!section.content?.grid && !section.content?.layouts?.length) return;
+    const cells = normalizeHeroLayouts(section.content).flatMap((layout) => flatten(layout.cells));
+    const text = cells.filter((cell) => cell.type === "text" || cell.type === "title")
+      .map((cell) => String(cell.text || cell.rich_text_html || "")).join(" ")
+      .replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ")
+      .replace(/privacy\s*policy/gi, "").replace(/[^a-zA-Z0-9가-힣]/g, "").toLowerCase();
+    if (!text) return;
+    const hasMap = cells.some((cell) => cell.type === "map" || cell.display_mode === "map-section");
+    sectionKeys.set(section.id, text);
+    const previous = contactCopies.get(text);
+    if (!previous || (hasMap && !previous.hasMap) ||
+        (hasMap === previous.hasMap && section.id === preferredSectionId)) {
+      contactCopies.set(text, { id: section.id, hasMap });
+    }
+  });
+  sections = sections.filter((section) => {
+    const key = sectionKeys.get(section.id);
+    return !key || contactCopies.get(key)?.id === section.id;
+  });
   const owners = new Map<string, { sectionIndex: number; layoutIndex: number; preferred: boolean }>();
   const rows = sections.map((section) => ({ section, layouts:
     section.content?.grid || section.content?.layouts?.length
@@ -17740,7 +17815,7 @@ function ReadOnlyCellContent({
     <div
       className={`relative flex w-full min-h-0 min-w-0 ${
         (cell.display_mode === "restaurant-menu" || cell.display_mode === "catering-menu" || cell.display_mode === "catering-request-form") ||
-        (previewDevice === "mobile" && cell.display_mode === "auto-slider")
+        (previewDevice === "mobile" && (cell.display_mode === "auto-slider" || cell.display_mode === "gallery"))
           ? "h-auto"
           : "h-full"
       } ${
@@ -18228,7 +18303,8 @@ function ReadOnlyGrid({
     renderedCells.length > 1;
 
   const autoContentHeight =
-    area !== "header" && Boolean(deviceGrid.auto_height);
+    area !== "header" && (Boolean(deviceGrid.auto_height) ||
+      (previewDevice === "mobile" && gridContainsDisplayMode(deviceGrid, "gallery")));
   // 영업시간과 Restaurant Menu는 내용 높이에 맞춰 자동으로 표시합니다.
   const autoMobileBusinessHours =
     previewDevice === "mobile" &&
@@ -20704,7 +20780,7 @@ function ImageGalleryGrid({
   return (
     <>
       <div
-        className="grid h-full w-full content-start gap-2 overflow-y-auto"
+        className="grid h-auto w-full content-start gap-2 overflow-visible"
         style={{
           gridTemplateColumns: `repeat(auto-fit, minmax(min(${itemMinWidth}px, 100%), 1fr))`,
         }}
@@ -20718,13 +20794,18 @@ function ImageGalleryGrid({
               event.stopPropagation();
               setActiveIndex(index);
             }}
-            className="group relative block aspect-[4/3] min-w-0 overflow-hidden rounded-xl bg-gray-100 text-left"
+            className="group relative block min-w-0 overflow-hidden rounded-xl bg-white text-left"
+            style={{ height: mobile ? "auto" : `${Math.max(120, Math.min(1200, Number(cell.gallery_item_height_px) || 230))}px`, alignSelf: mobile ? "start" : undefined }}
             aria-label={item.title || `갤러리 이미지 ${index + 1} 크게 보기`}
           >
             <img
               src={item.url}
               alt={item.title || `갤러리 이미지 ${index + 1}`}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              className="h-full w-full"
+              style={{
+                display: "block", width: "100%", height: mobile ? "auto" : "100%",
+                objectFit: mobile ? "contain" : cell.gallery_image_fit === "cover" ? "cover" : "contain",
+              }}
             />
             {item.title ? (
               <span className="absolute inset-x-0 bottom-0 block bg-black/65 px-2 py-2 text-xs font-black leading-4 text-white">
@@ -22227,6 +22308,10 @@ function CellPreview({
       <div
         className="flex h-full w-full min-h-0 min-w-0"
         style={{
+          boxSizing: "border-box",
+          border: cell.contact_card_border ? "2px solid #64748b" : undefined,
+          borderRadius: cell.contact_card_border ? "20px" : undefined,
+          padding: cell.contact_card_border ? "24px" : undefined,
           justifyContent:
             cell.text_align === "left"
               ? "flex-start"
@@ -37391,6 +37476,23 @@ function TitleCellEditor({
   const usesDbImages =
     mode === "auto-slider" || mode === "image-scroll" || mode === "gallery";
 
+  // Website gallery is authoritative. Reload on entry and when returning from
+  // its manager, rather than retaining a business-registration photo snapshot.
+  const galleryLoaderRef = useRef(loadSavedImages);
+  useEffect(() => { galleryLoaderRef.current = loadSavedImages; });
+  useEffect(() => {
+    if (mode !== "gallery") return;
+    const refresh = () => { void galleryLoaderRef.current("gallery"); };
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    refresh();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [businessId, cell.id, mode]);
+
   const imageControlsOpen = activeControlStep === 1;
   const overlayControlsOpen = activeControlStep === 2;
 
@@ -39369,6 +39471,12 @@ function TitleCellEditor({
                     ? "옆으로 흐르는 이미지"
                     : "이미지 갤러리"}
               </p>
+              {mode === "gallery" ? (
+                <a href={`/owner/business/${businessId}/gallery?type=gallery`} target="_blank" rel="noreferrer"
+                  className="mt-2 inline-block text-xs font-bold text-blue-700 underline">
+                  웹사이트 갤러리 이미지 관리 열기
+                </a>
+              ) : null}
               <p className="mt-1 text-xs leading-5 text-gray-500">
                 {mode === "gallery"
                   ? "웹사이트 이미지 관리의 ‘갤러리’에 등록한 사진을 순서대로 모두 사용합니다."

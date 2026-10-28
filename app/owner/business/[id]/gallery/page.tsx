@@ -50,8 +50,10 @@ export default function WebsiteImageManagerPage() {
     if (template) {
       setTemplateId(template.id);
       sessionStorage.setItem(`restaurant-template-${businessId}`, template.id);
-      const type = query.get("type");
-      setActiveType(type === "slider" || type === "scroll" || type === "gallery" ? type : "hero");
+    }
+    const type = query.get("type");
+    if (type === "hero" || type === "slider" || type === "scroll" || type === "gallery") {
+      setActiveType(type);
     }
   }, [businessId]);
   const template = getRestaurantTemplate(templateId);
